@@ -4,7 +4,7 @@
 
 A comprehensive Lego resale business management system for tracking inventory, purchases, orders across multiple platforms (Amazon, eBay, BrickLink, Brick Owl), and financial reporting. Built for personal use with architecture designed for future commercial SaaS scaling.
 
-**PRD Reference:** See `docs/PRD.md` for complete requirements and specifications.
+**PRD Reference:** See `Hadley_Bricks_PRD_v1.md` for complete requirements and specifications.
 
 ---
 
@@ -57,8 +57,8 @@ hadley-bricks/
 │   │   └── ...
 │   └── migrations/               # Database migrations
 ├── docs/                         # Documentation
-│   ├── PRD.md
 │   └── API.md
+├── Hadley_Bricks_PRD_v1.md       # Product Requirements Document
 └── CLAUDE.md                     # This file
 ```
 
@@ -500,7 +500,7 @@ npm run build
 
 ## Links
 
-- [PRD Document](./docs/PRD.md)
+- [PRD Document](./Hadley_Bricks_PRD_v1.md)
 - [Supabase Dashboard](https://supabase.com/dashboard)
 - [Vercel Dashboard](https://vercel.com/dashboard)
 - [BrickLink API Docs](https://www.bricklink.com/v3/api.page)
