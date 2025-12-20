@@ -47,7 +47,10 @@
       "Bash(New-Item -Path \"tests/integration\" -ItemType Directory -Force)",
       "Bash(New-Item -Path \"tests/e2e/playwright\" -ItemType Directory -Force)",
       "Bash(New-Item -Path \"tests/fixtures/seeders\" -ItemType Directory -Force)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Add development agent infrastructure\n\n- Replace CLAUDE.md with updated version including agent system docs\n- Add 5 agent specifications:\n  - Test Plan Agent \\(docs/testing/test-plan-agent.md\\)\n  - Test Build Agent \\(docs/testing/test-build-agent.md\\)\n  - Test Execution Agent \\(docs/testing/test-execution-agent.md\\)\n  - Code Review Agent \\(docs/reviews/code-review-agent.md\\)\n  - Merge Feature Agent \\(docs/agents/merge-feature-agent.md\\)\n- Add 5 Claude Code slash commands \\(.claude/commands/\\)\n- Add test and review configuration files\n- Create directory structure for agent outputs\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(Remove-Item -Force nul -ErrorAction SilentlyContinue)",
+      "Bash(rm:*)"
     ]
   }
 }
