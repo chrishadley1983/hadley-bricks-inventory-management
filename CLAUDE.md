@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A comprehensive Lego resale business management system for tracking inventory, purchases, orders across multiple platforms (Amazon, eBay, BrickLink, Brick Owl), and financial reporting. Built for personal use with architecture designed for future commercial SaaS scaling.
+A comprehensive Lego resale business management system for tracking inventory, purchases, orders across multiple platforms (Amazon, eBay, BrickLink, Brick Owl, Bricqer), and financial reporting. Built for personal use with architecture designed for future commercial SaaS scaling.
 
 **PRD Reference:** See `docs/PRD.md` for complete requirements and specifications.
 
@@ -25,46 +25,150 @@ A comprehensive Lego resale business management system for tracking inventory, p
 
 ---
 
-## Project Structure
+## 🔴 CRITICAL: Cloud Supabase (No Local)
 
-```
-hadley-bricks/
-├── apps/
-│   └── web/                      # Next.js 14 web application
-│       ├── app/                  # App router pages
-│       │   ├── (auth)/           # Auth pages (login, register)
-│       │   ├── (dashboard)/      # Protected dashboard pages
-│       │   └── api/              # API routes
-│       ├── components/           # React components
-│       │   ├── ui/               # shadcn/ui components
-│       │   ├── forms/            # Form components
-│       │   └── features/         # Feature-specific components
-│       ├── hooks/                # Custom React hooks
-│       ├── stores/               # Zustand stores
-│       ├── lib/                  # Utilities and helpers
-│       │   ├── supabase/         # Supabase client
-│       │   ├── api/              # API client functions
-│       │   └── utils/            # General utilities
-│       └── types/                # TypeScript types
-├── packages/
-│   ├── database/                 # Supabase types and client
-│   └── shared/                   # Shared types and utilities
-├── supabase/
-│   ├── functions/                # Edge Functions
-│   │   ├── ai-parse-purchase/
-│   │   ├── bricklink-sync/
-│   │   ├── brickowl-sync/
-│   │   └── ...
-│   └── migrations/               # Database migrations
-├── docs/                         # Documentation
-│   ├── PRD.md
-│   └── API.md
-└── CLAUDE.md                     # This file
+**This project uses cloud Supabase only. There is no local Supabase instance.**
+
+- All database operations connect to the cloud instance
+- No `npx supabase start` required
+- Migrations are pushed directly to cloud: `npm run db:push`
+- Types are generated from cloud schema: `npm run db:types`
+
+> **Warning:** There is no `db:reset` for cloud Supabase. Database resets must be done manually via the Supabase dashboard if needed.
+
+---
+
+## 🔴 CRITICAL: Local Windows Environment
+
+**The user (Chris) runs this on their LOCAL WINDOWS MACHINE with PowerShell.**
+
+- Use PowerShell syntax, NOT bash/Linux commands
+- Use `Remove-Item -Recurse -Force` not `rm -rf`
+- Use `$env:VARIABLE` not `export VARIABLE`
+- Use semicolon `;` to chain commands, not `&&`
+- **Write commands as single lines** - multiline scripts without proper delimiters won't paste correctly into PowerShell
+
+```powershell
+# Good - single line with semicolons
+Remove-Item -Recurse -Force node_modules/.cache -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+
+# Good - comma-separated paths
+Remove-Item -Recurse -Force node_modules/.cache, .next -ErrorAction SilentlyContinue
 ```
 
 ---
 
-## ⚠️ CRITICAL: Verification Checklist
+## Project Structure
+
+```
+hadley-bricks/
+├── .claude/
+│   └── commands/             # Claude Code slash commands
+├── apps/
+│   └── web/                  # Next.js 14 web application
+│       ├── app/              # App router pages
+│       │   ├── (auth)/       # Auth pages (login, register)
+│       │   ├── (dashboard)/  # Protected dashboard pages
+│       │   └── api/          # API routes
+│       ├── components/       # React components
+│       │   ├── ui/           # shadcn/ui components
+│       │   ├── forms/        # Form components
+│       │   └── features/     # Feature-specific components
+│       ├── hooks/            # Custom React hooks
+│       ├── stores/           # Zustand stores
+│       ├── lib/              # Utilities and helpers
+│       │   ├── supabase/     # Supabase client
+│       │   ├── google/       # Google Sheets client
+│       │   ├── sync/         # Cache and dual-write services
+│       │   ├── adapters/     # Platform adapters
+│       │   ├── repositories/ # Data access layer
+│       │   ├── services/     # Business logic
+│       │   ├── api/          # API client functions
+│       │   ├── ai/           # AI prompts and services
+│       │   └── utils/        # General utilities
+│       └── types/            # TypeScript types
+├── packages/
+│   ├── database/             # Supabase types and client
+│   └── shared/               # Shared types and utilities
+├── supabase/
+│   ├── functions/            # Edge Functions
+│   │   ├── ai-parse-purchase/
+│   │   ├── bricklink-sync/
+│   │   ├── brickowl-sync/
+│   │   └── ...
+│   └── migrations/           # Database migrations
+├── docs/
+│   ├── PRD.md
+│   ├── API.md
+│   ├── agents/               # Agent specifications
+│   ├── testing/              # Test infrastructure
+│   │   ├── analysis/         # Coverage analysis outputs
+│   │   ├── config/           # Test configuration
+│   │   ├── execution-history/# Test run history
+│   │   ├── registry/         # Test manifests
+│   │   └── templates/        # Report templates
+│   ├── reviews/              # Code review outputs
+│   └── merges/               # Merge reports
+├── tests/
+│   ├── unit/
+│   ├── api/
+│   ├── integration/
+│   ├── e2e/
+│   │   └── playwright/
+│   └── fixtures/
+│       └── seeders/
+└── CLAUDE.md                 # This file
+```
+
+---
+
+## Development Agents
+
+This project uses a suite of development agents for consistent, high-quality workflows.
+
+### Available Agents
+
+| Command | Agent | Purpose |
+|---------|-------|---------|
+| `/test-plan` | Test Plan Agent | Analyse coverage gaps |
+| `/test-build` | Test Build Agent | Generate tests for gaps |
+| `/test-execute` | Test Execution Agent | Run tests and report |
+| `/code-review` | Code Review Agent | Review code changes |
+| `/merge-feature` | Merge Feature Agent | Safely merge branches |
+
+### Standard Workflow
+
+**During development:**
+```powershell
+/test-execute quick          # Fast validation
+/code-review staged          # Before committing
+```
+
+**Before merging:**
+```powershell
+/test-execute pre-merge      # Full test suite
+/code-review branch          # Full review
+/merge-feature <branch>      # Safe merge
+```
+
+**When adding features:**
+```powershell
+/test-plan analyze           # Find coverage gaps
+/test-build feature:<n>      # Generate tests
+/test-execute feature:<n>    # Verify tests
+```
+
+### Agent Documentation
+
+- Test Plan Agent: `docs/testing/test-plan-agent.md`
+- Test Build Agent: `docs/testing/test-build-agent.md`
+- Test Execution Agent: `docs/testing/test-execution-agent.md`
+- Code Review Agent: `docs/reviews/code-review-agent.md`
+- Merge Feature Agent: `docs/agents/merge-feature-agent.md`
+
+---
+
+## ⚠️ Verification Checklist
 
 **Before reporting ANY change as complete, Claude MUST verify ALL applicable items:**
 
@@ -77,10 +181,15 @@ hadley-bricks/
 
 ### Database Changes
 - [ ] Migration file created in `supabase/migrations/`
-- [ ] Migration applied successfully (`npm run db:migrate`)
+- [ ] Migration pushed to cloud (`npm run db:push`)
 - [ ] RLS policies added for new tables
 - [ ] Indexes added for foreign keys and common queries
 - [ ] Types regenerated (`npm run db:types`)
+
+### Sheets Integration Changes
+- [ ] Dual-write working (Sheets first, then Supabase async)
+- [ ] Cache invalidation working
+- [ ] Sync status indicator updated
 
 ### API Changes
 - [ ] Zod schema created for request validation
@@ -97,6 +206,7 @@ hadley-bricks/
 - [ ] Keyboard navigation works
 
 ### Testing
+- [ ] Run `/test-execute quick` - must pass
 - [ ] Unit tests written for new utility functions
 - [ ] Integration tests for new API routes
 - [ ] Existing tests still pass (`npm test`)
@@ -114,30 +224,28 @@ hadley-bricks/
 
 ### Starting Development
 
-```bash
-# 1. Start Supabase locally
-npx supabase start
-
+```powershell
+# 1. Ensure .env.local is configured with cloud Supabase + Google Sheets credentials
 # 2. Start Next.js dev server
 npm run dev
 
-# 3. Verify both are running before making changes
+# 3. Verify the app connects to cloud Supabase before making changes
 ```
 
 ### Git Workflow
 
-```bash
+```powershell
 # Feature branches
 git checkout -b feature/[feature-name]
 
 # Commit messages - use conventional commits
-feat: add inventory aging report
-fix: correct BrickLink order sync duplicate detection
-refactor: extract repository pattern for inventory
-docs: update API documentation
-test: add unit tests for cost calculation
+# feat: add inventory aging report
+# fix: correct BrickLink order sync duplicate detection
+# refactor: extract repository pattern for inventory
+# docs: update API documentation
+# test: add unit tests for cost calculation
 
-# Before pushing
+# Before pushing (or use /code-review staged)
 npm run typecheck
 npm run lint
 npm test
@@ -145,19 +253,113 @@ npm test
 
 ### Database Changes
 
-```bash
-# Create migration
+```powershell
+# Create migration file locally
 npx supabase migration new [descriptive_name]
 
-# Apply migration
-npm run db:migrate
+# Push migrations to cloud Supabase
+npm run db:push
 
-# Regenerate types
+# Regenerate types from cloud schema
 npm run db:types
-
-# Reset database (development only!)
-npm run db:reset
 ```
+
+---
+
+## Sheets-Primary Architecture
+
+### Current Phase: Sheets-Primary
+
+During the transition period, Google Sheets remains the source of truth while Supabase acts as a cache for performance:
+
+**Read Path (Sheets Primary):**
+1. Check Supabase cache first (TTL: 5 minutes)
+2. If cache miss or stale → fetch from Google Sheets
+3. Transform Sheets data → store in Supabase cache
+4. Return data from cache
+
+**Write Path (Sheets First):**
+1. Write to Google Sheets (primary) - **blocking**
+2. Async sync to Supabase (fire-and-forget)
+3. Invalidate cache for affected records
+
+**Conflict Resolution:**
+- Google Sheets always wins
+- On conflict, Sheets data overwrites Supabase
+- Last-write-wins with Sheets as authority
+
+### Data Flow Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   React App     │────▶│   API Routes    │────▶│  Repositories   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                       │
+                                    ┌──────────────────┴──────────────────┐
+                                    ▼                                      ▼
+                          ┌─────────────────┐                    ┌─────────────────┐
+                          │   Read-Through  │                    │   Dual-Write    │
+                          │     Cache       │                    │    Service      │
+                          └─────────────────┘                    └─────────────────┘
+                                    │                                      │
+                          ┌─────────┴─────────┐                  ┌────────┴────────┐
+                          ▼                   ▼                  ▼                 ▼
+                   ┌───────────┐       ┌───────────┐      ┌───────────┐     ┌───────────┐
+                   │  Supabase │       │  Google   │      │  Google   │     │  Supabase │
+                   │  (cache)  │       │  Sheets   │      │  Sheets   │     │  (async)  │
+                   └───────────┘       │ (primary) │      │ (primary) │     └───────────┘
+                                       └───────────┘      └───────────┘
+```
+
+### Sync Status
+
+Components should display sync status indicators:
+- 🟢 In sync (last sync < 5 min ago)
+- 🟡 Syncing (operation in progress)
+- 🔴 Sync error (needs retry)
+
+Use the `useSyncStatus` hook to access sync state.
+
+### Migration Scripts
+
+```powershell
+# Run in apps/web directory
+
+# Test Google Sheets connection
+npm run sheets:test
+
+# Migrate inventory from Sheets to Supabase (dry run first)
+npm run migrate:inventory -- --dry-run
+npm run migrate:inventory
+
+# Migrate purchases from Sheets to Supabase
+npm run migrate:purchases -- --dry-run
+npm run migrate:purchases
+
+# Validate data reconciliation
+npm run validate:reconcile
+```
+
+### Environment Variables for Sheets Integration
+
+```powershell
+# Google Sheets (required for Sheets-primary mode)
+GOOGLE_CREDENTIALS_PATH=     # Path to service account JSON
+GOOGLE_SHEETS_ID=            # Spreadsheet ID
+ENABLE_SHEETS_WRITE=true     # Enable dual-write to Sheets
+
+# Optional: Alternative to credentials file
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=
+```
+
+### Post-Transition (Future)
+
+After the transition period is complete:
+1. Switch read path to Supabase-only
+2. Remove Sheets write operations
+3. Keep Sheets as backup export destination
+4. Remove cache layer (Supabase becomes primary)
 
 ---
 
@@ -171,12 +373,12 @@ All data access goes through repository classes. During MVP phase, repositories 
 // Example: /lib/repositories/inventory.repository.ts
 export class InventoryRepository {
   async findById(id: string): Promise<InventoryItem | null> {
-    // Read from Supabase (primary after migration)
+    // Read from cache, fallback to Sheets
   }
-  
+
   async create(item: CreateInventoryInput): Promise<InventoryItem> {
-    // Write to Supabase
-    // TODO: Remove after migration - also write to Google Sheets
+    // Write to Sheets (primary)
+    // Then async write to Supabase
   }
 }
 ```
@@ -193,7 +395,7 @@ export class PurchaseService {
     private inventoryRepo: InventoryRepository,
     private aiService: AIService
   ) {}
-  
+
   async createFromNaturalLanguage(text: string): Promise<Purchase> {
     const parsed = await this.aiService.parsePurchase(text);
     return this.purchaseRepo.create(parsed);
@@ -203,19 +405,16 @@ export class PurchaseService {
 
 ### Adapter Pattern (External Integrations)
 
-Each platform has an adapter that normalizes API responses to internal types.
+Each platform has an adapter implementing `PlatformAdapter` interface.
 
 ```typescript
 // Example: /lib/adapters/bricklink.adapter.ts
 export class BrickLinkAdapter implements PlatformAdapter {
-  async fetchOrders(): Promise<PlatformOrder[]> {
-    const rawOrders = await this.client.getOrders();
-    return rawOrders.map(this.normalizeOrder);
-  }
-  
-  private normalizeOrder(raw: BrickLinkRawOrder): PlatformOrder {
-    // Transform BrickLink-specific format to internal type
-  }
+  platform = 'bricklink' as const;
+
+  async testConnection(): Promise<boolean> { /* ... */ }
+  async fetchOrders(params?: OrderFetchParams): Promise<PlatformOrder[]> { /* ... */ }
+  async fetchOrder(orderId: string): Promise<PlatformOrder> { /* ... */ }
 }
 ```
 
@@ -252,13 +451,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = CreateSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ 
-        error: 'Validation failed', 
-        details: parsed.error.flatten() 
+      return NextResponse.json({
+        error: 'Validation failed',
+        details: parsed.error.flatten()
       }, { status: 400 });
     }
 
-    // 3. Business logic
+    // 3. Business logic (uses dual-write internally)
     const result = await inventoryService.create(user.id, parsed.data);
 
     // 4. Return response
@@ -335,7 +534,7 @@ describe('formatCurrency', () => {
   it('formats GBP correctly', () => {
     expect(formatCurrency(1234.56, 'GBP')).toBe('£1,234.56');
   });
-  
+
   it('handles zero', () => {
     expect(formatCurrency(0, 'GBP')).toBe('£0.00');
   });
@@ -355,7 +554,7 @@ describe('POST /api/inventory', () => {
       method: 'POST',
       body: JSON.stringify({ setNumber: '75192' }),
     });
-    
+
     const response = await POST(request);
     expect(response.status).toBe(401);
   });
@@ -366,10 +565,9 @@ describe('POST /api/inventory', () => {
 
 ## Common Commands
 
-```bash
+```powershell
 # Development
 npm run dev                 # Start Next.js dev server
-npx supabase start         # Start local Supabase
 
 # Code Quality
 npm run typecheck          # TypeScript check
@@ -377,20 +575,26 @@ npm run lint               # ESLint
 npm run lint:fix           # ESLint with auto-fix
 npm run format             # Prettier format
 
-# Testing
+# Testing (via agents preferred)
 npm test                   # Run all tests
 npm test -- --watch        # Watch mode
 npm test -- --coverage     # Coverage report
 
-# Database
-npm run db:migrate         # Apply migrations
-npm run db:types           # Regenerate types
-npm run db:reset           # Reset database (dev only)
-npm run db:seed            # Seed test data
+# Database (Cloud Supabase)
+npm run db:push            # Push migrations to cloud
+npm run db:types           # Regenerate types from cloud schema
+
+# Google Sheets
+npm run sheets:test        # Test Sheets connection
+npm run migrate:inventory  # Migrate inventory data
+npm run validate:reconcile # Validate data sync
 
 # Build
 npm run build              # Production build
 npm run start              # Start production server
+
+# Cache clearing (PowerShell)
+Remove-Item -Recurse -Force node_modules/.cache, .next -ErrorAction SilentlyContinue
 ```
 
 ---
@@ -399,18 +603,26 @@ npm run start              # Start production server
 
 Required in `.env.local`:
 
-```bash
-# Supabase
+```powershell
+# Supabase (Cloud)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+
+# Google Sheets (required for Sheets-primary mode)
+GOOGLE_CREDENTIALS_PATH=     # Path to service account JSON
+GOOGLE_SHEETS_ID=            # Spreadsheet ID
+ENABLE_SHEETS_WRITE=true     # Enable dual-write to Sheets
+
+# Optional: Alternative to credentials file
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=
 
 # AI
 ANTHROPIC_API_KEY=
 GOOGLE_AI_API_KEY=
 
-# External APIs (stored encrypted in DB, these are for Edge Functions)
-# BrickLink and Brick Owl credentials stored per-user in platform_credentials table
+# Platform credentials stored encrypted in platform_credentials table
 ```
 
 ---
@@ -421,25 +633,9 @@ GOOGLE_AI_API_KEY=
 2. **Always use RLS** - Every table must have Row Level Security policies
 3. **Validate all inputs** - Use Zod schemas on every API route
 4. **Check auth on every request** - Protected routes must verify session
-5. **Sanitize user content** - Escape HTML, prevent XSS
-6. **Use parameterized queries** - Never concatenate SQL strings
-
----
-
-## Migration Phase Notes
-
-### Current Phase: MVP (Dual-Write)
-
-During MVP, the system reads from Google Sheets but writes to both:
-- ✅ Write to Supabase (primary)
-- ✅ Write to Google Sheets (legacy, to be removed)
-
-### Post-Migration
-
-After data migration is complete:
-- Remove all Google Sheets write operations
-- Remove sheetsService.ts
-- Update repositories to Supabase-only
+5. **Encrypt platform credentials** - Store in platform_credentials table with encryption
+6. **Sanitize user content** - Escape HTML, prevent XSS
+7. **Use parameterized queries** - Never concatenate SQL strings
 
 ---
 
@@ -453,6 +649,12 @@ After data migration is complete:
 ### Brick Owl
 - API key authentication
 - Adapter: `/lib/adapters/brickowl.adapter.ts`
+
+### Bricqer
+- API key + tenant URL authentication
+- API endpoint: `{tenant_url}/api/v1/`
+- Adapter: `/lib/adapters/bricqer.adapter.ts`
+- [API Docs](https://www.bricqer.com/guides/using-the-api)
 
 ### eBay / Amazon
 - CSV import only (no API integration)
@@ -477,23 +679,51 @@ All AI prompts in: `/lib/ai/prompts/`
 
 ## Troubleshooting
 
-### Supabase connection issues
-```bash
-npx supabase status  # Check if running
-npx supabase stop && npx supabase start  # Restart
+### Supabase Connection Issues
+```powershell
+# Verify environment variables are set
+echo $env:NEXT_PUBLIC_SUPABASE_URL
+
+# Check cloud Supabase dashboard for service status
+# Verify RLS policies allow the operation
+
+# Regenerate types if schema changed
+npm run db:types
+
+# Clear caches and restart
+Remove-Item -Recurse -Force node_modules/.cache, .next -ErrorAction SilentlyContinue
+npm run dev
 ```
 
-### Type generation issues
-```bash
-npx supabase db reset  # Reset DB
-npm run db:types       # Regenerate
+### Google Sheets Sync Issues
+```powershell
+# Test Sheets connection
+npm run sheets:test
+
+# Check credentials are set
+echo $env:GOOGLE_SHEETS_ID
+
+# Verify service account has Editor access to the spreadsheet
+# Check sync status in UI (🟢/🟡/🔴 indicators)
 ```
 
-### Build failures
-```bash
-rm -rf .next node_modules
+### Type Generation Issues
+```powershell
+npm run db:types       # Regenerate from cloud schema
+```
+
+### Build Failures
+```powershell
+Remove-Item -Recurse -Force .next, node_modules -ErrorAction SilentlyContinue
 npm install
 npm run build
+```
+
+### Stale Code / Changes Not Appearing
+```powershell
+# Clear all caches
+Remove-Item -Recurse -Force node_modules/.cache, .next -ErrorAction SilentlyContinue
+npm run dev
 ```
 
 ---
@@ -505,7 +735,8 @@ npm run build
 - [Vercel Dashboard](https://vercel.com/dashboard)
 - [BrickLink API Docs](https://www.bricklink.com/v3/api.page)
 - [Brick Owl API Docs](https://www.brickowl.com/api)
+- [Bricqer API Docs](https://www.bricqer.com/guides/using-the-api)
 
 ---
 
-*Last Updated: December 2024*
+*Last Updated: December 2025*

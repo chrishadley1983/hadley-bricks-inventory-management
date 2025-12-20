@@ -1,0 +1,28 @@
+{
+  "name": "hadley-bricks",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "start": "npm run start --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web",
+    "lint:fix": "npm run lint:fix --workspace=apps/web",
+    "format": "npm run format --workspace=apps/web",
+    "format:check": "npm run format:check --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspace=apps/web",
+    "test": "npm run test --workspace=apps/web",
+    "test:watch": "npm run test:watch --workspace=apps/web",
+    "test:coverage": "npm run test:coverage --workspace=apps/web",
+    "db:push": "npx supabase db push",
+    "db:types": "npx supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > packages/database/src/types.ts",
+    "migrate:inventory": "npm run migrate:inventory --workspace=apps/web",
+    "migrate:purchases": "npm run migrate:purchases --workspace=apps/web",
+    "validate:reconcile": "npm run validate:reconcile --workspace=apps/web",
+    "sheets:test": "npm run sheets:test --workspace=apps/web"
+  }
+}
