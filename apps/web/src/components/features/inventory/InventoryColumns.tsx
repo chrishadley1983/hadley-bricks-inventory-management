@@ -38,7 +38,7 @@ export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
   listing_date: 'Listing Date',
   listing_platform: 'Listing Platform',
   amazon_asin: 'Amazon ASIN',
-  linked_lot: 'Linked Lot',
+  linked_lot: 'Linked Purchase',
   notes: 'Notes',
   created_at: 'Created',
   updated_at: 'Last Updated',
@@ -278,7 +278,7 @@ export function getInventoryColumns({ onDelete }: ColumnsProps = {}): ColumnDef<
     },
     {
       accessorKey: 'linked_lot',
-      header: 'Linked Lot',
+      header: 'Linked Purchase',
       cell: ({ row }) => {
         const lot = row.getValue('linked_lot') as string | null;
         return <span className="max-w-[100px] truncate">{lot || '-'}</span>;

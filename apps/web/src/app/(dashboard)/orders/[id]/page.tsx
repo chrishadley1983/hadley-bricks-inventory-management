@@ -279,13 +279,13 @@ export default function OrderDetailPage({
                 {order.status || 'Unknown'}
               </Badge>
             </div>
-            <p className="text-muted-foreground mt-1">
+            <div className="text-muted-foreground mt-1 flex items-center">
               <Badge variant="outline" className="capitalize mr-2">
                 {order.platform}
               </Badge>
               {order.order_date &&
                 format(new Date(order.order_date), 'MMMM d, yyyy \'at\' h:mm a')}
-            </p>
+            </div>
           </div>
 
           {order.platform === 'bricklink' && (

@@ -272,7 +272,7 @@ export function BulkEditDialog({
             )}
           </div>
 
-          {/* Linked Lot */}
+          {/* Linked Purchase */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Checkbox
@@ -283,12 +283,12 @@ export function BulkEditDialog({
                 }
               />
               <Label htmlFor="edit-linked-lot" className="font-medium">
-                Linked Lot
+                Linked Purchase
               </Label>
             </div>
             {formState.linked_lot.enabled && (
               <Input
-                placeholder="Enter linked lot"
+                placeholder="Enter purchase reference"
                 value={formState.linked_lot.value || ''}
                 onChange={(e) => handleFieldChange('linked_lot', e.target.value || null)}
               />

@@ -18,6 +18,7 @@ export interface InventoryFilters {
   condition?: ItemCondition;
   platform?: string;
   linkedLot?: string;
+  purchaseId?: string;
   searchTerm?: string;
 }
 
@@ -67,6 +68,10 @@ export class InventoryRepository extends BaseRepository<
 
     if (filters?.linkedLot) {
       query = query.eq('linked_lot', filters.linkedLot);
+    }
+
+    if (filters?.purchaseId) {
+      query = query.eq('purchase_id', filters.purchaseId);
     }
 
     if (filters?.searchTerm) {

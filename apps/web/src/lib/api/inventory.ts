@@ -5,6 +5,7 @@ export interface InventoryFilters {
   condition?: string;
   platform?: string;
   search?: string;
+  purchaseId?: string;
 }
 
 export interface PaginationParams {
@@ -47,6 +48,7 @@ export async function fetchInventory(
   if (filters?.condition) params.set('condition', filters.condition);
   if (filters?.platform) params.set('platform', filters.platform);
   if (filters?.search) params.set('search', filters.search);
+  if (filters?.purchaseId) params.set('purchaseId', filters.purchaseId);
   if (pagination?.page) params.set('page', String(pagination.page));
   if (pagination?.pageSize) params.set('pageSize', String(pagination.pageSize));
 

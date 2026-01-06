@@ -28,6 +28,7 @@ const QuerySchema = z.object({
   condition: z.enum(['New', 'Used']).optional(),
   platform: z.string().optional(),
   linkedLot: z.string().optional(),
+  purchaseId: z.string().uuid().optional(),
   search: z.string().optional(),
 });
 
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, status, condition, platform, linkedLot, search } = parsed.data;
+    const { page, pageSize, status, condition, platform, linkedLot, purchaseId, search } = parsed.data;
 
     const service = new InventoryService(supabase, user.id);
     const result = await service.getAll(
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
         condition,
         platform,
         linkedLot,
+        purchaseId,
         searchTerm: search,
       },
       { page, pageSize }

@@ -40,9 +40,9 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
   const { data: purchase, isLoading, error } = usePurchase(id);
   const deleteMutation = useDeletePurchase();
 
-  // Fetch linked inventory items (items with purchase date matching this purchase)
+  // Fetch linked inventory items by purchase_id foreign key
   const { data: inventoryData } = useInventoryList(
-    { search: purchase?.reference || undefined },
+    { purchaseId: id },
     { page: 1, pageSize: 50 }
   );
 

@@ -384,9 +384,9 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
                 name="linked_lot"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Linked Lot</FormLabel>
+                    <FormLabel>Linked Purchase</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., LOT-2024-001" {...field} />
+                      <Input placeholder="e.g., 338 (80)" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

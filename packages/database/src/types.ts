@@ -632,6 +632,7 @@ export type Database = {
           listing_value: number | null
           notes: string | null
           purchase_date: string | null
+          purchase_id: string | null
           returned_from_item_id: string | null
           set_number: string
           sheets_synced_at: string | null
@@ -661,6 +662,7 @@ export type Database = {
           listing_value?: number | null
           notes?: string | null
           purchase_date?: string | null
+          purchase_id?: string | null
           returned_from_item_id?: string | null
           set_number: string
           sheets_synced_at?: string | null
@@ -690,6 +692,7 @@ export type Database = {
           listing_value?: number | null
           notes?: string | null
           purchase_date?: string | null
+          purchase_id?: string | null
           returned_from_item_id?: string | null
           set_number?: string
           sheets_synced_at?: string | null
@@ -706,6 +709,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_items_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_roi_view"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "inventory_items_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_items_returned_from_item_id_fkey"
             columns: ["returned_from_item_id"]

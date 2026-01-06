@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign } from 'lucide-react';
-import { useInventoryItem, useDeleteInventory } from '@/hooks';
+import { useInventoryItem, useDeleteInventory, usePurchase } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +35,9 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const { data: item, isLoading, error } = useInventoryItem(id);
   const deleteMutation = useDeleteInventory();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Fetch linked purchase if purchase_id exists
+  const { data: linkedPurchase } = usePurchase(item?.purchase_id ?? undefined);
 
   const handleDelete = async () => {
     await deleteMutation.mutateAsync(id);
@@ -196,7 +199,21 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               <DetailRow label="Storage Location" value={item.storage_location} />
-              <DetailRow label="Linked Lot" value={item.linked_lot} />
+              <DetailRow
+                label="Linked Purchase"
+                value={
+                  linkedPurchase ? (
+                    <Link
+                      href={`/purchases/${linkedPurchase.id}`}
+                      className="text-primary hover:underline"
+                    >
+                      {linkedPurchase.short_description}
+                    </Link>
+                  ) : item.linked_lot ? (
+                    item.linked_lot
+                  ) : null
+                }
+              />
               {item.notes && (
                 <div>
                   <dt className="text-sm font-medium text-muted-foreground">Notes</dt>

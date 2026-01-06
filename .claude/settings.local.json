@@ -92,7 +92,9 @@
       "Bash(taskkill //F //PID 99704)",
       "Skill(code-review)",
       "Skill(code-review:*)",
-      "Bash(Select-String -Pattern \"\\(password|secret|api_key|token|credential\\)\" -CaseSensitive:$false)"
+      "Bash(Select-String -Pattern \"\\(password|secret|api_key|token|credential\\)\" -CaseSensitive:$false)",
+      "Bash(git commit:*)",
+      "Bash(Select-String -Pattern \"amzn1|Login with Amazon\" -Path \"apps/web/src/app/\\(dashboard\\)/settings/integrations/page.tsx\" -Context 2,2)"
     ]
   }
 }
