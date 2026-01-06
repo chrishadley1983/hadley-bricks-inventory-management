@@ -20,7 +20,7 @@ import { OrderRepository, CredentialsRepository } from '../repositories';
 import type { SyncResult } from '../adapters/platform-adapter.interface';
 
 export interface BricqerSyncOptions {
-  /** Filter by order status(es) */
+  /** Filter by order status(es) - uppercase: READY, SHIPPED, etc. */
   status?: string[];
   /** Force full sync (ignore last sync time) */
   fullSync?: boolean;
@@ -28,6 +28,8 @@ export interface BricqerSyncOptions {
   includeItems?: boolean;
   /** Maximum number of orders to sync */
   limit?: number;
+  /** Include archived/filed orders (filed=true for archived, filed=false for active only) */
+  includeArchived?: boolean;
 }
 
 /**
@@ -109,11 +111,53 @@ export class BricqerSyncService {
       lastSyncedAt: new Date(),
     };
 
-    try {
-      const client = await this.getClient(userId);
+    console.log('[BricqerSyncService] Starting sync for user:', userId.substring(0, 8) + '...');
+    console.log('[BricqerSyncService] Options:', JSON.stringify(options));
 
-      // Get sales orders
-      const orders = await client.getSalesOrders(undefined, options.limit);
+    try {
+      console.log('[BricqerSyncService] Getting client...');
+      const client = await this.getClient(userId);
+      console.log('[BricqerSyncService] Client created successfully');
+
+      // Get orders - Bricqer uses uppercase status values (READY, SHIPPED, etc.)
+      // Default to including archived orders (filed=true) unless explicitly set to false
+      console.log('[BricqerSyncService] Fetching orders...');
+      const includeArchived = options.includeArchived !== false; // Default true
+
+      let allOrders: BricqerOrder[] = [];
+
+      if (includeArchived) {
+        // Fetch both archived (filed=true) and active (filed=false) orders
+        // Use getAllOrders to handle pagination properly
+        console.log('[BricqerSyncService] Fetching archived orders...');
+        const archivedOrders = await client.getAllOrders({ filed: true });
+        console.log('[BricqerSyncService] Found', archivedOrders.length, 'archived orders');
+
+        console.log('[BricqerSyncService] Fetching active orders...');
+        const activeOrders = await client.getAllOrders({ filed: false });
+        console.log('[BricqerSyncService] Found', activeOrders.length, 'active orders');
+
+        // Combine, removing duplicates by id
+        const seenIds = new Set<string | number>();
+        for (const order of [...archivedOrders, ...activeOrders]) {
+          if (!seenIds.has(order.id)) {
+            seenIds.add(order.id);
+            allOrders.push(order);
+          }
+        }
+      } else {
+        // Only fetch active orders
+        allOrders = await client.getAllOrders({ filed: false });
+      }
+
+      console.log('[BricqerSyncService] Fetched', allOrders.length, 'total orders from Bricqer API');
+
+      // Filter out eBay orders - they're handled by the separate eBay integration
+      const orders = allOrders.filter((order) => {
+        const isEbay = order.orderProvider?.toLowerCase() === 'ebay';
+        return !isEbay;
+      });
+      console.log('[BricqerSyncService] After filtering eBay:', orders.length, 'orders to process');
       result.ordersProcessed = orders.length;
 
       // Process orders
@@ -142,7 +186,15 @@ export class BricqerSyncService {
       }
 
       result.success = result.errors.length === 0;
+      console.log('[BricqerSyncService] Sync completed:', {
+        success: result.success,
+        processed: result.ordersProcessed,
+        created: result.ordersCreated,
+        updated: result.ordersUpdated,
+        errors: result.errors.length,
+      });
     } catch (error) {
+      console.error('[BricqerSyncService] Sync error:', error);
       if (error instanceof BricqerRateLimitError) {
         result.errors.push(`Rate limit exceeded. Resets at: ${error.rateLimitInfo.resetTime}`);
       } else if (error instanceof BricqerAuthError) {
@@ -150,7 +202,12 @@ export class BricqerSyncService {
       } else if (error instanceof BricqerApiError) {
         result.errors.push(`Bricqer API error: ${error.message} (code: ${error.code})`);
       } else {
-        result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        result.errors.push(errorMsg);
+        // Add more context for credential decryption errors
+        if (errorMsg.includes('decrypt') || errorMsg.includes('authenticate')) {
+          result.errors.push('Hint: Check that CREDENTIALS_ENCRYPTION_KEY is correctly set in environment');
+        }
       }
     }
 
@@ -179,6 +236,9 @@ export class BricqerSyncService {
     }
 
     // Prepare order for database
+    // Use pieceCount (total pieces) if available, otherwise lotCount, otherwise count from items array
+    const itemsCount = normalized.pieceCount || normalized.lotCount || normalized.items.length || 0;
+
     const orderInsert: PlatformOrderInsert = {
       user_id: userId,
       platform: 'bricqer',
@@ -194,7 +254,8 @@ export class BricqerSyncService {
       currency: normalized.currency,
       shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
-      items_count: normalized.items.length,
+      items_count: itemsCount,
+      // Note: buyer_phone and orderDescription are available in normalized.rawData
       raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 
@@ -233,6 +294,9 @@ export class BricqerSyncService {
     const normalized = normalizeOrder(order, items);
 
     // Prepare and save order
+    // Use pieceCount (total pieces) if available, otherwise lotCount, otherwise count from items array
+    const itemsCount = normalized.pieceCount || normalized.lotCount || normalized.items.length || 0;
+
     const orderInsert: PlatformOrderInsert = {
       user_id: userId,
       platform: 'bricqer',
@@ -248,7 +312,8 @@ export class BricqerSyncService {
       currency: normalized.currency,
       shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
-      items_count: normalized.items.length,
+      items_count: itemsCount,
+      // Note: buyer_phone and orderDescription are available in normalized.rawData
       raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 

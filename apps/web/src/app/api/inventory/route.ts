@@ -5,20 +5,20 @@ import { InventoryService } from '@/lib/services';
 
 const CreateInventorySchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
-  item_name: z.string().optional(),
-  condition: z.enum(['New', 'Used']).optional(),
-  status: z.string().optional(),
-  source: z.string().optional(),
-  purchase_date: z.string().optional(),
-  cost: z.number().optional(),
-  listing_date: z.string().optional(),
-  listing_value: z.number().optional(),
-  storage_location: z.string().optional(),
-  sku: z.string().optional(),
-  linked_lot: z.string().optional(),
-  amazon_asin: z.string().optional(),
-  listing_platform: z.string().optional(),
-  notes: z.string().optional(),
+  item_name: z.string().nullish(),
+  condition: z.enum(['New', 'Used']).nullish(),
+  status: z.string().optional(), // status doesn't accept null in the database
+  source: z.string().nullish(),
+  purchase_date: z.string().nullish(),
+  cost: z.number().nullish(),
+  listing_date: z.string().nullish(),
+  listing_value: z.number().nullish(),
+  storage_location: z.string().nullish(),
+  sku: z.string().nullish(),
+  linked_lot: z.string().nullish(),
+  amazon_asin: z.string().nullish(),
+  listing_platform: z.string().nullish(),
+  notes: z.string().nullish(),
 });
 
 const QuerySchema = z.object({
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     const service = new InventoryService(supabase, user.id);
     const result = await service.getAll(
       {
-        status: status as 'NOT YET RECEIVED' | 'IN STOCK' | 'LISTED' | 'SOLD' | undefined,
+        status: status as 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD' | undefined,
         condition,
         platform,
         linkedLot,

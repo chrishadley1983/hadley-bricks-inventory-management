@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { MileageSection } from './MileageSection';
 import type { Purchase } from '@hadley-bricks/database';
 
 const purchaseSchema = z.object({
@@ -290,6 +291,14 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
             </CardContent>
           </Card>
         </div>
+
+        {/* Mileage Section - only show in edit mode */}
+        {mode === 'edit' && initialData && (
+          <MileageSection
+            purchaseId={initialData.id}
+            purchaseDate={form.watch('purchase_date')}
+          />
+        )}
 
         {/* Form Actions */}
         <div className="flex justify-end gap-4">

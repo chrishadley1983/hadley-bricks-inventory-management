@@ -11,7 +11,7 @@ const SyncStatusProvider = dynamic(
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SyncStatusProvider autoSyncOnMount={true}>
+    <SyncStatusProvider autoSyncOnMount={false}>
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-y-auto bg-muted/30">{children}</main>

@@ -19,17 +19,16 @@ export interface BricqerPaginatedResponse<T> {
   results: T[];
 }
 
-/** Bricqer order status */
+/** Bricqer order status (uppercase in API) */
 export type BricqerOrderStatus =
-  | 'pending'
-  | 'paid'
-  | 'processing'
-  | 'packed'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled'
-  | 'refunded'
-  | 'on_hold';
+  | 'READY'
+  | 'PICKED'
+  | 'PACKED'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'REFUNDED'
+  | 'ON_HOLD';
 
 /** Bricqer payment status */
 export type BricqerPaymentStatus =
@@ -75,49 +74,157 @@ export interface BricqerOrderItem {
   image_url?: string;
 }
 
-/** Bricqer order from list endpoint */
+/** Bricqer contact from order */
+export interface BricqerContact {
+  id: number;
+  name: string;
+  email?: string;
+  type?: string;
+  verified?: boolean;
+  address?: string;
+  country?: {
+    name: string;
+    translatedName?: string | null;
+  };
+}
+
+/** Bricqer order from list endpoint (actual API response structure) */
 export interface BricqerOrder {
   id: number | string;
-  order_number: string;
+  /** Display name like "eBay #20-13998-99661" or "BrickLink #29891125" */
+  displayName?: string;
+  /** Order provider: "eBay", "BrickLink", "BrickOwl", etc. */
+  orderProvider?: string;
+  order_number?: string;
   external_order_id?: string;
   status: BricqerOrderStatus;
   payment_status?: BricqerPaymentStatus;
-  created_at: string;
+  /** Created timestamp (ISO format) - actual field name from API */
+  created?: string;
+  /** Legacy field name - some endpoints may use this */
+  created_at?: string;
+  /** Modified timestamp (ISO format) */
+  modified?: string;
   updated_at?: string;
   ordered_at?: string;
+  /** Payment date timestamp */
+  paymentDate?: string;
   paid_at?: string;
   shipped_at?: string;
   delivered_at?: string;
+  /** Order remarks/notes */
+  remarks?: string | null;
+  /** Contact/customer info */
+  contact?: BricqerContact;
+  /** Cost subtotal */
+  costSubtotal?: string | number;
+  /** Cost grand total */
+  costGrandtotal?: string | number;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
   billing_address?: BricqerAddress;
   shipping_address?: BricqerAddress;
-  subtotal: string | number;
-  shipping_cost: string | number;
+  subtotal?: string | number;
+  shipping_cost?: string | number;
   tax?: string | number;
   discount?: string | number;
-  total: string | number;
-  currency: string;
+  total?: string | number;
+  currency?: string;
   items?: BricqerOrderItem[];
   tracking_number?: string;
   tracking_url?: string;
   shipping_method?: string;
+  shippingName?: string;
+  shippingCode?: string;
+  shippingTrackTrace?: boolean;
+  countryCode?: string;
+  countryId?: number;
+  /** Whether the order is archived/filed */
+  filed?: boolean;
   notes?: string;
   internal_notes?: string;
   source?: string;
   channel?: string;
   tags?: string[];
+  weight?: string | number;
+  /** Number of unique lots in the order */
+  lotCount?: number;
 }
 
-/** Bricqer order detail with full items */
+/** Journal contact from detailed order response */
+export interface BricqerJournalContact {
+  id: number;
+  contactType: string;
+  name: string;
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  remarks?: string | null;
+  country?: number;
+}
+
+/** Bricqer order detail with full items - extended response from /orders/order/{id}/ */
 export interface BricqerOrderDetail extends BricqerOrder {
   items: BricqerOrderItem[];
+  /** Shipping cost (actual API field name) */
+  costShipping?: string | number;
+  /** Tax amount */
+  costTax?: string | number;
+  /** Journal containing contact details for detailed orders */
+  journal?: {
+    id: number;
+    reference?: string;
+    contact?: BricqerJournalContact;
+  };
+  /** Batch set from order with item details (available for BrickLink/BrickOwl, empty for eBay) */
+  batchSet?: Array<{
+    id: number;
+    itemSet: Array<{
+      id: number;
+      definitionId: number;
+      description: string;
+      legoType: string;
+      legoId: string;
+      legoIdFull: string;
+      legoPicture?: string;
+      picture?: string;
+      condition: 'N' | 'U';
+      color?: {
+        id: number;
+        rgb: string;
+        name: string;
+        blid?: number;
+      };
+      price: number;
+      quantity: number;
+      picked?: number;
+      remainingQuantity?: number;
+    }>;
+  }>;
+  /** Invoice set with financial summary */
+  invoiceSet?: Array<{
+    id: number;
+    /** Invoice line items (NOT a count - it's an array of line items) */
+    items: Array<{
+      description: string;
+      amount: string;
+      vatPercentage: string;
+    }>;
+    totals?: {
+      subtotal: number;
+      tax: number;
+      paid: number;
+      grandtotal: number;
+    };
+  }>;
+  /** Order description (e.g., "Used LEGO® products") */
+  description?: string;
 }
 
 /** Bricqer order list query parameters */
 export interface BricqerOrderListParams {
-  /** Filter by status */
+  /** Filter by status (uppercase: READY, SHIPPED, etc.) */
   status?: BricqerOrderStatus | BricqerOrderStatus[];
   /** Filter by payment status */
   payment_status?: BricqerPaymentStatus;
@@ -135,6 +242,8 @@ export interface BricqerOrderListParams {
   ordering?: string;
   /** Search query */
   search?: string;
+  /** Filter by archived status (filed=true for archived, filed=false for active) */
+  filed?: boolean;
 }
 
 /** Normalized order format for internal use */
@@ -145,12 +254,19 @@ export interface NormalizedBricqerOrder {
   status: string;
   buyerName: string;
   buyerEmail?: string;
+  buyerPhone?: string;
   subtotal: number;
   shipping: number;
   fees: number;
   total: number;
   currency: string;
   items: NormalizedBricqerOrderItem[];
+  /** Number of unique lots (different items) in the order */
+  lotCount?: number;
+  /** Total number of pieces (sum of quantities across all lots) */
+  pieceCount?: number;
+  /** Order description (e.g., "Used LEGO® products") */
+  orderDescription?: string;
   shippingAddress?: {
     name: string;
     address1?: string;

@@ -33,6 +33,29 @@ export class OrderRepository extends BaseRepository<
   }
 
   /**
+   * Get status patterns for filtering raw status field
+   * Matches the normalizeStatus logic in OrderStatusService
+   */
+  private getStatusPatterns(status: string): string[] {
+    switch (status) {
+      case 'Completed':
+        return ['completed', 'received'];
+      case 'Shipped':
+        return ['shipped', 'dispatched'];
+      case 'Packed':
+        return ['packed', 'ready'];
+      case 'Paid':
+        return ['paid', 'payment'];
+      case 'Cancelled':
+        return ['cancel', 'npb'];
+      case 'Pending':
+      default:
+        // Pending is the default - no specific patterns (handled separately)
+        return [];
+    }
+  }
+
+  /**
    * Find orders by user with optional filters
    */
   async findByUser(
@@ -56,7 +79,37 @@ export class OrderRepository extends BaseRepository<
     }
 
     if (filters?.status) {
-      query = query.eq('status', filters.status);
+      // Filter by internal_status OR by raw status patterns (matching normalizeStatus logic)
+      // This matches the counting logic in OrderStatusService.getStatusSummary
+      const statusPatterns = this.getStatusPatterns(filters.status);
+
+      if (statusPatterns.length > 0) {
+        // Build OR condition: internal_status = X OR (internal_status is null AND status matches patterns)
+        const patternConditions = statusPatterns.map((p) => `status.ilike.%${p}%`).join(',');
+        query = query.or(
+          `internal_status.eq.${filters.status},and(internal_status.is.null,or(${patternConditions}))`
+        );
+      } else {
+        // For Pending: match internal_status=Pending OR (internal_status is null AND status doesn't match other patterns)
+        // We need to exclude orders where status contains patterns that would normalize to other statuses
+        // All patterns that would NOT be Pending:
+        const nonPendingPatterns = [
+          'completed',
+          'received',
+          'shipped',
+          'dispatched',
+          'packed',
+          'ready',
+          'paid',
+          'payment',
+          'cancel',
+          'npb',
+        ];
+        const excludeConditions = nonPendingPatterns.map((p) => `status.not.ilike.%${p}%`).join(',');
+        query = query.or(
+          `internal_status.eq.Pending,and(internal_status.is.null,${excludeConditions})`
+        );
+      }
     }
 
     if (filters?.startDate) {
@@ -229,6 +282,7 @@ export class OrderRepository extends BaseRepository<
 
   /**
    * Get order statistics for a user
+   * Uses pagination to handle >1000 orders
    */
   async getStats(
     userId: string,
@@ -238,35 +292,82 @@ export class OrderRepository extends BaseRepository<
     totalRevenue: number;
     ordersByStatus: Record<string, number>;
   }> {
-    let query = this.supabase
-      .from('platform_orders')
-      .select('status, total')
-      .eq('user_id', userId);
-
-    if (platform) {
-      query = query.eq('platform', platform);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`Failed to get order stats: ${error.message}`);
-    }
-
-    const orders = data ?? [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
     const ordersByStatus: Record<string, number> = {};
     let totalRevenue = 0;
+    let totalOrders = 0;
 
-    for (const order of orders) {
-      const status = order.status || 'Unknown';
-      ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
-      totalRevenue += order.total || 0;
+    while (hasMore) {
+      let query = this.supabase
+        .from('platform_orders')
+        .select('status, total')
+        .eq('user_id', userId)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (platform) {
+        query = query.eq('platform', platform);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to get order stats: ${error.message}`);
+      }
+
+      const orders = data ?? [];
+
+      for (const order of orders) {
+        const status = order.status || 'Unknown';
+        ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
+        totalRevenue += order.total || 0;
+        totalOrders++;
+      }
+
+      hasMore = orders.length === pageSize;
+      page++;
     }
 
     return {
-      totalOrders: orders.length,
+      totalOrders,
       totalRevenue,
       ordersByStatus,
     };
+  }
+
+  /**
+   * Get count of orders by platform
+   * Uses accurate count query (no 1000 limit)
+   */
+  async countByPlatform(userId: string, platform: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('platform_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('platform', platform);
+
+    if (error) {
+      throw new Error(`Failed to count orders: ${error.message}`);
+    }
+
+    return count ?? 0;
+  }
+
+  /**
+   * Get count of all orders for a user
+   * Uses accurate count query (no 1000 limit)
+   */
+  async countByUser(userId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('platform_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (error) {
+      throw new Error(`Failed to count orders: ${error.message}`);
+    }
+
+    return count ?? 0;
   }
 }

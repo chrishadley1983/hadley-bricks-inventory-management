@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  ExternalLink,
   Loader2,
   AlertTriangle,
   CheckCircle2,
@@ -21,7 +20,12 @@ import {
   Truck,
   PackageCheck,
   XCircle,
+  ClipboardList,
+  PackageCheck as ConfirmIcon,
+  Download,
+  Square,
 } from 'lucide-react';
+import { ConfirmOrdersDialog } from '@/components/features/orders/ConfirmOrdersDialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -56,6 +60,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import type { PlatformOrder, OrderStatus } from '@hadley-bricks/database';
 
 const Header = dynamic(
@@ -83,8 +88,6 @@ interface PlatformStatus {
 
 interface AllPlatformsStatusResponse {
   data: {
-    bricklink?: PlatformStatus;
-    brickowl?: PlatformStatus;
     bricqer?: PlatformStatus;
     ebay?: PlatformStatus;
     amazon?: PlatformStatus;
@@ -115,6 +118,8 @@ interface SyncResponse {
 
 interface StatusSummaryResponse {
   data: Record<OrderStatus, number>;
+  total: number;
+  dateRange: string;
 }
 
 interface BulkUpdateResponse {
@@ -148,10 +153,154 @@ async function fetchAllPlatformStatuses(): Promise<AllPlatformsStatusResponse> {
   return response.json();
 }
 
-async function fetchStatusSummary(): Promise<StatusSummaryResponse> {
-  const response = await fetch('/api/orders/status-summary');
+async function fetchStatusSummary(days?: string, platform?: string): Promise<StatusSummaryResponse> {
+  const params = new URLSearchParams();
+  if (days && days !== 'all') params.set('days', days);
+  if (platform) params.set('platform', platform);
+  const url = `/api/orders/status-summary${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
   if (!response.ok) throw new Error('Failed to fetch status summary');
   return response.json();
+}
+
+interface EbayStatusSummary {
+  all: number;
+  Paid: number;
+  Packed: number;
+  Completed: number;
+  Refunded: number;
+}
+
+async function fetchEbayStatus(): Promise<{ isConnected: boolean }> {
+  const response = await fetch('/api/integrations/ebay/status');
+  if (!response.ok) return { isConnected: false };
+  return response.json();
+}
+
+async function fetchEbayStatusSummary(days?: string): Promise<{ data: EbayStatusSummary }> {
+  const params = new URLSearchParams();
+  if (days && days !== 'all') params.set('days', days);
+  const url = `/api/orders/ebay/status-summary${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch eBay status summary');
+  return response.json();
+}
+
+async function fetchEbaySyncLog(): Promise<{ logs: Array<{ started_at: string; status: string }> }> {
+  const response = await fetch('/api/integrations/ebay/sync');
+  if (!response.ok) return { logs: [] };
+  return response.json();
+}
+
+// eBay orders for the table
+interface EbayOrder {
+  id: string;
+  ebay_order_id: string;
+  buyer_username: string;
+  creation_date: string;
+  total: number;
+  currency: string;
+  order_fulfilment_status: string;
+  order_payment_status: string;
+  ui_status: string;
+}
+
+interface EbayOrdersResponse {
+  data: EbayOrder[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+async function fetchEbayOrders(
+  page: number,
+  status?: string,
+  search?: string
+): Promise<EbayOrdersResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: '20' });
+  if (status && status !== 'all') params.set('status', status);
+  if (search) params.set('search', search);
+
+  const response = await fetch(`/api/orders/ebay?${params}`);
+  if (!response.ok) throw new Error('Failed to fetch eBay orders');
+  return response.json();
+}
+
+// Transform eBay order to PlatformOrder-like format for display
+function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder {
+  return {
+    id: ebayOrder.id,
+    platform: 'ebay',
+    platform_order_id: ebayOrder.ebay_order_id,
+    order_date: ebayOrder.creation_date,
+    buyer_name: ebayOrder.buyer_username,
+    buyer_email: null,
+    total: ebayOrder.total,
+    subtotal: null,
+    shipping: null,
+    tax: null,
+    fees: null,
+    currency: ebayOrder.currency,
+    status: ebayOrder.ui_status,
+    internal_status: ebayOrder.ui_status as OrderStatus,
+    shipping_address: null,
+    created_at: ebayOrder.creation_date,
+    updated_at: ebayOrder.creation_date,
+    synced_at: null,
+    user_id: '',
+    items: [],
+    // Additional fields expected by PlatformOrder
+    cancelled_at: null,
+    completed_at: null,
+    items_count: null,
+    notes: null,
+    packed_at: null,
+    payment_method: null,
+    shipped_at: null,
+  } as unknown as PlatformOrder;
+}
+
+// Backfill types and functions
+interface BackfillProgress {
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+  isRunning: boolean;
+  startedAt: string | null;
+  estimatedSecondsRemaining: number | null;
+  currentOrderId: string | null;
+  errors: string[];
+}
+
+interface BackfillStatusResponse {
+  data: {
+    progress: BackfillProgress;
+    ordersNeedingBackfill: number;
+  };
+}
+
+async function fetchBackfillStatus(): Promise<BackfillStatusResponse> {
+  const response = await fetch('/api/orders/backfill');
+  if (!response.ok) throw new Error('Failed to fetch backfill status');
+  return response.json();
+}
+
+async function startBackfill(batchSize?: number): Promise<{ data: { progress: BackfillProgress } }> {
+  const response = await fetch('/api/orders/backfill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ batchSize: batchSize || 50 }),
+  });
+  if (!response.ok) throw new Error('Failed to start backfill');
+  return response.json();
+}
+
+async function stopBackfill(): Promise<void> {
+  await fetch('/api/orders/backfill', { method: 'DELETE' });
 }
 
 async function triggerSync(): Promise<SyncResponse> {
@@ -161,6 +310,25 @@ async function triggerSync(): Promise<SyncResponse> {
     body: JSON.stringify({ includeItems: true }),
   });
   if (!response.ok) throw new Error('Failed to sync');
+  return response.json();
+}
+
+async function triggerPlatformSync(platform: string): Promise<SyncResponse> {
+  const response = await fetch('/api/integrations/sync-all-orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ platforms: [platform], includeItems: true }),
+  });
+  if (!response.ok) throw new Error(`Failed to sync ${platform}`);
+  return response.json();
+}
+
+async function triggerEbaySync(): Promise<{ success: boolean }> {
+  const response = await fetch('/api/integrations/ebay/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Failed to sync eBay');
   return response.json();
 }
 
@@ -197,13 +365,15 @@ function getStatusColor(status: string | null): string {
   return 'bg-gray-100 text-gray-800';
 }
 
-function formatCurrency(amount: number | null, currency = 'GBP'): string {
+function formatCurrency(amount: number | null, currency?: string | null): string {
   if (amount === null) return '-';
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
-    currency,
+    currency: currency || 'GBP',
   }).format(amount);
 }
+
+type TimeframeOption = 'all' | '7' | '30' | '90';
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
@@ -212,10 +382,26 @@ export default function OrdersPage() {
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmDialogPlatform, setConfirmDialogPlatform] = useState<'amazon' | 'ebay'>('amazon');
+  const [timeframe, setTimeframe] = useState<TimeframeOption>('all');
 
+  // Use different query based on platform selection
+  const isEbayPlatform = platform === 'ebay';
+  const isAllPlatforms = platform === 'all';
+
+  // Regular orders query (when not filtering to eBay only)
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['orders', page, platform, status, search],
     queryFn: () => fetchOrders(page, platform, status, search),
+    enabled: !isEbayPlatform,
+  });
+
+  // eBay orders query (when eBay platform selected OR when showing all platforms)
+  const { data: ebayOrdersData, isLoading: ebayOrdersLoading } = useQuery({
+    queryKey: ['ebay', 'orders', 'list', page, status, search],
+    queryFn: () => fetchEbayOrders(page, status, search),
+    enabled: isEbayPlatform || isAllPlatforms,
   });
 
   const { data: platformStatuses, isLoading: statusLoading } = useQuery({
@@ -225,23 +411,133 @@ export default function OrdersPage() {
   });
 
   const { data: statusSummary } = useQuery({
-    queryKey: ['orders', 'status-summary'],
-    queryFn: fetchStatusSummary,
+    queryKey: ['orders', 'status-summary', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe),
     refetchInterval: 30000,
   });
 
-  const bricklinkStatus = platformStatuses?.data?.bricklink;
-  const brickowlStatus = platformStatuses?.data?.brickowl;
+  // eBay specific queries
+  const { data: ebayConnectionStatus } = useQuery({
+    queryKey: ['ebay', 'status'],
+    queryFn: fetchEbayStatus,
+    refetchInterval: 60000,
+  });
+
+  const { data: ebayStatusSummary } = useQuery({
+    queryKey: ['ebay', 'orders', 'status-summary', timeframe],
+    queryFn: () => fetchEbayStatusSummary(timeframe),
+    enabled: ebayConnectionStatus?.isConnected,
+    refetchInterval: 30000,
+  });
+
+  const { data: ebaySyncLog } = useQuery({
+    queryKey: ['ebay', 'sync-log'],
+    queryFn: fetchEbaySyncLog,
+    enabled: ebayConnectionStatus?.isConnected,
+    refetchInterval: 60000,
+  });
+
   const bricqerStatus = platformStatuses?.data?.bricqer;
+  const amazonStatus = platformStatuses?.data?.amazon;
+
+  // Platform-specific status summaries (must be after bricqerStatus/amazonStatus are defined)
+  const { data: bricqerStatusSummary } = useQuery({
+    queryKey: ['orders', 'status-summary', 'bricqer', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe, 'bricqer'),
+    enabled: bricqerStatus?.isConfigured,
+    refetchInterval: 30000,
+  });
+
+  const { data: amazonStatusSummary } = useQuery({
+    queryKey: ['orders', 'status-summary', 'amazon', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe, 'amazon'),
+    enabled: amazonStatus?.isConfigured,
+    refetchInterval: 30000,
+  });
+
+  // Amazon backfill query - poll while running
+  const { data: backfillStatus } = useQuery({
+    queryKey: ['amazon', 'backfill'],
+    queryFn: fetchBackfillStatus,
+    enabled: amazonStatus?.isConfigured || false,
+    refetchInterval: (query) => {
+      // Poll every 2 seconds while running, otherwise every 30 seconds
+      return query.state.data?.data?.progress?.isRunning ? 2000 : 30000;
+    },
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: startBackfill,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'backfill'] });
+    },
+  });
+
+  const stopBackfillMutation = useMutation({
+    mutationFn: stopBackfill,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'backfill'] });
+    },
+  });
+  const ebayConnected = ebayConnectionStatus?.isConnected || false;
+  const ebayLastSync = ebaySyncLog?.logs?.[0]?.started_at;
+  const ebayUnfulfilledCount = (ebayStatusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Packed || 0);
+
+  // Backfill state
+  const backfillProgress = backfillStatus?.data?.progress;
+  const ordersNeedingBackfill = backfillStatus?.data?.ordersNeedingBackfill || 0;
+  const isBackfillRunning = backfillProgress?.isRunning || false;
+
+  // Compute combined status summary (regular orders + eBay orders)
+  // Note: eBay orders are stored in a separate table so we need to add them
+  const combinedStatusSummary = {
+    Pending: (statusSummary?.data?.Pending || 0),
+    Paid: (statusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Paid || 0),
+    Packed: (statusSummary?.data?.Packed || 0) + (ebayStatusSummary?.data?.Packed || 0),
+    Shipped: (statusSummary?.data?.Shipped || 0),
+    Completed: (statusSummary?.data?.Completed || 0) + (ebayStatusSummary?.data?.Completed || 0),
+    Cancelled: (statusSummary?.data?.Cancelled || 0) + (ebayStatusSummary?.data?.Refunded || 0),
+  };
+
+  // Total order count from status summary (this is the accurate total from DB)
+  // Use the total from status summary API which sums all statuses correctly
+  const platformOrdersTotal = statusSummary?.total || 0;
+  const ebayOrdersTotal = ebayStatusSummary?.data?.all || 0;
+  const totalOrderCount = platformOrdersTotal + ebayOrdersTotal;
+
   const hasAnyPlatformConfigured =
-    bricklinkStatus?.isConfigured ||
-    brickowlStatus?.isConfigured ||
-    bricqerStatus?.isConfigured;
+    bricqerStatus?.isConfigured ||
+    amazonStatus?.isConfigured ||
+    ebayConnected;
 
   const syncMutation = useMutation({
     mutationFn: triggerSync,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
+    },
+  });
+
+  const bricqerSyncMutation = useMutation({
+    mutationFn: () => triggerPlatformSync('bricqer'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
+    },
+  });
+
+  const amazonSyncMutation = useMutation({
+    mutationFn: () => triggerPlatformSync('amazon'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
+    },
+  });
+
+  const ebaySyncMutation = useMutation({
+    mutationFn: triggerEbaySync,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ebay'] });
       queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
     },
   });
@@ -255,8 +551,44 @@ export default function OrdersPage() {
     },
   });
 
-  const orders = ordersData?.data || [];
-  const pagination = ordersData?.pagination;
+  // Compute orders and pagination based on platform selection
+  let orders: PlatformOrder[];
+  let pagination: OrdersResponse['pagination'] | undefined;
+  let isLoading: boolean;
+
+  if (isEbayPlatform) {
+    // eBay only
+    orders = (ebayOrdersData?.data || []).map(transformEbayOrderForDisplay);
+    pagination = ebayOrdersData?.pagination;
+    isLoading = ebayOrdersLoading;
+  } else if (isAllPlatforms) {
+    // Merge regular orders with eBay orders
+    const regularOrders = ordersData?.data || [];
+    const ebayOrders = (ebayOrdersData?.data || []).map(transformEbayOrderForDisplay);
+
+    // Combine and sort by date (most recent first)
+    orders = [...regularOrders, ...ebayOrders].sort((a, b) => {
+      const dateA = a.order_date ? new Date(a.order_date).getTime() : 0;
+      const dateB = b.order_date ? new Date(b.order_date).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    // For "all platforms", we show a combined view - pagination is approximate
+    const regularTotal = ordersData?.pagination?.total || 0;
+    const ebayTotal = ebayOrdersData?.pagination?.total || 0;
+    pagination = {
+      page: 1,
+      pageSize: orders.length,
+      total: regularTotal + ebayTotal,
+      totalPages: 1,
+    };
+    isLoading = ordersLoading || ebayOrdersLoading;
+  } else {
+    // Specific platform (not eBay)
+    orders = ordersData?.data || [];
+    pagination = ordersData?.pagination;
+    isLoading = ordersLoading;
+  }
 
   const toggleOrderSelection = (orderId: string) => {
     const newSelection = new Set(selectedOrders);
@@ -299,7 +631,19 @@ export default function OrdersPage() {
               View and manage orders from your connected platforms
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-4">
+            {/* Timeframe Selector */}
+            <Select value={timeframe} onValueChange={(v: string) => setTimeframe(v as TimeframeOption)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Timeframe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="7">Last 7 Days</SelectItem>
+                <SelectItem value="30">Last 30 Days</SelectItem>
+                <SelectItem value="90">Last 90 Days</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending || !hasAnyPlatformConfigured}
@@ -325,8 +669,7 @@ export default function OrdersPage() {
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="flex items-center justify-between">
               <span>
-                No platforms configured. Connect BrickLink, Brick Owl, or Bricqer to sync
-                orders.
+                No platforms configured. Connect Bricqer, Amazon, or eBay to sync orders.
               </span>
               <Link href="/settings/integrations">
                 <Button variant="outline" size="sm">
@@ -357,7 +700,7 @@ export default function OrdersPage() {
         )}
 
         {/* Status Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-7">
           <Card
             className={`cursor-pointer transition-colors ${status === 'all' ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
             onClick={() => setStatus('all')}
@@ -367,23 +710,23 @@ export default function OrdersPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {pagination?.total?.toLocaleString() || '-'}
+                {totalOrderCount.toLocaleString()}
               </div>
             </CardContent>
           </Card>
 
-          {(['Pending', 'Paid', 'Packed', 'Shipped', 'Completed'] as const).map((s) => (
+          {(['Pending', 'Paid', 'Packed', 'Shipped', 'Completed', 'Cancelled'] as const).map((s) => (
             <Card
               key={s}
               className={`cursor-pointer transition-colors ${status === s ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
               onClick={() => setStatus(status === s ? 'all' : s)}
             >
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{s}</CardTitle>
+                <CardTitle className="text-sm font-medium">{s === 'Cancelled' ? 'Cancelled/Refunded' : s}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {statusSummary?.data?.[s]?.toLocaleString() || '0'}
+                  {combinedStatusSummary[s]?.toLocaleString() || '0'}
                 </div>
               </CardContent>
             </Card>
@@ -391,93 +734,484 @@ export default function OrdersPage() {
         </div>
 
         {/* Platform Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Bricqer Card */}
+          <Card className={`${platform === 'bricqer' ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">BrickLink</CardTitle>
-              {bricklinkStatus?.isConfigured ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {bricklinkStatus?.isConfigured
-                  ? bricklinkStatus.totalOrders.toLocaleString()
-                  : 'Not configured'}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {bricklinkStatus?.lastSyncedAt
-                  ? `Last sync: ${format(new Date(bricklinkStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                  : bricklinkStatus?.isConfigured
-                    ? 'Never synced'
-                    : 'Connect in Settings'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Brick Owl</CardTitle>
-              {brickowlStatus?.isConfigured ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {brickowlStatus?.isConfigured
-                  ? brickowlStatus.totalOrders.toLocaleString()
-                  : 'Not configured'}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {brickowlStatus?.lastSyncedAt
-                  ? `Last sync: ${format(new Date(brickowlStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                  : brickowlStatus?.isConfigured
-                    ? 'Never synced'
-                    : 'Connect in Settings'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Bricqer</CardTitle>
+              <CardTitle
+                className="text-sm font-medium cursor-pointer hover:text-primary"
+                onClick={() => setPlatform(platform === 'bricqer' ? 'all' : 'bricqer')}
+              >
+                Bricqer
+              </CardTitle>
               {bricqerStatus?.isConfigured ? (
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               ) : (
                 <AlertTriangle className="h-4 w-4 text-yellow-500" />
               )}
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {bricqerStatus?.isConfigured
-                  ? bricqerStatus.totalOrders.toLocaleString()
-                  : 'Not configured'}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {bricqerStatus?.lastSyncedAt
-                  ? `Last sync: ${format(new Date(bricqerStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                  : bricqerStatus?.isConfigured
-                    ? 'Never synced'
-                    : 'Connect in Settings'}
-              </p>
+            <CardContent className="space-y-3">
+              {bricqerStatus?.isConfigured ? (
+                <>
+                  <div className="space-y-1">
+                    <div
+                      className="text-2xl font-bold cursor-pointer hover:text-primary"
+                      onClick={() => {
+                        setPlatform('bricqer');
+                        setStatus('all');
+                      }}
+                    >
+                      {(bricqerStatusSummary?.total || 0).toLocaleString()} orders
+                    </div>
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      <span
+                        className="text-yellow-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('bricqer');
+                          setStatus('Pending');
+                        }}
+                      >
+                        {bricqerStatusSummary?.data?.Pending || 0} Pending
+                      </span>
+                      <span
+                        className="text-purple-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('bricqer');
+                          setStatus('Paid');
+                        }}
+                      >
+                        {bricqerStatusSummary?.data?.Paid || 0} Paid
+                      </span>
+                      <span
+                        className="text-blue-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('bricqer');
+                          setStatus('Shipped');
+                        }}
+                      >
+                        {bricqerStatusSummary?.data?.Shipped || 0} Shipped
+                      </span>
+                      <span
+                        className="text-green-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('bricqer');
+                          setStatus('Completed');
+                        }}
+                      >
+                        {bricqerStatusSummary?.data?.Completed || 0} Done
+                      </span>
+                      <span
+                        className="text-red-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('bricqer');
+                          setStatus('Cancelled');
+                        }}
+                      >
+                        {bricqerStatusSummary?.data?.Cancelled || 0} Cancelled
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {bricqerStatus.lastSyncedAt
+                      ? `Last sync: ${format(new Date(bricqerStatus.lastSyncedAt), 'MMM d, h:mm a')}`
+                      : 'Never synced'}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      bricqerSyncMutation.mutate();
+                    }}
+                    disabled={bricqerSyncMutation.isPending}
+                  >
+                    {bricqerSyncMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Sync Bricqer
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
+                  <Link href="/settings/integrations">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure
+                    </Button>
+                  </Link>
+                </>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
+          {/* Amazon Card */}
+          <Card className={`${platform === 'amazon' ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Other Platforms</CardTitle>
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              <CardTitle
+                className="text-sm font-medium cursor-pointer hover:text-primary"
+                onClick={() => setPlatform(platform === 'amazon' ? 'all' : 'amazon')}
+              >
+                Amazon
+              </CardTitle>
+              {amazonStatus?.isConfigured ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              )}
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">Coming Soon</div>
-              <p className="text-xs text-muted-foreground">eBay, Amazon support planned</p>
+            <CardContent className="space-y-3">
+              {amazonStatus?.isConfigured ? (
+                <>
+                  <div className="space-y-1">
+                    <div
+                      className="text-2xl font-bold cursor-pointer hover:text-primary"
+                      onClick={() => {
+                        setPlatform('amazon');
+                        setStatus('all');
+                      }}
+                    >
+                      {(amazonStatusSummary?.total || 0).toLocaleString()} orders
+                    </div>
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      <span
+                        className="text-yellow-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('amazon');
+                          setStatus('Pending');
+                        }}
+                      >
+                        {amazonStatusSummary?.data?.Pending || 0} Pending
+                      </span>
+                      <span
+                        className="text-purple-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('amazon');
+                          setStatus('Paid');
+                        }}
+                      >
+                        {amazonStatusSummary?.data?.Paid || 0} Paid
+                      </span>
+                      <span
+                        className="text-blue-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('amazon');
+                          setStatus('Shipped');
+                        }}
+                      >
+                        {amazonStatusSummary?.data?.Shipped || 0} Shipped
+                      </span>
+                      <span
+                        className="text-green-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('amazon');
+                          setStatus('Completed');
+                        }}
+                      >
+                        {amazonStatusSummary?.data?.Completed || 0} Done
+                      </span>
+                      <span
+                        className="text-red-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('amazon');
+                          setStatus('Cancelled');
+                        }}
+                      >
+                        {amazonStatusSummary?.data?.Cancelled || 0} Cancelled
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {amazonStatus.lastSyncedAt
+                      ? `Last sync: ${format(new Date(amazonStatus.lastSyncedAt), 'MMM d, h:mm a')}`
+                      : 'Never synced'}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        amazonSyncMutation.mutate();
+                      }}
+                      disabled={amazonSyncMutation.isPending}
+                    >
+                      {amazonSyncMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-1 h-4 w-4" />
+                          Sync
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open('/api/picking-list/amazon?format=pdf', '_blank');
+                      }}
+                    >
+                      <ClipboardList className="mr-1 h-4 w-4" />
+                      Pick List
+                    </Button>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDialogPlatform('amazon');
+                      setConfirmDialogOpen(true);
+                    }}
+                  >
+                    <ConfirmIcon className="mr-2 h-4 w-4" />
+                    Confirm Orders Processed
+                  </Button>
+
+                  {/* Backfill Section */}
+                  {ordersNeedingBackfill > 0 && !isBackfillRunning && (
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                        <span>{ordersNeedingBackfill} orders missing item details</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          backfillMutation.mutate(50);
+                        }}
+                        disabled={backfillMutation.isPending}
+                      >
+                        {backfillMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Fetch Missing Items
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Backfill Progress */}
+                  {isBackfillRunning && backfillProgress && (
+                    <div className="pt-2 border-t space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Fetching items: {backfillProgress.processed}/{backfillProgress.total}
+                        </span>
+                        {backfillProgress.estimatedSecondsRemaining !== null && (
+                          <span className="text-muted-foreground">
+                            ~{Math.ceil(backfillProgress.estimatedSecondsRemaining / 60)}m remaining
+                          </span>
+                        )}
+                      </div>
+                      <Progress
+                        value={(backfillProgress.processed / backfillProgress.total) * 100}
+                        className="h-2"
+                      />
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-green-600">{backfillProgress.success} success</span>
+                        {backfillProgress.failed > 0 && (
+                          <span className="text-red-600">{backfillProgress.failed} failed</span>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          stopBackfillMutation.mutate();
+                        }}
+                        disabled={stopBackfillMutation.isPending}
+                      >
+                        <Square className="mr-2 h-4 w-4" />
+                        Stop Backfill
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Backfill Complete Message */}
+                  {!isBackfillRunning && backfillProgress && backfillProgress.processed > 0 && ordersNeedingBackfill === 0 && (
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center gap-2 text-xs text-green-600">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>All order items fetched</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
+                  <Link href="/settings/integrations">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* eBay Card */}
+          <Card className={`${platform === 'ebay' ? 'ring-2 ring-primary' : ''}`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle
+                className="text-sm font-medium cursor-pointer hover:text-primary"
+                onClick={() => setPlatform(platform === 'ebay' ? 'all' : 'ebay')}
+              >
+                eBay
+              </CardTitle>
+              {ebayConnected ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {ebayConnected ? (
+                <>
+                  <div className="space-y-1">
+                    <div
+                      className="text-2xl font-bold cursor-pointer hover:text-primary"
+                      onClick={() => {
+                        setPlatform('ebay');
+                        setStatus('all');
+                      }}
+                    >
+                      {(ebayStatusSummary?.data?.all || 0).toLocaleString()} orders
+                    </div>
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      <span
+                        className="text-purple-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('ebay');
+                          setStatus('Paid');
+                        }}
+                      >
+                        {ebayStatusSummary?.data?.Paid || 0} Paid
+                      </span>
+                      <span
+                        className="text-blue-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('ebay');
+                          setStatus('Packed');
+                        }}
+                      >
+                        {ebayStatusSummary?.data?.Packed || 0} Packed
+                      </span>
+                      <span
+                        className="text-green-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('ebay');
+                          setStatus('Completed');
+                        }}
+                      >
+                        {ebayStatusSummary?.data?.Completed || 0} Done
+                      </span>
+                      <span
+                        className="text-red-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('ebay');
+                          setStatus('Cancelled');
+                        }}
+                      >
+                        {ebayStatusSummary?.data?.Refunded || 0} Refunded
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {ebayLastSync
+                      ? `Last sync: ${format(new Date(ebayLastSync), 'MMM d, h:mm a')}`
+                      : 'Never synced'}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ebaySyncMutation.mutate();
+                      }}
+                      disabled={ebaySyncMutation.isPending}
+                    >
+                      {ebaySyncMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-1 h-4 w-4" />
+                          Sync
+                        </>
+                      )}
+                    </Button>
+                    {ebayUnfulfilledCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open('/api/picking-list/ebay?format=pdf', '_blank');
+                        }}
+                      >
+                        <ClipboardList className="mr-1 h-4 w-4" />
+                        Pick List
+                      </Button>
+                    )}
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDialogPlatform('ebay');
+                      setConfirmDialogOpen(true);
+                    }}
+                  >
+                    <ConfirmIcon className="mr-2 h-4 w-4" />
+                    Confirm Orders Processed
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-medium text-muted-foreground">Not connected</div>
+                  <Link href="/settings/integrations">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Connect
+                    </Button>
+                  </Link>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Confirm Orders Dialog */}
+        <ConfirmOrdersDialog
+          open={confirmDialogOpen}
+          onOpenChange={setConfirmDialogOpen}
+          platform={confirmDialogPlatform}
+        />
 
         {/* Orders Table Card */}
         <Card>
@@ -553,9 +1287,9 @@ export default function OrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Platforms</SelectItem>
-                  <SelectItem value="bricklink">BrickLink</SelectItem>
-                  <SelectItem value="brickowl">Brick Owl</SelectItem>
                   <SelectItem value="bricqer">Bricqer</SelectItem>
+                  <SelectItem value="amazon">Amazon</SelectItem>
+                  <SelectItem value="ebay">eBay</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -599,7 +1333,7 @@ export default function OrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ordersLoading ? (
+                  {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto" />
@@ -611,7 +1345,9 @@ export default function OrdersPage() {
                         colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
-                        No orders found. Try syncing with BrickLink.
+                        {isEbayPlatform
+                          ? 'No eBay orders found. Try syncing with eBay.'
+                          : 'No orders found. Try syncing with the selected platform.'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -658,11 +1394,15 @@ export default function OrdersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/orders/${order.id}`}>View Details</Link>
+                                <Link href={order.platform === 'ebay' ? `/orders/ebay/${order.id}` : `/orders/${order.id}`}>
+                                  View Details
+                                </Link>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
-                                <Link href={`/orders/${order.id}`}>Update Status</Link>
+                                <Link href={order.platform === 'ebay' ? `/orders/ebay/${order.id}` : `/orders/${order.id}`}>
+                                  Update Status
+                                </Link>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

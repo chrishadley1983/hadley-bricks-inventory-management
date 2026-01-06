@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
+import { usePlatforms } from '@/hooks';
 import type { InventoryFilters as Filters } from '@/lib/api';
 
 interface InventoryFiltersProps {
@@ -20,7 +21,7 @@ interface InventoryFiltersProps {
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'NOT YET RECEIVED', label: 'Not Yet Received' },
-  { value: 'IN STOCK', label: 'In Stock' },
+  { value: 'BACKLOG', label: 'Backlog' },
   { value: 'LISTED', label: 'Listed' },
   { value: 'SOLD', label: 'Sold' },
 ];
@@ -32,7 +33,8 @@ const CONDITION_OPTIONS = [
 ];
 
 export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersProps) {
-  const hasActiveFilters = filters.status || filters.condition || filters.search;
+  const { data: platforms = [] } = usePlatforms();
+  const hasActiveFilters = filters.status || filters.condition || filters.platform || filters.search;
 
   const clearFilters = () => {
     onFiltersChange({});
@@ -82,6 +84,25 @@ export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersP
             {CONDITION_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.platform || 'all'}
+          onValueChange={(value: string) =>
+            onFiltersChange({ ...filters, platform: value === 'all' ? undefined : value })
+          }
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Platform" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Platforms</SelectItem>
+            {platforms.map((platform) => (
+              <SelectItem key={platform} value={platform}>
+                {platform}
               </SelectItem>
             ))}
           </SelectContent>

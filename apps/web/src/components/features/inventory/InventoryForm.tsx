@@ -32,7 +32,7 @@ const inventoryFormSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
   item_name: z.string().optional(),
   condition: z.enum(['New', 'Used']).optional(),
-  status: z.enum(['NOT YET RECEIVED', 'IN STOCK', 'LISTED', 'SOLD']).optional(),
+  status: z.enum(['NOT YET RECEIVED', 'BACKLOG', 'LISTED', 'SOLD']).optional(),
   source: z.string().optional(),
   purchase_date: z.string().optional(),
   cost: z.string().optional(),
@@ -55,7 +55,7 @@ interface InventoryFormProps {
 
 const STATUS_OPTIONS = [
   { value: 'NOT YET RECEIVED', label: 'Not Yet Received' },
-  { value: 'IN STOCK', label: 'In Stock' },
+  { value: 'BACKLOG', label: 'Backlog' },
   { value: 'LISTED', label: 'Listed' },
   { value: 'SOLD', label: 'Sold' },
 ];
@@ -96,7 +96,7 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
       ? {
           set_number: existingItem.set_number,
           item_name: existingItem.item_name || '',
-          condition: existingItem.condition || undefined,
+          condition: (existingItem.condition as 'New' | 'Used' | undefined) || undefined,
           status: (existingItem.status as InventoryFormValues['status']) || 'NOT YET RECEIVED',
           source: existingItem.source || '',
           purchase_date: existingItem.purchase_date || '',

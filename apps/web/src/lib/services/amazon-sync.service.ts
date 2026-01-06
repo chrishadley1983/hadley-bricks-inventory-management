@@ -1,0 +1,439 @@
+/**
+ * Amazon Sync Service
+ *
+ * Handles syncing orders from Amazon SP-API to local database.
+ */
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database, PlatformOrderInsert, OrderItemInsert } from '@hadley-bricks/database';
+import {
+  AmazonClient,
+  AmazonApiError,
+  AmazonRateLimitError,
+  AmazonAuthError,
+  normalizeOrder,
+  type AmazonCredentials,
+  type AmazonOrder,
+  type NormalizedAmazonOrder,
+  type AmazonOrderStatus,
+} from '../amazon';
+import { OrderRepository, CredentialsRepository } from '../repositories';
+import type { SyncResult } from '../adapters/platform-adapter.interface';
+
+export interface AmazonSyncOptions {
+  /** Sync orders created after this date */
+  createdAfter?: Date;
+  /** Sync orders updated after this date */
+  updatedAfter?: Date;
+  /** Filter by order status(es) */
+  statuses?: AmazonOrderStatus[];
+  /** Only sync merchant fulfilled orders (exclude FBA) */
+  merchantFulfilledOnly?: boolean;
+  /** Sync items for each order (slower but more complete) */
+  includeItems?: boolean;
+  /** Maximum number of orders to sync */
+  limit?: number;
+}
+
+/**
+ * Default marketplaces for EU sellers
+ */
+const DEFAULT_EU_MARKETPLACES = [
+  'A1F83G8C2ARO7P', // UK
+  'A1PA6795UKMFR9', // DE
+  'A13V1IB3VIYBER', // FR
+  'APJ6JRA9NG5V4', // IT
+  'A1RKKUPIHCS9HS', // ES
+];
+
+/**
+ * Service for syncing Amazon orders
+ */
+export class AmazonSyncService {
+  private orderRepo: OrderRepository;
+  private credentialsRepo: CredentialsRepository;
+
+  constructor(private supabase: SupabaseClient<Database>) {
+    this.orderRepo = new OrderRepository(supabase);
+    this.credentialsRepo = new CredentialsRepository(supabase);
+  }
+
+  /**
+   * Get Amazon client for a user
+   */
+  private async getClient(userId: string): Promise<AmazonClient> {
+    const credentials = await this.credentialsRepo.getCredentials<AmazonCredentials>(
+      userId,
+      'amazon'
+    );
+
+    if (!credentials) {
+      throw new Error('Amazon credentials not configured');
+    }
+
+    return new AmazonClient(credentials);
+  }
+
+  /**
+   * Test Amazon connection with stored credentials
+   */
+  async testConnection(userId: string): Promise<boolean> {
+    const client = await this.getClient(userId);
+    return client.testConnection();
+  }
+
+  /**
+   * Test Amazon connection with provided credentials (doesn't read from DB)
+   */
+  async testConnectionWithCredentials(credentials: AmazonCredentials): Promise<boolean> {
+    const client = new AmazonClient(credentials);
+    return client.testConnection();
+  }
+
+  /**
+   * Save Amazon credentials
+   */
+  async saveCredentials(userId: string, credentials: AmazonCredentials): Promise<void> {
+    // Ensure marketplaces are set
+    if (!credentials.marketplaceIds || credentials.marketplaceIds.length === 0) {
+      credentials.marketplaceIds = DEFAULT_EU_MARKETPLACES;
+    }
+    await this.credentialsRepo.saveCredentials(userId, 'amazon', credentials);
+  }
+
+  /**
+   * Delete Amazon credentials
+   */
+  async deleteCredentials(userId: string): Promise<void> {
+    await this.credentialsRepo.deleteCredentials(userId, 'amazon');
+  }
+
+  /**
+   * Check if Amazon is configured
+   */
+  async isConfigured(userId: string): Promise<boolean> {
+    return this.credentialsRepo.hasCredentials(userId, 'amazon');
+  }
+
+  /**
+   * Get the most recent order date from the database for a user
+   */
+  private async getMostRecentOrderDate(userId: string): Promise<Date | null> {
+    const { data, error } = await this.supabase
+      .from('platform_orders')
+      .select('order_date')
+      .eq('user_id', userId)
+      .eq('platform', 'amazon')
+      .order('order_date', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0 || !data[0].order_date) {
+      return null;
+    }
+
+    return new Date(data[0].order_date);
+  }
+
+  /**
+   * Sync orders from Amazon
+   * By default, only syncs orders newer than the most recent order in the database.
+   * Use options.createdAfter to override this behavior and sync from a specific date.
+   */
+  async syncOrders(userId: string, options: AmazonSyncOptions = {}): Promise<SyncResult> {
+    const result: SyncResult = {
+      success: false,
+      platform: 'amazon',
+      ordersProcessed: 0,
+      ordersCreated: 0,
+      ordersUpdated: 0,
+      errors: [],
+      lastSyncedAt: new Date(),
+    };
+
+    console.log('[AmazonSyncService] Starting sync for user:', userId.substring(0, 8) + '...');
+    console.log('[AmazonSyncService] Options:', JSON.stringify(options));
+
+    try {
+      console.log('[AmazonSyncService] Getting client...');
+      const client = await this.getClient(userId);
+      console.log('[AmazonSyncService] Client created successfully');
+
+      // Build query params
+      const queryParams: Parameters<AmazonClient['getAllOrders']>[0] = {};
+
+      // Determine the start date for fetching orders
+      if (options.createdAfter) {
+        // Explicit date provided - use it
+        queryParams.CreatedAfter = options.createdAfter.toISOString();
+        console.log('[AmazonSyncService] Using explicit createdAfter:', options.createdAfter.toISOString());
+      } else if (!options.updatedAfter) {
+        // No explicit date - check for most recent order in database
+        const mostRecentOrderDate = await this.getMostRecentOrderDate(userId);
+
+        if (mostRecentOrderDate) {
+          // Add a small buffer (1 minute) to avoid missing orders created at the exact same time
+          const startDate = new Date(mostRecentOrderDate.getTime() - 60000);
+          queryParams.CreatedAfter = startDate.toISOString();
+          console.log('[AmazonSyncService] Syncing orders after most recent:', startDate.toISOString());
+        } else {
+          // No orders in database - default to last 90 days
+          const ninetyDaysAgo = new Date();
+          ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+          queryParams.CreatedAfter = ninetyDaysAgo.toISOString();
+          console.log('[AmazonSyncService] No existing orders, using 90-day default:', ninetyDaysAgo.toISOString());
+        }
+      }
+
+      if (options.updatedAfter) {
+        queryParams.LastUpdatedAfter = options.updatedAfter.toISOString();
+      }
+
+      if (options.statuses && options.statuses.length > 0) {
+        queryParams.OrderStatuses = options.statuses;
+      }
+
+      if (options.merchantFulfilledOnly) {
+        queryParams.FulfillmentChannels = ['MFN'];
+      }
+
+      if (options.limit) {
+        queryParams.MaxResultsPerPage = Math.min(options.limit, 100);
+      }
+
+      // Fetch orders
+      console.log('[AmazonSyncService] Fetching orders...');
+      let orders: AmazonOrder[];
+
+      if (options.limit) {
+        // If limit specified, just get first page
+        orders = await client.getOrders(queryParams);
+        if (orders.length > options.limit) {
+          orders = orders.slice(0, options.limit);
+        }
+      } else {
+        // Get all orders with pagination
+        orders = await client.getAllOrders(queryParams);
+      }
+
+      console.log('[AmazonSyncService] Fetched', orders.length, 'orders from Amazon');
+      result.ordersProcessed = orders.length;
+
+      // Process orders
+      for (const orderSummary of orders) {
+        try {
+          const orderId = orderSummary.AmazonOrderId;
+
+          // Check if order already exists
+          const existing = await this.orderRepo.findByPlatformOrderId(
+            userId,
+            'amazon',
+            orderId
+          );
+
+          await this.processOrder(userId, client, orderSummary, options.includeItems ?? false);
+
+          if (existing) {
+            result.ordersUpdated++;
+          } else {
+            result.ordersCreated++;
+          }
+        } catch (orderError) {
+          const errorMsg = orderError instanceof Error ? orderError.message : 'Unknown error';
+          const orderId = orderSummary.AmazonOrderId;
+          result.errors.push(`Order ${orderId}: ${errorMsg}`);
+        }
+      }
+
+      result.success = result.errors.length === 0;
+      console.log('[AmazonSyncService] Sync completed:', {
+        success: result.success,
+        processed: result.ordersProcessed,
+        created: result.ordersCreated,
+        updated: result.ordersUpdated,
+        errors: result.errors.length,
+      });
+    } catch (error) {
+      console.error('[AmazonSyncService] Sync error:', error);
+      if (error instanceof AmazonRateLimitError) {
+        result.errors.push(`Rate limit exceeded. Resets at: ${error.rateLimitInfo.resetTime}`);
+      } else if (error instanceof AmazonAuthError) {
+        result.errors.push(`Authentication error: ${error.message}`);
+      } else if (error instanceof AmazonApiError) {
+        result.errors.push(`Amazon API error: ${error.message} (code: ${error.code})`);
+      } else {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        result.errors.push(errorMsg);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Process a single order
+   */
+  private async processOrder(
+    userId: string,
+    client: AmazonClient,
+    orderSummary: AmazonOrder,
+    includeItems: boolean
+  ): Promise<void> {
+    let normalized: NormalizedAmazonOrder;
+
+    if (includeItems) {
+      // Fetch full order with items
+      const orderId = orderSummary.AmazonOrderId;
+      const items = await client.getOrderItems(orderId);
+      normalized = normalizeOrder(orderSummary, items);
+    } else {
+      // Just use summary data
+      normalized = normalizeOrder(orderSummary, []);
+    }
+
+    // Prepare order for database
+    const orderInsert: PlatformOrderInsert = {
+      user_id: userId,
+      platform: 'amazon',
+      platform_order_id: normalized.platformOrderId,
+      order_date: normalized.orderDate.toISOString(),
+      buyer_name: normalized.buyerName,
+      buyer_email: normalized.buyerEmail,
+      status: normalized.status,
+      subtotal: normalized.subtotal,
+      shipping: normalized.shipping,
+      fees: normalized.fees,
+      total: normalized.total,
+      currency: normalized.currency,
+      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      items_count: normalized.items.length,
+      raw_data: {
+        ...normalized.rawData,
+        marketplace: normalized.marketplace,
+        marketplaceId: normalized.marketplaceId,
+        fulfillmentChannel: normalized.fulfillmentChannel,
+      } as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+    };
+
+    // Upsert order
+    const savedOrder = await this.orderRepo.upsert(orderInsert);
+
+    // If we have items, save them
+    if (includeItems && normalized.items.length > 0) {
+      const itemInserts: Omit<OrderItemInsert, 'order_id'>[] = normalized.items.map((item) => ({
+        item_number: item.asin,
+        item_name: item.title,
+        item_type: 'set', // Amazon items are typically complete sets
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        total_price: item.totalPrice,
+        currency: item.currency,
+        // Amazon-specific fields stored in raw_data if needed
+      }));
+
+      await this.orderRepo.replaceOrderItems(savedOrder.id, itemInserts);
+    }
+  }
+
+  /**
+   * Sync a single order by ID
+   */
+  async syncOrderById(
+    userId: string,
+    orderId: string,
+    includeItems = true
+  ): Promise<NormalizedAmazonOrder> {
+    const client = await this.getClient(userId);
+    const { order, items } = await client.getOrderWithItems(orderId);
+    const normalized = normalizeOrder(order, items);
+
+    // Prepare and save order
+    const orderInsert: PlatformOrderInsert = {
+      user_id: userId,
+      platform: 'amazon',
+      platform_order_id: normalized.platformOrderId,
+      order_date: normalized.orderDate.toISOString(),
+      buyer_name: normalized.buyerName,
+      buyer_email: normalized.buyerEmail,
+      status: normalized.status,
+      subtotal: normalized.subtotal,
+      shipping: normalized.shipping,
+      fees: normalized.fees,
+      total: normalized.total,
+      currency: normalized.currency,
+      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      items_count: normalized.items.length,
+      raw_data: {
+        ...normalized.rawData,
+        marketplace: normalized.marketplace,
+        marketplaceId: normalized.marketplaceId,
+        fulfillmentChannel: normalized.fulfillmentChannel,
+      } as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+    };
+
+    const savedOrder = await this.orderRepo.upsert(orderInsert);
+
+    // Save items
+    if (includeItems && normalized.items.length > 0) {
+      const itemInserts: Omit<OrderItemInsert, 'order_id'>[] = normalized.items.map((item) => ({
+        item_number: item.asin,
+        item_name: item.title,
+        item_type: 'set',
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        total_price: item.totalPrice,
+        currency: item.currency,
+      }));
+
+      await this.orderRepo.replaceOrderItems(savedOrder.id, itemInserts);
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Get sync status
+   */
+  async getSyncStatus(userId: string): Promise<{
+    isConfigured: boolean;
+    totalOrders: number;
+    lastSyncedAt: Date | null;
+  }> {
+    const isConfigured = await this.isConfigured(userId);
+
+    if (!isConfigured) {
+      return {
+        isConfigured: false,
+        totalOrders: 0,
+        lastSyncedAt: null,
+      };
+    }
+
+    const stats = await this.orderRepo.getStats(userId, 'amazon');
+
+    // Get most recent synced_at
+    const { data } = await this.supabase
+      .from('platform_orders')
+      .select('synced_at')
+      .eq('user_id', userId)
+      .eq('platform', 'amazon')
+      .order('synced_at', { ascending: false })
+      .limit(1) as { data: { synced_at: string }[] | null };
+
+    const lastSyncedAt = data?.[0]?.synced_at ? new Date(data[0].synced_at) : null;
+
+    return {
+      isConfigured: true,
+      totalOrders: stats.totalOrders,
+      lastSyncedAt,
+    };
+  }
+
+  /**
+   * Get unshipped orders requiring action
+   */
+  async getUnshippedOrders(userId: string): Promise<NormalizedAmazonOrder[]> {
+    const client = await this.getClient(userId);
+    const orders = await client.getUnshippedOrders();
+    return orders.map((order) => normalizeOrder(order, []));
+  }
+}

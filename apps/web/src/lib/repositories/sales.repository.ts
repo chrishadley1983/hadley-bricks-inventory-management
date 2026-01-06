@@ -217,6 +217,7 @@ export class SalesRepository extends BaseRepository<Sale, SaleInsert, SaleUpdate
 
   /**
    * Get sales statistics
+   * Uses pagination to handle >1000 records
    */
   async getStats(
     userId: string,
@@ -232,60 +233,71 @@ export class SalesRepository extends BaseRepository<Sale, SaleInsert, SaleUpdate
     averageSale: number;
     platformBreakdown: Record<string, { count: number; revenue: number; profit: number }>;
   }> {
-    let query = this.supabase
-      .from('sales')
-      .select('platform, sale_amount, gross_profit')
-      .eq('user_id', userId);
-
-    if (options?.platform) {
-      query = query.eq('platform', options.platform);
-    }
-
-    if (options?.startDate) {
-      query = query.gte('sale_date', options.startDate.toISOString().split('T')[0]);
-    }
-
-    if (options?.endDate) {
-      query = query.lte('sale_date', options.endDate.toISOString().split('T')[0]);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`Failed to get sales stats: ${error.message}`);
-    }
-
-    const sales = data || [];
-    const platformBreakdown: Record<string, { count: number; revenue: number; profit: number }> =
-      {};
-
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    const platformBreakdown: Record<string, { count: number; revenue: number; profit: number }> = {};
     let totalRevenue = 0;
     let totalProfit = 0;
+    let totalSales = 0;
 
-    for (const sale of sales) {
-      totalRevenue += sale.sale_amount || 0;
-      totalProfit += sale.gross_profit || 0;
+    while (hasMore) {
+      let query = this.supabase
+        .from('sales')
+        .select('platform, sale_amount, gross_profit')
+        .eq('user_id', userId)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      const platform = sale.platform || 'Unknown';
-      if (!platformBreakdown[platform]) {
-        platformBreakdown[platform] = { count: 0, revenue: 0, profit: 0 };
+      if (options?.platform) {
+        query = query.eq('platform', options.platform);
       }
-      platformBreakdown[platform].count++;
-      platformBreakdown[platform].revenue += sale.sale_amount || 0;
-      platformBreakdown[platform].profit += sale.gross_profit || 0;
+
+      if (options?.startDate) {
+        query = query.gte('sale_date', options.startDate.toISOString().split('T')[0]);
+      }
+
+      if (options?.endDate) {
+        query = query.lte('sale_date', options.endDate.toISOString().split('T')[0]);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to get sales stats: ${error.message}`);
+      }
+
+      const sales = data || [];
+
+      for (const sale of sales) {
+        totalRevenue += sale.sale_amount || 0;
+        totalProfit += sale.gross_profit || 0;
+        totalSales++;
+
+        const platform = sale.platform || 'Unknown';
+        if (!platformBreakdown[platform]) {
+          platformBreakdown[platform] = { count: 0, revenue: 0, profit: 0 };
+        }
+        platformBreakdown[platform].count++;
+        platformBreakdown[platform].revenue += sale.sale_amount || 0;
+        platformBreakdown[platform].profit += sale.gross_profit || 0;
+      }
+
+      hasMore = sales.length === pageSize;
+      page++;
     }
 
     return {
-      totalSales: sales.length,
+      totalSales,
       totalRevenue,
       totalProfit,
-      averageSale: sales.length > 0 ? totalRevenue / sales.length : 0,
+      averageSale: totalSales > 0 ? totalRevenue / totalSales : 0,
       platformBreakdown,
     };
   }
 
   /**
    * Get monthly sales summary
+   * Uses pagination to handle >1000 records
    */
   async getMonthlySummary(
     userId: string,
@@ -301,17 +313,6 @@ export class SalesRepository extends BaseRepository<Sale, SaleInsert, SaleUpdate
     const startDate = `${year}-01-01`;
     const endDate = `${year}-12-31`;
 
-    const { data, error } = await this.supabase
-      .from('sales')
-      .select('sale_date, sale_amount, gross_profit')
-      .eq('user_id', userId)
-      .gte('sale_date', startDate)
-      .lte('sale_date', endDate);
-
-    if (error) {
-      throw new Error(`Failed to get monthly summary: ${error.message}`);
-    }
-
     // Initialize months
     const monthlyData: Array<{
       month: number;
@@ -325,12 +326,35 @@ export class SalesRepository extends BaseRepository<Sale, SaleInsert, SaleUpdate
       profit: 0,
     }));
 
-    for (const sale of data || []) {
-      const saleDate = new Date(sale.sale_date);
-      const month = saleDate.getMonth(); // 0-indexed
-      monthlyData[month].sales++;
-      monthlyData[month].revenue += sale.sale_amount || 0;
-      monthlyData[month].profit += sale.gross_profit || 0;
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await this.supabase
+        .from('sales')
+        .select('sale_date, sale_amount, gross_profit')
+        .eq('user_id', userId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        throw new Error(`Failed to get monthly summary: ${error.message}`);
+      }
+
+      const sales = data || [];
+
+      for (const sale of sales) {
+        const saleDate = new Date(sale.sale_date);
+        const month = saleDate.getMonth(); // 0-indexed
+        monthlyData[month].sales++;
+        monthlyData[month].revenue += sale.sale_amount || 0;
+        monthlyData[month].profit += sale.gross_profit || 0;
+      }
+
+      hasMore = sales.length === pageSize;
+      page++;
     }
 
     return monthlyData;

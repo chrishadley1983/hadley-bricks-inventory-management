@@ -10,6 +10,13 @@ import { purchaseKeys } from './use-purchases';
  * Sync a table from Google Sheets
  */
 async function syncTable(tableName: 'inventory' | 'purchases'): Promise<{ count: number }> {
+  // Log who triggered the sync
+  const timestamp = new Date().toISOString();
+  console.log(`[syncTable] ========== SYNC TRIGGERED ==========`);
+  console.log(`[syncTable] Table: ${tableName}`);
+  console.log(`[syncTable] Timestamp: ${timestamp}`);
+  console.log(`[syncTable] Stack trace:`, new Error().stack?.split('\n').slice(1, 8).join('\n'));
+
   const response = await fetch(`/api/sync/${tableName}`, {
     method: 'POST',
   });
@@ -20,6 +27,7 @@ async function syncTable(tableName: 'inventory' | 'purchases'): Promise<{ count:
   }
 
   const result = await response.json();
+  console.log(`[syncTable] Sync complete for ${tableName}:`, result);
   return result.data;
 }
 
@@ -51,7 +59,7 @@ export function useSyncTable(tableName: 'inventory' | 'purchases') {
     },
     onSuccess: (data) => {
       setTableSynced(tableName, data.count);
-      // Invalidate queries to refresh data
+      // Invalidate queries to trigger refetch
       if (tableName === 'inventory') {
         queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
       } else {
@@ -102,7 +110,7 @@ export function useSyncAll() {
         setTableError('purchases', purchasesResult.reason?.message || 'Sync failed');
       }
 
-      // Invalidate all queries
+      // Invalidate queries to trigger refetch
       queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
       queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
     } catch (error) {
@@ -143,17 +151,29 @@ export function useSyncOnLoad(
   const { sync, isPending } = useSyncTable(tableName);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      console.log(`[useSyncOnLoad] ${tableName}: Sync disabled`);
+      return;
+    }
 
     // Check if we should sync
     const isStale =
       !tableStatus.lastSync ||
       new Date().getTime() - tableStatus.lastSync.getTime() > staleTtlMs;
 
+    console.log(`[useSyncOnLoad] ${tableName}: Checking sync status`, {
+      enabled,
+      isStale,
+      lastSync: tableStatus.lastSync,
+      status: tableStatus.status,
+      staleTtlMs,
+    });
+
     if (isStale && tableStatus.status !== 'syncing') {
+      console.log(`[useSyncOnLoad] ${tableName}: AUTO-TRIGGERING SYNC (data is stale)`);
       sync();
     }
-  }, [enabled, staleTtlMs, sync, tableStatus.lastSync, tableStatus.status]);
+  }, [enabled, staleTtlMs, sync, tableStatus.lastSync, tableStatus.status, tableName]);
 
   return {
     status: tableStatus,

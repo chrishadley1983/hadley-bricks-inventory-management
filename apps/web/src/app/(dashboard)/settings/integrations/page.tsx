@@ -1,7 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -11,7 +12,9 @@ import {
   EyeOff,
   ExternalLink,
   Loader2,
+  Link2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -44,6 +47,21 @@ interface BrickOwlCredentials {
 interface BricqerCredentials {
   tenantUrl: string;
   apiKey: string;
+}
+
+interface AmazonCredentials {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  sellerId: string;
+}
+
+interface EbayConnectionStatus {
+  isConnected: boolean;
+  ebayUsername?: string;
+  marketplaceId?: string;
+  expiresAt?: string;
+  needsRefresh?: boolean;
 }
 
 // BrickLink API functions
@@ -136,6 +154,79 @@ async function deleteBricqerCredentials(): Promise<void> {
   }
 }
 
+// Amazon API functions
+async function fetchAmazonStatus(): Promise<{ isConfigured: boolean; totalOrders?: number; lastSyncedAt?: string }> {
+  const response = await fetch('/api/integrations/amazon/credentials');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function saveAmazonCredentials(credentials: AmazonCredentials): Promise<void> {
+  const response = await fetch('/api/integrations/amazon/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to save credentials');
+  }
+}
+
+async function deleteAmazonCredentials(): Promise<void> {
+  const response = await fetch('/api/integrations/amazon/credentials', {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete credentials');
+  }
+}
+
+async function syncAmazon(): Promise<{ success: boolean; ordersProcessed?: number; ordersCreated?: number; ordersUpdated?: number; errors?: string[] }> {
+  const response = await fetch('/api/integrations/amazon/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ includeItems: true }),
+  });
+
+  return response.json();
+}
+
+// eBay API functions
+async function fetchEbayStatus(): Promise<EbayConnectionStatus> {
+  const response = await fetch('/api/integrations/ebay/status');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function testEbayConnection(): Promise<{ success: boolean; message?: string; error?: string; details?: unknown }> {
+  const response = await fetch('/api/integrations/ebay/test');
+  return response.json();
+}
+
+async function disconnectEbay(): Promise<void> {
+  const response = await fetch('/api/integrations/ebay/disconnect', {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to disconnect');
+  }
+}
+
+async function syncEbay(type: 'orders' | 'transactions' | 'payouts' | 'all'): Promise<{ success: boolean; results?: unknown }> {
+  const response = await fetch('/api/integrations/ebay/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  });
+
+  return response.json();
+}
+
 // Sync all platforms
 async function syncAllPlatforms(): Promise<{ success: boolean; data: Record<string, unknown> }> {
   const response = await fetch('/api/integrations/sync-all-orders', {
@@ -154,6 +245,11 @@ async function syncAllPlatforms(): Promise<{ success: boolean; data: Record<stri
 
 export default function IntegrationsSettingsPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+
+  // Check for eBay OAuth callback status
+  const ebaySuccess = searchParams.get('ebay_success');
+  const ebayError = searchParams.get('ebay_error');
 
   // BrickLink state
   const [showBrickLinkSecrets, setShowBrickLinkSecrets] = useState(false);
@@ -182,6 +278,34 @@ export default function IntegrationsSettingsPage() {
   });
   const [bricqerError, setBricqerError] = useState<string | null>(null);
   const [bricqerSuccess, setBricqerSuccess] = useState<string | null>(null);
+
+  // Amazon state
+  const [showAmazonSecrets, setShowAmazonSecrets] = useState(false);
+  const [amazonCredentials, setAmazonCredentials] = useState<AmazonCredentials>({
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+    sellerId: '',
+  });
+  const [amazonError, setAmazonError] = useState<string | null>(null);
+  const [amazonSuccess, setAmazonSuccess] = useState<string | null>(null);
+
+  // eBay state
+  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Handle eBay OAuth callback messages
+  useEffect(() => {
+    if (ebaySuccess) {
+      setEbayMessage({ type: 'success', message: 'Successfully connected to eBay!' });
+      // Clear the URL params
+      window.history.replaceState({}, '', '/settings/integrations');
+      // Refetch eBay status
+      queryClient.invalidateQueries({ queryKey: ['ebay', 'status'] });
+    } else if (ebayError) {
+      setEbayMessage({ type: 'error', message: ebayError });
+      window.history.replaceState({}, '', '/settings/integrations');
+    }
+  }, [ebaySuccess, ebayError, queryClient]);
 
   // BrickLink queries/mutations
   const { data: brickLinkStatus, isLoading: brickLinkStatusLoading } = useQuery({
@@ -290,6 +414,118 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
+  // Amazon queries/mutations
+  const { data: amazonStatus, isLoading: amazonStatusLoading } = useQuery({
+    queryKey: ['amazon', 'status'],
+    queryFn: fetchAmazonStatus,
+    refetchInterval: 60000,
+  });
+
+  const saveAmazonMutation = useMutation({
+    mutationFn: saveAmazonCredentials,
+    onSuccess: () => {
+      setAmazonSuccess('Amazon credentials saved and verified successfully');
+      setAmazonError(null);
+      setAmazonCredentials({ clientId: '', clientSecret: '', refreshToken: '', sellerId: '' });
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'status'] });
+    },
+    onError: (err: Error) => {
+      setAmazonError(err.message);
+      setAmazonSuccess(null);
+    },
+  });
+
+  const deleteAmazonMutation = useMutation({
+    mutationFn: deleteAmazonCredentials,
+    onSuccess: () => {
+      setAmazonSuccess('Amazon credentials removed');
+      setAmazonError(null);
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'status'] });
+    },
+    onError: (err: Error) => {
+      setAmazonError(err.message);
+      setAmazonSuccess(null);
+    },
+  });
+
+  const syncAmazonMutation = useMutation({
+    mutationFn: syncAmazon,
+    onSuccess: (data) => {
+      if (data.success) {
+        const detail = data.ordersProcessed !== undefined
+          ? ` (${data.ordersProcessed} orders processed, ${data.ordersCreated} created, ${data.ordersUpdated} updated)`
+          : '';
+        setAmazonSuccess(`Amazon sync completed successfully!${detail}`);
+      } else {
+        setAmazonError(`Sync completed with errors: ${data.errors?.join(', ') || 'Unknown error'}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'status'] });
+    },
+    onError: (err: Error) => {
+      setAmazonError(err.message);
+      setAmazonSuccess(null);
+    },
+  });
+
+  // eBay queries/mutations
+  const { data: ebayStatus, isLoading: ebayStatusLoading } = useQuery({
+    queryKey: ['ebay', 'status'],
+    queryFn: fetchEbayStatus,
+    refetchInterval: 60000,
+  });
+
+  const testEbayMutation = useMutation({
+    mutationFn: testEbayConnection,
+    onSuccess: (data) => {
+      if (data.success) {
+        setEbayMessage({ type: 'success', message: data.message || 'Connection test successful!' });
+      } else {
+        setEbayMessage({ type: 'error', message: data.error || 'Connection test failed' });
+      }
+    },
+    onError: (err: Error) => {
+      setEbayMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  const disconnectEbayMutation = useMutation({
+    mutationFn: disconnectEbay,
+    onSuccess: () => {
+      setEbayMessage({ type: 'success', message: 'eBay disconnected successfully' });
+      queryClient.invalidateQueries({ queryKey: ['ebay', 'status'] });
+    },
+    onError: (err: Error) => {
+      setEbayMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  const syncEbayMutation = useMutation({
+    mutationFn: (type: 'orders' | 'transactions' | 'payouts' | 'all') => syncEbay(type),
+    onSuccess: (data) => {
+      if (data.success) {
+        // Build a detailed message from results
+        const results = data.results as Record<string, { ordersProcessed?: number; transactionsProcessed?: number; payoutsProcessed?: number }> | undefined;
+        const parts: string[] = [];
+        if (results?.orders?.ordersProcessed !== undefined) {
+          parts.push(`${results.orders.ordersProcessed} orders`);
+        }
+        if (results?.transactions?.transactionsProcessed !== undefined) {
+          parts.push(`${results.transactions.transactionsProcessed} transactions`);
+        }
+        if (results?.payouts?.payoutsProcessed !== undefined) {
+          parts.push(`${results.payouts.payoutsProcessed} payouts`);
+        }
+        const detail = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+        setEbayMessage({ type: 'success', message: `eBay sync completed successfully!${detail}` });
+      } else {
+        setEbayMessage({ type: 'error', message: 'Sync completed with errors' });
+      }
+    },
+    onError: (err: Error) => {
+      setEbayMessage({ type: 'error', message: err.message });
+    },
+  });
+
   // Sync all mutation
   const syncAllMutation = useMutation({
     mutationFn: syncAllPlatforms,
@@ -357,7 +593,41 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const hasConfiguredPlatforms = brickLinkStatus?.configured || brickOwlStatus?.configured || bricqerStatus?.configured;
+  const handleConnectEbay = () => {
+    // Redirect to eBay OAuth flow
+    window.location.href = '/api/integrations/ebay/connect?returnUrl=/settings/integrations';
+  };
+
+  const handleDisconnectEbay = () => {
+    if (confirm('Are you sure you want to disconnect eBay?')) {
+      disconnectEbayMutation.mutate();
+    }
+  };
+
+  const handleSaveAmazon = () => {
+    setAmazonError(null);
+    setAmazonSuccess(null);
+
+    if (
+      !amazonCredentials.clientId ||
+      !amazonCredentials.clientSecret ||
+      !amazonCredentials.refreshToken ||
+      !amazonCredentials.sellerId
+    ) {
+      setAmazonError('All fields are required');
+      return;
+    }
+
+    saveAmazonMutation.mutate(amazonCredentials);
+  };
+
+  const handleDeleteAmazon = () => {
+    if (confirm('Are you sure you want to remove Amazon credentials?')) {
+      deleteAmazonMutation.mutate();
+    }
+  };
+
+  const hasConfiguredPlatforms = brickLinkStatus?.configured || brickOwlStatus?.configured || bricqerStatus?.configured || ebayStatus?.isConnected || amazonStatus?.isConfigured;
 
   return (
     <>
@@ -408,6 +678,154 @@ export default function IntegrationsSettingsPage() {
             </AlertDescription>
           </Alert>
         )}
+
+        {/* eBay Integration */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100">
+                  <span className="text-lg font-bold text-yellow-700">eB</span>
+                </div>
+                <div>
+                  <CardTitle>eBay</CardTitle>
+                  <CardDescription>
+                    Sync orders and financial data from eBay
+                  </CardDescription>
+                </div>
+              </div>
+              {ebayStatusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : ebayStatus?.isConnected ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-700">
+                  <XCircle className="mr-1 h-3 w-3" />
+                  Not Connected
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {ebayMessage && (
+              <Alert className={ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={ebayMessage.type === 'error' ? 'destructive' : undefined}>
+                {ebayMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                <AlertDescription className={ebayMessage.type === 'success' ? 'text-green-800' : undefined}>
+                  {ebayMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {ebayStatus?.isConnected ? (
+              <>
+                <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">eBay Username:</span>
+                    <span className="font-medium">{ebayStatus.ebayUsername || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Marketplace:</span>
+                    <span className="font-medium">{ebayStatus.marketplaceId || 'EBAY_GB'}</span>
+                  </div>
+                  {ebayStatus.expiresAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Token Expires:</span>
+                      <span className="font-medium">
+                        {new Date(ebayStatus.expiresAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => testEbayMutation.mutate()}
+                    disabled={testEbayMutation.isPending}
+                  >
+                    {testEbayMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Test Connection
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => syncEbayMutation.mutate('orders')}
+                    disabled={syncEbayMutation.isPending}
+                  >
+                    {syncEbayMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync Orders
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => syncEbayMutation.mutate('all')}
+                    disabled={syncEbayMutation.isPending}
+                  >
+                    {syncEbayMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync All
+                  </Button>
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleDisconnectEbay}
+                    disabled={disconnectEbayMutation.isPending}
+                  >
+                    {disconnectEbayMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Disconnect
+                  </Button>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Link href="/settings/ebay-sku-matching">
+                    <Button variant="outline" className="w-full justify-start">
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Manage SKU Mappings
+                    </Button>
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg bg-muted p-4 text-sm">
+                  <p className="font-medium mb-2">Connect your eBay account:</p>
+                  <p className="text-muted-foreground mb-4">
+                    Click the button below to authorize Hadley Bricks to access your eBay seller account.
+                    This will allow syncing of orders, transactions, and financial data.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Order fulfilment data for picking lists</li>
+                    <li>Transaction history for reconciliation</li>
+                    <li>Payout information for accounting</li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button onClick={handleConnectEbay}>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Connect eBay Account
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* BrickLink Integration */}
         <Card>
@@ -851,22 +1269,199 @@ export default function IntegrationsSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* eBay - CSV Import Only */}
-        <Card className="opacity-60">
+        {/* Amazon Integration */}
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100">
-                  <span className="text-lg font-bold text-yellow-700">eB</span>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100">
+                  <span className="text-lg font-bold text-orange-700">Az</span>
                 </div>
                 <div>
-                  <CardTitle>eBay</CardTitle>
-                  <CardDescription>CSV import only</CardDescription>
+                  <CardTitle>Amazon</CardTitle>
+                  <CardDescription>
+                    Sync orders from your Amazon Seller Central account (EU marketplaces)
+                  </CardDescription>
                 </div>
               </div>
-              <Badge variant="secondary">CSV Import</Badge>
+              {amazonStatusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : amazonStatus?.isConfigured ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-700">
+                  <XCircle className="mr-1 h-3 w-3" />
+                  Not Connected
+                </Badge>
+              )}
             </div>
           </CardHeader>
+          <CardContent className="space-y-4">
+            {amazonError && (
+              <Alert variant="destructive">
+                <AlertDescription>{amazonError}</AlertDescription>
+              </Alert>
+            )}
+
+            {amazonSuccess && (
+              <Alert className="bg-green-50 border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{amazonSuccess}</AlertDescription>
+              </Alert>
+            )}
+
+            {amazonStatus?.isConfigured && (
+              <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Orders:</span>
+                  <span className="font-medium">{amazonStatus.totalOrders || 0}</span>
+                </div>
+                {amazonStatus.lastSyncedAt && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Synced:</span>
+                    <span className="font-medium">
+                      {new Date(amazonStatus.lastSyncedAt).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg bg-muted p-4 text-sm">
+              <p className="font-medium mb-2">How to get your Amazon SP-API credentials:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Register as a developer in Amazon Seller Central</li>
+                <li>Create an SP-API application</li>
+                <li>Authorize the app to access your seller account</li>
+                <li>Copy the Client ID, Client Secret, and Refresh Token</li>
+                <li>Find your Seller ID in Account Info</li>
+              </ol>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="amazonClientId">Client ID (LWA)</Label>
+                <Input
+                  id="amazonClientId"
+                  type={showAmazonSecrets ? 'text' : 'password'}
+                  placeholder="amzn1.application-oa2-client.xxxx"
+                  value={amazonCredentials.clientId}
+                  onChange={(e) =>
+                    setAmazonCredentials({ ...amazonCredentials, clientId: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="amazonClientSecret">Client Secret (LWA)</Label>
+                <Input
+                  id="amazonClientSecret"
+                  type={showAmazonSecrets ? 'text' : 'password'}
+                  placeholder="amzn1.oa2-cs.v1.xxxx"
+                  value={amazonCredentials.clientSecret}
+                  onChange={(e) =>
+                    setAmazonCredentials({ ...amazonCredentials, clientSecret: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="amazonRefreshToken">Refresh Token</Label>
+                <Input
+                  id="amazonRefreshToken"
+                  type={showAmazonSecrets ? 'text' : 'password'}
+                  placeholder="Atzr|IwEBIxxxx"
+                  value={amazonCredentials.refreshToken}
+                  onChange={(e) =>
+                    setAmazonCredentials({ ...amazonCredentials, refreshToken: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="amazonSellerId">Seller ID (Merchant Token)</Label>
+                <Input
+                  id="amazonSellerId"
+                  type="text"
+                  placeholder="A2XXXXXXXX"
+                  value={amazonCredentials.sellerId}
+                  onChange={(e) =>
+                    setAmazonCredentials({ ...amazonCredentials, sellerId: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAmazonSecrets(!showAmazonSecrets)}
+              >
+                {showAmazonSecrets ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide Secrets
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Show Secrets
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="flex gap-2 pt-4 border-t">
+              <Button
+                onClick={handleSaveAmazon}
+                disabled={saveAmazonMutation.isPending}
+              >
+                {saveAmazonMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Save & Test Connection
+                  </>
+                )}
+              </Button>
+
+              {amazonStatus?.isConfigured && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => syncAmazonMutation.mutate()}
+                    disabled={syncAmazonMutation.isPending}
+                  >
+                    {syncAmazonMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync Orders
+                  </Button>
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteAmazon}
+                    disabled={deleteAmazonMutation.isPending}
+                  >
+                    {deleteAmazonMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
         </Card>
       </div>
     </>

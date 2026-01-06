@@ -105,16 +105,18 @@ export function normalizeStatus(value: string): string {
   const statusMap: Record<string, string> = {
     SOLD: 'SOLD',
     LISTED: 'LISTED',
-    'IN STOCK': 'IN STOCK',
+    BACKLOG: 'BACKLOG',
+    'IN STOCK': 'BACKLOG', // Legacy mapping
     'NOT YET RECEIVED': 'NOT YET RECEIVED',
     // Common variations
     sold: 'SOLD',
     listed: 'LISTED',
-    'in stock': 'IN STOCK',
-    stock: 'IN STOCK',
+    backlog: 'BACKLOG',
+    'in stock': 'BACKLOG',
+    stock: 'BACKLOG',
     pending: 'NOT YET RECEIVED',
   };
-  return statusMap[value] || statusMap[value.toLowerCase()] || 'IN STOCK';
+  return statusMap[value] || statusMap[value.toLowerCase()] || 'BACKLOG';
 }
 
 /**

@@ -117,7 +117,7 @@ describe('InventoryRepository', () => {
     });
 
     it('should apply status filter', async () => {
-      await repository.findAllFiltered({ status: 'IN STOCK' });
+      await repository.findAllFiltered({ status: 'BACKLOG' });
 
       const fromCall = mockClient.from.mock.results[0];
       expect(fromCall).toBeTruthy();

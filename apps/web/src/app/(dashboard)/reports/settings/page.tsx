@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useReportSettings, useUpdateReportSettings } from '@/hooks/use-reports';
+import { useHomeAddress, useUpdateHomeAddress } from '@/hooks/use-mileage';
 import { useToast } from '@/hooks/use-toast';
 
 const Header = dynamic(
@@ -32,6 +33,8 @@ const Header = dynamic(
 export default function ReportSettingsPage() {
   const { data: settings, isLoading } = useReportSettings();
   const updateMutation = useUpdateReportSettings();
+  const { data: homeAddress, isLoading: isLoadingHomeAddress } = useHomeAddress();
+  const updateHomeAddressMutation = useUpdateHomeAddress();
   const { toast } = useToast();
 
   const handleSave = async (field: string, value: unknown) => {
@@ -45,6 +48,22 @@ export default function ReportSettingsPage() {
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveHomeAddress = async (address: string) => {
+    try {
+      await updateHomeAddressMutation.mutateAsync(address);
+      toast({
+        title: 'Home address saved',
+        description: 'Your home address has been updated for mileage calculations.',
+      });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to save home address. Please try again.',
         variant: 'destructive',
       });
     }
@@ -214,6 +233,44 @@ export default function ReportSettingsPage() {
                     HMRC standard rate is £0.45 per mile for the first 10,000 miles
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Home Address for Mileage Calculations */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Home Address</CardTitle>
+                <CardDescription>
+                  Starting point for mileage calculations when collecting purchases
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="homeAddress">Full Address or Postcode</Label>
+                  {isLoadingHomeAddress ? (
+                    <div className="flex items-center gap-2 h-10">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Loading...</span>
+                    </div>
+                  ) : (
+                    <Input
+                      id="homeAddress"
+                      defaultValue={homeAddress || ''}
+                      placeholder="e.g., TN27 8JT or 123 High Street, Ashford, Kent"
+                      onBlur={(e) => handleSaveHomeAddress(e.target.value || '')}
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    This address is used as the starting point when calculating route distances
+                    for purchase collections. Enter a full address or postcode.
+                  </p>
+                </div>
+                {updateHomeAddressMutation.isPending && (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Saving...</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

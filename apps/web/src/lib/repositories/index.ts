@@ -16,3 +16,6 @@ export { SalesRepository } from './sales.repository';
 export type { SaleFilters, SaleWithItems } from './sales.repository';
 
 export { CredentialsRepository } from './credentials.repository';
+
+export { MileageRepository } from './mileage.repository';
+export type { MileageFilters, ExpenseType } from './mileage.repository';

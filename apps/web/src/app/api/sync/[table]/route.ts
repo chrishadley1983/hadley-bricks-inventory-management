@@ -9,6 +9,40 @@ const TABLE_NAME_MAP: Record<string, string> = {
   purchases: 'purchases',
 };
 
+// Helper to log sync events to database
+async function logSyncEvent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  tableName: string,
+  action: 'sync_started' | 'sync_completed' | 'sync_failed',
+  request: NextRequest,
+  details: {
+    recordsAffected?: number;
+    errorMessage?: string;
+    durationMs?: number;
+    metadata?: Record<string, unknown>;
+  } = {}
+) {
+  try {
+    await supabase.from('sync_audit_log').insert({
+      user_id: userId,
+      table_name: tableName,
+      action,
+      user_agent: request.headers.get('user-agent'),
+      referer: request.headers.get('referer'),
+      origin: request.headers.get('origin'),
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+      records_affected: details.recordsAffected,
+      error_message: details.errorMessage,
+      duration_ms: details.durationMs,
+      metadata: (details.metadata || {}) as Record<string, string | number | boolean | null>,
+    });
+  } catch (err) {
+    console.error('[logSyncEvent] Failed to log sync event:', err);
+    // Don't throw - logging failure shouldn't break sync
+  }
+}
+
 /**
  * POST /api/sync/[table]
  * Sync a table from Google Sheets to Supabase cache
@@ -19,7 +53,20 @@ export async function POST(
 ) {
   try {
     const { table } = await params;
-    console.log(`[POST /api/sync/${table}] Starting sync...`);
+    const timestamp = new Date().toISOString();
+
+    // Log detailed request info for debugging sync triggers
+    console.log(`[POST /api/sync/${table}] ========== SYNC REQUEST ==========`);
+    console.log(`[POST /api/sync/${table}] Timestamp: ${timestamp}`);
+    console.log(`[POST /api/sync/${table}] User-Agent: ${request.headers.get('user-agent')}`);
+    console.log(`[POST /api/sync/${table}] Referer: ${request.headers.get('referer')}`);
+    console.log(`[POST /api/sync/${table}] Origin: ${request.headers.get('origin')}`);
+    console.log(`[POST /api/sync/${table}] X-Forwarded-For: ${request.headers.get('x-forwarded-for')}`);
+    console.log(`[POST /api/sync/${table}] Content-Type: ${request.headers.get('content-type')}`);
+
+    // Log stack trace to see what triggered this
+    const stack = new Error().stack;
+    console.log(`[POST /api/sync/${table}] Call stack:`, stack?.split('\n').slice(1, 5).join('\n'));
 
     // Validate table parameter
     if (table !== 'inventory' && table !== 'purchases') {
@@ -42,10 +89,24 @@ export async function POST(
     }
     console.log(`[POST /api/sync/${table}] User authenticated: ${user.id}`);
 
+    // Log sync start to database
+    const startTime = Date.now();
+    await logSyncEvent(supabase, user.id, table, 'sync_started', request, {
+      metadata: {
+        userAgent: request.headers.get('user-agent'),
+        referer: request.headers.get('referer'),
+        timestamp,
+      },
+    });
+
     // Get Sheets client
     const sheetsClient = getSheetsClient();
     if (!sheetsClient) {
       console.error(`[POST /api/sync/${table}] Google Sheets not configured`);
+      await logSyncEvent(supabase, user.id, table, 'sync_failed', request, {
+        errorMessage: 'Google Sheets not configured',
+        durationMs: Date.now() - startTime,
+      });
       return NextResponse.json(
         { error: 'Google Sheets not configured. Check environment variables.' },
         { status: 503 }
@@ -66,13 +127,25 @@ export async function POST(
     }
     console.log(`[POST /api/sync/${table}] Sync result:`, result);
 
+    const durationMs = Date.now() - startTime;
+
     if (!result.success) {
       console.error(`[POST /api/sync/${table}] Sync failed:`, result.error);
+      await logSyncEvent(supabase, user.id, table, 'sync_failed', request, {
+        errorMessage: result.error,
+        durationMs,
+      });
       return NextResponse.json(
         { error: result.error || 'Sync failed' },
         { status: 500 }
       );
     }
+
+    // Log successful sync
+    await logSyncEvent(supabase, user.id, table, 'sync_completed', request, {
+      recordsAffected: result.count,
+      durationMs,
+    });
 
     return NextResponse.json({
       data: {

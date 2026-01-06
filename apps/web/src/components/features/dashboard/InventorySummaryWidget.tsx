@@ -3,21 +3,24 @@
 import { Package } from 'lucide-react';
 import { StatWidget } from '@/components/ui/widget';
 import { useInventorySummary } from '@/hooks';
+import { useDashboardStore } from '@/stores';
 
 /**
  * Widget displaying total inventory count
  */
 export function InventorySummaryWidget() {
-  const { data, isLoading, error } = useInventorySummary();
+  const excludeSold = useDashboardStore((state) => state.excludeSold);
+  const platform = useDashboardStore((state) => state.platform);
+  const { data, isLoading, error } = useInventorySummary({ excludeSold, platform });
 
-  const inStockCount = data?.byStatus?.['IN STOCK'] || 0;
+  const backlogCount = data?.byStatus?.['BACKLOG'] || 0;
   const totalItems = data?.totalItems || 0;
 
   return (
     <StatWidget
       title="Total Inventory"
       value={totalItems}
-      subtitle={`${inStockCount} in stock`}
+      subtitle={`${backlogCount} in backlog`}
       icon={<Package className="h-4 w-4" />}
       isLoading={isLoading}
       error={error instanceof Error ? error : null}

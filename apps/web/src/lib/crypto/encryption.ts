@@ -54,9 +54,18 @@ export async function encrypt(plaintext: string): Promise<string> {
 
 /**
  * Decrypt a base64-encoded encrypted string
+ * Handles PostgreSQL bytea hex-escaped format (\\x...) if present
  */
-export async function decrypt(encryptedBase64: string): Promise<string> {
-  const combined = Buffer.from(encryptedBase64, 'base64');
+export async function decrypt(encryptedData: string): Promise<string> {
+  // Handle PostgreSQL bytea hex-escaped format
+  let base64Data = encryptedData;
+  if (encryptedData.startsWith('\\x')) {
+    // Convert hex to the original base64 string
+    const hexStr = encryptedData.slice(2);
+    base64Data = Buffer.from(hexStr, 'hex').toString('utf8');
+  }
+
+  const combined = Buffer.from(base64Data, 'base64');
 
   // Extract components
   const salt = combined.subarray(0, SALT_LENGTH);

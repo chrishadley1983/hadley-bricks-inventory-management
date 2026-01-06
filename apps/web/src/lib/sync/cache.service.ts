@@ -49,9 +49,12 @@ export interface CacheConfig {
 
 const DEFAULT_CONFIG: CacheConfig = {
   ttlMs: 5 * 60 * 1000, // 5 minutes
-  syncOnMiss: true,
+  syncOnMiss: false, // Disabled - Supabase is now source of truth
   batchSize: 1000,
 };
+
+// In-memory sync locks to prevent concurrent syncs (per user per table)
+const syncLocks = new Map<string, boolean>();
 
 /**
  * Read-through cache service for Sheets-primary architecture
@@ -109,6 +112,16 @@ export class CacheService {
    * Sync inventory data from Google Sheets to Supabase cache
    */
   async syncInventory(): Promise<{ success: boolean; count: number; error?: string }> {
+    const lockKey = `${this.userId}:inventory_items`;
+
+    // Check if sync is already in progress
+    if (syncLocks.get(lockKey)) {
+      console.log('[CacheService.syncInventory] Sync already in progress, skipping...');
+      return { success: false, count: 0, error: 'Sync already in progress' };
+    }
+
+    // Acquire lock
+    syncLocks.set(lockKey, true);
     console.log('[CacheService.syncInventory] Starting...');
 
     try {
@@ -165,6 +178,14 @@ export class CacheService {
       console.log(`[CacheService.syncInventory] Transformed ${allItems.length} items`);
 
       if (allItems.length > 0) {
+        // Count existing records first
+        const { count: existingCount } = await this.supabase
+          .from('inventory_items')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', this.userId);
+
+        console.log(`[CacheService.syncInventory] Found ${existingCount ?? 0} existing records to delete`);
+
         // Delete existing inventory for this user
         console.log('[CacheService.syncInventory] Deleting existing inventory...');
         const { error: deleteError } = await this.supabase
@@ -175,6 +196,19 @@ export class CacheService {
         if (deleteError) {
           console.error('[CacheService.syncInventory] Delete error:', deleteError);
           throw deleteError;
+        }
+
+        // Verify deletion completed
+        const { count: remainingCount } = await this.supabase
+          .from('inventory_items')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', this.userId);
+
+        console.log(`[CacheService.syncInventory] After delete: ${remainingCount ?? 0} records remain`);
+
+        if (remainingCount && remainingCount > 0) {
+          console.error(`[CacheService.syncInventory] Delete incomplete: ${remainingCount} records remain`);
+          throw new Error(`Delete incomplete: ${remainingCount} records still exist`);
         }
 
         // Process in batches
@@ -207,6 +241,9 @@ export class CacheService {
         // Ignore metadata update errors
       }
       return { success: false, count: 0, error: message };
+    } finally {
+      // Release lock
+      syncLocks.delete(`${this.userId}:inventory_items`);
     }
   }
 
@@ -214,6 +251,16 @@ export class CacheService {
    * Sync purchases data from Google Sheets to Supabase cache
    */
   async syncPurchases(): Promise<{ success: boolean; count: number; error?: string }> {
+    const lockKey = `${this.userId}:purchases`;
+
+    // Check if sync is already in progress
+    if (syncLocks.get(lockKey)) {
+      console.log('[CacheService.syncPurchases] Sync already in progress, skipping...');
+      return { success: false, count: 0, error: 'Sync already in progress' };
+    }
+
+    // Acquire lock
+    syncLocks.set(lockKey, true);
     console.log('[CacheService.syncPurchases] Starting...');
 
     try {
@@ -290,6 +337,9 @@ export class CacheService {
         // Ignore metadata update errors
       }
       return { success: false, count: 0, error: message };
+    } finally {
+      // Release lock
+      syncLocks.delete(`${this.userId}:purchases`);
     }
   }
 

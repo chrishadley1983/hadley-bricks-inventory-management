@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -23,7 +24,31 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Settings2,
+  Trash2,
+  Copy,
+  Pencil,
+} from 'lucide-react';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -31,14 +56,37 @@ interface DataTableProps<TData, TValue> {
   searchKey?: string;
   searchPlaceholder?: string;
   isLoading?: boolean;
+  /** Function to extract a unique ID from each row for React keys and deduplication */
+  getRowId?: (row: TData) => string;
+  /** Enable row selection with checkboxes */
+  enableRowSelection?: boolean;
+  /** Callback when selected rows change */
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
+  /** Bulk actions for selected rows */
+  bulkActions?: {
+    onDelete?: (rows: TData[]) => void;
+    onDuplicate?: (rows: TData[]) => void;
+    onEdit?: (rows: TData[]) => void;
+    onBulkEdit?: (rows: TData[]) => void;
+  };
+  /** Enable column visibility controls */
+  enableColumnVisibility?: boolean;
+  /** Column display names for the visibility menu */
+  columnDisplayNames?: Record<string, string>;
+  /** Initial column visibility state - columns not listed default to visible */
+  initialColumnVisibility?: VisibilityState;
   pagination?: {
     page: number;
     pageSize: number;
     total: number;
     totalPages: number;
     onPageChange: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
+    pageSizeOptions?: number[];
   };
 }
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export function DataTable<TData, TValue>({
   columns,
@@ -46,15 +94,53 @@ export function DataTable<TData, TValue>({
   searchKey,
   searchPlaceholder = 'Search...',
   isLoading = false,
+  getRowId,
+  enableRowSelection = false,
+  onRowSelectionChange,
+  bulkActions,
+  enableColumnVisibility = false,
+  columnDisplayNames = {},
+  initialColumnVisibility = {},
   pagination,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility);
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+  // Build columns with selection checkbox if enabled
+  const tableColumns = React.useMemo(() => {
+    if (!enableRowSelection) return columns;
+
+    const selectColumn: ColumnDef<TData, TValue> = {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value: boolean | 'indeterminate') => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    };
+
+    return [selectColumn, ...columns];
+  }, [columns, enableRowSelection]);
 
   const table = useReactTable({
     data,
-    columns,
+    columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: pagination ? undefined : getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -62,27 +148,157 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      rowSelection,
     },
     manualPagination: !!pagination,
+    getRowId,
   });
+
+  // Get selected rows data
+  const selectedRows = React.useMemo(() => {
+    return table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table.getFilteredSelectedRowModel().rows]);
+
+  // Notify parent of selection changes
+  React.useEffect(() => {
+    onRowSelectionChange?.(selectedRows);
+  }, [selectedRows, onRowSelectionChange]);
+
+  const getColumnDisplayName = (columnId: string): string => {
+    return columnDisplayNames[columnId] || columnId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const pageSizeOptions = pagination?.pageSizeOptions || PAGE_SIZE_OPTIONS;
 
   return (
     <div className="space-y-4">
-      {searchKey && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder={searchPlaceholder}
-            value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn(searchKey)?.setFilterValue(event.target.value)}
-            className="max-w-sm pl-9"
-          />
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          {searchKey && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
+                onChange={(event) => table.getColumn(searchKey)?.setFilterValue(event.target.value)}
+                className="max-w-sm pl-9"
+              />
+            </div>
+          )}
+
+          {/* Bulk Actions - shown when rows are selected */}
+          {enableRowSelection && selectedRows.length > 0 && (
+            <div className="flex items-center gap-2 ml-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedRows.length} selected
+              </span>
+              {bulkActions?.onEdit && selectedRows.length === 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkActions.onEdit?.(selectedRows)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              )}
+              {bulkActions?.onBulkEdit && selectedRows.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkActions.onBulkEdit?.(selectedRows)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Bulk Edit
+                </Button>
+              )}
+              {bulkActions?.onDuplicate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkActions.onDuplicate?.(selectedRows)}
+                >
+                  <Copy className="h-4 w-4 mr-1" />
+                  Duplicate
+                </Button>
+              )}
+              {bulkActions?.onDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => bulkActions.onDelete?.(selectedRows)}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          {/* Rows per page selector */}
+          {pagination?.onPageSizeChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page</span>
+              <Select
+                value={String(pagination.pageSize)}
+                onValueChange={(value: string) => pagination.onPageSizeChange?.(Number(value))}
+              >
+                <SelectTrigger className="w-[70px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Column visibility dropdown */}
+          {enableColumnVisibility && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings2 className="h-4 w-4 mr-1" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value: boolean) => column.toggleVisibility(!!value)}
+                      >
+                        {getColumnDisplayName(column.id)}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
 
       <div className="rounded-md border">
         <Table>
@@ -131,8 +347,16 @@ export function DataTable<TData, TValue>({
 
       {pagination && (
         <div className="flex items-center justify-between px-2">
-          <div className="text-sm text-muted-foreground">
-            Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            {enableRowSelection && (
+              <span>
+                {table.getFilteredSelectedRowModel().rows.length} of{' '}
+                {table.getFilteredRowModel().rows.length} row(s) selected
+              </span>
+            )}
+            <span>
+              Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
+            </span>
           </div>
           <div className="flex items-center space-x-2">
             <Button

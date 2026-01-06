@@ -3,9 +3,11 @@ export {
   useInventoryList,
   useInventoryItem,
   useInventorySummary,
+  usePlatforms,
   useCreateInventory,
   useUpdateInventory,
   useDeleteInventory,
+  useBulkUpdateInventory,
   inventoryKeys,
 } from './use-inventory';
 export {
@@ -33,3 +35,19 @@ export {
   useBrickLinkSync,
   useBrickLinkCredentials,
 } from './use-orders';
+export {
+  useBricqerInventoryStats,
+  bricqerStatsKeys,
+  type RefreshProgress,
+} from './use-bricqer-stats';
+export {
+  useMileageForPurchase,
+  useMileageList,
+  useMileageEntry,
+  useCreateMileage,
+  useUpdateMileage,
+  useDeleteMileage,
+  useHomeAddress,
+  useUpdateHomeAddress,
+  mileageKeys,
+} from './use-mileage';

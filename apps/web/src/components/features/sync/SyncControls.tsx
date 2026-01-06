@@ -1,6 +1,6 @@
 'use client';
 
-import { RefreshCw, CloudOff, AlertTriangle } from 'lucide-react';
+import { RefreshCw, CloudOff, AlertTriangle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -22,6 +22,9 @@ interface SyncControlsProps {
 
 /**
  * Manual sync controls component
+ *
+ * NOTE: Google Sheets sync is currently disabled. Supabase is now the source of truth.
+ * The sync functionality is preserved for one-time data imports if needed.
  */
 export function SyncControls({ compact = false, table }: SyncControlsProps) {
   const { status: globalStatus, tables, isSyncing, lastError } = useGlobalSyncStatus();
@@ -29,51 +32,9 @@ export function SyncControls({ compact = false, table }: SyncControlsProps) {
   const inventorySync = useSyncTable('inventory');
   const purchasesSync = useSyncTable('purchases');
 
+  // Sync is disabled - hide compact controls entirely
   if (compact) {
-    // Compact inline version
-    return (
-      <div className="flex items-center gap-2">
-        {table ? (
-          <>
-            <SyncStatusBadge
-              status={tables[table]}
-              showTime
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => (table === 'inventory' ? inventorySync.sync() : purchasesSync.sync())}
-              disabled={table === 'inventory' ? inventorySync.isPending : purchasesSync.isPending}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${(table === 'inventory' ? inventorySync.isPending : purchasesSync.isPending) ? 'animate-spin' : ''}`}
-              />
-            </Button>
-          </>
-        ) : (
-          <>
-            <SyncStatusBadge
-              status={{
-                lastSync: tables.inventory.lastSync,
-                status: globalStatus,
-                recordCount:
-                  (tables.inventory?.recordCount || 0) +
-                  (tables.purchases?.recordCount || 0),
-              }}
-              showTime
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={syncAll}
-              disabled={isSyncing}
-            >
-              <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            </Button>
-          </>
-        )}
-      </div>
-    );
+    return null;
   }
 
   // Full card version
@@ -89,6 +50,14 @@ export function SyncControls({ compact = false, table }: SyncControlsProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Automatic sync is disabled. Supabase is now the source of truth. Use
+            manual sync below only for one-time data imports from Google Sheets.
+          </AlertDescription>
+        </Alert>
+
         {lastError && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />

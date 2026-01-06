@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { MileageSection } from './MileageSection';
 
 interface PurchaseDetailProps {
   id: string;
@@ -172,6 +173,9 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
             </CardContent>
           </Card>
         </div>
+
+        {/* Mileage & Travel Costs */}
+        <MileageSection purchaseId={id} purchaseDate={purchase.purchase_date} />
 
         {/* Linked Inventory Items */}
         <Card>

@@ -25,7 +25,7 @@ interface InventoryDetailProps {
 
 const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   'NOT YET RECEIVED': 'secondary',
-  'IN STOCK': 'default',
+  BACKLOG: 'default',
   LISTED: 'outline',
   SOLD: 'destructive',
 };
@@ -88,7 +88,7 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
                 </Link>
               </Button>
               <h1 className="text-2xl font-bold">{item.item_name || `Set ${item.set_number}`}</h1>
-              <Badge variant={STATUS_VARIANTS[item.status] || 'outline'}>{item.status}</Badge>
+              <Badge variant={item.status ? STATUS_VARIANTS[item.status] || 'outline' : 'outline'}>{item.status || '-'}</Badge>
             </div>
             <p className="text-muted-foreground">Set #{item.set_number}</p>
           </div>

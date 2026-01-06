@@ -99,6 +99,13 @@ export class InventoryService {
   }
 
   /**
+   * Bulk update multiple items with the same data
+   */
+  async updateBulk(ids: string[], input: InventoryItemUpdate): Promise<InventoryItem[]> {
+    return this.repository.updateBulk(ids, input);
+  }
+
+  /**
    * Get items by status
    */
   async getByStatus(
@@ -109,34 +116,53 @@ export class InventoryService {
   }
 
   /**
-   * Get items in stock (ready to sell)
+   * Get items in backlog (ready to list)
    */
-  async getInStock(pagination?: PaginationOptions): Promise<PaginatedResult<InventoryItem>> {
-    return this.repository.findByStatus('IN STOCK', pagination);
+  async getBacklog(pagination?: PaginationOptions): Promise<PaginatedResult<InventoryItem>> {
+    return this.repository.findByStatus('BACKLOG', pagination);
   }
 
   /**
    * Get inventory summary statistics
    */
-  async getSummary(): Promise<{
+  async getSummary(options?: { excludeSold?: boolean; platform?: string }): Promise<{
     totalItems: number;
     byStatus: Record<string, number>;
     totalCost: number;
     totalListingValue: number;
+    valueByStatus: Record<string, { cost: number; listingValue: number; count: number }>;
   }> {
-    const [countByStatus, values] = await Promise.all([
-      this.repository.getCountByStatus(),
-      this.repository.getTotalValue(),
+    const excludeStatuses: InventoryStatus[] = options?.excludeSold ? ['SOLD'] : [];
+    const platform = options?.platform;
+
+    const [countByStatus, values, valueByStatus] = await Promise.all([
+      this.repository.getCountByStatus({ platform }),
+      this.repository.getTotalValue({ excludeStatuses, platform }),
+      this.repository.getValueByStatus({ platform }),
     ]);
 
-    const totalItems = Object.values(countByStatus).reduce((sum, count) => sum + count, 0);
+    // Calculate total items (optionally excluding sold)
+    let totalItems = 0;
+    for (const [status, count] of Object.entries(countByStatus)) {
+      if (!excludeStatuses.includes(status as InventoryStatus)) {
+        totalItems += count;
+      }
+    }
 
     return {
       totalItems,
       byStatus: countByStatus,
       totalCost: values.cost,
       totalListingValue: values.listingValue,
+      valueByStatus,
     };
+  }
+
+  /**
+   * Get distinct listing platforms
+   */
+  async getDistinctPlatforms(): Promise<string[]> {
+    return this.repository.getDistinctPlatforms();
   }
 
   /**

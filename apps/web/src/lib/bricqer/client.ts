@@ -304,6 +304,10 @@ export class BricqerClient {
   /**
    * Get list of orders
    * @param params Query parameters for filtering orders
+   *
+   * Note: Bricqer API uses /orders/order/ endpoint (not /orders/)
+   * Status values are uppercase: READY, SHIPPED, CANCELLED, etc.
+   * Use 'filed' parameter to filter archived orders (filed=true for archived)
    */
   async getOrders(params?: BricqerOrderListParams): Promise<BricqerOrder[]> {
     const queryParams: Record<string, string | number | boolean | undefined> = {};
@@ -346,9 +350,14 @@ export class BricqerClient {
       queryParams.search = params.search;
     }
 
-    // Bricqer may return paginated or direct array
+    // Include archived orders filter
+    if (params?.filed !== undefined) {
+      queryParams.filed = params.filed;
+    }
+
+    // Bricqer API uses /orders/order/ endpoint
     const response = await this.request<BricqerPaginatedResponse<BricqerOrder> | BricqerOrder[]>(
-      '/orders/',
+      '/orders/order/',
       { params: queryParams }
     );
 
@@ -364,61 +373,60 @@ export class BricqerClient {
    * Convert order list params to request params
    */
   private convertOrderParams(
-    params?: Omit<BricqerOrderListParams, 'limit' | 'offset'>,
-    extra?: { limit: number; offset: number }
+    params?: Omit<BricqerOrderListParams, 'limit' | 'offset' | 'page'>
   ): Record<string, string | number | boolean | undefined> {
-    if (!params && !extra) return {};
+    if (!params) return {};
 
     const result: Record<string, string | number | boolean | undefined> = {};
 
-    if (params) {
-      // Handle status (can be string or array)
-      if (params.status) {
-        result.status = Array.isArray(params.status)
-          ? params.status.join(',')
-          : params.status;
-      }
-      if (params.payment_status) result.payment_status = params.payment_status;
-      if (params.created_after) result.created_after = params.created_after;
-      if (params.created_before) result.created_before = params.created_before;
-      if (params.page) result.page = params.page;
-      if (params.ordering) result.ordering = params.ordering;
-      if (params.search) result.search = params.search;
+    // Handle status (can be string or array)
+    if (params.status) {
+      result.status = Array.isArray(params.status)
+        ? params.status.join(',')
+        : params.status;
     }
-
-    if (extra) {
-      result.limit = extra.limit;
-      result.offset = extra.offset;
-    }
+    if (params.payment_status) result.payment_status = params.payment_status;
+    if (params.created_after) result.created_after = params.created_after;
+    if (params.created_before) result.created_before = params.created_before;
+    if (params.ordering) result.ordering = params.ordering;
+    if (params.search) result.search = params.search;
+    // Include archived orders filter
+    if (params.filed !== undefined) result.filed = params.filed;
 
     return result;
   }
 
   /**
    * Get all orders with pagination
+   * Uses page-based pagination (page=1, page=2, etc.) with limit=100 per page
    */
-  async getAllOrders(params?: Omit<BricqerOrderListParams, 'limit' | 'offset'>): Promise<BricqerOrder[]> {
+  async getAllOrders(params?: Omit<BricqerOrderListParams, 'limit' | 'offset' | 'page'>): Promise<BricqerOrder[]> {
     const allOrders: BricqerOrder[] = [];
-    let offset = 0;
+    let page = 1;
     const limit = 100;
     let hasMore = true;
+    const maxPages = 50; // Safety limit to prevent infinite loops
 
-    while (hasMore) {
+    while (hasMore && page <= maxPages) {
+      const queryParams = this.convertOrderParams(params);
+      queryParams.limit = limit;
+      queryParams.page = page;
+
       const response = await this.request<BricqerPaginatedResponse<BricqerOrder> | BricqerOrder[]>(
-        '/orders/',
-        {
-          params: this.convertOrderParams(params, { limit, offset }),
-        }
+        '/orders/order/',
+        { params: queryParams }
       );
 
       if (Array.isArray(response)) {
         allOrders.push(...response);
-        hasMore = false;
+        // Continue if we got a full page
+        hasMore = response.length === limit;
       } else {
         allOrders.push(...(response.results || []));
-        hasMore = response.next !== null;
-        offset += limit;
+        // Continue if we got a full page
+        hasMore = (response.results?.length || 0) === limit;
       }
+      page++;
     }
 
     return allOrders;
@@ -429,7 +437,7 @@ export class BricqerClient {
    * @param orderId The Bricqer order ID
    */
   async getOrder(orderId: string | number): Promise<BricqerOrderDetail> {
-    const response = await this.request<BricqerOrderDetail>(`/orders/${orderId}/`);
+    const response = await this.request<BricqerOrderDetail>(`/orders/order/${orderId}/`);
     return response;
   }
 
@@ -440,7 +448,7 @@ export class BricqerClient {
   async getOrderItems(orderId: string | number): Promise<BricqerOrderItem[]> {
     try {
       const response = await this.request<BricqerOrderItem[] | { items: BricqerOrderItem[] }>(
-        `/orders/${orderId}/items/`
+        `/orders/order/${orderId}/items/`
       );
 
       if (Array.isArray(response)) {
@@ -634,6 +642,9 @@ export class BricqerClient {
 
   /**
    * Get inventory statistics
+   *
+   * Note: Bricqer API returns pagination info in a nested structure:
+   * { page: { count: number, ... }, results: [...] }
    */
   async getInventoryStats(): Promise<{
     totalItems: number;
@@ -642,23 +653,21 @@ export class BricqerClient {
   }> {
     // Get counts from first page of each endpoint
     const [itemsResponse, storageResponse] = await Promise.all([
-      this.request<BricqerPaginatedResponse<BricqerInventoryItem>>('/inventory/item/', {
-        params: { limit: 1 },
-      }),
+      this.request<{ page?: { count: number }; count?: number; results: BricqerInventoryItem[] }>(
+        '/inventory/item/',
+        { params: { limit: 1 } }
+      ),
       this.getStorageLocations(),
     ]);
 
-    // Calculate total quantity from all items if needed
-    let totalQuantity = 0;
-    if ('count' in itemsResponse) {
-      // For now, we'd need to fetch all items to get total quantity
-      // This is a simplified version
-      totalQuantity = itemsResponse.count;
-    }
+    // Bricqer API returns count inside page object
+    const totalItems = itemsResponse.page?.count ?? itemsResponse.count ?? 0;
 
+    // Note: Total quantity would require fetching all items and summing remainingQuantity
+    // For now, we return totalItems as a proxy (each lot counted once)
     return {
-      totalItems: 'count' in itemsResponse ? itemsResponse.count : 0,
-      totalQuantity,
+      totalItems,
+      totalQuantity: totalItems, // Would need full fetch to calculate actual quantity
       storageLocations: storageResponse.length,
     };
   }

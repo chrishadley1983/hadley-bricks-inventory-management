@@ -26,18 +26,22 @@ function parseNumeric(value: string | number | undefined | null): number {
 
 /**
  * Map Bricqer status to a normalized status string
+ * Bricqer uses uppercase status values: READY, SHIPPED, etc.
  */
 function normalizeStatus(status: string): string {
   const statusMap: Record<string, string> = {
-    pending: 'Pending',
-    paid: 'Paid',
-    processing: 'Processing',
+    ready: 'Paid',
+    picked: 'Packed',
     packed: 'Packed',
     shipped: 'Shipped',
     delivered: 'Completed',
-    cancelled: 'Cancelled',
-    refunded: 'Refunded',
-    on_hold: 'On Hold',
+    cancelled: 'Cancelled/Refunded',
+    refunded: 'Cancelled/Refunded',
+    on_hold: 'Pending',
+    // Legacy lowercase values
+    pending: 'Pending',
+    paid: 'Paid',
+    processing: 'Paid',
   };
 
   return statusMap[status.toLowerCase()] || status;
@@ -55,8 +59,16 @@ function normalizeCondition(condition: string | undefined): 'New' | 'Used' {
 
 /**
  * Get buyer name from order
+ * Detailed orders have journal.contact, list orders have contact
  */
-function getBuyerName(order: BricqerOrder): string {
+function getBuyerName(order: BricqerOrder | BricqerOrderDetail): string {
+  // Try journal.contact first (detailed order response from /orders/order/{id}/)
+  const detail = order as BricqerOrderDetail;
+  if (detail.journal?.contact?.name) return detail.journal.contact.name;
+
+  // Try contact (list response from /orders/order/)
+  if (order.contact?.name) return order.contact.name;
+
   if (order.customer_name) return order.customer_name;
 
   const shipping = order.shipping_address;
@@ -76,6 +88,34 @@ function getBuyerName(order: BricqerOrder): string {
   }
 
   return 'Unknown';
+}
+
+/**
+ * Get buyer email from order
+ */
+function getBuyerEmail(order: BricqerOrder | BricqerOrderDetail): string | undefined {
+  const detail = order as BricqerOrderDetail;
+  return (
+    detail.journal?.contact?.email ||
+    order.contact?.email ||
+    order.customer_email ||
+    order.shipping_address?.email ||
+    order.billing_address?.email ||
+    undefined
+  );
+}
+
+/**
+ * Get buyer phone from order
+ */
+function getBuyerPhone(order: BricqerOrder | BricqerOrderDetail): string | undefined {
+  const detail = order as BricqerOrderDetail;
+  return (
+    detail.journal?.contact?.phone ||
+    order.shipping_address?.phone ||
+    order.billing_address?.phone ||
+    undefined
+  );
 }
 
 /**
@@ -104,23 +144,96 @@ export function normalizeOrderItem(
 }
 
 /**
+ * Parse address from journal.contact.address or contact.address string
+ * Format: "Street\nCity Line\nPostcode City\nCounty" (newline separated)
+ */
+function parseAddressString(
+  address: string,
+  contactName: string,
+  countryCode?: string
+): NormalizedBricqerOrder['shippingAddress'] {
+  const lines = address.split('\n').filter((l) => l.trim());
+
+  if (lines.length === 0) {
+    return {
+      name: contactName,
+      countryCode: countryCode || 'GB',
+    };
+  }
+
+  // Last line typically has postcode + city (e.g., "DN3 2HN Doncaster")
+  const lastLine = lines[lines.length - 1] || '';
+  // UK postcodes are typically at the start, followed by city
+  const postcodeMatch = lastLine.match(/^([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\s+(.+)$/i);
+
+  let postalCode: string | undefined;
+  let city: string | undefined;
+
+  if (postcodeMatch) {
+    postalCode = postcodeMatch[1];
+    city = postcodeMatch[2];
+  } else {
+    // Try reverse - city might be first
+    const reversedMatch = lastLine.match(/^(.+?)\s+([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})$/i);
+    if (reversedMatch) {
+      city = reversedMatch[1];
+      postalCode = reversedMatch[2];
+    } else {
+      // Just use the whole line as city
+      city = lastLine;
+    }
+  }
+
+  return {
+    name: contactName,
+    address1: lines[0],
+    address2: lines.length > 2 ? lines[1] : undefined,
+    city,
+    state: lines.length > 3 ? lines[lines.length - 1] : undefined,
+    postalCode,
+    countryCode: countryCode || 'GB',
+  };
+}
+
+/**
  * Normalize a Bricqer order to internal format
  */
 export function normalizeOrder(
   order: BricqerOrder | BricqerOrderDetail,
   items?: BricqerOrderItem[]
 ): NormalizedBricqerOrder {
-  const orderItems = items || (order as BricqerOrderDetail).items || [];
+  const detail = order as BricqerOrderDetail;
+  const orderItems = items || detail.items || [];
   const currency = order.currency || 'GBP';
 
-  const subtotal = parseNumeric(order.subtotal);
-  const shipping = parseNumeric(order.shipping_cost);
-  const tax = parseNumeric(order.tax);
-  const total = parseNumeric(order.total) || subtotal + shipping + tax;
+  // Handle API field names for costs
+  // - costShipping is the actual field name for shipping in detailed response
+  // - shipping_cost was the old/assumed field name (doesn't exist)
+  const subtotal = parseNumeric(order.costSubtotal) || parseNumeric(order.subtotal);
+  const shipping = parseNumeric(detail.costShipping) || parseNumeric(order.shipping_cost);
+  const tax = parseNumeric(detail.costTax) || parseNumeric(order.tax);
+  const total =
+    parseNumeric(order.costGrandtotal) || parseNumeric(order.total) || subtotal + shipping + tax;
 
-  // Build shipping address
+  // Build shipping address - prefer journal.contact.address (detailed), then contact.address (list)
   let shippingAddress: NormalizedBricqerOrder['shippingAddress'];
-  if (order.shipping_address) {
+  const countryCode = order.countryCode || 'GB';
+
+  if (detail.journal?.contact?.address) {
+    // Parse address from journal.contact (detailed order response)
+    shippingAddress = parseAddressString(
+      detail.journal.contact.address,
+      detail.journal.contact.name || 'Unknown',
+      countryCode
+    );
+  } else if (order.contact?.address) {
+    // Parse address from contact (list order response)
+    shippingAddress = parseAddressString(
+      order.contact.address,
+      order.contact.name || 'Unknown',
+      countryCode
+    );
+  } else if (order.shipping_address) {
     const addr = order.shipping_address;
     shippingAddress = {
       name: addr.name || `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Unknown',
@@ -133,19 +246,48 @@ export function normalizeOrder(
     };
   }
 
+  // Get order date - try various field names
+  const orderDateStr = order.paymentDate || order.created || order.created_at || order.ordered_at;
+  const orderDate = orderDateStr ? new Date(orderDateStr) : new Date();
+
+  // Use displayName as order ID if order_number not available
+  const platformOrderId = order.displayName || order.order_number || String(order.id);
+
+  // Get lot count - available directly from API
+  const lotCount = order.lotCount;
+
+  // Calculate piece count from batchSet.itemSet (sum of quantities)
+  // This is available for BrickLink/BrickOwl orders, but empty for eBay orders
+  let pieceCount: number | undefined;
+  if (detail.batchSet && detail.batchSet.length > 0) {
+    let totalQuantity = 0;
+    for (const batch of detail.batchSet) {
+      if (Array.isArray(batch.itemSet)) {
+        for (const item of batch.itemSet) {
+          totalQuantity += item.quantity || 0;
+        }
+      }
+    }
+    pieceCount = totalQuantity > 0 ? totalQuantity : undefined;
+  }
+
   return {
-    platformOrderId: order.order_number || String(order.id),
+    platformOrderId,
     platform: 'bricqer',
-    orderDate: new Date(order.ordered_at || order.created_at),
+    orderDate,
     status: normalizeStatus(order.status),
     buyerName: getBuyerName(order),
-    buyerEmail: order.customer_email || order.shipping_address?.email || order.billing_address?.email,
+    buyerEmail: getBuyerEmail(order),
+    buyerPhone: getBuyerPhone(order),
     subtotal,
     shipping,
     fees: tax,
     total,
     currency,
     items: orderItems.map((item) => normalizeOrderItem(item, currency)),
+    lotCount,
+    pieceCount,
+    orderDescription: detail.description,
     shippingAddress,
     trackingNumber: order.tracking_number,
     rawData: order as BricqerOrderDetail,

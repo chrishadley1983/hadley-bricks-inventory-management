@@ -3,6 +3,7 @@ import type { InventoryItem, InventoryItemInsert, InventoryItemUpdate } from '@h
 export interface InventoryFilters {
   status?: string;
   condition?: string;
+  platform?: string;
   search?: string;
 }
 
@@ -19,11 +20,18 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface StatusValue {
+  cost: number;
+  listingValue: number;
+  count: number;
+}
+
 export interface InventorySummary {
   totalItems: number;
   byStatus: Record<string, number>;
   totalCost: number;
   totalListingValue: number;
+  valueByStatus: Record<string, StatusValue>;
 }
 
 /**
@@ -37,6 +45,7 @@ export async function fetchInventory(
 
   if (filters?.status) params.set('status', filters.status);
   if (filters?.condition) params.set('condition', filters.condition);
+  if (filters?.platform) params.set('platform', filters.platform);
   if (filters?.search) params.set('search', filters.search);
   if (pagination?.page) params.set('page', String(pagination.page));
   if (pagination?.pageSize) params.set('pageSize', String(pagination.pageSize));
@@ -127,8 +136,16 @@ export async function deleteInventoryItem(id: string): Promise<void> {
 /**
  * Fetch inventory summary statistics
  */
-export async function fetchInventorySummary(): Promise<InventorySummary> {
-  const response = await fetch('/api/inventory/summary');
+export async function fetchInventorySummary(options?: {
+  excludeSold?: boolean;
+  platform?: string;
+}): Promise<InventorySummary> {
+  const params = new URLSearchParams();
+  if (options?.excludeSold) params.set('excludeSold', 'true');
+  if (options?.platform) params.set('platform', options.platform);
+
+  const url = `/api/inventory/summary${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
 
   if (!response.ok) {
     const error = await response.json();
@@ -137,4 +154,52 @@ export async function fetchInventorySummary(): Promise<InventorySummary> {
 
   const result = await response.json();
   return result.data;
+}
+
+/**
+ * Fetch distinct listing platforms
+ */
+export async function fetchPlatforms(): Promise<string[]> {
+  const response = await fetch('/api/inventory/platforms');
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch platforms');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+export interface BulkUpdateInput {
+  ids: string[];
+  updates: Partial<{
+    storage_location: string | null;
+    linked_lot: string | null;
+    notes: string | null;
+    condition: 'New' | 'Used' | null;
+    status: string | null;
+    source: string | null;
+    listing_platform: string | null;
+  }>;
+}
+
+/**
+ * Bulk update multiple inventory items
+ */
+export async function bulkUpdateInventoryItems(
+  input: BulkUpdateInput
+): Promise<{ data: InventoryItem[]; updated: number }> {
+  const response = await fetch('/api/inventory/bulk', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to bulk update inventory items');
+  }
+
+  return response.json();
 }

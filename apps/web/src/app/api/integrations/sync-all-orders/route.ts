@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { OrderSyncService } from '@/lib/services';
 
 const SyncOptionsSchema = z.object({
-  platforms: z.array(z.enum(['bricklink', 'brickowl', 'ebay', 'amazon'])).optional(),
+  platforms: z.array(z.enum(['bricklink', 'brickowl', 'bricqer', 'ebay', 'amazon'])).optional(),
   includeArchived: z.boolean().optional().default(false),
   includeItems: z.boolean().optional().default(true),
   fullSync: z.boolean().optional().default(false),
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Run sync across all platforms
     const result = await syncService.syncAllPlatforms(user.id, {
-      platforms: options.platforms as ('bricklink' | 'brickowl' | 'ebay' | 'amazon')[] | undefined,
+      platforms: options.platforms as ('bricklink' | 'brickowl' | 'bricqer' | 'ebay' | 'amazon')[] | undefined,
       includeArchived: options.includeArchived,
       includeItems: options.includeItems,
       fullSync: options.fullSync,

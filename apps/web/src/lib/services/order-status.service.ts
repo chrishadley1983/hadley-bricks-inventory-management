@@ -340,26 +340,17 @@ export class OrderStatusService {
 
   /**
    * Get order status summary for dashboard
+   * Uses pagination to handle >1000 records
+   * Supports optional date range filtering
    */
   async getStatusSummary(
     userId: string,
-    platform?: string
+    platform?: string,
+    options?: {
+      startDate?: Date;
+      endDate?: Date;
+    }
   ): Promise<Record<OrderStatus, number>> {
-    let query = this.supabase
-      .from('platform_orders')
-      .select('internal_status, status')
-      .eq('user_id', userId);
-
-    if (platform) {
-      query = query.eq('platform', platform);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`Failed to get status summary: ${error.message}`);
-    }
-
     const summary: Record<OrderStatus, number> = {
       Pending: 0,
       Paid: 0,
@@ -369,12 +360,46 @@ export class OrderStatusService {
       Cancelled: 0,
     };
 
-    const orders = (data || []) as Array<{ internal_status: string | null; status: string | null }>;
-    for (const order of orders) {
-      const status = order.internal_status
-        ? (order.internal_status as OrderStatus)
-        : this.normalizeStatus(order.status);
-      summary[status] = (summary[status] || 0) + 1;
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = this.supabase
+        .from('platform_orders')
+        .select('internal_status, status')
+        .eq('user_id', userId)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (platform) {
+        query = query.eq('platform', platform);
+      }
+
+      if (options?.startDate) {
+        query = query.gte('order_date', options.startDate.toISOString().split('T')[0]);
+      }
+
+      if (options?.endDate) {
+        query = query.lte('order_date', options.endDate.toISOString().split('T')[0]);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to get status summary: ${error.message}`);
+      }
+
+      const orders = (data || []) as Array<{ internal_status: string | null; status: string | null }>;
+      for (const order of orders) {
+        // Use internal_status if set, otherwise normalize the raw status field
+        const status = order.internal_status
+          ? (order.internal_status as OrderStatus)
+          : this.normalizeStatus(order.status);
+        summary[status] = (summary[status] || 0) + 1;
+      }
+
+      hasMore = orders.length === pageSize;
+      page++;
     }
 
     return summary;

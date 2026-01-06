@@ -36,6 +36,34 @@ A comprehensive Lego resale business management system for tracking inventory, p
 
 > **Warning:** There is no `db:reset` for cloud Supabase. Database resets must be done manually via the Supabase dashboard if needed.
 
+## 🔴 CRITICAL: Supabase Query Row Limit
+
+**Supabase returns a maximum of 1,000 rows by default.** Always use pagination when querying tables that may have more than 1,000 rows.
+
+```typescript
+// BAD - will silently truncate results at 1,000 rows
+const { data } = await supabase.from('inventory_items').select('*');
+
+// GOOD - paginate to get all results
+const pageSize = 1000;
+let page = 0;
+let hasMore = true;
+const allData = [];
+
+while (hasMore) {
+  const { data } = await supabase
+    .from('inventory_items')
+    .select('*')
+    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+  allData.push(...(data ?? []));
+  hasMore = (data?.length ?? 0) === pageSize;
+  page++;
+}
+```
+
+> **Warning:** This limit applies to all queries including counts and aggregations. Always verify large result sets are complete.
+
 ---
 
 ## 🔴 CRITICAL: Local Windows Environment
@@ -621,6 +649,12 @@ GOOGLE_PRIVATE_KEY=
 # AI
 ANTHROPIC_API_KEY=
 GOOGLE_AI_API_KEY=
+
+# eBay Integration (OAuth 2.0)
+EBAY_CLIENT_ID=              # eBay App ID (Client ID)
+EBAY_CLIENT_SECRET=          # eBay Cert ID (Client Secret)
+EBAY_REDIRECT_URI=           # OAuth callback URL (e.g., http://localhost:3000/api/integrations/ebay/callback)
+EBAY_SANDBOX=false           # Set to 'true' for sandbox testing
 
 # Platform credentials stored encrypted in platform_credentials table
 ```

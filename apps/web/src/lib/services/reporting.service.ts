@@ -341,10 +341,7 @@ interface PurchaseQueryRow {
   short_description: string;
   cost: number;
   source: string | null;
-  mileage: number | null;
 }
-
-const MILEAGE_RATE = 0.45; // HMRC rate 45p per mile
 
 export class ReportingService {
   constructor(private supabase: SupabaseClient<Database>) {}
@@ -1110,10 +1107,28 @@ export class ReportingService {
     // Fetch purchases
     const { data: purchasesData, error: purchaseError } = await this.supabase
       .from('purchases')
-      .select('id, purchase_date, short_description, cost, source, mileage')
+      .select('id, purchase_date, short_description, cost, source')
       .eq('user_id', userId)
       .gte('purchase_date', startDate)
       .lte('purchase_date', endDate);
+
+    // Fetch mileage from new mileage_tracking table
+    const { data: mileageData } = await this.supabase
+      .from('mileage_tracking')
+      .select('purchase_id, miles_travelled, amount_claimed')
+      .eq('user_id', userId)
+      .eq('expense_type', 'mileage');
+
+    // Build mileage lookup by purchase_id
+    const mileageByPurchaseId = new Map<string, { miles: number; cost: number }>();
+    for (const m of mileageData || []) {
+      if (m.purchase_id) {
+        const existing = mileageByPurchaseId.get(m.purchase_id) || { miles: 0, cost: 0 };
+        existing.miles += m.miles_travelled;
+        existing.cost += m.amount_claimed;
+        mileageByPurchaseId.set(m.purchase_id, existing);
+      }
+    }
 
     if (purchaseError) {
       throw new Error(`Failed to fetch purchases: ${purchaseError.message}`);
@@ -1178,13 +1193,17 @@ export class ReportingService {
       const revenue = soldItems.reduce((sum, i) => sum + (i.listing_value || 0), 0);
       const profit = revenue - purchase.cost;
       const roi = purchase.cost > 0 ? (profit / purchase.cost) * 100 : 0;
-      const mileageCost = (purchase.mileage || 0) * MILEAGE_RATE;
+
+      // Get mileage from the mileage_tracking lookup
+      const purchaseMileage = mileageByPurchaseId.get(purchase.id) || { miles: 0, cost: 0 };
+      const mileageCost = purchaseMileage.cost;
+      const purchaseMiles = purchaseMileage.miles;
 
       totalSpent += purchase.cost;
       itemsAcquired += itemCount;
       itemsSold += soldCount;
       revenueFromSold += revenue;
-      totalMileage += purchase.mileage || 0;
+      totalMileage += purchaseMiles;
 
       // Source breakdown
       const source = purchase.source || 'Unknown';
@@ -1201,7 +1220,7 @@ export class ReportingService {
       sourceData.itemsAcquired += itemCount;
       sourceData.itemsSold += soldCount;
       sourceData.revenue += revenue;
-      sourceData.mileage += purchase.mileage || 0;
+      sourceData.mileage += purchaseMiles;
       sourceMap.set(source, sourceData);
 
       purchasesList.push({
@@ -1215,13 +1234,17 @@ export class ReportingService {
         revenue,
         profit,
         roi,
-        mileage: purchase.mileage,
+        mileage: purchaseMiles,
         mileageCost,
       });
     }
 
     const totalProfit = revenueFromSold - totalSpent;
-    const totalMileageCost = totalMileage * MILEAGE_RATE;
+    // Use actual mileage costs from mileage_tracking table instead of recalculating
+    const totalMileageCost = Array.from(mileageByPurchaseId.values()).reduce(
+      (sum, m) => sum + m.cost,
+      0
+    );
 
     const bySource = Array.from(sourceMap.entries()).map(([source, data]) => {
       const profit = data.revenue - data.totalSpent;
@@ -1276,17 +1299,23 @@ export class ReportingService {
       throw new Error(`Failed to fetch sales: ${salesError.message}`);
     }
 
-    // Fetch purchases with mileage
-    const { data: purchasesData, error: purchaseError } = await this.supabase
-      .from('purchases')
-      .select('purchase_date, short_description, mileage')
+    // Fetch mileage from mileage_tracking table (joined with purchases for description)
+    const { data: mileageData, error: mileageError } = await this.supabase
+      .from('mileage_tracking')
+      .select(`
+        tracking_date,
+        miles_travelled,
+        amount_claimed,
+        reason,
+        expense_type,
+        purchases!mileage_tracking_purchase_id_fkey(short_description)
+      `)
       .eq('user_id', userId)
-      .gte('purchase_date', yearStart)
-      .lte('purchase_date', yearEnd)
-      .not('mileage', 'is', null);
+      .gte('tracking_date', yearStart)
+      .lte('tracking_date', yearEnd);
 
-    if (purchaseError) {
-      throw new Error(`Failed to fetch purchases: ${purchaseError.message}`);
+    if (mileageError) {
+      throw new Error(`Failed to fetch mileage: ${mileageError.message}`);
     }
 
     interface TaxSaleRow {
@@ -1302,13 +1331,16 @@ export class ReportingService {
 
     const sales = (salesData || []) as TaxSaleRow[];
 
-    interface MileageRow {
-      purchase_date: string;
-      short_description: string;
-      mileage: number | null;
+    interface MileageTrackingRow {
+      tracking_date: string;
+      miles_travelled: number;
+      amount_claimed: number;
+      reason: string;
+      expense_type: string;
+      purchases: { short_description: string } | null;
     }
 
-    const mileageRecords = (purchasesData || []) as MileageRow[];
+    const mileageRecords = (mileageData || []) as MileageTrackingRow[];
 
     // Calculate totals
     let totalRevenue = 0;
@@ -1357,22 +1389,29 @@ export class ReportingService {
       quarters[quarterIndex].profit += profit;
     }
 
-    // Mileage log
+    // Mileage log - now from mileage_tracking table
     let totalMiles = 0;
+    let totalMileageAllowance = 0;
     const mileageLog: TaxSummaryReport['mileageLog'] = [];
 
     for (const record of mileageRecords) {
-      const miles = record.mileage || 0;
-      totalMiles += miles;
+      // Only include mileage type entries in miles calculation
+      if (record.expense_type === 'mileage') {
+        totalMiles += record.miles_travelled;
+      }
+      totalMileageAllowance += record.amount_claimed;
+
+      const description = record.purchases?.short_description
+        ? `${record.reason} - ${record.purchases.short_description}`
+        : record.reason;
+
       mileageLog.push({
-        date: record.purchase_date,
-        description: record.short_description,
-        mileage: miles,
-        allowance: miles * MILEAGE_RATE,
+        date: record.tracking_date,
+        description,
+        mileage: record.miles_travelled,
+        allowance: record.amount_claimed,
       });
     }
-
-    const totalMileageAllowance = totalMiles * MILEAGE_RATE;
     const grossProfit = totalRevenue - totalCogs;
     const totalExpenses = totalFees + totalShippingCosts + totalMileageAllowance + totalOtherCosts;
     const netProfit = grossProfit - totalExpenses;

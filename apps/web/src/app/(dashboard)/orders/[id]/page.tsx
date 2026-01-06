@@ -29,14 +29,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -140,11 +132,11 @@ function getStatusColor(status: string | null): string {
   return 'bg-gray-100 text-gray-800';
 }
 
-function formatCurrency(amount: number | null, currency = 'GBP'): string {
+function formatCurrency(amount: number | null, currency?: string | null): string {
   if (amount === null) return '-';
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
-    currency,
+    currency: currency || 'GBP',
   }).format(amount);
 }
 
@@ -518,7 +510,7 @@ export default function OrderDetailPage({
               <div>
                 <p className="text-sm text-muted-foreground">Last Synced</p>
                 <p className="font-medium">
-                  {format(new Date(order.synced_at), 'MMMM d, yyyy \'at\' h:mm a')}
+                  {order.synced_at ? format(new Date(order.synced_at), 'MMMM d, yyyy \'at\' h:mm a') : '-'}
                 </p>
               </div>
             </CardContent>
@@ -527,77 +519,28 @@ export default function OrderDetailPage({
 
         {/* Order Items */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
               <Package className="h-5 w-5" />
               Order Items
             </CardTitle>
-            <CardDescription>
-              {order.items_count} item{order.items_count !== 1 ? 's' : ''} in this order
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            {order.items && order.items.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Condition</TableHead>
-                      <TableHead className="text-center">Qty</TableHead>
-                      <TableHead className="text-right">Unit Price</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {order.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{item.item_name || item.item_number}</p>
-                            <p className="text-sm text-muted-foreground font-mono">
-                              {item.item_number}
-                            </p>
-                            {item.color_name && (
-                              <p className="text-sm text-muted-foreground">
-                                Color: {item.color_name}
-                              </p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{item.item_type || '-'}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              item.condition === 'New'
-                                ? 'bg-green-50 text-green-700'
-                                : 'bg-blue-50 text-blue-700'
-                            }
-                          >
-                            {item.condition || '-'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(item.unit_price, item.currency)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(item.total_price, item.currency)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">
-                No item details available. Try syncing with &quot;Include Items&quot; enabled.
-              </p>
-            )}
+            {(() => {
+              const rawData = order.raw_data as { lotCount?: number } | null;
+              const lotCount = rawData?.lotCount;
+              const pieceCount = order.items_count;
+
+              if (pieceCount || lotCount) {
+                const parts = [];
+                if (pieceCount) parts.push(`${pieceCount} item${pieceCount !== 1 ? 's' : ''}`);
+                if (lotCount) parts.push(`${lotCount} lot${lotCount !== 1 ? 's' : ''}`);
+                return (
+                  <p className="text-lg font-medium">{parts.join(' / ')}</p>
+                );
+              }
+              return <p className="text-muted-foreground">No item details available</p>;
+            })()}
           </CardContent>
         </Card>
 

@@ -9,6 +9,7 @@ import type { Database, Platform } from '@hadley-bricks/database';
 import { BrickLinkSyncService } from './bricklink-sync.service';
 import { BrickOwlSyncService } from './brickowl-sync.service';
 import { BricqerSyncService } from './bricqer-sync.service';
+import { AmazonSyncService } from './amazon-sync.service';
 import { CredentialsRepository } from '../repositories';
 import type {
   SyncResult,
@@ -24,12 +25,14 @@ export class OrderSyncService {
   private brickLinkSync: BrickLinkSyncService;
   private brickOwlSync: BrickOwlSyncService;
   private bricqerSync: BricqerSyncService;
+  private amazonSync: AmazonSyncService;
   private credentialsRepo: CredentialsRepository;
 
   constructor(private supabase: SupabaseClient<Database>) {
     this.brickLinkSync = new BrickLinkSyncService(supabase);
     this.brickOwlSync = new BrickOwlSyncService(supabase);
     this.bricqerSync = new BricqerSyncService(supabase);
+    this.amazonSync = new AmazonSyncService(supabase);
     this.credentialsRepo = new CredentialsRepository(supabase);
   }
 
@@ -68,6 +71,16 @@ export class OrderSyncService {
         }
         case 'bricqer': {
           const status = await this.bricqerSync.getSyncStatus(userId);
+          return {
+            platform,
+            isConfigured: status.isConfigured,
+            totalOrders: status.totalOrders,
+            lastSyncedAt: status.lastSyncedAt,
+            connectionStatus: status.isConfigured ? 'connected' : 'disconnected',
+          };
+        }
+        case 'amazon': {
+          const status = await this.amazonSync.getSyncStatus(userId);
           return {
             platform,
             isConfigured: status.isConfigured,
@@ -142,6 +155,14 @@ export class OrderSyncService {
         const result = await this.bricqerSync.syncOrders(userId, {
           fullSync: options?.fullSync,
           includeItems: options?.includeItems ?? true,
+        });
+        return { ...result, platform };
+      }
+      case 'amazon': {
+        // Default to NOT fetching items - too slow with 400+ orders and hits rate limits
+        // Items can be fetched on-demand when confirming individual orders
+        const result = await this.amazonSync.syncOrders(userId, {
+          includeItems: options?.includeItems ?? false,
         });
         return { ...result, platform };
       }
@@ -228,6 +249,8 @@ export class OrderSyncService {
         return this.brickOwlSync.testConnection(userId);
       case 'bricqer':
         return this.bricqerSync.testConnection(userId);
+      case 'amazon':
+        return this.amazonSync.testConnection(userId);
       default:
         return false;
     }
