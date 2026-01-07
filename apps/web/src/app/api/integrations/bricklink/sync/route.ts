@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { BrickLinkSyncService } from '@/lib/services';
+import { createBrickLinkTransactionSyncService } from '@/lib/bricklink';
 
 const SyncOptionsSchema = z.object({
   includeFiled: z.boolean().optional().default(false),
@@ -11,7 +12,7 @@ const SyncOptionsSchema = z.object({
 
 /**
  * POST /api/integrations/bricklink/sync
- * Trigger a sync of BrickLink orders
+ * Trigger a sync of BrickLink orders to both platform_orders AND bricklink_transactions
  */
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const syncService = new BrickLinkSyncService(supabase);
+    const transactionSyncService = createBrickLinkTransactionSyncService();
 
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
@@ -48,17 +50,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run sync
-    const result = await syncService.syncOrders(user.id, options);
+    // Run both syncs in parallel:
+    // 1. Original sync to platform_orders (for order management)
+    // 2. New sync to bricklink_transactions (for transaction staging)
+    const [orderResult, transactionResult] = await Promise.all([
+      syncService.syncOrders(user.id, options),
+      transactionSyncService.syncTransactions(user.id, {
+        fullSync: options.fullSync,
+        includeFiled: options.includeFiled,
+      }),
+    ]);
 
     return NextResponse.json({
-      success: result.success,
+      success: orderResult.success && transactionResult.success,
       data: {
-        ordersProcessed: result.ordersProcessed,
-        ordersCreated: result.ordersCreated,
-        ordersUpdated: result.ordersUpdated,
-        errors: result.errors,
-        lastSyncedAt: result.lastSyncedAt.toISOString(),
+        // Order sync results (platform_orders)
+        ordersProcessed: orderResult.ordersProcessed,
+        ordersCreated: orderResult.ordersCreated,
+        ordersUpdated: orderResult.ordersUpdated,
+        errors: orderResult.errors,
+        lastSyncedAt: orderResult.lastSyncedAt.toISOString(),
+        // Transaction sync results (bricklink_transactions)
+        transactions: {
+          processed: transactionResult.ordersProcessed,
+          created: transactionResult.ordersCreated,
+          updated: transactionResult.ordersUpdated,
+          error: transactionResult.error,
+        },
       },
     });
   } catch (error) {
@@ -84,13 +102,22 @@ export async function GET() {
     }
 
     const syncService = new BrickLinkSyncService(supabase);
-    const status = await syncService.getSyncStatus(user.id);
+    const transactionSyncService = createBrickLinkTransactionSyncService();
+
+    const [status, transactionStatus] = await Promise.all([
+      syncService.getSyncStatus(user.id),
+      transactionSyncService.getConnectionStatus(user.id),
+    ]);
 
     return NextResponse.json({
       data: {
         isConfigured: status.isConfigured,
         totalOrders: status.totalOrders,
         lastSyncedAt: status.lastSyncedAt?.toISOString() || null,
+        transactions: {
+          count: transactionStatus.transactionCount ?? 0,
+          lastSyncAt: transactionStatus.lastSyncAt ?? null,
+        },
       },
     });
   } catch (error) {

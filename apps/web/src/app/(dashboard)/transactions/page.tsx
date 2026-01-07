@@ -52,6 +52,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { MONZO_CATEGORY_LABELS, type MonzoCategory } from '@/lib/monzo/types';
 import { useEbaySync } from '@/hooks/use-ebay-sync';
 import { usePayPalSync } from '@/hooks/use-paypal-sync';
+import { useBrickLinkTransactionSync } from '@/hooks/use-bricklink-transaction-sync';
+import { BRICKLINK_STATUS_LABELS } from '@/lib/bricklink';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -189,12 +191,62 @@ interface PayPalTransactionsResponse {
 }
 
 // ============================================================================
+// BrickLink Types
+// ============================================================================
+
+interface BrickLinkTransaction {
+  id: string;
+  bricklink_order_id: string;
+  order_date: string;
+  status_changed_date: string | null;
+  buyer_name: string;
+  buyer_email: string | null;
+  base_currency: string;
+  shipping: number;
+  insurance: number;
+  add_charge_1: number;
+  add_charge_2: number;
+  credit: number;
+  coupon_credit: number;
+  order_total: number;
+  tax: number;
+  base_grand_total: number;
+  total_lots: number;
+  total_items: number;
+  order_status: string;
+  payment_status: string | null;
+  payment_method: string | null;
+  payment_date: string | null;
+  tracking_number: string | null;
+  buyer_location: string | null;
+  order_note: string | null;
+}
+
+interface BrickLinkTransactionsResponse {
+  transactions: BrickLinkTransaction[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: {
+    totalSales: number;
+    totalShipping: number;
+    totalTax: number;
+    totalGrandTotal: number;
+    transactionCount: number;
+  };
+}
+
+// ============================================================================
 // Shared Types
 // ============================================================================
 
 type MonzoSortField = 'created' | 'merchant_name' | 'description' | 'amount' | 'local_category' | 'user_notes';
 type EbaySortField = 'transaction_date' | 'amount' | 'item_title';
 type PayPalSortField = 'transaction_date' | 'fee_amount' | 'gross_amount' | 'payer_name';
+type BrickLinkSortField = 'order_date' | 'buyer_name' | 'order_status' | 'base_grand_total' | 'shipping';
 type SortDirection = 'asc' | 'desc';
 
 type DateRangeKey = '__all__' | 'this_month' | 'last_month' | 'last_quarter' | 'last_year';
@@ -367,6 +419,36 @@ async function fetchPayPalTransactions(params: {
 }
 
 // ============================================================================
+// API Functions - BrickLink
+// ============================================================================
+
+async function fetchBrickLinkTransactions(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: string;
+  fromDate?: string;
+  toDate?: string;
+  sortBy?: BrickLinkSortField;
+  sortOrder?: SortDirection;
+}): Promise<BrickLinkTransactionsResponse> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  if (params.search) searchParams.set('search', params.search);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.fromDate) searchParams.set('fromDate', params.fromDate);
+  if (params.toDate) searchParams.set('toDate', params.toDate);
+  if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+
+  const response = await fetch(`/api/bricklink/transactions?${searchParams.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch BrickLink transactions');
+  return response.json();
+}
+
+// ============================================================================
 // Formatting Helpers
 // ============================================================================
 
@@ -427,7 +509,7 @@ const EBAY_TRANSACTION_TYPES = Object.keys(EBAY_TRANSACTION_TYPE_LABELS);
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'monzo' | 'ebay' | 'paypal'>('monzo');
+  const [activeTab, setActiveTab] = useState<'monzo' | 'ebay' | 'paypal' | 'bricklink'>('monzo');
 
   // ============================================================================
   // Monzo State
@@ -495,6 +577,32 @@ export default function TransactionsPage() {
     transactionCount: paypalTransactionCount,
   } = usePayPalSync({ enabled: activeTab === 'paypal' });
 
+  // ============================================================================
+  // BrickLink State
+  // ============================================================================
+  const [bricklinkPage, setBrickLinkPage] = useState(1);
+  const [bricklinkPageSize] = useState(50);
+  const [bricklinkSearch, setBrickLinkSearch] = useState('');
+  const [bricklinkDebouncedSearch, setBrickLinkDebouncedSearch] = useState('');
+  const [bricklinkStatusFilter, setBrickLinkStatusFilter] = useState<string>('');
+  const [bricklinkDateRangeKey, setBrickLinkDateRangeKey] = useState<DateRangeKey>('__all__');
+  const [bricklinkSortField, setBrickLinkSortField] = useState<BrickLinkSortField>('order_date');
+  const [bricklinkSortDirection, setBrickLinkSortDirection] = useState<SortDirection>('desc');
+  const [bricklinkMessage, setBrickLinkMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedBrickLinkTransaction, setSelectedBrickLinkTransaction] = useState<BrickLinkTransaction | null>(null);
+
+  // BrickLink Sync Hook
+  const {
+    isConnected: bricklinkIsConnected,
+    isRunning: bricklinkIsRunning,
+    isSyncing: bricklinkIsSyncing,
+    triggerSync: triggerBrickLinkSync,
+    lastSyncTime: bricklinkLastSyncTime,
+    syncResult: bricklinkSyncResult,
+    syncError: bricklinkSyncError,
+    transactionCount: bricklinkTransactionCount,
+  } = useBrickLinkTransactionSync({ enabled: activeTab === 'bricklink' });
+
   // Get date ranges
   const monzoDateRange = useMemo(() => {
     return DATE_RANGES[monzoDateRangeKey].getRange();
@@ -507,6 +615,10 @@ export default function TransactionsPage() {
   const paypalDateRange = useMemo(() => {
     return DATE_RANGES[paypalDateRangeKey].getRange();
   }, [paypalDateRangeKey]);
+
+  const bricklinkDateRange = useMemo(() => {
+    return DATE_RANGES[bricklinkDateRangeKey].getRange();
+  }, [bricklinkDateRangeKey]);
 
   // Debounce Monzo search
   useEffect(() => {
@@ -569,6 +681,34 @@ export default function TransactionsPage() {
       setPayPalMessage({ type: 'error', message: paypalSyncError.message });
     }
   }, [paypalSyncError]);
+
+  // Debounce BrickLink search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBrickLinkDebouncedSearch(bricklinkSearch);
+      setBrickLinkPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [bricklinkSearch]);
+
+  // Show BrickLink sync messages
+  useEffect(() => {
+    if (bricklinkSyncResult?.success) {
+      const detail = bricklinkSyncResult.ordersProcessed !== undefined
+        ? ` (${bricklinkSyncResult.ordersProcessed} processed, ${bricklinkSyncResult.ordersCreated} new)`
+        : '';
+      setBrickLinkMessage({
+        type: 'success',
+        message: `Sync completed!${detail}`,
+      });
+    }
+  }, [bricklinkSyncResult]);
+
+  useEffect(() => {
+    if (bricklinkSyncError) {
+      setBrickLinkMessage({ type: 'error', message: bricklinkSyncError.message });
+    }
+  }, [bricklinkSyncError]);
 
   // ============================================================================
   // Monzo Queries
@@ -633,6 +773,26 @@ export default function TransactionsPage() {
         sortOrder: paypalSortDirection,
       }),
     enabled: paypalIsConnected && activeTab === 'paypal',
+  });
+
+  // ============================================================================
+  // BrickLink Queries
+  // ============================================================================
+
+  const { data: bricklinkTransactionsData, isLoading: bricklinkTransactionsLoading } = useQuery({
+    queryKey: ['bricklink', 'transactions', bricklinkPage, bricklinkPageSize, bricklinkDebouncedSearch, bricklinkStatusFilter, bricklinkDateRangeKey, bricklinkSortField, bricklinkSortDirection],
+    queryFn: () =>
+      fetchBrickLinkTransactions({
+        page: bricklinkPage,
+        pageSize: bricklinkPageSize,
+        search: bricklinkDebouncedSearch || undefined,
+        status: bricklinkStatusFilter || undefined,
+        fromDate: bricklinkDateRange?.start.toISOString(),
+        toDate: bricklinkDateRange?.end.toISOString(),
+        sortBy: bricklinkSortField,
+        sortOrder: bricklinkSortDirection,
+      }),
+    enabled: bricklinkIsConnected && activeTab === 'bricklink',
   });
 
   // ============================================================================
@@ -740,6 +900,24 @@ export default function TransactionsPage() {
   };
 
   // ============================================================================
+  // BrickLink Handlers
+  // ============================================================================
+
+  const handleBrickLinkSort = (field: BrickLinkSortField) => {
+    if (bricklinkSortField === field) {
+      setBrickLinkSortDirection(bricklinkSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setBrickLinkSortField(field);
+      setBrickLinkSortDirection('desc');
+    }
+    setBrickLinkPage(1);
+  };
+
+  const handleBrickLinkSync = () => {
+    triggerBrickLinkSync(false);
+  };
+
+  // ============================================================================
   // Sort Icons
   // ============================================================================
 
@@ -776,6 +954,17 @@ export default function TransactionsPage() {
     );
   };
 
+  const BrickLinkSortIcon = ({ field }: { field: BrickLinkSortField }) => {
+    if (bricklinkSortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return bricklinkSortDirection === 'asc' ? (
+      <ArrowUp className="ml-1 h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3" />
+    );
+  };
+
   // ============================================================================
   // Computed Values
   // ============================================================================
@@ -803,6 +992,16 @@ export default function TransactionsPage() {
   };
   const paypalDateRangeLabel = DATE_RANGES[paypalDateRangeKey].label;
 
+  // BrickLink summary from API
+  const bricklinkSummary = bricklinkTransactionsData?.summary || {
+    totalSales: 0,
+    totalShipping: 0,
+    totalTax: 0,
+    totalGrandTotal: 0,
+    transactionCount: 0,
+  };
+  const bricklinkDateRangeLabel = DATE_RANGES[bricklinkDateRangeKey].label;
+
   // ============================================================================
   // Render
   // ============================================================================
@@ -822,11 +1021,12 @@ export default function TransactionsPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'monzo' | 'ebay' | 'paypal')}>
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'monzo' | 'ebay' | 'paypal' | 'bricklink')}>
           <TabsList>
             <TabsTrigger value="monzo">Monzo</TabsTrigger>
             <TabsTrigger value="ebay">eBay</TabsTrigger>
             <TabsTrigger value="paypal">PayPal</TabsTrigger>
+            <TabsTrigger value="bricklink">BrickLink</TabsTrigger>
           </TabsList>
 
           {/* ============================================================================ */}
@@ -1727,6 +1927,344 @@ export default function TransactionsPage() {
               </Card>
             )}
           </TabsContent>
+
+          {/* ============================================================================ */}
+          {/* BrickLink Tab */}
+          {/* ============================================================================ */}
+          <TabsContent value="bricklink" className="space-y-6">
+            {/* BrickLink Sync Button */}
+            {bricklinkIsConnected && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleBrickLinkSync}
+                  disabled={bricklinkIsRunning || bricklinkIsSyncing}
+                >
+                  {bricklinkIsRunning || bricklinkIsSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync Orders
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* BrickLink Messages */}
+            {bricklinkMessage && (
+              <Alert
+                className={bricklinkMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                variant={bricklinkMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                <AlertDescription
+                  className={bricklinkMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
+                  {bricklinkMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Not connected message */}
+            {!bricklinkIsConnected && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connect BrickLink</CardTitle>
+                  <CardDescription>
+                    Connect your BrickLink account to view and manage your order transactions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild>
+                    <a href="/settings/integrations">Go to Integrations</a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* BrickLink Summary Cards */}
+            {bricklinkIsConnected && (
+              <div className="grid gap-4 md:grid-cols-5">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Order Total</CardTitle>
+                    <span className="text-xs text-muted-foreground">{bricklinkDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatEbayAmount(bricklinkSummary.totalSales)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Shipping</CardTitle>
+                    <span className="text-xs text-muted-foreground">{bricklinkDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatEbayAmount(bricklinkSummary.totalShipping)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Tax</CardTitle>
+                    <span className="text-xs text-muted-foreground">{bricklinkDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {formatEbayAmount(bricklinkSummary.totalTax)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Grand Total</CardTitle>
+                    <span className="text-xs text-muted-foreground">{bricklinkDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatEbayAmount(bricklinkSummary.totalGrandTotal)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Orders</CardTitle>
+                    <span className="text-xs text-muted-foreground">All time</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {bricklinkTransactionCount || bricklinkTransactionsData?.pagination?.total || 0}
+                    </div>
+                    {bricklinkLastSyncTime && (
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {formatDateTime(bricklinkLastSyncTime)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* BrickLink Filters */}
+            {bricklinkIsConnected && (
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    placeholder="Search buyer, order ID..."
+                    value={bricklinkSearch}
+                    onChange={(e) => setBrickLinkSearch(e.target.value)}
+                  />
+                </div>
+                <Select value={bricklinkDateRangeKey} onValueChange={(v: string) => { setBrickLinkDateRangeKey(v as DateRangeKey); setBrickLinkPage(1); }}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(DATE_RANGES) as DateRangeKey[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {DATE_RANGES[key].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={bricklinkStatusFilter || '__all__'} onValueChange={(v: string) => setBrickLinkStatusFilter(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Order Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Statuses</SelectItem>
+                    {Object.entries(BRICKLINK_STATUS_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* BrickLink Transactions Table */}
+            {bricklinkIsConnected && (
+              <Card>
+                <CardContent className="p-0">
+                  {bricklinkTransactionsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleBrickLinkSort('order_date')}
+                              >
+                                Date
+                                <BrickLinkSortIcon field="order_date" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>Order ID</TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleBrickLinkSort('buyer_name')}
+                              >
+                                Buyer
+                                <BrickLinkSortIcon field="buyer_name" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleBrickLinkSort('order_status')}
+                              >
+                                Status
+                                <BrickLinkSortIcon field="order_status" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">Items</TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handleBrickLinkSort('shipping')}
+                              >
+                                Shipping
+                                <BrickLinkSortIcon field="shipping" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handleBrickLinkSort('base_grand_total')}
+                              >
+                                Total
+                                <BrickLinkSortIcon field="base_grand_total" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="w-[60px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {bricklinkTransactionsData?.transactions?.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                No orders found. Click &quot;Sync Orders&quot; to import your BrickLink data.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            bricklinkTransactionsData?.transactions?.map((transaction) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  {formatDate(transaction.order_date)}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {transaction.bricklink_order_id}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex flex-col">
+                                    <span>{transaction.buyer_name}</span>
+                                    {transaction.buyer_location && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {transaction.buyer_location}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      transaction.order_status === 'COMPLETED' || transaction.order_status === 'RECEIVED'
+                                        ? 'default'
+                                        : transaction.order_status === 'CANCELLED' || transaction.order_status === 'NPB'
+                                        ? 'destructive'
+                                        : 'secondary'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {BRICKLINK_STATUS_LABELS[transaction.order_status] || transaction.order_status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  <div className="flex flex-col items-end">
+                                    <span>{transaction.total_items}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {transaction.total_lots} lots
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">
+                                  {formatEbayAmount(transaction.shipping, transaction.base_currency)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium whitespace-nowrap text-green-600">
+                                  {formatEbayAmount(transaction.base_grand_total, transaction.base_currency)}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedBrickLinkTransaction(transaction)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+
+                      {/* BrickLink Pagination */}
+                      {bricklinkTransactionsData?.pagination && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((bricklinkPage - 1) * bricklinkPageSize) + 1} to{' '}
+                            {Math.min(bricklinkPage * bricklinkPageSize, bricklinkTransactionsData.pagination.total)} of{' '}
+                            {bricklinkTransactionsData.pagination.total} orders
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setBrickLinkPage((p) => Math.max(1, p - 1))}
+                              disabled={bricklinkPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {bricklinkPage} of {bricklinkTransactionsData.pagination.totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setBrickLinkPage((p) => p + 1)}
+                              disabled={bricklinkPage >= bricklinkTransactionsData.pagination.totalPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* ============================================================================ */}
@@ -2092,6 +2630,181 @@ export default function TransactionsPage() {
                     variant="outline"
                     className="flex-1"
                     onClick={() => setSelectedPayPalTransaction(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* ============================================================================ */}
+        {/* BrickLink Detail Sheet */}
+        {/* ============================================================================ */}
+        <Sheet open={!!selectedBrickLinkTransaction} onOpenChange={() => setSelectedBrickLinkTransaction(null)}>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Order Details</SheetTitle>
+              <SheetDescription>
+                View BrickLink order details and financial breakdown.
+              </SheetDescription>
+            </SheetHeader>
+            {selectedBrickLinkTransaction && (
+              <div className="mt-6 space-y-6">
+                {/* Order Info */}
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Order Date</span>
+                    <span className="font-medium">{formatDateTime(selectedBrickLinkTransaction.order_date)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Order ID</span>
+                    <span className="font-mono text-sm">{selectedBrickLinkTransaction.bricklink_order_id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge
+                      variant={
+                        selectedBrickLinkTransaction.order_status === 'COMPLETED' || selectedBrickLinkTransaction.order_status === 'RECEIVED'
+                          ? 'default'
+                          : selectedBrickLinkTransaction.order_status === 'CANCELLED' || selectedBrickLinkTransaction.order_status === 'NPB'
+                          ? 'destructive'
+                          : 'secondary'
+                      }
+                    >
+                      {BRICKLINK_STATUS_LABELS[selectedBrickLinkTransaction.order_status] || selectedBrickLinkTransaction.order_status}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Buyer</span>
+                    <span className="font-medium">{selectedBrickLinkTransaction.buyer_name}</span>
+                  </div>
+                  {selectedBrickLinkTransaction.buyer_email && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="text-sm">{selectedBrickLinkTransaction.buyer_email}</span>
+                    </div>
+                  )}
+                  {selectedBrickLinkTransaction.buyer_location && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Location</span>
+                      <span className="text-sm">{selectedBrickLinkTransaction.buyer_location}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Items</span>
+                    <span className="text-sm">{selectedBrickLinkTransaction.total_items} items ({selectedBrickLinkTransaction.total_lots} lots)</span>
+                  </div>
+                  {selectedBrickLinkTransaction.payment_method && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Payment Method</span>
+                      <span className="text-sm">{selectedBrickLinkTransaction.payment_method}</span>
+                    </div>
+                  )}
+                  {selectedBrickLinkTransaction.payment_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Payment Date</span>
+                      <span className="text-sm">{formatDateTime(selectedBrickLinkTransaction.payment_date)}</span>
+                    </div>
+                  )}
+                  {selectedBrickLinkTransaction.tracking_number && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tracking</span>
+                      <span className="font-mono text-xs">{selectedBrickLinkTransaction.tracking_number}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Financial Breakdown */}
+                <div className="space-y-3">
+                  <h4 className="font-medium">Financial Breakdown</h4>
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Order Total</span>
+                      <span className="font-medium">
+                        {formatEbayAmount(selectedBrickLinkTransaction.order_total, selectedBrickLinkTransaction.base_currency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Shipping</span>
+                      <span>
+                        {formatEbayAmount(selectedBrickLinkTransaction.shipping, selectedBrickLinkTransaction.base_currency)}
+                      </span>
+                    </div>
+                    {selectedBrickLinkTransaction.insurance > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Insurance</span>
+                        <span>
+                          {formatEbayAmount(selectedBrickLinkTransaction.insurance, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedBrickLinkTransaction.add_charge_1 > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Additional Charge 1</span>
+                        <span>
+                          {formatEbayAmount(selectedBrickLinkTransaction.add_charge_1, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedBrickLinkTransaction.add_charge_2 > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Additional Charge 2</span>
+                        <span>
+                          {formatEbayAmount(selectedBrickLinkTransaction.add_charge_2, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedBrickLinkTransaction.credit > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Credit</span>
+                        <span className="text-red-600">
+                          -{formatEbayAmount(selectedBrickLinkTransaction.credit, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedBrickLinkTransaction.coupon_credit > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Coupon Credit</span>
+                        <span className="text-red-600">
+                          -{formatEbayAmount(selectedBrickLinkTransaction.coupon_credit, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedBrickLinkTransaction.tax > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Tax</span>
+                        <span>
+                          {formatEbayAmount(selectedBrickLinkTransaction.tax, selectedBrickLinkTransaction.base_currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                      <span>Grand Total</span>
+                      <span className="text-green-600">
+                        {formatEbayAmount(selectedBrickLinkTransaction.base_grand_total, selectedBrickLinkTransaction.base_currency)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {selectedBrickLinkTransaction.order_note && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Order Note</h4>
+                    <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                      {selectedBrickLinkTransaction.order_note}
+                    </p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setSelectedBrickLinkTransaction(null)}
                   >
                     Close
                   </Button>
