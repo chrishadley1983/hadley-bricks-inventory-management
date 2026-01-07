@@ -14,6 +14,234 @@ export type Database = {
   }
   public: {
     Tables: {
+      bricklink_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          historical_import_completed_at: string | null
+          historical_import_from_date: string | null
+          historical_import_started_at: string | null
+          id: string
+          include_filed_orders: boolean
+          last_auto_sync_at: string | null
+          last_sync_date_cursor: string | null
+          next_auto_sync_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          include_filed_orders?: boolean
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          include_filed_orders?: boolean
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricklink_sync_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          from_date: string | null
+          id: string
+          last_sync_cursor: string | null
+          orders_created: number | null
+          orders_processed: number | null
+          orders_skipped: number | null
+          orders_updated: number | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          orders_created?: number | null
+          orders_processed?: number | null
+          orders_skipped?: number | null
+          orders_updated?: number | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          orders_created?: number | null
+          orders_processed?: number | null
+          orders_skipped?: number | null
+          orders_updated?: number | null
+          started_at?: string
+          status?: string
+          sync_mode?: string
+          to_date?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricklink_transactions: {
+        Row: {
+          add_charge_1: number | null
+          add_charge_2: number | null
+          base_currency: string
+          base_grand_total: number
+          bricklink_order_id: string
+          buyer_email: string | null
+          buyer_location: string | null
+          buyer_name: string
+          coupon_credit: number | null
+          created_at: string
+          credit: number | null
+          id: string
+          insurance: number | null
+          order_date: string
+          order_note: string | null
+          order_status: string
+          order_total: number
+          payment_date: string | null
+          payment_method: string | null
+          payment_status: string | null
+          raw_response: Json
+          seller_remarks: string | null
+          shipping: number | null
+          shipping_method: string | null
+          status_changed_date: string | null
+          tax: number | null
+          total_items: number | null
+          total_lots: number | null
+          tracking_number: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          add_charge_1?: number | null
+          add_charge_2?: number | null
+          base_currency?: string
+          base_grand_total: number
+          bricklink_order_id: string
+          buyer_email?: string | null
+          buyer_location?: string | null
+          buyer_name: string
+          coupon_credit?: number | null
+          created_at?: string
+          credit?: number | null
+          id?: string
+          insurance?: number | null
+          order_date: string
+          order_note?: string | null
+          order_status: string
+          order_total: number
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          raw_response: Json
+          seller_remarks?: string | null
+          shipping?: number | null
+          shipping_method?: string | null
+          status_changed_date?: string | null
+          tax?: number | null
+          total_items?: number | null
+          total_lots?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          add_charge_1?: number | null
+          add_charge_2?: number | null
+          base_currency?: string
+          base_grand_total?: number
+          bricklink_order_id?: string
+          buyer_email?: string | null
+          buyer_location?: string | null
+          buyer_name?: string
+          coupon_credit?: number | null
+          created_at?: string
+          credit?: number | null
+          id?: string
+          insurance?: number | null
+          order_date?: string
+          order_note?: string | null
+          order_status?: string
+          order_total?: number
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          raw_response?: Json
+          seller_remarks?: string | null
+          shipping?: number | null
+          shipping_method?: string | null
+          status_changed_date?: string | null
+          tax?: number | null
+          total_items?: number | null
+          total_lots?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bricqer_stats_cache: {
         Row: {
           created_at: string
