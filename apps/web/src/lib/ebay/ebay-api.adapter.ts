@@ -3,6 +3,9 @@
  *
  * HTTP client wrapper for eBay REST APIs with rate limiting, error handling,
  * and automatic token refresh.
+ *
+ * The Finances API requires digital signatures for EU/UK-domiciled sellers.
+ * This adapter supports both signed and unsigned requests.
  */
 
 import type {
@@ -17,12 +20,15 @@ import type {
   EbayPayoutFetchParams,
   EbayErrorResponse,
 } from './types';
+import type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
+import { ebaySignatureService } from './ebay-signature.service';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const EBAY_API_BASE_URL = 'https://api.ebay.com';
+const EBAY_SIGNED_API_BASE_URL = 'https://apiz.ebay.com'; // Signed requests MUST use apiz.ebay.com
 const EBAY_SANDBOX_API_BASE_URL = 'https://api.sandbox.ebay.com';
 
 const FULFILMENT_API_PATH = '/sell/fulfillment/v1';
@@ -40,6 +46,8 @@ export interface EbayApiAdapterConfig {
   accessToken: string;
   marketplaceId?: string;
   sandbox?: boolean;
+  signingKeys?: EbaySigningKeys;
+  userId?: string; // Required for auto-fetching signing keys
 }
 
 export interface EbayApiRequestOptions {
@@ -47,6 +55,7 @@ export interface EbayApiRequestOptions {
   headers?: Record<string, string>;
   body?: unknown;
   params?: Record<string, string | number | undefined>;
+  requiresSignature?: boolean; // If true, request will be signed
 }
 
 export class EbayApiError extends Error {
@@ -69,11 +78,15 @@ export class EbayApiAdapter {
   private marketplaceId: string;
   private baseUrl: string;
   private lastRequestTime = 0;
+  private signingKeys?: EbaySigningKeys;
+  private userId?: string;
 
   constructor(config: EbayApiAdapterConfig) {
     this.accessToken = config.accessToken;
     this.marketplaceId = config.marketplaceId || 'EBAY_GB';
     this.baseUrl = config.sandbox ? EBAY_SANDBOX_API_BASE_URL : EBAY_API_BASE_URL;
+    this.signingKeys = config.signingKeys;
+    this.userId = config.userId;
   }
 
   /**
@@ -81,6 +94,34 @@ export class EbayApiAdapter {
    */
   setAccessToken(token: string): void {
     this.accessToken = token;
+  }
+
+  /**
+   * Set signing keys for Finances API requests
+   */
+  setSigningKeys(keys: EbaySigningKeys): void {
+    this.signingKeys = keys;
+  }
+
+  /**
+   * Ensure signing keys are available (fetch if needed)
+   */
+  private async ensureSigningKeys(): Promise<EbaySigningKeys | null> {
+    if (this.signingKeys) {
+      return this.signingKeys;
+    }
+
+    if (!this.userId) {
+      console.warn('[EbayApiAdapter] No userId set, cannot fetch signing keys');
+      return null;
+    }
+
+    // Try to get signing keys
+    const keys = await ebaySignatureService.getSigningKeys(this.userId, this.accessToken);
+    if (keys) {
+      this.signingKeys = keys;
+    }
+    return keys;
   }
 
   // ============================================================================
@@ -131,11 +172,12 @@ export class EbayApiAdapter {
   }
 
   // ============================================================================
-  // Finances API Methods
+  // Finances API Methods (Requires Digital Signatures for EU/UK sellers)
   // ============================================================================
 
   /**
    * Get transactions with optional filtering
+   * Note: Finances API requires digital signatures for EU/UK-domiciled sellers
    * @see https://developer.ebay.com/api-docs/sell/finances/resources/transaction/methods/getTransactions
    */
   async getTransactions(params?: EbayTransactionFetchParams): Promise<EbayTransactionsResponse> {
@@ -154,11 +196,13 @@ export class EbayApiAdapter {
 
     return this.request<EbayTransactionsResponse>(`${FINANCES_API_PATH}/transaction`, {
       params: queryParams,
+      requiresSignature: true,
     });
   }
 
   /**
    * Get payouts with optional filtering
+   * Note: Finances API requires digital signatures for EU/UK-domiciled sellers
    * @see https://developer.ebay.com/api-docs/sell/finances/resources/payout/methods/getPayouts
    */
   async getPayouts(params?: EbayPayoutFetchParams): Promise<EbayPayoutsResponse> {
@@ -177,16 +221,19 @@ export class EbayApiAdapter {
 
     return this.request<EbayPayoutsResponse>(`${FINANCES_API_PATH}/payout`, {
       params: queryParams,
+      requiresSignature: true,
     });
   }
 
   /**
    * Get a specific payout by ID
+   * Note: Finances API requires digital signatures for EU/UK-domiciled sellers
    * @see https://developer.ebay.com/api-docs/sell/finances/resources/payout/methods/getPayout
    */
   async getPayout(payoutId: string): Promise<EbayPayoutResponse> {
     return this.request<EbayPayoutResponse>(
-      `${FINANCES_API_PATH}/payout/${encodeURIComponent(payoutId)}`
+      `${FINANCES_API_PATH}/payout/${encodeURIComponent(payoutId)}`,
+      { requiresSignature: true }
     );
   }
 
@@ -271,6 +318,17 @@ export class EbayApiAdapter {
   // ============================================================================
 
   /**
+   * Convert a date string to UTC format with Z suffix.
+   * eBay API has issues with + in timezone offsets due to URL encoding.
+   * Using Z (UTC) format avoids this issue.
+   */
+  private static toUtcFormat(dateString: string): string {
+    const date = new Date(dateString);
+    // Return ISO string which always uses Z suffix for UTC
+    return date.toISOString();
+  }
+
+  /**
    * Build a date range filter for orders
    * @param fromDate Start date (ISO string)
    * @param toDate End date (ISO string)
@@ -285,16 +343,20 @@ export class EbayApiAdapter {
 
     const parts: string[] = [];
 
-    if (fromDate) {
-      parts.push(`${field}:[${fromDate}..]`);
+    // Convert dates to UTC format to avoid URL encoding issues with +
+    const utcFromDate = fromDate ? this.toUtcFormat(fromDate) : undefined;
+    const utcToDate = toDate ? this.toUtcFormat(toDate) : undefined;
+
+    if (utcFromDate) {
+      parts.push(`${field}:[${utcFromDate}..]`);
     }
 
-    if (toDate) {
-      if (fromDate) {
+    if (utcToDate) {
+      if (utcFromDate) {
         // Replace the range end
-        parts[0] = `${field}:[${fromDate}..${toDate}]`;
+        parts[0] = `${field}:[${utcFromDate}..${utcToDate}]`;
       } else {
-        parts.push(`${field}:[..${toDate}]`);
+        parts.push(`${field}:[..${utcToDate}]`);
       }
     }
 
@@ -318,19 +380,44 @@ export class EbayApiAdapter {
 
     const parts: string[] = [];
 
-    if (fromDate) {
-      parts.push(`transactionDate:[${fromDate}..]`);
+    // Convert dates to UTC format to avoid URL encoding issues with +
+    const utcFromDate = fromDate ? this.toUtcFormat(fromDate) : undefined;
+    const utcToDate = toDate ? this.toUtcFormat(toDate) : undefined;
+
+    if (utcFromDate) {
+      parts.push(`transactionDate:[${utcFromDate}..]`);
     }
 
-    if (toDate) {
-      if (fromDate) {
-        parts[0] = `transactionDate:[${fromDate}..${toDate}]`;
+    if (utcToDate) {
+      if (utcFromDate) {
+        parts[0] = `transactionDate:[${utcFromDate}..${utcToDate}]`;
       } else {
-        parts.push(`transactionDate:[..${toDate}]`);
+        parts.push(`transactionDate:[..${utcToDate}]`);
       }
     }
 
     return parts.join(',');
+  }
+
+  /**
+   * Build a date range filter for payouts
+   */
+  static buildPayoutDateFilter(fromDate?: string, toDate?: string): string | undefined {
+    if (!fromDate && !toDate) return undefined;
+
+    // Convert dates to UTC format to avoid URL encoding issues with +
+    const utcFromDate = fromDate ? this.toUtcFormat(fromDate) : undefined;
+    const utcToDate = toDate ? this.toUtcFormat(toDate) : undefined;
+
+    if (utcFromDate && utcToDate) {
+      return `payoutDate:[${utcFromDate}..${utcToDate}]`;
+    } else if (utcFromDate) {
+      return `payoutDate:[${utcFromDate}..]`;
+    } else if (utcToDate) {
+      return `payoutDate:[..${utcToDate}]`;
+    }
+
+    return undefined;
   }
 
   // ============================================================================
@@ -338,13 +425,18 @@ export class EbayApiAdapter {
   // ============================================================================
 
   /**
-   * Make an API request with rate limiting and retry logic
+   * Make an API request with rate limiting, retry logic, and optional digital signatures
    */
   private async request<T>(path: string, options: EbayApiRequestOptions = {}): Promise<T> {
     // Rate limiting - ensure minimum delay between requests
     await this.enforceRateLimit();
 
-    const url = new URL(`${this.baseUrl}${path}`);
+    // IMPORTANT: Signed requests MUST use apiz.ebay.com, not api.ebay.com
+    // The regular api.ebay.com endpoint returns 404 for signed requests
+    const baseUrlForRequest = options.requiresSignature
+      ? EBAY_SIGNED_API_BASE_URL
+      : this.baseUrl;
+    const url = new URL(`${baseUrlForRequest}${path}`);
 
     // Add query parameters
     if (options.params) {
@@ -355,23 +447,64 @@ export class EbayApiAdapter {
       });
     }
 
+    console.log(`[EbayApiAdapter] Request: ${options.method || 'GET'} ${url.toString()}`);
+    console.log(`[EbayApiAdapter] Requires signature: ${options.requiresSignature || false}`);
+
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.accessToken}`,
+      Authorization: `Bearer ${this.accessToken.substring(0, 20)}...`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'X-EBAY-C-MARKETPLACE-ID': this.marketplaceId,
       ...options.headers,
     };
 
+    // Use full token for actual request
+    const requestHeaders: Record<string, string> = {
+      ...headers,
+      Authorization: `Bearer ${this.accessToken}`,
+    };
+
+    // Add digital signature headers if required
+    let signedHeaders: SignedRequestHeaders | null = null;
+    if (options.requiresSignature) {
+      const signingKeys = await this.ensureSigningKeys();
+      if (signingKeys) {
+        console.log('[EbayApiAdapter] Signing request with digital signature');
+        const bodyString = options.body ? JSON.stringify(options.body) : undefined;
+        signedHeaders = ebaySignatureService.signRequest(
+          signingKeys,
+          options.method || 'GET',
+          url.toString(),
+          bodyString
+        );
+
+        // Add signature headers to request
+        requestHeaders['x-ebay-signature-key'] = signedHeaders['x-ebay-signature-key'];
+        requestHeaders['x-ebay-enforce-signature'] = signedHeaders['x-ebay-enforce-signature'];
+        requestHeaders['Signature'] = signedHeaders['Signature'];
+        requestHeaders['Signature-Input'] = signedHeaders['Signature-Input'];
+        if (signedHeaders['Content-Digest']) {
+          requestHeaders['Content-Digest'] = signedHeaders['Content-Digest'];
+        }
+        console.log('[EbayApiAdapter] Signature headers added');
+      } else {
+        console.warn('[EbayApiAdapter] Digital signatures required but no signing keys available');
+        // Continue without signature - API will return 403 if signatures are actually required
+      }
+    }
+
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
+        console.log(`[EbayApiAdapter] Attempt ${attempt + 1}/${MAX_RETRIES}`);
         const response = await fetch(url.toString(), {
           method: options.method || 'GET',
-          headers,
+          headers: requestHeaders,
           body: options.body ? JSON.stringify(options.body) : undefined,
         });
+
+        console.log(`[EbayApiAdapter] Response status: ${response.status} ${response.statusText}`);
 
         // Handle rate limiting
         if (response.status === 429) {
@@ -386,17 +519,34 @@ export class EbayApiAdapter {
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null);
           const errorResponse = errorBody as EbayErrorResponse | null;
+          console.error(`[EbayApiAdapter] Error response:`, JSON.stringify(errorResponse, null, 2));
+
+          // Check if this is a signature error - provide more helpful message
+          const errorMessage = errorResponse?.errors?.[0]?.message || `HTTP ${response.status}: ${response.statusText}`;
+          const isSignatureError = errorMessage.toLowerCase().includes('signature') ||
+            errorMessage.toLowerCase().includes('x-ebay-signature-key');
+
+          if (isSignatureError && !signedHeaders) {
+            throw new EbayApiError(
+              'Digital signature required. Please reconnect your eBay account to enable API signing.',
+              response.status,
+              errorResponse?.errors
+            );
+          }
 
           throw new EbayApiError(
-            errorResponse?.errors?.[0]?.message || `HTTP ${response.status}: ${response.statusText}`,
+            errorMessage,
             response.status,
             errorResponse?.errors
           );
         }
 
-        return (await response.json()) as T;
+        const data = (await response.json()) as T;
+        console.log(`[EbayApiAdapter] Success - received data`);
+        return data;
       } catch (error) {
         lastError = error as Error;
+        console.error(`[EbayApiAdapter] Request error:`, error);
 
         // Don't retry on non-retryable errors
         if (error instanceof EbayApiError) {
@@ -405,7 +555,7 @@ export class EbayApiAdapter {
             throw error;
           }
 
-          // 403 Forbidden - insufficient scopes, don't retry
+          // 403 Forbidden - insufficient scopes or signature issue, don't retry
           if (error.statusCode === 403) {
             throw error;
           }

@@ -18,6 +18,7 @@ import {
   BarChart3,
   PieChart,
   LineChart,
+  Landmark,
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,6 +33,7 @@ const mainNavItems: NavItem[] = [
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/orders', label: 'Orders', icon: FileText },
   { href: '/sales', label: 'Sales', icon: DollarSign },
+  { href: '/transactions', label: 'Transactions', icon: Landmark },
 ];
 
 const reportNavItems: NavItem[] = [

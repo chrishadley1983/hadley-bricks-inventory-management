@@ -49,8 +49,19 @@ const Header = dynamic(
   { ssr: false }
 );
 
-interface OrderWithItems extends PlatformOrder {
+interface ShippingAddress {
+  name?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  countryCode?: string;
+}
+
+interface OrderWithItems extends Omit<PlatformOrder, 'shipping_address'> {
   items: OrderItem[];
+  shipping_address?: ShippingAddress | null;
 }
 
 interface OrderResponse {
@@ -138,16 +149,6 @@ function formatCurrency(amount: number | null, currency?: string | null): string
     style: 'currency',
     currency: currency || 'GBP',
   }).format(amount);
-}
-
-interface ShippingAddress {
-  name?: string;
-  address1?: string;
-  address2?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  countryCode?: string;
 }
 
 export default function OrderDetailPage({

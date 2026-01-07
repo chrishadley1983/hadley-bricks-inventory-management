@@ -101,11 +101,12 @@ export class EbayFulfilmentService {
       const connectionStatus = await this.authService.getConnectionStatus(userId);
       const marketplaceId = connectionStatus.marketplaceId || 'EBAY_GB';
 
-      // Create API adapter
+      // Create API adapter with userId (for consistency, orders don't require signatures)
       const api = new EbayApiAdapter({
         accessToken,
         marketplaceId,
         sandbox: process.env.EBAY_SANDBOX === 'true',
+        userId,
       });
 
       // Log sync start
@@ -218,6 +219,7 @@ export class EbayFulfilmentService {
         accessToken,
         marketplaceId: connectionStatus.marketplaceId || 'EBAY_GB',
         sandbox: process.env.EBAY_SANDBOX === 'true',
+        userId,
       });
 
       const order = await api.getOrder(ebayOrderId);
