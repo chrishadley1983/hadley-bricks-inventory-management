@@ -1,0 +1,2106 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  RefreshCw,
+  Loader2,
+  Pencil,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { MONZO_CATEGORY_LABELS, type MonzoCategory } from '@/lib/monzo/types';
+import { useEbaySync } from '@/hooks/use-ebay-sync';
+import { usePayPalSync } from '@/hooks/use-paypal-sync';
+
+const Header = dynamic(
+  () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
+  { ssr: false }
+);
+
+// ============================================================================
+// Monzo Types
+// ============================================================================
+
+interface MonzoTransaction {
+  id: string;
+  monzo_transaction_id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  merchant_name: string | null;
+  category: string;
+  local_category: string | null;
+  user_notes: string | null;
+  tags: string[];
+  created: string;
+  settled: string | null;
+  is_load: boolean;
+}
+
+interface TransactionsResponse {
+  data: {
+    transactions: MonzoTransaction[];
+    pagination: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+    summary: {
+      totalIncome: number;
+      totalExpenses: number;
+    };
+    categories: string[];
+  };
+}
+
+interface MonzoStatus {
+  data: {
+    connection: {
+      isConnected: boolean;
+      transactionCount?: number;
+      lastSyncAt?: string;
+    };
+    sync: {
+      isRunning: boolean;
+    } | null;
+  };
+}
+
+// ============================================================================
+// eBay Types
+// ============================================================================
+
+interface EbayTransaction {
+  id: string;
+  ebay_transaction_id: string;
+  transaction_type: string;
+  transaction_status: string;
+  transaction_date: string;
+  amount: number;
+  currency: string;
+  booking_entry: string;
+  payout_id: string | null;
+  ebay_order_id: string | null;
+  buyer_username: string | null;
+  item_title: string | null;
+  custom_label: string | null;
+  sale_amount: number | null;
+  total_fee_amount: number | null;
+  final_value_fee_fixed: number | null;
+  final_value_fee_variable: number | null;
+  international_fee: number | null;
+  regulatory_operating_fee: number | null;
+  transaction_memo: string | null;
+  created_at: string;
+}
+
+interface EbayTransactionsResponse {
+  transactions: EbayTransaction[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: {
+    totalSales: number;
+    totalFees: number;
+    totalRefunds: number;
+    netRevenue: number;
+  };
+}
+
+// ============================================================================
+// PayPal Types
+// ============================================================================
+
+interface PayPalTransaction {
+  id: string;
+  paypal_transaction_id: string;
+  transaction_date: string;
+  transaction_type: string | null;
+  transaction_status: string | null;
+  gross_amount: number;
+  fee_amount: number;
+  net_amount: number;
+  balance_amount: number | null;
+  currency: string;
+  description: string | null;
+  from_email: string | null;
+  payer_name: string | null;
+  invoice_id: string | null;
+  created_at: string;
+}
+
+interface PayPalTransactionsResponse {
+  transactions: PayPalTransaction[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: {
+    totalFees: number;
+    transactionCount: number;
+  };
+}
+
+// ============================================================================
+// Shared Types
+// ============================================================================
+
+type MonzoSortField = 'created' | 'merchant_name' | 'description' | 'amount' | 'local_category' | 'user_notes';
+type EbaySortField = 'transaction_date' | 'amount' | 'item_title';
+type PayPalSortField = 'transaction_date' | 'fee_amount' | 'gross_amount' | 'payer_name';
+type SortDirection = 'asc' | 'desc';
+
+type DateRangeKey = '__all__' | 'this_month' | 'last_month' | 'last_quarter' | 'last_year';
+
+interface DateRange {
+  label: string;
+  getRange: () => { start: Date; end: Date } | null;
+}
+
+const DATE_RANGES: Record<DateRangeKey, DateRange> = {
+  __all__: {
+    label: 'All Time',
+    getRange: () => null,
+  },
+  this_month: {
+    label: 'This Month',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      return { start, end };
+    },
+  },
+  last_month: {
+    label: 'Last Month',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return { start, end };
+    },
+  },
+  last_quarter: {
+    label: 'Last Quarter',
+    getRange: () => {
+      const now = new Date();
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+      const end = new Date(now.getFullYear(), currentQuarter * 3, 0, 23, 59, 59, 999);
+      return { start, end };
+    },
+  },
+  last_year: {
+    label: 'Last Year',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear() - 1, 0, 1);
+      const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+      return { start, end };
+    },
+  },
+};
+
+// ============================================================================
+// API Functions - Monzo
+// ============================================================================
+
+async function fetchMonzoTransactions(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  category?: string;
+  localCategory?: string;
+  startDate?: string;
+  endDate?: string;
+  sortField?: MonzoSortField;
+  sortDirection?: SortDirection;
+}): Promise<TransactionsResponse> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  if (params.search) searchParams.set('search', params.search);
+  if (params.category) searchParams.set('category', params.category);
+  if (params.localCategory) searchParams.set('localCategory', params.localCategory);
+  if (params.startDate) searchParams.set('startDate', params.startDate);
+  if (params.endDate) searchParams.set('endDate', params.endDate);
+  if (params.sortField) searchParams.set('sortField', params.sortField);
+  if (params.sortDirection) searchParams.set('sortDirection', params.sortDirection);
+
+  const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch transactions');
+  return response.json();
+}
+
+async function fetchMonzoStatus(): Promise<MonzoStatus> {
+  const response = await fetch('/api/integrations/monzo/status');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function syncMonzo(): Promise<{ data?: { success: boolean; transactionsProcessed?: number }; error?: string }> {
+  const response = await fetch('/api/integrations/monzo/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'incremental' }),
+  });
+  return response.json();
+}
+
+async function updateMonzoTransaction(
+  id: string,
+  data: { user_notes?: string; local_category?: string | null; tags?: string[] }
+): Promise<{ data: MonzoTransaction }> {
+  const response = await fetch(`/api/transactions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to update transaction');
+  return response.json();
+}
+
+// ============================================================================
+// API Functions - eBay
+// ============================================================================
+
+async function fetchEbayTransactions(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  transactionType?: string;
+  fromDate?: string;
+  toDate?: string;
+  sortBy?: EbaySortField;
+  sortOrder?: SortDirection;
+}): Promise<EbayTransactionsResponse> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  if (params.search) searchParams.set('search', params.search);
+  if (params.transactionType) searchParams.set('transactionType', params.transactionType);
+  if (params.fromDate) searchParams.set('fromDate', params.fromDate);
+  if (params.toDate) searchParams.set('toDate', params.toDate);
+  if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+
+  const response = await fetch(`/api/ebay/transactions?${searchParams.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch eBay transactions');
+  return response.json();
+}
+
+// ============================================================================
+// API Functions - PayPal
+// ============================================================================
+
+async function fetchPayPalTransactions(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  fromDate?: string;
+  toDate?: string;
+  sortBy?: PayPalSortField;
+  sortOrder?: SortDirection;
+}): Promise<PayPalTransactionsResponse> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  if (params.search) searchParams.set('search', params.search);
+  if (params.fromDate) searchParams.set('fromDate', params.fromDate);
+  if (params.toDate) searchParams.set('toDate', params.toDate);
+  if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+
+  const response = await fetch(`/api/paypal/transactions?${searchParams.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch PayPal transactions');
+  return response.json();
+}
+
+// ============================================================================
+// Formatting Helpers
+// ============================================================================
+
+function formatAmount(amountInPence: number, currency: string = 'GBP'): string {
+  const amount = amountInPence / 100;
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+
+function formatEbayAmount(amount: number, currency: string = 'GBP'): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// ============================================================================
+// eBay Transaction Type Labels
+// ============================================================================
+
+const EBAY_TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  SALE: 'Sale',
+  REFUND: 'Refund',
+  CREDIT: 'Credit',
+  DISPUTE: 'Dispute',
+  NON_SALE_CHARGE: 'Fee',
+  SHIPPING_LABEL: 'Shipping Label',
+  TRANSFER: 'Transfer',
+  ADJUSTMENT: 'Adjustment',
+  PAYOUT: 'Payout',
+};
+
+const EBAY_TRANSACTION_TYPES = Object.keys(EBAY_TRANSACTION_TYPE_LABELS);
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export default function TransactionsPage() {
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'monzo' | 'ebay' | 'paypal'>('monzo');
+
+  // ============================================================================
+  // Monzo State
+  // ============================================================================
+  const [monzoPage, setMonzoPage] = useState(1);
+  const [monzoPageSize] = useState(50);
+  const [monzoSearch, setMonzoSearch] = useState('');
+  const [monzoDebouncedSearch, setMonzoDebouncedSearch] = useState('');
+  const [monzoLocalCategoryFilter, setMonzoLocalCategoryFilter] = useState<string>('');
+  const [monzoDateRangeKey, setMonzoDateRangeKey] = useState<DateRangeKey>('__all__');
+  const [monzoSortField, setMonzoSortField] = useState<MonzoSortField>('created');
+  const [monzoSortDirection, setMonzoSortDirection] = useState<SortDirection>('desc');
+  const [selectedMonzoTransaction, setSelectedMonzoTransaction] = useState<MonzoTransaction | null>(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editLocalCategory, setEditLocalCategory] = useState<string>('');
+  const [monzoMessage, setMonzoMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // ============================================================================
+  // eBay State
+  // ============================================================================
+  const [ebayPage, setEbayPage] = useState(1);
+  const [ebayPageSize] = useState(50);
+  const [ebaySearch, setEbaySearch] = useState('');
+  const [ebayDebouncedSearch, setEbayDebouncedSearch] = useState('');
+  const [ebayTransactionTypeFilter, setEbayTransactionTypeFilter] = useState<string>('');
+  const [ebayDateRangeKey, setEbayDateRangeKey] = useState<DateRangeKey>('__all__');
+  const [ebaySortField, setEbaySortField] = useState<EbaySortField>('transaction_date');
+  const [ebaySortDirection, setEbaySortDirection] = useState<SortDirection>('desc');
+  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedEbayTransaction, setSelectedEbayTransaction] = useState<EbayTransaction | null>(null);
+
+  // ============================================================================
+  // PayPal State
+  // ============================================================================
+  const [paypalPage, setPayPalPage] = useState(1);
+  const [paypalPageSize] = useState(50);
+  const [paypalSearch, setPayPalSearch] = useState('');
+  const [paypalDebouncedSearch, setPayPalDebouncedSearch] = useState('');
+  const [paypalDateRangeKey, setPayPalDateRangeKey] = useState<DateRangeKey>('__all__');
+  const [paypalSortField, setPayPalSortField] = useState<PayPalSortField>('transaction_date');
+  const [paypalSortDirection, setPayPalSortDirection] = useState<SortDirection>('desc');
+  const [paypalMessage, setPayPalMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedPayPalTransaction, setSelectedPayPalTransaction] = useState<PayPalTransaction | null>(null);
+
+  // eBay Sync Hook
+  const {
+    isConnected: ebayIsConnected,
+    isRunning: ebayIsSyncing,
+    isSyncing: ebayIsManualSyncing,
+    triggerSync: triggerEbaySync,
+    lastSyncTime: ebayLastSyncTime,
+    syncResult: ebaySyncResult,
+    syncError: ebaySyncError,
+  } = useEbaySync({ enabled: activeTab === 'ebay' });
+
+  // PayPal Sync Hook
+  const {
+    isConnected: paypalIsConnected,
+    isRunning: paypalIsRunning,
+    isSyncing: paypalIsSyncing,
+    triggerSync: triggerPayPalSync,
+    lastSyncTime: paypalLastSyncTime,
+    syncResult: paypalSyncResult,
+    syncError: paypalSyncError,
+    transactionCount: paypalTransactionCount,
+  } = usePayPalSync({ enabled: activeTab === 'paypal' });
+
+  // Get date ranges
+  const monzoDateRange = useMemo(() => {
+    return DATE_RANGES[monzoDateRangeKey].getRange();
+  }, [monzoDateRangeKey]);
+
+  const ebayDateRange = useMemo(() => {
+    return DATE_RANGES[ebayDateRangeKey].getRange();
+  }, [ebayDateRangeKey]);
+
+  const paypalDateRange = useMemo(() => {
+    return DATE_RANGES[paypalDateRangeKey].getRange();
+  }, [paypalDateRangeKey]);
+
+  // Debounce Monzo search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMonzoDebouncedSearch(monzoSearch);
+      setMonzoPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [monzoSearch]);
+
+  // Debounce eBay search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setEbayDebouncedSearch(ebaySearch);
+      setEbayPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [ebaySearch]);
+
+  // Debounce PayPal search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPayPalDebouncedSearch(paypalSearch);
+      setPayPalPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [paypalSearch]);
+
+  // Show eBay sync messages
+  useEffect(() => {
+    if (ebaySyncResult?.success) {
+      setEbayMessage({
+        type: 'success',
+        message: `Sync completed! ${ebaySyncResult.results?.orders?.ordersProcessed || 0} orders, ${ebaySyncResult.results?.transactions?.recordsProcessed || 0} transactions processed.`,
+      });
+    }
+  }, [ebaySyncResult]);
+
+  useEffect(() => {
+    if (ebaySyncError) {
+      setEbayMessage({ type: 'error', message: ebaySyncError.message });
+    }
+  }, [ebaySyncError]);
+
+  // Show PayPal sync messages
+  useEffect(() => {
+    if (paypalSyncResult?.success) {
+      const detail = paypalSyncResult.transactionsProcessed !== undefined
+        ? ` (${paypalSyncResult.transactionsProcessed} processed, ${paypalSyncResult.transactionsCreated} new)`
+        : '';
+      setPayPalMessage({
+        type: 'success',
+        message: `Sync completed!${detail}`,
+      });
+    }
+  }, [paypalSyncResult]);
+
+  useEffect(() => {
+    if (paypalSyncError) {
+      setPayPalMessage({ type: 'error', message: paypalSyncError.message });
+    }
+  }, [paypalSyncError]);
+
+  // ============================================================================
+  // Monzo Queries
+  // ============================================================================
+
+  const { data: monzoStatus, isLoading: monzoStatusLoading } = useQuery({
+    queryKey: ['monzo', 'status'],
+    queryFn: fetchMonzoStatus,
+    refetchInterval: 30000,
+  });
+
+  const { data: monzoTransactionsData, isLoading: monzoTransactionsLoading } = useQuery({
+    queryKey: ['transactions', monzoPage, monzoPageSize, monzoDebouncedSearch, monzoLocalCategoryFilter, monzoDateRangeKey, monzoSortField, monzoSortDirection],
+    queryFn: () =>
+      fetchMonzoTransactions({
+        page: monzoPage,
+        pageSize: monzoPageSize,
+        search: monzoDebouncedSearch || undefined,
+        localCategory: monzoLocalCategoryFilter || undefined,
+        startDate: monzoDateRange?.start.toISOString(),
+        endDate: monzoDateRange?.end.toISOString(),
+        sortField: monzoSortField,
+        sortDirection: monzoSortDirection,
+      }),
+    enabled: monzoStatus?.data?.connection?.isConnected && activeTab === 'monzo',
+  });
+
+  // ============================================================================
+  // eBay Queries
+  // ============================================================================
+
+  const { data: ebayTransactionsData, isLoading: ebayTransactionsLoading } = useQuery({
+    queryKey: ['ebay', 'transactions', ebayPage, ebayPageSize, ebayDebouncedSearch, ebayTransactionTypeFilter, ebayDateRangeKey, ebaySortField, ebaySortDirection],
+    queryFn: () =>
+      fetchEbayTransactions({
+        page: ebayPage,
+        pageSize: ebayPageSize,
+        search: ebayDebouncedSearch || undefined,
+        transactionType: ebayTransactionTypeFilter || undefined,
+        fromDate: ebayDateRange?.start.toISOString(),
+        toDate: ebayDateRange?.end.toISOString(),
+        sortBy: ebaySortField,
+        sortOrder: ebaySortDirection,
+      }),
+    enabled: ebayIsConnected && activeTab === 'ebay',
+  });
+
+  // ============================================================================
+  // PayPal Queries
+  // ============================================================================
+
+  const { data: paypalTransactionsData, isLoading: paypalTransactionsLoading } = useQuery({
+    queryKey: ['paypal', 'transactions', paypalPage, paypalPageSize, paypalDebouncedSearch, paypalDateRangeKey, paypalSortField, paypalSortDirection],
+    queryFn: () =>
+      fetchPayPalTransactions({
+        page: paypalPage,
+        pageSize: paypalPageSize,
+        search: paypalDebouncedSearch || undefined,
+        fromDate: paypalDateRange?.start.toISOString(),
+        toDate: paypalDateRange?.end.toISOString(),
+        sortBy: paypalSortField,
+        sortOrder: paypalSortDirection,
+      }),
+    enabled: paypalIsConnected && activeTab === 'paypal',
+  });
+
+  // ============================================================================
+  // Monzo Mutations
+  // ============================================================================
+
+  const monzoSyncMutation = useMutation({
+    mutationFn: syncMonzo,
+    onSuccess: (data) => {
+      if (data.data?.success) {
+        setMonzoMessage({
+          type: 'success',
+          message: `Sync completed! ${data.data.transactionsProcessed || 0} transactions processed.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['monzo', 'status'] });
+      } else {
+        setMonzoMessage({ type: 'error', message: data.error || 'Sync failed' });
+      }
+    },
+    onError: (err: Error) => {
+      setMonzoMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  const monzoUpdateMutation = useMutation({
+    mutationFn: (data: { id: string; user_notes?: string; local_category?: string | null }) =>
+      updateMonzoTransaction(data.id, {
+        user_notes: data.user_notes,
+        local_category: data.local_category,
+      }),
+    onSuccess: () => {
+      setMonzoMessage({ type: 'success', message: 'Transaction updated successfully' });
+      setSelectedMonzoTransaction(null);
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (err: Error) => {
+      setMonzoMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  // ============================================================================
+  // Monzo Handlers
+  // ============================================================================
+
+  const handleEditMonzoTransaction = (transaction: MonzoTransaction) => {
+    setSelectedMonzoTransaction(transaction);
+    setEditNotes(transaction.user_notes || '');
+    setEditLocalCategory(transaction.local_category || '');
+  };
+
+  const handleSaveMonzoTransaction = () => {
+    if (!selectedMonzoTransaction) return;
+    monzoUpdateMutation.mutate({
+      id: selectedMonzoTransaction.id,
+      user_notes: editNotes,
+      local_category: editLocalCategory || null,
+    });
+  };
+
+  const handleMonzoSort = (field: MonzoSortField) => {
+    if (monzoSortField === field) {
+      setMonzoSortDirection(monzoSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setMonzoSortField(field);
+      setMonzoSortDirection('desc');
+    }
+    setMonzoPage(1);
+  };
+
+  // ============================================================================
+  // eBay Handlers
+  // ============================================================================
+
+  const handleEbaySort = (field: EbaySortField) => {
+    if (ebaySortField === field) {
+      setEbaySortDirection(ebaySortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setEbaySortField(field);
+      setEbaySortDirection('desc');
+    }
+    setEbayPage(1);
+  };
+
+  const handleEbaySync = () => {
+    triggerEbaySync('all', false);
+  };
+
+  // ============================================================================
+  // PayPal Handlers
+  // ============================================================================
+
+  const handlePayPalSort = (field: PayPalSortField) => {
+    if (paypalSortField === field) {
+      setPayPalSortDirection(paypalSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPayPalSortField(field);
+      setPayPalSortDirection('desc');
+    }
+    setPayPalPage(1);
+  };
+
+  const handlePayPalSync = () => {
+    triggerPayPalSync(false);
+  };
+
+  // ============================================================================
+  // Sort Icons
+  // ============================================================================
+
+  const MonzoSortIcon = ({ field }: { field: MonzoSortField }) => {
+    if (monzoSortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return monzoSortDirection === 'asc' ? (
+      <ArrowUp className="ml-1 h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3" />
+    );
+  };
+
+  const EbaySortIcon = ({ field }: { field: EbaySortField }) => {
+    if (ebaySortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return ebaySortDirection === 'asc' ? (
+      <ArrowUp className="ml-1 h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3" />
+    );
+  };
+
+  const PayPalSortIcon = ({ field }: { field: PayPalSortField }) => {
+    if (paypalSortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return paypalSortDirection === 'asc' ? (
+      <ArrowUp className="ml-1 h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3" />
+    );
+  };
+
+  // ============================================================================
+  // Computed Values
+  // ============================================================================
+
+  const monzoTotalIncome = monzoTransactionsData?.data?.summary?.totalIncome || 0;
+  const monzoTotalExpenses = monzoTransactionsData?.data?.summary?.totalExpenses || 0;
+  const monzoDateRangeLabel = DATE_RANGES[monzoDateRangeKey].label;
+  const monzoIsConnected = monzoStatus?.data?.connection?.isConnected;
+  const monzoIsSyncing = monzoStatus?.data?.sync?.isRunning || monzoSyncMutation.isPending;
+
+  // Use summary from API (calculated from ALL matching transactions, not just current page)
+  const ebaySummary = ebayTransactionsData?.summary || {
+    totalSales: 0,
+    totalFees: 0,
+    totalRefunds: 0,
+    netRevenue: 0,
+  };
+
+  const ebayDateRangeLabel = DATE_RANGES[ebayDateRangeKey].label;
+
+  // PayPal summary from API
+  const paypalSummary = paypalTransactionsData?.summary || {
+    totalFees: 0,
+    transactionCount: 0,
+  };
+  const paypalDateRangeLabel = DATE_RANGES[paypalDateRangeKey].label;
+
+  // ============================================================================
+  // Render
+  // ============================================================================
+
+  return (
+    <>
+      <Header title="Transactions" />
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Transactions</h2>
+            <p className="text-muted-foreground">
+              View and manage your financial transactions
+            </p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'monzo' | 'ebay' | 'paypal')}>
+          <TabsList>
+            <TabsTrigger value="monzo">Monzo</TabsTrigger>
+            <TabsTrigger value="ebay">eBay</TabsTrigger>
+            <TabsTrigger value="paypal">PayPal</TabsTrigger>
+          </TabsList>
+
+          {/* ============================================================================ */}
+          {/* Monzo Tab */}
+          {/* ============================================================================ */}
+          <TabsContent value="monzo" className="space-y-6">
+            {/* Monzo Sync Button */}
+            {monzoIsConnected && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => monzoSyncMutation.mutate()}
+                  disabled={monzoIsSyncing}
+                >
+                  {monzoIsSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync Transactions
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Monzo Messages */}
+            {monzoMessage && (
+              <Alert
+                className={monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                variant={monzoMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                <AlertDescription
+                  className={monzoMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
+                  {monzoMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Not connected message */}
+            {!monzoStatusLoading && !monzoIsConnected && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connect Monzo</CardTitle>
+                  <CardDescription>
+                    Connect your Monzo account to view and manage your transactions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild>
+                    <a href="/settings/integrations">Go to Integrations</a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Monzo Summary Cards */}
+            {monzoIsConnected && (
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Income</CardTitle>
+                    <span className="text-xs text-muted-foreground">{monzoDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatAmount(monzoTotalIncome)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Expenses</CardTitle>
+                    <span className="text-xs text-muted-foreground">{monzoDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">
+                      {formatAmount(monzoTotalExpenses)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
+                    <span className="text-xs text-muted-foreground">All time</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {monzoStatus?.data?.connection?.transactionCount || 0}
+                    </div>
+                    {monzoStatus?.data?.connection?.lastSyncAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {formatDateTime(monzoStatus.data.connection.lastSyncAt)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Monzo Filters */}
+            {monzoIsConnected && (
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    placeholder="Search merchant or description..."
+                    value={monzoSearch}
+                    onChange={(e) => setMonzoSearch(e.target.value)}
+                  />
+                </div>
+                <Select value={monzoDateRangeKey} onValueChange={(v: string) => { setMonzoDateRangeKey(v as DateRangeKey); setMonzoPage(1); }}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(DATE_RANGES) as DateRangeKey[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {DATE_RANGES[key].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={monzoLocalCategoryFilter || '__all__'} onValueChange={(v: string) => setMonzoLocalCategoryFilter(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="My Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Categories</SelectItem>
+                    {(monzoTransactionsData?.data?.categories || []).map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {MONZO_CATEGORY_LABELS[cat as MonzoCategory] || cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Monzo Transactions Table */}
+            {monzoIsConnected && (
+              <Card>
+                <CardContent className="p-0">
+                  {monzoTransactionsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleMonzoSort('created')}
+                              >
+                                Date
+                                <MonzoSortIcon field="created" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleMonzoSort('merchant_name')}
+                              >
+                                Merchant
+                                <MonzoSortIcon field="merchant_name" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleMonzoSort('description')}
+                              >
+                                Description
+                                <MonzoSortIcon field="description" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handleMonzoSort('amount')}
+                              >
+                                Amount
+                                <MonzoSortIcon field="amount" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleMonzoSort('local_category')}
+                              >
+                                My Category
+                                <MonzoSortIcon field="local_category" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleMonzoSort('user_notes')}
+                              >
+                                Notes
+                                <MonzoSortIcon field="user_notes" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="w-[60px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {monzoTransactionsData?.data?.transactions?.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                No transactions found
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            monzoTransactionsData?.data?.transactions?.map((transaction) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  {formatDate(transaction.created)}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {transaction.merchant_name || '-'}
+                                </TableCell>
+                                <TableCell className="max-w-[200px] truncate">
+                                  {transaction.description}
+                                </TableCell>
+                                <TableCell
+                                  className={`text-right font-medium whitespace-nowrap ${
+                                    transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}
+                                >
+                                  {transaction.amount > 0 ? '+' : ''}
+                                  {formatAmount(transaction.amount, transaction.currency)}
+                                </TableCell>
+                                <TableCell>
+                                  {transaction.local_category ? (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {MONZO_CATEGORY_LABELS[transaction.local_category as MonzoCategory] ||
+                                        transaction.local_category}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">
+                                  {transaction.user_notes || '-'}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditMonzoTransaction(transaction)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+
+                      {/* Monzo Pagination */}
+                      {monzoTransactionsData?.data?.pagination && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((monzoPage - 1) * monzoPageSize) + 1} to{' '}
+                            {Math.min(monzoPage * monzoPageSize, monzoTransactionsData.data.pagination.total)} of{' '}
+                            {monzoTransactionsData.data.pagination.total} transactions
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMonzoPage((p) => Math.max(1, p - 1))}
+                              disabled={monzoPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {monzoPage} of {monzoTransactionsData.data.pagination.totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMonzoPage((p) => p + 1)}
+                              disabled={monzoPage >= monzoTransactionsData.data.pagination.totalPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ============================================================================ */}
+          {/* eBay Tab */}
+          {/* ============================================================================ */}
+          <TabsContent value="ebay" className="space-y-6">
+            {/* eBay Sync Button */}
+            {ebayIsConnected && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleEbaySync}
+                  disabled={ebayIsSyncing || ebayIsManualSyncing}
+                >
+                  {ebayIsSyncing || ebayIsManualSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync Transactions
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* eBay Messages */}
+            {ebayMessage && (
+              <Alert
+                className={ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                variant={ebayMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                <AlertDescription
+                  className={ebayMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
+                  {ebayMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Not connected message */}
+            {!ebayIsConnected && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connect eBay</CardTitle>
+                  <CardDescription>
+                    Connect your eBay account to view and manage your sales transactions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild>
+                    <a href="/settings/integrations">Go to Integrations</a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* eBay Summary Cards */}
+            {ebayIsConnected && (
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Sales</CardTitle>
+                    <span className="text-xs text-muted-foreground">{ebayDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatEbayAmount(ebaySummary.totalSales)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Fees</CardTitle>
+                    <span className="text-xs text-muted-foreground">{ebayDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {formatEbayAmount(ebaySummary.totalFees)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Refunds</CardTitle>
+                    <span className="text-xs text-muted-foreground">{ebayDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">
+                      {formatEbayAmount(ebaySummary.totalRefunds)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Transactions</CardTitle>
+                    <span className="text-xs text-muted-foreground">{ebayDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {ebayTransactionsData?.pagination?.total || 0}
+                    </div>
+                    {ebayLastSyncTime && (
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {formatDateTime(ebayLastSyncTime)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* eBay Filters */}
+            {ebayIsConnected && (
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    placeholder="Search item, order ID, or buyer..."
+                    value={ebaySearch}
+                    onChange={(e) => setEbaySearch(e.target.value)}
+                  />
+                </div>
+                <Select value={ebayDateRangeKey} onValueChange={(v: string) => { setEbayDateRangeKey(v as DateRangeKey); setEbayPage(1); }}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(DATE_RANGES) as DateRangeKey[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {DATE_RANGES[key].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={ebayTransactionTypeFilter || '__all__'} onValueChange={(v: string) => setEbayTransactionTypeFilter(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Transaction Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Types</SelectItem>
+                    {EBAY_TRANSACTION_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {EBAY_TRANSACTION_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* eBay Transactions Table */}
+            {ebayIsConnected && (
+              <Card>
+                <CardContent className="p-0">
+                  {ebayTransactionsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleEbaySort('transaction_date')}
+                              >
+                                Date
+                                <EbaySortIcon field="transaction_date" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handleEbaySort('item_title')}
+                              >
+                                Item
+                                <EbaySortIcon field="item_title" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>Order ID</TableHead>
+                            <TableHead>Buyer</TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handleEbaySort('amount')}
+                              >
+                                Amount
+                                <EbaySortIcon field="amount" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">Fees</TableHead>
+                            <TableHead className="w-[60px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ebayTransactionsData?.transactions?.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                No transactions found. Click &quot;Sync Transactions&quot; to import your eBay data.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            ebayTransactionsData?.transactions?.map((transaction) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  {formatDate(transaction.transaction_date)}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      transaction.transaction_type === 'SALE'
+                                        ? 'default'
+                                        : transaction.transaction_type === 'REFUND'
+                                        ? 'destructive'
+                                        : 'secondary'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {EBAY_TRANSACTION_TYPE_LABELS[transaction.transaction_type] || transaction.transaction_type}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="max-w-[200px] truncate">
+                                  <div className="flex flex-col">
+                                    <span className="truncate">
+                                      {transaction.item_title || transaction.transaction_memo || '-'}
+                                    </span>
+                                    {transaction.custom_label && (
+                                      <span className="text-xs text-muted-foreground truncate">
+                                        SKU: {transaction.custom_label}
+                                      </span>
+                                    )}
+                                    {!transaction.item_title && transaction.transaction_memo && (
+                                      <span className="text-xs text-muted-foreground truncate">
+                                        {EBAY_TRANSACTION_TYPE_LABELS[transaction.transaction_type] || transaction.transaction_type}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {transaction.ebay_order_id || '-'}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  {transaction.buyer_username || '-'}
+                                </TableCell>
+                                <TableCell
+                                  className={`text-right font-medium whitespace-nowrap ${
+                                    transaction.transaction_type === 'NON_SALE_CHARGE' || transaction.transaction_type === 'REFUND'
+                                      ? 'text-red-600'
+                                      : transaction.amount > 0
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                  }`}
+                                >
+                                  {transaction.transaction_type === 'NON_SALE_CHARGE' || transaction.transaction_type === 'REFUND'
+                                    ? '-'
+                                    : transaction.amount > 0
+                                      ? '+'
+                                      : ''}
+                                  {formatEbayAmount(Math.abs(transaction.amount), transaction.currency)}
+                                </TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">
+                                  {transaction.total_fee_amount
+                                    ? formatEbayAmount(Math.abs(transaction.total_fee_amount), transaction.currency)
+                                    : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedEbayTransaction(transaction)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+
+                      {/* eBay Pagination */}
+                      {ebayTransactionsData?.pagination && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((ebayPage - 1) * ebayPageSize) + 1} to{' '}
+                            {Math.min(ebayPage * ebayPageSize, ebayTransactionsData.pagination.total)} of{' '}
+                            {ebayTransactionsData.pagination.total} transactions
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEbayPage((p) => Math.max(1, p - 1))}
+                              disabled={ebayPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {ebayPage} of {ebayTransactionsData.pagination.totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEbayPage((p) => p + 1)}
+                              disabled={ebayPage >= ebayTransactionsData.pagination.totalPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ============================================================================ */}
+          {/* PayPal Tab */}
+          {/* ============================================================================ */}
+          <TabsContent value="paypal" className="space-y-6">
+            {/* PayPal Sync Button */}
+            {paypalIsConnected && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handlePayPalSync}
+                  disabled={paypalIsRunning || paypalIsSyncing}
+                >
+                  {paypalIsRunning || paypalIsSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync Transactions
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* PayPal Messages */}
+            {paypalMessage && (
+              <Alert
+                className={paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                variant={paypalMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                <AlertDescription
+                  className={paypalMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
+                  {paypalMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Not connected message */}
+            {!paypalIsConnected && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connect PayPal</CardTitle>
+                  <CardDescription>
+                    Connect your PayPal account to view and manage your fee transactions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild>
+                    <a href="/settings/integrations">Go to Integrations</a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* PayPal Summary Cards */}
+            {paypalIsConnected && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Fees</CardTitle>
+                    <span className="text-xs text-muted-foreground">{paypalDateRangeLabel}</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {formatEbayAmount(paypalSummary.totalFees)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Fee Transactions</CardTitle>
+                    <span className="text-xs text-muted-foreground">All time</span>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {paypalTransactionCount || paypalTransactionsData?.pagination?.total || 0}
+                    </div>
+                    {paypalLastSyncTime && (
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {formatDateTime(paypalLastSyncTime)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* PayPal Filters */}
+            {paypalIsConnected && (
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    placeholder="Search payer, email, or description..."
+                    value={paypalSearch}
+                    onChange={(e) => setPayPalSearch(e.target.value)}
+                  />
+                </div>
+                <Select value={paypalDateRangeKey} onValueChange={(v: string) => { setPayPalDateRangeKey(v as DateRangeKey); setPayPalPage(1); }}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(DATE_RANGES) as DateRangeKey[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {DATE_RANGES[key].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* PayPal Transactions Table */}
+            {paypalIsConnected && (
+              <Card>
+                <CardContent className="p-0">
+                  {paypalTransactionsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handlePayPalSort('transaction_date')}
+                              >
+                                Date
+                                <PayPalSortIcon field="transaction_date" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={() => handlePayPalSort('payer_name')}
+                              >
+                                Payer
+                                <PayPalSortIcon field="payer_name" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handlePayPalSort('gross_amount')}
+                              >
+                                Gross
+                                <PayPalSortIcon field="gross_amount" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">
+                              <Button
+                                variant="ghost"
+                                className="h-auto p-0 font-medium hover:bg-transparent ml-auto"
+                                onClick={() => handlePayPalSort('fee_amount')}
+                              >
+                                Fee
+                                <PayPalSortIcon field="fee_amount" />
+                              </Button>
+                            </TableHead>
+                            <TableHead className="text-right">Net</TableHead>
+                            <TableHead className="w-[60px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paypalTransactionsData?.transactions?.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                No fee transactions found. Click &quot;Sync Transactions&quot; to import your PayPal data.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            paypalTransactionsData?.transactions?.map((transaction) => (
+                              <TableRow key={transaction.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  {formatDate(transaction.transaction_date)}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex flex-col">
+                                    <span>{transaction.payer_name || '-'}</span>
+                                    {transaction.from_email && (
+                                      <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                                        {transaction.from_email}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="max-w-[200px] truncate">
+                                  {transaction.description || transaction.transaction_type || '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-medium whitespace-nowrap text-green-600">
+                                  +{formatEbayAmount(transaction.gross_amount, transaction.currency)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium whitespace-nowrap text-orange-600">
+                                  -{formatEbayAmount(Math.abs(transaction.fee_amount), transaction.currency)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium whitespace-nowrap">
+                                  {formatEbayAmount(transaction.net_amount, transaction.currency)}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedPayPalTransaction(transaction)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+
+                      {/* PayPal Pagination */}
+                      {paypalTransactionsData?.pagination && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((paypalPage - 1) * paypalPageSize) + 1} to{' '}
+                            {Math.min(paypalPage * paypalPageSize, paypalTransactionsData.pagination.total)} of{' '}
+                            {paypalTransactionsData.pagination.total} transactions
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPayPalPage((p) => Math.max(1, p - 1))}
+                              disabled={paypalPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {paypalPage} of {paypalTransactionsData.pagination.totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPayPalPage((p) => p + 1)}
+                              disabled={paypalPage >= paypalTransactionsData.pagination.totalPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* ============================================================================ */}
+        {/* Monzo Edit Sheet */}
+        {/* ============================================================================ */}
+        <Sheet open={!!selectedMonzoTransaction} onOpenChange={() => setSelectedMonzoTransaction(null)}>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Edit Transaction</SheetTitle>
+              <SheetDescription>
+                Add notes and categorize this transaction for your records.
+              </SheetDescription>
+            </SheetHeader>
+            {selectedMonzoTransaction && (
+              <div className="mt-6 space-y-6">
+                {/* Read-only info */}
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-medium">{formatDateTime(selectedMonzoTransaction.created)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Merchant</span>
+                    <span className="font-medium">{selectedMonzoTransaction.merchant_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span
+                      className={`font-medium ${
+                        selectedMonzoTransaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {selectedMonzoTransaction.amount > 0 ? '+' : ''}
+                      {formatAmount(selectedMonzoTransaction.amount, selectedMonzoTransaction.currency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Original Category</span>
+                    <Badge variant="outline">
+                      {MONZO_CATEGORY_LABELS[selectedMonzoTransaction.category as MonzoCategory] ||
+                        selectedMonzoTransaction.category}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Description</span>
+                    <p className="mt-1 text-sm">{selectedMonzoTransaction.description}</p>
+                  </div>
+                </div>
+
+                {/* Editable fields */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="localCategory">My Category</Label>
+                    <Select value={editLocalCategory || '__none__'} onValueChange={(v: string) => setEditLocalCategory(v === '__none__' ? '' : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {(monzoTransactionsData?.data?.categories || []).map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {MONZO_CATEGORY_LABELS[cat as MonzoCategory] || cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Override the original category for your own tracking
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      placeholder="Add notes about this transaction..."
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    className="flex-1"
+                    onClick={handleSaveMonzoTransaction}
+                    disabled={monzoUpdateMutation.isPending}
+                  >
+                    {monzoUpdateMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedMonzoTransaction(null)}
+                    disabled={monzoUpdateMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* ============================================================================ */}
+        {/* eBay Detail Sheet */}
+        {/* ============================================================================ */}
+        <Sheet open={!!selectedEbayTransaction} onOpenChange={() => setSelectedEbayTransaction(null)}>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Transaction Details</SheetTitle>
+              <SheetDescription>
+                View eBay transaction details and fee breakdown.
+              </SheetDescription>
+            </SheetHeader>
+            {selectedEbayTransaction && (
+              <div className="mt-6 space-y-6">
+                {/* Transaction Info */}
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-medium">{formatDateTime(selectedEbayTransaction.transaction_date)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Type</span>
+                    <Badge
+                      variant={
+                        selectedEbayTransaction.transaction_type === 'SALE'
+                          ? 'default'
+                          : selectedEbayTransaction.transaction_type === 'REFUND'
+                          ? 'destructive'
+                          : 'secondary'
+                      }
+                    >
+                      {EBAY_TRANSACTION_TYPE_LABELS[selectedEbayTransaction.transaction_type] || selectedEbayTransaction.transaction_type}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span
+                      className={`font-medium ${
+                        selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' || selectedEbayTransaction.transaction_type === 'REFUND'
+                          ? 'text-red-600'
+                          : selectedEbayTransaction.amount > 0
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                      }`}
+                    >
+                      {selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' || selectedEbayTransaction.transaction_type === 'REFUND'
+                        ? '-'
+                        : selectedEbayTransaction.amount > 0
+                          ? '+'
+                          : ''}
+                      {formatEbayAmount(Math.abs(selectedEbayTransaction.amount), selectedEbayTransaction.currency)}
+                    </span>
+                  </div>
+                  {selectedEbayTransaction.item_title && (
+                    <div>
+                      <span className="text-muted-foreground">Item</span>
+                      <p className="mt-1 text-sm font-medium">{selectedEbayTransaction.item_title}</p>
+                    </div>
+                  )}
+                  {!selectedEbayTransaction.item_title && selectedEbayTransaction.transaction_memo && (
+                    <div>
+                      <span className="text-muted-foreground">Description</span>
+                      <p className="mt-1 text-sm font-medium">{selectedEbayTransaction.transaction_memo}</p>
+                    </div>
+                  )}
+                  {selectedEbayTransaction.custom_label && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">SKU</span>
+                      <span className="font-mono text-sm">{selectedEbayTransaction.custom_label}</span>
+                    </div>
+                  )}
+                  {selectedEbayTransaction.ebay_order_id && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Order ID</span>
+                      <span className="font-mono text-xs">{selectedEbayTransaction.ebay_order_id}</span>
+                    </div>
+                  )}
+                  {selectedEbayTransaction.buyer_username && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Buyer</span>
+                      <span className="text-sm">{selectedEbayTransaction.buyer_username}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fee Breakdown - for sales with fees */}
+                {selectedEbayTransaction.transaction_type === 'SALE' && (selectedEbayTransaction.total_fee_amount || 0) > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium">Fee Breakdown</h4>
+                    <div className="rounded-lg border p-4 space-y-2">
+                      {selectedEbayTransaction.final_value_fee_fixed && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Final Value Fee (Fixed)</span>
+                          <span>{formatEbayAmount(selectedEbayTransaction.final_value_fee_fixed, selectedEbayTransaction.currency)}</span>
+                        </div>
+                      )}
+                      {selectedEbayTransaction.final_value_fee_variable && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Final Value Fee (Variable)</span>
+                          <span>{formatEbayAmount(selectedEbayTransaction.final_value_fee_variable, selectedEbayTransaction.currency)}</span>
+                        </div>
+                      )}
+                      {selectedEbayTransaction.international_fee && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">International Fee</span>
+                          <span>{formatEbayAmount(selectedEbayTransaction.international_fee, selectedEbayTransaction.currency)}</span>
+                        </div>
+                      )}
+                      {selectedEbayTransaction.regulatory_operating_fee && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Regulatory Operating Fee</span>
+                          <span>{formatEbayAmount(selectedEbayTransaction.regulatory_operating_fee, selectedEbayTransaction.currency)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                        <span>Total Fees</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(Math.abs(selectedEbayTransaction.total_fee_amount || 0), selectedEbayTransaction.currency)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fee Info - for standalone fee transactions */}
+                {selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium">Fee Details</h4>
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <div className="flex justify-between text-sm font-medium">
+                        <span>{selectedEbayTransaction.transaction_memo || 'Fee'}</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(Math.abs(selectedEbayTransaction.amount), selectedEbayTransaction.currency)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setSelectedEbayTransaction(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* ============================================================================ */}
+        {/* PayPal Detail Sheet */}
+        {/* ============================================================================ */}
+        <Sheet open={!!selectedPayPalTransaction} onOpenChange={() => setSelectedPayPalTransaction(null)}>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Transaction Details</SheetTitle>
+              <SheetDescription>
+                View PayPal fee transaction details.
+              </SheetDescription>
+            </SheetHeader>
+            {selectedPayPalTransaction && (
+              <div className="mt-6 space-y-6">
+                {/* Transaction Info */}
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-medium">{formatDateTime(selectedPayPalTransaction.transaction_date)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Transaction ID</span>
+                    <span className="font-mono text-xs">{selectedPayPalTransaction.paypal_transaction_id}</span>
+                  </div>
+                  {selectedPayPalTransaction.transaction_type && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Type</span>
+                      <Badge variant="secondary">{selectedPayPalTransaction.transaction_type}</Badge>
+                    </div>
+                  )}
+                  {selectedPayPalTransaction.transaction_status && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status</span>
+                      <span className="font-medium">{selectedPayPalTransaction.transaction_status}</span>
+                    </div>
+                  )}
+                  {selectedPayPalTransaction.payer_name && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Payer</span>
+                      <span className="font-medium">{selectedPayPalTransaction.payer_name}</span>
+                    </div>
+                  )}
+                  {selectedPayPalTransaction.from_email && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="text-sm">{selectedPayPalTransaction.from_email}</span>
+                    </div>
+                  )}
+                  {selectedPayPalTransaction.description && (
+                    <div>
+                      <span className="text-muted-foreground">Description</span>
+                      <p className="mt-1 text-sm">{selectedPayPalTransaction.description}</p>
+                    </div>
+                  )}
+                  {selectedPayPalTransaction.invoice_id && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Invoice ID</span>
+                      <span className="font-mono text-sm">{selectedPayPalTransaction.invoice_id}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Amount Breakdown */}
+                <div className="space-y-3">
+                  <h4 className="font-medium">Amount Breakdown</h4>
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Gross Amount</span>
+                      <span className="font-medium text-green-600">
+                        +{formatEbayAmount(selectedPayPalTransaction.gross_amount, selectedPayPalTransaction.currency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Fee</span>
+                      <span className="font-medium text-orange-600">
+                        -{formatEbayAmount(Math.abs(selectedPayPalTransaction.fee_amount), selectedPayPalTransaction.currency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                      <span>Net Amount</span>
+                      <span>
+                        {formatEbayAmount(selectedPayPalTransaction.net_amount, selectedPayPalTransaction.currency)}
+                      </span>
+                    </div>
+                    {selectedPayPalTransaction.balance_amount !== null && (
+                      <div className="flex justify-between text-sm text-muted-foreground pt-2 border-t">
+                        <span>Balance After</span>
+                        <span>
+                          {formatEbayAmount(selectedPayPalTransaction.balance_amount, selectedPayPalTransaction.currency)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setSelectedPayPalTransaction(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
+  );
+}

@@ -1,4 +1,3 @@
-
 {
   "permissions": {
     "allow": [
@@ -17,6 +16,7 @@
       "Bash(netstat *)",
       "Bash(timeout *)",
       "Bash(findstr *)",
+      "Bash(find *)",
       "Bash(set *)",
       "Bash(cd *)",
       "Bash(dir *)",
@@ -31,7 +31,34 @@
       "Bash(taskkill *)",
       "Bash(for *)",
       "Bash(do *)",
-      "Bash(done *)"
+      "Bash(done *)",
+      "WebFetch(*)",
+      "mcp__supabase__*(*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run db:push:*)",
+      "Bash(npm run db:types:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(Start-Sleep -Seconds 15)",
+      "Bash(Invoke-RestMethod -Uri \"http://localhost:3000/api/integrations/paypal/status\" -Method Get)",
+      "Bash(ConvertTo-Json -Depth 10)",
+      "Bash(npm run lint)",
+      "Bash(npx tsx:*)",
+      "Bash(npx dotenv:*)",
+      "Bash(git add:*)",
+      "Bash(Remove-Item:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Add Monzo and PayPal integrations with encrypted credentials\n\n- Monzo OAuth integration with transaction sync\n- PayPal API integration with transaction search\n- eBay sync enhancements \\(auto-sync, historical import\\)\n- Encrypted credential storage for all payment integrations\n- Migration script for existing credentials\n- Database migrations for new integration tables\n- Transactions page for viewing synced data\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(cd * && rm *)",
+      "Bash(cd * && ls *)",
+      "Bash(cd * && npm *)",
+      "Bash(cd * && npx *)",
+      "Bash(cd * && git *)",
+      "Bash(git commit:*)"
     ]
   }
 }

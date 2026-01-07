@@ -64,6 +64,39 @@ interface EbayConnectionStatus {
   needsRefresh?: boolean;
 }
 
+interface MonzoConnectionStatus {
+  isConnected: boolean;
+  source?: string;
+  accountType?: string;
+  transactionCount?: number;
+  lastSyncAt?: string;
+}
+
+interface MonzoSyncStatus {
+  isRunning: boolean;
+  lastSync?: {
+    type: 'FULL' | 'INCREMENTAL';
+    status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+    startedAt: string;
+    completedAt?: string;
+    transactionsProcessed?: number;
+    error?: string;
+  };
+}
+
+interface PayPalCredentials {
+  clientId: string;
+  clientSecret: string;
+  sandbox: boolean;
+}
+
+interface PayPalConnectionStatus {
+  isConnected: boolean;
+  sandbox?: boolean;
+  transactionCount?: number;
+  lastSyncAt?: string;
+}
+
 // BrickLink API functions
 async function fetchBrickLinkStatus(): Promise<{ configured: boolean }> {
   const response = await fetch('/api/integrations/bricklink/credentials');
@@ -227,6 +260,70 @@ async function syncEbay(type: 'orders' | 'transactions' | 'payouts' | 'all'): Pr
   return response.json();
 }
 
+// Monzo API functions
+async function fetchMonzoStatus(): Promise<{ data: { connection: MonzoConnectionStatus; sync: MonzoSyncStatus | null } }> {
+  const response = await fetch('/api/integrations/monzo/status');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function syncMonzo(type: 'full' | 'incremental' = 'incremental'): Promise<{ data?: { success: boolean; transactionsProcessed?: number; transactionsCreated?: number; transactionsUpdated?: number }; error?: string }> {
+  const response = await fetch('/api/integrations/monzo/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  });
+
+  return response.json();
+}
+
+// PayPal API functions
+async function fetchPayPalStatus(): Promise<PayPalConnectionStatus> {
+  const response = await fetch('/api/integrations/paypal/status');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function savePayPalCredentials(credentials: PayPalCredentials): Promise<void> {
+  const response = await fetch('/api/integrations/paypal/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to save credentials');
+  }
+}
+
+async function deletePayPalCredentials(): Promise<void> {
+  const response = await fetch('/api/integrations/paypal/credentials', {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete credentials');
+  }
+}
+
+async function testPayPalConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
+  const response = await fetch('/api/integrations/paypal/test', {
+    method: 'POST',
+  });
+  return response.json();
+}
+
+async function syncPayPal(fullSync: boolean = false): Promise<{ success: boolean; transactionsProcessed?: number; transactionsCreated?: number; transactionsUpdated?: number; transactionsSkipped?: number; error?: string }> {
+  const response = await fetch('/api/integrations/paypal/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fullSync }),
+  });
+
+  return response.json();
+}
+
 // Sync all platforms
 async function syncAllPlatforms(): Promise<{ success: boolean; data: Record<string, unknown> }> {
   const response = await fetch('/api/integrations/sync-all-orders', {
@@ -250,6 +347,8 @@ export default function IntegrationsSettingsPage() {
   // Check for eBay OAuth callback status
   const ebaySuccess = searchParams.get('ebay_success');
   const ebayError = searchParams.get('ebay_error');
+
+  // Monzo no longer uses OAuth - syncs from Google Sheets
 
   // BrickLink state
   const [showBrickLinkSecrets, setShowBrickLinkSecrets] = useState(false);
@@ -293,6 +392,20 @@ export default function IntegrationsSettingsPage() {
   // eBay state
   const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Monzo state
+  const [monzoMessage, setMonzoMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // PayPal state
+  const [showPayPalSecrets, setShowPayPalSecrets] = useState(false);
+  const [paypalCredentials, setPayPalCredentials] = useState<PayPalCredentials>({
+    clientId: '',
+    clientSecret: '',
+    sandbox: false,
+  });
+  const [paypalError, setPayPalError] = useState<string | null>(null);
+  const [paypalSuccess, setPayPalSuccess] = useState<string | null>(null);
+  const [paypalMessage, setPayPalMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Handle eBay OAuth callback messages
   useEffect(() => {
     if (ebaySuccess) {
@@ -306,6 +419,7 @@ export default function IntegrationsSettingsPage() {
       window.history.replaceState({}, '', '/settings/integrations');
     }
   }, [ebaySuccess, ebayError, queryClient]);
+
 
   // BrickLink queries/mutations
   const { data: brickLinkStatus, isLoading: brickLinkStatusLoading } = useQuery({
@@ -502,27 +616,143 @@ export default function IntegrationsSettingsPage() {
   const syncEbayMutation = useMutation({
     mutationFn: (type: 'orders' | 'transactions' | 'payouts' | 'all') => syncEbay(type),
     onSuccess: (data) => {
+      // Type the results properly
+      const results = data.results as Record<string, {
+        success?: boolean;
+        ordersProcessed?: number;
+        recordsProcessed?: number;
+        error?: string;
+      }> | undefined;
+
+      // Collect success stats and errors
+      const successParts: string[] = [];
+      const errors: string[] = [];
+
+      if (results?.orders) {
+        if (results.orders.success) {
+          successParts.push(`${results.orders.ordersProcessed || 0} orders`);
+        } else if (results.orders.error) {
+          errors.push(`Orders: ${results.orders.error}`);
+        }
+      }
+      if (results?.transactions) {
+        if (results.transactions.success) {
+          successParts.push(`${results.transactions.recordsProcessed || 0} transactions`);
+        } else if (results.transactions.error) {
+          errors.push(`Transactions: ${results.transactions.error}`);
+        }
+      }
+      if (results?.payouts) {
+        if (results.payouts.success) {
+          successParts.push(`${results.payouts.recordsProcessed || 0} payouts`);
+        } else if (results.payouts.error) {
+          errors.push(`Payouts: ${results.payouts.error}`);
+        }
+      }
+
       if (data.success) {
-        // Build a detailed message from results
-        const results = data.results as Record<string, { ordersProcessed?: number; transactionsProcessed?: number; payoutsProcessed?: number }> | undefined;
-        const parts: string[] = [];
-        if (results?.orders?.ordersProcessed !== undefined) {
-          parts.push(`${results.orders.ordersProcessed} orders`);
-        }
-        if (results?.transactions?.transactionsProcessed !== undefined) {
-          parts.push(`${results.transactions.transactionsProcessed} transactions`);
-        }
-        if (results?.payouts?.payoutsProcessed !== undefined) {
-          parts.push(`${results.payouts.payoutsProcessed} payouts`);
-        }
-        const detail = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+        const detail = successParts.length > 0 ? ` (${successParts.join(', ')})` : '';
         setEbayMessage({ type: 'success', message: `eBay sync completed successfully!${detail}` });
+      } else if (errors.length > 0) {
+        setEbayMessage({ type: 'error', message: `Sync completed with errors: ${errors.join('; ')}` });
       } else {
         setEbayMessage({ type: 'error', message: 'Sync completed with errors' });
       }
     },
     onError: (err: Error) => {
       setEbayMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  // Monzo queries/mutations
+  const { data: monzoStatus, isLoading: monzoStatusLoading } = useQuery({
+    queryKey: ['monzo', 'status'],
+    queryFn: fetchMonzoStatus,
+    refetchInterval: 60000,
+  });
+
+  const syncMonzoMutation = useMutation({
+    mutationFn: (type: 'full' | 'incremental') => syncMonzo(type),
+    onSuccess: (data) => {
+      if (data.data?.success) {
+        const detail = data.data.transactionsProcessed !== undefined
+          ? ` (${data.data.transactionsProcessed} transactions processed, ${data.data.transactionsCreated} new, ${data.data.transactionsUpdated} updated)`
+          : '';
+        setMonzoMessage({ type: 'success', message: `Monzo sync completed successfully!${detail}` });
+      } else {
+        setMonzoMessage({ type: 'error', message: data.error || 'Sync completed with errors' });
+      }
+      queryClient.invalidateQueries({ queryKey: ['monzo', 'status'] });
+    },
+    onError: (err: Error) => {
+      setMonzoMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  // PayPal queries/mutations
+  const { data: paypalStatus, isLoading: paypalStatusLoading } = useQuery({
+    queryKey: ['paypal', 'status'],
+    queryFn: fetchPayPalStatus,
+    refetchInterval: 60000,
+  });
+
+  const savePayPalMutation = useMutation({
+    mutationFn: savePayPalCredentials,
+    onSuccess: () => {
+      setPayPalSuccess('PayPal credentials saved successfully');
+      setPayPalError(null);
+      setPayPalCredentials({ clientId: '', clientSecret: '', sandbox: false });
+      queryClient.invalidateQueries({ queryKey: ['paypal', 'status'] });
+    },
+    onError: (err: Error) => {
+      setPayPalError(err.message);
+      setPayPalSuccess(null);
+    },
+  });
+
+  const deletePayPalMutation = useMutation({
+    mutationFn: deletePayPalCredentials,
+    onSuccess: () => {
+      setPayPalSuccess('PayPal credentials removed');
+      setPayPalError(null);
+      queryClient.invalidateQueries({ queryKey: ['paypal', 'status'] });
+    },
+    onError: (err: Error) => {
+      setPayPalError(err.message);
+      setPayPalSuccess(null);
+    },
+  });
+
+  const testPayPalMutation = useMutation({
+    mutationFn: testPayPalConnection,
+    onSuccess: (data) => {
+      if (data.success) {
+        setPayPalMessage({ type: 'success', message: data.message || 'Connection test successful!' });
+      } else {
+        setPayPalMessage({ type: 'error', message: data.error || 'Connection test failed' });
+      }
+    },
+    onError: (err: Error) => {
+      setPayPalMessage({ type: 'error', message: err.message });
+    },
+  });
+
+  const syncPayPalMutation = useMutation({
+    mutationFn: (fullSync: boolean) => syncPayPal(fullSync),
+    onSuccess: (data) => {
+      if (data.success) {
+        const detail = data.transactionsProcessed !== undefined
+          ? ` (${data.transactionsProcessed} processed, ${data.transactionsCreated} new, ${data.transactionsUpdated} updated, ${data.transactionsSkipped} skipped)`
+          : '';
+        setPayPalMessage({ type: 'success', message: `PayPal sync completed successfully!${detail}` });
+      } else {
+        setPayPalMessage({ type: 'error', message: data.error || 'Sync completed with errors' });
+      }
+      queryClient.invalidateQueries({ queryKey: ['paypal', 'status'] });
+      queryClient.invalidateQueries({ queryKey: ['paypal', 'transactions'] });
+    },
+    onError: (err: Error) => {
+      setPayPalMessage({ type: 'error', message: err.message });
     },
   });
 
@@ -627,7 +857,25 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const hasConfiguredPlatforms = brickLinkStatus?.configured || brickOwlStatus?.configured || bricqerStatus?.configured || ebayStatus?.isConnected || amazonStatus?.isConfigured;
+  const handleSavePayPal = () => {
+    setPayPalError(null);
+    setPayPalSuccess(null);
+
+    if (!paypalCredentials.clientId || !paypalCredentials.clientSecret) {
+      setPayPalError('Client ID and Client Secret are required');
+      return;
+    }
+
+    savePayPalMutation.mutate(paypalCredentials);
+  };
+
+  const handleDeletePayPal = () => {
+    if (confirm('Are you sure you want to remove PayPal credentials?')) {
+      deletePayPalMutation.mutate();
+    }
+  };
+
+  const hasConfiguredPlatforms = brickLinkStatus?.configured || brickOwlStatus?.configured || bricqerStatus?.configured || ebayStatus?.isConnected || amazonStatus?.isConfigured || monzoStatus?.data?.connection?.isConnected || paypalStatus?.isConnected;
 
   return (
     <>
@@ -710,7 +958,16 @@ export default function IntegrationsSettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {ebayMessage && (
+            {syncEbayMutation.isPending && (
+              <Alert className="bg-blue-50 border-blue-200">
+                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                <AlertDescription className="text-blue-800">
+                  Syncing eBay data... This may take a few minutes for large datasets.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {ebayMessage && !syncEbayMutation.isPending && (
               <Alert className={ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={ebayMessage.type === 'error' ? 'destructive' : undefined}>
                 {ebayMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
                 <AlertDescription className={ebayMessage.type === 'success' ? 'text-green-800' : undefined}>
@@ -1454,6 +1711,362 @@ export default function IntegrationsSettingsPage() {
                     disabled={deleteAmazonMutation.isPending}
                   >
                     {deleteAmazonMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Monzo Integration (via Google Sheets) */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8505B]/10">
+                  <span className="text-lg font-bold text-[#E8505B]">M</span>
+                </div>
+                <div>
+                  <CardTitle>Monzo</CardTitle>
+                  <CardDescription>
+                    Sync bank transactions from Google Sheets (Monzo export)
+                  </CardDescription>
+                </div>
+              </div>
+              {monzoStatusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Google Sheets
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {monzoMessage && (
+              <Alert className={monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={monzoMessage.type === 'error' ? 'destructive' : undefined}>
+                {monzoMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                <AlertDescription className={monzoMessage.type === 'success' ? 'text-green-800' : undefined}>
+                  {monzoMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Data Source:</span>
+                <span className="font-medium">{monzoStatus?.data?.connection?.accountType || 'Google Sheets'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Transactions:</span>
+                <span className="font-medium">{monzoStatus?.data?.connection?.transactionCount || 0}</span>
+              </div>
+              {monzoStatus?.data?.connection?.lastSyncAt && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Last Synced:</span>
+                  <span className="font-medium">
+                    {new Date(monzoStatus.data.connection.lastSyncAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {monzoStatus?.data?.sync?.lastSync && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Last Sync Status:</span>
+                  <span className={`font-medium ${monzoStatus.data.sync.lastSync.status === 'COMPLETED' ? 'text-green-600' : monzoStatus.data.sync.lastSync.status === 'FAILED' ? 'text-red-600' : 'text-blue-600'}`}>
+                    {monzoStatus.data.sync.lastSync.status}
+                  </span>
+                </div>
+              )}
+              {monzoStatus?.data?.sync?.isRunning && (
+                <div className="flex items-center gap-2 text-blue-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Sync in progress...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm">
+              <p className="text-blue-800">
+                Monzo transactions are synced from the &quot;Monzo Transactions&quot; sheet in your Lego Planning spreadsheet.
+                This sheet is live-connected to your Monzo account.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => syncMonzoMutation.mutate('incremental')}
+                disabled={syncMonzoMutation.isPending || monzoStatus?.data?.sync?.isRunning}
+              >
+                {syncMonzoMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Sync New Transactions
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => syncMonzoMutation.mutate('full')}
+                disabled={syncMonzoMutation.isPending || monzoStatus?.data?.sync?.isRunning}
+              >
+                {syncMonzoMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Full Sync
+              </Button>
+
+              <Link href="/transactions">
+                <Button variant="outline">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View Transactions
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* PayPal Integration */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
+                  <span className="text-lg font-bold text-blue-700">PP</span>
+                </div>
+                <div>
+                  <CardTitle>PayPal</CardTitle>
+                  <CardDescription>
+                    Sync fee transactions from PayPal
+                  </CardDescription>
+                </div>
+              </div>
+              {paypalStatusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : paypalStatus?.isConnected ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Connected{paypalStatus.sandbox ? ' (Sandbox)' : ''}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-700">
+                  <XCircle className="mr-1 h-3 w-3" />
+                  Not Connected
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {paypalError && (
+              <Alert variant="destructive">
+                <AlertDescription>{paypalError}</AlertDescription>
+              </Alert>
+            )}
+
+            {paypalSuccess && (
+              <Alert className="bg-green-50 border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{paypalSuccess}</AlertDescription>
+              </Alert>
+            )}
+
+            {paypalMessage && (
+              <Alert className={paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={paypalMessage.type === 'error' ? 'destructive' : undefined}>
+                {paypalMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                <AlertDescription className={paypalMessage.type === 'success' ? 'text-green-800' : undefined}>
+                  {paypalMessage.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {paypalStatus?.isConnected && (
+              <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Environment:</span>
+                  <span className="font-medium">{paypalStatus.sandbox ? 'Sandbox' : 'Production'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fee Transactions:</span>
+                  <span className="font-medium">{paypalStatus.transactionCount || 0}</span>
+                </div>
+                {paypalStatus.lastSyncAt && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Synced:</span>
+                    <span className="font-medium">
+                      {new Date(paypalStatus.lastSyncAt).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg bg-muted p-4 text-sm">
+              <p className="font-medium mb-2">How to get your PayPal API credentials:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>
+                  Go to{' '}
+                  <a
+                    href="https://developer.paypal.com/dashboard/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    PayPal Developer Dashboard
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </li>
+                <li>Log in with your PayPal Business account</li>
+                <li>Go to Apps &amp; Credentials &rarr; Create App (or use existing)</li>
+                <li>Enable &quot;Transaction Search&quot; in App Feature Options</li>
+                <li>Copy the Client ID and Secret (toggle to Live for production)</li>
+              </ol>
+              <p className="mt-2 text-xs text-amber-700 bg-amber-50 p-2 rounded">
+                Note: Transaction Search permission may take up to 9 hours to activate.
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="paypalClientId">Client ID</Label>
+                <Input
+                  id="paypalClientId"
+                  type={showPayPalSecrets ? 'text' : 'password'}
+                  placeholder="Enter your PayPal Client ID"
+                  value={paypalCredentials.clientId}
+                  onChange={(e) =>
+                    setPayPalCredentials({ ...paypalCredentials, clientId: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="paypalClientSecret">Client Secret</Label>
+                <Input
+                  id="paypalClientSecret"
+                  type={showPayPalSecrets ? 'text' : 'password'}
+                  placeholder="Enter your PayPal Client Secret"
+                  value={paypalCredentials.clientSecret}
+                  onChange={(e) =>
+                    setPayPalCredentials({ ...paypalCredentials, clientSecret: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="paypalSandbox"
+                  checked={paypalCredentials.sandbox}
+                  onChange={(e) =>
+                    setPayPalCredentials({ ...paypalCredentials, sandbox: e.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="paypalSandbox" className="text-sm font-normal cursor-pointer">
+                  Use Sandbox environment (for testing)
+                </Label>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPayPalSecrets(!showPayPalSecrets)}
+              >
+                {showPayPalSecrets ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide Secrets
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Show Secrets
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-4 border-t">
+              <Button
+                onClick={handleSavePayPal}
+                disabled={savePayPalMutation.isPending}
+              >
+                {savePayPalMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Save Credentials
+                  </>
+                )}
+              </Button>
+
+              {paypalStatus?.isConnected && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => testPayPalMutation.mutate()}
+                    disabled={testPayPalMutation.isPending}
+                  >
+                    {testPayPalMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Test Connection
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => syncPayPalMutation.mutate(false)}
+                    disabled={syncPayPalMutation.isPending}
+                  >
+                    {syncPayPalMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => syncPayPalMutation.mutate(true)}
+                    disabled={syncPayPalMutation.isPending}
+                  >
+                    {syncPayPalMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Full Sync
+                  </Button>
+
+                  <Link href="/transactions">
+                    <Button variant="outline">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View Transactions
+                    </Button>
+                  </Link>
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeletePayPal}
+                    disabled={deletePayPalMutation.isPending}
+                  >
+                    {deletePayPalMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
                     Disconnect

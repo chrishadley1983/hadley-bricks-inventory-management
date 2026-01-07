@@ -90,10 +90,15 @@ export type Database = {
           created_at: string
           ebay_user_id: string | null
           id: string
+          jwe: string | null
           marketplace_id: string
+          private_key: string | null
+          public_key: string | null
           refresh_token: string
           refresh_token_expires_at: string
           scopes: string[]
+          signing_key_expires_at: string | null
+          signing_key_id: string | null
           updated_at: string
           user_id: string
         }
@@ -103,10 +108,15 @@ export type Database = {
           created_at?: string
           ebay_user_id?: string | null
           id?: string
+          jwe?: string | null
           marketplace_id?: string
+          private_key?: string | null
+          public_key?: string | null
           refresh_token: string
           refresh_token_expires_at: string
           scopes: string[]
+          signing_key_expires_at?: string | null
+          signing_key_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -116,10 +126,15 @@ export type Database = {
           created_at?: string
           ebay_user_id?: string | null
           id?: string
+          jwe?: string | null
           marketplace_id?: string
+          private_key?: string | null
+          public_key?: string | null
           refresh_token?: string
           refresh_token_expires_at?: string
           scopes?: string[]
+          signing_key_expires_at?: string | null
+          signing_key_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -290,12 +305,15 @@ export type Database = {
       ebay_payouts: {
         Row: {
           amount: number
+          bank_reference: string | null
           created_at: string
           currency: string
           ebay_payout_id: string
           id: string
+          last_attempted_payout_date: string | null
           payout_date: string
           payout_instrument: Json | null
+          payout_memo: string | null
           payout_status: string
           raw_response: Json
           transaction_count: number | null
@@ -304,12 +322,15 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bank_reference?: string | null
           created_at?: string
           currency: string
           ebay_payout_id: string
           id?: string
+          last_attempted_payout_date?: string | null
           payout_date: string
           payout_instrument?: Json | null
+          payout_memo?: string | null
           payout_status: string
           raw_response: Json
           transaction_count?: number | null
@@ -318,12 +339,15 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_reference?: string | null
           created_at?: string
           currency?: string
           ebay_payout_id?: string
           id?: string
+          last_attempted_payout_date?: string | null
           payout_date?: string
           payout_instrument?: Json | null
+          payout_memo?: string | null
           payout_status?: string
           raw_response?: Json
           transaction_count?: number | null
@@ -436,11 +460,77 @@ export type Database = {
           },
         ]
       }
+      ebay_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          from_date: string | null
+          historical_import_completed_at: string | null
+          historical_import_from_date: string | null
+          historical_import_started_at: string | null
+          id: string
+          last_auto_sync_at: string | null
+          next_auto_sync_at: string | null
+          orders_last_modified_cursor: string | null
+          payouts_date_cursor: string | null
+          to_date: string | null
+          transactions_date_cursor: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          from_date?: string | null
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          orders_last_modified_cursor?: string | null
+          payouts_date_cursor?: string | null
+          to_date?: string | null
+          transactions_date_cursor?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          from_date?: string | null
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          orders_last_modified_cursor?: string | null
+          payouts_date_cursor?: string | null
+          to_date?: string | null
+          transactions_date_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_sync_log: {
         Row: {
           completed_at: string | null
           created_at: string
           error_message: string | null
+          from_date: string | null
           id: string
           last_sync_cursor: string | null
           records_created: number | null
@@ -448,13 +538,16 @@ export type Database = {
           records_updated: number | null
           started_at: string
           status: string
+          sync_mode: string | null
           sync_type: string
+          to_date: string | null
           user_id: string
         }
         Insert: {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          from_date?: string | null
           id?: string
           last_sync_cursor?: string | null
           records_created?: number | null
@@ -462,13 +555,16 @@ export type Database = {
           records_updated?: number | null
           started_at: string
           status: string
+          sync_mode?: string | null
           sync_type: string
+          to_date?: string | null
           user_id: string
         }
         Update: {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          from_date?: string | null
           id?: string
           last_sync_cursor?: string | null
           records_created?: number | null
@@ -476,7 +572,9 @@ export type Database = {
           records_updated?: number | null
           started_at?: string
           status?: string
+          sync_mode?: string | null
           sync_type?: string
+          to_date?: string | null
           user_id?: string
         }
         Relationships: [
@@ -491,19 +589,33 @@ export type Database = {
       }
       ebay_transactions: {
         Row: {
+          ad_fee: number | null
           amount: number
           booking_entry: string
           buyer_username: string | null
           created_at: string
           currency: string
+          custom_label: string | null
           ebay_order_id: string | null
           ebay_transaction_id: string
+          final_value_fee_fixed: number | null
+          final_value_fee_variable: number | null
+          gross_transaction_amount: number | null
           id: string
+          insertion_fee: number | null
+          international_fee: number | null
+          item_location_country: string | null
+          item_title: string | null
           order_line_items: Json | null
           payout_id: string | null
+          postage_and_packaging: number | null
+          quantity: number | null
           raw_response: Json
+          regulatory_operating_fee: number | null
+          sales_record_reference: string | null
           total_fee_amount: number | null
           total_fee_currency: string | null
+          total_price: number | null
           transaction_date: string
           transaction_memo: string | null
           transaction_status: string
@@ -512,19 +624,33 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ad_fee?: number | null
           amount: number
           booking_entry: string
           buyer_username?: string | null
           created_at?: string
           currency: string
+          custom_label?: string | null
           ebay_order_id?: string | null
           ebay_transaction_id: string
+          final_value_fee_fixed?: number | null
+          final_value_fee_variable?: number | null
+          gross_transaction_amount?: number | null
           id?: string
+          insertion_fee?: number | null
+          international_fee?: number | null
+          item_location_country?: string | null
+          item_title?: string | null
           order_line_items?: Json | null
           payout_id?: string | null
+          postage_and_packaging?: number | null
+          quantity?: number | null
           raw_response: Json
+          regulatory_operating_fee?: number | null
+          sales_record_reference?: string | null
           total_fee_amount?: number | null
           total_fee_currency?: string | null
+          total_price?: number | null
           transaction_date: string
           transaction_memo?: string | null
           transaction_status: string
@@ -533,19 +659,33 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ad_fee?: number | null
           amount?: number
           booking_entry?: string
           buyer_username?: string | null
           created_at?: string
           currency?: string
+          custom_label?: string | null
           ebay_order_id?: string | null
           ebay_transaction_id?: string
+          final_value_fee_fixed?: number | null
+          final_value_fee_variable?: number | null
+          gross_transaction_amount?: number | null
           id?: string
+          insertion_fee?: number | null
+          international_fee?: number | null
+          item_location_country?: string | null
+          item_title?: string | null
           order_line_items?: Json | null
           payout_id?: string | null
+          postage_and_packaging?: number | null
+          quantity?: number | null
           raw_response?: Json
+          regulatory_operating_fee?: number | null
+          sales_record_reference?: string | null
           total_fee_amount?: number | null
           total_fee_currency?: string | null
+          total_price?: number | null
           transaction_date?: string
           transaction_memo?: string | null
           transaction_status?: string
@@ -813,6 +953,210 @@ export type Database = {
           },
         ]
       }
+      monzo_credentials: {
+        Row: {
+          access_token: string
+          access_token_expires_at: string
+          account_id: string
+          account_type: string | null
+          created_at: string
+          id: string
+          monzo_user_id: string | null
+          refresh_token: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          access_token_expires_at: string
+          account_id: string
+          account_type?: string | null
+          created_at?: string
+          id?: string
+          monzo_user_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          access_token_expires_at?: string
+          account_id?: string
+          account_type?: string | null
+          created_at?: string
+          id?: string
+          monzo_user_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monzo_credentials_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monzo_sync_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          last_transaction_id: string | null
+          source: string | null
+          started_at: string
+          status: string
+          sync_type: string
+          transactions_created: number | null
+          transactions_processed: number | null
+          transactions_updated: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_transaction_id?: string | null
+          source?: string | null
+          started_at: string
+          status: string
+          sync_type: string
+          transactions_created?: number | null
+          transactions_processed?: number | null
+          transactions_updated?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_transaction_id?: string | null
+          source?: string | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+          transactions_created?: number | null
+          transactions_processed?: number | null
+          transactions_updated?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monzo_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monzo_transactions: {
+        Row: {
+          account_id: string | null
+          address: string | null
+          amount: number
+          category: string | null
+          created: string
+          created_at: string
+          currency: string
+          data_source: string | null
+          decline_reason: string | null
+          description: string | null
+          emoji: string | null
+          id: string
+          is_load: boolean | null
+          local_amount: number | null
+          local_category: string | null
+          local_currency: string | null
+          merchant: Json | null
+          merchant_name: string | null
+          metadata: Json | null
+          monzo_transaction_id: string
+          raw_response: Json | null
+          settled: string | null
+          tags: string[] | null
+          transaction_time: string | null
+          transaction_type: string | null
+          updated_at: string
+          user_id: string
+          user_notes: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          address?: string | null
+          amount: number
+          category?: string | null
+          created: string
+          created_at?: string
+          currency?: string
+          data_source?: string | null
+          decline_reason?: string | null
+          description?: string | null
+          emoji?: string | null
+          id?: string
+          is_load?: boolean | null
+          local_amount?: number | null
+          local_category?: string | null
+          local_currency?: string | null
+          merchant?: Json | null
+          merchant_name?: string | null
+          metadata?: Json | null
+          monzo_transaction_id: string
+          raw_response?: Json | null
+          settled?: string | null
+          tags?: string[] | null
+          transaction_time?: string | null
+          transaction_type?: string | null
+          updated_at?: string
+          user_id: string
+          user_notes?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          address?: string | null
+          amount?: number
+          category?: string | null
+          created?: string
+          created_at?: string
+          currency?: string
+          data_source?: string | null
+          decline_reason?: string | null
+          description?: string | null
+          emoji?: string | null
+          id?: string
+          is_load?: boolean | null
+          local_amount?: number | null
+          local_category?: string | null
+          local_currency?: string | null
+          merchant?: Json | null
+          merchant_name?: string | null
+          metadata?: Json | null
+          monzo_transaction_id?: string
+          raw_response?: Json | null
+          settled?: string | null
+          tags?: string[] | null
+          transaction_time?: string | null
+          transaction_type?: string | null
+          updated_at?: string
+          user_id?: string
+          user_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monzo_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           color_id: number | null
@@ -920,6 +1264,260 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "platform_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paypal_credentials: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          client_id: string
+          client_secret: string
+          created_at: string
+          id: string
+          sandbox: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          client_id: string
+          client_secret: string
+          created_at?: string
+          id?: string
+          sandbox?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          id?: string
+          sandbox?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paypal_credentials_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paypal_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          historical_import_completed_at: string | null
+          historical_import_from_date: string | null
+          historical_import_started_at: string | null
+          id: string
+          last_auto_sync_at: string | null
+          last_sync_date_cursor: string | null
+          next_auto_sync_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paypal_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paypal_sync_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          from_date: string | null
+          id: string
+          last_sync_cursor: string | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date: string | null
+          transactions_created: number | null
+          transactions_processed: number | null
+          transactions_skipped: number | null
+          transactions_updated: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date?: string | null
+          transactions_created?: number | null
+          transactions_processed?: number | null
+          transactions_skipped?: number | null
+          transactions_updated?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          started_at?: string
+          status?: string
+          sync_mode?: string
+          to_date?: string | null
+          transactions_created?: number | null
+          transactions_processed?: number | null
+          transactions_skipped?: number | null
+          transactions_updated?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paypal_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paypal_transactions: {
+        Row: {
+          balance_amount: number | null
+          bank_account: string | null
+          bank_name: string | null
+          created_at: string
+          currency: string
+          description: string | null
+          fee_amount: number
+          from_email: string | null
+          gross_amount: number
+          id: string
+          invoice_id: string | null
+          net_amount: number
+          payer_name: string | null
+          paypal_transaction_id: string
+          postage_amount: number | null
+          raw_response: Json
+          reference_txn_id: string | null
+          time_zone: string | null
+          transaction_date: string
+          transaction_event_code: string | null
+          transaction_status: string | null
+          transaction_type: string | null
+          transaction_updated_date: string | null
+          updated_at: string
+          user_id: string
+          vat_amount: number | null
+        }
+        Insert: {
+          balance_amount?: number | null
+          bank_account?: string | null
+          bank_name?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          fee_amount: number
+          from_email?: string | null
+          gross_amount: number
+          id?: string
+          invoice_id?: string | null
+          net_amount: number
+          payer_name?: string | null
+          paypal_transaction_id: string
+          postage_amount?: number | null
+          raw_response: Json
+          reference_txn_id?: string | null
+          time_zone?: string | null
+          transaction_date: string
+          transaction_event_code?: string | null
+          transaction_status?: string | null
+          transaction_type?: string | null
+          transaction_updated_date?: string | null
+          updated_at?: string
+          user_id: string
+          vat_amount?: number | null
+        }
+        Update: {
+          balance_amount?: number | null
+          bank_account?: string | null
+          bank_name?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          fee_amount?: number
+          from_email?: string | null
+          gross_amount?: number
+          id?: string
+          invoice_id?: string | null
+          net_amount?: number
+          payer_name?: string | null
+          paypal_transaction_id?: string
+          postage_amount?: number | null
+          raw_response?: Json
+          reference_txn_id?: string | null
+          time_zone?: string | null
+          transaction_date?: string
+          transaction_event_code?: string | null
+          transaction_status?: string | null
+          transaction_type?: string | null
+          transaction_updated_date?: string | null
+          updated_at?: string
+          user_id?: string
+          vat_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paypal_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1353,6 +1951,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      transaction_tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_settings: {
         Row: {

@@ -28,4 +28,16 @@ export type {
   TransactionBreakdown,
 } from './ebay-finances.service';
 
+export { EbayTransactionSyncService, ebayTransactionSyncService } from './ebay-transaction-sync.service';
+export type { EbaySyncResult, EbaySyncOptions } from './ebay-transaction-sync.service';
+
+export { EbayOrderSyncService, ebayOrderSyncService } from './ebay-order-sync.service';
+export type { EbayOrderSyncResult, EbayOrderSyncOptions } from './ebay-order-sync.service';
+
+export { EbayAutoSyncService, ebayAutoSyncService } from './ebay-auto-sync.service';
+export type { EbaySyncConfig, EbayFullSyncResult, EbaySyncStatusSummary } from './ebay-auto-sync.service';
+
+export { EbaySignatureService, ebaySignatureService } from './ebay-signature.service';
+export type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
+
 export * from './types';

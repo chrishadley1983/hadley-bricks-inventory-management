@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { EbayFulfilmentService, EbayFinancesService } from '@/lib/ebay';
+import {
+  ebayTransactionSyncService,
+  ebayOrderSyncService,
+  ebayAutoSyncService,
+} from '@/lib/ebay';
 
 const SyncSchema = z.object({
-  type: z.enum(['orders', 'transactions', 'payouts', 'all']).default('orders'),
-  sinceDate: z.string().datetime().optional(),
-  fullSync: z.boolean().optional(),
-  limit: z.number().positive().optional(),
+  type: z.enum(['orders', 'transactions', 'payouts', 'all']).default('all'),
+  fullSync: z.boolean().optional().default(false),
 });
 
 /**
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const parsed = SyncSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -36,39 +38,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { type, sinceDate, fullSync, limit } = parsed.data;
+    const { type, fullSync } = parsed.data;
 
-    const fulfilmentService = new EbayFulfilmentService();
-    const financesService = new EbayFinancesService();
+    // For 'all' type, use the auto sync service for coordinated sync
+    if (type === 'all') {
+      const result = fullSync
+        ? await ebayAutoSyncService.performFullSync(user.id)
+        : await ebayAutoSyncService.performIncrementalSync(user.id);
 
+      return NextResponse.json({
+        success: result.orders.success && result.transactions.success && result.payouts.success,
+        results: {
+          orders: result.orders,
+          transactions: result.transactions,
+          payouts: result.payouts,
+        },
+        totalDuration: result.totalDuration,
+      });
+    }
+
+    // Handle individual sync types
     const results: Record<string, unknown> = {};
 
-    // Sync orders
-    if (type === 'orders' || type === 'all') {
-      const orderResult = await fulfilmentService.syncOrders(user.id, {
-        sinceDate: sinceDate ? new Date(sinceDate) : undefined,
-        fullSync,
-        limit,
-      });
-      results.orders = orderResult;
+    if (type === 'orders') {
+      results.orders = await ebayOrderSyncService.syncOrders(user.id, { fullSync });
     }
 
-    // Sync transactions
-    if (type === 'transactions' || type === 'all') {
-      const transactionResult = await financesService.syncTransactions(user.id, {
-        sinceDate: sinceDate ? new Date(sinceDate) : undefined,
-        limit,
-      });
-      results.transactions = transactionResult;
+    if (type === 'transactions') {
+      results.transactions = await ebayTransactionSyncService.syncTransactions(user.id, { fullSync });
     }
 
-    // Sync payouts
-    if (type === 'payouts' || type === 'all') {
-      const payoutResult = await financesService.syncPayouts(user.id, {
-        sinceDate: sinceDate ? new Date(sinceDate) : undefined,
-        limit,
-      });
-      results.payouts = payoutResult;
+    if (type === 'payouts') {
+      results.payouts = await ebayTransactionSyncService.syncPayouts(user.id, { fullSync });
     }
 
     // Check for any failures
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/integrations/ebay/sync
- * Get sync history/status
+ * Get sync status and history
  */
 export async function GET() {
   try {
@@ -108,9 +109,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get comprehensive sync status
+    const status = await ebayAutoSyncService.getSyncStatusSummary(user.id);
+
     // Get recent sync logs
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: syncLogs, error } = await (supabase as any)
+    const { data: syncLogs, error } = await supabase
       .from('ebay_sync_log')
       .select('*')
       .eq('user_id', user.id)
@@ -123,6 +126,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      status,
       logs: syncLogs || [],
     });
   } catch (error) {

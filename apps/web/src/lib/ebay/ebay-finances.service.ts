@@ -113,11 +113,12 @@ export class EbayFinancesService {
       const connectionStatus = await this.authService.getConnectionStatus(userId);
       const marketplaceId = connectionStatus.marketplaceId || 'EBAY_GB';
 
-      // Create API adapter
+      // Create API adapter with userId for signing key management (Finances API requires signatures)
       const api = new EbayApiAdapter({
         accessToken,
         marketplaceId,
         sandbox: process.env.EBAY_SANDBOX === 'true',
+        userId,
       });
 
       // Log sync start
@@ -211,11 +212,12 @@ export class EbayFinancesService {
       const connectionStatus = await this.authService.getConnectionStatus(userId);
       const marketplaceId = connectionStatus.marketplaceId || 'EBAY_GB';
 
-      // Create API adapter
+      // Create API adapter with userId for signing key management (Finances API requires signatures)
       const api = new EbayApiAdapter({
         accessToken,
         marketplaceId,
         sandbox: process.env.EBAY_SANDBOX === 'true',
+        userId,
       });
 
       // Log sync start
