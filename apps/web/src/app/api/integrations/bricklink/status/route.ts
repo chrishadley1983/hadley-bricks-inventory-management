@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createBrickLinkTransactionSyncService } from '@/lib/bricklink';
+import { createBrickLinkTransactionSyncService } from '@/lib/bricklink/bricklink-transaction-sync.service';
 
 export async function GET() {
   try {

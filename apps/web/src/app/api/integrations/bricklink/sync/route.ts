@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { BrickLinkSyncService } from '@/lib/services';
-import { createBrickLinkTransactionSyncService } from '@/lib/bricklink';
+import { createBrickLinkTransactionSyncService } from '@/lib/bricklink/bricklink-transaction-sync.service';
 
 const SyncOptionsSchema = z.object({
   includeFiled: z.boolean().optional().default(false),

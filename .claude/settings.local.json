@@ -98,7 +98,9 @@
       "Bash(git merge:*)",
       "Bash(git stash:*)",
       "Bash(npm run lint:*)",
-      "Bash(timeout 15 npm run dev:*)"
+      "Bash(timeout 15 npm run dev:*)",
+      "Bash(git fetch:*)",
+      "Bash(timeout 20 npm run dev:*)"
     ]
   }
 }

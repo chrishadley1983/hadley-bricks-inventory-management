@@ -1,9 +1,7 @@
 export { BrickLinkClient, BrickLinkApiError, RateLimitError } from './client';
 export { normalizeOrder, normalizeOrders, calculateOrderStats } from './adapter';
-export {
-  BrickLinkTransactionSyncService,
-  createBrickLinkTransactionSyncService,
-} from './bricklink-transaction-sync.service';
+// Note: BrickLinkTransactionSyncService is server-only (uses next/headers)
+// Import directly from './bricklink-transaction-sync.service' in API routes
 export type {
   BrickLinkCredentials,
   BrickLinkOrderSummary,
