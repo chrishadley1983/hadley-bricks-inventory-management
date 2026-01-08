@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { BrickOwlSyncService } from '@/lib/services';
+import { createBrickOwlTransactionSyncService } from '@/lib/brickowl/brickowl-transaction-sync.service';
 
 const SyncOptionsSchema = z.object({
   fullSync: z.boolean().optional().default(false),
   includeItems: z.boolean().optional().default(true),
   limit: z.number().optional(),
+  resetBeforeSync: z.boolean().optional().default(false),
+  transactionsOnly: z.boolean().optional().default(false),
 });
 
 /**
  * POST /api/integrations/brickowl/sync
- * Trigger a sync of Brick Owl orders
+ * Trigger a sync of Brick Owl orders to both platform_orders AND brickowl_transactions
  */
 export async function POST(request: NextRequest) {
   try {
@@ -26,10 +29,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse options
-    let options: { fullSync: boolean; includeItems: boolean; limit: number | undefined } = {
+    let options = {
       fullSync: false,
       includeItems: true,
-      limit: undefined
+      limit: undefined as number | undefined,
+      resetBeforeSync: false,
+      transactionsOnly: false,
     };
     try {
       const body = await request.json();
@@ -39,6 +44,8 @@ export async function POST(request: NextRequest) {
           fullSync: parsed.data.fullSync,
           includeItems: parsed.data.includeItems,
           limit: parsed.data.limit,
+          resetBeforeSync: parsed.data.resetBeforeSync,
+          transactionsOnly: parsed.data.transactionsOnly,
         };
       }
     } catch {
@@ -46,6 +53,17 @@ export async function POST(request: NextRequest) {
     }
 
     const syncService = new BrickOwlSyncService(supabase);
+    const transactionSyncService = createBrickOwlTransactionSyncService();
+
+    // Reset before sync if requested (clears bad data from previous syncs)
+    if (options.resetBeforeSync) {
+      console.log('[POST /api/integrations/brickowl/sync] Resetting transactions before sync...');
+      await supabase.from('brickowl_transactions').delete().eq('user_id', user.id);
+      await supabase.from('brickowl_sync_config').delete().eq('user_id', user.id);
+      await supabase.from('brickowl_sync_log').delete().eq('user_id', user.id);
+      // Force full sync after reset
+      options.fullSync = true;
+    }
 
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
@@ -56,17 +74,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run sync
-    const result = await syncService.syncOrders(user.id, options);
+    // Sync transactions (to brickowl_transactions table)
+    const transactionResult = await transactionSyncService.syncTransactions(user.id, {
+      fullSync: options.fullSync,
+    });
+
+    // Optionally sync to platform_orders (slower, fetches each order individually)
+    let orderResult = null;
+    if (!options.transactionsOnly) {
+      orderResult = await syncService.syncOrders(user.id, options);
+    }
 
     return NextResponse.json({
-      success: result.success,
+      success: transactionResult.success && (orderResult?.success ?? true),
       data: {
-        ordersProcessed: result.ordersProcessed,
-        ordersCreated: result.ordersCreated,
-        ordersUpdated: result.ordersUpdated,
-        errors: result.errors,
-        lastSyncedAt: result.lastSyncedAt.toISOString(),
+        // Order sync results (platform_orders) - only if not transactionsOnly
+        ordersProcessed: orderResult?.ordersProcessed ?? 0,
+        ordersCreated: orderResult?.ordersCreated ?? 0,
+        ordersUpdated: orderResult?.ordersUpdated ?? 0,
+        errors: orderResult?.errors ?? [],
+        lastSyncedAt: orderResult?.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
+        // Transaction sync results (brickowl_transactions)
+        transactions: {
+          processed: transactionResult.ordersProcessed,
+          created: transactionResult.ordersCreated,
+          updated: transactionResult.ordersUpdated,
+          error: transactionResult.error,
+        },
       },
     });
   } catch (error) {
@@ -92,13 +126,22 @@ export async function GET() {
     }
 
     const syncService = new BrickOwlSyncService(supabase);
-    const status = await syncService.getSyncStatus(user.id);
+    const transactionSyncService = createBrickOwlTransactionSyncService();
+
+    const [status, transactionStatus] = await Promise.all([
+      syncService.getSyncStatus(user.id),
+      transactionSyncService.getConnectionStatus(user.id),
+    ]);
 
     return NextResponse.json({
       data: {
         isConfigured: status.isConfigured,
         totalOrders: status.totalOrders,
         lastSyncedAt: status.lastSyncedAt?.toISOString() || null,
+        transactions: {
+          count: transactionStatus.transactionCount ?? 0,
+          lastSyncAt: transactionStatus.lastSyncAt ?? null,
+        },
       },
     });
   } catch (error) {

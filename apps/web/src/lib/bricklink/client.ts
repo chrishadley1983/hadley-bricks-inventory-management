@@ -179,6 +179,8 @@ export class BrickLinkClient {
     const baseUrl = `${BASE_URL}${endpoint}`;
     const authHeader = this.generateAuthHeader(method, baseUrl, stringParams);
 
+    console.log('[BrickLinkClient.request] Full URL:', url.toString());
+
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -262,7 +264,8 @@ export class BrickLinkClient {
   async testConnection(): Promise<boolean> {
     try {
       // Try to fetch orders to verify credentials work
-      await this.getOrders({ direction: 'out' });
+      // Use direction=in for sales orders (orders received from buyers)
+      await this.getOrders({ direction: 'in' });
       return true;
     } catch (error) {
       console.error('[BrickLink testConnection] Error:', error);
@@ -297,7 +300,10 @@ export class BrickLinkClient {
       queryParams.filed = params.filed;
     }
 
-    return this.request<BrickLinkOrderSummary[]>('GET', '/orders', queryParams);
+    console.log('[BrickLinkClient.getOrders] Query params:', JSON.stringify(queryParams));
+    const result = await this.request<BrickLinkOrderSummary[]>('GET', '/orders', queryParams);
+    console.log('[BrickLinkClient.getOrders] First order seller_name:', result[0]?.seller_name, 'buyer_name:', result[0]?.buyer_name);
+    return result;
   }
 
   /**
@@ -317,30 +323,32 @@ export class BrickLinkClient {
   }
 
   /**
-   * Get all sales orders (direction=out)
+   * Get all sales orders (orders received from buyers - direction=in)
    * This is a convenience method for getting orders you've sold
+   * Note: BrickLink API uses 'in' for orders received (sales), 'out' for orders placed (purchases)
    */
   async getSalesOrders(
     status?: BrickLinkOrderListParams['status'],
     includeFiled = false
   ): Promise<BrickLinkOrderSummary[]> {
     return this.getOrders({
-      direction: 'out',
+      direction: 'in',
       status,
       filed: includeFiled,
     });
   }
 
   /**
-   * Get all purchase orders (direction=in)
+   * Get all purchase orders (orders placed to sellers - direction=out)
    * This is a convenience method for getting orders you've bought
+   * Note: BrickLink API uses 'in' for orders received (sales), 'out' for orders placed (purchases)
    */
   async getPurchaseOrders(
     status?: BrickLinkOrderListParams['status'],
     includeFiled = false
   ): Promise<BrickLinkOrderSummary[]> {
     return this.getOrders({
-      direction: 'in',
+      direction: 'out',
       status,
       filed: includeFiled,
     });

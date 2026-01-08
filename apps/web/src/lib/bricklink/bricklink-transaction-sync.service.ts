@@ -225,9 +225,31 @@ export class BrickLinkTransactionSyncService {
       console.log('[BrickLinkTransactionSyncService] BrickLink client ready');
 
       // Fetch all sales orders from BrickLink
+      // BrickLink API: filed=false returns active orders, filed=true returns archived orders
+      // We need BOTH to get all orders
       console.log('[BrickLinkTransactionSyncService] Fetching orders from BrickLink API...');
       const includeFiled = options?.includeFiled ?? false;
-      const allOrders = await client.getSalesOrders(undefined, includeFiled);
+
+      // Get active orders (not filed)
+      const activeOrders = await client.getSalesOrders(undefined, false);
+      console.log('[BrickLinkTransactionSyncService] Active orders fetched:', activeOrders.length);
+
+      // Get filed/archived orders if requested
+      let filedOrders: typeof activeOrders = [];
+      if (includeFiled) {
+        filedOrders = await client.getSalesOrders(undefined, true);
+        console.log('[BrickLinkTransactionSyncService] Filed orders fetched:', filedOrders.length);
+      }
+
+      // Combine and dedupe (in case of overlap)
+      const orderMap = new Map<number, typeof activeOrders[0]>();
+      for (const order of activeOrders) {
+        orderMap.set(order.order_id, order);
+      }
+      for (const order of filedOrders) {
+        orderMap.set(order.order_id, order);
+      }
+      const allOrders = Array.from(orderMap.values());
       console.log('[BrickLinkTransactionSyncService] Total orders fetched:', allOrders.length);
 
       // Filter by date if doing incremental sync
@@ -394,9 +416,27 @@ export class BrickLinkTransactionSyncService {
 
   /**
    * Transform BrickLink order to database row
+   *
+   * NOTE: BrickLink's list orders endpoint only returns limited cost info:
+   * - subtotal (item cost)
+   * - grand_total/final_total (total including shipping/etc)
+   * - currency_code
+   *
+   * It does NOT return shipping, insurance, etc1, etc2 separately.
+   * We calculate shipping as: grand_total - subtotal (approximation)
    */
   private transformOrderToRow(userId: string, order: BrickLinkOrderSummary): TransactionRow {
     const cost = order.cost;
+
+    // Parse values
+    const subtotal = parseCurrencyValue(cost.subtotal);
+    const grandTotal = parseCurrencyValue(cost.grand_total) || parseCurrencyValue(cost.final_total);
+
+    // BrickLink list endpoint doesn't include shipping breakdown
+    // Calculate shipping as the difference between grand total and subtotal
+    // This includes shipping + insurance + any other charges
+    const shippingRaw = parseCurrencyValue(cost.shipping);
+    const calculatedShipping = shippingRaw > 0 ? shippingRaw : Math.max(0, grandTotal - subtotal);
 
     return {
       user_id: userId,
@@ -406,15 +446,15 @@ export class BrickLinkTransactionSyncService {
       buyer_name: order.buyer_name,
       buyer_email: order.buyer_email ?? null,
       base_currency: cost.currency_code || 'GBP',
-      shipping: parseCurrencyValue(cost.shipping),
+      shipping: calculatedShipping,
       insurance: parseCurrencyValue(cost.insurance),
       add_charge_1: parseCurrencyValue(cost.etc1),
       add_charge_2: parseCurrencyValue(cost.etc2),
       credit: parseCurrencyValue(cost.credit),
       coupon_credit: parseCurrencyValue(cost.coupon),
-      order_total: parseCurrencyValue(cost.subtotal),
+      order_total: subtotal,
       tax: parseCurrencyValue(cost.vat_amount) || parseCurrencyValue(cost.salesTax_collected_by_bl),
-      base_grand_total: parseCurrencyValue(cost.grand_total) || parseCurrencyValue(cost.final_total),
+      base_grand_total: grandTotal,
       total_lots: order.unique_count || 0,
       total_items: order.total_count || 0,
       order_status: order.status,

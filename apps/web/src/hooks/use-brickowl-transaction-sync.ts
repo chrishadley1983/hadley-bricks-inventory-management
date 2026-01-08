@@ -1,13 +1,13 @@
 /**
- * BrickLink Transaction Sync Hook
+ * BrickOwl Transaction Sync Hook
  *
  * Provides sync status, manual sync triggers, and historical import functionality.
- * Use in dashboard layout or BrickLink transactions page.
+ * Use in dashboard layout or BrickOwl transactions page.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { BrickLinkConnectionStatus, BrickLinkSyncResult } from '@/lib/bricklink';
+import type { BrickOwlConnectionStatus, BrickOwlSyncResult } from '@/lib/brickowl';
 
 // ============================================================================
 // Types
@@ -30,13 +30,13 @@ interface SyncLog {
 // ============================================================================
 
 /**
- * Hook for BrickLink transaction sync status and operations
+ * Hook for BrickOwl transaction sync status and operations
  *
  * @param options.enabled - Whether to fetch status (default: true)
  * @param options.autoSync - Whether to trigger auto-sync when due (default: false)
  * @returns Object with sync status, actions, and loading states
  */
-export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSync?: boolean } = {}) {
+export function useBrickOwlTransactionSync(options: { enabled?: boolean; autoSync?: boolean } = {}) {
   const { enabled = true, autoSync = false } = options;
   const queryClient = useQueryClient();
   const hasAttemptedAutoSync = useRef(false);
@@ -47,12 +47,12 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
     isLoading: isLoadingConnection,
     error: connectionError,
     refetch: refetchConnection,
-  } = useQuery<BrickLinkConnectionStatus>({
-    queryKey: ['bricklink', 'transactions', 'status'],
+  } = useQuery<BrickOwlConnectionStatus>({
+    queryKey: ['brickowl', 'transactions', 'status'],
     queryFn: async () => {
-      const response = await fetch('/api/integrations/bricklink/status');
+      const response = await fetch('/api/integrations/brickowl/status');
       if (!response.ok) {
-        throw new Error('Failed to fetch BrickLink connection status');
+        throw new Error('Failed to fetch BrickOwl connection status');
       }
       return response.json();
     },
@@ -62,12 +62,12 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
   });
 
   // Manual sync mutation
-  const syncMutation = useMutation<BrickLinkSyncResult, Error, { fullSync?: boolean; resetBeforeSync?: boolean; transactionsOnly?: boolean }>({
-    mutationFn: async ({ fullSync = false, resetBeforeSync = false, transactionsOnly = true }) => {
-      const response = await fetch('/api/integrations/bricklink/sync', {
+  const syncMutation = useMutation<BrickOwlSyncResult, Error, { fullSync?: boolean }>({
+    mutationFn: async ({ fullSync = false }) => {
+      const response = await fetch('/api/integrations/brickowl/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullSync, includeFiled: true, resetBeforeSync, transactionsOnly }),
+        body: JSON.stringify({ fullSync }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -77,7 +77,7 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
       // Extract transaction sync result from combined response
       return {
         success: data.success,
-        syncMode: fullSync || resetBeforeSync ? 'FULL' : 'INCREMENTAL',
+        syncMode: fullSync ? 'FULL' : 'INCREMENTAL',
         ordersProcessed: data.data?.transactions?.processed ?? 0,
         ordersCreated: data.data?.transactions?.created ?? 0,
         ordersUpdated: data.data?.transactions?.updated ?? 0,
@@ -85,18 +85,18 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
         error: data.data?.transactions?.error,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as BrickLinkSyncResult;
+      } as BrickOwlSyncResult;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bricklink', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['bricklink', 'sync'] });
+      queryClient.invalidateQueries({ queryKey: ['brickowl', 'transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['brickowl', 'sync'] });
     },
   });
 
   // Historical import mutation
-  const historicalImportMutation = useMutation<BrickLinkSyncResult, Error, { fromDate: string }>({
+  const historicalImportMutation = useMutation<BrickOwlSyncResult, Error, { fromDate: string }>({
     mutationFn: async ({ fromDate }) => {
-      const response = await fetch('/api/integrations/bricklink/sync/historical', {
+      const response = await fetch('/api/integrations/brickowl/sync/historical', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromDate }),
@@ -108,8 +108,8 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bricklink', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['bricklink', 'sync'] });
+      queryClient.invalidateQueries({ queryKey: ['brickowl', 'transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['brickowl', 'sync'] });
     },
   });
 
@@ -185,7 +185,6 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
 
     // Actions
     triggerSync: (fullSync = false) => syncMutation.mutate({ fullSync }),
-    triggerResetAndSync: () => syncMutation.mutate({ resetBeforeSync: true }),
     triggerHistoricalImport: (fromDate: string) => historicalImportMutation.mutate({ fromDate }),
     refetchStatus,
 
@@ -195,4 +194,4 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
   };
 }
 
-export default useBrickLinkTransactionSync;
+export default useBrickOwlTransactionSync;

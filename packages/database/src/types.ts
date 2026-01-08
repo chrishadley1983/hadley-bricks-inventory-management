@@ -14,6 +14,332 @@ export type Database = {
   }
   public: {
     Tables: {
+      amazon_settlements: {
+        Row: {
+          account_tail: string | null
+          beginning_balance: number | null
+          created_at: string
+          currency: string
+          financial_event_group_id: string
+          fund_transfer_date: string | null
+          fund_transfer_status: string | null
+          id: string
+          processing_period_end: string | null
+          processing_period_start: string | null
+          raw_response: Json
+          settlement_id: string | null
+          total_amount: number
+          trace_id: string | null
+          transaction_count: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_tail?: string | null
+          beginning_balance?: number | null
+          created_at?: string
+          currency: string
+          financial_event_group_id: string
+          fund_transfer_date?: string | null
+          fund_transfer_status?: string | null
+          id?: string
+          processing_period_end?: string | null
+          processing_period_start?: string | null
+          raw_response: Json
+          settlement_id?: string | null
+          total_amount: number
+          trace_id?: string | null
+          transaction_count?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_tail?: string | null
+          beginning_balance?: number | null
+          created_at?: string
+          currency?: string
+          financial_event_group_id?: string
+          fund_transfer_date?: string | null
+          fund_transfer_status?: string | null
+          id?: string
+          processing_period_end?: string | null
+          processing_period_start?: string | null
+          raw_response?: Json
+          settlement_id?: string | null
+          total_amount?: number
+          trace_id?: string | null
+          transaction_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_settlements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          historical_import_completed_at: string | null
+          historical_import_from_date: string | null
+          historical_import_started_at: string | null
+          id: string
+          last_auto_sync_at: string | null
+          next_auto_sync_at: string | null
+          settlements_cursor: string | null
+          transactions_posted_cursor: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          settlements_cursor?: string | null
+          transactions_posted_cursor?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          settlements_cursor?: string | null
+          transactions_posted_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_sync_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          from_date: string | null
+          id: string
+          last_sync_cursor: string | null
+          records_created: number | null
+          records_processed: number | null
+          records_updated: number | null
+          started_at: string
+          status: string
+          sync_mode: string | null
+          sync_type: string
+          to_date: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          records_created?: number | null
+          records_processed?: number | null
+          records_updated?: number | null
+          started_at: string
+          status: string
+          sync_mode?: string | null
+          sync_type: string
+          to_date?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          records_created?: number | null
+          records_processed?: number | null
+          records_updated?: number | null
+          started_at?: string
+          status?: string
+          sync_mode?: string | null
+          sync_type?: string
+          to_date?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_transactions: {
+        Row: {
+          amazon_order_id: string | null
+          amazon_transaction_id: string
+          asin: string | null
+          breakdowns: Json | null
+          buyer_email: string | null
+          buyer_name: string | null
+          contexts: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          fba_fulfillment_fee: number | null
+          fba_inventory_storage_fee: number | null
+          fba_per_unit_fee: number | null
+          fba_weight_fee: number | null
+          fulfillment_channel: string | null
+          gift_wrap_credit: number | null
+          gross_sales_amount: number | null
+          id: string
+          item_title: string | null
+          marketplace_facilitator_tax: number | null
+          marketplace_id: string | null
+          net_amount: number | null
+          other_fees: number | null
+          posted_date: string
+          promotional_rebate: number | null
+          quantity: number | null
+          raw_response: Json
+          referral_fee: number | null
+          related_identifiers: Json | null
+          sales_tax_collected: number | null
+          seller_order_id: string | null
+          seller_sku: string | null
+          shipping_credit: number | null
+          shipping_credit_tax: number | null
+          store_name: string | null
+          total_amount: number
+          total_fees: number | null
+          transaction_status: string | null
+          transaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amazon_order_id?: string | null
+          amazon_transaction_id: string
+          asin?: string | null
+          breakdowns?: Json | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          contexts?: Json | null
+          created_at?: string
+          currency: string
+          description?: string | null
+          fba_fulfillment_fee?: number | null
+          fba_inventory_storage_fee?: number | null
+          fba_per_unit_fee?: number | null
+          fba_weight_fee?: number | null
+          fulfillment_channel?: string | null
+          gift_wrap_credit?: number | null
+          gross_sales_amount?: number | null
+          id?: string
+          item_title?: string | null
+          marketplace_facilitator_tax?: number | null
+          marketplace_id?: string | null
+          net_amount?: number | null
+          other_fees?: number | null
+          posted_date: string
+          promotional_rebate?: number | null
+          quantity?: number | null
+          raw_response: Json
+          referral_fee?: number | null
+          related_identifiers?: Json | null
+          sales_tax_collected?: number | null
+          seller_order_id?: string | null
+          seller_sku?: string | null
+          shipping_credit?: number | null
+          shipping_credit_tax?: number | null
+          store_name?: string | null
+          total_amount: number
+          total_fees?: number | null
+          transaction_status?: string | null
+          transaction_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amazon_order_id?: string | null
+          amazon_transaction_id?: string
+          asin?: string | null
+          breakdowns?: Json | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          contexts?: Json | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          fba_fulfillment_fee?: number | null
+          fba_inventory_storage_fee?: number | null
+          fba_per_unit_fee?: number | null
+          fba_weight_fee?: number | null
+          fulfillment_channel?: string | null
+          gift_wrap_credit?: number | null
+          gross_sales_amount?: number | null
+          id?: string
+          item_title?: string | null
+          marketplace_facilitator_tax?: number | null
+          marketplace_id?: string | null
+          net_amount?: number | null
+          other_fees?: number | null
+          posted_date?: string
+          promotional_rebate?: number | null
+          quantity?: number | null
+          raw_response?: Json
+          referral_fee?: number | null
+          related_identifiers?: Json | null
+          sales_tax_collected?: number | null
+          seller_order_id?: string | null
+          seller_sku?: string | null
+          shipping_credit?: number | null
+          shipping_credit_tax?: number | null
+          store_name?: string | null
+          total_amount?: number
+          total_fees?: number | null
+          transaction_status?: string | null
+          transaction_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bricklink_sync_config: {
         Row: {
           auto_sync_enabled: boolean
@@ -235,6 +561,225 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "bricklink_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brickowl_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          historical_import_completed_at: string | null
+          historical_import_from_date: string | null
+          historical_import_started_at: string | null
+          id: string
+          last_auto_sync_at: string | null
+          last_sync_date_cursor: string | null
+          next_auto_sync_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          historical_import_completed_at?: string | null
+          historical_import_from_date?: string | null
+          historical_import_started_at?: string | null
+          id?: string
+          last_auto_sync_at?: string | null
+          last_sync_date_cursor?: string | null
+          next_auto_sync_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brickowl_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brickowl_sync_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          from_date: string | null
+          id: string
+          last_sync_cursor: string | null
+          orders_created: number | null
+          orders_processed: number | null
+          orders_skipped: number | null
+          orders_updated: number | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          orders_created?: number | null
+          orders_processed?: number | null
+          orders_skipped?: number | null
+          orders_updated?: number | null
+          started_at: string
+          status: string
+          sync_mode: string
+          to_date?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_date?: string | null
+          id?: string
+          last_sync_cursor?: string | null
+          orders_created?: number | null
+          orders_processed?: number | null
+          orders_skipped?: number | null
+          orders_updated?: number | null
+          started_at?: string
+          status?: string
+          sync_mode?: string
+          to_date?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brickowl_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brickowl_transactions: {
+        Row: {
+          base_currency: string
+          base_grand_total: number
+          brickowl_order_id: string
+          buyer_email: string | null
+          buyer_location: string | null
+          buyer_name: string
+          buyer_note: string | null
+          buyer_username: string | null
+          combined_shipping_discount: number | null
+          coupon_discount: number | null
+          created_at: string
+          id: string
+          order_date: string
+          order_status: string
+          order_total: number
+          payment_method: string | null
+          payment_status: string | null
+          public_note: string | null
+          raw_response: Json
+          seller_note: string | null
+          shipping: number | null
+          shipping_method: string | null
+          status_changed_date: string | null
+          tax: number | null
+          total_items: number | null
+          total_lots: number | null
+          tracking_number: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          base_currency?: string
+          base_grand_total: number
+          brickowl_order_id: string
+          buyer_email?: string | null
+          buyer_location?: string | null
+          buyer_name: string
+          buyer_note?: string | null
+          buyer_username?: string | null
+          combined_shipping_discount?: number | null
+          coupon_discount?: number | null
+          created_at?: string
+          id?: string
+          order_date: string
+          order_status: string
+          order_total: number
+          payment_method?: string | null
+          payment_status?: string | null
+          public_note?: string | null
+          raw_response: Json
+          seller_note?: string | null
+          shipping?: number | null
+          shipping_method?: string | null
+          status_changed_date?: string | null
+          tax?: number | null
+          total_items?: number | null
+          total_lots?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          base_currency?: string
+          base_grand_total?: number
+          brickowl_order_id?: string
+          buyer_email?: string | null
+          buyer_location?: string | null
+          buyer_name?: string
+          buyer_note?: string | null
+          buyer_username?: string | null
+          combined_shipping_discount?: number | null
+          coupon_discount?: number | null
+          created_at?: string
+          id?: string
+          order_date?: string
+          order_status?: string
+          order_total?: number
+          payment_method?: string | null
+          payment_status?: string | null
+          public_note?: string | null
+          raw_response?: Json
+          seller_note?: string | null
+          shipping?: number | null
+          shipping_method?: string | null
+          status_changed_date?: string | null
+          tax?: number | null
+          total_items?: number | null
+          total_lots?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brickowl_transactions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

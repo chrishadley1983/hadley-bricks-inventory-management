@@ -362,3 +362,286 @@ export interface NormalizedAmazonOrderItem {
   totalPrice: number;
   currency: string;
 }
+
+// ============================================
+// Finances API v2024-06-19 Types
+// ============================================
+
+/**
+ * Transaction types from Amazon Finances API
+ */
+export type AmazonTransactionType =
+  | 'Shipment'
+  | 'Refund'
+  | 'ServiceFee'
+  | 'Adjustment'
+  | 'Transfer'
+  | 'Liquidations'
+  | 'FBAInventoryFee'
+  | 'Guarantee'
+  | 'Chargeback'
+  | 'PayWithAmazon'
+  | 'SalesTaxServiceFee'
+  | 'RenewedProgram'
+  | 'RetroCharge';
+
+/**
+ * Transaction status from Finances API
+ */
+export type AmazonFinancialTransactionStatus =
+  | 'RELEASED'
+  | 'DEFERRED'
+  | 'DEFERRED_RELEASED';
+
+/**
+ * Money amount from Finances API
+ */
+export interface AmazonFinancesMoney {
+  currencyCode: string;
+  currencyAmount: string;
+}
+
+/**
+ * Selling partner metadata
+ */
+export interface AmazonSellingPartnerMetadata {
+  sellingPartnerId: string;
+  marketplaceId: string;
+  accountType: string;
+}
+
+/**
+ * Related identifier for linking transactions to orders
+ */
+export interface AmazonRelatedIdentifier {
+  relatedIdentifierName: string;
+  relatedIdentifierValue: string;
+}
+
+/**
+ * Transaction context (item/product info)
+ */
+export interface AmazonTransactionContext {
+  contextType: string;
+  storeName?: string;
+  asin?: string;
+  sku?: string;
+  quantityShipped?: number;
+  fulfillmentNetwork?: string;
+}
+
+/**
+ * Fee breakdown item (recursive structure)
+ */
+export interface AmazonTransactionBreakdown {
+  breakdownType: string;
+  breakdownAmount: AmazonFinancesMoney;
+  breakdowns?: AmazonTransactionBreakdown[];
+}
+
+/**
+ * Financial transaction from Finances API v2024-06-19
+ */
+export interface AmazonFinancialTransaction {
+  sellingPartnerMetadata: AmazonSellingPartnerMetadata;
+  transactionType: AmazonTransactionType | string;
+  transactionStatus: AmazonFinancialTransactionStatus;
+  relatedIdentifiers: AmazonRelatedIdentifier[];
+  totalAmount: AmazonFinancesMoney;
+  postedDate: string;
+  description?: string;
+  contexts?: AmazonTransactionContext[];
+  breakdowns?: AmazonTransactionBreakdown[];
+}
+
+/**
+ * List transactions response payload
+ */
+export interface AmazonListTransactionsPayload {
+  transactions?: AmazonFinancialTransaction[];
+  nextToken?: string;
+}
+
+/**
+ * List transactions response (wrapped in payload)
+ */
+export interface AmazonListTransactionsResponse {
+  payload: AmazonListTransactionsPayload;
+}
+
+/**
+ * List transactions request parameters
+ */
+export interface AmazonListTransactionsParams {
+  postedAfter: string;
+  postedBefore?: string;
+  marketplaceId?: string;
+  nextToken?: string;
+}
+
+// ============================================
+// Database Row Types for Amazon Transactions
+// ============================================
+
+/**
+ * Amazon transaction row as stored in database
+ */
+export interface AmazonTransactionRow {
+  id: string;
+  user_id: string;
+  amazon_transaction_id: string;
+  amazon_order_id: string | null;
+  seller_order_id: string | null;
+  marketplace_id: string | null;
+  transaction_type: string;
+  transaction_status: string | null;
+  posted_date: string;
+  description: string | null;
+  total_amount: number;
+  currency: string;
+  referral_fee: number | null;
+  fba_fulfillment_fee: number | null;
+  fba_per_unit_fee: number | null;
+  fba_weight_fee: number | null;
+  fba_inventory_storage_fee: number | null;
+  shipping_credit: number | null;
+  shipping_credit_tax: number | null;
+  promotional_rebate: number | null;
+  sales_tax_collected: number | null;
+  marketplace_facilitator_tax: number | null;
+  gift_wrap_credit: number | null;
+  other_fees: number | null;
+  gross_sales_amount: number | null;
+  net_amount: number | null;
+  total_fees: number | null;
+  item_title: string | null;
+  asin: string | null;
+  seller_sku: string | null;
+  quantity: number | null;
+  fulfillment_channel: string | null;
+  store_name: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  breakdowns: AmazonTransactionBreakdown[] | null;
+  contexts: AmazonTransactionContext[] | null;
+  related_identifiers: AmazonRelatedIdentifier[] | null;
+  raw_response: AmazonFinancialTransaction;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Amazon settlement row as stored in database
+ */
+export interface AmazonSettlementRow {
+  id: string;
+  user_id: string;
+  financial_event_group_id: string;
+  settlement_id: string | null;
+  fund_transfer_status: string | null;
+  fund_transfer_date: string | null;
+  trace_id: string | null;
+  account_tail: string | null;
+  processing_period_start: string | null;
+  processing_period_end: string | null;
+  beginning_balance: number | null;
+  total_amount: number;
+  currency: string;
+  transaction_count: number | null;
+  raw_response: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Amazon sync config row
+ */
+export interface AmazonSyncConfigRow {
+  id: string;
+  user_id: string;
+  auto_sync_enabled: boolean;
+  auto_sync_interval_hours: number;
+  last_auto_sync_at: string | null;
+  next_auto_sync_at: string | null;
+  transactions_posted_cursor: string | null;
+  settlements_cursor: string | null;
+  historical_import_started_at: string | null;
+  historical_import_completed_at: string | null;
+  historical_import_from_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Amazon sync log row
+ */
+export interface AmazonSyncLogRow {
+  id: string;
+  user_id: string;
+  sync_type: 'TRANSACTIONS' | 'SETTLEMENTS';
+  sync_mode: 'FULL' | 'INCREMENTAL' | 'HISTORICAL';
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  started_at: string;
+  completed_at: string | null;
+  records_processed: number | null;
+  records_created: number | null;
+  records_updated: number | null;
+  last_sync_cursor: string | null;
+  from_date: string | null;
+  to_date: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+// ============================================
+// Fee Type Mapping
+// ============================================
+
+/**
+ * Map of Amazon breakdown types to database column names
+ */
+export const AMAZON_FEE_TYPE_MAPPING: Record<string, string> = {
+  Commission: 'referral_fee',
+  FBAPerUnitFulfillmentFee: 'fba_per_unit_fee',
+  FBAWeightBasedFee: 'fba_weight_fee',
+  FBAFees: 'fba_fulfillment_fee',
+  StorageFee: 'fba_inventory_storage_fee',
+  ShippingHB: 'shipping_credit',
+  ShippingTax: 'shipping_credit_tax',
+  PromotionalRebate: 'promotional_rebate',
+  SalesTax: 'sales_tax_collected',
+  MarketplaceFacilitatorTax: 'marketplace_facilitator_tax',
+  GiftWrap: 'gift_wrap_credit',
+};
+
+/**
+ * Transaction type labels for UI display
+ */
+export const AMAZON_TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  Shipment: 'Sale',
+  Refund: 'Refund',
+  ServiceFee: 'Service Fee',
+  Adjustment: 'Adjustment',
+  Transfer: 'Transfer',
+  Liquidations: 'Liquidation',
+  FBAInventoryFee: 'FBA Fee',
+  Guarantee: 'A-to-z Claim',
+  Chargeback: 'Chargeback',
+  PayWithAmazon: 'Pay with Amazon',
+  SalesTaxServiceFee: 'Tax Service Fee',
+  RenewedProgram: 'Renewed Program',
+  RetroCharge: 'Retro Charge',
+};
+
+/**
+ * Marketplace labels for UI display
+ */
+export const AMAZON_MARKETPLACE_LABELS: Record<string, string> = {
+  A1F83G8C2ARO7P: 'UK',
+  A1PA6795UKMFR9: 'DE',
+  A13V1IB3VIYBER: 'FR',
+  APJ6JRA9NG5V4: 'IT',
+  A1RKKUPIHCS9HS: 'ES',
+  ATVPDKIKX0DER: 'US',
+  A2EUQ1WTGCTBG2: 'CA',
+};

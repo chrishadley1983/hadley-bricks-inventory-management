@@ -164,7 +164,11 @@ export interface BrickLinkOrderDetail extends BrickLinkOrderSummary {
 
 /** BrickLink order list query parameters */
 export interface BrickLinkOrderListParams {
-  /** Order direction: 'in' for purchases, 'out' for sales */
+  /**
+   * Order direction:
+   * - 'in' = orders received (you are the SELLER, customers buying from you)
+   * - 'out' = orders placed (you are the BUYER, you buying from other stores)
+   */
   direction?: 'in' | 'out';
   /** Filter by status */
   status?: BrickLinkOrderStatus | BrickLinkOrderStatus[];

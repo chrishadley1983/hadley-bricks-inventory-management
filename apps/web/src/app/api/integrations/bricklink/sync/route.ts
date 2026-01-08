@@ -8,6 +8,8 @@ const SyncOptionsSchema = z.object({
   includeFiled: z.boolean().optional().default(false),
   fullSync: z.boolean().optional().default(false),
   includeItems: z.boolean().optional().default(true),
+  resetBeforeSync: z.boolean().optional().default(false), // Clear existing transactions before sync
+  transactionsOnly: z.boolean().optional().default(false), // Skip platform_orders sync (faster)
 });
 
 /**
@@ -27,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse options
-    let options = { includeFiled: false, fullSync: false, includeItems: true };
+    let options = { includeFiled: false, fullSync: false, includeItems: true, resetBeforeSync: false, transactionsOnly: false };
     try {
       const body = await request.json();
       const parsed = SyncOptionsSchema.safeParse(body);
@@ -41,6 +43,16 @@ export async function POST(request: NextRequest) {
     const syncService = new BrickLinkSyncService(supabase);
     const transactionSyncService = createBrickLinkTransactionSyncService();
 
+    // Reset before sync if requested (clears bad data from previous syncs)
+    if (options.resetBeforeSync) {
+      console.log('[POST /api/integrations/bricklink/sync] Resetting transactions before sync...');
+      await supabase.from('bricklink_transactions').delete().eq('user_id', user.id);
+      await supabase.from('bricklink_sync_config').delete().eq('user_id', user.id);
+      await supabase.from('bricklink_sync_log').delete().eq('user_id', user.id);
+      // Force full sync after reset
+      options.fullSync = true;
+    }
+
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
     if (!isConfigured) {
@@ -50,26 +62,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run both syncs in parallel:
-    // 1. Original sync to platform_orders (for order management)
-    // 2. New sync to bricklink_transactions (for transaction staging)
-    const [orderResult, transactionResult] = await Promise.all([
-      syncService.syncOrders(user.id, options),
-      transactionSyncService.syncTransactions(user.id, {
-        fullSync: options.fullSync,
-        includeFiled: options.includeFiled,
-      }),
-    ]);
+    // Sync transactions (to bricklink_transactions table)
+    const transactionResult = await transactionSyncService.syncTransactions(user.id, {
+      fullSync: options.fullSync,
+      includeFiled: options.includeFiled,
+    });
+
+    // Optionally sync to platform_orders (slower, fetches each order individually)
+    let orderResult = null;
+    if (!options.transactionsOnly) {
+      orderResult = await syncService.syncOrders(user.id, options);
+    }
 
     return NextResponse.json({
-      success: orderResult.success && transactionResult.success,
+      success: transactionResult.success && (orderResult?.success ?? true),
       data: {
-        // Order sync results (platform_orders)
-        ordersProcessed: orderResult.ordersProcessed,
-        ordersCreated: orderResult.ordersCreated,
-        ordersUpdated: orderResult.ordersUpdated,
-        errors: orderResult.errors,
-        lastSyncedAt: orderResult.lastSyncedAt.toISOString(),
+        // Order sync results (platform_orders) - only if not transactionsOnly
+        ordersProcessed: orderResult?.ordersProcessed ?? 0,
+        ordersCreated: orderResult?.ordersCreated ?? 0,
+        ordersUpdated: orderResult?.ordersUpdated ?? 0,
+        errors: orderResult?.errors ?? [],
+        lastSyncedAt: orderResult?.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
         // Transaction sync results (bricklink_transactions)
         transactions: {
           processed: transactionResult.ordersProcessed,

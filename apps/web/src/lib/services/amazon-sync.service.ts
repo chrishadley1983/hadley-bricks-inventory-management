@@ -166,15 +166,21 @@ export class AmazonSyncService {
         // Explicit date provided - use it
         queryParams.CreatedAfter = options.createdAfter.toISOString();
         console.log('[AmazonSyncService] Using explicit createdAfter:', options.createdAfter.toISOString());
-      } else if (!options.updatedAfter) {
+      } else if (options.updatedAfter) {
+        // Explicit updatedAfter provided - use it for incremental sync
+        queryParams.LastUpdatedAfter = options.updatedAfter.toISOString();
+        console.log('[AmazonSyncService] Using explicit updatedAfter:', options.updatedAfter.toISOString());
+      } else {
         // No explicit date - check for most recent order in database
         const mostRecentOrderDate = await this.getMostRecentOrderDate(userId);
 
         if (mostRecentOrderDate) {
-          // Add a small buffer (1 minute) to avoid missing orders created at the exact same time
+          // Add a small buffer (1 minute) to avoid missing orders
           const startDate = new Date(mostRecentOrderDate.getTime() - 60000);
-          queryParams.CreatedAfter = startDate.toISOString();
-          console.log('[AmazonSyncService] Syncing orders after most recent:', startDate.toISOString());
+          // Use LastUpdatedAfter to catch BOTH new orders AND status changes
+          // Amazon API returns orders that were either created or updated after this date
+          queryParams.LastUpdatedAfter = startDate.toISOString();
+          console.log('[AmazonSyncService] Syncing orders updated after:', startDate.toISOString());
         } else {
           // No orders in database - default to last 90 days
           const ninetyDaysAgo = new Date();
@@ -182,10 +188,6 @@ export class AmazonSyncService {
           queryParams.CreatedAfter = ninetyDaysAgo.toISOString();
           console.log('[AmazonSyncService] No existing orders, using 90-day default:', ninetyDaysAgo.toISOString());
         }
-      }
-
-      if (options.updatedAfter) {
-        queryParams.LastUpdatedAfter = options.updatedAfter.toISOString();
       }
 
       if (options.statuses && options.statuses.length > 0) {
@@ -229,6 +231,15 @@ export class AmazonSyncService {
             'amazon',
             orderId
           );
+
+          // Log status changes for debugging
+          if (existing) {
+            const amazonStatus = orderSummary.OrderStatus;
+            const existingStatus = existing.status;
+            if (amazonStatus !== existingStatus) {
+              console.log(`[AmazonSyncService] Order ${orderId} status change: ${existingStatus} -> ${amazonStatus}`);
+            }
+          }
 
           await this.processOrder(userId, client, orderSummary, options.includeItems ?? false);
 
@@ -330,7 +341,11 @@ export class AmazonSyncService {
         // Amazon-specific fields stored in raw_data if needed
       }));
 
+      console.log(`[AmazonSyncService] Saving ${itemInserts.length} items for order ${normalized.platformOrderId}:`,
+        itemInserts.map(i => ({ asin: i.item_number, title: i.item_name?.substring(0, 50) })));
       await this.orderRepo.replaceOrderItems(savedOrder.id, itemInserts);
+    } else if (includeItems) {
+      console.log(`[AmazonSyncService] Order ${normalized.platformOrderId} has no items to save`);
     }
   }
 

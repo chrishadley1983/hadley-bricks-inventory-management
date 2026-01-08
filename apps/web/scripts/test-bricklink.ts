@@ -37,7 +37,8 @@ async function main() {
 
   try {
     console.log('Fetching orders...');
-    const orders = await client.getOrders({ direction: 'out' });
+    // direction=in for orders received (you are seller)
+    const orders = await client.getOrders({ direction: 'in' });
     console.log(`\n✅ SUCCESS! Found ${orders.length} orders.\n`);
 
     if (orders.length > 0) {
