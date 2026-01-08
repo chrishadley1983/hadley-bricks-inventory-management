@@ -163,6 +163,7 @@ export class OrderSyncService {
         // Items can be fetched on-demand when confirming individual orders
         const result = await this.amazonSync.syncOrders(userId, {
           includeItems: options?.includeItems ?? false,
+          fullSync: options?.fullSync,
         });
         return { ...result, platform };
       }

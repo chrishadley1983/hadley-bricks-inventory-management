@@ -310,6 +310,109 @@ export interface ReportSettings {
   showPreviousPeriodComparison: boolean;
 }
 
+/**
+ * Store status type - O=Open, C=Closed, H=Holiday
+ */
+export type StoreStatus = 'O' | 'C' | 'H';
+
+/**
+ * Platform identifier for daily activity
+ */
+export type ActivityPlatform = 'amazon' | 'ebay' | 'bricklink';
+
+/**
+ * Store status record
+ */
+export interface StoreStatusRecord {
+  id: string;
+  date: string;
+  platform: ActivityPlatform;
+  status: StoreStatus;
+}
+
+/**
+ * Daily activity data for a single platform
+ */
+export interface DailyPlatformData {
+  platform: ActivityPlatform;
+  itemsListed: number;
+  listingValue: number;
+  itemsSold: number;
+  soldValue: number;
+  storeStatus: StoreStatus | null;
+}
+
+/**
+ * Daily activity row - one row per day with all platform data
+ */
+export interface DailyActivityRow {
+  date: string;
+  dateLabel: string;
+  platforms: Record<ActivityPlatform, DailyPlatformData>;
+  totals: {
+    itemsListed: number;
+    listingValue: number;
+    itemsSold: number;
+    soldValue: number;
+  };
+}
+
+/**
+ * Monthly activity row - aggregated data for a month
+ */
+export interface MonthlyActivityRow {
+  month: string;
+  monthLabel: string;
+  platforms: Record<ActivityPlatform, {
+    itemsListed: number;
+    listingValue: number;
+    itemsSold: number;
+    soldValue: number;
+  }>;
+  totals: {
+    itemsListed: number;
+    listingValue: number;
+    itemsSold: number;
+    soldValue: number;
+  };
+}
+
+/**
+ * Daily Activity Report data structure
+ */
+export interface DailyActivityReport {
+  period: DateRange;
+  granularity: 'daily' | 'monthly';
+
+  // Data rows (daily or monthly based on granularity)
+  data: DailyActivityRow[] | MonthlyActivityRow[];
+
+  // Summary totals for the entire period
+  summary: {
+    platforms: Record<ActivityPlatform, {
+      totalItemsListed: number;
+      totalListingValue: number;
+      totalItemsSold: number;
+      totalSoldValue: number;
+    }>;
+    grandTotals: {
+      totalItemsListed: number;
+      totalListingValue: number;
+      totalItemsSold: number;
+      totalSoldValue: number;
+    };
+  };
+}
+
+/**
+ * Store status update input
+ */
+export interface UpdateStoreStatusInput {
+  date: string;
+  platform: ActivityPlatform;
+  status: StoreStatus;
+}
+
 // Helper types for database queries
 interface SaleQueryRow {
   sale_date: string;
@@ -1503,5 +1606,349 @@ export class ReportingService {
     }
 
     return updated;
+  }
+
+  /**
+   * Get Daily Activity Report
+   * Aggregates listing and sold activity by date and platform
+   */
+  async getDailyActivityReport(
+    userId: string,
+    dateRange: DateRange,
+    granularity: 'daily' | 'monthly' = 'daily'
+  ): Promise<DailyActivityReport> {
+    const startDate = this.formatDate(dateRange.startDate);
+    const endDate = this.formatDate(dateRange.endDate);
+
+    const platforms: ActivityPlatform[] = ['amazon', 'ebay', 'bricklink'];
+
+    // Helper to create empty platform data
+    const createEmptyPlatformData = (platform: ActivityPlatform): DailyPlatformData => ({
+      platform,
+      itemsListed: 0,
+      listingValue: 0,
+      itemsSold: 0,
+      soldValue: 0,
+      storeStatus: null,
+    });
+
+    // Helper to create empty platform totals
+    const createEmptyPlatformTotals = () => ({
+      totalItemsListed: 0,
+      totalListingValue: 0,
+      totalItemsSold: 0,
+      totalSoldValue: 0,
+    });
+
+    if (granularity === 'monthly') {
+      // Query monthly summary view
+      const { data: activityData, error } = await this.supabase
+        .from('monthly_platform_summary')
+        .select('month, month_start, platform, items_listed, listing_value, items_sold, sold_value')
+        .eq('user_id', userId)
+        .gte('month_start', startDate)
+        .lte('month_start', endDate)
+        .order('month', { ascending: true });
+
+      if (error) {
+        throw new Error(`Failed to fetch monthly activity: ${error.message}`);
+      }
+
+      interface MonthlyRow {
+        month: string;
+        month_start: string;
+        platform: string;
+        items_listed: number;
+        listing_value: number;
+        items_sold: number;
+        sold_value: number;
+      }
+
+      const rows = (activityData || []) as MonthlyRow[];
+
+      // Group by month
+      const monthMap = new Map<string, MonthlyActivityRow>();
+
+      for (const row of rows) {
+        const platform = row.platform as ActivityPlatform;
+        if (!platforms.includes(platform)) continue;
+
+        if (!monthMap.has(row.month)) {
+          const monthDate = new Date(row.month_start);
+          monthMap.set(row.month, {
+            month: row.month,
+            monthLabel: monthDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+            platforms: {
+              amazon: { itemsListed: 0, listingValue: 0, itemsSold: 0, soldValue: 0 },
+              ebay: { itemsListed: 0, listingValue: 0, itemsSold: 0, soldValue: 0 },
+              bricklink: { itemsListed: 0, listingValue: 0, itemsSold: 0, soldValue: 0 },
+            },
+            totals: { itemsListed: 0, listingValue: 0, itemsSold: 0, soldValue: 0 },
+          });
+        }
+
+        const monthRow = monthMap.get(row.month)!;
+        monthRow.platforms[platform].itemsListed = row.items_listed || 0;
+        monthRow.platforms[platform].listingValue = row.listing_value || 0;
+        monthRow.platforms[platform].itemsSold = row.items_sold || 0;
+        monthRow.platforms[platform].soldValue = row.sold_value || 0;
+      }
+
+      // Calculate totals for each month
+      const data: MonthlyActivityRow[] = Array.from(monthMap.values())
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+      for (const row of data) {
+        row.totals = {
+          itemsListed: platforms.reduce((sum, p) => sum + row.platforms[p].itemsListed, 0),
+          listingValue: platforms.reduce((sum, p) => sum + row.platforms[p].listingValue, 0),
+          itemsSold: platforms.reduce((sum, p) => sum + row.platforms[p].itemsSold, 0),
+          soldValue: platforms.reduce((sum, p) => sum + row.platforms[p].soldValue, 0),
+        };
+      }
+
+      // Calculate summary totals
+      const summary = {
+        platforms: {
+          amazon: createEmptyPlatformTotals(),
+          ebay: createEmptyPlatformTotals(),
+          bricklink: createEmptyPlatformTotals(),
+        },
+        grandTotals: { totalItemsListed: 0, totalListingValue: 0, totalItemsSold: 0, totalSoldValue: 0 },
+      };
+
+      for (const row of data) {
+        for (const platform of platforms) {
+          summary.platforms[platform].totalItemsListed += row.platforms[platform].itemsListed;
+          summary.platforms[platform].totalListingValue += row.platforms[platform].listingValue;
+          summary.platforms[platform].totalItemsSold += row.platforms[platform].itemsSold;
+          summary.platforms[platform].totalSoldValue += row.platforms[platform].soldValue;
+        }
+      }
+
+      summary.grandTotals = {
+        totalItemsListed: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsListed, 0),
+        totalListingValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalListingValue, 0),
+        totalItemsSold: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsSold, 0),
+        totalSoldValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalSoldValue, 0),
+      };
+
+      return { period: dateRange, granularity, data, summary };
+    }
+
+    // Daily granularity
+    // Query daily activity view
+    const { data: activityData, error } = await this.supabase
+      .from('daily_platform_activity')
+      .select('activity_date, platform, items_listed, listing_value, items_sold, sold_value')
+      .eq('user_id', userId)
+      .gte('activity_date', startDate)
+      .lte('activity_date', endDate)
+      .order('activity_date', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch daily activity: ${error.message}`);
+    }
+
+    // Fetch store statuses for the date range
+    const storeStatuses = await this.getStoreStatuses(userId, dateRange);
+    const statusMap = new Map<string, StoreStatus>();
+    for (const status of storeStatuses) {
+      statusMap.set(`${status.date}|${status.platform}`, status.status);
+    }
+
+    interface DailyRow {
+      activity_date: string;
+      platform: string;
+      items_listed: number;
+      listing_value: number;
+      items_sold: number;
+      sold_value: number;
+    }
+
+    const rows = (activityData || []) as DailyRow[];
+
+    // Generate all dates in the range first
+    const dateMap = new Map<string, DailyActivityRow>();
+    const currentDate = new Date(dateRange.startDate);
+    const endDateObj = new Date(dateRange.endDate);
+
+    while (currentDate <= endDateObj) {
+      const dateStr = this.formatDate(currentDate);
+      const displayDate = new Date(currentDate);
+      dateMap.set(dateStr, {
+        date: dateStr,
+        dateLabel: displayDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        platforms: {
+          amazon: createEmptyPlatformData('amazon'),
+          ebay: createEmptyPlatformData('ebay'),
+          bricklink: createEmptyPlatformData('bricklink'),
+        },
+        totals: { itemsListed: 0, listingValue: 0, itemsSold: 0, soldValue: 0 },
+      });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Populate with activity data
+    for (const row of rows) {
+      const platform = row.platform as ActivityPlatform;
+      if (!platforms.includes(platform)) continue;
+
+      const dateStr = row.activity_date;
+      const dateRow = dateMap.get(dateStr);
+      if (dateRow) {
+        dateRow.platforms[platform].itemsListed = row.items_listed || 0;
+        dateRow.platforms[platform].listingValue = row.listing_value || 0;
+        dateRow.platforms[platform].itemsSold = row.items_sold || 0;
+        dateRow.platforms[platform].soldValue = row.sold_value || 0;
+      }
+    }
+
+    // Add store statuses
+    for (const status of storeStatuses) {
+      const dateRow = dateMap.get(status.date);
+      if (dateRow) {
+        dateRow.platforms[status.platform].storeStatus = status.status;
+      }
+    }
+
+    // Calculate totals for each day
+    const data: DailyActivityRow[] = Array.from(dateMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    for (const row of data) {
+      row.totals = {
+        itemsListed: platforms.reduce((sum, p) => sum + row.platforms[p].itemsListed, 0),
+        listingValue: platforms.reduce((sum, p) => sum + row.platforms[p].listingValue, 0),
+        itemsSold: platforms.reduce((sum, p) => sum + row.platforms[p].itemsSold, 0),
+        soldValue: platforms.reduce((sum, p) => sum + row.platforms[p].soldValue, 0),
+      };
+    }
+
+    // Calculate summary totals
+    const summary = {
+      platforms: {
+        amazon: createEmptyPlatformTotals(),
+        ebay: createEmptyPlatformTotals(),
+        bricklink: createEmptyPlatformTotals(),
+      },
+      grandTotals: { totalItemsListed: 0, totalListingValue: 0, totalItemsSold: 0, totalSoldValue: 0 },
+    };
+
+    for (const row of data) {
+      for (const platform of platforms) {
+        summary.platforms[platform].totalItemsListed += row.platforms[platform].itemsListed;
+        summary.platforms[platform].totalListingValue += row.platforms[platform].listingValue;
+        summary.platforms[platform].totalItemsSold += row.platforms[platform].itemsSold;
+        summary.platforms[platform].totalSoldValue += row.platforms[platform].soldValue;
+      }
+    }
+
+    summary.grandTotals = {
+      totalItemsListed: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsListed, 0),
+      totalListingValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalListingValue, 0),
+      totalItemsSold: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsSold, 0),
+      totalSoldValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalSoldValue, 0),
+    };
+
+    return { period: dateRange, granularity, data, summary };
+  }
+
+  /**
+   * Get store statuses for a date range
+   */
+  async getStoreStatuses(userId: string, dateRange: DateRange): Promise<StoreStatusRecord[]> {
+    const startDate = this.formatDate(dateRange.startDate);
+    const endDate = this.formatDate(dateRange.endDate);
+
+    const { data, error } = await this.supabase
+      .from('platform_store_status')
+      .select('id, date, platform, status')
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch store statuses: ${error.message}`);
+    }
+
+    return (data || []).map(row => ({
+      id: row.id,
+      date: row.date,
+      platform: row.platform as ActivityPlatform,
+      status: row.status as StoreStatus,
+    }));
+  }
+
+  /**
+   * Set store status for a specific date and platform
+   * Uses upsert to handle both insert and update
+   */
+  async setStoreStatus(
+    userId: string,
+    date: string,
+    platform: ActivityPlatform,
+    status: StoreStatus
+  ): Promise<StoreStatusRecord> {
+    const { data, error } = await this.supabase
+      .from('platform_store_status')
+      .upsert(
+        {
+          user_id: userId,
+          date,
+          platform,
+          status,
+        },
+        {
+          onConflict: 'user_id,date,platform',
+        }
+      )
+      .select('id, date, platform, status')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to set store status: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      date: data.date,
+      platform: data.platform as ActivityPlatform,
+      status: data.status as StoreStatus,
+    };
+  }
+
+  /**
+   * Batch update store statuses
+   */
+  async batchSetStoreStatuses(
+    userId: string,
+    statuses: UpdateStoreStatusInput[]
+  ): Promise<StoreStatusRecord[]> {
+    const records = statuses.map(s => ({
+      user_id: userId,
+      date: s.date,
+      platform: s.platform,
+      status: s.status,
+    }));
+
+    const { data, error } = await this.supabase
+      .from('platform_store_status')
+      .upsert(records, {
+        onConflict: 'user_id,date,platform',
+      })
+      .select('id, date, platform, status');
+
+    if (error) {
+      throw new Error(`Failed to batch update store statuses: ${error.message}`);
+    }
+
+    return (data || []).map(row => ({
+      id: row.id,
+      date: row.date,
+      platform: row.platform as ActivityPlatform,
+      status: row.status as StoreStatus,
+    }));
   }
 }

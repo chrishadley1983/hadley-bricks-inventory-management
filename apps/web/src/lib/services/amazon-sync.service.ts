@@ -33,6 +33,8 @@ export interface AmazonSyncOptions {
   includeItems?: boolean;
   /** Maximum number of orders to sync */
   limit?: number;
+  /** Force full sync from last 90 days instead of incremental */
+  fullSync?: boolean;
 }
 
 /**
@@ -116,22 +118,24 @@ export class AmazonSyncService {
   }
 
   /**
-   * Get the most recent order date from the database for a user
+   * Get the most recent sync timestamp from the database for a user
+   * Uses synced_at (when we last fetched from Amazon) to properly catch status updates
+   * on older orders that may have been modified after newer orders were placed.
    */
-  private async getMostRecentOrderDate(userId: string): Promise<Date | null> {
+  private async getMostRecentSyncDate(userId: string): Promise<Date | null> {
     const { data, error } = await this.supabase
       .from('platform_orders')
-      .select('order_date')
+      .select('synced_at')
       .eq('user_id', userId)
       .eq('platform', 'amazon')
-      .order('order_date', { ascending: false })
+      .order('synced_at', { ascending: false })
       .limit(1);
 
-    if (error || !data || data.length === 0 || !data[0].order_date) {
+    if (error || !data || data.length === 0 || !data[0].synced_at) {
       return null;
     }
 
-    return new Date(data[0].order_date);
+    return new Date(data[0].synced_at);
   }
 
   /**
@@ -162,7 +166,13 @@ export class AmazonSyncService {
       const queryParams: Parameters<AmazonClient['getAllOrders']>[0] = {};
 
       // Determine the start date for fetching orders
-      if (options.createdAfter) {
+      if (options.fullSync) {
+        // Full sync requested - fetch all orders from last 90 days
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        queryParams.LastUpdatedAfter = ninetyDaysAgo.toISOString();
+        console.log('[AmazonSyncService] Full sync - fetching orders updated since:', ninetyDaysAgo.toISOString());
+      } else if (options.createdAfter) {
         // Explicit date provided - use it
         queryParams.CreatedAfter = options.createdAfter.toISOString();
         console.log('[AmazonSyncService] Using explicit createdAfter:', options.createdAfter.toISOString());
@@ -171,14 +181,15 @@ export class AmazonSyncService {
         queryParams.LastUpdatedAfter = options.updatedAfter.toISOString();
         console.log('[AmazonSyncService] Using explicit updatedAfter:', options.updatedAfter.toISOString());
       } else {
-        // No explicit date - check for most recent order in database
-        const mostRecentOrderDate = await this.getMostRecentOrderDate(userId);
+        // No explicit date - check for most recent sync timestamp in database
+        const mostRecentSyncDate = await this.getMostRecentSyncDate(userId);
 
-        if (mostRecentOrderDate) {
-          // Add a small buffer (1 minute) to avoid missing orders
-          const startDate = new Date(mostRecentOrderDate.getTime() - 60000);
+        if (mostRecentSyncDate) {
+          // Add a small buffer (1 minute) to avoid missing orders due to clock skew
+          const startDate = new Date(mostRecentSyncDate.getTime() - 60000);
           // Use LastUpdatedAfter to catch BOTH new orders AND status changes
           // Amazon API returns orders that were either created or updated after this date
+          // Using synced_at (not order_date) ensures we catch status updates on older orders
           queryParams.LastUpdatedAfter = startDate.toISOString();
           console.log('[AmazonSyncService] Syncing orders updated after:', startDate.toISOString());
         } else {
@@ -301,6 +312,17 @@ export class AmazonSyncService {
       normalized = normalizeOrder(orderSummary, []);
     }
 
+    // Map normalized status to internal status
+    // This ensures internal_status stays in sync with platform status updates
+    const internalStatusMap: Record<string, string> = {
+      Pending: 'Pending',
+      Paid: 'Paid',
+      Shipped: 'Shipped',
+      'Partially Shipped': 'Shipped', // Treat partial as shipped
+      'Cancelled/Refunded': 'Cancelled',
+    };
+    const internalStatus = internalStatusMap[normalized.status] || null;
+
     // Prepare order for database
     const orderInsert: PlatformOrderInsert = {
       user_id: userId,
@@ -310,6 +332,7 @@ export class AmazonSyncService {
       buyer_name: normalized.buyerName,
       buyer_email: normalized.buyerEmail,
       status: normalized.status,
+      internal_status: internalStatus,
       subtotal: normalized.subtotal,
       shipping: normalized.shipping,
       fees: normalized.fees,
@@ -323,6 +346,7 @@ export class AmazonSyncService {
         marketplaceId: normalized.marketplaceId,
         fulfillmentChannel: normalized.fulfillmentChannel,
       } as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      synced_at: new Date().toISOString(),
     };
 
     // Upsert order
@@ -361,6 +385,16 @@ export class AmazonSyncService {
     const { order, items } = await client.getOrderWithItems(orderId);
     const normalized = normalizeOrder(order, items);
 
+    // Map normalized status to internal status
+    const internalStatusMap: Record<string, string> = {
+      Pending: 'Pending',
+      Paid: 'Paid',
+      Shipped: 'Shipped',
+      'Partially Shipped': 'Shipped',
+      'Cancelled/Refunded': 'Cancelled',
+    };
+    const internalStatus = internalStatusMap[normalized.status] || null;
+
     // Prepare and save order
     const orderInsert: PlatformOrderInsert = {
       user_id: userId,
@@ -370,6 +404,7 @@ export class AmazonSyncService {
       buyer_name: normalized.buyerName,
       buyer_email: normalized.buyerEmail,
       status: normalized.status,
+      internal_status: internalStatus,
       subtotal: normalized.subtotal,
       shipping: normalized.shipping,
       fees: normalized.fees,
@@ -383,6 +418,7 @@ export class AmazonSyncService {
         marketplaceId: normalized.marketplaceId,
         fulfillmentChannel: normalized.fulfillmentChannel,
       } as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      synced_at: new Date().toISOString(),
     };
 
     const savedOrder = await this.orderRepo.upsert(orderInsert);

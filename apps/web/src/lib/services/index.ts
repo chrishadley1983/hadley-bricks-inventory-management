@@ -34,6 +34,14 @@ export type {
   PurchaseAnalysisReport,
   TaxSummaryReport,
   ReportSettings,
+  StoreStatus,
+  ActivityPlatform,
+  StoreStatusRecord,
+  DailyPlatformData,
+  DailyActivityRow,
+  MonthlyActivityRow,
+  DailyActivityReport,
+  UpdateStoreStatusInput,
 } from './reporting.service';
 export type {
   CreateMileageInput,

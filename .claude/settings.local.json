@@ -100,7 +100,23 @@
       "Bash(npm run lint:*)",
       "Bash(timeout 15 npm run dev:*)",
       "Bash(git fetch:*)",
-      "Bash(timeout 20 npm run dev:*)"
+      "Bash(timeout 20 npm run dev:*)",
+      "Bash(Get-ChildItem -Path \"$env:APPDATA\\\\Claude Code\" -Recurse -Filter \"*.json\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20 FullName)",
+      "Bash(Get-ChildItem -Path \"$env:USERPROFILE\\\\.claude\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20 FullName, Name)",
+      "Bash(claude mcp add-from-claude-desktop:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(npx:*)",
+      "Bash(claude mcp remove:*)",
+      "Bash(Start-Sleep -Seconds 15)",
+      "Bash(Move-Item -Path \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\supabase\\\\migrations\\\\20250108000003_fix_daily_activity_sold_data.sql\" -Destination \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\supabase\\\\migrations\\\\20250113000001_fix_daily_activity_sold_data.sql\")",
+      "Bash(cd:*)",
+      "Bash(git log:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(Get-Date -Format \"yyyyMMdd\")",
+      "Bash(node:*)"
     ]
   }
 }

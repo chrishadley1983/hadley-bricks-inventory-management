@@ -19,6 +19,7 @@ import {
   PieChart,
   LineChart,
   Landmark,
+  Link2,
 } from 'lucide-react';
 
 interface NavItem {
@@ -34,6 +35,7 @@ const mainNavItems: NavItem[] = [
   { href: '/orders', label: 'Orders', icon: FileText },
   { href: '/sales', label: 'Sales', icon: DollarSign },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
+  { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 
 const reportNavItems: NavItem[] = [
@@ -51,6 +53,7 @@ const integrationNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { href: '/admin/sync', label: 'Data Sync', icon: RefreshCw },
+  { href: '/settings/ebay-inventory-resolution', label: 'eBay Resolution', icon: Link2 },
 ];
 
 export function Sidebar() {

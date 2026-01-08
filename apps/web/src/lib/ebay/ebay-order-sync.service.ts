@@ -10,6 +10,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
+import { EbayInventoryLinkingService } from './ebay-inventory-linking.service';
 import type {
   EbayOrderResponse,
   EbayOrdersResponse,
@@ -41,6 +42,8 @@ export interface EbayOrderSyncResult {
   lineItemsUpdated: number;
   fulfilmentsProcessed: number;
   transactionsEnriched: number;
+  inventoryAutoLinked: number;
+  inventoryQueuedForResolution: number;
   lastSyncCursor?: string;
   error?: string;
   startedAt: Date;
@@ -144,6 +147,8 @@ export class EbayOrderSyncService {
         lineItemsUpdated: 0,
         fulfilmentsProcessed: 0,
         transactionsEnriched: 0,
+        inventoryAutoLinked: 0,
+        inventoryQueuedForResolution: 0,
         error: 'An order sync is already running',
         startedAt,
         completedAt: new Date(),
@@ -258,6 +263,50 @@ export class EbayOrderSyncService {
         transactionsEnriched = await this.enrichTransactionsFromOrders(userId, allOrders);
       }
 
+      // Process inventory linking for fulfilled orders
+      let inventoryAutoLinked = 0;
+      let inventoryQueuedForResolution = 0;
+      try {
+        const linkingService = new EbayInventoryLinkingService(supabase, userId);
+
+        // Get fulfilled orders that haven't been linked yet
+        const fulfilledOrders = allOrders.filter(
+          (order) => order.orderFulfillmentStatus === 'FULFILLED'
+        );
+
+        for (const order of fulfilledOrders) {
+          const dbOrderId = orderIdMap.get(order.orderId);
+          if (!dbOrderId) continue;
+
+          // Check if already processed
+          // Note: inventory_link_status column added in migration 20250108000003
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: existingOrder } = await (supabase as any)
+            .from('ebay_orders')
+            .select('inventory_link_status')
+            .eq('id', dbOrderId)
+            .single();
+
+          if (existingOrder?.inventory_link_status === 'complete') {
+            continue; // Already fully linked
+          }
+
+          const linkResult = await linkingService.processFulfilledOrder(dbOrderId);
+          inventoryAutoLinked += linkResult.autoLinked;
+          inventoryQueuedForResolution += linkResult.queuedForResolution;
+        }
+
+        console.log(
+          '[EbayOrderSyncService] Inventory linking complete. Auto-linked:',
+          inventoryAutoLinked,
+          'Queued:',
+          inventoryQueuedForResolution
+        );
+      } catch (linkingError) {
+        // Log but don't fail the sync
+        console.error('[EbayOrderSyncService] Inventory linking error:', linkingError);
+      }
+
       // Update sync cursor to newest lastModifiedDate
       const newestDate = allOrders.length > 0
         ? allOrders.reduce((newest, order) => {
@@ -301,6 +350,8 @@ export class EbayOrderSyncService {
         lineItemsUpdated,
         fulfilmentsProcessed,
         transactionsEnriched,
+        inventoryAutoLinked,
+        inventoryQueuedForResolution,
         lastSyncCursor: newestDate,
         startedAt,
         completedAt,
@@ -328,6 +379,8 @@ export class EbayOrderSyncService {
         lineItemsUpdated: 0,
         fulfilmentsProcessed: 0,
         transactionsEnriched: 0,
+        inventoryAutoLinked: 0,
+        inventoryQueuedForResolution: 0,
         error: errorMessage,
         startedAt,
         completedAt,

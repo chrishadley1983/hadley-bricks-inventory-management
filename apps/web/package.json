@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "migrate:inventory": "tsx scripts/migrate-inventory.ts",
     "migrate:purchases": "tsx scripts/migrate-purchases.ts",
+    "migrate:bricklink-uploads": "tsx scripts/migrate-bricklink-uploads.ts",
     "validate:reconcile": "tsx scripts/reconcile-data.ts",
     "sheets:test": "tsx scripts/test-sheets-connection.ts"
   },

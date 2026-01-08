@@ -11,6 +11,9 @@ import type {
   PurchaseAnalysisReport,
   TaxSummaryReport,
   ReportSettings,
+  DailyActivityReport,
+  StoreStatusRecord,
+  UpdateStoreStatusInput,
 } from '@/lib/services';
 
 interface DateRangeParams {
@@ -238,6 +241,103 @@ export function useExportReport() {
       window.URL.revokeObjectURL(downloadUrl);
 
       return { success: true };
+    },
+  });
+}
+
+/**
+ * Hook for fetching daily activity report
+ */
+export function useDailyActivityReport(
+  dateRange?: DateRangeParams,
+  granularity: 'daily' | 'monthly' = 'daily'
+) {
+  return useQuery<DailyActivityReport>({
+    queryKey: ['reports', 'daily-activity', dateRange, granularity],
+    queryFn: () =>
+      fetchReport<DailyActivityReport>('daily-activity', {
+        ...(dateRange && {
+          startDate: dateRange.startDate.toISOString().split('T')[0],
+          endDate: dateRange.endDate.toISOString().split('T')[0],
+          preset: dateRange.preset,
+        }),
+        granularity,
+      }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook for fetching store statuses
+ */
+export function useStoreStatuses(dateRange?: DateRangeParams) {
+  return useQuery<StoreStatusRecord[]>({
+    queryKey: ['store-status', dateRange],
+    queryFn: async () => {
+      if (!dateRange) return [];
+
+      const url = new URL('/api/store-status', window.location.origin);
+      url.searchParams.set('startDate', dateRange.startDate.toISOString().split('T')[0]);
+      url.searchParams.set('endDate', dateRange.endDate.toISOString().split('T')[0]);
+
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error('Failed to fetch store statuses');
+      }
+      const json = await response.json();
+      return json.data;
+    },
+    enabled: !!dateRange,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook for updating a single store status
+ */
+export function useUpdateStoreStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateStoreStatusInput) => {
+      const response = await fetch('/api/store-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update store status');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['store-status'] });
+      queryClient.invalidateQueries({ queryKey: ['reports', 'daily-activity'] });
+    },
+  });
+}
+
+/**
+ * Hook for batch updating store statuses
+ */
+export function useBatchUpdateStoreStatuses() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (statuses: UpdateStoreStatusInput[]) => {
+      const response = await fetch('/api/store-status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statuses }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to batch update store statuses');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['store-status'] });
+      queryClient.invalidateQueries({ queryKey: ['reports', 'daily-activity'] });
     },
   });
 }

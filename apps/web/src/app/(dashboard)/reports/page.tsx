@@ -12,6 +12,7 @@ import {
   FileText,
   Settings,
   ArrowRight,
+  CalendarDays,
 } from 'lucide-react';
 import {
   Card,
@@ -72,6 +73,13 @@ const reportCategories = [
     title: 'Sales Reports',
     description: 'Sales trends and platform analysis',
     reports: [
+      {
+        name: 'Daily Activity',
+        description: 'Daily listing and sales tracking per platform with store status',
+        href: '/reports/daily-activity',
+        icon: CalendarDays,
+        color: 'text-teal-600',
+      },
       {
         name: 'Platform Performance',
         description: 'Compare sales, profit, and fees across platforms',
