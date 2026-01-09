@@ -118,7 +118,18 @@
       "Bash(Get-Date -Format \"yyyyMMdd\")",
       "Bash(node:*)",
       "Bash(Select-String -Pattern \"PurchaseForm|MileageFormInline\")",
-      "Bash(Select-String -Pattern \"route.ts|PurchaseTable|PurchaseBulkEditDialog|integrations\")"
+      "Bash(Select-String -Pattern \"route.ts|PurchaseTable|PurchaseBulkEditDialog|integrations\")",
+      "Bash(dir:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "Bash(claude mcp list:*)",
+      "mcp__playwright__browser_run_code",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_click",
+      "Bash(Out-Null)",
+      "Bash($matches)",
+      "mcp__playwright__browser_type"
     ]
   }
 }

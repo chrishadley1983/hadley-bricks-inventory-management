@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, PlatformOrder, OrderItem, InventoryItem } from '@hadley-bricks/database';
 import { OrderRepository, InventoryRepository } from '../repositories';
+import { AmazonInventoryLinkingService } from '../amazon/amazon-inventory-linking.service';
 
 /**
  * Matching result for a single order item
@@ -328,6 +329,17 @@ export class OrderFulfilmentService {
             internal_status: 'Completed',
           })
           .eq('id', orderId);
+
+        // For Amazon orders, trigger the inventory linking service to calculate financials
+        if (order.platform === 'amazon') {
+          try {
+            const amazonLinkingService = new AmazonInventoryLinkingService(this.supabase, userId);
+            await amazonLinkingService.processShippedOrder(orderId, { mode: 'picklist' });
+          } catch (linkingError) {
+            // Log but don't fail the fulfillment - financials can be added later
+            console.error(`[OrderFulfilment] Amazon linking error for order ${orderId}:`, linkingError);
+          }
+        }
 
         result.processedOrders.push({
           orderId: order.id,

@@ -48,3 +48,6 @@ next-env.d.ts
 .vscode
 *.swp
 *.swo
+
+# Playwright auth state (contains session tokens)
+.playwright-auth.json

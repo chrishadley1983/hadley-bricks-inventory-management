@@ -49,7 +49,7 @@ const integrationNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { href: '/admin/sync', label: 'Data Sync', icon: RefreshCw },
-  { href: '/settings/ebay-inventory-resolution', label: 'eBay Resolution', icon: Link2 },
+  { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
 ];
 
 export function Sidebar() {

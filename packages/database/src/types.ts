@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      amazon_inventory_resolution_queue: {
+        Row: {
+          amazon_order_id: string
+          asin: string | null
+          created_at: string
+          id: string
+          item_name: string
+          match_candidates: Json | null
+          order_date: string
+          order_item_id: string
+          platform_order_id: string
+          quantity: number
+          quantity_needed: number | null
+          resolution_reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_inventory_item_ids: string[] | null
+          status: string
+          total_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amazon_order_id: string
+          asin?: string | null
+          created_at?: string
+          id?: string
+          item_name: string
+          match_candidates?: Json | null
+          order_date: string
+          order_item_id: string
+          platform_order_id: string
+          quantity?: number
+          quantity_needed?: number | null
+          resolution_reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_inventory_item_ids?: string[] | null
+          status?: string
+          total_amount: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amazon_order_id?: string
+          asin?: string | null
+          created_at?: string
+          id?: string
+          item_name?: string
+          match_candidates?: Json | null
+          order_date?: string
+          order_item_id?: string
+          platform_order_id?: string
+          quantity?: number
+          quantity_needed?: number | null
+          resolution_reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_inventory_item_ids?: string[] | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_inventory_resolution_queue_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_inventory_resolution_queue_platform_order_id_fkey"
+            columns: ["platform_order_id"]
+            isOneToOne: false
+            referencedRelation: "platform_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_inventory_resolution_queue_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_inventory_resolution_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_settlements: {
         Row: {
           account_tail: string | null
@@ -1848,6 +1943,7 @@ export type Database = {
       inventory_items: {
         Row: {
           amazon_asin: string | null
+          amazon_order_item_id: string | null
           archive_location: string | null
           condition: string | null
           cost: number | null
@@ -1883,6 +1979,7 @@ export type Database = {
         }
         Insert: {
           amazon_asin?: string | null
+          amazon_order_item_id?: string | null
           archive_location?: string | null
           condition?: string | null
           cost?: number | null
@@ -1918,6 +2015,7 @@ export type Database = {
         }
         Update: {
           amazon_asin?: string | null
+          amazon_order_item_id?: string | null
           archive_location?: string | null
           condition?: string | null
           cost?: number | null
@@ -1952,6 +2050,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_items_amazon_order_item_id_fkey"
+            columns: ["amazon_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_items_ebay_line_item_id_fkey"
             columns: ["ebay_line_item_id"]
@@ -2269,6 +2374,8 @@ export type Database = {
       }
       order_items: {
         Row: {
+          amazon_link_method: string | null
+          amazon_linked_at: string | null
           color_id: number | null
           color_name: string | null
           condition: string | null
@@ -2285,6 +2392,8 @@ export type Database = {
           unit_price: number | null
         }
         Insert: {
+          amazon_link_method?: string | null
+          amazon_linked_at?: string | null
           color_id?: number | null
           color_name?: string | null
           condition?: string | null
@@ -2301,6 +2410,8 @@ export type Database = {
           unit_price?: number | null
         }
         Update: {
+          amazon_link_method?: string | null
+          amazon_linked_at?: string | null
           color_id?: number | null
           color_name?: string | null
           condition?: string | null
@@ -2678,6 +2789,7 @@ export type Database = {
           fulfilled_at: string | null
           id: string
           internal_status: string | null
+          inventory_link_status: string | null
           items_count: number | null
           notes: string | null
           order_date: string | null
@@ -2708,6 +2820,7 @@ export type Database = {
           fulfilled_at?: string | null
           id?: string
           internal_status?: string | null
+          inventory_link_status?: string | null
           items_count?: number | null
           notes?: string | null
           order_date?: string | null
@@ -2738,6 +2851,7 @@ export type Database = {
           fulfilled_at?: string | null
           id?: string
           internal_status?: string | null
+          inventory_link_status?: string | null
           items_count?: number | null
           notes?: string | null
           order_date?: string | null
