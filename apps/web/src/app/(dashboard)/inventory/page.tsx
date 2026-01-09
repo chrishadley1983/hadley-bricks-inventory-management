@@ -4,23 +4,25 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Dynamically import Header to prevent SSR issues with Supabase
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
+  { ssr: false, loading: () => <HeaderSkeleton /> }
 );
 
 // Dynamically import InventoryTable to prevent SSR issues
 const InventoryTable = dynamic(
   () => import('@/components/features/inventory').then((mod) => ({ default: mod.InventoryTable })),
-  { ssr: false }
+  { ssr: false, loading: () => <TableSkeleton columns={8} rows={10} /> }
 );
 
 // Dynamically import SyncControls
 const SyncControls = dynamic(
   () => import('@/components/features/sync').then((mod) => ({ default: mod.SyncControls })),
-  { ssr: false }
+  { ssr: false, loading: () => <Skeleton className="h-8 w-24" /> }
 );
 
 export default function InventoryPage() {

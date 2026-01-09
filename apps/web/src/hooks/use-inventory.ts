@@ -11,6 +11,7 @@ import {
   updateInventoryItem,
   deleteInventoryItem,
   bulkUpdateInventoryItems,
+  bulkDeleteInventoryItems,
   type InventoryFilters,
   type PaginationParams,
   type BulkUpdateInput,
@@ -84,8 +85,9 @@ export function useCreateInventory() {
   return useMutation({
     mutationFn: (data: Omit<InventoryItemInsert, 'user_id'>) => createInventoryItem(data),
     onSuccess: () => {
-      // Invalidate all inventory queries to refetch
-      queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
+      // Only invalidate list and summary queries (not detail queries)
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
     },
   });
 }
@@ -141,6 +143,26 @@ export function useBulkUpdateInventory() {
         queryClient.setQueryData(inventoryKeys.detail(item.id), item);
       });
       // Invalidate list queries to refetch with updated data
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
+    },
+  });
+}
+
+/**
+ * Hook to bulk delete multiple inventory items
+ */
+export function useBulkDeleteInventory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteInventoryItems(ids),
+    onSuccess: (_, deletedIds) => {
+      // Remove deleted items from cache
+      deletedIds.forEach((id) => {
+        queryClient.removeQueries({ queryKey: inventoryKeys.detail(id) });
+      });
+      // Invalidate list queries to refetch
       queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
     },

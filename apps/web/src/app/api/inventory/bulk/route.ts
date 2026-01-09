@@ -18,6 +18,10 @@ const BulkUpdateSchema = z.object({
   }),
 });
 
+const BulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, 'At least one ID is required'),
+});
+
 /**
  * PATCH /api/inventory/bulk
  * Bulk update multiple inventory items
@@ -67,6 +71,47 @@ export async function PATCH(request: NextRequest) {
     });
   } catch (error) {
     console.error('[PATCH /api/inventory/bulk] Error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/inventory/bulk
+ * Bulk delete multiple inventory items
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const parsed = BulkDeleteSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { ids } = parsed.data;
+
+    const service = new InventoryService(supabase, user.id);
+    const result = await service.deleteBulk(ids);
+
+    return NextResponse.json({
+      success: true,
+      deleted: result.count,
+    });
+  } catch (error) {
+    console.error('[DELETE /api/inventory/bulk] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

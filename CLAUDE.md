@@ -228,10 +228,13 @@ This project uses a suite of development agents for consistent, high-quality wor
 
 ### Frontend Changes
 - [ ] Component renders without console errors
-- [ ] Loading states implemented
+- [ ] Loading states implemented with skeleton components
 - [ ] Error states implemented
 - [ ] Mobile responsive (check at 375px, 768px, 1024px)
 - [ ] Keyboard navigation works
+- [ ] Dynamic imports have `loading` fallback with skeleton component
+- [ ] Route has `loading.tsx` file for instant navigation feedback
+- [ ] Search inputs are debounced (300ms minimum)
 
 ### Testing
 - [ ] Run `/test-execute quick` - must pass
@@ -445,6 +448,91 @@ export class BrickLinkAdapter implements PlatformAdapter {
   async fetchOrder(orderId: string): Promise<PlatformOrder> { /* ... */ }
 }
 ```
+
+---
+
+## UI Performance Patterns
+
+### Loading States
+
+All dynamic imports MUST include a loading fallback:
+
+```typescript
+// GOOD - with loading skeleton
+const InventoryTable = dynamic(
+  () => import('@/components/features/inventory').then((mod) => ({ default: mod.InventoryTable })),
+  { ssr: false, loading: () => <TableSkeleton /> }
+);
+
+// BAD - no loading state (causes blank screen)
+const InventoryTable = dynamic(
+  () => import('@/components/features/inventory').then((mod) => ({ default: mod.InventoryTable })),
+  { ssr: false }
+);
+```
+
+All route segments should have a `loading.tsx` file:
+- Use `TableSkeleton` for list pages
+- Use `WidgetCardSkeleton` for dashboard-style pages
+- Import from `@/components/ui/skeletons`
+
+### Bulk Operations
+
+NEVER use sequential loops for bulk operations:
+
+```typescript
+// BAD - sequential API calls (slow)
+for (const id of ids) {
+  await deleteMutation.mutateAsync(id);
+}
+
+// GOOD - single batch API call
+await bulkDeleteMutation.mutateAsync(ids);
+```
+
+All bulk operations should:
+1. Have a dedicated batch API endpoint (`/api/[resource]/bulk`)
+2. Use a dedicated hook (`useBulkDelete[Resource]`, `useBulkUpdate[Resource]`)
+3. Accept arrays and process in a single database operation
+
+### Cache Invalidation
+
+Use surgical invalidation, not broad invalidation:
+
+```typescript
+// BAD - invalidates everything including details
+queryClient.invalidateQueries({ queryKey: resourceKeys.all });
+
+// GOOD - only invalidate affected query types
+queryClient.invalidateQueries({ queryKey: resourceKeys.lists() });
+queryClient.invalidateQueries({ queryKey: resourceKeys.summary() });
+```
+
+### Search Debouncing
+
+All search inputs MUST be debounced to prevent excessive API calls:
+
+```typescript
+import { useDebouncedCallback } from 'use-debounce';
+
+const debouncedSearch = useDebouncedCallback((value: string) => {
+  onFiltersChange({ ...filters, search: value || undefined });
+}, 300);
+```
+
+### Skeleton Components
+
+Available skeleton components in `@/components/ui/skeletons`:
+
+| Component | Use For |
+|-----------|---------|
+| `TableSkeleton` | DataTable loading states |
+| `HeaderSkeleton` | Page header loading |
+| `WidgetCardSkeleton` | Dashboard widget cards |
+| `StatCardSkeleton` | Stat/metric widgets |
+| `PageTitleSkeleton` | Page title and description |
+| `PageSkeleton` | Full page with header and table |
+| `DashboardSkeleton` | Dashboard page layout |
 
 ---
 

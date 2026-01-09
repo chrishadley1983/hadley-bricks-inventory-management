@@ -85,6 +85,13 @@ export class InventoryService {
   }
 
   /**
+   * Delete multiple inventory items
+   */
+  async deleteBulk(ids: string[]): Promise<{ count: number }> {
+    return this.repository.deleteBulk(ids);
+  }
+
+  /**
    * Update status for a single item
    */
   async updateStatus(id: string, status: InventoryStatus): Promise<InventoryItem> {

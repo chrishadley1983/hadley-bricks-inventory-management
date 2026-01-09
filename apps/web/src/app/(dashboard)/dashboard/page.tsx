@@ -12,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { HeaderSkeleton, StatCardSkeleton, WidgetCardSkeleton } from '@/components/ui/skeletons';
 
 // Dynamically import Header to prevent SSR issues with Supabase
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
+  { ssr: false, loading: () => <HeaderSkeleton /> }
 );
 
 // Dynamically import widgets to prevent SSR issues
@@ -25,7 +26,7 @@ const BricqerInventoryWidget = dynamic(
     import('@/components/features/dashboard').then((mod) => ({
       default: mod.BricqerInventoryWidget,
     })),
-  { ssr: false }
+  { ssr: false, loading: () => <StatCardSkeleton /> }
 );
 
 const FinancialSnapshotWidget = dynamic(
@@ -33,7 +34,7 @@ const FinancialSnapshotWidget = dynamic(
     import('@/components/features/dashboard').then((mod) => ({
       default: mod.FinancialSnapshotWidget,
     })),
-  { ssr: false }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
 );
 
 const StatusBreakdownWidget = dynamic(
@@ -41,7 +42,7 @@ const StatusBreakdownWidget = dynamic(
     import('@/components/features/dashboard').then((mod) => ({
       default: mod.StatusBreakdownWidget,
     })),
-  { ssr: false }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={5} /> }
 );
 
 const RecentActivityWidget = dynamic(
@@ -49,12 +50,12 @@ const RecentActivityWidget = dynamic(
     import('@/components/features/dashboard').then((mod) => ({
       default: mod.RecentActivityWidget,
     })),
-  { ssr: false }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
 const LowStockWidget = dynamic(
   () => import('@/components/features/dashboard').then((mod) => ({ default: mod.LowStockWidget })),
-  { ssr: false }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
 );
 
 export default function DashboardPage() {

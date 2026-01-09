@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useDebouncedCallback } from 'use-debounce';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -36,7 +38,27 @@ export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersP
   const { data: platforms = [] } = usePlatforms();
   const hasActiveFilters = filters.status || filters.condition || filters.platform || filters.search;
 
+  // Local state for search input to allow immediate UI feedback
+  const [searchValue, setSearchValue] = useState(filters.search || '');
+
+  // Sync local state when filters.search changes externally (e.g., clear filters)
+  useEffect(() => {
+    setSearchValue(filters.search || '');
+  }, [filters.search]);
+
+  // Debounced callback to update filters after 300ms of no typing
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    onFiltersChange({ ...filters, search: value || undefined });
+  }, 300);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value); // Update local state immediately
+    debouncedSearch(value); // Debounce the actual filter update
+  };
+
   const clearFilters = () => {
+    setSearchValue('');
     onFiltersChange({});
   };
 
@@ -46,8 +68,8 @@ export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersP
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by set number or name..."
-          value={filters.search || ''}
-          onChange={(e) => onFiltersChange({ ...filters, search: e.target.value || undefined })}
+          value={searchValue}
+          onChange={handleSearchChange}
           className="pl-9"
         />
       </div>

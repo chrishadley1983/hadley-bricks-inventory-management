@@ -207,3 +207,23 @@ export async function bulkUpdateInventoryItems(
 
   return response.json();
 }
+
+/**
+ * Bulk delete multiple inventory items
+ */
+export async function bulkDeleteInventoryItems(
+  ids: string[]
+): Promise<{ success: boolean; deleted: number }> {
+  const response = await fetch('/api/inventory/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to bulk delete inventory items');
+  }
+
+  return response.json();
+}

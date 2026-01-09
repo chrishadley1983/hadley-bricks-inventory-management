@@ -375,6 +375,22 @@ export class InventoryRepository extends BaseRepository<
   }
 
   /**
+   * Bulk delete multiple inventory items
+   */
+  async deleteBulk(ids: string[]): Promise<{ count: number }> {
+    const { error, count } = await this.supabase
+      .from(this.tableName)
+      .delete()
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to bulk delete inventory items: ${error.message}`);
+    }
+
+    return { count: count || 0 };
+  }
+
+  /**
    * Get inventory count by status
    * Uses pagination to handle >1000 records
    */
