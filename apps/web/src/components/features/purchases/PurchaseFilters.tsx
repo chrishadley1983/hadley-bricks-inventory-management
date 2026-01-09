@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useDebouncedCallback } from 'use-debounce';
 import { Search, Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,8 @@ const PAYMENT_METHODS = [
 ];
 
 export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersProps) {
-  const [search, setSearch] = useState(filters.search || '');
+  // Local state for search input to allow immediate UI feedback
+  const [searchValue, setSearchValue] = useState(filters.search || '');
   const [dateFrom, setDateFrom] = useState<Date | undefined>(
     filters.dateFrom ? new Date(filters.dateFrom) : undefined
   );
@@ -55,9 +57,20 @@ export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersPro
     filters.dateTo ? new Date(filters.dateTo) : undefined
   );
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onFiltersChange({ ...filters, search: search || undefined });
+  // Sync local state when filters.search changes externally (e.g., clear filters)
+  useEffect(() => {
+    setSearchValue(filters.search || '');
+  }, [filters.search]);
+
+  // Debounced callback to update filters after 300ms of no typing
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    onFiltersChange({ ...filters, search: value || undefined });
+  }, 300);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value); // Update local state immediately
+    debouncedSearch(value); // Debounce the actual filter update
   };
 
   const handleSourceChange = (value: string) => {
@@ -91,7 +104,7 @@ export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersPro
   };
 
   const clearFilters = () => {
-    setSearch('');
+    setSearchValue('');
     setDateFrom(undefined);
     setDateTo(undefined);
     onFiltersChange({});
@@ -102,20 +115,17 @@ export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersPro
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSearchSubmit} className="flex gap-2">
+      <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search purchases..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchValue}
+            onChange={handleSearchChange}
             className="pl-9"
           />
         </div>
-        <Button type="submit" variant="secondary">
-          Search
-        </Button>
-      </form>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Select value={filters.source || 'all'} onValueChange={handleSourceChange}>

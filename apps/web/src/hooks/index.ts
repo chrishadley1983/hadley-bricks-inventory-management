@@ -8,6 +8,7 @@ export {
   useUpdateInventory,
   useDeleteInventory,
   useBulkUpdateInventory,
+  useBulkDeleteInventory,
   inventoryKeys,
 } from './use-inventory';
 export {

@@ -62,10 +62,11 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import type { PlatformOrder, OrderStatus } from '@hadley-bricks/database';
+import { HeaderSkeleton } from '@/components/ui/skeletons';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
+  { ssr: false, loading: () => <HeaderSkeleton /> }
 );
 
 interface OrdersResponse {

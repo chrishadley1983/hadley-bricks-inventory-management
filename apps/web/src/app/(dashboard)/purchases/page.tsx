@@ -5,15 +5,17 @@ import Link from 'next/link';
 import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { HeaderSkeleton, TableSkeleton, WidgetCardSkeleton } from '@/components/ui/skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
+  { ssr: false, loading: () => <HeaderSkeleton /> }
 );
 
 const PurchaseTable = dynamic(
   () => import('@/components/features/purchases').then((mod) => ({ default: mod.PurchaseTable })),
-  { ssr: false }
+  { ssr: false, loading: () => <TableSkeleton columns={7} rows={10} /> }
 );
 
 const QuickAddPurchase = dynamic(
@@ -21,12 +23,12 @@ const QuickAddPurchase = dynamic(
     import('@/components/features/purchases').then((mod) => ({
       default: mod.QuickAddPurchase,
     })),
-  { ssr: false }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
 const SyncControls = dynamic(
   () => import('@/components/features/sync').then((mod) => ({ default: mod.SyncControls })),
-  { ssr: false }
+  { ssr: false, loading: () => <Skeleton className="h-8 w-24" /> }
 );
 
 export default function PurchasesPage() {

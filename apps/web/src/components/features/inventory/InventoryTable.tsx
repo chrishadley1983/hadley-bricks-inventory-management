@@ -6,7 +6,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { getInventoryColumns, COLUMN_DISPLAY_NAMES } from './InventoryColumns';
 import { InventoryFilters } from './InventoryFilters';
 import { BulkEditDialog } from './BulkEditDialog';
-import { useInventoryList, useDeleteInventory, useCreateInventory, useBulkUpdateInventory } from '@/hooks';
+import { useInventoryList, useDeleteInventory, useCreateInventory, useBulkUpdateInventory, useBulkDeleteInventory } from '@/hooks';
 import type { InventoryFilters as Filters } from '@/lib/api';
 import type { InventoryItem } from '@hadley-bricks/database';
 import {
@@ -32,6 +32,7 @@ export function InventoryTable() {
   const deleteMutation = useDeleteInventory();
   const createMutation = useCreateInventory();
   const bulkUpdateMutation = useBulkUpdateInventory();
+  const bulkDeleteMutation = useBulkDeleteInventory();
 
   const columns = useMemo(
     () => getInventoryColumns({ onDelete: (id) => setDeleteId(id) }),
@@ -60,9 +61,7 @@ export function InventoryTable() {
   }, []);
 
   const handleConfirmBulkDelete = async () => {
-    for (const id of bulkDeleteIds) {
-      await deleteMutation.mutateAsync(id);
-    }
+    await bulkDeleteMutation.mutateAsync(bulkDeleteIds);
     setBulkDeleteIds([]);
   };
 

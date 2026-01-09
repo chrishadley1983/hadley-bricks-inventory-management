@@ -20,6 +20,7 @@ export function Providers({ children }: ProvidersProps) {
             // With SSR, we usually want to set a staleTime above 0
             // to avoid refetching immediately on the client
             staleTime: 60 * 1000, // 1 minute
+            gcTime: 10 * 60 * 1000, // Keep cached data for 10 minutes (better retention when navigating)
             refetchOnWindowFocus: false,
             retry: 1,
           },
