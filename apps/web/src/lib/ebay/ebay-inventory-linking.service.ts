@@ -117,16 +117,7 @@ interface InventoryItem {
   status: string;
 }
 
-interface EbayTransaction {
-  ebay_order_id: string;
-  total_fee_amount: number | null;
-  final_value_fee_fixed: number | null;
-  final_value_fee_variable: number | null;
-  regulatory_operating_fee: number | null;
-  international_fee: number | null;
-  ad_fee: number | null;
-  postage_and_packaging: number | null;
-}
+// EbayTransaction interface removed - was unused
 
 // ============================================================================
 // Service Class
@@ -413,7 +404,7 @@ export class EbayInventoryLinkingService {
    * When includeSold is true, also matches SOLD items that don't have an ebay_line_item_id yet
    */
   private async findBySku(sku: string): Promise<InventoryItem[]> {
-    let query = this.supabase
+    const query = this.supabase
       .from('inventory_items')
       .select('id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id')
       .eq('user_id', this.userId)

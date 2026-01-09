@@ -7,7 +7,6 @@ import type {
   InventoryValuationReport,
   InventoryAgingReport,
   PlatformPerformanceReport,
-  SalesTrendsReport,
   PurchaseAnalysisReport,
   TaxSummaryReport,
   ReportSettings,
@@ -94,28 +93,6 @@ export function usePlatformPerformanceReport(dateRange?: DateRangeParams) {
           endDate: dateRange.endDate.toISOString().split('T')[0],
           preset: dateRange.preset,
         }),
-      }),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-/**
- * Hook for fetching sales trends report
- */
-export function useSalesTrendsReport(
-  dateRange?: DateRangeParams,
-  granularity: 'daily' | 'weekly' | 'monthly' = 'daily'
-) {
-  return useQuery<SalesTrendsReport>({
-    queryKey: ['reports', 'sales-trends', dateRange, granularity],
-    queryFn: () =>
-      fetchReport<SalesTrendsReport>('sales-trends', {
-        ...(dateRange && {
-          startDate: dateRange.startDate.toISOString().split('T')[0],
-          endDate: dateRange.endDate.toISOString().split('T')[0],
-          preset: dateRange.preset,
-        }),
-        granularity,
       }),
     staleTime: 5 * 60 * 1000,
   });

@@ -6,7 +6,6 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import { SalesRepository } from '../repositories/sales.repository';
 
 /**
  * Daily profit summary
@@ -115,11 +114,7 @@ interface SaleItemQueryResult {
 }
 
 export class ProfitService {
-  private salesRepo: SalesRepository;
-
-  constructor(private supabase: SupabaseClient<Database>) {
-    this.salesRepo = new SalesRepository(supabase);
-  }
+  constructor(private supabase: SupabaseClient<Database>) {}
 
   /**
    * Calculate profit metrics for a date range

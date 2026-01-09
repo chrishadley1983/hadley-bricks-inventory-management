@@ -261,15 +261,43 @@ export default function EbayInventoryResolutionPage() {
     queryFn: fetchQueue,
   });
 
+  // Helper to get next pending item (excluding current)
+  const getNextPendingItem = (currentId: string): QueueItem | null => {
+    const pendingItems = queueData?.data?.filter(item => item.status === 'pending') || [];
+    const currentIndex = pendingItems.findIndex(item => item.id === currentId);
+    // Get the next item, or the first item if we're at the end
+    if (currentIndex === -1) return pendingItems[0] || null;
+    // Return the next item (skip current one which will be removed)
+    const nextItems = pendingItems.filter(item => item.id !== currentId);
+    return nextItems[0] || null;
+  };
+
+  // Helper to advance to next item
+  const advanceToNextItem = (currentId: string) => {
+    const nextItem = getNextPendingItem(currentId);
+    if (nextItem) {
+      // Small delay to allow the UI to update
+      setTimeout(() => {
+        setSelectedItem(nextItem);
+        setSelectedInventoryIds([]);
+        setInventorySearch('');
+        setSearchResults([]);
+      }, 100);
+    } else {
+      setSelectedItem(null);
+    }
+  };
+
   // Mutations
   const resolveMutation = useMutation({
     mutationFn: ({ id, inventoryItemIds }: { id: string; inventoryItemIds: string[] }) =>
       resolveItem(id, inventoryItemIds),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setMessage({ type: 'success', text: 'Item resolved successfully' });
-      setSelectedItem(null);
       setSelectedInventoryIds([]);
       queryClient.invalidateQueries({ queryKey: ['ebay', 'resolution-queue'] });
+      // Auto-advance to next item
+      advanceToNextItem(variables.id);
     },
     onError: (error: Error) => {
       setMessage({ type: 'error', text: error.message });
@@ -279,10 +307,11 @@ export default function EbayInventoryResolutionPage() {
   const skipMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: 'skipped' | 'no_inventory' }) =>
       skipItem(id, reason),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setMessage({ type: 'success', text: 'Item skipped' });
-      setSelectedItem(null);
       queryClient.invalidateQueries({ queryKey: ['ebay', 'resolution-queue'] });
+      // Auto-advance to next item
+      advanceToNextItem(variables.id);
     },
     onError: (error: Error) => {
       setMessage({ type: 'error', text: error.message });
@@ -598,7 +627,18 @@ export default function EbayInventoryResolutionPage() {
         <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Link to Inventory</DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle>Link to Inventory</DialogTitle>
+                {selectedItem && (
+                  <span className="text-sm text-muted-foreground">
+                    {(() => {
+                      const pendingItems = queueData?.data?.filter(item => item.status === 'pending') || [];
+                      const currentIndex = pendingItems.findIndex(item => item.id === selectedItem.id);
+                      return `${currentIndex + 1} of ${pendingItems.length} remaining`;
+                    })()}
+                  </span>
+                )}
+              </div>
               <DialogDescription>
                 Select the inventory item{selectedItem?.quantity_needed && selectedItem.quantity_needed > 1 ? 's' : ''} that was sold
               </DialogDescription>

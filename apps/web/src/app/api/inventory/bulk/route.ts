@@ -13,6 +13,8 @@ const BulkUpdateSchema = z.object({
     status: z.string().nullish(),
     source: z.string().nullish(),
     listing_platform: z.string().nullish(),
+    purchase_id: z.string().uuid().nullish(),
+    purchase_date: z.string().nullish(),
   }),
 });
 

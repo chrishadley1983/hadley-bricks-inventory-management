@@ -64,6 +64,20 @@ export class PurchaseService {
   }
 
   /**
+   * Bulk update multiple purchases
+   */
+  async updateBulk(ids: string[], input: PurchaseUpdate): Promise<Purchase[]> {
+    return this.repository.updateBulk(ids, input, this.userId);
+  }
+
+  /**
+   * Bulk delete multiple purchases
+   */
+  async deleteBulk(ids: string[]): Promise<void> {
+    return this.repository.deleteBulk(ids, this.userId);
+  }
+
+  /**
    * Get recent purchases
    */
   async getRecent(limit: number = 10): Promise<Purchase[]> {

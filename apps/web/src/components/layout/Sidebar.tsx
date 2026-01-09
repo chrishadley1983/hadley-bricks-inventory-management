@@ -14,10 +14,8 @@ import {
   Upload,
   ExternalLink,
   RefreshCw,
-  DollarSign,
   BarChart3,
   PieChart,
-  LineChart,
   Landmark,
   Link2,
 } from 'lucide-react';
@@ -33,7 +31,6 @@ const mainNavItems: NavItem[] = [
   { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/orders', label: 'Orders', icon: FileText },
-  { href: '/sales', label: 'Sales', icon: DollarSign },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
@@ -43,7 +40,6 @@ const reportNavItems: NavItem[] = [
   { href: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
   { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
   { href: '/reports/platform-performance', label: 'Platforms', icon: PieChart },
-  { href: '/reports/sales-trends', label: 'Sales Trends', icon: LineChart },
 ];
 
 const integrationNavItems: NavItem[] = [

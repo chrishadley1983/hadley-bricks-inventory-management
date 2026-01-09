@@ -568,6 +568,200 @@ export type Database = {
           },
         ]
       }
+      bricklink_upload_sync_config: {
+        Row: {
+          auto_sync_enabled: boolean
+          auto_sync_interval_hours: number
+          created_at: string
+          id: string
+          last_auto_sync_at: string | null
+          next_auto_sync_at: string | null
+          sync_activated_only: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          sync_activated_only?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_sync_enabled?: boolean
+          auto_sync_interval_hours?: number
+          created_at?: string
+          id?: string
+          last_auto_sync_at?: string | null
+          next_auto_sync_at?: string | null
+          sync_activated_only?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_upload_sync_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricklink_upload_sync_log: {
+        Row: {
+          batches_created: number | null
+          batches_processed: number | null
+          batches_skipped: number | null
+          batches_updated: number | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          started_at: string
+          status: string
+          sync_mode: string
+          user_id: string
+        }
+        Insert: {
+          batches_created?: number | null
+          batches_processed?: number | null
+          batches_skipped?: number | null
+          batches_updated?: number | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          started_at: string
+          status: string
+          sync_mode: string
+          user_id: string
+        }
+        Update: {
+          batches_created?: number | null
+          batches_processed?: number | null
+          batches_skipped?: number | null
+          batches_updated?: number | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          sync_mode?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_upload_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricklink_uploads: {
+        Row: {
+          bricqer_batch_id: number | null
+          bricqer_purchase_id: number | null
+          condition: string | null
+          cost: number | null
+          created_at: string
+          id: string
+          is_activated: boolean | null
+          linked_lot: string | null
+          lots: number | null
+          notes: string | null
+          purchase_id: string | null
+          raw_response: Json | null
+          reference: string | null
+          remaining_price: number | null
+          remaining_quantity: number | null
+          selling_price: number
+          source: string | null
+          synced_from_bricqer: boolean | null
+          total_quantity: number
+          updated_at: string
+          upload_date: string
+          user_id: string
+        }
+        Insert: {
+          bricqer_batch_id?: number | null
+          bricqer_purchase_id?: number | null
+          condition?: string | null
+          cost?: number | null
+          created_at?: string
+          id?: string
+          is_activated?: boolean | null
+          linked_lot?: string | null
+          lots?: number | null
+          notes?: string | null
+          purchase_id?: string | null
+          raw_response?: Json | null
+          reference?: string | null
+          remaining_price?: number | null
+          remaining_quantity?: number | null
+          selling_price?: number
+          source?: string | null
+          synced_from_bricqer?: boolean | null
+          total_quantity?: number
+          updated_at?: string
+          upload_date: string
+          user_id: string
+        }
+        Update: {
+          bricqer_batch_id?: number | null
+          bricqer_purchase_id?: number | null
+          condition?: string | null
+          cost?: number | null
+          created_at?: string
+          id?: string
+          is_activated?: boolean | null
+          linked_lot?: string | null
+          lots?: number | null
+          notes?: string | null
+          purchase_id?: string | null
+          raw_response?: Json | null
+          reference?: string | null
+          remaining_price?: number | null
+          remaining_quantity?: number | null
+          selling_price?: number
+          source?: string | null
+          synced_from_bricqer?: boolean | null
+          total_quantity?: number
+          updated_at?: string
+          upload_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_uploads_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_roi_view"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "bricklink_uploads_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bricklink_uploads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brickowl_sync_config: {
         Row: {
           auto_sync_enabled: boolean
@@ -921,12 +1115,107 @@ export type Database = {
           },
         ]
       }
+      ebay_inventory_resolution_queue: {
+        Row: {
+          created_at: string
+          ebay_line_item_id: string
+          ebay_order_id: string
+          id: string
+          match_candidates: Json | null
+          order_date: string
+          quantity: number
+          quantity_needed: number | null
+          resolution_reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_inventory_item_ids: string[] | null
+          sku: string | null
+          status: string
+          title: string
+          total_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ebay_line_item_id: string
+          ebay_order_id: string
+          id?: string
+          match_candidates?: Json | null
+          order_date: string
+          quantity?: number
+          quantity_needed?: number | null
+          resolution_reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_inventory_item_ids?: string[] | null
+          sku?: string | null
+          status?: string
+          title: string
+          total_amount: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ebay_line_item_id?: string
+          ebay_order_id?: string
+          id?: string
+          match_candidates?: Json | null
+          order_date?: string
+          quantity?: number
+          quantity_needed?: number | null
+          resolution_reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_inventory_item_ids?: string[] | null
+          sku?: string | null
+          status?: string
+          title?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_inventory_resolution_queue_ebay_line_item_id_fkey"
+            columns: ["ebay_line_item_id"]
+            isOneToOne: true
+            referencedRelation: "ebay_order_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_inventory_resolution_queue_ebay_order_id_fkey"
+            columns: ["ebay_order_id"]
+            isOneToOne: false
+            referencedRelation: "ebay_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_inventory_resolution_queue_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_inventory_resolution_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_order_line_items: {
         Row: {
           created_at: string
           ebay_line_item_id: string
           fulfilment_status: string
           id: string
+          inventory_item_id: string | null
+          inventory_link_method: string | null
+          inventory_linked_at: string | null
           item_location: string | null
           legacy_item_id: string | null
           line_item_cost_amount: number
@@ -949,6 +1238,9 @@ export type Database = {
           ebay_line_item_id: string
           fulfilment_status: string
           id?: string
+          inventory_item_id?: string | null
+          inventory_link_method?: string | null
+          inventory_linked_at?: string | null
           item_location?: string | null
           legacy_item_id?: string | null
           line_item_cost_amount: number
@@ -971,6 +1263,9 @@ export type Database = {
           ebay_line_item_id?: string
           fulfilment_status?: string
           id?: string
+          inventory_item_id?: string | null
+          inventory_link_method?: string | null
+          inventory_linked_at?: string | null
           item_location?: string | null
           legacy_item_id?: string | null
           line_item_cost_amount?: number
@@ -990,6 +1285,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "ebay_order_line_items_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_order_line_items_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ebay_order_line_items_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -1008,6 +1317,8 @@ export type Database = {
           ebay_order_id: string
           fulfilment_instructions: Json | null
           id: string
+          inventory_link_status: string | null
+          inventory_linked_at: string | null
           last_modified_date: string
           legacy_order_id: string | null
           order_fulfilment_status: string
@@ -1030,6 +1341,8 @@ export type Database = {
           ebay_order_id: string
           fulfilment_instructions?: Json | null
           id?: string
+          inventory_link_status?: string | null
+          inventory_linked_at?: string | null
           last_modified_date: string
           legacy_order_id?: string | null
           order_fulfilment_status: string
@@ -1052,6 +1365,8 @@ export type Database = {
           ebay_order_id?: string
           fulfilment_instructions?: Json | null
           id?: string
+          inventory_link_status?: string | null
+          inventory_linked_at?: string | null
           last_modified_date?: string
           legacy_order_id?: string | null
           order_fulfilment_status?: string
@@ -1537,6 +1852,7 @@ export type Database = {
           condition: string | null
           cost: number | null
           created_at: string
+          ebay_line_item_id: string | null
           id: string
           item_name: string | null
           linked_lot: string | null
@@ -1552,8 +1868,12 @@ export type Database = {
           sku: string | null
           sold_at: string | null
           sold_date: string | null
+          sold_fees_amount: number | null
+          sold_gross_amount: number | null
+          sold_net_amount: number | null
           sold_order_id: string | null
           sold_platform: string | null
+          sold_postage_received: number | null
           sold_price: number | null
           source: string | null
           status: string | null
@@ -1567,6 +1887,7 @@ export type Database = {
           condition?: string | null
           cost?: number | null
           created_at?: string
+          ebay_line_item_id?: string | null
           id?: string
           item_name?: string | null
           linked_lot?: string | null
@@ -1582,8 +1903,12 @@ export type Database = {
           sku?: string | null
           sold_at?: string | null
           sold_date?: string | null
+          sold_fees_amount?: number | null
+          sold_gross_amount?: number | null
+          sold_net_amount?: number | null
           sold_order_id?: string | null
           sold_platform?: string | null
+          sold_postage_received?: number | null
           sold_price?: number | null
           source?: string | null
           status?: string | null
@@ -1597,6 +1922,7 @@ export type Database = {
           condition?: string | null
           cost?: number | null
           created_at?: string
+          ebay_line_item_id?: string | null
           id?: string
           item_name?: string | null
           linked_lot?: string | null
@@ -1612,8 +1938,12 @@ export type Database = {
           sku?: string | null
           sold_at?: string | null
           sold_date?: string | null
+          sold_fees_amount?: number | null
+          sold_gross_amount?: number | null
+          sold_net_amount?: number | null
           sold_order_id?: string | null
           sold_platform?: string | null
+          sold_postage_received?: number | null
           sold_price?: number | null
           source?: string | null
           status?: string | null
@@ -1622,6 +1952,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_items_ebay_line_item_id_fkey"
+            columns: ["ebay_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "ebay_order_line_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_items_purchase_id_fkey"
             columns: ["purchase_id"]
@@ -2431,6 +2768,44 @@ export type Database = {
           },
         ]
       }
+      platform_store_status: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          platform: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          platform: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          platform?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_store_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           business_name: string | null
@@ -2800,6 +3175,18 @@ export type Database = {
       }
     }
     Views: {
+      daily_platform_activity: {
+        Row: {
+          activity_date: string | null
+          items_listed: number | null
+          items_sold: number | null
+          listing_value: number | null
+          platform: string | null
+          sold_value: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       inventory_items_with_age: {
         Row: {
           age_bracket: string | null
@@ -2882,6 +3269,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      monthly_platform_summary: {
+        Row: {
+          items_listed: number | null
+          items_sold: number | null
+          listing_value: number | null
+          month: string | null
+          month_start: string | null
+          platform: string | null
+          sold_value: number | null
+          user_id: string | null
+        }
+        Relationships: []
       }
       platform_performance_view: {
         Row: {

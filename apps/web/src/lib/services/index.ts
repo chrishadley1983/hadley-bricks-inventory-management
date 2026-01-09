@@ -6,7 +6,6 @@ export { BricqerSyncService } from './bricqer-sync.service';
 export { OrderSyncService } from './order-sync.service';
 export { OrderStatusService } from './order-status.service';
 export { OrderFulfilmentService } from './order-fulfilment.service';
-export { SalesService } from './sales.service';
 export { ProfitService } from './profit.service';
 export { ReportingService } from './reporting.service';
 export { AmazonBackfillService } from './amazon-backfill.service';
@@ -15,7 +14,6 @@ export type { SyncResult as BrickLinkSyncResult, BrickLinkSyncOptions } from './
 export type { BrickOwlSyncOptions } from './brickowl-sync.service';
 export type { BricqerSyncOptions } from './bricqer-sync.service';
 export type { ShippingInfo, StatusUpdateResult, BulkStatusUpdateResult } from './order-status.service';
-export type { CreateSaleFromOrderInput, CreateManualSaleInput, SaleResult } from './sales.service';
 export type {
   DailyProfitSummary,
   MonthlyProfitSummary,
@@ -30,7 +28,6 @@ export type {
   InventoryValuationReport,
   InventoryAgingReport,
   PlatformPerformanceReport,
-  SalesTrendsReport,
   PurchaseAnalysisReport,
   TaxSummaryReport,
   ReportSettings,

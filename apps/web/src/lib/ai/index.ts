@@ -1,4 +1,13 @@
-export { getClaudeClient, sendMessage, sendMessageForJSON } from './claude-client';
+export {
+  getClaudeClient,
+  sendMessage,
+  sendMessageForJSON,
+  sendMessageWithImage,
+  sendMessageWithImages,
+  sendMessageWithImagesForJSON,
+  type ImageMediaType,
+  type ImageInput,
+} from './claude-client';
 export {
   PARSE_PURCHASE_SYSTEM_PROMPT,
   createParsePurchaseMessage,
@@ -9,3 +18,16 @@ export {
   createCalculateDistanceMessage,
   type DistanceResponse,
 } from './prompts/calculate-distance';
+export {
+  PARSE_INVENTORY_SYSTEM_PROMPT,
+  createParseInventoryMessage,
+  type ParsedInventoryItem,
+  type ParsedSharedFields,
+  type ParsedInventoryResponse,
+} from './prompts/parse-inventory';
+export {
+  EXTRACT_SET_NUMBERS_SYSTEM_PROMPT,
+  createExtractSetNumbersMessage,
+  type ExtractedSetNumber,
+  type ExtractSetNumbersResponse,
+} from './prompts/extract-set-numbers';

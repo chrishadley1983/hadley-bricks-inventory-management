@@ -16,6 +16,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
+/**
+ * Human-readable display names for purchase columns
+ */
+export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
+  purchase_date: 'Date',
+  source: 'Source',
+  short_description: 'Description',
+  cost: 'Cost',
+  payment_method: 'Payment',
+  description: 'Notes',
+  reference: 'Reference',
+  created_at: 'Created',
+};
+
 interface ColumnsProps {
   onDelete?: (id: string) => void;
 }

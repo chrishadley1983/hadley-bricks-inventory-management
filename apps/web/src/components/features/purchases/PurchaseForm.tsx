@@ -1,12 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useCreatePurchase, useUpdatePurchase } from '@/hooks';
+import { useCreatePurchase, useUpdatePurchase, useCreateMileage } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MileageSection } from './MileageSection';
+import { MileageFormInline, type PendingMileageEntry } from './MileageFormInline';
 import type { Purchase } from '@hadley-bricks/database';
 
 const purchaseSchema = z.object({
@@ -74,6 +76,10 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
   const router = useRouter();
   const createMutation = useCreatePurchase();
   const updateMutation = useUpdatePurchase();
+  const createMileageMutation = useCreateMileage();
+
+  // State for pending mileage entries (used in create mode)
+  const [pendingMileageEntries, setPendingMileageEntries] = useState<PendingMileageEntry[]>([]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -106,6 +112,24 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
     let result: Purchase;
     if (mode === 'create') {
       result = await createMutation.mutateAsync(purchaseData);
+
+      // Create any pending mileage entries with the new purchase ID
+      if (pendingMileageEntries.length > 0) {
+        await Promise.all(
+          pendingMileageEntries.map((entry) =>
+            createMileageMutation.mutateAsync({
+              purchaseId: result.id,
+              trackingDate: entry.trackingDate,
+              destinationPostcode: entry.destinationPostcode,
+              milesTravelled: entry.milesTravelled,
+              amountClaimed: entry.amountClaimed,
+              reason: entry.reason,
+              expenseType: entry.expenseType,
+              notes: entry.notes,
+            })
+          )
+        );
+      }
     } else {
       result = await updateMutation.mutateAsync({
         id: initialData!.id,
@@ -120,7 +144,7 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || createMileageMutation.isPending;
 
   return (
     <Form {...form}>
@@ -292,10 +316,16 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
           </Card>
         </div>
 
-        {/* Mileage Section - only show in edit mode */}
-        {mode === 'edit' && initialData && (
+        {/* Mileage Section */}
+        {mode === 'create' ? (
+          <MileageFormInline
+            purchaseDate={form.watch('purchase_date')}
+            pendingEntries={pendingMileageEntries}
+            onEntriesChange={setPendingMileageEntries}
+          />
+        ) : (
           <MileageSection
-            purchaseId={initialData.id}
+            purchaseId={initialData?.id}
             purchaseDate={form.watch('purchase_date')}
           />
         )}

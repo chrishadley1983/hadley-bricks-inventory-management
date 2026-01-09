@@ -1,12 +1,52 @@
 import type { Purchase, PurchaseInsert, PurchaseUpdate } from '@hadley-bricks/database';
 import type { PaginationParams, PaginatedResponse } from './inventory';
 
+/**
+ * Purchase search result for combobox lookup
+ */
+export interface PurchaseSearchResult {
+  id: string;
+  short_description: string;
+  purchase_date: string;
+  cost: number;
+  source: string | null;
+  reference: string | null;
+  items_linked: number;
+}
+
 export interface PurchaseFilters {
   source?: string;
   paymentMethod?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
+}
+
+/**
+ * Search purchases by description, reference, or source
+ * Used for the purchase lookup combobox
+ */
+export async function searchPurchases(
+  query: string,
+  limit?: number
+): Promise<PurchaseSearchResult[]> {
+  if (!query || query.length < 2) {
+    return [];
+  }
+
+  const params = new URLSearchParams();
+  params.set('q', query);
+  if (limit) params.set('limit', String(limit));
+
+  const response = await fetch(`/api/purchases/search?${params.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to search purchases');
+  }
+
+  const result = await response.json();
+  return result.data;
 }
 
 /**
@@ -106,6 +146,59 @@ export async function deletePurchase(id: string): Promise<void> {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to delete purchase');
+  }
+}
+
+/**
+ * Bulk update input type
+ */
+export interface BulkUpdatePurchaseInput {
+  ids: string[];
+  updates: Partial<{
+    purchase_date: string | null;
+    short_description: string | null;
+    cost: number | null;
+    source: string | null;
+    payment_method: string | null;
+    description: string | null;
+    reference: string | null;
+  }>;
+}
+
+/**
+ * Bulk update multiple purchases
+ */
+export async function bulkUpdatePurchases(
+  input: BulkUpdatePurchaseInput
+): Promise<Purchase[]> {
+  const response = await fetch('/api/purchases/bulk', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to bulk update purchases');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+/**
+ * Bulk delete multiple purchases
+ */
+export async function bulkDeletePurchases(ids: string[]): Promise<void> {
+  const response = await fetch('/api/purchases/bulk', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to bulk delete purchases');
   }
 }
 

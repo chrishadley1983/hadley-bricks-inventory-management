@@ -12,8 +12,6 @@ export type { PurchaseFilters } from './purchase.repository';
 export { OrderRepository } from './order.repository';
 export type { OrderFilters, OrderWithItems } from './order.repository';
 
-export { SalesRepository } from './sales.repository';
-export type { SaleFilters, SaleWithItems } from './sales.repository';
 
 export { CredentialsRepository } from './credentials.repository';
 

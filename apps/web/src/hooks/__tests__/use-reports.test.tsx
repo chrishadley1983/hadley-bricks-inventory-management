@@ -7,7 +7,6 @@ import {
   useInventoryValuationReport,
   useInventoryAgingReport,
   usePlatformPerformanceReport,
-  useSalesTrendsReport,
   usePurchaseAnalysisReport,
   useTaxSummaryReport,
   useReportSettings,
@@ -216,56 +215,6 @@ describe('Report hooks', () => {
       const fetchUrl = mockFetch.mock.calls[0][0] as string;
       expect(fetchUrl).toContain('startDate=2024-06-01');
       expect(fetchUrl).toContain('endDate=2024-06-30');
-    });
-  });
-
-  describe('useSalesTrendsReport', () => {
-    const mockReport = {
-      data: {
-        period: { startDate: '2024-01-01', endDate: '2024-12-31' },
-        granularity: 'monthly',
-        data: [],
-        summary: {
-          totalRevenue: 10000,
-          totalProfit: 3000,
-          totalOrders: 100,
-          peakDay: '2024-12-15',
-          peakRevenue: 500,
-          avgDailyRevenue: 27.4,
-        },
-      },
-    };
-
-    it('should fetch sales trends report with granularity', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockReport),
-      });
-
-      renderHook(() => useSalesTrendsReport(undefined, 'monthly'), { wrapper: createWrapper() });
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalled();
-      });
-
-      const fetchUrl = mockFetch.mock.calls[0][0] as string;
-      expect(fetchUrl).toContain('granularity=monthly');
-    });
-
-    it('should default to daily granularity', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockReport),
-      });
-
-      renderHook(() => useSalesTrendsReport(), { wrapper: createWrapper() });
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalled();
-      });
-
-      const fetchUrl = mockFetch.mock.calls[0][0] as string;
-      expect(fetchUrl).toContain('granularity=daily');
     });
   });
 

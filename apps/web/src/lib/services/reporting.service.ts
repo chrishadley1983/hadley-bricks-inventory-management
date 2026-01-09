@@ -1596,10 +1596,13 @@ export class ReportingService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (this.supabase as any)
       .from('user_settings')
-      .upsert({
-        user_id: userId,
-        report_settings: updated,
-      });
+      .upsert(
+        {
+          user_id: userId,
+          report_settings: updated,
+        },
+        { onConflict: 'user_id' }
+      );
 
     if (error) {
       throw new Error(`Failed to update settings: ${error.message}`);

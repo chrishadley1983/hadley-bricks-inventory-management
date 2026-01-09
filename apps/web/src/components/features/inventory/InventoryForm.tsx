@@ -1,11 +1,13 @@
 'use client';
 
+import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import type { Purchase } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +29,9 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCreateInventory, useUpdateInventory, useInventoryItem } from '@/hooks';
+import { PurchaseLookup } from './PurchaseLookup';
+import { QuickPurchaseDialog } from './QuickPurchaseDialog';
+import type { PurchaseSearchResult } from '@/lib/api';
 
 const inventoryFormSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
@@ -36,6 +41,7 @@ const inventoryFormSchema = z.object({
   source: z.string().optional(),
   purchase_date: z.string().optional(),
   cost: z.string().optional(),
+  purchase_id: z.string().optional(),
   listing_date: z.string().optional(),
   listing_value: z.string().optional(),
   storage_location: z.string().optional(),
@@ -51,6 +57,7 @@ type InventoryFormValues = z.infer<typeof inventoryFormSchema>;
 interface InventoryFormProps {
   mode: 'create' | 'edit';
   itemId?: string;
+  showHeader?: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -65,13 +72,18 @@ const CONDITION_OPTIONS = [
   { value: 'Used', label: 'Used' },
 ];
 
-export function InventoryForm({ mode, itemId }: InventoryFormProps) {
+export function InventoryForm({ mode, itemId, showHeader = true }: InventoryFormProps) {
   const router = useRouter();
   const createMutation = useCreateInventory();
   const updateMutation = useUpdateInventory();
   const { data: existingItem, isLoading: isLoadingItem } = useInventoryItem(
     mode === 'edit' ? itemId : undefined
   );
+
+  // State for purchase lookup
+  const [selectedPurchase, setSelectedPurchase] = React.useState<PurchaseSearchResult | null>(null);
+  const [quickPurchaseOpen, setQuickPurchaseOpen] = React.useState(false);
+  const [quickPurchaseDefaultDesc, setQuickPurchaseDefaultDesc] = React.useState('');
 
   const form = useForm<InventoryFormValues>({
     resolver: zodResolver(inventoryFormSchema),
@@ -83,6 +95,7 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
       source: '',
       purchase_date: '',
       cost: '',
+      purchase_id: '',
       listing_date: '',
       listing_value: '',
       storage_location: '',
@@ -101,6 +114,7 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
           source: existingItem.source || '',
           purchase_date: existingItem.purchase_date || '',
           cost: existingItem.cost?.toString() || '',
+          purchase_id: existingItem.purchase_id || '',
           listing_date: existingItem.listing_date || '',
           listing_value: existingItem.listing_value?.toString() || '',
           storage_location: existingItem.storage_location || '',
@@ -113,6 +127,50 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
       : undefined,
   });
 
+  // Handle purchase selection from lookup
+  const handlePurchaseSelect = React.useCallback(
+    (purchase: PurchaseSearchResult | null, suggestedCost: number | null) => {
+      setSelectedPurchase(purchase);
+      if (purchase) {
+        form.setValue('purchase_id', purchase.id);
+        form.setValue('purchase_date', purchase.purchase_date);
+        if (purchase.source) {
+          form.setValue('source', purchase.source);
+        }
+        if (suggestedCost !== null) {
+          form.setValue('cost', suggestedCost.toFixed(2));
+        }
+      } else {
+        form.setValue('purchase_id', '');
+      }
+    },
+    [form]
+  );
+
+  // Handle creating a new purchase from the lookup
+  const handleCreateNewPurchase = React.useCallback((searchTerm: string) => {
+    setQuickPurchaseDefaultDesc(searchTerm);
+    setQuickPurchaseOpen(true);
+  }, []);
+
+  // Handle new purchase created from dialog
+  const handlePurchaseCreated = React.useCallback(
+    (purchase: Purchase) => {
+      // Convert to search result format
+      const searchResult: PurchaseSearchResult = {
+        id: purchase.id,
+        short_description: purchase.short_description,
+        purchase_date: purchase.purchase_date,
+        cost: purchase.cost,
+        source: purchase.source,
+        reference: purchase.reference,
+        items_linked: 0,
+      };
+      handlePurchaseSelect(searchResult, purchase.cost);
+    },
+    [handlePurchaseSelect]
+  );
+
   const onSubmit = async (values: InventoryFormValues) => {
     const costNum = values.cost ? parseFloat(values.cost) : undefined;
     const listingValueNum = values.listing_value ? parseFloat(values.listing_value) : undefined;
@@ -121,6 +179,7 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
       ...values,
       cost: costNum && !isNaN(costNum) ? costNum : undefined,
       listing_value: listingValueNum && !isNaN(listingValueNum) ? listingValueNum : undefined,
+      purchase_id: values.purchase_id || undefined,
     };
 
     if (mode === 'edit' && itemId) {
@@ -145,22 +204,24 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={mode === 'edit' && itemId ? `/inventory/${itemId}` : '/inventory'}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {mode === 'create' ? 'Add Inventory Item' : 'Edit Inventory Item'}
-            </h1>
-            <p className="text-muted-foreground">
-              {mode === 'create' ? 'Add a new item to your inventory' : 'Update item details'}
-            </p>
+        {/* Header - conditionally shown */}
+        {showHeader && (
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={mode === 'edit' && itemId ? `/inventory/${itemId}` : '/inventory'}>
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">
+                {mode === 'create' ? 'Add Inventory Item' : 'Edit Inventory Item'}
+              </h1>
+              <p className="text-muted-foreground">
+                {mode === 'create' ? 'Add a new item to your inventory' : 'Update item details'}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Basic Information */}
@@ -381,13 +442,21 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
 
               <FormField
                 control={form.control}
-                name="linked_lot"
+                name="purchase_id"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Linked Purchase</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 338 (80)" {...field} />
+                      <PurchaseLookup
+                        value={field.value}
+                        selectedPurchase={selectedPurchase}
+                        onSelect={handlePurchaseSelect}
+                        onCreateNew={handleCreateNewPurchase}
+                      />
                     </FormControl>
+                    <FormDescription>
+                      Link to a purchase to auto-fill cost and date
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -448,6 +517,14 @@ export function InventoryForm({ mode, itemId }: InventoryFormProps) {
           </Button>
         </div>
       </form>
+
+      {/* Quick Purchase Dialog */}
+      <QuickPurchaseDialog
+        open={quickPurchaseOpen}
+        onOpenChange={setQuickPurchaseOpen}
+        onPurchaseCreated={handlePurchaseCreated}
+        defaultDescription={quickPurchaseDefaultDesc}
+      />
     </Form>
   );
 }

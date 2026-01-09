@@ -8,11 +8,11 @@ const Header = dynamic(
   { ssr: false }
 );
 
-// Dynamically import InventoryForm to prevent SSR issues
-const InventoryForm = dynamic(
+// Dynamically import InventoryAddTabs to prevent SSR issues
+const InventoryAddTabs = dynamic(
   () =>
-    import('@/components/features/inventory/InventoryForm').then((mod) => ({
-      default: mod.InventoryForm,
+    import('@/components/features/inventory/InventoryAddTabs').then((mod) => ({
+      default: mod.InventoryAddTabs,
     })),
   { ssr: false }
 );
@@ -20,9 +20,9 @@ const InventoryForm = dynamic(
 export default function NewInventoryPage() {
   return (
     <>
-      <Header title="Add Inventory Item" />
+      <Header title="Add Inventory" />
       <div className="p-6">
-        <InventoryForm mode="create" />
+        <InventoryAddTabs />
       </div>
     </>
   );

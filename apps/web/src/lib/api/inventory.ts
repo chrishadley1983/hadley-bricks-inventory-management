@@ -183,6 +183,8 @@ export interface BulkUpdateInput {
     status: string | null;
     source: string | null;
     listing_platform: string | null;
+    purchase_id: string | null;
+    purchase_date: string | null;
   }>;
 }
 

@@ -217,4 +217,50 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
 
     return (data ?? []) as Purchase[];
   }
+
+  /**
+   * Bulk update multiple purchases
+   * @param ids - Array of purchase IDs to update
+   * @param data - Fields to update
+   * @param userId - User ID for defense-in-depth filtering (in addition to RLS)
+   */
+  async updateBulk(ids: string[], data: PurchaseUpdate, userId?: string): Promise<Purchase[]> {
+    let query = this.supabase
+      .from(this.tableName)
+      .update(data)
+      .in('id', ids);
+
+    // Add user_id filter for defense-in-depth (RLS also enforces this)
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data: results, error } = await query.select();
+
+    if (error) {
+      throw new Error(`Failed to bulk update purchases: ${error.message}`);
+    }
+
+    return (results ?? []) as Purchase[];
+  }
+
+  /**
+   * Bulk delete multiple purchases
+   * @param ids - Array of purchase IDs to delete
+   * @param userId - User ID for defense-in-depth filtering (in addition to RLS)
+   */
+  async deleteBulk(ids: string[], userId?: string): Promise<void> {
+    let query = this.supabase.from(this.tableName).delete().in('id', ids);
+
+    // Add user_id filter for defense-in-depth (RLS also enforces this)
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to bulk delete purchases: ${error.message}`);
+    }
+  }
 }

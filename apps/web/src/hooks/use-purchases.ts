@@ -8,10 +8,13 @@ import {
   createPurchase,
   updatePurchase,
   deletePurchase,
+  bulkUpdatePurchases,
+  bulkDeletePurchases,
   parsePurchase,
   calculateMileage,
   type PurchaseFilters,
   type PaginationParams,
+  type BulkUpdatePurchaseInput,
 } from '@/lib/api';
 
 /**
@@ -88,6 +91,34 @@ export function useDeletePurchase() {
     onSuccess: (_, deletedId) => {
       queryClient.removeQueries({ queryKey: purchaseKeys.detail(deletedId) });
       queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Hook to bulk update multiple purchases
+ */
+export function useBulkUpdatePurchases() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: BulkUpdatePurchaseInput) => bulkUpdatePurchases(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to bulk delete multiple purchases
+ */
+export function useBulkDeletePurchases() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkDeletePurchases(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
     },
   });
 }

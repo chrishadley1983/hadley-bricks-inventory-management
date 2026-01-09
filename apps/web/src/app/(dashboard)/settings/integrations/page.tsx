@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,9 +13,7 @@ import {
   EyeOff,
   ExternalLink,
   Loader2,
-  Link2,
 } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -1049,14 +1048,6 @@ export default function IntegrationsSettingsPage() {
                   </Button>
                 </div>
 
-                <div className="pt-4 border-t">
-                  <Link href="/settings/ebay-sku-matching">
-                    <Button variant="outline" className="w-full justify-start">
-                      <Link2 className="mr-2 h-4 w-4" />
-                      Manage SKU Mappings
-                    </Button>
-                  </Link>
-                </div>
               </>
             ) : (
               <>

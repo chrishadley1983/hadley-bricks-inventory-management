@@ -9,7 +9,6 @@ const ExportParamsSchema = z.object({
     'inventory-valuation',
     'inventory-aging',
     'platform-performance',
-    'sales-trends',
     'purchase-analysis',
     'tax-summary',
   ]),
@@ -95,10 +94,6 @@ export async function GET(request: NextRequest) {
       case 'platform-performance':
         reportData = await reportingService.getPlatformPerformanceReport(user.id, dateRange);
         filename = `platform-performance-report-${new Date().toISOString().split('T')[0]}`;
-        break;
-      case 'sales-trends':
-        reportData = await reportingService.getSalesTrendsReport(user.id, dateRange);
-        filename = `sales-trends-report-${new Date().toISOString().split('T')[0]}`;
         break;
       case 'purchase-analysis':
         reportData = await reportingService.getPurchaseAnalysisReport(user.id, dateRange);
@@ -256,26 +251,6 @@ function convertToCSV(reportType: string, data: unknown): string {
           platform.profitMargin.toFixed(2),
           platform.averageOrderValue.toFixed(2),
           platform.totalFees.toFixed(2),
-        ]);
-      }
-      break;
-    }
-    case 'sales-trends': {
-      const report = data as {
-        trendData: Array<{
-          period: string;
-          sales: number;
-          revenue: number;
-          profit: number;
-        }>;
-      };
-      rows.push(['Period', 'Sales', 'Revenue', 'Profit']);
-      for (const point of report.trendData) {
-        rows.push([
-          point.period,
-          point.sales.toString(),
-          point.revenue.toFixed(2),
-          point.profit.toFixed(2),
         ]);
       }
       break;

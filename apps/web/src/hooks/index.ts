@@ -16,6 +16,8 @@ export {
   useCreatePurchase,
   useUpdatePurchase,
   useDeletePurchase,
+  useBulkUpdatePurchases,
+  useBulkDeletePurchases,
   useParsePurchase,
   useCalculateMileage,
   purchaseKeys,
@@ -51,3 +53,12 @@ export {
   useUpdateHomeAddress,
   mileageKeys,
 } from './use-mileage';
+export {
+  usePurchaseSearch,
+  usePurchaseLookup,
+  calculateSuggestedCost,
+  purchaseSearchKeys,
+} from './use-purchase-search';
+export { useParseInventory } from './use-parse-inventory';
+export { useExtractSetNumbers } from './use-extract-set-numbers';
+export { useInventoryImport, parseCsvContent } from './use-inventory-import';

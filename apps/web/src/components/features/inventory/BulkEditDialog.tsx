@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { Purchase } from '@hadley-bricks/database';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,9 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePlatforms } from '@/hooks';
+import { PurchaseLookup } from './PurchaseLookup';
+import { QuickPurchaseDialog } from './QuickPurchaseDialog';
+import type { PurchaseSearchResult } from '@/lib/api';
 
 interface BulkEditField {
   enabled: boolean;
@@ -30,7 +34,8 @@ interface BulkEditField {
 
 interface BulkEditFormState {
   storage_location: BulkEditField;
-  linked_lot: BulkEditField;
+  purchase_id: BulkEditField;
+  purchase_date: BulkEditField;
   notes: BulkEditField;
   condition: BulkEditField;
   status: BulkEditField;
@@ -64,13 +69,19 @@ export function BulkEditDialog({
   const { data: platforms = [] } = usePlatforms();
   const [formState, setFormState] = useState<BulkEditFormState>({
     storage_location: initialFieldState(),
-    linked_lot: initialFieldState(),
+    purchase_id: initialFieldState(),
+    purchase_date: initialFieldState(),
     notes: initialFieldState(),
     condition: initialFieldState(),
     status: initialFieldState(),
     source: initialFieldState(),
     listing_platform: initialFieldState(),
   });
+
+  // State for PurchaseLookup and QuickPurchaseDialog
+  const [selectedPurchase, setSelectedPurchase] = useState<PurchaseSearchResult | null>(null);
+  const [quickPurchaseOpen, setQuickPurchaseOpen] = useState(false);
+  const [quickPurchaseDescription, setQuickPurchaseDescription] = useState('');
 
   const handleFieldToggle = (field: keyof BulkEditFormState, enabled: boolean) => {
     setFormState((prev) => ({
@@ -104,19 +115,50 @@ export function BulkEditDialog({
     // Reset form state when closing
     setFormState({
       storage_location: initialFieldState(),
-      linked_lot: initialFieldState(),
+      purchase_id: initialFieldState(),
+      purchase_date: initialFieldState(),
       notes: initialFieldState(),
       condition: initialFieldState(),
       status: initialFieldState(),
       source: initialFieldState(),
       listing_platform: initialFieldState(),
     });
+    setSelectedPurchase(null);
     onOpenChange(false);
+  };
+
+  // Handle purchase selection from PurchaseLookup
+  const handlePurchaseSelect = (purchase: PurchaseSearchResult | null) => {
+    setSelectedPurchase(purchase);
+    handleFieldChange('purchase_id', purchase?.id || null);
+  };
+
+  // Handle creating new purchase from quick dialog
+  const handlePurchaseCreated = (purchase: Purchase) => {
+    const searchResult: PurchaseSearchResult = {
+      id: purchase.id,
+      short_description: purchase.short_description,
+      purchase_date: purchase.purchase_date,
+      cost: purchase.cost,
+      source: purchase.source,
+      reference: purchase.reference,
+      items_linked: 0,
+    };
+    setSelectedPurchase(searchResult);
+    handleFieldChange('purchase_id', purchase.id);
+    setQuickPurchaseOpen(false);
+  };
+
+  // Handle "Create New" click from PurchaseLookup
+  const handleCreateNewPurchase = (searchTerm: string) => {
+    setQuickPurchaseDescription(searchTerm);
+    setQuickPurchaseOpen(true);
   };
 
   const enabledFieldsCount = Object.values(formState).filter((f) => f.enabled).length;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -276,21 +318,44 @@ export function BulkEditDialog({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Checkbox
-                id="edit-linked-lot"
-                checked={formState.linked_lot.enabled}
+                id="edit-purchase-id"
+                checked={formState.purchase_id.enabled}
                 onCheckedChange={(checked: boolean | 'indeterminate') =>
-                  handleFieldToggle('linked_lot', !!checked)
+                  handleFieldToggle('purchase_id', !!checked)
                 }
               />
-              <Label htmlFor="edit-linked-lot" className="font-medium">
+              <Label htmlFor="edit-purchase-id" className="font-medium">
                 Linked Purchase
               </Label>
             </div>
-            {formState.linked_lot.enabled && (
+            {formState.purchase_id.enabled && (
+              <PurchaseLookup
+                selectedPurchase={selectedPurchase}
+                onSelect={handlePurchaseSelect}
+                onCreateNew={handleCreateNewPurchase}
+              />
+            )}
+          </div>
+
+          {/* Purchase Date */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-purchase-date"
+                checked={formState.purchase_date.enabled}
+                onCheckedChange={(checked: boolean | 'indeterminate') =>
+                  handleFieldToggle('purchase_date', !!checked)
+                }
+              />
+              <Label htmlFor="edit-purchase-date" className="font-medium">
+                Purchase Date
+              </Label>
+            </div>
+            {formState.purchase_date.enabled && (
               <Input
-                placeholder="Enter purchase reference"
-                value={formState.linked_lot.value || ''}
-                onChange={(e) => handleFieldChange('linked_lot', e.target.value || null)}
+                type="date"
+                value={formState.purchase_date.value || ''}
+                onChange={(e) => handleFieldChange('purchase_date', e.target.value || null)}
               />
             )}
           </div>
@@ -332,5 +397,13 @@ export function BulkEditDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <QuickPurchaseDialog
+      open={quickPurchaseOpen}
+      onOpenChange={setQuickPurchaseOpen}
+      onPurchaseCreated={handlePurchaseCreated}
+      defaultDescription={quickPurchaseDescription}
+    />
+  </>
   );
 }

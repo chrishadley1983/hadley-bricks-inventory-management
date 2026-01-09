@@ -7,11 +7,11 @@ const CreatePurchaseSchema = z.object({
   purchase_date: z.string().min(1, 'Purchase date is required'),
   short_description: z.string().min(1, 'Description is required'),
   cost: z.number().positive('Cost must be positive'),
-  source: z.string().optional(),
-  payment_method: z.string().optional(),
-  description: z.string().optional(),
-  reference: z.string().optional(),
-  image_url: z.string().url().optional().or(z.literal('')),
+  source: z.string().nullish(),
+  payment_method: z.string().nullish(),
+  description: z.string().nullish(),
+  reference: z.string().nullish(),
+  image_url: z.string().url().nullish().or(z.literal('')),
 });
 
 const QuerySchema = z.object({
