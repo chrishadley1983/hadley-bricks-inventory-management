@@ -24,12 +24,13 @@ const CreateInventorySchema = z.object({
 const QuerySchema = z.object({
   page: z.coerce.number().positive().optional(),
   pageSize: z.coerce.number().positive().max(100).optional(),
-  status: z.string().optional(),
+  status: z.string().optional(), // Can be comma-separated for multiple statuses
   condition: z.enum(['New', 'Used']).optional(),
   platform: z.string().optional(),
   linkedLot: z.string().optional(),
   purchaseId: z.string().uuid().optional(),
   search: z.string().optional(),
+  excludeLinked: z.coerce.boolean().optional(), // Exclude items already linked to orders
 });
 
 /**
@@ -59,17 +60,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, status, condition, platform, linkedLot, purchaseId, search } = parsed.data;
+    const { page, pageSize, status, condition, platform, linkedLot, purchaseId, search, excludeLinked } = parsed.data;
+
+    // Parse status - can be comma-separated for multiple values
+    type InventoryStatus = 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD';
+    let statusFilter: InventoryStatus | InventoryStatus[] | undefined;
+    if (status) {
+      const statuses = status.split(',').map(s => s.trim()) as InventoryStatus[];
+      statusFilter = statuses.length === 1 ? statuses[0] : statuses;
+    }
 
     const service = new InventoryService(supabase, user.id);
     const result = await service.getAll(
       {
-        status: status as 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD' | undefined,
+        status: statusFilter,
         condition,
         platform,
         linkedLot,
         purchaseId,
         searchTerm: search,
+        excludeLinkedToOrders: excludeLinked,
       },
       { page, pageSize }
     );

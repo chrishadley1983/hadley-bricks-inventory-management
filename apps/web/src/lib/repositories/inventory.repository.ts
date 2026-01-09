@@ -20,6 +20,7 @@ export interface InventoryFilters {
   linkedLot?: string;
   purchaseId?: string;
   searchTerm?: string;
+  excludeLinkedToOrders?: boolean;
 }
 
 /**
@@ -45,6 +46,19 @@ export class InventoryRepository extends BaseRepository<
     const pageSize = pagination?.pageSize ?? 50;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
+
+    // If excluding items linked to orders, get the linked IDs first
+    let linkedInventoryIds: string[] = [];
+    if (filters?.excludeLinkedToOrders) {
+      const { data: linkedItems } = await this.supabase
+        .from('order_items')
+        .select('inventory_item_id')
+        .not('inventory_item_id', 'is', null);
+
+      linkedInventoryIds = (linkedItems || [])
+        .map((item) => item.inventory_item_id)
+        .filter((id): id is string => id !== null);
+    }
 
     // Build the query
     let query = this.supabase.from(this.tableName).select('*', { count: 'exact' });
@@ -78,6 +92,14 @@ export class InventoryRepository extends BaseRepository<
       query = query.or(
         `set_number.ilike.%${filters.searchTerm}%,item_name.ilike.%${filters.searchTerm}%,sku.ilike.%${filters.searchTerm}%`
       );
+    }
+
+    // Exclude inventory items already linked to orders
+    if (filters?.excludeLinkedToOrders && linkedInventoryIds.length > 0) {
+      // Supabase doesn't support NOT IN directly, so we use .not().in()
+      // However, this has a limit on array size. For large arrays, we'll need a different approach.
+      // For now, this should work for reasonable data sizes.
+      query = query.not('id', 'in', `(${linkedInventoryIds.join(',')})`);
     }
 
     // Apply pagination
