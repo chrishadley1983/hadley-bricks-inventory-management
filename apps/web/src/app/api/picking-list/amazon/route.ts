@@ -9,11 +9,13 @@ export interface AmazonPickingListItem {
   asin: string | null;
   itemName: string;
   orderId: string;
+  orderItemId: string;
   amazonOrderId: string;
   quantity: number;
   buyerName: string | null;
   orderDate: string;
   matchStatus: 'matched' | 'unmatched';
+  inventoryItemId: string | null;
 }
 
 export interface AmazonPickingListResponse {
@@ -60,14 +62,15 @@ export async function GET(request: NextRequest) {
           id,
           item_number,
           item_name,
-          quantity
+          quantity,
+          inventory_item_id
         )
       `
       )
       .eq('user_id', user.id)
       .eq('platform', 'amazon')
       .is('fulfilled_at', null)
-      .in('status', ['Unshipped', 'PartiallyShipped', 'Pending'])
+      .in('status', ['Paid', 'Partially Shipped', 'Pending'])
       .order('order_date', { ascending: true });
 
     if (error) {
@@ -89,6 +92,7 @@ export async function GET(request: NextRequest) {
         item_number: string;
         item_name: string;
         quantity: number;
+        inventory_item_id: string | null;
       }>;
     }
 
@@ -100,46 +104,105 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    // Get inventory items by ASIN (amazon_asin field matches order item_number which stores ASIN)
+    // Get inventory items by ASIN - fetch ALL matching items for FIFO selection
+    // Filter: amazon_asin matches, listing_platform = 'amazon', status in (BACKLOG, LISTED)
+    // Sort by created_at ascending for FIFO
     let inventoryByAsin: Array<{
       id: string;
       amazon_asin: string | null;
       set_number: string;
       item_name: string | null;
       storage_location: string | null;
+      status: string | null;
+      listing_platform: string | null;
+      created_at: string;
     }> = [];
 
     if (allAsins.size > 0) {
       const { data } = await supabase
         .from('inventory_items')
-        .select('id, amazon_asin, set_number, item_name, storage_location')
+        .select('id, amazon_asin, set_number, item_name, storage_location, status, listing_platform, created_at')
         .eq('user_id', user.id)
-        .in('amazon_asin', Array.from(allAsins));
+        .in('amazon_asin', Array.from(allAsins))
+        .ilike('listing_platform', 'amazon')
+        .in('status', ['BACKLOG', 'LISTED'])
+        .order('created_at', { ascending: true }); // FIFO - oldest first
       inventoryByAsin = data || [];
     }
 
-    const inventoryByAsinMap = new Map(
-      inventoryByAsin.map((item) => [item.amazon_asin, item])
+    // Get inventory IDs already linked to any order (to exclude from matching)
+    const { data: linkedItems } = await supabase
+      .from('order_items')
+      .select('inventory_item_id')
+      .not('inventory_item_id', 'is', null);
+
+    const alreadyLinkedInventoryIds = new Set(
+      (linkedItems ?? [])
+        .map((item: { inventory_item_id: string | null }) => item.inventory_item_id)
+        .filter((id): id is string => id !== null)
     );
 
-    // Build picking list items
+    // Group inventory by ASIN (multiple items can have same ASIN)
+    const inventoryByAsinMap = new Map<string, typeof inventoryByAsin>();
+    for (const item of inventoryByAsin) {
+      if (item.amazon_asin && !alreadyLinkedInventoryIds.has(item.id)) {
+        const existing = inventoryByAsinMap.get(item.amazon_asin) || [];
+        existing.push(item);
+        inventoryByAsinMap.set(item.amazon_asin, existing);
+      }
+    }
+
+    // Track which inventory items we've assigned in this batch (to handle duplicates)
+    const assignedInventoryIds = new Set<string>();
+
+    // Build picking list items and persist matches
     const pickingListItems: AmazonPickingListItem[] = [];
     const unmatchedItems: AmazonPickingListItem[] = [];
     const unknownLocationItems: AmazonPickingListItem[] = [];
+    const matchesToPersist: Array<{ orderItemId: string; inventoryItemId: string }> = [];
 
     for (const order of (orders as OrderWithItems[] || [])) {
       for (const lineItem of order.items) {
         let matchStatus: 'matched' | 'unmatched' = 'unmatched';
         let location: string | null = null;
         let setNo: string | null = null;
+        let inventoryItemId: string | null = null;
 
-        // Check ASIN match
-        if (lineItem.item_number) {
-          const inventory = inventoryByAsinMap.get(lineItem.item_number);
-          if (inventory) {
+        // Check if already linked (from previous picking list generation)
+        if (lineItem.inventory_item_id) {
+          // Already linked - fetch the inventory details
+          const { data: linkedInventory } = await supabase
+            .from('inventory_items')
+            .select('id, set_number, storage_location')
+            .eq('id', lineItem.inventory_item_id)
+            .single();
+
+          if (linkedInventory) {
             matchStatus = 'matched';
-            location = inventory.storage_location;
-            setNo = inventory.set_number;
+            location = linkedInventory.storage_location;
+            setNo = linkedInventory.set_number;
+            inventoryItemId = linkedInventory.id;
+          }
+        } else if (lineItem.item_number) {
+          // Try to match by ASIN - use FIFO selection
+          const availableInventory = inventoryByAsinMap.get(lineItem.item_number) || [];
+
+          // Find first unassigned inventory item
+          for (const inv of availableInventory) {
+            if (!assignedInventoryIds.has(inv.id)) {
+              matchStatus = 'matched';
+              location = inv.storage_location;
+              setNo = inv.set_number;
+              inventoryItemId = inv.id;
+              assignedInventoryIds.add(inv.id);
+
+              // Queue this match to be persisted
+              matchesToPersist.push({
+                orderItemId: lineItem.id,
+                inventoryItemId: inv.id,
+              });
+              break;
+            }
           }
         }
 
@@ -149,11 +212,13 @@ export async function GET(request: NextRequest) {
           asin: lineItem.item_number,
           itemName: lineItem.item_name,
           orderId: order.id,
+          orderItemId: lineItem.id,
           amazonOrderId: order.platform_order_id,
           quantity: lineItem.quantity,
           buyerName: order.buyer_name,
           orderDate: order.order_date,
           matchStatus,
+          inventoryItemId,
         };
 
         // Track unmatched items
@@ -167,6 +232,33 @@ export async function GET(request: NextRequest) {
         }
 
         pickingListItems.push(item);
+      }
+    }
+
+    // Persist the matches to order_items table (creates the FK link for confirmation later)
+    if (matchesToPersist.length > 0) {
+      let persistedCount = 0;
+      const persistErrors: string[] = [];
+
+      for (const match of matchesToPersist) {
+        const { error } = await supabase
+          .from('order_items')
+          .update({
+            inventory_item_id: match.inventoryItemId,
+          })
+          .eq('id', match.orderItemId);
+
+        if (error) {
+          console.error(`[GET /api/picking-list/amazon] Failed to persist match for order item ${match.orderItemId}:`, error);
+          persistErrors.push(`${match.orderItemId}: ${error.message}`);
+        } else {
+          persistedCount++;
+        }
+      }
+
+      console.log(`[GET /api/picking-list/amazon] Persisted ${persistedCount}/${matchesToPersist.length} inventory matches`);
+      if (persistErrors.length > 0) {
+        console.error(`[GET /api/picking-list/amazon] Persist errors:`, persistErrors);
       }
     }
 

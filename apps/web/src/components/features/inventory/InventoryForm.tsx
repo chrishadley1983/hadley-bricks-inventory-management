@@ -72,6 +72,30 @@ const CONDITION_OPTIONS = [
   { value: 'Used', label: 'Used' },
 ];
 
+/**
+ * Normalize condition value from database to form enum
+ */
+function normalizeCondition(value: string | null | undefined): 'New' | 'Used' | undefined {
+  if (!value) return undefined;
+  const lower = value.toLowerCase();
+  if (lower === 'new') return 'New';
+  if (lower === 'used') return 'Used';
+  return undefined;
+}
+
+/**
+ * Normalize status value from database to form enum
+ */
+function normalizeStatus(value: string | null | undefined): InventoryFormValues['status'] | undefined {
+  if (!value) return undefined;
+  const upper = value.toUpperCase().replace(/\s+/g, ' ').trim();
+  if (upper === 'NOT YET RECEIVED') return 'NOT YET RECEIVED';
+  if (upper === 'BACKLOG') return 'BACKLOG';
+  if (upper === 'LISTED') return 'LISTED';
+  if (upper === 'SOLD') return 'SOLD';
+  return undefined;
+}
+
 export function InventoryForm({ mode, itemId, showHeader = true }: InventoryFormProps) {
   const router = useRouter();
   const createMutation = useCreateInventory();
@@ -105,27 +129,34 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
       listing_platform: '',
       notes: '',
     },
-    values: existingItem
-      ? {
-          set_number: existingItem.set_number,
-          item_name: existingItem.item_name || '',
-          condition: (existingItem.condition as 'New' | 'Used' | undefined) || undefined,
-          status: (existingItem.status as InventoryFormValues['status']) || 'NOT YET RECEIVED',
-          source: existingItem.source || '',
-          purchase_date: existingItem.purchase_date || '',
-          cost: existingItem.cost?.toString() || '',
-          purchase_id: existingItem.purchase_id || '',
-          listing_date: existingItem.listing_date || '',
-          listing_value: existingItem.listing_value?.toString() || '',
-          storage_location: existingItem.storage_location || '',
-          sku: existingItem.sku || '',
-          linked_lot: existingItem.linked_lot || '',
-          amazon_asin: existingItem.amazon_asin || '',
-          listing_platform: existingItem.listing_platform || '',
-          notes: existingItem.notes || '',
-        }
-      : undefined,
   });
+
+  // Reset form when existing item data loads
+  const { reset } = form;
+  React.useEffect(() => {
+    if (existingItem && mode === 'edit') {
+      const normalizedCondition = normalizeCondition(existingItem.condition);
+      const normalizedStatus = normalizeStatus(existingItem.status);
+      reset({
+        set_number: existingItem.set_number,
+        item_name: existingItem.item_name || '',
+        condition: normalizedCondition,
+        status: normalizedStatus || 'NOT YET RECEIVED',
+        source: existingItem.source || '',
+        purchase_date: existingItem.purchase_date || '',
+        cost: existingItem.cost?.toString() || '',
+        purchase_id: existingItem.purchase_id || '',
+        listing_date: existingItem.listing_date || '',
+        listing_value: existingItem.listing_value?.toString() || '',
+        storage_location: existingItem.storage_location || '',
+        sku: existingItem.sku || '',
+        linked_lot: existingItem.linked_lot || '',
+        amazon_asin: existingItem.amazon_asin || '',
+        listing_platform: existingItem.listing_platform || '',
+        notes: existingItem.notes || '',
+      });
+    }
+  }, [existingItem, mode, reset]);
 
   // Handle purchase selection from lookup
   const handlePurchaseSelect = React.useCallback(
@@ -265,7 +296,11 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Condition</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                      key={`condition-${field.value || 'empty'}`}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select condition" />
@@ -290,7 +325,11 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                      key={`status-${field.value || 'empty'}`}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />

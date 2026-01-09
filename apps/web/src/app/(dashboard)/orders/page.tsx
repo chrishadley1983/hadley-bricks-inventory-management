@@ -24,6 +24,7 @@ import {
   PackageCheck as ConfirmIcon,
   Download,
   Square,
+  Calculator,
 } from 'lucide-react';
 import { ConfirmOrdersDialog } from '@/components/features/orders/ConfirmOrdersDialog';
 import { Button } from '@/components/ui/button';
@@ -304,6 +305,31 @@ async function stopBackfill(): Promise<void> {
   await fetch('/api/orders/backfill', { method: 'DELETE' });
 }
 
+// Fee reconciliation types and functions
+interface FeeReconciliationPreview {
+  totalItemsNeedingReconciliation: number;
+}
+
+interface FeeReconciliationResult {
+  success: boolean;
+  itemsProcessed: number;
+  itemsUpdated: number;
+  itemsSkipped: number;
+  errors: string[];
+}
+
+async function fetchFeeReconciliationPreview(): Promise<{ data: FeeReconciliationPreview }> {
+  const response = await fetch('/api/admin/reconcile-amazon-fees');
+  if (!response.ok) throw new Error('Failed to fetch fee reconciliation preview');
+  return response.json();
+}
+
+async function runFeeReconciliation(): Promise<{ data: FeeReconciliationResult }> {
+  const response = await fetch('/api/admin/reconcile-amazon-fees', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to run fee reconciliation');
+  return response.json();
+}
+
 async function triggerSync(): Promise<SyncResponse> {
   const response = await fetch('/api/integrations/sync-all-orders', {
     method: 'POST',
@@ -480,6 +506,25 @@ export default function OrdersPage() {
       queryClient.invalidateQueries({ queryKey: ['amazon', 'backfill'] });
     },
   });
+
+  // Fee reconciliation query and mutation
+  const { data: feeReconciliationPreview } = useQuery({
+    queryKey: ['amazon', 'fee-reconciliation'],
+    queryFn: fetchFeeReconciliationPreview,
+    enabled: amazonStatus?.isConfigured || false,
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const feeReconciliationMutation = useMutation({
+    mutationFn: runFeeReconciliation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'fee-reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+
+  const itemsNeedingFeeReconciliation = feeReconciliationPreview?.data?.totalItemsNeedingReconciliation || 0;
+
   const ebayConnected = ebayConnectionStatus?.isConnected || false;
   const ebayLastSync = ebaySyncLog?.logs?.[0]?.started_at;
   const ebayUnfulfilledCount = (ebayStatusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Packed || 0);
@@ -981,6 +1026,37 @@ export default function OrdersPage() {
                     <ConfirmIcon className="mr-2 h-4 w-4" />
                     Confirm Orders Processed
                   </Button>
+
+                  {/* Fee Reconciliation Section */}
+                  {itemsNeedingFeeReconciliation > 0 && (
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                        <span>{itemsNeedingFeeReconciliation} items missing fee data</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          feeReconciliationMutation.mutate();
+                        }}
+                        disabled={feeReconciliationMutation.isPending}
+                      >
+                        {feeReconciliationMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Calculator className="mr-2 h-4 w-4" />
+                        )}
+                        {feeReconciliationMutation.isPending ? 'Reconciling...' : 'Reconcile Fees'}
+                      </Button>
+                      {feeReconciliationMutation.isSuccess && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Updated {feeReconciliationMutation.data.data.itemsUpdated} items
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Backfill Section */}
                   {ordersNeedingBackfill > 0 && !isBackfillRunning && (

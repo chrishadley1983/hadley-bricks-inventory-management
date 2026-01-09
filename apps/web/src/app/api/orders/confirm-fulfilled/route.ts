@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { OrderFulfilmentService } from '@/lib/services/order-fulfilment.service';
+import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
 
 const ConfirmOrdersSchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1),
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/orders/confirm-fulfilled?platform=amazon
  * Get orders ready for confirmation with their inventory match status
+ *
+ * For Amazon: First syncs order statuses from Amazon API to detect which orders
+ * have been shipped, then returns orders that have inventory linked AND are now shipped.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -79,6 +83,26 @@ export async function GET(request: NextRequest) {
         { error: 'Invalid platform. Must be "amazon" or "ebay"' },
         { status: 400 }
       );
+    }
+
+    // For Amazon: Sync order statuses first to detect shipped orders
+    if (parsed.data.platform === 'amazon') {
+      const amazonSyncService = new AmazonSyncService(supabase);
+      const isConfigured = await amazonSyncService.isConfigured(user.id);
+
+      if (isConfigured) {
+        console.log('[GET /api/orders/confirm-fulfilled] Syncing Amazon orders first...');
+        try {
+          // Sync recent orders to get updated statuses (focus on shipped status)
+          await amazonSyncService.syncOrders(user.id, {
+            statuses: ['Shipped', 'Unshipped', 'PartiallyShipped'],
+            includeItems: true,
+          });
+        } catch (syncError) {
+          // Log but don't fail - we can still show orders with current status
+          console.error('[GET /api/orders/confirm-fulfilled] Amazon sync warning:', syncError);
+        }
+      }
     }
 
     const fulfilmentService = new OrderFulfilmentService(supabase);

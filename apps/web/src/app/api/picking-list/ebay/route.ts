@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
     // Check for format parameter (json or pdf)
     const format = request.nextUrl.searchParams.get('format') || 'json';
 
-    // Fetch eligible orders with line items
+    // Fetch unfulfilled orders with line items
+    // Filter at DB level to avoid 1000 row limit issues
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: orders, error } = await (supabase as any)
       .from('ebay_orders')
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
       )
       .eq('user_id', user.id)
       .neq('order_payment_status', 'FULLY_REFUNDED')
+      .neq('order_fulfilment_status', 'FULFILLED')
       .order('creation_date', { ascending: true });
 
     if (error) {
@@ -80,16 +82,16 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleOrders = (orders || []).filter((order: any) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.line_items.some((li: any) => li.fulfilment_status === 'NOT_STARTED')
+      order.line_items.some((li: any) => li.fulfilment_status !== 'FULFILLED')
     );
 
-    // Get all SKUs from eligible line items
+    // Get all SKUs from eligible line items (unfulfilled items only)
     const allSkus = new Set<string>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     eligibleOrders.forEach((order: any) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       order.line_items.forEach((li: any) => {
-        if (li.sku && li.fulfilment_status === 'NOT_STARTED') {
+        if (li.sku && li.fulfilment_status !== 'FULFILLED') {
           allSkus.add(li.sku);
         }
       });
@@ -153,7 +155,8 @@ export async function GET(request: NextRequest) {
     for (const order of eligibleOrders) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const lineItem of order.line_items) {
-        if (lineItem.fulfilment_status !== 'NOT_STARTED') continue;
+        // Skip already fulfilled line items
+        if (lineItem.fulfilment_status === 'FULFILLED') continue;
 
         let matchStatus: 'matched' | 'unmatched' | 'manual' = 'unmatched';
         let location: string | null = null;

@@ -1,5 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // External image domains
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.brickset.com',
+        pathname: '/sets/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.bricklink.com',
+        pathname: '/**',
+      },
+    ],
+  },
   // Security headers
   async headers() {
     return [

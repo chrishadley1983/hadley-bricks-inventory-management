@@ -89,6 +89,10 @@ interface PayPalCredentials {
   sandbox: boolean;
 }
 
+interface BricksetCredentials {
+  apiKey: string;
+}
+
 interface PayPalConnectionStatus {
   isConnected: boolean;
   sandbox?: boolean;
@@ -323,6 +327,36 @@ async function syncPayPal(fullSync: boolean = false): Promise<{ success: boolean
   return response.json();
 }
 
+// Brickset API functions
+async function fetchBricksetStatus(): Promise<{ configured: boolean }> {
+  const response = await fetch('/api/integrations/brickset/credentials');
+  if (!response.ok) throw new Error('Failed to fetch status');
+  return response.json();
+}
+
+async function saveBricksetCredentials(credentials: BricksetCredentials): Promise<void> {
+  const response = await fetch('/api/integrations/brickset/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to save credentials');
+  }
+}
+
+async function deleteBricksetCredentials(): Promise<void> {
+  const response = await fetch('/api/integrations/brickset/credentials', {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete credentials');
+  }
+}
+
 // Sync all platforms
 async function syncAllPlatforms(): Promise<{ success: boolean; data: Record<string, unknown> }> {
   const response = await fetch('/api/integrations/sync-all-orders', {
@@ -404,6 +438,14 @@ export default function IntegrationsSettingsPage() {
   const [paypalError, setPayPalError] = useState<string | null>(null);
   const [paypalSuccess, setPayPalSuccess] = useState<string | null>(null);
   const [paypalMessage, setPayPalMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Brickset state
+  const [showBricksetSecret, setShowBricksetSecret] = useState(false);
+  const [bricksetCredentials, setBricksetCredentials] = useState<BricksetCredentials>({
+    apiKey: '',
+  });
+  const [bricksetError, setBricksetError] = useState<string | null>(null);
+  const [bricksetSuccess, setBricksetSuccess] = useState<string | null>(null);
 
   // Handle eBay OAuth callback messages
   useEffect(() => {
@@ -763,6 +805,40 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
+  // Brickset queries/mutations
+  const { data: bricksetStatus, isLoading: bricksetStatusLoading } = useQuery({
+    queryKey: ['brickset', 'status'],
+    queryFn: fetchBricksetStatus,
+    refetchInterval: 60000,
+  });
+
+  const saveBricksetMutation = useMutation({
+    mutationFn: saveBricksetCredentials,
+    onSuccess: () => {
+      setBricksetSuccess('Brickset credentials saved and verified successfully');
+      setBricksetError(null);
+      setBricksetCredentials({ apiKey: '' });
+      queryClient.invalidateQueries({ queryKey: ['brickset', 'status'] });
+    },
+    onError: (err: Error) => {
+      setBricksetError(err.message);
+      setBricksetSuccess(null);
+    },
+  });
+
+  const deleteBricksetMutation = useMutation({
+    mutationFn: deleteBricksetCredentials,
+    onSuccess: () => {
+      setBricksetSuccess('Brickset credentials removed');
+      setBricksetError(null);
+      queryClient.invalidateQueries({ queryKey: ['brickset', 'status'] });
+    },
+    onError: (err: Error) => {
+      setBricksetError(err.message);
+      setBricksetSuccess(null);
+    },
+  });
+
   const handleSaveBrickLink = () => {
     setBrickLinkError(null);
     setBrickLinkSuccess(null);
@@ -871,6 +947,24 @@ export default function IntegrationsSettingsPage() {
   const handleDeletePayPal = () => {
     if (confirm('Are you sure you want to remove PayPal credentials?')) {
       deletePayPalMutation.mutate();
+    }
+  };
+
+  const handleSaveBrickset = () => {
+    setBricksetError(null);
+    setBricksetSuccess(null);
+
+    if (!bricksetCredentials.apiKey) {
+      setBricksetError('API Key is required');
+      return;
+    }
+
+    saveBricksetMutation.mutate(bricksetCredentials);
+  };
+
+  const handleDeleteBrickset = () => {
+    if (confirm('Are you sure you want to remove Brickset credentials?')) {
+      deleteBricksetMutation.mutate();
     }
   };
 
@@ -2058,6 +2152,148 @@ export default function IntegrationsSettingsPage() {
                     disabled={deletePayPalMutation.isPending}
                   >
                     {deletePayPalMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Brickset Integration */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
+                  <span className="text-lg font-bold text-blue-700">BS</span>
+                </div>
+                <div>
+                  <CardTitle>Brickset</CardTitle>
+                  <CardDescription>
+                    LEGO set database for lookups and metadata
+                  </CardDescription>
+                </div>
+              </div>
+              {bricksetStatusLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : bricksetStatus?.configured ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-700">
+                  <XCircle className="mr-1 h-3 w-3" />
+                  Not Connected
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {bricksetError && (
+              <Alert variant="destructive">
+                <AlertDescription>{bricksetError}</AlertDescription>
+              </Alert>
+            )}
+
+            {bricksetSuccess && (
+              <Alert className="bg-green-50 border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{bricksetSuccess}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="rounded-lg bg-muted p-4 text-sm">
+              <p className="font-medium mb-2">How to get your Brickset API key:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>
+                  Go to{' '}
+                  <a
+                    href="https://brickset.com/tools/webservices/requestkey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    Brickset API Key Request
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </li>
+                <li>Register for an API key (requires a Brickset account)</li>
+                <li>Copy the API Key and paste it below</li>
+              </ol>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="bricksetApiKey">API Key</Label>
+                <Input
+                  id="bricksetApiKey"
+                  type={showBricksetSecret ? 'text' : 'password'}
+                  placeholder="Enter your Brickset API Key"
+                  value={bricksetCredentials.apiKey}
+                  onChange={(e) =>
+                    setBricksetCredentials({ apiKey: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowBricksetSecret(!showBricksetSecret)}
+              >
+                {showBricksetSecret ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide API Key
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Show API Key
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="flex gap-2 pt-4 border-t">
+              <Button
+                onClick={handleSaveBrickset}
+                disabled={saveBricksetMutation.isPending}
+              >
+                {saveBricksetMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Save & Test Connection
+                  </>
+                )}
+              </Button>
+
+              {bricksetStatus?.configured && (
+                <>
+                  <Link href="/set-lookup">
+                    <Button variant="outline">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Set Lookup
+                    </Button>
+                  </Link>
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteBrickset}
+                    disabled={deleteBricksetMutation.isPending}
+                  >
+                    {deleteBricksetMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
                     Disconnect

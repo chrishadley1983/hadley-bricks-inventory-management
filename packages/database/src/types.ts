@@ -1076,6 +1076,191 @@ export type Database = {
           },
         ]
       }
+      brickset_api_credentials: {
+        Row: {
+          api_key_encrypted: string
+          created_at: string
+          id: string
+          last_used_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brickset_api_credentials_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brickset_sets: {
+        Row: {
+          additional_image_count: number | null
+          age_max: number | null
+          age_min: number | null
+          availability: string | null
+          bricklink_sold_price_new: number | null
+          bricklink_sold_price_used: number | null
+          brickset_id: number | null
+          ca_retail_price: number | null
+          category: string | null
+          created_at: string
+          de_retail_price: number | null
+          depth: number | null
+          designers: string[] | null
+          ean: string | null
+          eu_item_number: string | null
+          exit_date: string | null
+          height: number | null
+          id: string
+          image_filename: string | null
+          image_url: string | null
+          instructions_count: number | null
+          last_fetched_at: string | null
+          launch_date: string | null
+          minifigs: number | null
+          own_count: number | null
+          packaging_type: string | null
+          pieces: number | null
+          rating: number | null
+          raw_response: Json | null
+          released: boolean | null
+          set_name: string
+          set_number: string
+          subtheme: string | null
+          theme: string | null
+          theme_group: string | null
+          uk_retail_price: number | null
+          upc: string | null
+          updated_at: string
+          us_date_added: string | null
+          us_date_removed: string | null
+          us_item_number: string | null
+          us_retail_price: number | null
+          variant: number | null
+          want_count: number | null
+          weight: number | null
+          width: number | null
+          year_from: number | null
+        }
+        Insert: {
+          additional_image_count?: number | null
+          age_max?: number | null
+          age_min?: number | null
+          availability?: string | null
+          bricklink_sold_price_new?: number | null
+          bricklink_sold_price_used?: number | null
+          brickset_id?: number | null
+          ca_retail_price?: number | null
+          category?: string | null
+          created_at?: string
+          de_retail_price?: number | null
+          depth?: number | null
+          designers?: string[] | null
+          ean?: string | null
+          eu_item_number?: string | null
+          exit_date?: string | null
+          height?: number | null
+          id?: string
+          image_filename?: string | null
+          image_url?: string | null
+          instructions_count?: number | null
+          last_fetched_at?: string | null
+          launch_date?: string | null
+          minifigs?: number | null
+          own_count?: number | null
+          packaging_type?: string | null
+          pieces?: number | null
+          rating?: number | null
+          raw_response?: Json | null
+          released?: boolean | null
+          set_name: string
+          set_number: string
+          subtheme?: string | null
+          theme?: string | null
+          theme_group?: string | null
+          uk_retail_price?: number | null
+          upc?: string | null
+          updated_at?: string
+          us_date_added?: string | null
+          us_date_removed?: string | null
+          us_item_number?: string | null
+          us_retail_price?: number | null
+          variant?: number | null
+          want_count?: number | null
+          weight?: number | null
+          width?: number | null
+          year_from?: number | null
+        }
+        Update: {
+          additional_image_count?: number | null
+          age_max?: number | null
+          age_min?: number | null
+          availability?: string | null
+          bricklink_sold_price_new?: number | null
+          bricklink_sold_price_used?: number | null
+          brickset_id?: number | null
+          ca_retail_price?: number | null
+          category?: string | null
+          created_at?: string
+          de_retail_price?: number | null
+          depth?: number | null
+          designers?: string[] | null
+          ean?: string | null
+          eu_item_number?: string | null
+          exit_date?: string | null
+          height?: number | null
+          id?: string
+          image_filename?: string | null
+          image_url?: string | null
+          instructions_count?: number | null
+          last_fetched_at?: string | null
+          launch_date?: string | null
+          minifigs?: number | null
+          own_count?: number | null
+          packaging_type?: string | null
+          pieces?: number | null
+          rating?: number | null
+          raw_response?: Json | null
+          released?: boolean | null
+          set_name?: string
+          set_number?: string
+          subtheme?: string | null
+          theme?: string | null
+          theme_group?: string | null
+          uk_retail_price?: number | null
+          upc?: string | null
+          updated_at?: string
+          us_date_added?: string | null
+          us_date_removed?: string | null
+          us_item_number?: string | null
+          us_retail_price?: number | null
+          variant?: number | null
+          want_count?: number | null
+          weight?: number | null
+          width?: number | null
+          year_from?: number | null
+        }
+        Relationships: []
+      }
       bricqer_stats_cache: {
         Row: {
           created_at: string

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign, ShoppingCart, Archive } from 'lucide-react';
 import { useInventoryItem, useDeleteInventory, usePurchase } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -222,6 +222,91 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Sales Information - Only show for SOLD items */}
+          {item.status === 'SOLD' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Sales Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <DetailRow label="Sold Date" value={formatDate(item.sold_date)} />
+                <DetailRow label="Sold Platform" value={item.sold_platform} />
+                <DetailRow label="Order ID" value={item.sold_order_id} />
+                <DetailRow
+                  label="Sold Price"
+                  value={item.sold_price ? formatCurrency(item.sold_price) : '-'}
+                />
+                <DetailRow
+                  label="Gross Amount"
+                  value={item.sold_gross_amount ? formatCurrency(item.sold_gross_amount) : '-'}
+                />
+                <DetailRow
+                  label="Postage Received"
+                  value={item.sold_postage_received ? formatCurrency(item.sold_postage_received) : '-'}
+                />
+                <DetailRow
+                  label="Fees"
+                  value={
+                    item.sold_fees_amount ? (
+                      <span className="text-red-600">
+                        -{formatCurrency(item.sold_fees_amount)}
+                      </span>
+                    ) : (
+                      '-'
+                    )
+                  }
+                />
+                <DetailRow
+                  label="Net Amount"
+                  value={
+                    item.sold_net_amount ? (
+                      <span className="font-semibold text-green-600">
+                        {formatCurrency(item.sold_net_amount)}
+                      </span>
+                    ) : (
+                      '-'
+                    )
+                  }
+                />
+                {/* Calculate actual profit if we have cost and net amount */}
+                {item.cost && item.sold_net_amount && (
+                  <DetailRow
+                    label="Actual Profit"
+                    value={
+                      <span
+                        className={
+                          item.sold_net_amount - item.cost > 0
+                            ? 'font-semibold text-green-600'
+                            : 'font-semibold text-red-600'
+                        }
+                      >
+                        {formatCurrency(item.sold_net_amount - item.cost)}
+                      </span>
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Archive Location - Only show for SOLD items with archive location */}
+          {item.status === 'SOLD' && item.archive_location && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Archive className="h-5 w-5" />
+                  Archive
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <DetailRow label="Archive Location" value={item.archive_location} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

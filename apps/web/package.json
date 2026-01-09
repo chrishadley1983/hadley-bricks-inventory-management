@@ -18,7 +18,8 @@
     "migrate:purchases": "tsx scripts/migrate-purchases.ts",
     "migrate:bricklink-uploads": "tsx scripts/migrate-bricklink-uploads.ts",
     "validate:reconcile": "tsx scripts/reconcile-data.ts",
-    "sheets:test": "tsx scripts/test-sheets-connection.ts"
+    "sheets:test": "tsx scripts/test-sheets-connection.ts",
+    "seed:brickset": "tsx src/scripts/seed-brickset-data.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

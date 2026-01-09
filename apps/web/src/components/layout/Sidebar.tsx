@@ -18,6 +18,7 @@ import {
   PieChart,
   Landmark,
   Link2,
+  Search,
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,6 +33,7 @@ const mainNavItems: NavItem[] = [
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/orders', label: 'Orders', icon: FileText },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
+  { href: '/set-lookup', label: 'Set Lookup', icon: Search },
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 
