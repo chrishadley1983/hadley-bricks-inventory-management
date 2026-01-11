@@ -31,7 +31,6 @@ export type {
   InventoryAgingReport,
   PlatformPerformanceReport,
   PurchaseAnalysisReport,
-  TaxSummaryReport,
   ReportSettings,
   StoreStatus,
   ActivityPlatform,

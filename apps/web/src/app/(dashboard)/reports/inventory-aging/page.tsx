@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2, Clock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Clock, AlertTriangle, DollarSign, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -19,9 +20,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { StatCard, BarChart, PieChart } from '@/components/charts';
 import { useInventoryAgingReport, useExportReport } from '@/hooks/use-reports';
+import type { InventoryAgingReport } from '@/lib/services';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -50,15 +59,112 @@ function getBracketBadgeVariant(bracket: string): 'default' | 'secondary' | 'des
   return 'default';
 }
 
+type BracketItem = NonNullable<InventoryAgingReport['brackets'][0]['items']>[0];
+
+interface DrillDownSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  bracket: InventoryAgingReport['brackets'][0] | null;
+}
+
+function DrillDownSheet({ isOpen, onClose, bracket }: DrillDownSheetProps) {
+  if (!bracket) return null;
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Badge variant={getBracketBadgeVariant(bracket.bracket)}>
+              {bracket.bracket}
+            </Badge>
+            <span>Items</span>
+          </SheetTitle>
+          <SheetDescription>
+            {bracket.itemCount} items with {formatCurrency(bracket.potentialRevenueImpact)} potential revenue
+          </SheetDescription>
+        </SheetHeader>
+        <div className="mt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead className="text-right">Days</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">List Value</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bracket.items?.map((item: BracketItem) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{item.setNumber}</p>
+                      <p className="text-sm text-muted-foreground truncate max-w-[180px]">
+                        {item.itemName}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{item.condition}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-orange-600">
+                    {item.daysInStock}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(item.cost)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatCurrency(item.listingValue)}
+                  </TableCell>
+                  <TableCell>
+                    <Link href={`/inventory/${item.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {(!bracket.items || bracket.items.length === 0) && (
+            <p className="text-center text-muted-foreground py-8">
+              No items in this age bracket
+            </p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function InventoryAgingReportPage() {
   const { data: report, isLoading, error } = useInventoryAgingReport();
   const exportMutation = useExportReport();
+  const [selectedBracket, setSelectedBracket] = useState<InventoryAgingReport['brackets'][0] | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const handleExport = (format: 'csv' | 'json') => {
     exportMutation.mutate({
       reportType: 'inventory-aging',
       format,
     });
+  };
+
+  const handleBracketClick = (bracket: InventoryAgingReport['brackets'][0]) => {
+    setSelectedBracket(bracket);
+    setIsSheetOpen(true);
+  };
+
+  const handleBarClick = (data: { name?: string | number }) => {
+    const bracketName = String(data.name || '');
+    const bracket = report?.brackets.find((b) => b.bracket === bracketName);
+    if (bracket) {
+      handleBracketClick(bracket);
+    }
   };
 
   // Prepare chart data
@@ -81,6 +187,7 @@ export default function InventoryAgingReportPage() {
   ) || [];
   const slowMovingValue = slowMovingBrackets.reduce((sum, b) => sum + b.totalCostValue, 0);
   const slowMovingCount = slowMovingBrackets.reduce((sum, b) => sum + b.itemCount, 0);
+  const slowMovingRevenue = slowMovingBrackets.reduce((sum, b) => sum + b.potentialRevenueImpact, 0);
 
   return (
     <>
@@ -124,7 +231,7 @@ export default function InventoryAgingReportPage() {
         ) : (
           <>
             {/* Key Metrics */}
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-5">
               <StatCard
                 title="Total Items"
                 value={report?.totalItems || 0}
@@ -135,6 +242,12 @@ export default function InventoryAgingReportPage() {
                 title="Total Value"
                 value={report?.totalValue || 0}
                 format="currency"
+              />
+              <StatCard
+                title="Potential Revenue"
+                value={report?.totalPotentialRevenue || 0}
+                format="currency"
+                icon={<DollarSign className="h-4 w-4 text-green-500" />}
               />
               <StatCard
                 title="Avg Days in Stock"
@@ -156,7 +269,9 @@ export default function InventoryAgingReportPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Items by Age Bracket</CardTitle>
-                  <CardDescription>Number of items in each age category</CardDescription>
+                  <CardDescription>
+                    Number of items in each age category. Click a bar to view items.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BarChart
@@ -165,6 +280,7 @@ export default function InventoryAgingReportPage() {
                     bars={[{ dataKey: 'items', name: 'Items', color: '#3b82f6' }]}
                     height={300}
                     colorByValue={(d) => d.color as string}
+                    onBarClick={handleBarClick}
                   />
                 </CardContent>
               </Card>
@@ -189,7 +305,7 @@ export default function InventoryAgingReportPage() {
               <CardHeader>
                 <CardTitle>Age Bracket Summary</CardTitle>
                 <CardDescription>
-                  Detailed breakdown by age category
+                  Detailed breakdown by age category. Click a row to view items.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -199,12 +315,17 @@ export default function InventoryAgingReportPage() {
                       <TableHead>Age Bracket</TableHead>
                       <TableHead className="text-right">Items</TableHead>
                       <TableHead className="text-right">Total Value</TableHead>
+                      <TableHead className="text-right">Potential Revenue</TableHead>
                       <TableHead className="text-right">% of Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {report?.brackets.map((bracket) => (
-                      <TableRow key={bracket.bracket}>
+                      <TableRow
+                        key={bracket.bracket}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleBracketClick(bracket)}
+                      >
                         <TableCell>
                           <Badge variant={getBracketBadgeVariant(bracket.bracket)}>
                             {bracket.bracket}
@@ -213,6 +334,9 @@ export default function InventoryAgingReportPage() {
                         <TableCell className="text-right">{bracket.itemCount}</TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(bracket.totalCostValue)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-green-600">
+                          {formatCurrency(bracket.potentialRevenueImpact)}
                         </TableCell>
                         <TableCell className="text-right">
                           {bracket.percentOfTotal.toFixed(1)}%
@@ -234,8 +358,8 @@ export default function InventoryAgingReportPage() {
                   </CardTitle>
                   <CardDescription className="text-orange-700">
                     You have {slowMovingCount} items worth {formatCurrency(slowMovingValue)} that
-                    have been in stock for over 90 days. Consider reviewing pricing or running
-                    promotions.
+                    have been in stock for over 90 days, representing {formatCurrency(slowMovingRevenue)} in
+                    potential revenue. Consider reviewing pricing or running promotions.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -259,6 +383,8 @@ export default function InventoryAgingReportPage() {
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Days in Stock</TableHead>
                         <TableHead className="text-right">Cost</TableHead>
+                        <TableHead className="text-right">List Value</TableHead>
+                        <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -284,6 +410,16 @@ export default function InventoryAgingReportPage() {
                             <TableCell className="text-right">
                               {formatCurrency(item.cost)}
                             </TableCell>
+                            <TableCell className="text-right font-medium text-green-600">
+                              {formatCurrency(item.listingValue)}
+                            </TableCell>
+                            <TableCell>
+                              <Link href={`/inventory/${item.id}`}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            </TableCell>
                           </TableRow>
                         ))}
                     </TableBody>
@@ -294,6 +430,13 @@ export default function InventoryAgingReportPage() {
           </>
         )}
       </div>
+
+      {/* Drill-down Sheet */}
+      <DrillDownSheet
+        isOpen={isSheetOpen}
+        onClose={() => setIsSheetOpen(false)}
+        bracket={selectedBracket}
+      />
     </>
   );
 }

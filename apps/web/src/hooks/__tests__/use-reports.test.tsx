@@ -8,7 +8,6 @@ import {
   useInventoryAgingReport,
   usePlatformPerformanceReport,
   usePurchaseAnalysisReport,
-  useTaxSummaryReport,
   useReportSettings,
   useUpdateReportSettings,
   useExportReport,
@@ -41,13 +40,21 @@ describe('Report hooks', () => {
   describe('useProfitLossReport', () => {
     const mockReport = {
       data: {
-        period: { startDate: '2024-01-01', endDate: '2024-12-31' },
-        totalRevenue: 10000,
-        grossProfit: 5000,
-        netProfit: 3000,
-        profitMargin: 30,
-        platformBreakdown: [],
-        monthlyBreakdown: [],
+        generatedAt: '2024-01-15T10:00:00Z',
+        dateRange: { startMonth: '2024-01', endMonth: '2024-12' },
+        months: ['2024-01', '2024-02', '2024-03'],
+        rows: [
+          {
+            category: 'Income',
+            transactionType: 'eBay Gross Sales',
+            monthlyValues: { '2024-01': 5000, '2024-02': 3000, '2024-03': 2000 },
+            total: 10000,
+          },
+        ],
+        categoryTotals: {
+          Income: { '2024-01': 5000, '2024-02': 3000, '2024-03': 2000 },
+        },
+        grandTotal: { '2024-01': 3000, '2024-02': 2000, '2024-03': 1000 },
       },
     };
 
@@ -61,8 +68,8 @@ describe('Report hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(result.current.data?.totalRevenue).toBe(10000);
-      expect(result.current.data?.netProfit).toBe(3000);
+      expect(result.current.data?.rows[0].total).toBe(10000);
+      expect(result.current.data?.grandTotal['2024-01']).toBe(3000);
     });
 
     it('should pass date range parameters', async () => {
@@ -255,65 +262,6 @@ describe('Report hooks', () => {
     });
   });
 
-  describe('useTaxSummaryReport', () => {
-    const mockReport = {
-      data: {
-        financialYear: 2024,
-        yearStart: '2024-04-01',
-        yearEnd: '2025-03-31',
-        summary: {
-          totalSalesRevenue: 15000,
-          costOfGoodsSold: 5000,
-          grossProfit: 10000,
-          allowableExpenses: {
-            platformFees: 500,
-            shippingCosts: 300,
-            mileageAllowance: 225,
-            otherCosts: 100,
-            total: 1125,
-          },
-          netProfit: 8875,
-        },
-        quarterlyBreakdown: [],
-        mileageLog: [],
-        totalMiles: 500,
-        totalMileageAllowance: 225,
-      },
-    };
-
-    it('should fetch tax summary for financial year', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockReport),
-      });
-
-      const { result } = renderHook(() => useTaxSummaryReport(2024), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      expect(result.current.data?.financialYear).toBe(2024);
-      expect(result.current.data?.summary.netProfit).toBe(8875);
-    });
-
-    it('should pass financial year parameter', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockReport),
-      });
-
-      renderHook(() => useTaxSummaryReport(2024), { wrapper: createWrapper() });
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalled();
-      });
-
-      const fetchUrl = mockFetch.mock.calls[0][0] as string;
-      expect(fetchUrl).toContain('financialYear=2024');
-    });
-  });
-
   describe('useReportSettings', () => {
     const mockSettings = {
       data: {
@@ -419,7 +367,7 @@ describe('Report hooks', () => {
       global.URL.revokeObjectURL = originalRevokeObjectURL;
     });
 
-    it('should pass export parameters including date range and financial year', async () => {
+    it('should pass export parameters including date range', async () => {
       const mockBlob = new Blob(['{}'], { type: 'application/json' });
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -444,17 +392,21 @@ describe('Report hooks', () => {
       const { result } = renderHook(() => useExportReport(), { wrapper: createWrapper() });
 
       result.current.mutate({
-        reportType: 'tax-summary',
+        reportType: 'inventory-valuation',
         format: 'json',
-        financialYear: 2024,
+        dateRange: {
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-12-31'),
+        },
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       const fetchUrl = mockFetch.mock.calls[0][0] as string;
-      expect(fetchUrl).toContain('reportType=tax-summary');
+      expect(fetchUrl).toContain('reportType=inventory-valuation');
       expect(fetchUrl).toContain('format=json');
-      expect(fetchUrl).toContain('financialYear=2024');
+      expect(fetchUrl).toContain('startDate=2024-01-01');
+      expect(fetchUrl).toContain('endDate=2024-12-31');
 
       // Cleanup
       global.URL.createObjectURL = originalCreateObjectURL;

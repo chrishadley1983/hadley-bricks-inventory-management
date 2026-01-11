@@ -10,6 +10,7 @@ const UpdateSettingsSchema = z.object({
   businessName: z.string().nullable().optional(),
   businessAddress: z.string().nullable().optional(),
   showPreviousPeriodComparison: z.boolean().optional(),
+  dailyListingTarget: z.number().positive().optional(),
 });
 
 /**

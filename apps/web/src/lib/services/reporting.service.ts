@@ -129,6 +129,7 @@ export interface InventoryAgingReport {
     maxDays: number | null;
     itemCount: number;
     totalCostValue: number;
+    potentialRevenueImpact: number;
     percentOfTotal: number;
     items?: Array<{
       id: string;
@@ -136,12 +137,15 @@ export interface InventoryAgingReport {
       itemName: string;
       daysInStock: number;
       cost: number;
+      listingValue: number;
       status: string;
+      condition: string;
     }>;
   }>;
 
   totalItems: number;
   totalValue: number;
+  totalPotentialRevenue: number;
   averageDaysInStock: number;
   itemsOver180Days: number;
   valueOver180Days: number;
@@ -258,47 +262,6 @@ export interface PurchaseAnalysisReport {
 }
 
 /**
- * Tax Summary data structure
- */
-export interface TaxSummaryReport {
-  financialYear: number;
-  yearStart: string;
-  yearEnd: string;
-
-  summary: {
-    totalSalesRevenue: number;
-    costOfGoodsSold: number;
-    grossProfit: number;
-    allowableExpenses: {
-      platformFees: number;
-      shippingCosts: number;
-      mileageAllowance: number;
-      otherCosts: number;
-      total: number;
-    };
-    netProfit: number;
-  };
-
-  quarterlyBreakdown: Array<{
-    quarter: number;
-    quarterLabel: string;
-    revenue: number;
-    expenses: number;
-    profit: number;
-  }>;
-
-  mileageLog: Array<{
-    date: string;
-    description: string;
-    mileage: number;
-    allowance: number;
-  }>;
-
-  totalMiles: number;
-  totalMileageAllowance: number;
-}
-
-/**
  * Report Settings
  */
 export interface ReportSettings {
@@ -308,6 +271,7 @@ export interface ReportSettings {
   businessName: string | null;
   businessAddress: string | null;
   showPreviousPeriodComparison: boolean;
+  dailyListingTarget: number;
 }
 
 /**
@@ -819,7 +783,7 @@ export class ReportingService {
   async getInventoryAgingReport(userId: string, includeItems: boolean = false): Promise<InventoryAgingReport> {
     const { data: inventoryData, error } = await this.supabase
       .from('inventory_items')
-      .select('id, set_number, item_name, condition, status, cost, purchase_date, created_at')
+      .select('id, set_number, item_name, condition, status, cost, listing_value, purchase_date, created_at')
       .eq('user_id', userId)
       .in('status', ['IN STOCK', 'LISTED', 'NOT YET RECEIVED']);
 
@@ -831,21 +795,23 @@ export class ReportingService {
 
     // Define age brackets
     const brackets: InventoryAgingReport['brackets'] = [
-      { bracket: '0-30 days', minDays: 0, maxDays: 30, itemCount: 0, totalCostValue: 0, percentOfTotal: 0, items: [] },
-      { bracket: '31-60 days', minDays: 31, maxDays: 60, itemCount: 0, totalCostValue: 0, percentOfTotal: 0, items: [] },
-      { bracket: '61-90 days', minDays: 61, maxDays: 90, itemCount: 0, totalCostValue: 0, percentOfTotal: 0, items: [] },
-      { bracket: '91-180 days', minDays: 91, maxDays: 180, itemCount: 0, totalCostValue: 0, percentOfTotal: 0, items: [] },
-      { bracket: '180+ days', minDays: 181, maxDays: null, itemCount: 0, totalCostValue: 0, percentOfTotal: 0, items: [] },
+      { bracket: '0-30 days', minDays: 0, maxDays: 30, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
+      { bracket: '31-60 days', minDays: 31, maxDays: 60, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
+      { bracket: '61-90 days', minDays: 61, maxDays: 90, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
+      { bracket: '91-180 days', minDays: 91, maxDays: 180, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
+      { bracket: '180+ days', minDays: 181, maxDays: null, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
     ];
 
     let totalItems = 0;
     let totalValue = 0;
+    let totalPotentialRevenue = 0;
     let totalDays = 0;
     let itemsOver180 = 0;
     let valueOver180 = 0;
 
     for (const item of items) {
       const cost = item.cost || 0;
+      const listingValue = item.listing_value || cost * 1.5; // Estimate if no listing value
       const baseDate = item.purchase_date
         ? new Date(item.purchase_date)
         : new Date(item.created_at);
@@ -855,6 +821,7 @@ export class ReportingService {
 
       totalItems++;
       totalValue += cost;
+      totalPotentialRevenue += listingValue;
       totalDays += daysInStock;
 
       // Find appropriate bracket
@@ -866,15 +833,18 @@ export class ReportingService {
         if (inBracket) {
           bracket.itemCount++;
           bracket.totalCostValue += cost;
+          bracket.potentialRevenueImpact += listingValue;
 
-          if (includeItems && bracket.items) {
+          if (bracket.items) {
             bracket.items.push({
               id: item.id,
               setNumber: item.set_number,
               itemName: item.item_name || item.set_number,
               daysInStock,
               cost,
+              listingValue,
               status: item.status || 'Unknown',
+              condition: item.condition || 'Unknown',
             });
           }
           break;
@@ -887,7 +857,7 @@ export class ReportingService {
       }
     }
 
-    // Calculate percentages
+    // Calculate percentages and sort items
     for (const bracket of brackets) {
       bracket.percentOfTotal = totalItems > 0 ? (bracket.itemCount / totalItems) * 100 : 0;
       // Sort items by days in stock descending
@@ -907,6 +877,7 @@ export class ReportingService {
       brackets,
       totalItems,
       totalValue,
+      totalPotentialRevenue,
       averageDaysInStock: totalItems > 0 ? Math.round(totalDays / totalItems) : 0,
       itemsOver180Days: itemsOver180,
       valueOver180Days: valueOver180,
@@ -1383,175 +1354,6 @@ export class ReportingService {
   }
 
   /**
-   * Get Tax Summary Report
-   */
-  async getTaxSummaryReport(userId: string, financialYear: number): Promise<TaxSummaryReport> {
-    // UK financial year: April to March
-    const yearStart = `${financialYear}-04-01`;
-    const yearEnd = `${financialYear + 1}-03-31`;
-
-    // Fetch sales
-    const { data: salesData, error: salesError } = await this.supabase
-      .from('sales')
-      .select('sale_date, sale_amount, shipping_charged, platform_fees, shipping_cost, other_costs, cost_of_goods, gross_profit')
-      .eq('user_id', userId)
-      .gte('sale_date', yearStart)
-      .lte('sale_date', yearEnd);
-
-    if (salesError) {
-      throw new Error(`Failed to fetch sales: ${salesError.message}`);
-    }
-
-    // Fetch mileage from mileage_tracking table (joined with purchases for description)
-    const { data: mileageData, error: mileageError } = await this.supabase
-      .from('mileage_tracking')
-      .select(`
-        tracking_date,
-        miles_travelled,
-        amount_claimed,
-        reason,
-        expense_type,
-        purchases!mileage_tracking_purchase_id_fkey(short_description)
-      `)
-      .eq('user_id', userId)
-      .gte('tracking_date', yearStart)
-      .lte('tracking_date', yearEnd);
-
-    if (mileageError) {
-      throw new Error(`Failed to fetch mileage: ${mileageError.message}`);
-    }
-
-    interface TaxSaleRow {
-      sale_date: string;
-      sale_amount: number | null;
-      shipping_charged: number | null;
-      platform_fees: number | null;
-      shipping_cost: number | null;
-      other_costs: number | null;
-      cost_of_goods: number | null;
-      gross_profit: number | null;
-    }
-
-    const sales = (salesData || []) as TaxSaleRow[];
-
-    interface MileageTrackingRow {
-      tracking_date: string;
-      miles_travelled: number;
-      amount_claimed: number;
-      reason: string;
-      expense_type: string;
-      purchases: { short_description: string } | null;
-    }
-
-    const mileageRecords = (mileageData || []) as MileageTrackingRow[];
-
-    // Calculate totals
-    let totalRevenue = 0;
-    let totalCogs = 0;
-    let totalFees = 0;
-    let totalShippingCosts = 0;
-    let totalOtherCosts = 0;
-
-    // Quarterly breakdown
-    const quarters: Array<{
-      quarter: number;
-      revenue: number;
-      expenses: number;
-      profit: number;
-    }> = [
-      { quarter: 1, revenue: 0, expenses: 0, profit: 0 }, // Apr-Jun
-      { quarter: 2, revenue: 0, expenses: 0, profit: 0 }, // Jul-Sep
-      { quarter: 3, revenue: 0, expenses: 0, profit: 0 }, // Oct-Dec
-      { quarter: 4, revenue: 0, expenses: 0, profit: 0 }, // Jan-Mar
-    ];
-
-    for (const sale of sales) {
-      const revenue = (sale.sale_amount || 0) + (sale.shipping_charged || 0);
-      const cogs = sale.cost_of_goods || 0;
-      const fees = sale.platform_fees || 0;
-      const shipping = sale.shipping_cost || 0;
-      const other = sale.other_costs || 0;
-      const profit = sale.gross_profit || 0;
-
-      totalRevenue += revenue;
-      totalCogs += cogs;
-      totalFees += fees;
-      totalShippingCosts += shipping;
-      totalOtherCosts += other;
-
-      // Determine quarter (UK financial year)
-      const saleMonth = new Date(sale.sale_date).getMonth() + 1;
-      let quarterIndex: number;
-      if (saleMonth >= 4 && saleMonth <= 6) quarterIndex = 0;
-      else if (saleMonth >= 7 && saleMonth <= 9) quarterIndex = 1;
-      else if (saleMonth >= 10 && saleMonth <= 12) quarterIndex = 2;
-      else quarterIndex = 3;
-
-      quarters[quarterIndex].revenue += revenue;
-      quarters[quarterIndex].expenses += cogs + fees + shipping + other;
-      quarters[quarterIndex].profit += profit;
-    }
-
-    // Mileage log - now from mileage_tracking table
-    let totalMiles = 0;
-    let totalMileageAllowance = 0;
-    const mileageLog: TaxSummaryReport['mileageLog'] = [];
-
-    for (const record of mileageRecords) {
-      // Only include mileage type entries in miles calculation
-      if (record.expense_type === 'mileage') {
-        totalMiles += record.miles_travelled;
-      }
-      totalMileageAllowance += record.amount_claimed;
-
-      const description = record.purchases?.short_description
-        ? `${record.reason} - ${record.purchases.short_description}`
-        : record.reason;
-
-      mileageLog.push({
-        date: record.tracking_date,
-        description,
-        mileage: record.miles_travelled,
-        allowance: record.amount_claimed,
-      });
-    }
-    const grossProfit = totalRevenue - totalCogs;
-    const totalExpenses = totalFees + totalShippingCosts + totalMileageAllowance + totalOtherCosts;
-    const netProfit = grossProfit - totalExpenses;
-
-    const quarterLabels = ['Q1 (Apr-Jun)', 'Q2 (Jul-Sep)', 'Q3 (Oct-Dec)', 'Q4 (Jan-Mar)'];
-
-    return {
-      financialYear,
-      yearStart,
-      yearEnd,
-      summary: {
-        totalSalesRevenue: totalRevenue,
-        costOfGoodsSold: totalCogs,
-        grossProfit,
-        allowableExpenses: {
-          platformFees: totalFees,
-          shippingCosts: totalShippingCosts,
-          mileageAllowance: totalMileageAllowance,
-          otherCosts: totalOtherCosts,
-          total: totalExpenses,
-        },
-        netProfit,
-      },
-      quarterlyBreakdown: quarters.map((q, i) => ({
-        quarter: i + 1,
-        quarterLabel: quarterLabels[i],
-        revenue: q.revenue,
-        expenses: q.expenses,
-        profit: q.profit,
-      })),
-      mileageLog: mileageLog.sort((a, b) => a.date.localeCompare(b.date)),
-      totalMiles,
-      totalMileageAllowance,
-    };
-  }
-
-  /**
    * Get Report Settings
    */
   async getReportSettings(userId: string): Promise<ReportSettings> {
@@ -1572,6 +1374,7 @@ export class ReportingService {
       businessName: null,
       businessAddress: null,
       showPreviousPeriodComparison: true,
+      dailyListingTarget: 200,
     };
 
     interface SettingsRow {

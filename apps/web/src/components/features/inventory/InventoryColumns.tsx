@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2 } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2, CloudUpload } from 'lucide-react';
 import Link from 'next/link';
 import type { InventoryItem } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
@@ -47,9 +47,10 @@ export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
 
 interface ColumnsProps {
   onDelete?: (id: string) => void;
+  onAddToAmazonSync?: (item: InventoryItem) => void;
 }
 
-export function getInventoryColumns({ onDelete }: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
+export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
   return [
     {
       accessorKey: 'set_number',
@@ -356,6 +357,12 @@ export function getInventoryColumns({ onDelete }: ColumnsProps = {}): ColumnDef<
                   View Details
                 </Link>
               </DropdownMenuItem>
+              {onAddToAmazonSync && item.amazon_asin && (
+                <DropdownMenuItem onClick={() => onAddToAmazonSync(item)}>
+                  <CloudUpload className="mr-2 h-4 w-4" />
+                  Add to Amazon Sync
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {onDelete && (
                 <DropdownMenuItem

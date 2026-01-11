@@ -48,6 +48,7 @@ import {
   Trash2,
   Copy,
   Pencil,
+  CloudUpload,
 } from 'lucide-react';
 import { Skeleton } from './skeleton';
 
@@ -69,6 +70,7 @@ interface DataTableProps<TData, TValue> {
     onDuplicate?: (rows: TData[]) => void;
     onEdit?: (rows: TData[]) => void;
     onBulkEdit?: (rows: TData[]) => void;
+    onAddToAmazonSync?: (rows: TData[]) => void;
   };
   /** Enable column visibility controls */
   enableColumnVisibility?: boolean;
@@ -229,6 +231,16 @@ export function DataTable<TData, TValue>({
                 >
                   <Copy className="h-4 w-4 mr-1" />
                   Duplicate
+                </Button>
+              )}
+              {bulkActions?.onAddToAmazonSync && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkActions.onAddToAmazonSync?.(selectedRows)}
+                >
+                  <CloudUpload className="h-4 w-4 mr-1" />
+                  Amazon Sync
                 </Button>
               )}
               {bulkActions?.onDelete && (

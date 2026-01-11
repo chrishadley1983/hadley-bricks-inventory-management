@@ -58,6 +58,24 @@ const LowStockWidget = dynamic(
   { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
 );
 
+const DashboardSummaryWidget = dynamic(
+  () =>
+    import('@/components/features/dashboard').then((mod) => ({
+      default: mod.DashboardSummaryWidget,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+    ),
+  }
+);
+
 export default function DashboardPage() {
   const excludeSold = useDashboardStore((state) => state.excludeSold);
   const toggleExcludeSold = useDashboardStore((state) => state.toggleExcludeSold);
@@ -69,6 +87,11 @@ export default function DashboardPage() {
     <>
       <Header title="Dashboard" />
       <div className="p-6">
+        {/* Summary Section */}
+        <div className="mb-6">
+          <DashboardSummaryWidget />
+        </div>
+
         {/* Dashboard Controls */}
         <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
           {/* Platform Filter */}
@@ -103,7 +126,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Top stat widgets */}
+        {/* Inventory stat widgets */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <BricqerInventoryWidget />
           <FinancialSnapshotWidget />

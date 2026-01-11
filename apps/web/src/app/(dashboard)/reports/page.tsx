@@ -8,7 +8,6 @@ import {
   Clock,
   BarChart3,
   ShoppingBag,
-  FileText,
   Settings,
   ArrowRight,
   CalendarDays,
@@ -30,7 +29,7 @@ const Header = dynamic(
 const reportCategories = [
   {
     title: 'Financial Reports',
-    description: 'Profit, loss, and tax reporting',
+    description: 'Profit, loss, and financial analysis',
     reports: [
       {
         name: 'Profit & Loss',
@@ -38,13 +37,7 @@ const reportCategories = [
         href: '/reports/profit-loss',
         icon: TrendingUp,
         color: 'text-green-600',
-      },
-      {
-        name: 'Tax Summary',
-        description: 'UK financial year summary for HMRC reporting',
-        href: '/reports/tax-summary',
-        icon: FileText,
-        color: 'text-purple-600',
+        comingSoon: false,
       },
     ],
   },
@@ -58,6 +51,7 @@ const reportCategories = [
         href: '/reports/inventory-valuation',
         icon: Package,
         color: 'text-blue-600',
+        comingSoon: true,
       },
       {
         name: 'Inventory Aging',
@@ -65,6 +59,7 @@ const reportCategories = [
         href: '/reports/inventory-aging',
         icon: Clock,
         color: 'text-orange-600',
+        comingSoon: false,
       },
     ],
   },
@@ -78,6 +73,7 @@ const reportCategories = [
         href: '/reports/daily-activity',
         icon: CalendarDays,
         color: 'text-teal-600',
+        comingSoon: false,
       },
       {
         name: 'Platform Performance',
@@ -85,6 +81,7 @@ const reportCategories = [
         href: '/reports/platform-performance',
         icon: BarChart3,
         color: 'text-indigo-600',
+        comingSoon: true,
       },
     ],
   },
@@ -98,6 +95,7 @@ const reportCategories = [
         href: '/reports/purchase-analysis',
         icon: ShoppingBag,
         color: 'text-rose-600',
+        comingSoon: true,
       },
     ],
   },
@@ -135,6 +133,26 @@ export default function ReportsPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {category.reports.map((report) => {
                   const Icon = report.icon;
+
+                  if (report.comingSoon) {
+                    return (
+                      <Card key={report.name} className="h-full opacity-50 cursor-not-allowed">
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div className="p-2 rounded-lg bg-muted text-muted-foreground">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded">
+                              Coming Soon
+                            </span>
+                          </div>
+                          <CardTitle className="text-base text-muted-foreground">{report.name}</CardTitle>
+                          <CardDescription>{report.description}</CardDescription>
+                        </CardHeader>
+                      </Card>
+                    );
+                  }
+
                   return (
                     <Link key={report.name} href={report.href}>
                       <Card className="h-full hover:bg-accent/50 transition-colors cursor-pointer">
@@ -170,10 +188,6 @@ export default function ReportsPage() {
             <p>
               <strong>Export:</strong> Reports can be exported to CSV or JSON for external
               analysis
-            </p>
-            <p>
-              <strong>Tax Year:</strong> UK financial year runs April to April. The Tax Summary
-              report is specifically designed for HMRC reporting
             </p>
             <p>
               <strong>Mileage:</strong> Collection mileage is tracked at HMRC rate of 45p/mile

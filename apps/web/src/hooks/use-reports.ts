@@ -3,17 +3,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   DateRangePreset,
-  ProfitLossReport,
   InventoryValuationReport,
   InventoryAgingReport,
   PlatformPerformanceReport,
   PurchaseAnalysisReport,
-  TaxSummaryReport,
   ReportSettings,
   DailyActivityReport,
   StoreStatusRecord,
   UpdateStoreStatusInput,
 } from '@/lib/services';
+import type { ProfitLossReport } from '@/lib/services/profit-loss-report.service';
 
 interface DateRangeParams {
   startDate: Date;
@@ -43,17 +42,23 @@ async function fetchReport<T>(endpoint: string, params?: Record<string, string>)
  * Hook for fetching profit/loss report
  */
 export function useProfitLossReport(dateRange?: DateRangeParams, compareWithPrevious = true) {
+  const params: Record<string, string> = {
+    compareWithPrevious: String(compareWithPrevious),
+  };
+
+  if (dateRange) {
+    params.startDate = dateRange.startDate.toISOString().split('T')[0];
+    params.endDate = dateRange.endDate.toISOString().split('T')[0];
+    if (dateRange.preset) {
+      params.preset = dateRange.preset;
+    }
+  }
+
+  console.log('[useProfitLossReport] Fetching with params:', params);
+
   return useQuery<ProfitLossReport>({
     queryKey: ['reports', 'profit-loss', dateRange, compareWithPrevious],
-    queryFn: () =>
-      fetchReport<ProfitLossReport>('profit-loss', {
-        ...(dateRange && {
-          startDate: dateRange.startDate.toISOString().split('T')[0],
-          endDate: dateRange.endDate.toISOString().split('T')[0],
-          preset: dateRange.preset,
-        }),
-        compareWithPrevious: String(compareWithPrevious),
-      }),
+    queryFn: () => fetchReport<ProfitLossReport>('profit-loss', params),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -116,19 +121,6 @@ export function usePurchaseAnalysisReport(dateRange?: DateRangeParams) {
   });
 }
 
-/**
- * Hook for fetching tax summary report
- */
-export function useTaxSummaryReport(financialYear?: number) {
-  return useQuery<TaxSummaryReport>({
-    queryKey: ['reports', 'tax-summary', financialYear],
-    queryFn: () =>
-      fetchReport<TaxSummaryReport>('tax-summary', {
-        ...(financialYear && { financialYear: String(financialYear) }),
-      }),
-    staleTime: 5 * 60 * 1000,
-  });
-}
 
 /**
  * Hook for fetching report settings

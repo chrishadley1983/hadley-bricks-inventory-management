@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { ReportingService } from '@/lib/services';
+import { ProfitLossReportService } from '@/lib/services/profit-loss-report.service';
 
 const QueryParamsSchema = z.object({
-  preset: z
-    .enum([
-      'this_month',
-      'last_month',
-      'this_quarter',
-      'last_quarter',
-      'this_year',
-      'last_year',
-      'last_30_days',
-      'last_90_days',
-      'custom',
-    ])
-    .optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  compareWithPrevious: z
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  startDate: z.string().optional(), // For backwards compatibility - will convert to month
+  endDate: z.string().optional(), // For backwards compatibility - will convert to month
+  includeZeroRows: z
     .string()
     .transform((v) => v === 'true')
     .optional(),
@@ -27,7 +16,7 @@ const QueryParamsSchema = z.object({
 
 /**
  * GET /api/reports/profit-loss
- * Get profit and loss report with optional comparison
+ * Get profit and loss report using the detailed transaction-based service
  */
 export async function GET(request: NextRequest) {
   try {
@@ -51,23 +40,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { preset, startDate, endDate, compareWithPrevious } = parsed.data;
+    const { startMonth, endMonth, startDate, endDate, includeZeroRows } = parsed.data;
 
-    const reportingService = new ReportingService(supabase);
+    // Convert date params to month format if provided (backwards compatibility)
+    let resolvedStartMonth = startMonth;
+    let resolvedEndMonth = endMonth;
 
-    // Get date range from preset or custom dates
-    const dateRange = reportingService.getDateRangeFromPreset(
-      preset || 'this_month',
-      startDate && endDate
-        ? { startDate: new Date(startDate), endDate: new Date(endDate) }
-        : undefined
-    );
+    if (!resolvedStartMonth && startDate) {
+      resolvedStartMonth = startDate.substring(0, 7);
+    }
+    if (!resolvedEndMonth && endDate) {
+      resolvedEndMonth = endDate.substring(0, 7);
+    }
 
-    const report = await reportingService.getProfitLossReport(
-      user.id,
-      dateRange,
-      compareWithPrevious ?? true
-    );
+    const reportService = new ProfitLossReportService(supabase);
+
+    const report = await reportService.generateReport(user.id, {
+      startMonth: resolvedStartMonth,
+      endMonth: resolvedEndMonth,
+      includeZeroRows: includeZeroRows ?? false,
+    });
 
     return NextResponse.json({ data: report });
   } catch (error) {

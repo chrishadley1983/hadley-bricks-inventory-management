@@ -236,6 +236,31 @@ export default function ReportSettingsPage() {
               </CardContent>
             </Card>
 
+            {/* Dashboard Targets */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Dashboard Targets</CardTitle>
+                <CardDescription>
+                  Set daily targets for the dashboard performance tracking
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dailyListingTarget">Daily Listing Target (£)</Label>
+                  <Input
+                    id="dailyListingTarget"
+                    type="number"
+                    step="1"
+                    defaultValue={settings?.dailyListingTarget || 200}
+                    onBlur={(e) => handleSave('dailyListingTarget', parseFloat(e.target.value) || 200)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Target value of items to list per day. Used for listing performance tracking on the dashboard.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Home Address for Mileage Calculations */}
             <Card>
               <CardHeader>

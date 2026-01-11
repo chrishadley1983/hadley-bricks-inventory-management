@@ -6,7 +6,10 @@ import { DataTable } from '@/components/ui/data-table';
 import { getInventoryColumns, COLUMN_DISPLAY_NAMES } from './InventoryColumns';
 import { InventoryFilters } from './InventoryFilters';
 import { BulkEditDialog } from './BulkEditDialog';
+import { PriceConflictDialog } from '../amazon-sync/PriceConflictDialog';
 import { useInventoryList, useDeleteInventory, useCreateInventory, useBulkUpdateInventory, useBulkDeleteInventory } from '@/hooks';
+import { useAddToSyncQueue, type PriceConflict } from '@/hooks/use-amazon-sync';
+import { useToast } from '@/hooks/use-toast';
 import type { InventoryFilters as Filters } from '@/lib/api';
 import type { InventoryItem } from '@hadley-bricks/database';
 import {
@@ -21,23 +24,23 @@ import { Button } from '@/components/ui/button';
 
 export function InventoryTable() {
   const router = useRouter();
+  const { toast } = useToast();
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[]>([]);
   const [bulkEditItems, setBulkEditItems] = useState<InventoryItem[]>([]);
+  // Queue of pending price conflicts to resolve one by one
+  const [pendingConflicts, setPendingConflicts] = useState<PriceConflict[]>([]);
+  const currentConflict = pendingConflicts[0] ?? null;
 
   const { data, isLoading, error } = useInventoryList(filters, { page, pageSize });
   const deleteMutation = useDeleteInventory();
   const createMutation = useCreateInventory();
   const bulkUpdateMutation = useBulkUpdateInventory();
   const bulkDeleteMutation = useBulkDeleteInventory();
-
-  const columns = useMemo(
-    () => getInventoryColumns({ onDelete: (id) => setDeleteId(id) }),
-    []
-  );
+  const addToSyncQueueMutation = useAddToSyncQueue();
 
   const handleFiltersChange = (newFilters: Filters) => {
     setFilters(newFilters);
@@ -99,6 +102,117 @@ export function InventoryTable() {
     setBulkEditItems(rows);
   }, []);
 
+  const handleAddToAmazonSync = useCallback(async (item: InventoryItem) => {
+    if (!item.amazon_asin) {
+      toast({
+        title: 'Cannot add to sync',
+        description: 'This item does not have an Amazon ASIN.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const result = await addToSyncQueueMutation.mutateAsync({ inventoryItemId: item.id });
+
+      // Check for price conflict
+      if (result.priceConflict) {
+        setPendingConflicts([result.priceConflict]);
+        return;
+      }
+
+      toast({
+        title: 'Added to sync queue',
+        description: `${item.set_number} has been added to the Amazon sync queue.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to add to queue',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  }, [addToSyncQueueMutation, toast]);
+
+  const handleBulkAddToAmazonSync = useCallback(async (rows: InventoryItem[]) => {
+    const itemsWithAsin = rows.filter(row => row.amazon_asin);
+    if (itemsWithAsin.length === 0) {
+      toast({
+        title: 'No eligible items',
+        description: 'None of the selected items have an Amazon ASIN.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const result = await addToSyncQueueMutation.mutateAsync({
+        inventoryItemIds: itemsWithAsin.map(item => item.id),
+      });
+      const skippedCount = rows.length - itemsWithAsin.length;
+
+      // Check for price conflicts - queue all of them to resolve one by one
+      if (result.priceConflicts && result.priceConflicts.length > 0) {
+        const conflictCount = result.priceConflicts.length;
+        // Queue all conflicts to resolve sequentially
+        setPendingConflicts(result.priceConflicts);
+
+        // Show a toast about what's happening
+        if (result.added && result.added > 0) {
+          toast({
+            title: 'Partial success',
+            description: `${result.added} item(s) added. Resolving ${conflictCount} price conflict(s)...`,
+          });
+        } else {
+          toast({
+            title: 'Price conflicts detected',
+            description: `Resolving ${conflictCount} price conflict(s)...`,
+          });
+        }
+        return;
+      }
+
+      // Check if all items failed with other errors
+      if (result.added === 0 && result.errors && result.errors.length > 0) {
+        toast({
+          title: 'Failed to add to queue',
+          description: result.errors[0].split(': ')[1] || result.errors[0],
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      let description = `${result.added} item(s) added to Amazon sync queue.`;
+      if (skippedCount > 0) {
+        description += ` ${skippedCount} item(s) skipped (no ASIN).`;
+      }
+      if (result.skipped) {
+        description += ` ${result.skipped} already in queue.`;
+      }
+      if (result.errors && result.errors.length > 0) {
+        description += ` ${result.errors.length} failed.`;
+      }
+      const addedCount = result.added ?? 0;
+      toast({
+        title: addedCount > 0 ? 'Added to sync queue' : 'No items added',
+        description,
+        variant: addedCount > 0 ? 'default' : 'destructive',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to add to queue',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  }, [addToSyncQueueMutation, toast]);
+
+  const columns = useMemo(
+    () => getInventoryColumns({
+      onDelete: (id) => setDeleteId(id),
+      onAddToAmazonSync: handleAddToAmazonSync,
+    }),
+    [handleAddToAmazonSync]
+  );
+
   const handleConfirmBulkEdit = async (updates: Partial<Record<string, string | null>>) => {
     const ids = bulkEditItems.map((item) => item.id);
     await bulkUpdateMutation.mutateAsync({ ids, updates });
@@ -144,6 +258,7 @@ export function InventoryTable() {
             onDuplicate: handleBulkDuplicate,
             onEdit: handleBulkEdit,
             onBulkEdit: handleOpenBulkEdit,
+            onAddToAmazonSync: handleBulkAddToAmazonSync,
           }}
           pagination={{
             page: data?.page || 1,
@@ -212,6 +327,27 @@ export function InventoryTable() {
         selectedCount={bulkEditItems.length}
         onConfirm={handleConfirmBulkEdit}
         isPending={bulkUpdateMutation.isPending}
+      />
+
+      {/* Price conflict dialog */}
+      <PriceConflictDialog
+        open={!!currentConflict}
+        onOpenChange={(open) => {
+          if (!open) {
+            // User cancelled - remove current conflict and move to next
+            setPendingConflicts((prev) => prev.slice(1));
+          }
+        }}
+        conflict={currentConflict}
+        remainingCount={pendingConflicts.length - 1}
+        onResolved={(message) => {
+          toast({
+            title: 'Added to sync queue',
+            description: message,
+          });
+          // Move to next conflict
+          setPendingConflicts((prev) => prev.slice(1));
+        }}
       />
     </>
   );
