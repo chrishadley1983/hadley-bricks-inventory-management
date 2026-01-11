@@ -53,6 +53,23 @@ const STATUS_CONFIG: Record<
     variant: 'default',
     color: 'text-green-500',
   },
+  done_verifying: {
+    icon: Loader2,
+    label: 'Verifying Prices',
+    variant: 'default',
+    color: 'text-amber-500',
+  },
+  verified: {
+    icon: CheckCircle2,
+    label: 'Verified',
+    variant: 'default',
+    color: 'text-green-500',
+  },
+  verification_failed: {
+    icon: AlertTriangle,
+    label: 'Verification Failed',
+    variant: 'destructive',
+  },
   cancelled: {
     icon: XCircle,
     label: 'Cancelled',
@@ -82,7 +99,8 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
   const config = STATUS_CONFIG[feed.status] || STATUS_CONFIG.pending;
   const Icon = config.icon;
   const isProcessing = feed.status === 'submitted' || feed.status === 'processing';
-  const isComplete = !['pending', 'submitted', 'processing'].includes(feed.status);
+  const isVerifying = feed.status === 'done_verifying';
+  const isComplete = !['pending', 'submitted', 'processing', 'done_verifying'].includes(feed.status);
 
   // Auto-poll while processing
   useEffect(() => {
@@ -118,7 +136,7 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
           className={`flex items-center gap-1.5 ${config.color || ''}`}
         >
           <Icon
-            className={`h-3.5 w-3.5 ${isProcessing ? 'animate-spin' : ''}`}
+            className={`h-3.5 w-3.5 ${isProcessing || isVerifying ? 'animate-spin' : ''}`}
           />
           {config.label}
         </Badge>
@@ -127,7 +145,7 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
           <Badge variant="outline">Dry Run</Badge>
         )}
 
-        {isComplete && (
+        {(isComplete || isVerifying) && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-green-600">
               {feed.success_count} success

@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      amazon_arbitrage_pricing: {
+        Row: {
+          asin: string
+          buy_box_is_yours: boolean | null
+          buy_box_price: number | null
+          created_at: string
+          id: string
+          offer_count: number | null
+          sales_rank: number | null
+          sales_rank_category: string | null
+          snapshot_date: string
+          user_id: string
+          was_price_90d: number | null
+          your_price: number | null
+          your_qty: number | null
+        }
+        Insert: {
+          asin: string
+          buy_box_is_yours?: boolean | null
+          buy_box_price?: number | null
+          created_at?: string
+          id?: string
+          offer_count?: number | null
+          sales_rank?: number | null
+          sales_rank_category?: string | null
+          snapshot_date: string
+          user_id: string
+          was_price_90d?: number | null
+          your_price?: number | null
+          your_qty?: number | null
+        }
+        Update: {
+          asin?: string
+          buy_box_is_yours?: boolean | null
+          buy_box_price?: number | null
+          created_at?: string
+          id?: string
+          offer_count?: number | null
+          sales_rank?: number | null
+          sales_rank_category?: string | null
+          snapshot_date?: string
+          user_id?: string
+          was_price_90d?: number | null
+          your_price?: number | null
+          your_qty?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_arbitrage_pricing_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_inventory_resolution_queue: {
         Row: {
           amazon_order_id: string
@@ -748,6 +804,165 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "amazon_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arbitrage_sync_status: {
+        Row: {
+          created_at: string
+          error_details: Json | null
+          error_message: string | null
+          id: string
+          items_failed: number | null
+          items_processed: number | null
+          job_type: string
+          last_run_at: string | null
+          last_run_duration_ms: number | null
+          last_success_at: string | null
+          next_scheduled_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          items_failed?: number | null
+          items_processed?: number | null
+          job_type: string
+          last_run_at?: string | null
+          last_run_duration_ms?: number | null
+          last_success_at?: string | null
+          next_scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          items_failed?: number | null
+          items_processed?: number | null
+          job_type?: string
+          last_run_at?: string | null
+          last_run_duration_ms?: number | null
+          last_success_at?: string | null
+          next_scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_sync_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asin_bricklink_mapping: {
+        Row: {
+          asin: string
+          bricklink_set_number: string
+          created_at: string
+          match_confidence: string
+          match_method: string | null
+          updated_at: string
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          asin: string
+          bricklink_set_number: string
+          created_at?: string
+          match_confidence: string
+          match_method?: string | null
+          updated_at?: string
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          asin?: string
+          bricklink_set_number?: string
+          created_at?: string
+          match_confidence?: string
+          match_method?: string | null
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asin_bricklink_mapping_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricklink_arbitrage_pricing: {
+        Row: {
+          avg_price: number | null
+          bricklink_set_number: string
+          condition: string
+          country_code: string
+          created_at: string
+          id: string
+          max_price: number | null
+          min_price: number | null
+          price_detail_json: Json | null
+          qty_avg_price: number | null
+          snapshot_date: string
+          total_lots: number | null
+          total_qty: number | null
+          user_id: string
+        }
+        Insert: {
+          avg_price?: number | null
+          bricklink_set_number: string
+          condition?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          max_price?: number | null
+          min_price?: number | null
+          price_detail_json?: Json | null
+          qty_avg_price?: number | null
+          snapshot_date: string
+          total_lots?: number | null
+          total_qty?: number | null
+          user_id: string
+        }
+        Update: {
+          avg_price?: number | null
+          bricklink_set_number?: string
+          condition?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          max_price?: number | null
+          min_price?: number | null
+          price_detail_json?: Json | null
+          qty_avg_price?: number | null
+          snapshot_date?: string
+          total_lots?: number | null
+          total_qty?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_arbitrage_pricing_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2052,6 +2267,48 @@ export type Database = {
           },
         ]
       }
+      ebay_pricing: {
+        Row: {
+          avg_price: number | null
+          condition: string
+          country_code: string
+          created_at: string
+          id: string
+          listings_json: Json | null
+          max_price: number | null
+          min_price: number | null
+          set_number: string
+          snapshot_date: string
+          total_listings: number | null
+        }
+        Insert: {
+          avg_price?: number | null
+          condition?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          listings_json?: Json | null
+          max_price?: number | null
+          min_price?: number | null
+          set_number: string
+          snapshot_date: string
+          total_listings?: number | null
+        }
+        Update: {
+          avg_price?: number | null
+          condition?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          listings_json?: Json | null
+          max_price?: number | null
+          min_price?: number | null
+          set_number?: string
+          snapshot_date?: string
+          total_listings?: number | null
+        }
+        Relationships: []
+      }
       ebay_shipping_fulfilments: {
         Row: {
           created_at: string
@@ -2384,6 +2641,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "ebay_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      excluded_ebay_listings: {
+        Row: {
+          ebay_item_id: string
+          excluded_at: string
+          id: string
+          reason: string | null
+          set_number: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          ebay_item_id: string
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          set_number: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          ebay_item_id?: string
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          set_number?: string
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "excluded_ebay_listings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -3871,6 +4166,68 @@ export type Database = {
         }
         Relationships: []
       }
+      tracked_asins: {
+        Row: {
+          added_at: string
+          asin: string
+          created_at: string
+          excluded_at: string | null
+          exclusion_reason: string | null
+          id: string
+          image_url: string | null
+          last_synced_at: string | null
+          name: string | null
+          quantity: number | null
+          sku: string | null
+          source: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          asin: string
+          created_at?: string
+          excluded_at?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          image_url?: string | null
+          last_synced_at?: string | null
+          name?: string | null
+          quantity?: number | null
+          sku?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          asin?: string
+          created_at?: string
+          excluded_at?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          image_url?: string | null
+          last_synced_at?: string | null
+          name?: string | null
+          quantity?: number | null
+          sku?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracked_asins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_tags: {
         Row: {
           color: string | null
@@ -3946,6 +4303,56 @@ export type Database = {
       }
     }
     Views: {
+      arbitrage_current_view: {
+        Row: {
+          amazon_snapshot_date: string | null
+          amazon_url: string | null
+          asin: string | null
+          bl_avg_price: number | null
+          bl_max_price: number | null
+          bl_min_price: number | null
+          bl_price_detail: Json | null
+          bl_snapshot_date: string | null
+          bl_total_lots: number | null
+          bl_total_qty: number | null
+          bricklink_set_number: string | null
+          buy_box_is_yours: boolean | null
+          buy_box_price: number | null
+          ebay_avg_price: number | null
+          ebay_listings: Json | null
+          ebay_margin_absolute: number | null
+          ebay_margin_percent: number | null
+          ebay_max_price: number | null
+          ebay_min_price: number | null
+          ebay_snapshot_date: string | null
+          ebay_total_listings: number | null
+          image_url: string | null
+          margin_absolute: number | null
+          margin_percent: number | null
+          match_confidence: string | null
+          name: string | null
+          offer_count: number | null
+          quantity: number | null
+          sales_rank: number | null
+          sales_rank_category: string | null
+          sku: string | null
+          source: string | null
+          status: string | null
+          user_id: string | null
+          was_price_90d: number | null
+          your_price: number | null
+          your_qty: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracked_asins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_platform_activity: {
         Row: {
           activity_date: string | null
