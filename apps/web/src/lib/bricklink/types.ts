@@ -224,3 +224,72 @@ export interface RateLimitInfo {
   dailyLimit: number;
   dailyRemaining: number;
 }
+
+// ============================================
+// Price Guide Types
+// ============================================
+
+/** BrickLink price guide type */
+export type BrickLinkGuideType = 'sold' | 'stock';
+
+/** BrickLink price guide detail entry */
+export interface BrickLinkPriceDetail {
+  quantity: number;
+  unit_price: string;
+  shipping_available: boolean;
+  seller_country_code: string;
+  buyer_country_code?: string;
+  date_ordered?: string;
+}
+
+/** BrickLink price guide response */
+export interface BrickLinkPriceGuide {
+  item: {
+    no: string;
+    type: BrickLinkItemType;
+  };
+  new_or_used: BrickLinkItemCondition;
+  currency_code: string;
+  min_price: string;
+  max_price: string;
+  avg_price: string;
+  qty_avg_price: string;
+  unit_quantity: number;
+  total_quantity: number;
+  price_detail: BrickLinkPriceDetail[];
+}
+
+/** BrickLink price guide query parameters */
+export interface BrickLinkPriceGuideParams {
+  /** Item type (SET, PART, MINIFIG, etc.) */
+  type: BrickLinkItemType;
+  /** Item number (e.g., "40585-1") */
+  no: string;
+  /** Condition: N = New, U = Used */
+  newOrUsed?: BrickLinkItemCondition;
+  /** Country code to filter sellers (e.g., "UK") */
+  countryCode?: string;
+  /** Guide type: stock (current listings) or sold (past sales) */
+  guideType?: BrickLinkGuideType;
+  /** Currency code (e.g., "GBP") */
+  currencyCode?: string;
+  /** VAT option for European items */
+  vat?: 'N' | 'Y' | 'O';
+}
+
+/** BrickLink catalog item info */
+export interface BrickLinkCatalogItem {
+  no: string;
+  name: string;
+  type: BrickLinkItemType;
+  category_id: number;
+  alternate_no?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  weight?: string;
+  dim_x?: string;
+  dim_y?: string;
+  dim_z?: string;
+  year_released?: number;
+  is_obsolete?: boolean;
+}

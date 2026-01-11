@@ -24,5 +24,15 @@ export {
   AmazonFeedsClient,
   createAmazonFeedsClient,
 } from './amazon-feeds.client';
+export {
+  AmazonPricingClient,
+  createAmazonPricingClient,
+  type AsinPricingData,
+} from './amazon-pricing.client';
+export {
+  AmazonListingsClient,
+  createAmazonListingsClient,
+  type ListingsItemResponse,
+} from './amazon-listings.client';
 export { AmazonSyncService, type AddToQueueResult } from './amazon-sync.service';
 export * from './amazon-sync.types';

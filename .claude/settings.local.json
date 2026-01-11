@@ -161,7 +161,43 @@
       "Bash(test:*)",
       "Bash(taskkill:*)",
       "Bash(ConvertFrom-Json)",
-      "Bash(ConvertTo-Json -Depth 10)"
+      "Bash(ConvertTo-Json -Depth 10)",
+      "Bash(python -m json.tool:*)",
+      "Bash(Select-String \"SUPABASE_PROJECT\")",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_tables",
+      "Bash(Select-String -Pattern \"node\")",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_resize",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\scripts\\\\notify.ps1\" -Title \"Test\" -Message \"Notification system working!\" -Sound success)",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\web\\\\src\\\\app\\\\api\\\\debug\" -ErrorAction SilentlyContinue)",
+      "Bash(Write-Output \"Debug folder removed\")",
+      "mcp__supabase__apply_migration",
+      "Bash(Remove-Item -Force \"apps/web/nul\" -ErrorAction SilentlyContinue)",
+      "Bash(cmd /c \"del /f apps\\\\web\\\\nul 2>nul\")",
+      "Bash(cmd /c \"del /f nul 2>nul\")"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"scripts/notify.ps1\" -Title \"Claude Code\" -Message \"Task completed\" -Sound success"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"scripts/notify.ps1\" -Title \"Claude Code\" -Message \"Permission needed - check VS Code\" -Sound warning"
+          }
+        ]
+      }
     ]
   }
 }

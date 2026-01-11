@@ -21,12 +21,14 @@ import {
   CalendarDays,
   Layers,
   CloudUpload,
+  Scale,
 } from 'lucide-react';
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  disabled?: boolean;
 }
 
 const mainNavItems: NavItem[] = [
@@ -53,6 +55,13 @@ const integrationNavItems: NavItem[] = [
   { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
 ];
 
+const arbitrageNavItems: NavItem[] = [
+  { href: '/arbitrage/amazon', label: 'Amazon', icon: Scale },
+  { href: '/arbitrage/ebay', label: 'eBay', icon: Scale },
+  { href: '/arbitrage/vinted', label: 'Vinted', icon: Scale, disabled: true },
+  { href: '/arbitrage/facebook', label: 'Facebook', icon: Scale, disabled: true },
+];
+
 // Commented out - Data Sync page not currently needed, but keeping code for future use
 // Note: Monzo Transactions still links to Google Sheets - do not remove connection type code
 // const adminNavItems: NavItem[] = [
@@ -70,6 +79,18 @@ export function Sidebar() {
   const NavLink = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
     const Icon = item.icon;
+
+    if (item.disabled) {
+      return (
+        <span
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/50 cursor-not-allowed"
+          title="Coming soon"
+        >
+          <Icon className="h-4 w-4" />
+          {item.label}
+        </span>
+      );
+    }
 
     return (
       <Link
@@ -120,6 +141,17 @@ export function Sidebar() {
           </h3>
           <div className="space-y-1">
             {integrationNavItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Arbitrage Tracker
+          </h3>
+          <div className="space-y-1">
+            {arbitrageNavItems.map((item) => (
               <NavLink key={item.href} item={item} />
             ))}
           </div>

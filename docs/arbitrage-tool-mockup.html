@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrickLink Arbitrage Scanner | Hadley Bricks</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-base: #fafafa;
+            --bg-card: #ffffff;
+            --bg-elevated: #ffffff;
+            --border: #e5e7eb;
+            --border-light: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --accent-primary: #2563eb;
+            --accent-primary-light: #dbeafe;
+            --accent-green: #059669;
+            --accent-green-light: #d1fae5;
+            --accent-green-bg: #ecfdf5;
+            --accent-red: #dc2626;
+            --accent-red-light: #fee2e2;
+            --accent-yellow: #d97706;
+            --accent-yellow-light: #fef3c7;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary), #7c3aed);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.125rem;
+        }
+
+        .logo-text span {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-base);
+        }
+
+        /* Main Container */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+        }
+
+        /* Controls Bar */
+        .controls-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .margin-input-group {
+            display: flex;
+            align-items: center;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .margin-input {
+            width: 60px;
+            padding: 0.5rem 0.75rem;
+            border: none;
+            background: transparent;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .margin-input:focus {
+            outline: none;
+        }
+
+        .margin-suffix {
+            padding: 0.5rem 0.75rem;
+            background: var(--border-light);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .filter-select {
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-base);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 1rem;
+        }
+
+        .search-input {
+            padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-base);
+            font-size: 0.875rem;
+            width: 240px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: 0.75rem center;
+            background-size: 1rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-primary-light);
+        }
+
+        .stats-summary {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .stat-pill-value {
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-pill-value.opportunities {
+            color: var(--accent-green);
+        }
+
+        /* Results Table */
+        .results-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .results-header {
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-base);
+        }
+
+        .results-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .results-count {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-base);
+            position: sticky;
+            top: 0;
+        }
+
+        .results-table th.sortable {
+            cursor: pointer;
+        }
+
+        .results-table th.sortable:hover {
+            color: var(--text-primary);
+        }
+
+        .results-table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid var(--border-light);
+            vertical-align: middle;
+        }
+
+        .results-table tbody tr {
+            cursor: pointer;
+            transition: background 0.1s ease;
+        }
+
+        .results-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .results-table tbody tr.opportunity {
+            background: var(--accent-green-bg);
+        }
+
+        .results-table tbody tr.opportunity:hover {
+            background: #d1fae5;
+        }
+
+        .item-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.875rem;
+        }
+
+        .item-image {
+            width: 48px;
+            height: 48px;
+            background: var(--bg-base);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            border: 1px solid var(--border-light);
+        }
+
+        .item-details {
+            min-width: 0;
+        }
+
+        .item-name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 280px;
+        }
+
+        .item-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.2rem;
+        }
+
+        .item-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .item-asin {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            background: var(--bg-base);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .price-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .price-amazon {
+            color: var(--text-primary);
+        }
+
+        .price-bricklink {
+            color: var(--accent-primary);
+        }
+
+        .price-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 400;
+            display: block;
+            margin-top: 0.15rem;
+        }
+
+        .margin-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .margin-positive {
+            color: var(--accent-green);
+        }
+
+        .margin-negative {
+            color: var(--accent-red);
+        }
+
+        .margin-neutral {
+            color: var(--text-muted);
+        }
+
+        .qty-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .qty-zero {
+            color: var(--text-muted);
+        }
+
+        .lots-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
+            background: var(--accent-primary-light);
+            color: var(--accent-primary);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            min-width: 36px;
+        }
+
+        .buybox-price {
+            color: var(--text-primary);
+        }
+
+        .buybox-yours {
+            color: var(--accent-green);
+        }
+
+        .buybox-other {
+            color: var(--accent-yellow);
+        }
+
+        .offers-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: var(--bg-base);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .was-price {
+            color: var(--text-secondary);
+        }
+
+        .rank-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .action-cell {
+            text-align: right;
+        }
+
+        .view-btn {
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .view-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        /* Modal / Popup */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            width: 100%;
+            max-width: 640px;
+            max-height: 90vh;
+            overflow: hidden;
+            transform: translateY(20px) scale(0.95);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .modal-item-image {
+            width: 72px;
+            height: 72px;
+            background: var(--bg-base);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .modal-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .modal-item-name {
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .modal-item-ids {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .modal-id-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-base);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: var(--bg-base);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .modal-close:hover {
+            background: var(--accent-red-light);
+            color: var(--accent-red);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .comparison-card {
+            background: var(--bg-base);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+        }
+
+        .comparison-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .comparison-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .comparison-card.amazon .comparison-price {
+            color: var(--text-primary);
+        }
+
+        .comparison-card.bricklink .comparison-price {
+            color: var(--accent-green);
+        }
+
+        .comparison-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .amazon-data-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .amazon-stat {
+            background: var(--bg-base);
+            border-radius: var(--radius-md);
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .amazon-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .amazon-stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-top: 0.2rem;
+        }
+
+        .amazon-stat-value.buybox-yours {
+            color: var(--accent-green);
+        }
+
+        .amazon-stat-value.buybox-other {
+            color: var(--accent-yellow);
+        }
+
+        .amazon-stat-sub {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 0.15rem;
+        }
+
+        .margin-highlight {
+            background: var(--accent-green-bg);
+            border: 1px solid var(--accent-green);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .margin-highlight-label {
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .margin-highlight-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .margin-highlight-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .bricklink-section {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .bricklink-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+        }
+
+        .bricklink-stat {
+            background: var(--bg-card);
+            padding: 0.75rem 1rem;
+            text-align: center;
+        }
+
+        .bricklink-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .bricklink-stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            margin-top: 0.2rem;
+        }
+
+        .price-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .price-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .price-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .price-list-qty {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 50px;
+        }
+
+        .price-list-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+
+        .price-list-country {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-base);
+        }
+
+        .bricklink-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: #e85d04;
+            color: white;
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.15s ease;
+        }
+
+        .bricklink-link:hover {
+            background: #d45303;
+            transform: translateY(-1px);
+        }
+
+        .bricklink-link svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .updated-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state-title {
+            font-weight: 600;
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">HB</div>
+                <div class="logo-text">Hadley Bricks <span>Arbitrage Scanner</span></div>
+            </div>
+            <div class="header-actions">
+                <div class="sync-status">
+                    <span class="sync-dot"></span>
+                    Last sync: 2 mins ago
+                </div>
+                <button class="btn btn-secondary">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh Prices
+                </button>
+                <button class="btn btn-primary">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    Add Items
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="controls-bar">
+            <div class="control-group">
+                <label class="control-label">Min Margin</label>
+                <div class="margin-input-group">
+                    <input type="number" class="margin-input" value="30" min="0" max="100">
+                    <span class="margin-suffix">%</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Show</label>
+                <select class="filter-select">
+                    <option value="opportunities">Opportunities Only</option>
+                    <option value="all" selected>All Items</option>
+                    <option value="in-stock">In Stock (Amazon)</option>
+                    <option value="zero-qty">Zero Qty Only</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Sort</label>
+                <select class="filter-select">
+                    <option value="margin-desc" selected>Margin (High → Low)</option>
+                    <option value="margin-asc">Margin (Low → High)</option>
+                    <option value="price-asc">BL Price (Low → High)</option>
+                    <option value="name-asc">Name (A → Z)</option>
+                </select>
+            </div>
+
+            <input type="text" class="search-input" placeholder="Search by name, ASIN, or set #...">
+
+            <div class="stats-summary">
+                <div class="stat-pill">
+                    <span class="control-label">Items</span>
+                    <span class="stat-pill-value">47</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="control-label">Opportunities</span>
+                    <span class="stat-pill-value opportunities">12</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-container">
+            <div class="results-header">
+                <span class="results-title">Amazon Inventory vs BrickLink Prices (UK New)</span>
+                <span class="results-count">Showing 47 items</span>
+            </div>
+
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th style="width: 22%">Item</th>
+                        <th class="sortable" style="width: 10%">Your Price</th>
+                        <th class="sortable" style="width: 10%">Buy Box</th>
+                        <th style="width: 8%">Offers</th>
+                        <th class="sortable" style="width: 10%">Was Price</th>
+                        <th class="sortable" style="width: 8%">Rank</th>
+                        <th class="sortable" style="width: 10%">BL Min</th>
+                        <th class="sortable" style="width: 9%">Margin ↓</th>
+                        <th style="width: 6%">BL Lots</th>
+                        <th style="width: 5%"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="opportunity" onclick="openModal()">
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🏛️</div>
+                                <div class="item-details">
+                                    <div class="item-name">World of Wonders</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40585-1</span>
+                                        <span class="item-asin">B0BVMQ7J5W</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£34.99</span>
+                            <span class="price-sub">Qty: 0</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price">£32.50</span>
+                            <span class="price-sub buybox-other">Other seller</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">8</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£38.99</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#2,847</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£13.99</span>
+                            <span class="price-sub">Avg: £26.97</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+60.0%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">22</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr class="opportunity">
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🏠</div>
+                                <div class="item-details">
+                                    <div class="item-name">Houses of the World 1</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40594-1</span>
+                                        <span class="item-asin">B0C5H2MK9P</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£29.99</span>
+                            <span class="price-sub">Qty: 3</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price buybox-yours">£29.99</span>
+                            <span class="price-sub buybox-yours">You</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">5</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£34.50</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#4,215</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£11.50</span>
+                            <span class="price-sub">Avg: £18.45</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+61.7%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">31</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr class="opportunity">
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🎡</div>
+                                <div class="item-details">
+                                    <div class="item-name">Bricktober Fairground</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40714-1</span>
+                                        <span class="item-asin">B0DK7N8H2L</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£44.99</span>
+                            <span class="price-sub">Qty: 0</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price">£42.99</span>
+                            <span class="price-sub buybox-other">Other seller</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">12</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£52.00</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#1,892</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£19.99</span>
+                            <span class="price-sub">Avg: £28.50</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+55.6%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">8</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr class="opportunity">
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🚂</div>
+                                <div class="item-details">
+                                    <div class="item-name">Trains 50 Years GWP</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40608-1</span>
+                                        <span class="item-asin">B0CHGM7TN9</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£19.99</span>
+                            <span class="price-sub">Qty: 5</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price buybox-yours">£19.99</span>
+                            <span class="price-sub buybox-yours">You</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">3</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£22.99</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#6,543</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£8.99</span>
+                            <span class="price-sub">Avg: £12.80</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+55.0%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">45</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🎄</div>
+                                <div class="item-details">
+                                    <div class="item-name">Christmas Tree</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40573-1</span>
+                                        <span class="item-asin">B0B5QHKN7R</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£14.99</span>
+                            <span class="price-sub">Qty: 12</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price buybox-yours">£14.99</span>
+                            <span class="price-sub buybox-yours">You</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">7</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£16.50</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#3,127</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£9.99</span>
+                            <span class="price-sub">Avg: £12.50</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+33.4%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">67</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🐇</div>
+                                <div class="item-details">
+                                    <div class="item-name">Year of the Rabbit</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40575-1</span>
+                                        <span class="item-asin">B0B8HMLN5K</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£12.99</span>
+                            <span class="price-sub">Qty: 0</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price">£11.99</span>
+                            <span class="price-sub buybox-other">Other seller</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">4</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£14.99</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#18,456</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£8.75</span>
+                            <span class="price-sub">Avg: £10.20</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-positive">+32.6%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">29</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">🚀</div>
+                                <div class="item-details">
+                                    <div class="item-name">Space Adventure Ride</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40335-1</span>
+                                        <span class="item-asin">B07NQHK8T4</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£22.50</span>
+                            <span class="price-sub">Qty: 2</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price buybox-yours">£22.50</span>
+                            <span class="price-sub buybox-yours">You</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">2</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£24.99</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#45,821</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£18.99</span>
+                            <span class="price-sub">Avg: £21.30</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-neutral">+15.6%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">12</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-image">⚽</div>
+                                <div class="item-details">
+                                    <div class="item-name">Football Stadium</div>
+                                    <div class="item-meta">
+                                        <span class="item-id">40634-1</span>
+                                        <span class="item-asin">B0CK9MN2P7</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="price-cell price-amazon">£18.99</span>
+                            <span class="price-sub">Qty: 0</span>
+                        </td>
+                        <td>
+                            <span class="price-cell buybox-price">£17.50</span>
+                            <span class="price-sub buybox-other">Other seller</span>
+                        </td>
+                        <td>
+                            <span class="offers-count">6</span>
+                        </td>
+                        <td>
+                            <span class="price-cell was-price">£19.99</span>
+                            <span class="price-sub">90-day median</span>
+                        </td>
+                        <td>
+                            <span class="rank-cell">#67,234</span>
+                            <span class="price-sub">Toys</span>
+                        </td>
+                        <td>
+                            <span class="price-cell price-bricklink">£19.50</span>
+                            <span class="price-sub">Avg: £22.10</span>
+                        </td>
+                        <td>
+                            <span class="margin-cell margin-negative">-2.7%</span>
+                        </td>
+                        <td>
+                            <span class="lots-badge">5</span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="view-btn">→</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-item-image">🏛️</div>
+                <div class="modal-item-info">
+                    <div class="modal-item-name">World of Wonders</div>
+                    <div class="modal-item-ids">
+                        <span class="modal-id-tag">Set: 40585-1</span>
+                        <span class="modal-id-tag">ASIN: B0BVMQ7J5W</span>
+                        <span class="modal-id-tag">SKU: HB-40585</span>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Amazon Section -->
+                <div class="section-label">Amazon Data</div>
+                <div class="amazon-data-grid">
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">Your Price</div>
+                        <div class="amazon-stat-value">£34.99</div>
+                        <div class="amazon-stat-sub">Qty: 0 in stock</div>
+                    </div>
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">Buy Box</div>
+                        <div class="amazon-stat-value buybox-other">£32.50</div>
+                        <div class="amazon-stat-sub">Other seller</div>
+                    </div>
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">Was Price</div>
+                        <div class="amazon-stat-value">£38.99</div>
+                        <div class="amazon-stat-sub">90-day median</div>
+                    </div>
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">Sales Rank</div>
+                        <div class="amazon-stat-value">#2,847</div>
+                        <div class="amazon-stat-sub">in Toys</div>
+                    </div>
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">Offers</div>
+                        <div class="amazon-stat-value">8</div>
+                        <div class="amazon-stat-sub">total sellers</div>
+                    </div>
+                    <div class="amazon-stat">
+                        <div class="amazon-stat-label">FBA Fee Est.</div>
+                        <div class="amazon-stat-value">£6.50</div>
+                        <div class="amazon-stat-sub">approx</div>
+                    </div>
+                </div>
+
+                <div class="margin-highlight">
+                    <div class="margin-highlight-label">Potential Margin</div>
+                    <div class="margin-highlight-value">+60.0%</div>
+                    <div class="margin-highlight-sub">Buy at £13.99 → Sell at £34.99 = £21.00 gross (£14.50 after fees est.)</div>
+                </div>
+
+                <div class="section-label">BrickLink UK Availability (New)</div>
+                <div class="bricklink-section">
+                    <div class="bricklink-stats">
+                        <div class="bricklink-stat">
+                            <div class="bricklink-stat-label">Min Price</div>
+                            <div class="bricklink-stat-value">£13.99</div>
+                        </div>
+                        <div class="bricklink-stat">
+                            <div class="bricklink-stat-label">Avg Price</div>
+                            <div class="bricklink-stat-value">£26.97</div>
+                        </div>
+                        <div class="bricklink-stat">
+                            <div class="bricklink-stat-label">Max Price</div>
+                            <div class="bricklink-stat-value">£49.99</div>
+                        </div>
+                    </div>
+                    <div class="price-list">
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£13.99</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£15.00</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£17.10</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£18.00</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 3</span>
+                            <span class="price-list-price">£18.74</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£19.99</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£19.99</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                        <div class="price-list-item">
+                            <span class="price-list-qty">Qty: 1</span>
+                            <span class="price-list-price">£20.31</span>
+                            <span class="price-list-country">🇬🇧 UK</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <span class="updated-time">Prices updated 2 mins ago</span>
+                <a href="https://www.bricklink.com/v2/catalog/catalogitem.page?S=40585-1#T=S&O={%22cond%22:%22N%22,%22loc%22:%22UK%22}" target="_blank" class="bricklink-link">
+                    View on BrickLink
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            document.getElementById('modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(event) {
+            if (!event || event.target === document.getElementById('modal')) {
+                document.getElementById('modal').classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

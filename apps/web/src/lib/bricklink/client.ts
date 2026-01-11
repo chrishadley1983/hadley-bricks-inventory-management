@@ -13,6 +13,10 @@ import type {
   BrickLinkOrderDetail,
   BrickLinkOrderItem,
   BrickLinkOrderListParams,
+  BrickLinkPriceGuide,
+  BrickLinkPriceGuideParams,
+  BrickLinkCatalogItem,
+  BrickLinkItemType,
   RateLimitInfo,
 } from './types';
 
@@ -370,5 +374,100 @@ export class BrickLinkClient {
     const items = itemBatches.flat();
 
     return { order, items };
+  }
+
+  // ============================================
+  // Price Guide Methods
+  // ============================================
+
+  /**
+   * Get price guide for an item
+   * @param params Price guide query parameters
+   * @returns Price guide data including min/max/avg prices and detailed listings
+   */
+  async getPriceGuide(params: BrickLinkPriceGuideParams): Promise<BrickLinkPriceGuide> {
+    const queryParams: Record<string, string | undefined> = {};
+
+    if (params.newOrUsed) {
+      queryParams.new_or_used = params.newOrUsed;
+    }
+
+    if (params.countryCode) {
+      queryParams.country_code = params.countryCode;
+    }
+
+    if (params.guideType) {
+      queryParams.guide_type = params.guideType;
+    }
+
+    if (params.currencyCode) {
+      queryParams.currency_code = params.currencyCode;
+    }
+
+    if (params.vat) {
+      queryParams.vat = params.vat;
+    }
+
+    // Endpoint: /items/{type}/{no}/price
+    const endpoint = `/items/${params.type}/${encodeURIComponent(params.no)}/price`;
+
+    console.log('[BrickLinkClient.getPriceGuide] Fetching price guide for:', params.type, params.no);
+    return this.request<BrickLinkPriceGuide>('GET', endpoint, queryParams);
+  }
+
+  /**
+   * Get price guide for a SET with common defaults
+   * @param setNumber Set number (e.g., "40585-1")
+   * @param options Additional options
+   * @returns Price guide for the set
+   */
+  async getSetPriceGuide(
+    setNumber: string,
+    options: {
+      condition?: 'N' | 'U';
+      countryCode?: string;
+      currencyCode?: string;
+    } = {}
+  ): Promise<BrickLinkPriceGuide> {
+    return this.getPriceGuide({
+      type: 'SET',
+      no: setNumber,
+      newOrUsed: options.condition ?? 'N',
+      countryCode: options.countryCode,
+      currencyCode: options.currencyCode ?? 'GBP',
+      guideType: 'stock',
+    });
+  }
+
+  // ============================================
+  // Catalog Methods
+  // ============================================
+
+  /**
+   * Get catalog item information
+   * @param type Item type
+   * @param no Item number
+   * @returns Catalog item details
+   */
+  async getCatalogItem(type: BrickLinkItemType, no: string): Promise<BrickLinkCatalogItem> {
+    const endpoint = `/items/${type}/${encodeURIComponent(no)}`;
+    return this.request<BrickLinkCatalogItem>('GET', endpoint);
+  }
+
+  /**
+   * Check if a set exists in the BrickLink catalog
+   * @param setNumber Set number (e.g., "40585-1")
+   * @returns True if set exists, false otherwise
+   */
+  async setExists(setNumber: string): Promise<boolean> {
+    try {
+      await this.getCatalogItem('SET', setNumber);
+      return true;
+    } catch (error) {
+      if (error instanceof BrickLinkApiError && error.code === 404) {
+        return false;
+      }
+      throw error;
+    }
   }
 }
