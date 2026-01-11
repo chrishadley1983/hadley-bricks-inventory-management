@@ -14,3 +14,15 @@ export {
   type AmazonSyncResult,
   type AmazonSyncOptions,
 } from './amazon-transaction-sync.service';
+export {
+  AmazonCatalogClient,
+  createAmazonCatalogClient,
+  type CatalogItemResponse,
+  type ProductTypeResult,
+} from './amazon-catalog.client';
+export {
+  AmazonFeedsClient,
+  createAmazonFeedsClient,
+} from './amazon-feeds.client';
+export { AmazonSyncService, type AddToQueueResult } from './amazon-sync.service';
+export * from './amazon-sync.types';

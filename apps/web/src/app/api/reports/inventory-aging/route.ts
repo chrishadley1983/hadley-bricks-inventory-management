@@ -19,7 +19,8 @@ export async function GET(_request: NextRequest) {
     }
 
     const reportingService = new ReportingService(supabase);
-    const report = await reportingService.getInventoryAgingReport(user.id);
+    // Always include items for drill-down functionality
+    const report = await reportingService.getInventoryAgingReport(user.id, true);
 
     return NextResponse.json({ data: report });
   } catch (error) {

@@ -19,9 +19,7 @@ export function ImportStatusBanner({
   className,
 }: ImportStatusBannerProps) {
   const platformLabel = platform === 'ebay' ? 'eBay' : 'Amazon';
-  const importMessage = platform === 'ebay'
-    ? 'Fetching listings from eBay. This may take a few minutes.'
-    : 'Fetching report from Amazon. This may take a few minutes.';
+  const importMessage = `Fetching listings from ${platformLabel}. This may take a few minutes.`;
 
   // Show importing state
   if (isImporting) {

@@ -109,6 +109,56 @@ export type Database = {
           },
         ]
       }
+      amazon_product_cache: {
+        Row: {
+          asin: string
+          brand: string | null
+          created_at: string
+          fetched_at: string
+          id: string
+          marketplace_id: string
+          product_type: string | null
+          raw_response: Json | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asin: string
+          brand?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          marketplace_id?: string
+          product_type?: string | null
+          raw_response?: Json | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asin?: string
+          brand?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          marketplace_id?: string
+          product_type?: string | null
+          raw_response?: Json | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_product_cache_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_settlements: {
         Row: {
           account_tail: string | null
@@ -233,6 +283,200 @@ export type Database = {
           },
         ]
       }
+      amazon_sync_feed_items: {
+        Row: {
+          amazon_result_code: string | null
+          amazon_sku: string
+          amazon_status: string | null
+          asin: string
+          created_at: string
+          error_code: string | null
+          error_details: Json | null
+          error_message: string | null
+          feed_id: string
+          id: string
+          inventory_item_ids: string[]
+          is_new_sku: boolean | null
+          price_verified: boolean | null
+          quantity_verified: boolean | null
+          status: string
+          submitted_price: number
+          submitted_quantity: number
+          updated_at: string
+          user_id: string
+          verification_error: string | null
+          verified_price: number | null
+          verified_quantity: number | null
+          warnings: Json | null
+        }
+        Insert: {
+          amazon_result_code?: string | null
+          amazon_sku: string
+          amazon_status?: string | null
+          asin: string
+          created_at?: string
+          error_code?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          feed_id: string
+          id?: string
+          inventory_item_ids?: string[]
+          is_new_sku?: boolean | null
+          price_verified?: boolean | null
+          quantity_verified?: boolean | null
+          status?: string
+          submitted_price: number
+          submitted_quantity: number
+          updated_at?: string
+          user_id: string
+          verification_error?: string | null
+          verified_price?: number | null
+          verified_quantity?: number | null
+          warnings?: Json | null
+        }
+        Update: {
+          amazon_result_code?: string | null
+          amazon_sku?: string
+          amazon_status?: string | null
+          asin?: string
+          created_at?: string
+          error_code?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          feed_id?: string
+          id?: string
+          inventory_item_ids?: string[]
+          is_new_sku?: boolean | null
+          price_verified?: boolean | null
+          quantity_verified?: boolean | null
+          status?: string
+          submitted_price?: number
+          submitted_quantity?: number
+          updated_at?: string
+          user_id?: string
+          verification_error?: string | null
+          verified_price?: number | null
+          verified_quantity?: number | null
+          warnings?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_sync_feed_items_feed_id_fkey"
+            columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_sync_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_feed_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_sync_feeds: {
+        Row: {
+          amazon_feed_document_id: string | null
+          amazon_feed_id: string | null
+          amazon_result_document_id: string | null
+          completed_at: string | null
+          created_at: string
+          error_count: number | null
+          error_details: Json | null
+          error_message: string | null
+          feed_type: string
+          id: string
+          is_dry_run: boolean
+          last_poll_at: string | null
+          last_verification_at: string | null
+          marketplace_id: string
+          poll_count: number | null
+          request_payload: Json | null
+          response_payload: Json | null
+          result_payload: Json | null
+          status: string
+          submitted_at: string | null
+          success_count: number | null
+          total_items: number
+          updated_at: string
+          user_id: string
+          verification_attempts: number | null
+          verification_completed_at: string | null
+          verification_started_at: string | null
+          warning_count: number | null
+        }
+        Insert: {
+          amazon_feed_document_id?: string | null
+          amazon_feed_id?: string | null
+          amazon_result_document_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_count?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          feed_type?: string
+          id?: string
+          is_dry_run?: boolean
+          last_poll_at?: string | null
+          last_verification_at?: string | null
+          marketplace_id?: string
+          poll_count?: number | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          result_payload?: Json | null
+          status?: string
+          submitted_at?: string | null
+          success_count?: number | null
+          total_items?: number
+          updated_at?: string
+          user_id: string
+          verification_attempts?: number | null
+          verification_completed_at?: string | null
+          verification_started_at?: string | null
+          warning_count?: number | null
+        }
+        Update: {
+          amazon_feed_document_id?: string | null
+          amazon_feed_id?: string | null
+          amazon_result_document_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_count?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          feed_type?: string
+          id?: string
+          is_dry_run?: boolean
+          last_poll_at?: string | null
+          last_verification_at?: string | null
+          marketplace_id?: string
+          poll_count?: number | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          result_payload?: Json | null
+          status?: string
+          submitted_at?: string | null
+          success_count?: number | null
+          total_items?: number
+          updated_at?: string
+          user_id?: string
+          verification_attempts?: number | null
+          verification_completed_at?: string | null
+          verification_started_at?: string | null
+          warning_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_sync_feeds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_sync_log: {
         Row: {
           completed_at: string | null
@@ -288,6 +532,82 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "amazon_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_sync_queue: {
+        Row: {
+          added_at: string
+          amazon_price: number | null
+          amazon_quantity: number | null
+          amazon_sku: string | null
+          asin: string
+          created_at: string
+          id: string
+          inventory_item_id: string
+          is_new_sku: boolean | null
+          local_price: number
+          local_quantity: number
+          product_type: string | null
+          sku: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          amazon_price?: number | null
+          amazon_quantity?: number | null
+          amazon_sku?: string | null
+          asin: string
+          created_at?: string
+          id?: string
+          inventory_item_id: string
+          is_new_sku?: boolean | null
+          local_price: number
+          local_quantity?: number
+          product_type?: string | null
+          sku: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          amazon_price?: number | null
+          amazon_quantity?: number | null
+          amazon_sku?: string | null
+          asin?: string
+          created_at?: string
+          id?: string
+          inventory_item_id?: string
+          is_new_sku?: boolean | null
+          local_price?: number
+          local_quantity?: number
+          product_type?: string | null
+          sku?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_sync_queue_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_queue_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_queue_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2963,6 +3283,158 @@ export type Database = {
           },
         ]
       }
+      platform_listing_imports: {
+        Row: {
+          amazon_report_document_id: string | null
+          amazon_report_id: string | null
+          amazon_report_type: string | null
+          completed_at: string | null
+          created_at: string
+          ebay_page_number: number | null
+          ebay_total_entries: number | null
+          ebay_total_pages: number | null
+          error_count: number | null
+          error_details: Json | null
+          error_message: string | null
+          id: string
+          import_type: string
+          platform: string
+          processed_rows: number | null
+          started_at: string | null
+          status: string
+          total_rows: number | null
+          user_id: string
+        }
+        Insert: {
+          amazon_report_document_id?: string | null
+          amazon_report_id?: string | null
+          amazon_report_type?: string | null
+          completed_at?: string | null
+          created_at?: string
+          ebay_page_number?: number | null
+          ebay_total_entries?: number | null
+          ebay_total_pages?: number | null
+          error_count?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          import_type?: string
+          platform: string
+          processed_rows?: number | null
+          started_at?: string | null
+          status?: string
+          total_rows?: number | null
+          user_id: string
+        }
+        Update: {
+          amazon_report_document_id?: string | null
+          amazon_report_id?: string | null
+          amazon_report_type?: string | null
+          completed_at?: string | null
+          created_at?: string
+          ebay_page_number?: number | null
+          ebay_total_entries?: number | null
+          ebay_total_pages?: number | null
+          error_count?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          import_type?: string
+          platform?: string
+          processed_rows?: number | null
+          started_at?: string | null
+          status?: string
+          total_rows?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_listing_imports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_listings: {
+        Row: {
+          amazon_data: Json | null
+          bricklink_data: Json | null
+          created_at: string
+          currency: string | null
+          ebay_data: Json | null
+          fulfillment_channel: string | null
+          id: string
+          import_id: string
+          listing_status: string | null
+          platform: string
+          platform_item_id: string
+          platform_sku: string | null
+          price: number | null
+          quantity: number | null
+          raw_data: Json
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amazon_data?: Json | null
+          bricklink_data?: Json | null
+          created_at?: string
+          currency?: string | null
+          ebay_data?: Json | null
+          fulfillment_channel?: string | null
+          id?: string
+          import_id: string
+          listing_status?: string | null
+          platform: string
+          platform_item_id: string
+          platform_sku?: string | null
+          price?: number | null
+          quantity?: number | null
+          raw_data: Json
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amazon_data?: Json | null
+          bricklink_data?: Json | null
+          created_at?: string
+          currency?: string | null
+          ebay_data?: Json | null
+          fulfillment_channel?: string | null
+          id?: string
+          import_id?: string
+          listing_status?: string | null
+          platform?: string
+          platform_item_id?: string
+          platform_sku?: string | null
+          price?: number | null
+          quantity?: number | null
+          raw_data?: Json
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_listings_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "platform_listing_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_orders: {
         Row: {
           buyer_email: string | null
@@ -3485,6 +3957,31 @@ export type Database = {
           user_id: string | null
         }
         Relationships: []
+      }
+      ebay_sku_issues: {
+        Row: {
+          created_at: string | null
+          ebay_data: Json | null
+          id: string | null
+          issue_type: string | null
+          listing_status: string | null
+          platform_item_id: string | null
+          platform_sku: string | null
+          price: number | null
+          quantity: number | null
+          sku_count: number | null
+          title: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventory_items_with_age: {
         Row: {

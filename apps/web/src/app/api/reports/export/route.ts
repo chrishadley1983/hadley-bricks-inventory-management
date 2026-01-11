@@ -10,7 +10,6 @@ const ExportParamsSchema = z.object({
     'inventory-aging',
     'platform-performance',
     'purchase-analysis',
-    'tax-summary',
   ]),
   format: z.enum(['csv', 'json']),
   preset: z
@@ -28,7 +27,6 @@ const ExportParamsSchema = z.object({
     .optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  financialYear: z.coerce.number().optional(),
 });
 
 /**
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { reportType, format, preset, startDate, endDate, financialYear } = parsed.data;
+    const { reportType, format, preset, startDate, endDate } = parsed.data;
 
     const reportingService = new ReportingService(supabase);
 
@@ -68,11 +66,6 @@ export async function GET(request: NextRequest) {
         ? { startDate: new Date(startDate), endDate: new Date(endDate) }
         : undefined
     );
-
-    // Default financial year
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const defaultFinancialYear = currentMonth >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 
     // Fetch the report data based on type
     let reportData: unknown;
@@ -99,12 +92,6 @@ export async function GET(request: NextRequest) {
         reportData = await reportingService.getPurchaseAnalysisReport(user.id, dateRange);
         filename = `purchase-analysis-report-${new Date().toISOString().split('T')[0]}`;
         break;
-      case 'tax-summary': {
-        const year = financialYear ?? defaultFinancialYear;
-        reportData = await reportingService.getTaxSummaryReport(user.id, year);
-        filename = `tax-summary-report-${year}`;
-        break;
-      }
       default:
         return NextResponse.json({ error: 'Unknown report type' }, { status: 400 });
     }
@@ -290,22 +277,6 @@ function convertToCSV(reportType: string, data: unknown): string {
           purchase.roi.toFixed(2),
         ]);
       }
-      break;
-    }
-    case 'tax-summary': {
-      const report = data as {
-        financialYear: string;
-        totalTurnover: number;
-        totalExpenses: number;
-        netProfit: number;
-        mileageDeduction: number;
-      };
-      rows.push(['Metric', 'Value']);
-      rows.push(['Financial Year', report.financialYear]);
-      rows.push(['Total Turnover', report.totalTurnover.toFixed(2)]);
-      rows.push(['Total Expenses', report.totalExpenses.toFixed(2)]);
-      rows.push(['Net Profit', report.netProfit.toFixed(2)]);
-      rows.push(['Mileage Deduction', report.mileageDeduction.toFixed(2)]);
       break;
     }
     default:

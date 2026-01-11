@@ -35,6 +35,7 @@ interface BarChartProps {
   formatYAxis?: (value: number) => string;
   formatTooltip?: (value: number) => string;
   colorByValue?: (value: DataPoint) => string;
+  onBarClick?: (data: DataPoint) => void;
 }
 
 const DEFAULT_COLORS = [
@@ -58,6 +59,7 @@ export function BarChart({
   formatYAxis,
   formatTooltip,
   colorByValue,
+  onBarClick,
 }: BarChartProps) {
   const isVertical = layout === 'vertical';
 
@@ -95,7 +97,10 @@ export function BarChart({
           </>
         )}
         <Tooltip
-          formatter={(value: number | undefined) => [formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0)]}
+          formatter={(value: number | undefined, name?: string) => [
+            formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0),
+            name ?? ''
+          ]}
           labelFormatter={formatXAxis}
           contentStyle={{
             backgroundColor: 'hsl(var(--background))',
@@ -112,6 +117,8 @@ export function BarChart({
             fill={bar.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
             stackId={bar.stackId}
             radius={[4, 4, 0, 0]}
+            onClick={onBarClick ? (entry: DataPoint) => onBarClick(entry) : undefined}
+            style={onBarClick ? { cursor: 'pointer' } : undefined}
           >
             {colorByValue &&
               data.map((entry, i) => <Cell key={`cell-${i}`} fill={colorByValue(entry)} />)}

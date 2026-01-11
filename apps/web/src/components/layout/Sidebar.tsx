@@ -8,17 +8,19 @@ import {
   Package,
   ShoppingCart,
   FileText,
-  Settings,
+  // Settings, // Commented out - Settings link removed from sidebar
   TrendingUp,
   Clock,
   Upload,
   ExternalLink,
-  RefreshCw,
+  // RefreshCw, // Commented out - used by Data Sync (currently disabled)
   BarChart3,
-  PieChart,
   Landmark,
   Link2,
   Search,
+  CalendarDays,
+  Layers,
+  CloudUpload,
 } from 'lucide-react';
 
 interface NavItem {
@@ -40,17 +42,25 @@ const mainNavItems: NavItem[] = [
 const reportNavItems: NavItem[] = [
   { href: '/reports', label: 'All Reports', icon: BarChart3 },
   { href: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
+  { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
   { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
-  { href: '/reports/platform-performance', label: 'Platforms', icon: PieChart },
 ];
 
 const integrationNavItems: NavItem[] = [
   { href: '/settings/integrations', label: 'Platforms', icon: ExternalLink },
-  { href: '/integrations/import', label: 'Import Data', icon: Upload },
+  { href: '/platform-stock', label: 'Amazon Stock', icon: Layers },
+  { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
+  { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
 ];
 
+// Commented out - Data Sync page not currently needed, but keeping code for future use
+// Note: Monzo Transactions still links to Google Sheets - do not remove connection type code
+// const adminNavItems: NavItem[] = [
+//   { href: '/admin/sync', label: 'Data Sync', icon: RefreshCw },
+//   { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
+// ];
+
 const adminNavItems: NavItem[] = [
-  { href: '/admin/sync', label: 'Data Sync', icon: RefreshCw },
   { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
 ];
 
@@ -126,21 +136,6 @@ export function Sidebar() {
           </div>
         </div>
       </nav>
-
-      <div className="border-t p-3">
-        <Link
-          href="/settings"
-          className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-            pathname === '/settings' || pathname.startsWith('/settings/')
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </Link>
-      </div>
     </aside>
   );
 }
