@@ -11,70 +11,51 @@
 
 /**
  * Patterns to exclude from listings (case-insensitive)
+ *
+ * NOTE: The eBay API query already filters to category 19006 (LEGO Complete Sets & Packs),
+ * New condition, and Buy It Now. This pre-filtering at the API level handles most invalid
+ * listings, so these patterns are disabled to avoid over-filtering.
+ *
+ * Users can manually exclude individual listings that slip through.
  */
-const EXCLUDE_PATTERNS = [
-  // Display accessories
-  /\bmount\b/i,
-  /\bbracket\b/i,
-  /\bstand\b/i,
-  /\bdisplay\b/i,
-  /\bholder\b/i,
-  /\bframe\b/i,
-  /\bcase\b/i,
+const EXCLUDE_PATTERNS: RegExp[] = [
+  // DISABLED - eBay category filter handles most of these
+  // Re-enable specific patterns if needed
 
-  // Documentation
-  /\binstructions?\b/i,
-  /\bmanual\b/i,
-  /\bbooklet\b/i,
+  // // Display accessories
+  // /\bdisplay\s+mount\b/i,
+  // /\bdisplay\s+stand\s+only\b/i,
+  // /\bdisplay\s+case\s+only\b/i,
+  // /\bwall\s+mount\b/i,
+  // /\bacrylic\s+case\b/i,
 
-  // Incomplete items
-  /\bminifig(ure)?s?\s+only\b/i,
-  /\bparts\s+only\b/i,
-  /\bspares?\b/i,
-  /\bpieces?\s+only\b/i,
-  /\bbricks?\s+only\b/i,
-  /\bincomplete\b/i,
-  /\bno\s+box\b/i,
-  /\bno\s+minifig/i,
-  /\bmissing\b/i,
+  // // Documentation
+  // /\binstructions?\s+only\b/i,
+  // /\bmanual\s+only\b/i,
 
-  // Third-party / compatibility markers
-  /\bcompatible\b/i,
-  /\bfor\s+lego\b/i, // "For Lego" = third party accessory
-  /\balternative\b/i,
-  /\baftermarket\b/i,
-  /\bcustom\b/i,
-  /\bmoc\b/i, // My Own Creation
+  // // Incomplete items
+  // /\bminifig(ure)?s?\s+only\b/i,
+  // /\bparts\s+only\b/i,
+  // /\bincomplete\b/i,
+  // /\bno\s+box\b/i,
+  // /\bmissing\s+pieces\b/i,
 
-  // Knockoff brands
-  /\bknockoff\b/i,
-  /\breplica\b/i,
-  /\bfake\b/i,
-  /\bclone\b/i,
-  /\blepin\b/i,
-  /\bking\b/i,
-  /\bbela\b/i,
-  /\blele\b/i,
-  /\bsluban\b/i,
-  /\bcobi\b/i,
-  /\benlighten\b/i,
-  /\bxingbao\b/i,
-  /\bsembo\b/i,
-  /\bwange\b/i,
-  /\bpanlos\b/i,
+  // // Third-party
+  // /\bfor\s+lego\b/i,
+  // /\bcompatible\s+with\b/i,
+  // /\bmoc\b/i,
 
-  // Box/packaging only
-  /\bbox\s+only\b/i,
-  /\bempty\s+box\b/i,
-  /\bpackaging\s+only\b/i,
-
-  // Stickers
-  /\bstickers?\s+only\b/i,
-  /\bsticker\s+sheet\b/i,
+  // // Knockoffs
+  // /\blepin\b/i,
+  // /\bnot\s+lego\b/i,
 ];
 
 /**
  * Check if a listing title is a valid LEGO set listing
+ *
+ * Since we're searching category 19006 (LEGO Complete Sets & Packs) with the query
+ * "LEGO {setNumber}", eBay's relevance ranking should return mostly valid results.
+ * We only do minimal validation here to avoid over-filtering.
  *
  * @param title - The eBay listing title
  * @param setNumber - The LEGO set number to match (e.g., "75192" or "40585-1")
@@ -86,20 +67,22 @@ export function isValidLegoListing(title: string, setNumber: string): boolean {
   }
 
   // Strip -1 suffix from set number (e.g., 40585-1 -> 40585)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cleanSetNumber = setNumber.replace(/-\d+$/, '');
 
-  // Must contain the set number
-  if (!title.includes(cleanSetNumber)) {
-    return false;
-  }
+  // DISABLED: Set number requirement was too strict - many sellers don't include it
+  // The eBay search query already includes the set number for relevance ranking
+  // if (!title.includes(cleanSetNumber)) {
+  //   return false;
+  // }
 
-  // Should contain "LEGO" (official branding)
+  // Should contain "LEGO" (official branding) - this is a reasonable minimum requirement
   const titleLower = title.toLowerCase();
   if (!titleLower.includes('lego')) {
     return false;
   }
 
-  // Check against all exclude patterns
+  // Check against exclude patterns (currently empty - category filter handles most cases)
   for (const pattern of EXCLUDE_PATTERNS) {
     if (pattern.test(title)) {
       return false;
@@ -124,11 +107,11 @@ export function getListingRejectionReason(
     return 'Missing title or set number';
   }
 
-  const cleanSetNumber = setNumber.replace(/-\d+$/, '');
-
-  if (!title.includes(cleanSetNumber)) {
-    return `Title does not contain set number ${cleanSetNumber}`;
-  }
+  // Set number check is disabled - kept for reference
+  // const cleanSetNumber = setNumber.replace(/-\d+$/, '');
+  // if (!title.includes(cleanSetNumber)) {
+  //   return `Title does not contain set number ${cleanSetNumber}`;
+  // }
 
   const titleLower = title.toLowerCase();
   if (!titleLower.includes('lego')) {
