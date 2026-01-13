@@ -23,6 +23,7 @@ import {
   CloudUpload,
   Scale,
   Sparkles,
+  Calculator,
 } from 'lucide-react';
 
 interface NavItem {
@@ -39,6 +40,7 @@ const mainNavItems: NavItem[] = [
   { href: '/orders', label: 'Orders', icon: FileText },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
   { href: '/set-lookup', label: 'Set Lookup', icon: Search },
+  { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 

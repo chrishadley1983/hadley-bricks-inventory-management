@@ -175,7 +175,8 @@
       "mcp__supabase__apply_migration",
       "Bash(Remove-Item -Force \"apps/web/nul\" -ErrorAction SilentlyContinue)",
       "Bash(cmd /c \"del /f apps\\\\web\\\\nul 2>nul\")",
-      "Bash(cmd /c \"del /f nul 2>nul\")"
+      "Bash(cmd /c \"del /f nul 2>nul\")",
+      "mcp__supabase__generate_typescript_types"
     ]
   },
   "hooks": {

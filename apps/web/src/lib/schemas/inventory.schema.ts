@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SELLING_PLATFORMS } from '@hadley-bricks/database';
 
 /**
  * Status options for inventory items
@@ -38,7 +39,7 @@ export const inventoryItemSchema = z.object({
   sku: z.string().optional(),
   linked_lot: z.string().optional(),
   amazon_asin: z.string().optional(),
-  listing_platform: z.string().optional(),
+  listing_platform: z.enum(SELLING_PLATFORMS).optional().nullable(),
   notes: z.string().optional(),
 });
 
@@ -110,10 +111,19 @@ export function parseFormToApiData(values: InventoryFormValues): Partial<Invento
   const costNum = values.cost ? parseFloat(values.cost) : undefined;
   const listingValueNum = values.listing_value ? parseFloat(values.listing_value) : undefined;
 
+  // Destructure listing_platform to handle separately (form is string, API wants enum)
+  const { listing_platform, ...rest } = values;
+
+  // Validate listing_platform is a valid selling platform
+  const validPlatform = listing_platform && SELLING_PLATFORMS.includes(listing_platform as typeof SELLING_PLATFORMS[number])
+    ? (listing_platform as typeof SELLING_PLATFORMS[number])
+    : undefined;
+
   return {
-    ...values,
+    ...rest,
     cost: costNum && !isNaN(costNum) ? costNum : undefined,
     listing_value: listingValueNum && !isNaN(listingValueNum) ? listingValueNum : undefined,
     purchase_id: values.purchase_id || undefined,
+    listing_platform: validPlatform,
   };
 }

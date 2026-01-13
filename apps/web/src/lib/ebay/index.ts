@@ -43,4 +43,7 @@ export type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.ser
 export { EbayBrowseClient, getEbayBrowseClient } from './ebay-browse.client';
 export type { EbayItemSummary, EbaySearchResponse, EbaySearchOptions } from './ebay-browse.client';
 
+export { EbayFindingClient, getEbayFindingClient } from './ebay-finding.client';
+export type { EbaySoldItem, SoldListingsResult } from './ebay-finding.client';
+
 export * from './types';

@@ -19,7 +19,7 @@
     "test:watch": "npm run test:watch --workspace=apps/web",
     "test:coverage": "npm run test:coverage --workspace=apps/web",
     "db:push": "npx supabase db push",
-    "db:types": "npx supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > packages/database/src/types.ts",
+    "db:types": "npx supabase gen types typescript --project-id modjoikyuhqzouxvieua --schema public > packages/database/src/types.ts",
     "migrate:inventory": "npm run migrate:inventory --workspace=apps/web",
     "migrate:purchases": "npm run migrate:purchases --workspace=apps/web",
     "validate:reconcile": "npm run validate:reconcile --workspace=apps/web",
