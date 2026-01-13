@@ -32,8 +32,11 @@ const AnalyzePhotosRequestSchema = z.object({
   listingDescription: z.string().max(5000).optional(),
   options: z
     .object({
+      primaryModel: z.enum(['claude', 'gemini']).optional(),
       useGeminiVerification: z.boolean().optional(),
       useBrickognize: z.boolean().optional(),
+      useImageChunking: z.boolean().optional(),
+      forceChunking: z.boolean().optional(),
     })
     .optional(),
 });
@@ -88,14 +91,17 @@ export async function POST(request: NextRequest) {
 
     // 5. Build analysis options
     const analysisOptions: PhotoAnalysisOptions = {
+      primaryModel: options?.primaryModel ?? 'gemini', // Default to Gemini Pro for better OCR
       useGeminiVerification: options?.useGeminiVerification ?? true,
       useBrickognize: options?.useBrickognize ?? true,
+      useImageChunking: options?.useImageChunking ?? true,
+      forceChunking: options?.forceChunking ?? false,
       listingDescription,
     };
 
     // 6. Run photo analysis
     console.log(
-      `[POST /api/purchase-evaluator/analyze-photos] Starting analysis of ${images.length} image(s) for user ${user.id}`
+      `[POST /api/purchase-evaluator/analyze-photos] Starting analysis of ${images.length} image(s) for user ${user.id} (primary: ${analysisOptions.primaryModel})`
     );
 
     const result = await analyzePhotos(analysisImages, analysisOptions);

@@ -1,34 +1,36 @@
 /**
  * Gemini API Client for Image Analysis
  *
- * Uses Google's Gemini 2.5 Flash model for fast, cost-effective
- * image analysis and text extraction. Used as secondary verification
- * in the photo analysis pipeline.
+ * Uses Google's Gemini 3 Pro model for primary analysis (best OCR accuracy)
+ * and Gemini 3 Flash for fast verification tasks.
  */
 
-import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
+import { GoogleGenAI, ThinkingLevel, type Part } from '@google/genai';
 
 // ============================================
 // Configuration
 // ============================================
 
 /**
- * Gemini 2.5 Flash model for cost-effective image analysis
+ * Gemini model IDs
+ * - gemini-3-pro-preview: Most intelligent - best for reasoning, agentic tasks, accurate OCR
+ * - gemini-3-flash-preview: Fast + Pro-level intelligence for verification
  */
-const GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20';
+const GEMINI_MODEL_PRIMARY = 'gemini-3-pro-preview';
+const GEMINI_MODEL_FAST = 'gemini-3-flash-preview';
 
-let geminiClient: GoogleGenerativeAI | null = null;
+let geminiClient: GoogleGenAI | null = null;
 
 /**
  * Get the Gemini client instance (singleton)
  */
-function getGeminiClient(): GoogleGenerativeAI {
+function getGeminiClient(): GoogleGenAI {
   if (!geminiClient) {
     const apiKey = process.env.GOOGLE_AI_API_KEY;
     if (!apiKey) {
       throw new Error('GOOGLE_AI_API_KEY environment variable is not set');
     }
-    geminiClient = new GoogleGenerativeAI(apiKey);
+    geminiClient = new GoogleGenAI({ apiKey });
   }
   return geminiClient;
 }
@@ -63,14 +65,19 @@ export interface GeminiExtractionResult {
  *
  * @param images - Array of images to analyze
  * @param prompt - Analysis prompt
+ * @param usePrimaryModel - If true, use Pro model; if false, use Flash (default: false for verification)
+ * @param thinkingLevel - Thinking depth for Gemini 3 (default: HIGH for Pro, LOW for Flash)
  * @returns Raw text response from Gemini
  */
 export async function analyzeImagesWithGemini(
   images: GeminiImageInput[],
-  prompt: string
+  prompt: string,
+  usePrimaryModel: boolean = false,
+  thinkingLevel?: ThinkingLevel
 ): Promise<string> {
   const client = getGeminiClient();
-  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const modelId = usePrimaryModel ? GEMINI_MODEL_PRIMARY : GEMINI_MODEL_FAST;
+  const defaultThinking = usePrimaryModel ? ThinkingLevel.HIGH : ThinkingLevel.LOW;
 
   // Build parts array with images and prompt
   const parts: Part[] = [];
@@ -88,11 +95,19 @@ export async function analyzeImagesWithGemini(
   // Add text prompt
   parts.push({ text: prompt });
 
-  // Generate response
-  const result = await model.generateContent(parts);
-  const response = result.response;
-  const text = response.text();
+  // Generate response with thinking config
+  const response = await client.models.generateContent({
+    model: modelId,
+    contents: { parts },
+    config: {
+      thinkingConfig: {
+        thinkingLevel: thinkingLevel ?? defaultThinking,
+      },
+    },
+  });
 
+  // Extract text from response
+  const text = response.text ?? '';
   return text;
 }
 
@@ -230,4 +245,137 @@ Respond in JSON format:
  */
 export function isGeminiConfigured(): boolean {
   return !!process.env.GOOGLE_AI_API_KEY;
+}
+
+// ============================================
+// Full Photo Analysis with Gemini (Primary Mode)
+// ============================================
+
+/**
+ * Response type for full Gemini analysis
+ */
+export interface GeminiFullAnalysisItem {
+  itemType: 'set' | 'minifig' | 'parts_lot' | 'non_lego' | 'unknown';
+  setNumber: string | null;
+  setName: string | null;
+  condition: 'New' | 'Used';
+  boxCondition: 'Mint' | 'Excellent' | 'Good' | 'Fair' | 'Poor' | null;
+  sealStatus: 'Factory Sealed' | 'Resealed' | 'Open Box' | 'Unknown';
+  damageNotes: string[];
+  confidenceScore: number;
+  needsReview: boolean;
+  reviewReason: string | null;
+  rawDescription: string;
+  quantity: number;
+  minifigDescription: string | null;
+  partsEstimate: string | null;
+}
+
+export interface GeminiFullAnalysisResult {
+  items: GeminiFullAnalysisItem[];
+  overallNotes: string;
+  analysisConfidence: number;
+  warnings: string[];
+}
+
+/**
+ * Run full photo analysis using Gemini as primary model
+ *
+ * This provides the same structured output as Claude Opus but uses Gemini.
+ * Particularly effective for accurate set number reading.
+ */
+export async function analyzePhotosWithGemini(
+  images: GeminiImageInput[],
+  listingDescription?: string
+): Promise<GeminiFullAnalysisResult> {
+  const imageCountText = images.length === 1
+    ? 'this photo'
+    : `these ${images.length} photos`;
+
+  const descriptionContext = listingDescription
+    ? `\n\nThe seller provided this description:\n"${listingDescription}"\n\nUse this to help identify items, but verify against what you see.`
+    : '';
+
+  const prompt = `You are an expert LEGO appraiser analyzing ${imageCountText} of a LEGO lot.${descriptionContext}
+
+## Your Task
+Identify ALL LEGO items visible and assess their condition. Accuracy is critical for purchase evaluation.
+
+## Set Number Reading - CRITICAL
+When reading set numbers from boxes:
+1. Look at the TOP-RIGHT corner of the box front, or side panels
+2. Read EACH DIGIT carefully, one by one, left to right
+3. Common digit confusions to avoid:
+   - 5 vs 6 vs 8 (5 has flat top, 6 has bottom loop, 8 has two loops)
+   - 2 vs 3 (2 has flat bottom, 3 is open left)
+   - 0 vs 6 vs 9 (0 is symmetric)
+4. Standard set number patterns:
+   - City sets: 5 digits starting with 60 (60285, 60389)
+   - Bundle packs: 5 digits starting with 66 (66523, 66546)
+   - Star Wars: 5 digits starting with 75 (75192)
+   - Creator: 5 digits starting with 10, 31, 40 (10281)
+   - Technic: 5 digits starting with 42 (42115)
+
+## Condition Grading
+**Box Condition:**
+- Mint: Factory perfect, no wear
+- Excellent: Near-mint, minor shelf wear only
+- Good: Visible wear, minor creases OK
+- Fair: Significant wear, multiple creases
+- Poor: Major damage, tears, crushing
+
+**Seal Status:**
+- Factory Sealed: Original LEGO seals intact
+- Resealed: Evidence of re-taping
+- Open Box: Clearly opened
+- Unknown: Cannot determine
+
+## Output Format
+Return ONLY valid JSON:
+{
+  "items": [
+    {
+      "itemType": "set",
+      "setNumber": "60285",
+      "setName": "Sports Car",
+      "condition": "New",
+      "boxCondition": "Excellent",
+      "sealStatus": "Factory Sealed",
+      "damageNotes": ["Minor shelf wear"],
+      "confidenceScore": 0.95,
+      "needsReview": false,
+      "reviewReason": null,
+      "rawDescription": "LEGO City blue sports car box, set number 60285 clearly visible top right",
+      "quantity": 1,
+      "minifigDescription": null,
+      "partsEstimate": null
+    }
+  ],
+  "overallNotes": "Lot contains 5 sealed City sets in good to excellent condition",
+  "analysisConfidence": 0.92,
+  "warnings": []
+}`;
+
+  try {
+    console.log('[Gemini] Running full photo analysis with Gemini 3 Pro (thinking: HIGH)...');
+    // Use Pro model with high thinking for primary analysis - best accuracy
+    const rawResponse = await analyzeImagesWithGemini(images, prompt, true, ThinkingLevel.HIGH);
+
+    // Parse JSON from response
+    let jsonStr = rawResponse;
+    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    }
+
+    const parsed = JSON.parse(jsonStr) as GeminiFullAnalysisResult;
+
+    console.log(`[Gemini] Analysis complete: ${parsed.items.length} items found`);
+    return parsed;
+  } catch (error) {
+    console.error('[Gemini] Full analysis failed:', error);
+    throw new Error(
+      `Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 }

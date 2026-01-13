@@ -43,6 +43,9 @@ type PurchaseEvaluationItemInsert = Database['public']['Tables']['purchase_evalu
 // ============================================
 
 function mapEvaluationRow(row: PurchaseEvaluationRow): PurchaseEvaluation {
+  // Type assertion for new columns that may not be in the DB types yet
+  const extendedRow = row as Record<string, unknown>;
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -59,8 +62,13 @@ function mapEvaluationRow(row: PurchaseEvaluationRow): PurchaseEvaluation {
     status: (row.status as 'draft' | 'in_progress' | 'completed' | 'saved' | 'converted') || 'draft',
     lookupCompletedAt: row.lookup_completed_at,
     // Conversion tracking - these columns may not exist in DB yet until migration is applied
-    convertedAt: (row as Record<string, unknown>).converted_at as string | null ?? null,
-    convertedPurchaseId: (row as Record<string, unknown>).converted_purchase_id as string | null ?? null,
+    convertedAt: extendedRow.converted_at as string | null ?? null,
+    convertedPurchaseId: extendedRow.converted_purchase_id as string | null ?? null,
+    // Photo evaluation fields - these columns may not exist in DB yet until migration is applied
+    evaluationMode: (extendedRow.evaluation_mode as 'cost_known' | 'max_bid') ?? 'cost_known',
+    targetMarginPercent: extendedRow.target_margin_percent as number | null ?? null,
+    photoAnalysisJson: extendedRow.photo_analysis_json as Record<string, unknown> | null ?? null,
+    listingDescription: extendedRow.listing_description as string | null ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -134,8 +142,8 @@ export class PurchaseEvaluatorService {
     userId: string,
     request: CreateEvaluationRequest
   ): Promise<PurchaseEvaluation> {
-    // Create evaluation record
-    const evaluationInsert: PurchaseEvaluationInsert = {
+    // Create evaluation record with photo analysis fields if present
+    const evaluationInsert = {
       user_id: userId,
       name: request.name || `Evaluation ${new Date().toLocaleDateString()}`,
       source: request.source,
@@ -144,7 +152,12 @@ export class PurchaseEvaluatorService {
       cost_allocation_method: request.costAllocationMethod ?? 'per_item',
       item_count: request.items.length,
       status: 'draft',
-    };
+      // Photo analysis fields
+      evaluation_mode: request.evaluationMode ?? 'cost_known',
+      target_margin_percent: request.targetMarginPercent ?? null,
+      photo_analysis_json: request.photoAnalysisJson ?? null,
+      listing_description: request.listingDescription ?? null,
+    } as PurchaseEvaluationInsert;
 
     const { data: evaluation, error: evalError } = await this.supabase
       .from('purchase_evaluations')
@@ -156,8 +169,8 @@ export class PurchaseEvaluatorService {
       throw new Error(`Failed to create evaluation: ${evalError?.message}`);
     }
 
-    // Create item records
-    const itemInserts: PurchaseEvaluationItemInsert[] = request.items.map((item) => ({
+    // Create item records with photo analysis fields if present
+    const itemInserts = request.items.map((item) => ({
       evaluation_id: evaluation.id,
       set_number: item.setNumber,
       set_name: item.setName ?? null,
@@ -165,7 +178,13 @@ export class PurchaseEvaluatorService {
       quantity: item.quantity ?? 1,
       unit_cost: item.cost ?? null,
       target_platform: request.defaultPlatform,
-    }));
+      // Photo analysis fields
+      item_type: item.itemType ?? 'set',
+      box_condition: item.boxCondition ?? null,
+      seal_status: item.sealStatus ?? 'Unknown',
+      damage_notes: item.damageNotes ?? null,
+      ai_confidence_score: item.aiConfidenceScore ?? null,
+    })) as PurchaseEvaluationItemInsert[];
 
     const { error: itemsError } = await this.supabase
       .from('purchase_evaluation_items')

@@ -41,9 +41,13 @@ import {
 } from '@/components/ui/select';
 import type { PurchaseEvaluation, EvaluationItem, TargetPlatform } from '@/lib/purchase-evaluator';
 import { formatCurrencyGBP } from '@/lib/arbitrage/calculations';
+import type { EvaluationMode } from '../PurchaseEvaluatorWizard';
+import { calculateMaxPurchasePriceEbay, calculateMaxPurchasePriceAmazon } from '@/lib/purchase-evaluator/reverse-calculations';
 
 interface ReviewStepProps {
   evaluation: PurchaseEvaluation;
+  evaluationMode?: EvaluationMode;
+  targetMarginPercent?: number;
   onSave: () => void;
   onBack: () => void;
   onUpdateItems?: (updates: Array<{
@@ -71,9 +75,33 @@ function getSellPrice(item: EvaluationItem): number | null {
 }
 
 /**
+ * Calculate max purchase price for an item based on expected sell price and target margin
+ */
+function getMaxPurchasePrice(item: EvaluationItem, targetMarginPercent: number): number | null {
+  const sellPrice = getSellPrice(item);
+  if (!sellPrice || sellPrice <= 0) return null;
+
+  if (item.targetPlatform === 'ebay') {
+    const result = calculateMaxPurchasePriceEbay(sellPrice, targetMarginPercent);
+    return result.maxPurchasePrice;
+  } else {
+    const result = calculateMaxPurchasePriceAmazon(sellPrice, targetMarginPercent);
+    return result.maxPurchasePrice;
+  }
+}
+
+/**
  * Review step showing all pricing data and profitability
  */
-export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalculateCosts }: ReviewStepProps) {
+export function ReviewStep({
+  evaluation,
+  evaluationMode = 'cost_known',
+  targetMarginPercent = 30,
+  onSave,
+  onBack,
+  onUpdateItems,
+  onRecalculateCosts,
+}: ReviewStepProps) {
   const items = evaluation.items || [];
   const [editingCosts, setEditingCosts] = React.useState<Record<string, string>>({});
   const [editingPrices, setEditingPrices] = React.useState<Record<string, string>>({});
@@ -102,6 +130,25 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
 
   // Calculate total expected profit from grossProfit (which accounts for platform fees)
   const totalExpectedProfit = items.reduce((sum, item) => sum + (item.grossProfit || 0), 0);
+
+  // For max_bid mode: Calculate total max purchase price
+  const totalMaxPurchasePrice = evaluationMode === 'max_bid'
+    ? items.reduce((sum, item) => {
+        const maxPrice = getMaxPurchasePrice(item, targetMarginPercent);
+        return sum + (maxPrice || 0);
+      }, 0)
+    : 0;
+
+  // For max_bid mode: Calculate expected revenue from sell prices
+  const calculatedExpectedRevenue = items.reduce((sum, item) => {
+    const sellPrice = getSellPrice(item);
+    return sum + ((sellPrice || 0) * (item.quantity || 1));
+  }, 0);
+
+  // Count items with calculable max price
+  const itemsWithMaxPrice = evaluationMode === 'max_bid'
+    ? items.filter((item) => getMaxPurchasePrice(item, targetMarginPercent) !== null).length
+    : 0;
 
   // Format percentage with color
   const formatPercent = (value: number | null, inverse?: boolean) => {
@@ -200,34 +247,62 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
       {/* Summary Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Evaluation Summary</CardTitle>
+          <CardTitle>
+            {evaluationMode === 'max_bid' ? 'Maximum Bid Recommendation' : 'Evaluation Summary'}
+          </CardTitle>
           <CardDescription>
-            {evaluation.name || `Evaluation from ${new Date(evaluation.createdAt).toLocaleDateString()}`}
+            {evaluationMode === 'max_bid'
+              ? `Based on ${targetMarginPercent}% target margin for ${itemsWithMaxPrice}/${items.length} items with pricing data`
+              : evaluation.name || `Evaluation from ${new Date(evaluation.createdAt).toLocaleDateString()}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold">{formatCurrencyGBP(evaluation.totalCost)}</p>
-              <p className="text-sm text-muted-foreground">Total Cost</p>
+          {evaluationMode === 'max_bid' ? (
+            // Max Bid Mode Summary
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="text-center p-6 bg-primary/5 border-2 border-primary rounded-lg">
+                <p className="text-3xl font-bold text-primary">
+                  {formatCurrencyGBP(totalMaxPurchasePrice)}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">Maximum Purchase Price</p>
+                <p className="text-xs text-muted-foreground">
+                  For {targetMarginPercent}% profit margin
+                </p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className="text-2xl font-bold">{formatCurrencyGBP(calculatedExpectedRevenue)}</p>
+                <p className="text-sm text-muted-foreground">Expected Revenue</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className="text-2xl font-bold">{items.length}</p>
+                <p className="text-sm text-muted-foreground">Items Identified</p>
+              </div>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold">{formatCurrencyGBP(evaluation.totalExpectedRevenue)}</p>
-              <p className="text-sm text-muted-foreground">Expected Revenue</p>
+          ) : (
+            // Traditional Mode Summary
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className="text-2xl font-bold">{formatCurrencyGBP(evaluation.totalCost)}</p>
+                <p className="text-sm text-muted-foreground">Total Cost</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className="text-2xl font-bold">{formatCurrencyGBP(evaluation.totalExpectedRevenue)}</p>
+                <p className="text-sm text-muted-foreground">Expected Revenue</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className={`text-2xl font-bold ${totalExpectedProfit > 0 ? 'text-green-600' : totalExpectedProfit < 0 ? 'text-red-600' : ''}`}>
+                  {totalExpectedProfit !== 0 ? formatCurrencyGBP(totalExpectedProfit) : '-'}
+                </p>
+                <p className="text-sm text-muted-foreground">Est. Profit (after fees)</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <p className={`text-2xl font-bold ${(evaluation.overallMarginPercent ?? 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {evaluation.overallMarginPercent?.toFixed(1) ?? '-'}%
+                </p>
+                <p className="text-sm text-muted-foreground">Margin</p>
+              </div>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className={`text-2xl font-bold ${totalExpectedProfit > 0 ? 'text-green-600' : totalExpectedProfit < 0 ? 'text-red-600' : ''}`}>
-                {totalExpectedProfit !== 0 ? formatCurrencyGBP(totalExpectedProfit) : '-'}
-              </p>
-              <p className="text-sm text-muted-foreground">Est. Profit (after fees)</p>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className={`text-2xl font-bold ${(evaluation.overallMarginPercent ?? 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {evaluation.overallMarginPercent?.toFixed(1) ?? '-'}%
-              </p>
-              <p className="text-sm text-muted-foreground">Margin</p>
-            </div>
-          </div>
+          )}
 
           {/* Warnings */}
           <div className="mt-4 space-y-2">
@@ -257,7 +332,9 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
           <div>
             <CardTitle>Items ({items.length})</CardTitle>
             <CardDescription>
-              Review pricing data and profitability for each item
+              {evaluationMode === 'max_bid'
+                ? 'Review identified items and their maximum purchase prices'
+                : 'Review pricing data and profitability for each item'}
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -291,13 +368,26 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
                     <TableHead className="w-[40px]">Qty</TableHead>
                     <TableHead className="w-[90px]">Platform</TableHead>
                     <TableHead className="w-[100px]">ASIN</TableHead>
-                    <TableHead className="w-[90px]">Cost</TableHead>
-                    <TableHead className="w-[90px]">Price</TableHead>
+                    {evaluationMode === 'max_bid' ? (
+                      <>
+                        <TableHead className="w-[90px]">Sell Price</TableHead>
+                        <TableHead className="w-[90px] bg-primary/5">Max Bid</TableHead>
+                      </>
+                    ) : (
+                      <>
+                        <TableHead className="w-[90px]">Cost</TableHead>
+                        <TableHead className="w-[90px]">Price</TableHead>
+                      </>
+                    )}
                     <TableHead className="w-[70px]">Buy Box</TableHead>
                     <TableHead className="w-[70px]">Was Price</TableHead>
                     <TableHead className="w-[70px]">eBay Sold</TableHead>
-                    <TableHead className="w-[60px]">COG%</TableHead>
-                    <TableHead className="w-[60px]">Margin</TableHead>
+                    {evaluationMode !== 'max_bid' && (
+                      <>
+                        <TableHead className="w-[60px]">COG%</TableHead>
+                        <TableHead className="w-[60px]">Margin</TableHead>
+                      </>
+                    )}
                     <TableHead className="w-[40px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -420,29 +510,148 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
                             <span className="text-muted-foreground text-xs">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className="w-[75px] h-7 text-xs"
-                            value={currentCost}
-                            onChange={(e) => handleCostChange(item.id, e.target.value)}
-                            placeholder="0.00"
-                          />
+                        {evaluationMode === 'max_bid' ? (
+                          // Max Bid Mode: Show editable sell price and calculated max bid
+                          <>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="w-[75px] h-7 text-xs"
+                                value={currentPrice}
+                                onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                                placeholder={sellPrice?.toFixed(2) || '0.00'}
+                              />
+                            </TableCell>
+                            <TableCell className="bg-primary/5">
+                              {(() => {
+                                // Use the current price (which includes pending edits) for max bid calculation
+                                const effectiveSellPrice = typeof currentPrice === 'string' && currentPrice !== ''
+                                  ? parseFloat(currentPrice)
+                                  : sellPrice;
+
+                                if (!effectiveSellPrice || effectiveSellPrice <= 0) {
+                                  return <span className="text-muted-foreground text-xs">-</span>;
+                                }
+
+                                // Calculate max bid based on platform
+                                const platform = pendingUpdates[item.id]?.targetPlatform ?? item.targetPlatform;
+                                const maxBid = platform === 'ebay'
+                                  ? calculateMaxPurchasePriceEbay(effectiveSellPrice, targetMarginPercent).maxPurchasePrice
+                                  : calculateMaxPurchasePriceAmazon(effectiveSellPrice, targetMarginPercent).maxPurchasePrice;
+
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="font-semibold text-primary text-xs cursor-help">
+                                          {formatCurrencyGBP(maxBid)}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        <div className="space-y-1 text-xs">
+                                          <p className="font-semibold">Max Bid Breakdown</p>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                                            <span className="text-muted-foreground">Expected Sell:</span>
+                                            <span>{formatCurrencyGBP(effectiveSellPrice)}</span>
+                                            <span className="text-muted-foreground">Platform Fees:</span>
+                                            <span>
+                                              {platform === 'ebay'
+                                                ? '~15.7% + £0.30'
+                                                : '~15% + £3-4'}
+                                            </span>
+                                            <span className="text-muted-foreground">Target Margin:</span>
+                                            <span>{targetMarginPercent}%</span>
+                                            <span className="text-muted-foreground font-semibold border-t pt-1">Max Bid:</span>
+                                            <span className="font-semibold text-primary border-t pt-1">
+                                              {formatCurrencyGBP(maxBid)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
+                            </TableCell>
+                          </>
+                        ) : (
+                          // Traditional Mode: Show editable cost and price
+                          <>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="w-[75px] h-7 text-xs"
+                                value={currentCost}
+                                onChange={(e) => handleCostChange(item.id, e.target.value)}
+                                placeholder="0.00"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="w-[75px] h-7 text-xs"
+                                value={currentPrice}
+                                onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                                placeholder={sellPrice?.toFixed(2) || '0.00'}
+                              />
+                            </TableCell>
+                          </>
+                        )}
+                        <TableCell className="text-xs">
+                          {item.amazonBuyBoxPrice ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-help underline decoration-dotted">
+                                    {formatCurrencyGBP(item.amazonBuyBoxPrice)}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <div className="space-y-1 text-xs">
+                                    <p className="font-semibold">Amazon Listing Details</p>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                                      <span className="text-muted-foreground">Buy Box:</span>
+                                      <span>{formatCurrencyGBP(item.amazonBuyBoxPrice)}</span>
+                                      {item.amazonSalesRank && (
+                                        <>
+                                          <span className="text-muted-foreground">Sales Rank:</span>
+                                          <span>#{item.amazonSalesRank.toLocaleString()}</span>
+                                        </>
+                                      )}
+                                      {item.amazonOfferCount !== null && (
+                                        <>
+                                          <span className="text-muted-foreground">Sellers:</span>
+                                          <span>{item.amazonOfferCount} offer{item.amazonOfferCount !== 1 ? 's' : ''}</span>
+                                        </>
+                                      )}
+                                      {item.amazonWasPrice && (
+                                        <>
+                                          <span className="text-muted-foreground">Was Price:</span>
+                                          <span>{formatCurrencyGBP(item.amazonWasPrice)}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {item.amazonSalesRank && (
+                                      <p className="text-[10px] text-muted-foreground pt-1 border-t">
+                                        {item.amazonSalesRank < 50000 ? '🔥 Hot seller' :
+                                         item.amazonSalesRank < 200000 ? '✓ Good velocity' :
+                                         item.amazonSalesRank < 500000 ? '⚠️ Slower mover' : '❄️ Low velocity'}
+                                      </p>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className="w-[75px] h-7 text-xs"
-                            value={currentPrice}
-                            onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                            placeholder={sellPrice?.toFixed(2) || '0.00'}
-                          />
-                        </TableCell>
-                        <TableCell className="text-xs">{formatCurrencyGBP(item.amazonBuyBoxPrice)}</TableCell>
                         <TableCell className="text-xs">{formatCurrencyGBP(item.amazonWasPrice)}</TableCell>
                         <TableCell className="text-xs">
                           {item.ebaySoldAvgPrice ? (
@@ -451,8 +660,10 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs">{formatPercent(item.cogPercent, true)}</TableCell>
-                        <TableCell>
+                        {evaluationMode !== 'max_bid' && (
+                          <>
+                            <TableCell className="text-xs">{formatPercent(item.cogPercent, true)}</TableCell>
+                            <TableCell>
                           {item.profitMarginPercent !== null && item.grossProfit !== null ? (
                             <TooltipProvider>
                               <Tooltip>
@@ -499,7 +710,9 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
                           ) : (
                             <span className="text-muted-foreground text-xs">-</span>
                           )}
-                        </TableCell>
+                            </TableCell>
+                          </>
+                        )}
                         <TableCell>
                           <a
                             href={item.amazonAsin ? buildAmazonUrl(item.amazonAsin) : buildEbayUrl(item.setNumber)}
@@ -532,7 +745,13 @@ export function ReviewStep({ evaluation, onSave, onBack, onUpdateItems, onRecalc
               Apply Changes
             </Button>
           )}
-          <Button onClick={onSave}>
+          <Button onClick={async () => {
+            // Apply any pending updates before saving
+            if (hasPendingUpdates && onUpdateItems) {
+              await handleApplyUpdates();
+            }
+            onSave();
+          }}>
             <Save className="mr-2 h-4 w-4" />
             Save Evaluation
           </Button>

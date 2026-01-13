@@ -189,6 +189,9 @@ export class EvaluationConversionService {
    * Map database row to PurchaseEvaluation type
    */
   private mapEvaluationRow(row: EvaluationRowWithConversion): PurchaseEvaluation {
+    // Type assertion for new columns that may not be in the DB types yet
+    const extendedRow = row as unknown as Record<string, unknown>;
+
     return {
       id: row.id,
       userId: row.user_id,
@@ -206,6 +209,11 @@ export class EvaluationConversionService {
       lookupCompletedAt: row.lookup_completed_at,
       convertedAt: row.converted_at ?? null,
       convertedPurchaseId: row.converted_purchase_id ?? null,
+      // Photo evaluation fields - these columns may not exist in DB yet until migration is applied
+      evaluationMode: (extendedRow.evaluation_mode as 'cost_known' | 'max_bid') ?? 'cost_known',
+      targetMarginPercent: extendedRow.target_margin_percent as number | null ?? null,
+      photoAnalysisJson: extendedRow.photo_analysis_json as Record<string, unknown> | null ?? null,
+      listingDescription: extendedRow.listing_description as string | null ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

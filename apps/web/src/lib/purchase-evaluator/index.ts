@@ -25,3 +25,43 @@ export {
 } from './calculations';
 
 export * from './types';
+
+// Photo analysis types - explicitly exported to avoid naming conflicts
+export type {
+  PhotoItemType,
+  BoxCondition,
+  SealStatus,
+  AIModel,
+  ModelIdentification,
+  BrickognizeItem,
+  GeminiSetExtraction,
+  PhotoAnalysisItem,
+  PhotoAnalysisResult,
+  PhotoAnalysisOptions,
+  OpusAnalysisResponse,
+  GeminiExtractionResponse,
+  AnalysisImageInput,
+  // EvaluationMode is already exported from ./types
+  EbayFeeBreakdown,
+  AmazonFeeBreakdown,
+} from './photo-types';
+
+export {
+  generatePhotoItemId,
+  createEmptyPhotoAnalysisItem,
+  getItemTypeLabel,
+  getBoxConditionColor,
+  getConfidenceColor,
+  formatConfidence,
+} from './photo-types';
+
+// Image chunking utilities (client-side)
+export {
+  processImagesForChunking,
+  detectItemRegions,
+  cropImageToRegion,
+  isChunkingAvailable,
+  type ItemRegion,
+  type ChunkedImage,
+  type ChunkingResult,
+} from './image-chunking.service';

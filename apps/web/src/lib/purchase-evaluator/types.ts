@@ -16,6 +16,18 @@ export type LookupStatus = 'pending' | 'found' | 'not_found' | 'multiple' | 'err
 export type AsinSource = 'ean_lookup' | 'upc_lookup' | 'keyword_search' | 'manual';
 export type AsinConfidence = 'exact' | 'probable' | 'manual' | 'multiple';
 
+/**
+ * Evaluation mode determines calculation approach
+ * - cost_known: Traditional mode, purchase price known, calculates profit
+ * - max_bid: Photo mode, calculates max purchase price from target margin
+ */
+export type EvaluationMode = 'cost_known' | 'max_bid';
+
+/**
+ * Source of evaluation data
+ */
+export type EvaluationSource = 'csv_upload' | 'clipboard_paste' | 'photo_analysis';
+
 // ============================================
 // Input Types (from CSV/Clipboard)
 // ============================================
@@ -29,6 +41,12 @@ export interface EvaluationInputItem {
   condition: 'New' | 'Used';
   quantity?: number;
   cost?: number;
+  // Photo analysis fields
+  itemType?: 'set' | 'minifig' | 'parts_lot' | 'non_lego' | 'unknown';
+  boxCondition?: 'Mint' | 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  sealStatus?: 'Factory Sealed' | 'Resealed' | 'Open Box' | 'Unknown';
+  damageNotes?: string[];
+  aiConfidenceScore?: number;
 }
 
 /**
@@ -156,9 +174,17 @@ export interface PurchaseEvaluation {
   source: string | null;
   defaultPlatform: TargetPlatform;
 
-  // Cost allocation
+  // Evaluation mode (cost_known for traditional, max_bid for photo analysis)
+  evaluationMode: EvaluationMode;
+
+  // Cost allocation (traditional mode)
   totalPurchasePrice: number | null;
   costAllocationMethod: CostAllocationMethod | null;
+
+  // Photo analysis mode
+  targetMarginPercent: number | null;
+  photoAnalysisJson: unknown | null;
+  listingDescription: string | null;
 
   // Summary stats
   itemCount: number;
@@ -218,11 +244,19 @@ export interface LookupProgress {
  */
 export interface CreateEvaluationRequest {
   name?: string;
-  source: 'csv_upload' | 'clipboard_paste';
+  source: EvaluationSource;
   defaultPlatform: TargetPlatform;
   items: EvaluationInputItem[];
+
+  // Traditional mode (cost_known)
   totalPurchasePrice?: number;
   costAllocationMethod?: CostAllocationMethod;
+
+  // Photo analysis mode (max_bid)
+  evaluationMode?: EvaluationMode;
+  targetMarginPercent?: number;
+  photoAnalysisJson?: unknown;
+  listingDescription?: string;
 }
 
 /**
@@ -334,8 +368,12 @@ export interface PurchaseEvaluationRow {
   name: string | null;
   source: string | null;
   default_platform: string;
+  evaluation_mode: string;
   total_purchase_price: number | null;
   cost_allocation_method: string | null;
+  target_margin_percent: number | null;
+  photo_analysis_json: unknown | null;
+  listing_description: string | null;
   item_count: number;
   total_cost: number | null;
   total_expected_revenue: number | null;
@@ -469,8 +507,12 @@ export function rowToEvaluation(row: PurchaseEvaluationRow): PurchaseEvaluation 
     name: row.name,
     source: row.source,
     defaultPlatform: row.default_platform as TargetPlatform,
+    evaluationMode: (row.evaluation_mode as EvaluationMode) || 'cost_known',
     totalPurchasePrice: row.total_purchase_price,
     costAllocationMethod: row.cost_allocation_method as CostAllocationMethod | null,
+    targetMarginPercent: row.target_margin_percent,
+    photoAnalysisJson: row.photo_analysis_json,
+    listingDescription: row.listing_description,
     itemCount: row.item_count,
     totalCost: row.total_cost,
     totalExpectedRevenue: row.total_expected_revenue,

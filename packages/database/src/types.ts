@@ -3928,6 +3928,9 @@ export type Database = {
       }
       purchase_evaluation_items: {
         Row: {
+          ai_confidence_score: number | null
+          ai_model_results: Json | null
+          ai_raw_description: string | null
           allocated_cost: number | null
           amazon_alternative_asins: Json | null
           amazon_asin: string | null
@@ -3940,10 +3943,12 @@ export type Database = {
           amazon_offer_count: number | null
           amazon_sales_rank: number | null
           amazon_was_price: number | null
+          box_condition: string | null
           brickset_set_id: string | null
           cog_percent: number | null
           condition: string
           created_at: string
+          damage_notes: string[] | null
           ean: string | null
           ebay_avg_price: number | null
           ebay_listing_count: number | null
@@ -3962,10 +3967,15 @@ export type Database = {
           gross_profit: number | null
           id: string
           image_url: string | null
+          item_type: string | null
+          max_purchase_price: number | null
+          minifig_id: string | null
           needs_review: boolean | null
+          part_ids: string[] | null
           profit_margin_percent: number | null
           quantity: number | null
           roi_percent: number | null
+          seal_status: string | null
           set_name: string | null
           set_number: string
           target_platform: string | null
@@ -3977,6 +3987,9 @@ export type Database = {
           user_sell_price_override: number | null
         }
         Insert: {
+          ai_confidence_score?: number | null
+          ai_model_results?: Json | null
+          ai_raw_description?: string | null
           allocated_cost?: number | null
           amazon_alternative_asins?: Json | null
           amazon_asin?: string | null
@@ -3989,10 +4002,12 @@ export type Database = {
           amazon_offer_count?: number | null
           amazon_sales_rank?: number | null
           amazon_was_price?: number | null
+          box_condition?: string | null
           brickset_set_id?: string | null
           cog_percent?: number | null
           condition: string
           created_at?: string
+          damage_notes?: string[] | null
           ean?: string | null
           ebay_avg_price?: number | null
           ebay_listing_count?: number | null
@@ -4011,10 +4026,15 @@ export type Database = {
           gross_profit?: number | null
           id?: string
           image_url?: string | null
+          item_type?: string | null
+          max_purchase_price?: number | null
+          minifig_id?: string | null
           needs_review?: boolean | null
+          part_ids?: string[] | null
           profit_margin_percent?: number | null
           quantity?: number | null
           roi_percent?: number | null
+          seal_status?: string | null
           set_name?: string | null
           set_number: string
           target_platform?: string | null
@@ -4026,6 +4046,9 @@ export type Database = {
           user_sell_price_override?: number | null
         }
         Update: {
+          ai_confidence_score?: number | null
+          ai_model_results?: Json | null
+          ai_raw_description?: string | null
           allocated_cost?: number | null
           amazon_alternative_asins?: Json | null
           amazon_asin?: string | null
@@ -4038,10 +4061,12 @@ export type Database = {
           amazon_offer_count?: number | null
           amazon_sales_rank?: number | null
           amazon_was_price?: number | null
+          box_condition?: string | null
           brickset_set_id?: string | null
           cog_percent?: number | null
           condition?: string
           created_at?: string
+          damage_notes?: string[] | null
           ean?: string | null
           ebay_avg_price?: number | null
           ebay_listing_count?: number | null
@@ -4060,10 +4085,15 @@ export type Database = {
           gross_profit?: number | null
           id?: string
           image_url?: string | null
+          item_type?: string | null
+          max_purchase_price?: number | null
+          minifig_id?: string | null
           needs_review?: boolean | null
+          part_ids?: string[] | null
           profit_margin_percent?: number | null
           quantity?: number | null
           roi_percent?: number | null
+          seal_status?: string | null
           set_name?: string | null
           set_number?: string
           target_platform?: string | null
@@ -4105,14 +4135,18 @@ export type Database = {
           cost_allocation_method: string | null
           created_at: string
           default_platform: string | null
+          evaluation_mode: string | null
           id: string
           item_count: number | null
+          listing_description: string | null
           lookup_completed_at: string | null
           name: string | null
           overall_margin_percent: number | null
           overall_roi_percent: number | null
+          photo_analysis_json: Json | null
           source: string | null
           status: string | null
+          target_margin_percent: number | null
           total_cost: number | null
           total_expected_revenue: number | null
           total_purchase_price: number | null
@@ -4125,14 +4159,18 @@ export type Database = {
           cost_allocation_method?: string | null
           created_at?: string
           default_platform?: string | null
+          evaluation_mode?: string | null
           id?: string
           item_count?: number | null
+          listing_description?: string | null
           lookup_completed_at?: string | null
           name?: string | null
           overall_margin_percent?: number | null
           overall_roi_percent?: number | null
+          photo_analysis_json?: Json | null
           source?: string | null
           status?: string | null
+          target_margin_percent?: number | null
           total_cost?: number | null
           total_expected_revenue?: number | null
           total_purchase_price?: number | null
@@ -4145,14 +4183,18 @@ export type Database = {
           cost_allocation_method?: string | null
           created_at?: string
           default_platform?: string | null
+          evaluation_mode?: string | null
           id?: string
           item_count?: number | null
+          listing_description?: string | null
           lookup_completed_at?: string | null
           name?: string | null
           overall_margin_percent?: number | null
           overall_roi_percent?: number | null
+          photo_analysis_json?: Json | null
           source?: string | null
           status?: string | null
+          target_margin_percent?: number | null
           total_cost?: number | null
           total_expected_revenue?: number | null
           total_purchase_price?: number | null

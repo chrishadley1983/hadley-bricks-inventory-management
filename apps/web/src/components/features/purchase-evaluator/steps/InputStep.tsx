@@ -7,6 +7,8 @@ import {
   ClipboardPaste,
   Download,
   AlertCircle,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,13 +19,14 @@ import { parseAndConsolidate, type EvaluationInputItem, type ParseError } from '
 
 interface InputStepProps {
   onItemsParsed: (items: EvaluationInputItem[], source: 'csv_upload' | 'clipboard_paste') => void;
+  onSwitchToPhotoMode?: () => void;
 }
 
 /**
  * Input step for the purchase evaluator wizard
- * Allows CSV file upload or clipboard paste
+ * Allows CSV file upload, clipboard paste, or photo analysis
  */
-export function InputStep({ onItemsParsed }: InputStepProps) {
+export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps) {
   const [pasteContent, setPasteContent] = React.useState('');
   const [parseErrors, setParseErrors] = React.useState<ParseError[]>([]);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -113,7 +116,7 @@ export function InputStep({ onItemsParsed }: InputStepProps) {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs defaultValue="upload" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               Upload File
@@ -121,6 +124,10 @@ export function InputStep({ onItemsParsed }: InputStepProps) {
             <TabsTrigger value="paste" className="flex items-center gap-2">
               <ClipboardPaste className="h-4 w-4" />
               Paste Data
+            </TabsTrigger>
+            <TabsTrigger value="photo" className="flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              Photo Analysis
             </TabsTrigger>
           </TabsList>
 
@@ -185,6 +192,87 @@ export function InputStep({ onItemsParsed }: InputStepProps) {
                   Parse Data
                 </Button>
               </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="photo" className="space-y-4">
+            {/* Photo Analysis Feature Card */}
+            <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-6">
+              <div className="flex items-start gap-4">
+                <div className="rounded-full bg-primary/10 p-3">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <h3 className="text-lg font-semibold">AI-Powered Photo Analysis</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Upload photos of LEGO lots from auctions, marketplace listings, or collection shots.
+                    Our AI will identify sets, minifigures, and parts, then assess their condition.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">What it identifies:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      LEGO sets (from box photos or numbers)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Minifigures (character identification)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Loose parts and bulk lots
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Non-LEGO items (flagged separately)
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Condition assessment:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Box condition (Mint to Poor)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Seal status (Factory Sealed, Open, etc.)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Damage notes and concerns
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Confidence scores per item
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-background/50 rounded-lg">
+                <h4 className="font-medium text-sm mb-2">Calculate Maximum Purchase Price</h4>
+                <p className="text-sm text-muted-foreground">
+                  Set your target profit margin (20-50%) and we&apos;ll calculate the maximum you should pay
+                  for the lot based on current market prices.
+                </p>
+              </div>
+
+              {onSwitchToPhotoMode && (
+                <div className="mt-6 flex justify-center">
+                  <Button size="lg" onClick={onSwitchToPhotoMode} className="gap-2">
+                    <Camera className="h-4 w-4" />
+                    Start Photo Analysis
+                  </Button>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

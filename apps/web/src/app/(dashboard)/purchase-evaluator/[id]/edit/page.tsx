@@ -113,6 +113,8 @@ export default function EditEvaluationPage() {
 
         <ReviewStep
           evaluation={evaluation}
+          evaluationMode={evaluation.evaluationMode === 'max_bid' ? 'max_bid' : 'cost_known'}
+          targetMarginPercent={evaluation.targetMarginPercent ?? 30}
           onSave={handleSave}
           onBack={handleBack}
           onUpdateItems={handleUpdateItems}

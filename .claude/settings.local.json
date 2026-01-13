@@ -176,7 +176,9 @@
       "Bash(Remove-Item -Force \"apps/web/nul\" -ErrorAction SilentlyContinue)",
       "Bash(cmd /c \"del /f apps\\\\web\\\\nul 2>nul\")",
       "Bash(cmd /c \"del /f nul 2>nul\")",
-      "mcp__supabase__generate_typescript_types"
+      "mcp__supabase__generate_typescript_types",
+      "mcp__playwright__browser_file_upload",
+      "mcp__playwright__browser_hover"
     ]
   },
   "hooks": {

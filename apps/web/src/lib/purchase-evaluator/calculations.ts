@@ -382,6 +382,30 @@ export function allocateCostsEqually(
 // ============================================
 
 /**
+ * Get the effective sell price for an item
+ * Priority: userSellPriceOverride > expectedSellPrice > platform prices
+ */
+function getEffectiveSellPrice(item: EvaluationItem): number | null {
+  // User override takes precedence
+  if (item.userSellPriceOverride && item.userSellPriceOverride > 0) {
+    return item.userSellPriceOverride;
+  }
+
+  // Then expected sell price (set by profitability calculation)
+  if (item.expectedSellPrice && item.expectedSellPrice > 0) {
+    return item.expectedSellPrice;
+  }
+
+  // Finally fall back to platform prices
+  if (item.targetPlatform === 'ebay') {
+    return item.ebaySoldAvgPrice ?? item.ebayAvgPrice ?? null;
+  }
+
+  // Amazon: Buy Box, then Was Price
+  return item.amazonBuyBoxPrice ?? item.amazonWasPrice ?? null;
+}
+
+/**
  * Calculate overall evaluation summary
  *
  * @param items - Evaluation items with profitability data
@@ -409,9 +433,11 @@ export function calculateEvaluationSummary(
       totalCost += cost * qty;
     }
 
-    if (item.expectedSellPrice && item.expectedSellPrice > 0) {
+    // Get effective sell price - handles max_bid mode where expectedSellPrice isn't set
+    const sellPrice = getEffectiveSellPrice(item);
+    if (sellPrice && sellPrice > 0) {
       itemsWithPrice++;
-      totalExpectedRevenue += item.expectedSellPrice * qty;
+      totalExpectedRevenue += sellPrice * qty;
     }
 
     if (item.grossProfit !== null) {

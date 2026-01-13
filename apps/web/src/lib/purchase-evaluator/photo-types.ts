@@ -171,6 +171,16 @@ export interface PhotoAnalysisResult {
 
   /** Total processing time in milliseconds */
   processingTimeMs: number;
+
+  // Image chunking metadata
+  /** Whether image chunking was applied */
+  wasChunked?: boolean;
+
+  /** Number of image chunks processed */
+  chunkCount?: number;
+
+  /** Chunking decision reason */
+  chunkingReason?: string;
 }
 
 // ============================================
@@ -178,9 +188,19 @@ export interface PhotoAnalysisResult {
 // ============================================
 
 /**
+ * Primary model for photo analysis
+ * - 'claude': Claude Opus for primary, Gemini for verification (default)
+ * - 'gemini': Gemini for primary, Claude for verification (better digit reading)
+ */
+export type PrimaryAnalysisModel = 'claude' | 'gemini';
+
+/**
  * Options for controlling the analysis pipeline
  */
 export interface PhotoAnalysisOptions {
+  /** Primary model for analysis (default: 'claude') */
+  primaryModel?: PrimaryAnalysisModel;
+
   /** Use Gemini for cross-verification of set numbers (default: true) */
   useGeminiVerification: boolean;
 
@@ -189,6 +209,12 @@ export interface PhotoAnalysisOptions {
 
   /** Optional listing description to provide context */
   listingDescription?: string;
+
+  /** Enable smart image chunking to isolate individual items (default: true) */
+  useImageChunking?: boolean;
+
+  /** Force chunking even when detection doesn't recommend it */
+  forceChunking?: boolean;
 }
 
 // ============================================

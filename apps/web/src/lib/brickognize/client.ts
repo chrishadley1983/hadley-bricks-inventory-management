@@ -14,7 +14,7 @@
 import type {
   BrickognizeItem,
   BrickognizeResponse,
-  BrickognizeSearchResult,
+  // BrickognizeSearchResult is defined for future use
 } from '../purchase-evaluator/photo-types';
 
 // ============================================
