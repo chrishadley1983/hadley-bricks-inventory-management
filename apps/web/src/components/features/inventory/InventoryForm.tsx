@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import type { Purchase } from '@hadley-bricks/database';
+import { SELLING_PLATFORMS, PLATFORM_LABELS, type SellingPlatform } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -433,9 +434,23 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Listing Platform</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., BrickLink, eBay" {...field} />
-                    </FormControl>
+                    <Select
+                      value={field.value || ''}
+                      onValueChange={(val: string) => field.onChange(val || '')}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select platform..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SELLING_PLATFORMS.map((platform) => (
+                          <SelectItem key={platform} value={platform}>
+                            {PLATFORM_LABELS[platform as SellingPlatform]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

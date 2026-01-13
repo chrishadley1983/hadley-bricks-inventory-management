@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       amazon_arbitrage_pricing: {
@@ -3951,6 +3926,305 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_evaluation_items: {
+        Row: {
+          ai_confidence_score: number | null
+          ai_model_results: Json | null
+          ai_raw_description: string | null
+          allocated_cost: number | null
+          amazon_alternative_asins: Json | null
+          amazon_asin: string | null
+          amazon_asin_confidence: string | null
+          amazon_asin_source: string | null
+          amazon_buy_box_price: number | null
+          amazon_lookup_error: string | null
+          amazon_lookup_status: string | null
+          amazon_my_price: number | null
+          amazon_offer_count: number | null
+          amazon_sales_rank: number | null
+          amazon_was_price: number | null
+          box_condition: string | null
+          brickset_set_id: string | null
+          cog_percent: number | null
+          condition: string
+          created_at: string
+          damage_notes: string[] | null
+          ean: string | null
+          ebay_avg_price: number | null
+          ebay_listing_count: number | null
+          ebay_listings_json: Json | null
+          ebay_lookup_error: string | null
+          ebay_lookup_status: string | null
+          ebay_max_price: number | null
+          ebay_min_price: number | null
+          ebay_sold_avg_price: number | null
+          ebay_sold_count: number | null
+          ebay_sold_listings_json: Json | null
+          ebay_sold_max_price: number | null
+          ebay_sold_min_price: number | null
+          evaluation_id: string
+          expected_sell_price: number | null
+          gross_profit: number | null
+          id: string
+          image_url: string | null
+          item_type: string | null
+          max_purchase_price: number | null
+          minifig_id: string | null
+          needs_review: boolean | null
+          part_ids: string[] | null
+          profit_margin_percent: number | null
+          quantity: number | null
+          roi_percent: number | null
+          seal_status: string | null
+          set_name: string | null
+          set_number: string
+          target_platform: string | null
+          uk_retail_price: number | null
+          unit_cost: number | null
+          upc: string | null
+          updated_at: string
+          user_notes: string | null
+          user_sell_price_override: number | null
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          ai_model_results?: Json | null
+          ai_raw_description?: string | null
+          allocated_cost?: number | null
+          amazon_alternative_asins?: Json | null
+          amazon_asin?: string | null
+          amazon_asin_confidence?: string | null
+          amazon_asin_source?: string | null
+          amazon_buy_box_price?: number | null
+          amazon_lookup_error?: string | null
+          amazon_lookup_status?: string | null
+          amazon_my_price?: number | null
+          amazon_offer_count?: number | null
+          amazon_sales_rank?: number | null
+          amazon_was_price?: number | null
+          box_condition?: string | null
+          brickset_set_id?: string | null
+          cog_percent?: number | null
+          condition: string
+          created_at?: string
+          damage_notes?: string[] | null
+          ean?: string | null
+          ebay_avg_price?: number | null
+          ebay_listing_count?: number | null
+          ebay_listings_json?: Json | null
+          ebay_lookup_error?: string | null
+          ebay_lookup_status?: string | null
+          ebay_max_price?: number | null
+          ebay_min_price?: number | null
+          ebay_sold_avg_price?: number | null
+          ebay_sold_count?: number | null
+          ebay_sold_listings_json?: Json | null
+          ebay_sold_max_price?: number | null
+          ebay_sold_min_price?: number | null
+          evaluation_id: string
+          expected_sell_price?: number | null
+          gross_profit?: number | null
+          id?: string
+          image_url?: string | null
+          item_type?: string | null
+          max_purchase_price?: number | null
+          minifig_id?: string | null
+          needs_review?: boolean | null
+          part_ids?: string[] | null
+          profit_margin_percent?: number | null
+          quantity?: number | null
+          roi_percent?: number | null
+          seal_status?: string | null
+          set_name?: string | null
+          set_number: string
+          target_platform?: string | null
+          uk_retail_price?: number | null
+          unit_cost?: number | null
+          upc?: string | null
+          updated_at?: string
+          user_notes?: string | null
+          user_sell_price_override?: number | null
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          ai_model_results?: Json | null
+          ai_raw_description?: string | null
+          allocated_cost?: number | null
+          amazon_alternative_asins?: Json | null
+          amazon_asin?: string | null
+          amazon_asin_confidence?: string | null
+          amazon_asin_source?: string | null
+          amazon_buy_box_price?: number | null
+          amazon_lookup_error?: string | null
+          amazon_lookup_status?: string | null
+          amazon_my_price?: number | null
+          amazon_offer_count?: number | null
+          amazon_sales_rank?: number | null
+          amazon_was_price?: number | null
+          box_condition?: string | null
+          brickset_set_id?: string | null
+          cog_percent?: number | null
+          condition?: string
+          created_at?: string
+          damage_notes?: string[] | null
+          ean?: string | null
+          ebay_avg_price?: number | null
+          ebay_listing_count?: number | null
+          ebay_listings_json?: Json | null
+          ebay_lookup_error?: string | null
+          ebay_lookup_status?: string | null
+          ebay_max_price?: number | null
+          ebay_min_price?: number | null
+          ebay_sold_avg_price?: number | null
+          ebay_sold_count?: number | null
+          ebay_sold_listings_json?: Json | null
+          ebay_sold_max_price?: number | null
+          ebay_sold_min_price?: number | null
+          evaluation_id?: string
+          expected_sell_price?: number | null
+          gross_profit?: number | null
+          id?: string
+          image_url?: string | null
+          item_type?: string | null
+          max_purchase_price?: number | null
+          minifig_id?: string | null
+          needs_review?: boolean | null
+          part_ids?: string[] | null
+          profit_margin_percent?: number | null
+          quantity?: number | null
+          roi_percent?: number | null
+          seal_status?: string | null
+          set_name?: string | null
+          set_number?: string
+          target_platform?: string | null
+          uk_retail_price?: number | null
+          unit_cost?: number | null
+          upc?: string | null
+          updated_at?: string
+          user_notes?: string | null
+          user_sell_price_override?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_evaluation_items_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: false
+            referencedRelation: "brickset_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_evaluation_items_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: false
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["brickset_set_id"]
+          },
+          {
+            foreignKeyName: "purchase_evaluation_items_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_evaluations: {
+        Row: {
+          converted_at: string | null
+          converted_purchase_id: string | null
+          cost_allocation_method: string | null
+          created_at: string
+          default_platform: string | null
+          evaluation_mode: string | null
+          id: string
+          item_count: number | null
+          listing_description: string | null
+          lookup_completed_at: string | null
+          name: string | null
+          overall_margin_percent: number | null
+          overall_roi_percent: number | null
+          photo_analysis_json: Json | null
+          source: string | null
+          status: string | null
+          target_margin_percent: number | null
+          total_cost: number | null
+          total_expected_revenue: number | null
+          total_purchase_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          converted_at?: string | null
+          converted_purchase_id?: string | null
+          cost_allocation_method?: string | null
+          created_at?: string
+          default_platform?: string | null
+          evaluation_mode?: string | null
+          id?: string
+          item_count?: number | null
+          listing_description?: string | null
+          lookup_completed_at?: string | null
+          name?: string | null
+          overall_margin_percent?: number | null
+          overall_roi_percent?: number | null
+          photo_analysis_json?: Json | null
+          source?: string | null
+          status?: string | null
+          target_margin_percent?: number | null
+          total_cost?: number | null
+          total_expected_revenue?: number | null
+          total_purchase_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          converted_at?: string | null
+          converted_purchase_id?: string | null
+          cost_allocation_method?: string | null
+          created_at?: string
+          default_platform?: string | null
+          evaluation_mode?: string | null
+          id?: string
+          item_count?: number | null
+          listing_description?: string | null
+          lookup_completed_at?: string | null
+          name?: string | null
+          overall_margin_percent?: number | null
+          overall_roi_percent?: number | null
+          photo_analysis_json?: Json | null
+          source?: string | null
+          status?: string | null
+          target_margin_percent?: number | null
+          total_cost?: number | null
+          total_expected_revenue?: number | null
+          total_purchase_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_evaluations_converted_purchase_id_fkey"
+            columns: ["converted_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_roi_view"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "purchase_evaluations_converted_purchase_id_fkey"
+            columns: ["converted_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_evaluations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchases: {
         Row: {
           cost: number
@@ -4968,9 +5242,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

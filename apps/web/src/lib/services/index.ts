@@ -12,6 +12,8 @@ export { AmazonBackfillService } from './amazon-backfill.service';
 export { AmazonFeeReconciliationService } from './amazon-fee-reconciliation.service';
 export { MileageService, DEFAULT_MILEAGE_RATE } from './mileage.service';
 export { BricksetCredentialsService } from './brickset-credentials.service';
+export { EvaluationConversionService } from './evaluation-conversion.service';
+export type { ConversionValidationError } from './evaluation-conversion.service';
 export type { SyncResult as BrickLinkSyncResult, BrickLinkSyncOptions } from './bricklink-sync.service';
 export type { BrickOwlSyncOptions } from './brickowl-sync.service';
 export type { BricqerSyncOptions } from './bricqer-sync.service';

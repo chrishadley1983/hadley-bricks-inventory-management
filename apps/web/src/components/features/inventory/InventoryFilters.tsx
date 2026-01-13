@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
-import { usePlatforms } from '@/hooks';
+import { SELLING_PLATFORMS, PLATFORM_LABELS, type SellingPlatform } from '@hadley-bricks/database';
 import type { InventoryFilters as Filters } from '@/lib/api';
 
 interface InventoryFiltersProps {
@@ -35,7 +35,6 @@ const CONDITION_OPTIONS = [
 ];
 
 export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersProps) {
-  const { data: platforms = [] } = usePlatforms();
   const hasActiveFilters = filters.status || filters.condition || filters.platform || filters.search;
 
   // Local state for search input to allow immediate UI feedback
@@ -122,9 +121,9 @@ export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersP
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Platforms</SelectItem>
-            {platforms.map((platform) => (
+            {SELLING_PLATFORMS.map((platform) => (
               <SelectItem key={platform} value={platform}>
-                {platform}
+                {PLATFORM_LABELS[platform as SellingPlatform]}
               </SelectItem>
             ))}
           </SelectContent>

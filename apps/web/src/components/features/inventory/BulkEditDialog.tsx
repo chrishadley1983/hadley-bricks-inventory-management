@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Purchase } from '@hadley-bricks/database';
+import { SELLING_PLATFORMS, PLATFORM_LABELS, type SellingPlatform } from '@hadley-bricks/database';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { usePlatforms } from '@/hooks';
 import { PurchaseLookup } from './PurchaseLookup';
 import { QuickPurchaseDialog } from './QuickPurchaseDialog';
 import type { PurchaseSearchResult } from '@/lib/api';
@@ -66,7 +66,6 @@ export function BulkEditDialog({
   onConfirm,
   isPending,
 }: BulkEditDialogProps) {
-  const { data: platforms = [] } = usePlatforms();
   const [formState, setFormState] = useState<BulkEditFormState>({
     storage_location: initialFieldState(),
     purchase_id: initialFieldState(),
@@ -281,9 +280,9 @@ export function BulkEditDialog({
                   <SelectValue placeholder="Select platform" />
                 </SelectTrigger>
                 <SelectContent>
-                  {platforms.map((platform) => (
+                  {SELLING_PLATFORMS.map((platform) => (
                     <SelectItem key={platform} value={platform}>
-                      {platform}
+                      {PLATFORM_LABELS[platform as SellingPlatform]}
                     </SelectItem>
                   ))}
                 </SelectContent>

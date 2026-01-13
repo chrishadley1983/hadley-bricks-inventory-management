@@ -1,4 +1,5 @@
 export * from './types';
+export * from './platforms';
 import type { Tables, TablesInsert, TablesUpdate } from './types';
 
 // Convenience type aliases for common tables
@@ -56,8 +57,8 @@ export type SaleItemUpdate = TablesUpdate<'sale_items'>;
 export type OrderStatusHistory = Tables<'order_status_history'>;
 export type OrderStatusHistoryInsert = TablesInsert<'order_status_history'>;
 
-// Platform type (supported integration platforms)
-export type Platform = 'bricklink' | 'brickowl' | 'bricqer' | 'ebay' | 'amazon';
+// Platform type - now exported from ./platforms
+// (kept here as comment for reference: 'bricklink' | 'brickowl' | 'bricqer' | 'ebay' | 'amazon')
 
 // Item condition type
 export type ItemCondition = 'New' | 'Used';
