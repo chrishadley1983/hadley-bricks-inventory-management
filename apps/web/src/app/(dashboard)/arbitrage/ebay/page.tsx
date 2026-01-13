@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { RefreshCw, AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock, ExternalLink } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +27,7 @@ import {
   type EbaySyncProgress,
 } from '@/hooks/use-arbitrage';
 import type { ArbitrageFilterOptions, ArbitrageItem, SyncJobType } from '@/lib/arbitrage/types';
+import { EBAY_SHOW_FILTER_OPTIONS, EBAY_SORT_OPTIONS } from '@/lib/arbitrage/types';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { buildEbaySearchUrl } from '@/lib/arbitrage/ebay-url';
@@ -43,6 +44,8 @@ export default function EbayArbitragePage() {
   const [activeTab, setActiveTab] = useState<TabValue>('opportunities');
   const [filters, setFilters] = useState<ArbitrageFilterOptions>({
     sortField: 'ebay_margin',
+    pageSize: 50,
+    page: 1,
   });
   const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
@@ -61,8 +64,13 @@ export default function EbayArbitragePage() {
   const ebaySyncMutation = useEbaySyncWithProgress();
 
   const handleFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
+    // Reset to page 1 when filters change (unless page is explicitly being changed)
+    const pageChanged = newFilters.page !== undefined && newFilters.page !== filters.page;
+    if (!pageChanged) {
+      newFilters.page = 1;
+    }
     setFilters(newFilters);
-  }, []);
+  }, [filters.page]);
 
   const handleRowClick = useCallback((item: ArbitrageItem) => {
     setSelectedAsin(item.asin);
@@ -113,14 +121,8 @@ export default function EbayArbitragePage() {
   const items = arbitrageData?.items ?? [];
   const totalCount = arbitrageData?.totalCount ?? 0;
 
-  // Count eBay opportunities (items with eBay margin data)
-  const ebayOpportunityCount = useMemo(() => {
-    const minMargin = filters.minMargin ?? 30;
-    return items.filter(item =>
-      item.ebayMarginPercent !== null &&
-      item.ebayMarginPercent >= minMargin
-    ).length;
-  }, [items, filters.minMargin]);
+  // Use server-side eBay opportunities count (more accurate than client-side filtering of paginated items)
+  const ebayOpportunityCount = summary?.ebayOpportunities ?? 0;
 
   return (
     <>
@@ -300,6 +302,9 @@ export default function EbayArbitragePage() {
               opportunities={ebayOpportunityCount}
               unmappedCount={summary?.unmapped ?? 0}
               onOpenExcluded={() => setExcludedModalOpen(true)}
+              showFilterOptions={EBAY_SHOW_FILTER_OPTIONS}
+              sortOptions={EBAY_SORT_OPTIONS}
+              defaultSortField="ebay_margin"
             />
             <EbayArbitrageTable
               items={items}
@@ -307,6 +312,59 @@ export default function EbayArbitragePage() {
               minMargin={filters.minMargin ?? 30}
               onRowClick={handleRowClick}
             />
+            {/* Pagination */}
+            {!dataLoading && totalCount > 0 && (() => {
+              const currentPage = filters.page ?? 1;
+              const pageSize = filters.pageSize ?? 50;
+              const totalPages = Math.ceil(totalCount / pageSize);
+              const startItem = (currentPage - 1) * pageSize + 1;
+              const endItem = Math.min(currentPage * pageSize, totalCount);
+
+              return (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Showing {startItem}-{endItem} of {totalCount} items
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setFilters(f => ({ ...f, page: 1 }))}
+                    >
+                      First
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setFilters(f => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="px-3 py-1 text-sm font-medium">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setFilters(f => ({ ...f, page: (f.page ?? 1) + 1 }))}
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setFilters(f => ({ ...f, page: totalPages }))}
+                    >
+                      Last
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="unmapped" className="mt-6">
@@ -434,9 +492,9 @@ function EbayArbitrageTable({
   return (
     <Card>
       <CardContent className="p-0">
-        <div>
+        <div className="max-h-[600px] overflow-auto">
           <table className="w-full text-sm table-fixed">
-            <thead className="border-b bg-muted/50">
+            <thead className="border-b bg-muted/50 sticky top-0 z-10 bg-card">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Item</th>
                 <th className="px-4 py-3 text-right font-medium w-[100px]">Your Price</th>
@@ -468,11 +526,34 @@ function EbayArbitrageTable({
                           />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{item.name || item.asin}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium truncate">{item.name || item.asin}</p>
+                            {item.itemType === 'seeded' && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 ${
+                                  item.seededMatchConfidence && item.seededMatchConfidence >= 95
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : item.seededMatchConfidence && item.seededMatchConfidence >= 85
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                                title={`${item.seededMatchMethod ?? 'unknown'} match (${item.seededMatchConfidence ?? 0}%)`}
+                              >
+                                Seeded
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{item.bricklinkSetNumber || 'Unmapped'}</span>
                             <span>|</span>
                             <span>{item.asin}</span>
+                            {item.bricksetRrp != null && (
+                              <>
+                                <span>|</span>
+                                <span>RRP: {formatCurrency(item.bricksetRrp, 'GBP')}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -488,7 +569,20 @@ function EbayArbitrageTable({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {item.buyBoxPrice ? formatCurrency(item.buyBoxPrice, 'GBP') : '—'}
+                      {(() => {
+                        const effectivePrice = item.effectiveAmazonPrice ?? item.buyBoxPrice ?? item.lowestOfferPrice;
+                        const hasBuyBox = item.buyBoxPrice !== null;
+                        return (
+                          <div>
+                            <span className={hasBuyBox ? '' : 'text-muted-foreground'}>
+                              {effectivePrice ? formatCurrency(effectivePrice, 'GBP') : '—'}
+                            </span>
+                            {effectivePrice && !hasBuyBox && (
+                              <div className="text-[10px] text-muted-foreground">Lowest</div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {item.ebayMinPrice ? formatCurrency(item.ebayMinPrice, 'GBP') : '—'}

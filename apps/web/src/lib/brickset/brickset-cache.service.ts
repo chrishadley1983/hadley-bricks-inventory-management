@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServiceRoleClient } from '../supabase/server';
 import { BricksetApiClient } from './brickset-api';
 import type { BricksetSet, BricksetApiSet } from './types';
 import { apiSetToInternal, internalToDbInsert, dbRowToInternal } from './types';
@@ -308,6 +309,7 @@ export class BricksetCacheService {
 
   /**
    * Upsert a set into the cache
+   * Uses service role client to bypass RLS (brickset_sets has no user write policies)
    */
   private async upsertSet(
     internalSet: Omit<BricksetSet, 'id' | 'createdAt' | 'updatedAt'>,
@@ -315,10 +317,14 @@ export class BricksetCacheService {
   ): Promise<void> {
     const dbData = {
       ...internalToDbInsert(internalSet),
-      raw_response: rawResponse,
+      // Convert to plain JSON by serializing and deserializing
+      raw_response: JSON.parse(JSON.stringify(rawResponse)),
     };
 
-    const { error } = await this.supabase
+    // Use service role client because brickset_sets table only has SELECT policy
+    // Writes require service role to bypass RLS
+    const serviceClient = createServiceRoleClient();
+    const { error } = await serviceClient
       .from('brickset_sets')
       .upsert(dbData, { onConflict: 'set_number' });
 
@@ -330,6 +336,7 @@ export class BricksetCacheService {
 
   /**
    * Batch insert sets (for seed data import)
+   * Uses service role client to bypass RLS
    */
   async batchInsertSets(
     sets: Array<Omit<BricksetSet, 'id' | 'createdAt' | 'updatedAt'>>
@@ -337,13 +344,16 @@ export class BricksetCacheService {
     let inserted = 0;
     let errors = 0;
 
+    // Use service role client for writes
+    const serviceClient = createServiceRoleClient();
+
     // Process in batches of 100 to avoid timeouts
     const batchSize = 100;
     for (let i = 0; i < sets.length; i += batchSize) {
       const batch = sets.slice(i, i + batchSize);
       const dbData = batch.map((set) => internalToDbInsert(set));
 
-      const { error } = await this.supabase
+      const { error } = await serviceClient
         .from('brickset_sets')
         .upsert(dbData, { onConflict: 'set_number', ignoreDuplicates: true });
 

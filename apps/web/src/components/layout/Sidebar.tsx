@@ -22,6 +22,7 @@ import {
   Layers,
   CloudUpload,
   Scale,
+  Sparkles,
 } from 'lucide-react';
 
 interface NavItem {
@@ -56,8 +57,9 @@ const integrationNavItems: NavItem[] = [
 ];
 
 const arbitrageNavItems: NavItem[] = [
-  { href: '/arbitrage/amazon', label: 'Amazon', icon: Scale },
+  { href: '/arbitrage/amazon', label: 'BrickLink', icon: Scale },
   { href: '/arbitrage/ebay', label: 'eBay', icon: Scale },
+  { href: '/arbitrage/seeded', label: 'Seeded ASINs', icon: Sparkles },
   { href: '/arbitrage/vinted', label: 'Vinted', icon: Scale, disabled: true },
   { href: '/arbitrage/facebook', label: 'Facebook', icon: Scale, disabled: true },
 ];

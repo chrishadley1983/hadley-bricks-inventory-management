@@ -109,9 +109,26 @@ export function ArbitrageDetailModal({
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-lg font-bold leading-tight">
-                {item.name ?? 'Unknown Product'}
-              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-lg font-bold leading-tight">
+                  {item.name ?? 'Unknown Product'}
+                </DialogTitle>
+                {item.itemType === 'seeded' && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs px-2',
+                      item.seededMatchConfidence && item.seededMatchConfidence >= 95
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : item.seededMatchConfidence && item.seededMatchConfidence >= 85
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    )}
+                  >
+                    Seeded
+                  </Badge>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge variant="outline" className="font-mono text-xs">
                   Set: {item.bricklinkSetNumber ?? '—'}
@@ -122,6 +139,21 @@ export function ArbitrageDetailModal({
                 {item.sku && (
                   <Badge variant="outline" className="font-mono text-xs">
                     SKU: {item.sku}
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.bricksetRrp != null && (
+                  <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                    RRP: {formatCurrencyGBP(item.bricksetRrp)}
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.bricksetTheme && (
+                  <Badge variant="outline" className="text-xs">
+                    {item.bricksetTheme} ({item.bricksetYear})
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.seededMatchMethod && (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    Match: {item.seededMatchMethod} ({item.seededMatchConfidence ?? 0}%)
                   </Badge>
                 )}
               </div>

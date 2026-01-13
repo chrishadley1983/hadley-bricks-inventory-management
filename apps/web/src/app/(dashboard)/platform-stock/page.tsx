@@ -10,6 +10,7 @@ import {
   ComparisonView,
   ImportStatusBanner,
 } from '@/components/features/platform-stock';
+import { RepricingView } from '@/components/features/repricing';
 import {
   usePlatformListings,
   useTriggerImport,
@@ -21,7 +22,7 @@ const Header = dynamic(
   { ssr: false }
 );
 
-type TabValue = 'listings' | 'comparison';
+type TabValue = 'listings' | 'comparison' | 'repricing';
 
 export default function PlatformStockPage() {
   const { toast } = useToast();
@@ -95,9 +96,10 @@ export default function PlatformStockPage() {
           value={activeTab}
           onValueChange={(v: string) => setActiveTab(v as TabValue)}
         >
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="listings">Amazon Listings</TabsTrigger>
-            <TabsTrigger value="comparison">Stock Comparison</TabsTrigger>
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <TabsTrigger value="listings">Listings</TabsTrigger>
+            <TabsTrigger value="comparison">Comparison</TabsTrigger>
+            <TabsTrigger value="repricing">Repricing</TabsTrigger>
           </TabsList>
 
           <TabsContent value="listings" className="mt-6">
@@ -106,6 +108,10 @@ export default function PlatformStockPage() {
 
           <TabsContent value="comparison" className="mt-6">
             <ComparisonView platform={platform} />
+          </TabsContent>
+
+          <TabsContent value="repricing" className="mt-6">
+            <RepricingView platform={platform} />
           </TabsContent>
         </Tabs>
       </div>

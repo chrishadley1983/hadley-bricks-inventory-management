@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       amazon_arbitrage_pricing: {
@@ -19,12 +44,20 @@ export type Database = {
           asin: string
           buy_box_is_yours: boolean | null
           buy_box_price: number | null
+          competitive_price: number | null
           created_at: string
           id: string
+          lowest_offer_is_fba: boolean | null
+          lowest_offer_is_prime: boolean | null
+          lowest_offer_price: number | null
+          lowest_offer_seller_id: string | null
           offer_count: number | null
+          offers_json: Json | null
+          price_is_lowest_offer: boolean | null
           sales_rank: number | null
           sales_rank_category: string | null
           snapshot_date: string
+          total_offer_count: number | null
           user_id: string
           was_price_90d: number | null
           your_price: number | null
@@ -34,12 +67,20 @@ export type Database = {
           asin: string
           buy_box_is_yours?: boolean | null
           buy_box_price?: number | null
+          competitive_price?: number | null
           created_at?: string
           id?: string
+          lowest_offer_is_fba?: boolean | null
+          lowest_offer_is_prime?: boolean | null
+          lowest_offer_price?: number | null
+          lowest_offer_seller_id?: string | null
           offer_count?: number | null
+          offers_json?: Json | null
+          price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
           snapshot_date: string
+          total_offer_count?: number | null
           user_id: string
           was_price_90d?: number | null
           your_price?: number | null
@@ -49,12 +90,20 @@ export type Database = {
           asin?: string
           buy_box_is_yours?: boolean | null
           buy_box_price?: number | null
+          competitive_price?: number | null
           created_at?: string
           id?: string
+          lowest_offer_is_fba?: boolean | null
+          lowest_offer_is_prime?: boolean | null
+          lowest_offer_price?: number | null
+          lowest_offer_seller_id?: string | null
           offer_count?: number | null
+          offers_json?: Json | null
+          price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
           snapshot_date?: string
+          total_offer_count?: number | null
           user_id?: string
           was_price_90d?: number | null
           your_price?: number | null
@@ -825,6 +874,7 @@ export type Database = {
           last_success_at: string | null
           next_scheduled_at: string | null
           status: string
+          total_items: number | null
           updated_at: string
           user_id: string
         }
@@ -841,6 +891,7 @@ export type Database = {
           last_success_at?: string | null
           next_scheduled_at?: string | null
           status?: string
+          total_items?: number | null
           updated_at?: string
           user_id: string
         }
@@ -857,6 +908,7 @@ export type Database = {
           last_success_at?: string | null
           next_scheduled_at?: string | null
           status?: string
+          total_items?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -3955,6 +4007,60 @@ export type Database = {
           },
         ]
       }
+      repricing_pricing_cache: {
+        Row: {
+          asin: string
+          buy_box_is_yours: boolean | null
+          buy_box_price: number | null
+          created_at: string
+          fetched_at: string
+          id: string
+          lowest_offer_condition: string | null
+          lowest_offer_price: number | null
+          lowest_offer_shipping: number | null
+          new_offer_count: number | null
+          sales_rank: number | null
+          sales_rank_category: string | null
+          updated_at: string
+          user_id: string
+          was_price: number | null
+        }
+        Insert: {
+          asin: string
+          buy_box_is_yours?: boolean | null
+          buy_box_price?: number | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          lowest_offer_condition?: string | null
+          lowest_offer_price?: number | null
+          lowest_offer_shipping?: number | null
+          new_offer_count?: number | null
+          sales_rank?: number | null
+          sales_rank_category?: string | null
+          updated_at?: string
+          user_id: string
+          was_price?: number | null
+        }
+        Update: {
+          asin?: string
+          buy_box_is_yours?: boolean | null
+          buy_box_price?: number | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          lowest_offer_condition?: string | null
+          lowest_offer_price?: number | null
+          lowest_offer_shipping?: number | null
+          new_offer_count?: number | null
+          sales_rank?: number | null
+          sales_rank_category?: string | null
+          updated_at?: string
+          user_id?: string
+          was_price?: number | null
+        }
+        Relationships: []
+      }
       sale_items: {
         Row: {
           color_name: string | null
@@ -4115,6 +4221,78 @@ export type Database = {
           },
         ]
       }
+      seeded_asins: {
+        Row: {
+          alternative_asins: Json | null
+          amazon_brand: string | null
+          amazon_image_url: string | null
+          amazon_price: number | null
+          amazon_title: string | null
+          asin: string | null
+          brickset_set_id: string
+          created_at: string
+          discovery_attempts: number | null
+          discovery_error: string | null
+          discovery_status: string
+          id: string
+          last_discovery_attempt_at: string | null
+          match_confidence: number | null
+          match_method: string | null
+          updated_at: string
+        }
+        Insert: {
+          alternative_asins?: Json | null
+          amazon_brand?: string | null
+          amazon_image_url?: string | null
+          amazon_price?: number | null
+          amazon_title?: string | null
+          asin?: string | null
+          brickset_set_id: string
+          created_at?: string
+          discovery_attempts?: number | null
+          discovery_error?: string | null
+          discovery_status?: string
+          id?: string
+          last_discovery_attempt_at?: string | null
+          match_confidence?: number | null
+          match_method?: string | null
+          updated_at?: string
+        }
+        Update: {
+          alternative_asins?: Json | null
+          amazon_brand?: string | null
+          amazon_image_url?: string | null
+          amazon_price?: number | null
+          amazon_title?: string | null
+          asin?: string | null
+          brickset_set_id?: string
+          created_at?: string
+          discovery_attempts?: number | null
+          discovery_error?: string | null
+          discovery_status?: string
+          id?: string
+          last_discovery_attempt_at?: string | null
+          match_confidence?: number | null
+          match_method?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seeded_asins_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: true
+            referencedRelation: "brickset_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seeded_asins_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: true
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["brickset_set_id"]
+          },
+        ]
+      }
       sync_audit_log: {
         Row: {
           action: string
@@ -4177,6 +4355,7 @@ export type Database = {
           image_url: string | null
           last_synced_at: string | null
           name: string | null
+          price: number | null
           quantity: number | null
           sku: string | null
           source: string
@@ -4194,6 +4373,7 @@ export type Database = {
           image_url?: string | null
           last_synced_at?: string | null
           name?: string | null
+          price?: number | null
           quantity?: number | null
           sku?: string | null
           source: string
@@ -4211,6 +4391,7 @@ export type Database = {
           image_url?: string | null
           last_synced_at?: string | null
           name?: string | null
+          price?: number | null
           quantity?: number | null
           sku?: string | null
           source?: string
@@ -4253,6 +4434,67 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "transaction_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_seeded_asin_preferences: {
+        Row: {
+          created_at: string
+          excluded_at: string | null
+          exclusion_reason: string | null
+          id: string
+          include_in_sync: boolean
+          manual_asin_override: string | null
+          seeded_asin_id: string
+          updated_at: string
+          user_id: string
+          user_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          excluded_at?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          include_in_sync?: boolean
+          manual_asin_override?: string | null
+          seeded_asin_id: string
+          updated_at?: string
+          user_id: string
+          user_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          excluded_at?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          include_in_sync?: boolean
+          manual_asin_override?: string | null
+          seeded_asin_id?: string
+          updated_at?: string
+          user_id?: string
+          user_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_seeded_asin_preferences_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
+            referencedRelation: "seeded_asins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_seeded_asin_preferences_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["seeded_asin_id"]
+          },
+          {
+            foreignKeyName: "user_seeded_asin_preferences_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -4318,6 +4560,7 @@ export type Database = {
           bricklink_set_number: string | null
           buy_box_is_yours: boolean | null
           buy_box_price: number | null
+          competitive_price: number | null
           ebay_avg_price: number | null
           ebay_listings: Json | null
           ebay_margin_absolute: number | null
@@ -4326,18 +4569,25 @@ export type Database = {
           ebay_min_price: number | null
           ebay_snapshot_date: string | null
           ebay_total_listings: number | null
+          effective_amazon_price: number | null
           image_url: string | null
+          lowest_offer_is_fba: boolean | null
+          lowest_offer_is_prime: boolean | null
+          lowest_offer_price: number | null
+          lowest_offer_seller_id: string | null
           margin_absolute: number | null
           margin_percent: number | null
           match_confidence: string | null
           name: string | null
           offer_count: number | null
-          quantity: number | null
+          offers_json: Json | null
+          price_is_lowest_offer: boolean | null
           sales_rank: number | null
           sales_rank_category: string | null
           sku: string | null
           source: string | null
           status: string | null
+          total_offer_count: number | null
           user_id: string | null
           was_price_90d: number | null
           your_price: number | null
@@ -4532,6 +4782,50 @@ export type Database = {
           },
         ]
       }
+      seeded_discovery_summary: {
+        Row: {
+          avg_confidence: number | null
+          excluded_count: number | null
+          found_count: number | null
+          found_percent: number | null
+          last_discovery_at: string | null
+          multiple_count: number | null
+          not_found_count: number | null
+          pending_count: number | null
+          total_count: number | null
+        }
+        Relationships: []
+      }
+      user_seeded_arbitrage_items: {
+        Row: {
+          asin: string | null
+          bricklink_set_number: string | null
+          brickset_pieces: number | null
+          brickset_rrp: number | null
+          brickset_set_id: string | null
+          brickset_theme: string | null
+          brickset_year: number | null
+          discovery_status: string | null
+          image_url: string | null
+          include_in_sync: boolean | null
+          match_confidence: number | null
+          match_method: string | null
+          name: string | null
+          seeded_asin_id: string | null
+          set_name: string | null
+          user_id: string | null
+          user_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_seeded_asin_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_days_in_stock: {
@@ -4539,6 +4833,13 @@ export type Database = {
         Returns: number
       }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
+      initialize_seeded_asins: {
+        Args: never
+        Returns: {
+          created_count: number
+          skipped_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -4667,6 +4968,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

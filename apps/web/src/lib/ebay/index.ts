@@ -40,4 +40,7 @@ export type { EbaySyncConfig, EbayFullSyncResult, EbaySyncStatusSummary } from '
 export { EbaySignatureService, ebaySignatureService } from './ebay-signature.service';
 export type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
 
+export { EbayBrowseClient, getEbayBrowseClient } from './ebay-browse.client';
+export type { EbayItemSummary, EbaySearchResponse, EbaySearchOptions } from './ebay-browse.client';
+
 export * from './types';

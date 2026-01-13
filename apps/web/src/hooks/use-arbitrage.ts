@@ -39,6 +39,7 @@ interface UnmappedResponse {
 interface SummaryStats {
   totalItems: number;
   opportunities: number;
+  ebayOpportunities: number;
   unmapped: number;
   excluded: number;
 }

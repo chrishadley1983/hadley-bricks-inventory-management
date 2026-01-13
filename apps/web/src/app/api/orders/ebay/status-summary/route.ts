@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server';
  * GET /api/orders/ebay/status-summary
  * Get summary counts of eBay orders by status
  *
+ * Uses separate count queries to avoid Supabase 1000 row limit.
+ *
  * Query params:
  * - days: Filter to last N days (7, 30, 90, or 'all') (optional, default: 'all')
  */
@@ -33,48 +35,65 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
-      .from('ebay_orders')
-      .select('order_fulfilment_status, order_payment_status')
-      .eq('user_id', user.id);
+    // Use count queries to avoid 1000 row limit
+    // Run all count queries in parallel for efficiency
 
-    if (startDate) {
-      query = query.gte('creation_date', startDate);
-    }
+    // Base query builder
+    const buildQuery = () => {
+      let q = supabase.from('ebay_orders').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+      if (startDate) {
+        q = q.gte('creation_date', startDate);
+      }
+      return q;
+    };
 
-    const { data: orders, error } = await query;
+    // Count all orders
+    const allQuery = buildQuery();
 
-    if (error) {
-      console.error('[GET /api/orders/ebay/status-summary] Error:', error);
+    // Count Refunded (payment status = FULLY_REFUNDED)
+    const refundedQuery = buildQuery().eq('order_payment_status', 'FULLY_REFUNDED');
+
+    // Count Completed/Done (fulfilment status = FULFILLED, not refunded)
+    const completedQuery = buildQuery()
+      .eq('order_fulfilment_status', 'FULFILLED')
+      .neq('order_payment_status', 'FULLY_REFUNDED');
+
+    // Count Packed (fulfilment status = IN_PROGRESS, not refunded)
+    const packedQuery = buildQuery()
+      .eq('order_fulfilment_status', 'IN_PROGRESS')
+      .neq('order_payment_status', 'FULLY_REFUNDED');
+
+    // Execute all queries in parallel
+    const [allResult, refundedResult, completedResult, packedResult] = await Promise.all([
+      allQuery,
+      refundedQuery,
+      completedQuery,
+      packedQuery,
+    ]);
+
+    if (allResult.error) {
+      console.error('[GET /api/orders/ebay/status-summary] Error:', allResult.error);
       return NextResponse.json(
         { error: 'Failed to fetch status summary' },
         { status: 500 }
       );
     }
 
-    // Count by UI status
-    const summary = {
-      all: orders?.length || 0,
-      Paid: 0,
-      Packed: 0,
-      Completed: 0,
-      Refunded: 0,
-    };
+    const all = allResult.count ?? 0;
+    const refunded = refundedResult.count ?? 0;
+    const completed = completedResult.count ?? 0;
+    const packed = packedResult.count ?? 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const order of orders || []) {
-      if (order.order_payment_status === 'FULLY_REFUNDED') {
-        summary.Refunded++;
-      } else if (order.order_fulfilment_status === 'FULFILLED') {
-        summary.Completed++;
-      } else if (order.order_fulfilment_status === 'IN_PROGRESS') {
-        summary.Packed++;
-      } else {
-        summary.Paid++;
-      }
-    }
+    // Paid = All - Refunded - Completed - Packed
+    const paid = all - refunded - completed - packed;
+
+    const summary = {
+      all,
+      Paid: paid,
+      Packed: packed,
+      Completed: completed,
+      Refunded: refunded,
+    };
 
     return NextResponse.json({ data: summary });
   } catch (error) {

@@ -5,8 +5,8 @@ import { BricksetCredentialsService } from '@/lib/services';
 import { BricksetCacheService } from '@/lib/brickset';
 
 const QuerySchema = z.object({
-  query: z.string().min(1, 'Search query is required'),
-  theme: z.string().optional(),
+  query: z.string().optional().default(''),
+  theme: z.string().nullable().optional(),
   year: z.coerce.number().optional(),
   limit: z.coerce.number().min(1).max(100).optional().default(50),
   useApi: z.coerce.boolean().optional().default(false),
@@ -56,6 +56,20 @@ export async function GET(request: NextRequest) {
 
     const { query, theme, year, limit, useApi } = parsed.data;
 
+    // Use cache service
+    const cacheService = new BricksetCacheService(supabase);
+
+    // If no query, return recent lookups
+    if (!query || query.trim() === '') {
+      const recentSets = await cacheService.getRecentLookups(limit);
+      return NextResponse.json({
+        data: recentSets,
+        count: recentSets.length,
+        query: '',
+        filters: { theme, year },
+      });
+    }
+
     // Get API key if we want to use API fallback
     let apiKey: string | null = null;
     if (useApi) {
@@ -63,10 +77,9 @@ export async function GET(request: NextRequest) {
       apiKey = await credentialsService.getApiKey(user.id);
     }
 
-    // Use cache service to search
-    const cacheService = new BricksetCacheService(supabase);
+    // Search for sets
     const sets = await cacheService.searchSets(query, apiKey || undefined, {
-      theme,
+      theme: theme || undefined,
       year,
       limit,
       useApiIfNoResults: useApi,

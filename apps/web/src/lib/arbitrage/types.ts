@@ -8,11 +8,14 @@
 // Database Types
 // ============================================
 
-export type AsinSource = 'inventory' | 'discovery' | 'manual';
+export type AsinSource = 'inventory' | 'discovery' | 'manual' | 'seeded';
 export type AsinStatus = 'active' | 'excluded' | 'pending_review';
 export type MatchConfidence = 'exact' | 'probable' | 'manual';
-export type SyncJobType = 'inventory_asins' | 'amazon_pricing' | 'bricklink_pricing' | 'asin_mapping' | 'ebay_pricing';
+export type SyncJobType = 'inventory_asins' | 'amazon_pricing' | 'bricklink_pricing' | 'asin_mapping' | 'ebay_pricing' | 'seeded_discovery';
 export type SyncJobStatus = 'idle' | 'running' | 'completed' | 'failed';
+export type ItemType = 'inventory' | 'seeded';
+export type DiscoveryStatus = 'pending' | 'found' | 'not_found' | 'multiple' | 'excluded';
+export type SeededMatchMethod = 'ean' | 'upc' | 'title_exact' | 'title_fuzzy';
 
 /**
  * Tracked ASIN record
@@ -48,6 +51,21 @@ export interface AsinBricklinkMapping {
 }
 
 /**
+ * Amazon offer from offers_json
+ */
+export interface AmazonOffer {
+  sellerId: string;
+  condition: string;
+  subCondition: string;
+  fulfillmentType: 'AFN' | 'MFN';
+  listingPrice: number;
+  shippingPrice: number;
+  totalPrice: number;
+  currency: string;
+  isPrime: boolean;
+}
+
+/**
  * Amazon pricing snapshot
  */
 export interface AmazonArbitragePricing {
@@ -63,6 +81,15 @@ export interface AmazonArbitragePricing {
   wasPrice90d: number | null;
   salesRank: number | null;
   salesRankCategory: string | null;
+  // New fields for lowest offer fallback
+  lowestOfferPrice: number | null;
+  priceIsLowestOffer: boolean;
+  lowestOfferSellerId: string | null;
+  lowestOfferIsFba: boolean | null;
+  lowestOfferIsPrime: boolean | null;
+  offersJson: AmazonOffer[] | null;
+  totalOfferCount: number | null;
+  competitivePrice: number | null;
   createdAt: string;
 }
 
@@ -159,6 +186,17 @@ export interface ArbitrageItem {
   salesRankCategory: string | null;
   amazonSnapshotDate: string | null;
 
+  // Amazon lowest offer data (fallback when no buy box)
+  lowestOfferPrice: number | null;
+  priceIsLowestOffer: boolean | null;
+  lowestOfferSellerId: string | null;
+  lowestOfferIsFba: boolean | null;
+  lowestOfferIsPrime: boolean | null;
+  offersJson: AmazonOffer[] | null;
+  totalOfferCount: number | null;
+  competitivePrice: number | null;
+  effectiveAmazonPrice: number | null; // buy_box_price or lowest_offer_price
+
   // BrickLink latest (New, UK)
   blMinPrice: number | null;
   blAvgPrice: number | null;
@@ -186,6 +224,17 @@ export interface ArbitrageItem {
 
   // Convenience URLs
   amazonUrl: string | null;
+
+  // Seeded ASIN fields (only populated for seeded items)
+  itemType: ItemType;
+  seededAsinId: string | null;
+  bricksetSetId: string | null;
+  bricksetRrp: number | null;
+  bricksetYear: number | null;
+  bricksetTheme: string | null;
+  bricksetPieces: number | null;
+  seededMatchMethod: SeededMatchMethod | null;
+  seededMatchConfidence: number | null;
 }
 
 /**
@@ -218,6 +267,9 @@ export interface UnmappedAsin {
 export type ArbitrageShowFilter =
   | 'all'
   | 'opportunities'
+  | 'ebay_opportunities'
+  | 'with_ebay_data'
+  | 'no_ebay_data'
   | 'in_stock'
   | 'zero_qty'
   | 'pending_review';
@@ -348,6 +400,7 @@ export interface AmazonFBMProfitBreakdown {
   netPayout: number;          // Sale price - fees - shipping
   totalProfit: number;        // Net payout - product cost
   roiPercent: number;         // (profit / cost) * 100
+  profitMarginPercent: number; // (profit / sale price) * 100
 }
 
 // ============================================
@@ -378,6 +431,15 @@ export const SHOW_FILTER_OPTIONS: { value: ArbitrageShowFilter; label: string }[
   { value: 'pending_review', label: 'Pending Review' },
 ];
 
+export const EBAY_SHOW_FILTER_OPTIONS: { value: ArbitrageShowFilter; label: string }[] = [
+  { value: 'all', label: 'All Items' },
+  { value: 'ebay_opportunities', label: 'Opportunities Only' },
+  { value: 'with_ebay_data', label: 'With eBay Data' },
+  { value: 'no_ebay_data', label: 'No eBay Data' },
+  { value: 'in_stock', label: 'In Stock (Amazon)' },
+  { value: 'zero_qty', label: 'Zero Qty Only' },
+];
+
 export const SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] = [
   { value: 'margin', label: 'Margin (BL)' },
   { value: 'bl_price', label: 'BL Price' },
@@ -390,4 +452,161 @@ export const EBAY_SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] =
   { value: 'ebay_price', label: 'eBay Price' },
   { value: 'sales_rank', label: 'Sales Rank' },
   { value: 'name', label: 'Name' },
+];
+
+// ============================================
+// Seeded ASIN Types
+// ============================================
+
+/**
+ * Alternative ASIN for multiple match scenarios
+ */
+export interface AlternativeAsin {
+  asin: string;
+  title: string;
+  confidence: number;
+}
+
+/**
+ * Seeded ASIN record from brickset_sets
+ */
+export interface SeededAsin {
+  id: string;
+  bricksetSetId: string;
+  asin: string | null;
+  discoveryStatus: DiscoveryStatus;
+  matchMethod: SeededMatchMethod | null;
+  matchConfidence: number | null;
+  amazonTitle: string | null;
+  amazonPrice: number | null;
+  amazonImageUrl: string | null;
+  amazonBrand: string | null;
+  alternativeAsins: AlternativeAsin[] | null;
+  lastDiscoveryAttemptAt: string | null;
+  discoveryAttempts: number;
+  discoveryError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * User's preference for a seeded ASIN
+ */
+export interface UserSeededAsinPreference {
+  id: string;
+  userId: string;
+  seededAsinId: string;
+  includeInSync: boolean;
+  userStatus: 'active' | 'excluded';
+  exclusionReason: string | null;
+  excludedAt: string | null;
+  manualAsinOverride: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Seeded ASIN with Brickset set data
+ */
+export interface SeededAsinWithBrickset extends SeededAsin {
+  bricksetSet: {
+    id: string;
+    setNumber: string;
+    setName: string;
+    theme: string | null;
+    yearFrom: number | null;
+    ukRetailPrice: number | null;
+    imageUrl: string | null;
+    pieces: number | null;
+    ean: string | null;
+    upc: string | null;
+  };
+  userPreference?: UserSeededAsinPreference;
+}
+
+/**
+ * Discovery job result summary
+ */
+export interface DiscoveryResult {
+  processed: number;
+  found: number;
+  notFound: number;
+  multiple: number;
+  errors: number;
+  durationMs: number;
+}
+
+/**
+ * Discovery progress event (for streaming updates)
+ */
+export interface DiscoveryProgress {
+  type: 'start' | 'progress' | 'complete' | 'error';
+  processed?: number;
+  total?: number;
+  found?: number;
+  percent?: number;
+  currentSet?: string;
+  result?: DiscoveryResult;
+  error?: string;
+}
+
+/**
+ * Discovery summary statistics
+ */
+export interface DiscoverySummary {
+  pending: number;
+  found: number;
+  notFound: number;
+  multiple: number;
+  excluded: number;
+  total: number;
+  foundPercent: number;
+  avgConfidence: number | null;
+  lastDiscoveryAt: string | null;
+}
+
+// ============================================
+// Seeded ASIN Filter Types
+// ============================================
+
+export type SeededShowFilter =
+  | 'all'
+  | 'inventory'
+  | 'seeded'
+  | 'opportunities'
+  | 'ebay_opportunities'
+  | 'with_ebay_data'
+  | 'no_ebay_data'
+  | 'in_stock'
+  | 'zero_qty'
+  | 'pending_review';
+
+export interface SeededArbitrageFilterOptions extends ArbitrageFilterOptions {
+  showSeeded?: boolean;
+  itemType?: ItemType | 'all';
+}
+
+// ============================================
+// Updated Show Filter Options (with seeded)
+// ============================================
+
+export const SHOW_FILTER_OPTIONS_WITH_SEEDED: { value: SeededShowFilter; label: string }[] = [
+  { value: 'all', label: 'All Items' },
+  { value: 'inventory', label: 'Inventory Only' },
+  { value: 'seeded', label: 'Seeded Only' },
+  { value: 'opportunities', label: 'Opportunities Only' },
+  { value: 'in_stock', label: 'In Stock (Amazon)' },
+  { value: 'zero_qty', label: 'Zero Qty Only' },
+  { value: 'pending_review', label: 'Pending Review' },
+];
+
+export const EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED: { value: SeededShowFilter; label: string }[] = [
+  { value: 'all', label: 'All Items' },
+  { value: 'inventory', label: 'Inventory Only' },
+  { value: 'seeded', label: 'Seeded Only' },
+  { value: 'ebay_opportunities', label: 'Opportunities Only' },
+  { value: 'with_ebay_data', label: 'With eBay Data' },
+  { value: 'no_ebay_data', label: 'No eBay Data' },
+  { value: 'in_stock', label: 'In Stock (Amazon)' },
+  { value: 'zero_qty', label: 'Zero Qty Only' },
 ];

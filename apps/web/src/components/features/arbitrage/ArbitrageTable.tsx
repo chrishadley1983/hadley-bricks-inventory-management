@@ -1,6 +1,7 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, ShoppingCart } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,6 +13,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem } from '@/lib/arbitrage/types';
 import {
@@ -20,6 +27,7 @@ import {
   formatSalesRank,
   isOpportunity,
 } from '@/lib/arbitrage/calculations';
+import { AmazonOffersModal } from './AmazonOffersModal';
 
 interface ArbitrageTableProps {
   items: ArbitrageItem[];
@@ -34,6 +42,8 @@ export function ArbitrageTable({
   minMargin,
   onRowClick,
 }: ArbitrageTableProps) {
+  const [offersModalItem, setOffersModalItem] = useState<ArbitrageItem | null>(null);
+
   if (isLoading) {
     return <ArbitrageTableSkeleton />;
   }
@@ -51,34 +61,44 @@ export function ArbitrageTable({
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="w-[22%]">Item</TableHead>
-            <TableHead className="w-[10%]">Your Price</TableHead>
-            <TableHead className="w-[10%]">Buy Box</TableHead>
-            <TableHead className="w-[8%]">Offers</TableHead>
-            <TableHead className="w-[10%]">Was Price</TableHead>
-            <TableHead className="w-[8%]">Rank</TableHead>
-            <TableHead className="w-[10%]">BL Min</TableHead>
-            <TableHead className="w-[9%]">Margin</TableHead>
-            <TableHead className="w-[6%]">BL Lots</TableHead>
-            <TableHead className="w-[5%]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => (
-            <ArbitrageTableRow
-              key={item.asin}
-              item={item}
-              minMargin={minMargin}
-              onClick={() => onRowClick(item)}
-            />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[22%]">Item</TableHead>
+              <TableHead className="w-[10%]">Your Price</TableHead>
+              <TableHead className="w-[10%]">Buy Box</TableHead>
+              <TableHead className="w-[8%]">Offers</TableHead>
+              <TableHead className="w-[10%]">Was Price</TableHead>
+              <TableHead className="w-[8%]">Rank</TableHead>
+              <TableHead className="w-[10%]">BL Min</TableHead>
+              <TableHead className="w-[9%]">Margin</TableHead>
+              <TableHead className="w-[6%]">BL Lots</TableHead>
+              <TableHead className="w-[5%]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <ArbitrageTableRow
+                key={item.asin}
+                item={item}
+                minMargin={minMargin}
+                onClick={() => onRowClick(item)}
+                onOffersClick={() => setOffersModalItem(item)}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Amazon Offers Modal */}
+      <AmazonOffersModal
+        item={offersModalItem}
+        isOpen={offersModalItem !== null}
+        onClose={() => setOffersModalItem(null)}
+      />
+    </>
   );
 }
 
@@ -86,10 +106,15 @@ interface ArbitrageTableRowProps {
   item: ArbitrageItem;
   minMargin: number;
   onClick: () => void;
+  onOffersClick: () => void;
 }
 
-function ArbitrageTableRow({ item, minMargin, onClick }: ArbitrageTableRowProps) {
+function ArbitrageTableRow({ item, minMargin, onClick, onOffersClick }: ArbitrageTableRowProps) {
   const isOpp = isOpportunity(item.marginPercent, minMargin);
+
+  // Determine effective price (buy box or lowest offer fallback)
+  const hasBuyBox = item.buyBoxPrice !== null;
+  const effectivePrice = item.effectiveAmazonPrice ?? item.buyBoxPrice ?? item.lowestOfferPrice;
 
   return (
     <TableRow
@@ -114,8 +139,42 @@ function ArbitrageTableRow({ item, minMargin, onClick }: ArbitrageTableRowProps)
             )}
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-sm truncate max-w-[280px]">
-              {item.name ?? 'Unknown Product'}
+            <div className="flex items-center gap-2">
+              <div className="font-semibold text-sm truncate max-w-[220px]">
+                {item.name ?? 'Unknown Product'}
+              </div>
+              {item.itemType === 'seeded' && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] px-1.5",
+                          item.seededMatchConfidence && item.seededMatchConfidence >= 95
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : item.seededMatchConfidence && item.seededMatchConfidence >= 85
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        )}
+                      >
+                        Seeded
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">
+                        Match: {item.seededMatchMethod ?? 'unknown'}
+                        {item.seededMatchConfidence != null && ` (${item.seededMatchConfidence}%)`}
+                      </p>
+                      {item.bricksetTheme && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.bricksetTheme} ({item.bricksetYear})
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="font-mono text-xs text-muted-foreground">
@@ -124,6 +183,11 @@ function ArbitrageTableRow({ item, minMargin, onClick }: ArbitrageTableRowProps)
               <Badge variant="outline" className="font-mono text-[10px] px-1.5">
                 {item.asin}
               </Badge>
+              {item.bricksetRrp != null && (
+                <span className="text-xs text-muted-foreground">
+                  RRP: {formatCurrencyGBP(item.bricksetRrp)}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -139,19 +203,21 @@ function ArbitrageTableRow({ item, minMargin, onClick }: ArbitrageTableRowProps)
         </div>
       </TableCell>
 
-      {/* Buy Box */}
+      {/* Buy Box / Effective Price */}
       <TableCell>
         <div
           className={cn(
             'font-mono font-semibold',
             item.buyBoxIsYours
               ? 'text-green-600'
-              : item.buyBoxPrice
+              : hasBuyBox
               ? 'text-amber-600'
+              : effectivePrice
+              ? 'text-muted-foreground'
               : ''
           )}
         >
-          {formatCurrencyGBP(item.buyBoxPrice)}
+          {formatCurrencyGBP(effectivePrice)}
         </div>
         <div
           className={cn(
@@ -159,15 +225,33 @@ function ArbitrageTableRow({ item, minMargin, onClick }: ArbitrageTableRowProps)
             item.buyBoxIsYours ? 'text-green-600' : 'text-muted-foreground'
           )}
         >
-          {item.buyBoxIsYours ? 'You' : item.buyBoxPrice ? 'Other seller' : '—'}
+          {item.buyBoxIsYours ? 'You (Buy Box)' : hasBuyBox ? 'Buy Box' : effectivePrice ? 'Lowest Offer' : '—'}
         </div>
       </TableCell>
 
       {/* Offers */}
       <TableCell>
-        <Badge variant="secondary" className="font-mono">
-          {item.offerCount ?? '—'}
-        </Badge>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2 font-mono"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOffersClick();
+                }}
+              >
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                {item.totalOfferCount ?? item.offerCount ?? '—'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">Click to view all offers</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </TableCell>
 
       {/* Was Price */}

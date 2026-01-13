@@ -26,8 +26,8 @@ const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 /** Buffer time before token expiry to trigger refresh (5 minutes) */
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-/** Delay between API calls for rate limiting */
-const API_DELAY_MS = 200;
+/** Delay between API calls for rate limiting (Amazon sustained rate: 1 req/sec) */
+const API_DELAY_MS = 1000;
 
 /** Maximum retries for rate-limited requests */
 const MAX_RETRIES = 3;
@@ -72,6 +72,48 @@ export interface ProductTypeResult {
   title: string | null;
   brand: string | null;
   raw: CatalogItemResponse;
+}
+
+/** Search result item from catalog search */
+export interface CatalogSearchItem {
+  asin: string;
+  title: string | null;
+  brand: string | null;
+  imageUrl: string | null;
+  price: number | null;
+}
+
+/** Search result response */
+export interface CatalogSearchResult {
+  items: CatalogSearchItem[];
+  totalResults: number;
+  nextPageToken?: string;
+}
+
+/** Raw API response for search */
+interface CatalogSearchApiResponse {
+  numberOfResults?: number;
+  pagination?: {
+    nextToken?: string;
+  };
+  items?: Array<{
+    asin: string;
+    summaries?: Array<{
+      marketplaceId: string;
+      brandName?: string;
+      brand?: string;
+      itemName?: string;
+    }>;
+    images?: Array<{
+      marketplaceId: string;
+      images?: Array<{
+        variant: string;
+        link: string;
+        height: number;
+        width: number;
+      }>;
+    }>;
+  }>;
 }
 
 // ============================================================================
@@ -148,6 +190,87 @@ export class AmazonCatalogClient {
       brand,
       raw: response,
     };
+  }
+
+  /**
+   * Search catalog by identifier (EAN or UPC)
+   *
+   * Searches for Amazon products by barcode identifier.
+   * Rate limit: 2 requests/second burst, 1 request/second sustained.
+   *
+   * @param identifier - EAN or UPC barcode
+   * @param identifierType - 'EAN' or 'UPC'
+   * @param marketplaceId - Target marketplace (default UK)
+   * @returns Search results with matching ASINs
+   */
+  async searchCatalogByIdentifier(
+    identifier: string,
+    identifierType: 'EAN' | 'UPC',
+    marketplaceId: string = 'A1F83G8C2ARO7P'
+  ): Promise<CatalogSearchResult> {
+    console.log(
+      `[AmazonCatalogClient] Searching by ${identifierType}: ${identifier}`
+    );
+
+    const params = new URLSearchParams({
+      marketplaceIds: marketplaceId,
+      identifiers: identifier,
+      identifiersType: identifierType,
+      includedData: 'summaries,images',
+    });
+
+    try {
+      const response = await this.request<CatalogSearchApiResponse>(
+        `${CATALOG_API_PATH}/items?${params.toString()}`,
+        'GET'
+      );
+
+      return this.normalizeCatalogSearchResponse(response, marketplaceId);
+    } catch (error) {
+      // Handle "not found" as empty result, not error
+      if (error instanceof Error && error.message.includes('not found')) {
+        return { items: [], totalResults: 0 };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Search catalog by keywords
+   *
+   * Searches for Amazon products by keywords (e.g., "LEGO 75192").
+   * Rate limit: 2 requests/second burst, 1 request/second sustained.
+   *
+   * @param keywords - Search keywords
+   * @param marketplaceId - Target marketplace (default UK)
+   * @returns Search results with matching ASINs
+   */
+  async searchCatalogByKeywords(
+    keywords: string,
+    marketplaceId: string = 'A1F83G8C2ARO7P'
+  ): Promise<CatalogSearchResult> {
+    console.log(`[AmazonCatalogClient] Searching by keywords: ${keywords}`);
+
+    const params = new URLSearchParams({
+      marketplaceIds: marketplaceId,
+      keywords: keywords,
+      includedData: 'summaries,images',
+    });
+
+    try {
+      const response = await this.request<CatalogSearchApiResponse>(
+        `${CATALOG_API_PATH}/items?${params.toString()}`,
+        'GET'
+      );
+
+      return this.normalizeCatalogSearchResponse(response, marketplaceId);
+    } catch (error) {
+      // Handle "not found" as empty result, not error
+      if (error instanceof Error && error.message.includes('not found')) {
+        return { items: [], totalResults: 0 };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -302,6 +425,41 @@ export class AmazonCatalogClient {
     );
 
     return this.tokenData.accessToken;
+  }
+
+  // ==========================================================================
+  // PRIVATE METHODS - DATA TRANSFORMATION
+  // ==========================================================================
+
+  /**
+   * Normalize catalog search API response into our standard format
+   */
+  private normalizeCatalogSearchResponse(
+    response: CatalogSearchApiResponse,
+    marketplaceId: string
+  ): CatalogSearchResult {
+    const items: CatalogSearchItem[] = (response.items ?? []).map((item) => {
+      // Get summary for the marketplace
+      const summary = item.summaries?.find((s) => s.marketplaceId === marketplaceId);
+
+      // Get main image for the marketplace
+      const imageData = item.images?.find((img) => img.marketplaceId === marketplaceId);
+      const mainImage = imageData?.images?.find((i) => i.variant === 'MAIN');
+
+      return {
+        asin: item.asin,
+        title: summary?.itemName ?? null,
+        brand: summary?.brand ?? summary?.brandName ?? null,
+        imageUrl: mainImage?.link ?? null,
+        price: null, // Price not available in catalog search, fetched separately
+      };
+    });
+
+    return {
+      items,
+      totalResults: response.numberOfResults ?? items.length,
+      nextPageToken: response.pagination?.nextToken,
+    };
   }
 
   // ==========================================================================

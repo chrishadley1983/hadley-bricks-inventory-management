@@ -186,6 +186,25 @@ export class EbayBrowseClient {
   }
 
   /**
+   * Search for USED LEGO sets.
+   * Searches category 19006 (LEGO Complete Sets & Packs), Used condition,
+   * Buy It Now only, UK sellers, sorted by price ascending.
+   */
+  async searchLegoSetUsed(setNumber: string, limit: number = 50): Promise<EbaySearchResponse> {
+    // Strip -1 suffix if present (e.g., 40585-1 -> 40585)
+    const cleanSetNumber = setNumber.replace(/-\d+$/, '');
+
+    // eBay condition IDs: 3000 = Used, 1500 = Open box, 2500 = Seller refurbished
+    // Using USED filter which covers various used conditions
+    return this.searchItems(`LEGO ${cleanSetNumber}`, {
+      categoryId: '19006',
+      filter: 'conditions:{USED},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB',
+      sort: 'price',
+      limit,
+    });
+  }
+
+  /**
    * Get a specific item by ID
    */
   async getItem(itemId: string): Promise<unknown> {

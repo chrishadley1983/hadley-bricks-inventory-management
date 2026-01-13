@@ -72,6 +72,15 @@ export class ArbitrageService {
       case 'opportunities':
         query = query.gte('margin_percent', minMargin);
         break;
+      case 'ebay_opportunities':
+        query = query.gte('ebay_margin_percent', minMargin);
+        break;
+      case 'with_ebay_data':
+        query = query.not('ebay_min_price', 'is', null);
+        break;
+      case 'no_ebay_data':
+        query = query.is('ebay_min_price', null);
+        break;
       case 'in_stock':
         query = query.gt('your_qty', 0);
         break;
@@ -390,6 +399,7 @@ export class ArbitrageService {
       bricklink_pricing: null,
       ebay_pricing: null,
       asin_mapping: null,
+      seeded_discovery: null,
     };
 
     for (const row of data ?? []) {
@@ -441,12 +451,14 @@ export class ArbitrageService {
   async getSummaryStats(userId: string, minMargin: number = 30): Promise<{
     totalItems: number;
     opportunities: number;
+    ebayOpportunities: number;
     unmapped: number;
     excluded: number;
   }> {
     const [
       { count: totalItems },
       { count: opportunities },
+      { count: ebayOpportunities },
       { count: excluded },
     ] = await Promise.all([
       this.supabase
@@ -460,6 +472,11 @@ export class ArbitrageService {
         .eq('user_id', userId)
         .gte('margin_percent', minMargin),
       this.supabase
+        .from('arbitrage_current_view')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('ebay_margin_percent', minMargin),
+      this.supabase
         .from('tracked_asins')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
@@ -471,6 +488,7 @@ export class ArbitrageService {
     return {
       totalItems: totalItems ?? 0,
       opportunities: opportunities ?? 0,
+      ebayOpportunities: ebayOpportunities ?? 0,
       unmapped,
       excluded: excluded ?? 0,
     };
@@ -644,6 +662,16 @@ export class ArbitrageService {
       salesRank: row.sales_rank as number | null,
       salesRankCategory: row.sales_rank_category as string | null,
       amazonSnapshotDate: row.amazon_snapshot_date as string | null,
+      // Lowest offer fallback fields
+      lowestOfferPrice: row.lowest_offer_price as number | null,
+      priceIsLowestOffer: row.price_is_lowest_offer as boolean | null,
+      lowestOfferSellerId: row.lowest_offer_seller_id as string | null,
+      lowestOfferIsFba: row.lowest_offer_is_fba as boolean | null,
+      lowestOfferIsPrime: row.lowest_offer_is_prime as boolean | null,
+      offersJson: row.offers_json as ArbitrageItem['offersJson'],
+      totalOfferCount: row.total_offer_count as number | null,
+      competitivePrice: row.competitive_price as number | null,
+      effectiveAmazonPrice: row.effective_amazon_price as number | null,
       blMinPrice: row.bl_min_price as number | null,
       blAvgPrice: row.bl_avg_price as number | null,
       blMaxPrice: row.bl_max_price as number | null,
@@ -663,6 +691,16 @@ export class ArbitrageService {
       ebaySnapshotDate: row.ebay_snapshot_date as string | null,
       ebayMarginPercent: row.ebay_margin_percent as number | null,
       ebayMarginAbsolute: row.ebay_margin_absolute as number | null,
+      // Seeded ASIN fields
+      itemType: (row.item_type as ArbitrageItem['itemType']) ?? 'inventory',
+      seededAsinId: row.seeded_asin_id as string | null,
+      bricksetSetId: row.brickset_set_id as string | null,
+      bricksetRrp: row.brickset_rrp as number | null,
+      bricksetYear: row.brickset_year as number | null,
+      bricksetTheme: row.brickset_theme as string | null,
+      bricksetPieces: row.brickset_pieces as number | null,
+      seededMatchMethod: row.seeded_match_method as ArbitrageItem['seededMatchMethod'],
+      seededMatchConfidence: row.seeded_match_confidence as number | null,
     };
   }
 

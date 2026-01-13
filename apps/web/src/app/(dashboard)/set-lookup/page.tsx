@@ -10,8 +10,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SetLookupForm, SetDetailsCard } from '@/components/features/brickset';
+import { SetLookupForm, SetDetailsCard, SetLookupEbayModal, SetStockCard, SetStockModal, AmazonOffersModal } from '@/components/features/brickset';
+import type { SetPricingData } from '@/components/features/brickset';
 import type { BricksetSet } from '@/lib/brickset';
+import type { InventoryStockSummary } from '@/app/api/brickset/inventory-stock/route';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -59,6 +61,50 @@ async function fetchBricksetStatus(): Promise<{ configured: boolean }> {
   return response.json();
 }
 
+async function fetchSetPricing(
+  setNumber: string,
+  ean?: string | null,
+  upc?: string | null
+): Promise<SetPricingData> {
+  const params = new URLSearchParams({ setNumber });
+  if (ean) params.set('ean', ean);
+  if (upc) params.set('upc', upc);
+
+  const response = await fetch(`/api/brickset/pricing?${params}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch pricing data');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+async function fetchInventoryStock(
+  setNumber: string,
+  asin?: string | null
+): Promise<InventoryStockSummary> {
+  const params = new URLSearchParams({ setNumber });
+  if (asin) params.set('asin', asin);
+
+  const response = await fetch(`/api/brickset/inventory-stock?${params}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch inventory stock');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+/**
+ * Check if a string is a valid image URL
+ */
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
+}
+
 function RecentLookupCard({ set, onClick }: { set: BricksetSet; onClick: () => void }) {
   return (
     <button
@@ -66,9 +112,9 @@ function RecentLookupCard({ set, onClick }: { set: BricksetSet; onClick: () => v
       className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors text-left w-full"
     >
       <div className="relative flex-shrink-0 w-12 h-12 bg-gray-100 rounded overflow-hidden">
-        {set.imageUrl ? (
+        {isValidImageUrl(set.imageUrl) ? (
           <Image
-            src={set.imageUrl}
+            src={set.imageUrl!}
             alt={set.setName}
             fill
             sizes="48px"
@@ -94,6 +140,11 @@ function RecentLookupCard({ set, onClick }: { set: BricksetSet; onClick: () => v
 export default function SetLookupPage() {
   const queryClient = useQueryClient();
   const [currentSetNumber, setCurrentSetNumber] = useState<string | null>(null);
+  const [ebayModalOpen, setEbayModalOpen] = useState(false);
+  const [ebayUsedModalOpen, setEbayUsedModalOpen] = useState(false);
+  const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [stockModalTab, setStockModalTab] = useState<'current' | 'sold'>('current');
+  const [amazonOffersModalOpen, setAmazonOffersModalOpen] = useState(false);
 
   // Check if Brickset is configured
   const { data: bricksetStatus, isLoading: statusLoading } = useQuery({
@@ -116,6 +167,35 @@ export default function SetLookupPage() {
       queryClient.invalidateQueries({ queryKey: ['brickset', 'recent'] });
     },
   });
+
+  // Fetch pricing data when a set is successfully looked up
+  const currentSet = lookupMutation.data?.data;
+  const { data: pricingData, isLoading: pricingLoading } = useQuery({
+    queryKey: ['brickset', 'pricing', currentSet?.setNumber],
+    queryFn: () => fetchSetPricing(
+      currentSet!.setNumber,
+      currentSet!.ean,
+      currentSet!.upc
+    ),
+    enabled: !!currentSet,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch inventory stock data when a set is successfully looked up
+  const { data: stockData, isLoading: stockLoading } = useQuery({
+    queryKey: ['brickset', 'stock', currentSet?.setNumber],
+    queryFn: () => fetchInventoryStock(
+      currentSet!.setNumber,
+      pricingData?.amazon?.asin // Use ASIN from pricing if available
+    ),
+    enabled: !!currentSet,
+    staleTime: 1 * 60 * 1000, // 1 minute (stock changes more frequently)
+  });
+
+  const handleOpenStockModal = (tab: 'current' | 'sold') => {
+    setStockModalTab(tab);
+    setStockModalOpen(true);
+  };
 
   const handleLookup = (setNumber: string, forceRefresh: boolean) => {
     setCurrentSetNumber(setNumber);
@@ -191,13 +271,65 @@ export default function SetLookupPage() {
 
         {/* Results */}
         {lookupMutation.isSuccess && lookupMutation.data && (
-          <div className="space-y-2">
+          <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Source: {lookupMutation.data.source === 'api' ? 'Brickset API' : 'Local Cache'}</span>
             </div>
-            <SetDetailsCard set={lookupMutation.data.data} />
+            <SetDetailsCard
+              set={lookupMutation.data.data}
+              pricing={pricingData}
+              pricingLoading={pricingLoading}
+              onEbayClick={() => setEbayModalOpen(true)}
+              onEbayUsedClick={() => setEbayUsedModalOpen(true)}
+              onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
+            />
+            {/* Inventory Stock Card */}
+            <SetStockCard
+              stock={stockData ?? null}
+              loading={stockLoading}
+              onCurrentStockClick={() => handleOpenStockModal('current')}
+              onSoldStockClick={() => handleOpenStockModal('sold')}
+            />
           </div>
         )}
+
+        {/* eBay Listings Modal (New) */}
+        <SetLookupEbayModal
+          setNumber={currentSet?.setNumber ?? null}
+          setName={currentSet?.setName ?? null}
+          condition="new"
+          isOpen={ebayModalOpen}
+          onClose={() => setEbayModalOpen(false)}
+        />
+
+        {/* eBay Listings Modal (Used) */}
+        <SetLookupEbayModal
+          setNumber={currentSet?.setNumber ?? null}
+          setName={currentSet?.setName ?? null}
+          condition="used"
+          isOpen={ebayUsedModalOpen}
+          onClose={() => setEbayUsedModalOpen(false)}
+        />
+
+        {/* Inventory Stock Modal */}
+        <SetStockModal
+          setNumber={currentSet?.setNumber ?? null}
+          setName={currentSet?.setName ?? null}
+          stock={stockData ?? null}
+          isOpen={stockModalOpen}
+          onClose={() => setStockModalOpen(false)}
+          initialTab={stockModalTab}
+        />
+
+        {/* Amazon Offers Modal */}
+        <AmazonOffersModal
+          setNumber={currentSet?.setNumber ?? null}
+          setName={currentSet?.setName ?? null}
+          asin={pricingData?.amazon?.asin ?? null}
+          offers={pricingData?.amazon?.offers ?? []}
+          isOpen={amazonOffersModalOpen}
+          onClose={() => setAmazonOffersModalOpen(false)}
+        />
 
         {/* Loading State */}
         {lookupMutation.isPending && (

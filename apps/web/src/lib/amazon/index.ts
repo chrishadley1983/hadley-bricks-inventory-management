@@ -28,6 +28,8 @@ export {
   AmazonPricingClient,
   createAmazonPricingClient,
   type AsinPricingData,
+  type AmazonOffer,
+  type AsinCompetitiveSummaryData,
 } from './amazon-pricing.client';
 export {
   AmazonListingsClient,

@@ -10,7 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import type { AmazonCredentials } from '../amazon';
-import { createAmazonPricingClient } from '../amazon';
+import { createAmazonPricingClient, type AsinCompetitiveSummaryData } from '../amazon';
 import { createAmazonReportsClient } from '../platform-stock/amazon/amazon-reports.client';
 import { CredentialsRepository } from '../repositories';
 
@@ -114,6 +114,7 @@ export class AmazonArbitrageSyncService {
         image_url: item.imageUrl ?? null,
         sku: item.sellerSku,
         quantity: item.quantity ?? 0,
+        price: item.price ?? null,
         last_synced_at: now,
       }));
 
@@ -168,10 +169,16 @@ export class AmazonArbitrageSyncService {
 
   /**
    * Sync Amazon pricing data for all active tracked ASINs
-   * Uses Product Pricing API for competitive pricing
+   * Uses Product Pricing API for competitive pricing and competitive summary for WasPrice/offers
+   *
+   * @param userId - User ID
+   * @param options - Sync options
+   * @param options.includeSeeded - Include seeded ASINs in sync (default: true)
+   * @param onProgress - Progress callback
    */
   async syncPricing(
     userId: string,
+    options: { includeSeeded?: boolean } = {},
     onProgress?: (processed: number, total: number) => void
   ): Promise<{ updated: number; failed: number; total: number }> {
     console.log('[AmazonArbitrageSyncService.syncPricing] Starting pricing sync for user:', userId);
@@ -180,10 +187,10 @@ export class AmazonArbitrageSyncService {
     const credentials = await this.getCredentials(userId);
     const pricingClient = createAmazonPricingClient(credentials);
 
-    // Get all active tracked ASINs
+    // Get all active tracked ASINs (including quantity for your_qty)
     const { data: trackedAsins, error } = await this.supabase
       .from('tracked_asins')
-      .select('asin, sku')
+      .select('asin, sku, quantity')
       .eq('user_id', userId)
       .eq('status', 'active');
 
@@ -191,35 +198,103 @@ export class AmazonArbitrageSyncService {
       throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
     }
 
-    const total = trackedAsins?.length ?? 0;
+    // Get seeded ASINs if enabled
+    let seededAsins: { asin: string }[] = [];
+    if (options.includeSeeded !== false) {
+      const { data: seededData, error: seededError } = await this.supabase
+        .from('user_seeded_asin_preferences')
+        .select(`
+          seeded_asins!inner(asin),
+          manual_asin_override
+        `)
+        .eq('user_id', userId)
+        .eq('include_in_sync', true)
+        .eq('user_status', 'active');
+
+      if (!seededError && seededData) {
+        seededAsins = seededData
+          .map((p) => {
+            const sa = p.seeded_asins as unknown as { asin: string | null };
+            return { asin: p.manual_asin_override ?? sa?.asin };
+          })
+          .filter((a): a is { asin: string } => a.asin !== null && a.asin !== undefined);
+
+        console.log(`[AmazonArbitrageSyncService.syncPricing] Found ${seededAsins.length} seeded ASINs to sync`);
+      }
+    }
+
+    // Create quantity lookup map from tracked ASINs
+    const quantityMap = new Map<string, number>();
+    for (const ta of trackedAsins ?? []) {
+      quantityMap.set(ta.asin, ta.quantity ?? 0);
+    }
+
+    // Combine and deduplicate ASINs
+    const allAsins = [
+      ...(trackedAsins ?? []).map((a) => a.asin),
+      ...seededAsins.map((a) => a.asin),
+    ];
+    const uniqueAsins = [...new Set(allAsins)].map((asin) => ({ asin }));
+
+    const total = uniqueAsins.length;
     let updated = 0;
     let failed = 0;
     const today = new Date().toISOString().split('T')[0];
 
     // Process in batches (max 20 ASINs per request)
-    const batches = this.chunkArray(trackedAsins ?? [], BATCH_SIZE);
+    const batches = this.chunkArray(uniqueAsins, BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
       const asins = batch.map((item) => item.asin);
 
       try {
-        // Fetch competitive pricing for batch
+        // Fetch competitive pricing for batch (v0 API - faster, basic pricing)
         const pricingData = await pricingClient.getCompetitivePricing(asins, UK_MARKETPLACE_ID);
 
-        // Store pricing snapshots
-        const upsertData = pricingData.map((pricing) => ({
-          user_id: userId,
-          asin: pricing.asin,
-          snapshot_date: today,
-          your_price: pricing.yourPrice,
-          your_qty: 0, // Will be updated from inventory data
-          buy_box_price: pricing.buyBoxPrice,
-          buy_box_is_yours: pricing.buyBoxIsYours,
-          offer_count: (pricing.newOfferCount ?? 0) + (pricing.usedOfferCount ?? 0),
-          sales_rank: pricing.salesRank,
-          sales_rank_category: pricing.salesRankCategory,
-        }));
+        // Fetch competitive summary for batch (v2022-05-01 API - WasPrice, offers)
+        let summaryData: AsinCompetitiveSummaryData[] = [];
+        try {
+          summaryData = await pricingClient.getCompetitiveSummary(asins, UK_MARKETPLACE_ID);
+        } catch (summaryErr) {
+          console.warn(`[AmazonArbitrageSyncService.syncPricing] Could not fetch competitive summary:`, summaryErr);
+          // Continue without summary data - we'll use basic pricing only
+        }
+
+        // Create lookup map for summary data
+        const summaryMap = new Map<string, AsinCompetitiveSummaryData>();
+        for (const summary of summaryData) {
+          summaryMap.set(summary.asin, summary);
+        }
+
+        // Store pricing snapshots with extended data
+        const upsertData = pricingData.map((pricing) => {
+          const summary = summaryMap.get(pricing.asin);
+          const lowestOffer = summary?.lowestOffer;
+
+          return {
+            user_id: userId,
+            asin: pricing.asin,
+            snapshot_date: today,
+            your_price: pricing.yourPrice,
+            your_qty: quantityMap.get(pricing.asin) ?? 0,
+            buy_box_price: pricing.buyBoxPrice,
+            buy_box_is_yours: pricing.buyBoxIsYours,
+            offer_count: (pricing.newOfferCount ?? 0) + (pricing.usedOfferCount ?? 0),
+            sales_rank: pricing.salesRank,
+            sales_rank_category: pricing.salesRankCategory,
+            // New fields from competitive summary
+            was_price_90d: summary?.wasPrice ?? null,
+            lowest_offer_price: lowestOffer?.totalPrice ?? null,
+            price_is_lowest_offer: pricing.buyBoxPrice === null && lowestOffer !== null,
+            lowest_offer_seller_id: lowestOffer?.sellerId ?? null,
+            lowest_offer_is_fba: lowestOffer ? lowestOffer.fulfillmentType === 'AFN' : null,
+            lowest_offer_is_prime: lowestOffer?.isPrime ?? null,
+            offers_json: summary?.offers ? JSON.stringify(summary.offers) : null,
+            total_offer_count: summary?.totalOfferCount ?? null,
+            competitive_price: summary?.competitivePrice ?? null,
+          };
+        });
 
         const { error: insertError } = await this.supabase
           .from('amazon_arbitrage_pricing')
@@ -238,8 +313,8 @@ export class AmazonArbitrageSyncService {
         failed += batch.length;
       }
 
-      // Rate limit
-      await this.delay(RATE_LIMIT_DELAY);
+      // Rate limit (longer delay because we're calling 2 APIs)
+      await this.delay(RATE_LIMIT_DELAY * 2);
 
       // Report progress
       const processed = Math.min((batchIndex + 1) * BATCH_SIZE, total);

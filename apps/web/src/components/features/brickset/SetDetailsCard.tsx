@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { Loader2 } from 'lucide-react';
 import type { BricksetSet } from '@/lib/brickset';
 import {
   Card,
@@ -10,13 +11,68 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+interface PricingStats {
+  minPrice: number | null;
+  avgPrice: number | null;
+  maxPrice: number | null;
+  listingCount: number;
+}
+
+interface BrickLinkPricingStats {
+  minPrice: number | null;
+  avgPrice: number | null;
+  maxPrice: number | null;
+  lotCount: number;
+}
+
+export interface AmazonOfferData {
+  sellerId: string;
+  condition: string;
+  subCondition: string;
+  fulfillmentType: 'AFN' | 'MFN';
+  listingPrice: number;
+  shippingPrice: number;
+  totalPrice: number;
+  currency: string;
+  isPrime: boolean;
+}
+
+export interface SetPricingData {
+  amazon: {
+    buyBoxPrice: number | null;
+    lowestPrice: number | null;
+    wasPrice: number | null;
+    offerCount: number;
+    asin: string | null;
+    offers: AmazonOfferData[];
+  } | null;
+  ebay: PricingStats | null;
+  ebayUsed: PricingStats | null;
+  bricklink: BrickLinkPricingStats | null;
+  bricklinkUsed: BrickLinkPricingStats | null;
+}
 
 interface SetDetailsCardProps {
   set: BricksetSet;
+  pricing?: SetPricingData | null;
+  pricingLoading?: boolean;
+  onEbayClick?: () => void;
+  onEbayUsedClick?: () => void;
+  onAmazonOffersClick?: () => void;
+}
+
+/**
+ * Check if a string is a valid image URL
+ */
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
 }
 
 function formatPrice(price: number | null, currency: string): string {
-  if (price === null) return '-';
+  if (price === null) return '—';
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency,
@@ -24,7 +80,7 @@ function formatPrice(price: number | null, currency: string): string {
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return '-';
+  if (!date) return '—';
   return new Date(date).toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'short',
@@ -32,40 +88,66 @@ function formatDate(date: string | null): string {
   });
 }
 
-export function SetDetailsCard({ set }: SetDetailsCardProps) {
+interface StatCardProps {
+  label: string;
+  value: string;
+  subtext?: string;
+  valueClassName?: string;
+}
+
+function StatCard({ label, value, subtext, valueClassName }: StatCardProps) {
+  return (
+    <div className="rounded-lg bg-muted/50 p-2 text-center">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        {label}
+      </div>
+      <div className={`font-mono text-base font-bold mt-0.5 ${valueClassName ?? ''}`}>
+        {value}
+      </div>
+      {subtext && (
+        <div className="text-[10px] text-muted-foreground truncate">{subtext}</div>
+      )}
+    </div>
+  );
+}
+
+export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEbayUsedClick, onAmazonOffersClick }: SetDetailsCardProps) {
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-start gap-6">
+      {/* Header - Compact like arbitrage modal */}
+      <CardHeader className="pb-3">
+        <div className="flex items-start gap-4">
           {/* Set Image */}
-          <div className="relative h-48 w-48 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
-            {set.imageUrl ? (
+          <div className="relative h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-lg bg-muted border">
+            {isValidImageUrl(set.imageUrl) ? (
               <Image
-                src={set.imageUrl}
+                src={set.imageUrl!}
                 alt={set.setName}
                 fill
-                sizes="192px"
+                sizes="72px"
                 className="object-contain"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-gray-400">
-                No Image
+              <div className="flex h-full w-full items-center justify-center text-2xl">
+                📦
               </div>
             )}
           </div>
 
-          {/* Basic Info */}
-          <div className="flex-1">
+          {/* Product Info */}
+          <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div>
-                <CardTitle className="text-2xl">{set.setName}</CardTitle>
-                <CardDescription className="text-lg mt-1">
+                <CardTitle className="text-lg font-bold leading-tight">
+                  {set.setName}
+                </CardTitle>
+                <CardDescription className="text-base mt-1">
                   {set.setNumber}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
                 {set.released && (
-                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                     Released
                   </Badge>
                 )}
@@ -75,222 +157,416 @@ export function SetDetailsCard({ set }: SetDetailsCardProps) {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Theme:</span>{' '}
-                <span className="font-medium">{set.theme || '-'}</span>
-                {set.subtheme && (
-                  <span className="text-muted-foreground"> / {set.subtheme}</span>
-                )}
-              </div>
-              <div>
-                <span className="text-muted-foreground">Year:</span>{' '}
-                <span className="font-medium">{set.yearFrom || '-'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Pieces:</span>{' '}
-                <span className="font-medium">{set.pieces?.toLocaleString() || '-'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Minifigs:</span>{' '}
-                <span className="font-medium">{set.minifigs || '-'}</span>
-              </div>
+            {/* Badges row */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <Badge variant="outline" className="font-mono text-xs">
+                Set: {set.setNumber}
+              </Badge>
+              {set.ean && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  EAN: {set.ean}
+                </Badge>
+              )}
+              {set.upc && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  UPC: {set.upc}
+                </Badge>
+              )}
+              {set.ukRetailPrice && (
+                <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  RRP: {formatPrice(set.ukRetailPrice, 'GBP')}
+                </Badge>
+              )}
+              {set.theme && (
+                <Badge variant="outline" className="text-xs">
+                  {set.theme} {set.yearFrom ? `(${set.yearFrom})` : ''}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        {/* Retail Prices */}
+      <CardContent className="space-y-4 pt-0">
+        {/* Set Details - 2x2 grid */}
+        <div className="grid grid-cols-4 gap-2">
+          <StatCard
+            label="Pieces"
+            value={set.pieces?.toLocaleString() ?? '—'}
+          />
+          <StatCard
+            label="Minifigs"
+            value={set.minifigs?.toString() ?? '—'}
+          />
+          <StatCard
+            label="Year"
+            value={set.yearFrom?.toString() ?? '—'}
+          />
+          <StatCard
+            label="Rating"
+            value={set.rating?.toFixed(1) ?? '—'}
+            subtext={`${set.ownCount?.toLocaleString() ?? 0} owners`}
+          />
+        </div>
+
+        {/* Amazon Pricing */}
         <div>
-          <h3 className="text-sm font-semibold mb-3">Retail Prices</h3>
-          <div className="grid grid-cols-4 gap-4">
-            <div className="rounded-lg bg-muted p-3">
-              <div className="text-xs text-muted-foreground">UK</div>
-              <div className="text-lg font-semibold">
-                {formatPrice(set.ukRetailPrice, 'GBP')}
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Amazon (UK)
+          </h4>
+          <div className="rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-3 divide-x bg-muted/50">
+              <div className="p-2 text-center">
+                <div className="text-[10px] text-muted-foreground">Buy Box</div>
+                <div className="font-mono font-bold text-amber-600">
+                  {pricingLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                  ) : pricing?.amazon?.buyBoxPrice ? (
+                    formatPrice(pricing.amazon.buyBoxPrice, 'GBP')
+                  ) : (
+                    '—'
+                  )}
+                </div>
+              </div>
+              <div className="p-2 text-center">
+                <div className="text-[10px] text-muted-foreground">Lowest</div>
+                <div className="font-mono font-bold text-amber-600">
+                  {pricingLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                  ) : pricing?.amazon?.lowestPrice ? (
+                    formatPrice(pricing.amazon.lowestPrice, 'GBP')
+                  ) : (
+                    '—'
+                  )}
+                </div>
+              </div>
+              <div className="p-2 text-center">
+                <div className="text-[10px] text-muted-foreground">Was Price</div>
+                <div className="font-mono font-bold text-amber-600/70">
+                  {pricingLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                  ) : pricing?.amazon?.wasPrice ? (
+                    formatPrice(pricing.amazon.wasPrice, 'GBP')
+                  ) : (
+                    '—'
+                  )}
+                </div>
               </div>
             </div>
-            <div className="rounded-lg bg-muted p-3">
-              <div className="text-xs text-muted-foreground">US</div>
-              <div className="text-lg font-semibold">
-                {formatPrice(set.usRetailPrice, 'USD')}
-              </div>
-            </div>
-            <div className="rounded-lg bg-muted p-3">
-              <div className="text-xs text-muted-foreground">CA</div>
-              <div className="text-lg font-semibold">
-                {formatPrice(set.caRetailPrice, 'CAD')}
-              </div>
-            </div>
-            <div className="rounded-lg bg-muted p-3">
-              <div className="text-xs text-muted-foreground">DE</div>
-              <div className="text-lg font-semibold">
-                {formatPrice(set.deRetailPrice, 'EUR')}
-              </div>
-            </div>
+            <Separator />
+            <button
+              onClick={onAmazonOffersClick}
+              disabled={pricingLoading || !onAmazonOffersClick || !pricing?.amazon?.offers?.length}
+              className="w-full px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between hover:bg-amber-50 transition-colors disabled:cursor-default disabled:hover:bg-muted/30"
+            >
+              <span>Offers</span>
+              <span className="font-mono font-medium text-foreground">
+                {pricingLoading ? '...' : pricing?.amazon?.offerCount ?? '—'} sellers
+                {onAmazonOffersClick && !pricingLoading && pricing?.amazon?.offers?.length ? (
+                  <span className="ml-1 text-amber-600">(click)</span>
+                ) : null}
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* BrickLink Prices */}
-        {(set.bricklinkSoldPriceNew || set.bricklinkSoldPriceUsed) && (
+        {/* eBay Pricing - New and Used side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* eBay New */}
           <div>
-            <h3 className="text-sm font-semibold mb-3">BrickLink Price Guide</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg bg-blue-50 p-3">
-                <div className="text-xs text-blue-600">Sold (New)</div>
-                <div className="text-lg font-semibold text-blue-700">
-                  {formatPrice(set.bricklinkSoldPriceNew, 'GBP')}
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              eBay (UK, New)
+            </h4>
+            <button
+              onClick={onEbayClick}
+              disabled={pricingLoading || !onEbayClick}
+              className="w-full text-left rounded-lg border overflow-hidden hover:border-purple-400 hover:shadow-sm transition-all cursor-pointer disabled:cursor-default disabled:hover:border-border disabled:hover:shadow-none"
+            >
+              <div className="grid grid-cols-3 divide-x bg-muted/50">
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Min</div>
+                  <div className="font-mono font-bold text-purple-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebay?.minPrice ? (
+                      formatPrice(pricing.ebay.minPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Avg</div>
+                  <div className="font-mono font-bold text-purple-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebay?.avgPrice ? (
+                      formatPrice(pricing.ebay.avgPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Max</div>
+                  <div className="font-mono font-bold text-purple-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebay?.maxPrice ? (
+                      formatPrice(pricing.ebay.maxPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="rounded-lg bg-orange-50 p-3">
-                <div className="text-xs text-orange-600">Sold (Used)</div>
-                <div className="text-lg font-semibold text-orange-700">
-                  {formatPrice(set.bricklinkSoldPriceUsed, 'GBP')}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Physical Specs */}
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Dimensions</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Width:</span>
-                <span>{set.width ? `${set.width} cm` : '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Height:</span>
-                <span>{set.height ? `${set.height} cm` : '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Depth:</span>
-                <span>{set.depth ? `${set.depth} cm` : '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Weight:</span>
-                <span>{set.weight ? `${set.weight} g` : '-'}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Details</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Age Range:</span>
-                <span>
-                  {set.ageMin && set.ageMax
-                    ? `${set.ageMin}-${set.ageMax}+`
-                    : set.ageMin
-                      ? `${set.ageMin}+`
-                      : '-'}
+              <Separator />
+              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
+                <span>Listings</span>
+                <span className="font-mono font-medium text-foreground">
+                  {pricingLoading ? '...' : pricing?.ebay?.listingCount ?? '—'} available
+                  {onEbayClick && !pricingLoading && <span className="ml-1 text-purple-600">(click)</span>}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Packaging:</span>
-                <span>{set.packagingType || '-'}</span>
+            </button>
+          </div>
+
+          {/* eBay Used */}
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              eBay (UK, Used)
+            </h4>
+            <button
+              onClick={onEbayUsedClick}
+              disabled={pricingLoading || !onEbayUsedClick}
+              className="w-full text-left rounded-lg border overflow-hidden hover:border-orange-400 hover:shadow-sm transition-all cursor-pointer disabled:cursor-default disabled:hover:border-border disabled:hover:shadow-none"
+            >
+              <div className="grid grid-cols-3 divide-x bg-muted/50">
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Min</div>
+                  <div className="font-mono font-bold text-orange-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebayUsed?.minPrice ? (
+                      formatPrice(pricing.ebayUsed.minPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Avg</div>
+                  <div className="font-mono font-bold text-orange-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebayUsed?.avgPrice ? (
+                      formatPrice(pricing.ebayUsed.avgPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Max</div>
+                  <div className="font-mono font-bold text-orange-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.ebayUsed?.maxPrice ? (
+                      formatPrice(pricing.ebayUsed.maxPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Instructions:</span>
-                <span>{set.instructionsCount || '-'}</span>
+              <Separator />
+              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
+                <span>Listings</span>
+                <span className="font-mono font-medium text-foreground">
+                  {pricingLoading ? '...' : pricing?.ebayUsed?.listingCount ?? '—'} available
+                  {onEbayUsedClick && !pricingLoading && <span className="ml-1 text-orange-600">(click)</span>}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Images:</span>
-                <span>{set.additionalImageCount || '-'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* BrickLink Pricing - New and Used side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* BrickLink New */}
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              BrickLink (UK, New)
+            </h4>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="grid grid-cols-3 divide-x bg-muted/50">
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Min</div>
+                  <div className="font-mono font-bold text-blue-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklink?.minPrice ? (
+                      formatPrice(pricing.bricklink.minPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Avg</div>
+                  <div className="font-mono font-bold text-blue-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklink?.avgPrice ? (
+                      formatPrice(pricing.bricklink.avgPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Max</div>
+                  <div className="font-mono font-bold text-blue-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklink?.maxPrice ? (
+                      formatPrice(pricing.bricklink.maxPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+              </div>
+              <Separator />
+              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
+                <span>Listings</span>
+                <span className="font-mono font-medium text-foreground">
+                  {pricingLoading ? '...' : pricing?.bricklink?.lotCount ?? '—'} lots
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* BrickLink Used */}
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              BrickLink (UK, Used)
+            </h4>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="grid grid-cols-3 divide-x bg-muted/50">
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Min</div>
+                  <div className="font-mono font-bold text-teal-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklinkUsed?.minPrice ? (
+                      formatPrice(pricing.bricklinkUsed.minPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Avg</div>
+                  <div className="font-mono font-bold text-teal-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklinkUsed?.avgPrice ? (
+                      formatPrice(pricing.bricklinkUsed.avgPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">Max</div>
+                  <div className="font-mono font-bold text-teal-600">
+                    {pricingLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : pricing?.bricklinkUsed?.maxPrice ? (
+                      formatPrice(pricing.bricklinkUsed.maxPrice, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+              </div>
+              <Separator />
+              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
+                <span>Listings</span>
+                <span className="font-mono font-medium text-foreground">
+                  {pricingLoading ? '...' : pricing?.bricklinkUsed?.lotCount ?? '—'} lots
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Item Numbers & Barcodes */}
+        {/* Item Numbers & Barcodes - Inline compact layout */}
         <div>
-          <h3 className="text-sm font-semibold mb-3">Item Numbers & Barcodes</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Identifiers
+          </h4>
+          <div className="grid grid-cols-4 gap-4 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">US Item #:</span>
-              <span className="font-mono">{set.usItemNumber || '-'}</span>
+              <span className="font-mono">{set.usItemNumber || '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">EU Item #:</span>
-              <span className="font-mono">{set.euItemNumber || '-'}</span>
+              <span className="font-mono">{set.euItemNumber || '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">EAN:</span>
-              <span className="font-mono">{set.ean || '-'}</span>
+              <span className="font-mono">{set.ean || '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">UPC:</span>
-              <span className="font-mono">{set.upc || '-'}</span>
+              <span className="font-mono">{set.upc || '—'}</span>
             </div>
           </div>
         </div>
 
-        {/* Community Stats */}
+        {/* Community Stats - Compact */}
         <div>
-          <h3 className="text-sm font-semibold mb-3">Community Stats</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="rounded-lg bg-muted p-3 text-center">
-              <div className="text-2xl font-bold">{set.rating || '-'}</div>
-              <div className="text-xs text-muted-foreground">Rating</div>
-            </div>
-            <div className="rounded-lg bg-muted p-3 text-center">
-              <div className="text-2xl font-bold">
-                {set.ownCount?.toLocaleString() || '-'}
-              </div>
-              <div className="text-xs text-muted-foreground">Own It</div>
-            </div>
-            <div className="rounded-lg bg-muted p-3 text-center">
-              <div className="text-2xl font-bold">
-                {set.wantCount?.toLocaleString() || '-'}
-              </div>
-              <div className="text-xs text-muted-foreground">Want It</div>
-            </div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Community
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            <StatCard
+              label="Rating"
+              value={set.rating?.toFixed(1) ?? '—'}
+            />
+            <StatCard
+              label="Own It"
+              value={set.ownCount?.toLocaleString() ?? '—'}
+            />
+            <StatCard
+              label="Want It"
+              value={set.wantCount?.toLocaleString() ?? '—'}
+            />
           </div>
         </div>
 
-        {/* Availability Dates */}
+        {/* Availability Dates - Compact inline */}
         <div>
-          <h3 className="text-sm font-semibold mb-3">Availability</h3>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Availability
+          </h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Launch Date:</span>
+              <span className="text-muted-foreground">Launch:</span>
               <span>{formatDate(set.launchDate)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Exit Date:</span>
+              <span className="text-muted-foreground">Exit:</span>
               <span>{formatDate(set.exitDate)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">US Date Added:</span>
-              <span>{formatDate(set.usDateAdded)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">US Date Removed:</span>
-              <span>{formatDate(set.usDateRemoved)}</span>
             </div>
           </div>
         </div>
 
-        {/* Designers */}
-        {set.designers && set.designers.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Designers</h3>
-            <div className="flex flex-wrap gap-2">
-              {set.designers.map((designer) => (
-                <Badge key={designer} variant="secondary">
-                  {designer}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Cache Info */}
-        <div className="pt-4 border-t text-xs text-muted-foreground">
+        <div className="pt-2 border-t text-xs text-muted-foreground">
           Last updated: {formatDate(set.lastFetchedAt)}
         </div>
       </CardContent>

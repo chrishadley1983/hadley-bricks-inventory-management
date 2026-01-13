@@ -258,7 +258,12 @@ export function apiSetToInternal(apiSet: BricksetApiSet): Omit<BricksetSet, 'id'
     designers: apiSet.extendedData?.tags?.filter(t => t.startsWith('Designer:'))
       .map(t => t.replace('Designer:', '').trim()) || null,
     launchDate: apiSet.LEGOCom?.UK?.dateFirstAvailable || apiSet.LEGOCom?.US?.dateFirstAvailable || null,
-    exitDate: apiSet.LEGOCom?.UK?.dateLastAvailable || apiSet.LEGOCom?.US?.dateLastAvailable || null,
+    // dateLastAvailable can be empty string "", so we need to check explicitly
+    exitDate: (apiSet.LEGOCom?.UK?.dateLastAvailable && apiSet.LEGOCom.UK.dateLastAvailable !== '')
+      ? apiSet.LEGOCom.UK.dateLastAvailable
+      : (apiSet.LEGOCom?.US?.dateLastAvailable && apiSet.LEGOCom.US.dateLastAvailable !== '')
+        ? apiSet.LEGOCom.US.dateLastAvailable
+        : null,
     lastFetchedAt: new Date().toISOString(),
   };
 }

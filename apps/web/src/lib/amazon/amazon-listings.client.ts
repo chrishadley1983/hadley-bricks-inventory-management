@@ -395,6 +395,85 @@ export class AmazonListingsClient {
     }
   }
 
+  // ==========================================================================
+  // PUBLIC METHODS - PRICE UPDATE
+  // ==========================================================================
+
+  /**
+   * Update listing price instantly (not via feed)
+   *
+   * This uses the Listings API PATCH endpoint without VALIDATION_PREVIEW mode,
+   * which applies the price change immediately to Amazon.
+   *
+   * @param sku - Seller SKU
+   * @param newPrice - New price in GBP
+   * @param productType - Product type (e.g., 'TOY', 'BUILDING_BLOCKS')
+   * @param marketplaceId - Target marketplace (default UK)
+   * @returns Listing response with status
+   */
+  async updatePrice(
+    sku: string,
+    newPrice: number,
+    productType: string,
+    marketplaceId: string = 'A1F83G8C2ARO7P'
+  ): Promise<ListingsItemResponse> {
+    console.log(`[AmazonListingsClient] Updating price for SKU: ${sku} to £${newPrice}`);
+
+    const sellerId = this.credentials.sellerId;
+    const path = `${LISTINGS_API_PATH}/items/${sellerId}/${encodeURIComponent(sku)}`;
+    // NO mode parameter = live update (not VALIDATION_PREVIEW)
+    const queryParams = new URLSearchParams({
+      marketplaceIds: marketplaceId,
+    });
+
+    const body: ListingsPatchRequest = {
+      productType,
+      patches: [
+        {
+          op: 'replace',
+          path: '/attributes/purchasable_offer',
+          value: [
+            {
+              marketplace_id: marketplaceId,
+              currency: 'GBP',
+              our_price: [
+                {
+                  schedule: [
+                    {
+                      value_with_tax: newPrice,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    try {
+      const response = await this.request<ListingsItemResponse>(
+        `${path}?${queryParams.toString()}`,
+        'PATCH',
+        body
+      );
+
+      console.log(`[AmazonListingsClient] Price update result: ${response.status}`);
+
+      // Log validation issues if status is not successful
+      if (response.status === 'INVALID' || response.status === 'ERROR') {
+        console.error(`[AmazonListingsClient] Price update issues for SKU ${sku}:`,
+          JSON.stringify(response.issues, null, 2)
+        );
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`[AmazonListingsClient] Price update failed for SKU ${sku}:`, error);
+      throw error;
+    }
+  }
+
   /**
    * Test connection by attempting to get access token
    *

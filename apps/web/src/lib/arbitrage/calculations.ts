@@ -204,6 +204,7 @@ export function calculateAmazonFBMProfit(
   const netPayout = salePrice - totalAmazonFee - shippingCost;
   const totalProfit = netPayout - productCost;
   const roiPercent = (totalProfit / productCost) * 100;
+  const profitMarginPercent = (totalProfit / salePrice) * 100;
 
   return {
     // Input values
@@ -229,6 +230,7 @@ export function calculateAmazonFBMProfit(
     netPayout,
     totalProfit,
     roiPercent,
+    profitMarginPercent,
   };
 }
 

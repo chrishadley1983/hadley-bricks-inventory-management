@@ -40,9 +40,15 @@ export class BrickLinkArbitrageSyncService {
 
   /**
    * Sync BrickLink pricing for all mapped set numbers
+   *
+   * @param userId - User ID
+   * @param options - Sync options
+   * @param options.includeSeeded - Include seeded ASINs in sync (default: true)
+   * @param onProgress - Progress callback
    */
   async syncPricing(
     userId: string,
+    options: { includeSeeded?: boolean } = {},
     onProgress?: (processed: number, total: number) => void
   ): Promise<{ updated: number; failed: number; total: number }> {
     console.log('[BrickLinkArbitrageSyncService.syncPricing] Starting pricing sync for user:', userId);
@@ -75,7 +81,38 @@ export class BrickLinkArbitrageSyncService {
 
     // Filter to only mappings for active ASINs and get unique set numbers
     const activeMappings = (mappings ?? []).filter((m) => activeAsinSet.has(m.asin));
-    const setNumbers = [...new Set(activeMappings.map((m) => m.bricklink_set_number))];
+    const inventorySetNumbers = activeMappings.map((m) => m.bricklink_set_number);
+
+    // Get seeded set numbers if enabled
+    let seededSetNumbers: string[] = [];
+    if (options.includeSeeded !== false) {
+      const { data: seededData, error: seededError } = await this.supabase
+        .from('user_seeded_asin_preferences')
+        .select(`
+          seeded_asins!inner(
+            brickset_sets!inner(set_number)
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('include_in_sync', true)
+        .eq('user_status', 'active');
+
+      if (!seededError && seededData) {
+        seededSetNumbers = seededData
+          .map((p) => {
+            const sa = p.seeded_asins as unknown as {
+              brickset_sets: { set_number: string } | null;
+            };
+            return sa?.brickset_sets?.set_number;
+          })
+          .filter((s): s is string => s !== null && s !== undefined);
+
+        console.log(`[BrickLinkArbitrageSyncService.syncPricing] Found ${seededSetNumbers.length} seeded set numbers to sync`);
+      }
+    }
+
+    // Combine and deduplicate set numbers
+    const setNumbers = [...new Set([...inventorySetNumbers, ...seededSetNumbers])];
     const total = setNumbers.length;
     console.log(`[BrickLinkArbitrageSyncService.syncPricing] Found ${total} unique set numbers to sync`);
 

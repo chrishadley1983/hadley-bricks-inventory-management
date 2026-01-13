@@ -23,6 +23,16 @@ interface ArbitrageFiltersProps {
   opportunities: number;
   unmappedCount: number;
   onOpenExcluded: () => void;
+  /** Override show filter options (for eBay page) */
+  showFilterOptions?: { value: ArbitrageShowFilter; label: string }[];
+  /** Override sort options (for eBay page) */
+  sortOptions?: { value: ArbitrageSortField; label: string }[];
+  /** Default sort field value */
+  defaultSortField?: ArbitrageSortField;
+  /** Count of seeded items in results */
+  seededCount?: number;
+  /** Count of inventory items in results */
+  inventoryCount?: number;
 }
 
 export function ArbitrageFilters({
@@ -32,6 +42,11 @@ export function ArbitrageFilters({
   opportunities,
   unmappedCount,
   onOpenExcluded,
+  showFilterOptions = SHOW_FILTER_OPTIONS,
+  sortOptions = SORT_OPTIONS,
+  defaultSortField = 'margin',
+  seededCount,
+  inventoryCount,
 }: ArbitrageFiltersProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
 
@@ -110,7 +125,7 @@ export function ArbitrageFilters({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {SHOW_FILTER_OPTIONS.map((option) => (
+            {showFilterOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
@@ -122,12 +137,12 @@ export function ArbitrageFilters({
       {/* Sort */}
       <div className="flex items-center gap-2">
         <label className="text-sm font-medium text-muted-foreground">Sort</label>
-        <Select value={filters.sortField ?? 'margin'} onValueChange={handleSortChange}>
+        <Select value={filters.sortField ?? defaultSortField} onValueChange={handleSortChange}>
           <SelectTrigger className="w-[140px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {SORT_OPTIONS.map((option) => (
+            {sortOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
@@ -190,6 +205,22 @@ export function ArbitrageFilters({
             <span className="text-muted-foreground">Unmapped</span>
             <Badge variant="destructive" className="font-mono">
               {unmappedCount}
+            </Badge>
+          </div>
+        )}
+        {seededCount !== undefined && seededCount > 0 && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Seeded</span>
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-mono">
+              {seededCount}
+            </Badge>
+          </div>
+        )}
+        {inventoryCount !== undefined && inventoryCount > 0 && seededCount !== undefined && seededCount > 0 && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Inventory</span>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-mono">
+              {inventoryCount}
             </Badge>
           </div>
         )}

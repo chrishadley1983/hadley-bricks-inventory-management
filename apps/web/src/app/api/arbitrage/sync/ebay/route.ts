@@ -43,15 +43,19 @@ export async function POST() {
         );
 
         // Run sync with progress callback
-        const result = await ebaySyncService.syncPricing(user.id, async (processed, total) => {
-          const progress = {
-            type: 'progress',
-            processed,
-            total,
-            percent: Math.round((processed / total) * 100),
-          };
-          await writer.write(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
-        });
+        const result = await ebaySyncService.syncPricing(
+          user.id,
+          { includeSeeded: true },
+          async (processed: number, total: number) => {
+            const progress = {
+              type: 'progress',
+              processed,
+              total,
+              percent: Math.round((processed / total) * 100),
+            };
+            await writer.write(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
+          }
+        );
 
         // Send completion message
         await writer.write(

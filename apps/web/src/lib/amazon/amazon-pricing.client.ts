@@ -26,8 +26,11 @@ const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 /** Buffer time before token expiry to trigger refresh (5 minutes) */
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-/** Delay between API calls for rate limiting */
+/** Delay between API calls for rate limiting (competitive pricing v0) */
 const API_DELAY_MS = 200;
+
+/** Delay between batches for competitive pricing v0 (rate limit: ~0.1 req/sec) */
+const BATCH_DELAY_PRICING_MS = 10000; // 10 seconds between batches
 
 /** Maximum ASINs per batch request */
 const MAX_BATCH_SIZE = 20;
@@ -215,6 +218,96 @@ export interface AsinPricingData {
   currency: string;
 }
 
+/** Individual offer from getCompetitiveSummary */
+export interface AmazonOffer {
+  sellerId: string;
+  condition: string;
+  subCondition: string;
+  fulfillmentType: 'AFN' | 'MFN';
+  listingPrice: number;
+  shippingPrice: number;
+  totalPrice: number;
+  currency: string;
+  isPrime: boolean;
+}
+
+/** Extended pricing data with WasPrice and offers from getCompetitiveSummary */
+export interface AsinCompetitiveSummaryData {
+  asin: string;
+  /** WasPrice - 90-day median price customers pay */
+  wasPrice: number | null;
+  /** Competitive price from external retailers */
+  competitivePrice: number | null;
+  /** Lowest offer details (fallback when no buy box) */
+  lowestOffer: AmazonOffer | null;
+  /** All offers returned (up to 20) */
+  offers: AmazonOffer[];
+  /** Total offer count */
+  totalOfferCount: number;
+  /** Currency code */
+  currency: string;
+}
+
+// ============================================================================
+// COMPETITIVE SUMMARY TYPES (v2022-05-01 API)
+// ============================================================================
+
+/** Reference price from API */
+interface ReferencePrice {
+  name: string;
+  price?: {
+    amount: number;
+    currencyCode: string;
+  };
+}
+
+/** Offer from lowest priced offers */
+interface LowestPricedOffer {
+  condition: string;
+  subCondition: string;
+  fulfillmentType: string;
+  sellerId: string;
+  listingPrice?: {
+    amount: number;
+    currencyCode: string;
+  };
+  shippingOptions?: Array<{
+    price?: {
+      amount: number;
+      currencyCode: string;
+    };
+  }>;
+  primeDetails?: {
+    eligibility: string;
+  };
+}
+
+/** Competitive summary response item */
+interface CompetitiveSummaryResponseItem {
+  body?: {
+    asin: string;
+    marketplaceId: string;
+    referencePrices?: ReferencePrice[];
+    lowestPricedOffers?: Array<{
+      lowestPricedOffersInput?: {
+        itemCondition: string;
+        offerType: string;
+      };
+      offers?: LowestPricedOffer[];
+    }>;
+    featuredBuyingOptions?: unknown[];
+  };
+  status: {
+    statusCode: number;
+    reasonPhrase?: string;
+  };
+}
+
+/** Batch response for competitive summary */
+interface CompetitiveSummaryBatchResponse {
+  responses: CompetitiveSummaryResponseItem[];
+}
+
 // ============================================================================
 // CLIENT CLASS
 // ============================================================================
@@ -266,9 +359,10 @@ export class AmazonPricingClient {
         const batchResults = await this.getCompetitivePricing(batch, marketplaceId);
         results.push(...batchResults);
 
-        // Rate limit between batches
+        // Rate limit between batches - use longer delay to avoid 429
         if (i + MAX_BATCH_SIZE < asins.length) {
-          await this.sleep(API_DELAY_MS);
+          console.log(`[AmazonPricingClient] Waiting ${BATCH_DELAY_PRICING_MS}ms before next batch...`);
+          await this.sleep(BATCH_DELAY_PRICING_MS);
         }
       }
       return results;
@@ -368,6 +462,63 @@ export class AmazonPricingClient {
   }
 
   /**
+   * Get competitive summary for a batch of ASINs (v2022-05-01 API)
+   * Returns WasPrice, competitive price, and lowest offers
+   *
+   * @param asins - Array of ASINs (max 20 per batch)
+   * @param marketplaceId - Target marketplace (default UK)
+   * @returns Array of competitive summary data for each ASIN
+   */
+  async getCompetitiveSummary(
+    asins: string[],
+    marketplaceId: string = 'A1F83G8C2ARO7P'
+  ): Promise<AsinCompetitiveSummaryData[]> {
+    if (asins.length === 0) {
+      return [];
+    }
+
+    if (asins.length > MAX_BATCH_SIZE) {
+      // Process in batches
+      const results: AsinCompetitiveSummaryData[] = [];
+      for (let i = 0; i < asins.length; i += MAX_BATCH_SIZE) {
+        const batch = asins.slice(i, i + MAX_BATCH_SIZE);
+        const batchResults = await this.getCompetitiveSummary(batch, marketplaceId);
+        results.push(...batchResults);
+
+        // Rate limit between batches (slower rate for this API: 0.033 req/sec = ~30s per request)
+        if (i + MAX_BATCH_SIZE < asins.length) {
+          await this.sleep(35000); // 35 seconds between batches to stay under rate limit
+        }
+      }
+      return results;
+    }
+
+    console.log(`[AmazonPricingClient] Fetching competitive summary for ${asins.length} ASINs`);
+
+    // Build batch request for v2022-05-01 API
+    const requests = asins.map((asin) => ({
+      asin,
+      marketplaceId,
+      includedData: ['referencePrices', 'lowestPricedOffers'],
+      method: 'GET',
+      uri: '/products/pricing/2022-05-01/items/competitiveSummary',
+    }));
+
+    const url = '/batches/products/pricing/2022-05-01/items/competitiveSummary';
+
+    try {
+      const response = await this.request<CompetitiveSummaryBatchResponse>(url, 'POST', { requests });
+
+      return response.responses
+        .filter((r) => r.status.statusCode === 200 && r.body)
+        .map((r) => this.normalizeCompetitiveSummary(r));
+    } catch (error) {
+      console.error('[AmazonPricingClient] Error fetching competitive summary:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Test connection
    */
   async testConnection(): Promise<boolean> {
@@ -383,6 +534,57 @@ export class AmazonPricingClient {
   // ==========================================================================
   // PRIVATE METHODS - DATA TRANSFORMATION
   // ==========================================================================
+
+  /**
+   * Normalize competitive summary response into our standard format
+   */
+  private normalizeCompetitiveSummary(
+    response: CompetitiveSummaryResponseItem
+  ): AsinCompetitiveSummaryData {
+    const body = response.body!;
+
+    // Extract reference prices
+    const referencePrices = body.referencePrices ?? [];
+    const wasPriceRef = referencePrices.find((rp) => rp.name === 'WasPrice');
+    const competitivePriceRef = referencePrices.find((rp) => rp.name === 'CompetitivePrice');
+
+    // Extract offers from lowestPricedOffers
+    const lowestPricedOffersData = body.lowestPricedOffers ?? [];
+    const allOffers: AmazonOffer[] = [];
+
+    for (const lpo of lowestPricedOffersData) {
+      for (const offer of lpo.offers ?? []) {
+        const listingPrice = offer.listingPrice?.amount ?? 0;
+        const shippingPrice = offer.shippingOptions?.[0]?.price?.amount ?? 0;
+        const currency = offer.listingPrice?.currencyCode ?? 'GBP';
+
+        allOffers.push({
+          sellerId: offer.sellerId,
+          condition: offer.condition,
+          subCondition: offer.subCondition,
+          fulfillmentType: offer.fulfillmentType === 'AFN' ? 'AFN' : 'MFN',
+          listingPrice,
+          shippingPrice,
+          totalPrice: listingPrice + shippingPrice,
+          currency,
+          isPrime: offer.primeDetails?.eligibility === 'PRIME',
+        });
+      }
+    }
+
+    // Sort by total price to find lowest
+    allOffers.sort((a, b) => a.totalPrice - b.totalPrice);
+
+    return {
+      asin: body.asin,
+      wasPrice: wasPriceRef?.price?.amount ?? null,
+      competitivePrice: competitivePriceRef?.price?.amount ?? null,
+      lowestOffer: allOffers.length > 0 ? allOffers[0] : null,
+      offers: allOffers,
+      totalOfferCount: allOffers.length,
+      currency: wasPriceRef?.price?.currencyCode ?? allOffers[0]?.currency ?? 'GBP',
+    };
+  }
 
   /**
    * Normalize competitive pricing response into our standard format

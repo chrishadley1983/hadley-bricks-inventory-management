@@ -17,10 +17,24 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all data from the view
+    // Get total tracked ASINs count
+    const { count: totalTrackedAsins } = await supabase
+      .from('tracked_asins')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    // Get excluded ASINs count
+    const { count: excludedAsins } = await supabase
+      .from('tracked_asins')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'excluded');
+
+    // Get all data from the view (these are active ASINs in the view)
     const { data, error } = await supabase
       .from('arbitrage_current_view')
-      .select('asin, bricklink_set_number, ebay_min_price, ebay_margin_percent, your_price, buy_box_price')
+      .select('asin, bricklink_set_number, ebay_min_price, ebay_margin_percent, margin_percent, your_price, buy_box_price, your_qty')
       .eq('user_id', user.id);
 
     if (error) {
@@ -29,27 +43,57 @@ export async function GET() {
 
     const items = data ?? [];
 
-    const stats = {
-      total: items.length,
-      withMapping: items.filter(i => i.bricklink_set_number).length,
+    // Calculate breakdown
+    const breakdown = {
+      // Source totals
+      totalTrackedAsins: totalTrackedAsins ?? 0,
+      excludedAsins: excludedAsins ?? 0,
+      activeAsins: (totalTrackedAsins ?? 0) - (excludedAsins ?? 0),
+
+      // View data (only active ASINs appear here)
+      inView: items.length,
+
+      // Mapping status
+      mapped: items.filter(i => i.bricklink_set_number).length,
+      unmapped: items.filter(i => !i.bricklink_set_number).length,
+
+      // eBay data status (only for mapped items)
       withEbayPrice: items.filter(i => i.ebay_min_price !== null).length,
-      withEbayMargin: items.filter(i => i.ebay_margin_percent !== null).length,
-      ebayMarginGte0: items.filter(i => i.ebay_margin_percent !== null && i.ebay_margin_percent >= 0).length,
+      noEbayPrice: items.filter(i => i.bricklink_set_number && i.ebay_min_price === null).length,
+
+      // eBay margin breakdown (only where margin can be calculated)
       ebayMarginGte30: items.filter(i => i.ebay_margin_percent !== null && i.ebay_margin_percent >= 30).length,
+      ebayMarginGte0: items.filter(i => i.ebay_margin_percent !== null && i.ebay_margin_percent >= 0).length,
+      ebayMarginLt0: items.filter(i => i.ebay_margin_percent !== null && i.ebay_margin_percent < 0).length,
+      ebayMarginNull: items.filter(i => i.ebay_margin_percent === null).length,
+
+      // BrickLink margin breakdown
+      blMarginGte30: items.filter(i => i.margin_percent !== null && i.margin_percent >= 30).length,
+      blMarginGte0: items.filter(i => i.margin_percent !== null && i.margin_percent >= 0).length,
+      blMarginLt0: items.filter(i => i.margin_percent !== null && i.margin_percent < 0).length,
+      blMarginNull: items.filter(i => i.margin_percent === null).length,
+
+      // Amazon pricing status
       withYourPrice: items.filter(i => i.your_price !== null).length,
       withBuyBoxPrice: items.filter(i => i.buy_box_price !== null).length,
-      withAnyAmazonPrice: items.filter(i => i.your_price !== null || i.buy_box_price !== null).length,
+      noAmazonPrice: items.filter(i => i.your_price === null && i.buy_box_price === null).length,
+
+      // Stock status
+      inStock: items.filter(i => (i.your_qty ?? 0) > 0).length,
+      zeroQty: items.filter(i => (i.your_qty ?? 0) === 0).length,
     };
 
-    // Sample items without eBay data but with mapping
-    const missingEbay = items
-      .filter(i => i.bricklink_set_number && !i.ebay_min_price)
-      .slice(0, 10)
-      .map(i => ({ asin: i.asin, setNumber: i.bricklink_set_number }));
+    // Why eBay margin is null breakdown
+    const ebayMarginNullReasons = {
+      noMapping: items.filter(i => !i.bricklink_set_number).length,
+      mappedButNoEbayPrice: items.filter(i => i.bricklink_set_number && i.ebay_min_price === null).length,
+      hasEbayPriceButNoAmazonPrice: items.filter(i => i.ebay_min_price !== null && i.your_price === null && i.buy_box_price === null).length,
+    };
 
     return NextResponse.json({
-      stats,
-      missingEbaySamples: missingEbay,
+      breakdown,
+      ebayMarginNullReasons,
+      summary: `${breakdown.totalTrackedAsins} tracked → ${breakdown.activeAsins} active → ${breakdown.mapped} mapped → ${breakdown.withEbayPrice} with eBay price → ${breakdown.ebayMarginGte30} opportunities (≥30%)`,
     });
   } catch (error) {
     console.error('[GET /api/test/arbitrage-stats] Error:', error);

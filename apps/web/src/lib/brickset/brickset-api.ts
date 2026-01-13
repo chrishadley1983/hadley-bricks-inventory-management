@@ -47,7 +47,8 @@ export class BricksetApiClient {
     formData.append('apiKey', this.apiKey);
 
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== '') {
+      // userHash must always be included (even if empty) for getSets
+      if (key === 'userHash' || (value !== undefined && value !== null && value !== '')) {
         formData.append(key, value);
       }
     }
@@ -111,6 +112,8 @@ export class BricksetApiClient {
     if (params.orderBy) searchParams.orderBy = params.orderBy;
 
     const requestParams: Record<string, string> = {
+      // userHash is required by the API (even if empty)
+      userHash: '',
       params: JSON.stringify(searchParams),
     };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ExternalLink, Ban, RotateCcw, Star, X, Undo2 } from 'lucide-react';
+import { ExternalLink, Ban, RotateCcw, Star, X, Undo2, ShoppingCart } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ import {
 } from '@/lib/arbitrage/calculations';
 import { buildEbaySearchUrl, buildEbayItemUrl } from '@/lib/arbitrage/ebay-url';
 import { useExcludedEbayListings, useExcludeEbayListing, useRestoreEbayListing } from '@/hooks/use-arbitrage';
+import { AmazonOffersModal } from './AmazonOffersModal';
 
 interface EbayDetailModalProps {
   item: ArbitrageItem | null;
@@ -40,6 +41,9 @@ export function EbayDetailModal({
   onClose,
   onExclude,
 }: EbayDetailModalProps) {
+  // Amazon offers modal state
+  const [showAmazonOffers, setShowAmazonOffers] = useState(false);
+
   // Exclusion hooks
   const { data: excludedListings = [] } = useExcludedEbayListings(item?.bricklinkSetNumber ?? undefined);
   const excludeListingMutation = useExcludeEbayListing();
@@ -99,8 +103,9 @@ export function EbayDetailModal({
   // Parse the editable buy price
   const buyPrice = parseFloat(buyPriceInput) || 0;
 
-  // Use your_price if available, otherwise buy_box_price
-  const sellPrice = item.yourPrice ?? item.buyBoxPrice ?? 0;
+  // Use your_price if available, otherwise effective Amazon price (buy box or lowest offer)
+  const effectiveAmazonPrice = item.effectiveAmazonPrice ?? item.buyBoxPrice ?? item.lowestOfferPrice;
+  const sellPrice = item.yourPrice ?? effectiveAmazonPrice ?? 0;
 
   // Calculate Amazon FBM profit breakdown with current buy price
   const profitBreakdown = calculateAmazonFBMProfit(sellPrice, buyPrice);
@@ -166,9 +171,26 @@ export function EbayDetailModal({
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-lg font-bold leading-tight">
-                {item.name ?? 'Unknown Product'}
-              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-lg font-bold leading-tight">
+                  {item.name ?? 'Unknown Product'}
+                </DialogTitle>
+                {item.itemType === 'seeded' && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs px-2',
+                      item.seededMatchConfidence && item.seededMatchConfidence >= 95
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : item.seededMatchConfidence && item.seededMatchConfidence >= 85
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    )}
+                  >
+                    Seeded
+                  </Badge>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge variant="outline" className="font-mono text-xs">
                   Set: {item.bricklinkSetNumber ?? '—'}
@@ -179,6 +201,21 @@ export function EbayDetailModal({
                 {item.sku && (
                   <Badge variant="outline" className="font-mono text-xs">
                     SKU: {item.sku}
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.bricksetRrp != null && (
+                  <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                    RRP: {formatCurrencyGBP(item.bricksetRrp)}
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.bricksetTheme && (
+                  <Badge variant="outline" className="text-xs">
+                    {item.bricksetTheme} ({item.bricksetYear})
+                  </Badge>
+                )}
+                {item.itemType === 'seeded' && item.seededMatchMethod && (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    Match: {item.seededMatchMethod} ({item.seededMatchConfidence ?? 0}%)
                   </Badge>
                 )}
               </div>
@@ -196,18 +233,38 @@ export function EbayDetailModal({
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                   Amazon Data
                 </h4>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <StatCard
                     label="Your Price"
                     value={formatCurrencyGBP(item.yourPrice)}
                     subtext={`Qty: ${item.yourQty ?? 0}`}
                   />
                   <StatCard
-                    label="Buy Box"
-                    value={formatCurrencyGBP(item.buyBoxPrice)}
-                    subtext={item.buyBoxIsYours ? 'You' : 'Other seller'}
+                    label={item.buyBoxPrice !== null ? 'Buy Box' : 'Lowest Offer'}
+                    value={formatCurrencyGBP(effectiveAmazonPrice)}
+                    subtext={
+                      item.buyBoxPrice !== null
+                        ? item.buyBoxIsYours ? 'You' : 'Other seller'
+                        : 'No Buy Box'
+                    }
                     valueClassName={
-                      item.buyBoxIsYours ? 'text-green-600' : 'text-amber-600'
+                      item.buyBoxIsYours
+                        ? 'text-green-600'
+                        : item.buyBoxPrice !== null
+                        ? 'text-amber-600'
+                        : 'text-muted-foreground'
+                    }
+                  />
+                  <StatCard
+                    label="Was Price"
+                    value={formatCurrencyGBP(item.wasPrice90d)}
+                    subtext="90-day median"
+                    valueClassName={
+                      item.wasPrice90d && effectiveAmazonPrice && item.wasPrice90d < effectiveAmazonPrice
+                        ? 'text-red-600'
+                        : item.wasPrice90d && effectiveAmazonPrice && item.wasPrice90d > effectiveAmazonPrice
+                        ? 'text-green-600'
+                        : undefined
                     }
                   />
                   <StatCard
@@ -215,11 +272,19 @@ export function EbayDetailModal({
                     value={formatSalesRank(item.salesRank)}
                     subtext={item.salesRankCategory ?? '—'}
                   />
-                  <StatCard
-                    label="Offers"
-                    value={String(item.offerCount ?? '—')}
-                    subtext="total sellers"
-                  />
+                  <button
+                    onClick={() => setShowAmazonOffers(true)}
+                    className="rounded-lg bg-muted/50 p-2 text-center hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Offers
+                    </div>
+                    <div className="font-mono text-base font-bold mt-0.5 flex items-center justify-center gap-1">
+                      <ShoppingCart className="h-4 w-4" />
+                      {item.totalOfferCount ?? item.offerCount ?? '—'}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">click to view</div>
+                  </button>
                 </div>
               </div>
 
@@ -603,6 +668,13 @@ export function EbayDetailModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Amazon Offers Modal */}
+      <AmazonOffersModal
+        item={item}
+        isOpen={showAmazonOffers}
+        onClose={() => setShowAmazonOffers(false)}
+      />
     </Dialog>
   );
 }
