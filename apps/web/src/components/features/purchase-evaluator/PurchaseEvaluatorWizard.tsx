@@ -20,7 +20,8 @@ import {
   calculateMaxPurchasePriceAmazon,
   calculateMaxPurchasePriceEbay,
 } from '@/lib/purchase-evaluator/reverse-calculations';
-import type { PhotoAnalysisItem, PrimaryAnalysisModel } from '@/lib/purchase-evaluator/photo-types';
+import type { PhotoAnalysisItem, PrimaryAnalysisModel, AuctionSettings } from '@/lib/purchase-evaluator/photo-types';
+import { DEFAULT_AUCTION_SETTINGS } from '@/lib/purchase-evaluator/photo-types';
 import { InputStep } from './steps/InputStep';
 import { ParseStep } from './steps/ParseStep';
 import { LookupStep } from './steps/LookupStep';
@@ -74,6 +75,9 @@ export function PurchaseEvaluatorWizard() {
   const [useImageChunking, setUseImageChunking] = React.useState<boolean>(true);
   const [listingDescription, setListingDescription] = React.useState<string>('');
   const [photoAnalysisItems, setPhotoAnalysisItems] = React.useState<PhotoAnalysisItem[]>([]);
+
+  // Auction mode state
+  const [auctionSettings, setAuctionSettings] = React.useState<AuctionSettings>(DEFAULT_AUCTION_SETTINGS);
 
   // Fetch evaluation when we have an ID
   const { data: evaluation, refetch: refetchEvaluation } = useEvaluation(evaluationId);
@@ -368,6 +372,9 @@ export function PurchaseEvaluatorWizard() {
     setUseBrickognize(true);
     setListingDescription('');
     setPhotoAnalysisItems([]);
+
+    // Reset auction mode state
+    setAuctionSettings(DEFAULT_AUCTION_SETTINGS);
   };
 
   return (
@@ -420,6 +427,8 @@ export function PurchaseEvaluatorWizard() {
           onUseBrickognizeChange={setUseBrickognize}
           useImageChunking={useImageChunking}
           onUseImageChunkingChange={setUseImageChunking}
+          auctionSettings={auctionSettings}
+          onAuctionSettingsChange={setAuctionSettings}
           onAnalyze={handleAnalyzePhotos}
           isAnalyzing={photoAnalysis.isAnalyzing}
           progressMessage={photoAnalysis.progressMessage}
@@ -471,6 +480,9 @@ export function PurchaseEvaluatorWizard() {
           evaluation={evaluation}
           evaluationMode={evaluationMode}
           targetMarginPercent={targetMarginPercent}
+          onTargetMarginChange={setTargetMarginPercent}
+          auctionSettings={auctionSettings}
+          onAuctionSettingsChange={setAuctionSettings}
           onSave={handleSave}
           onBack={() => setStep(evaluationMode === 'max_bid' ? 'photo_analysis' : 'parse')}
           onUpdateItems={handleUpdateItems}
@@ -484,6 +496,7 @@ export function PurchaseEvaluatorWizard() {
           evaluation={evaluation}
           evaluationMode={evaluationMode}
           targetMarginPercent={targetMarginPercent}
+          auctionSettings={auctionSettings}
           onNewEvaluation={handleReset}
           onViewAll={() => router.push('/purchase-evaluator')}
           onUpdateActualCost={async (actualCost: number) => {

@@ -348,6 +348,46 @@ export interface AmazonFeeBreakdown {
 }
 
 // ============================================
+// Auction Mode Types
+// ============================================
+
+/**
+ * Settings for auction mode calculations
+ * When enabled, calculates max bid accounting for auction commission and shipping
+ */
+export interface AuctionSettings {
+  /** Whether auction mode is enabled */
+  enabled: boolean;
+  /** Commission rate as percentage (e.g., 32.94 for 32.94%) */
+  commissionPercent: number;
+  /** Shipping cost from auction house to buyer */
+  shippingCost: number;
+}
+
+/**
+ * Breakdown of auction-related costs
+ */
+export interface AuctionBreakdown {
+  /** Maximum bid to enter in auction */
+  maxBid: number;
+  /** Commission amount (bid * commissionPercent / 100) */
+  commission: number;
+  /** Shipping cost */
+  shippingCost: number;
+  /** Total paid (maxBid + commission + shipping) */
+  totalPaid: number;
+}
+
+/**
+ * Default auction settings
+ */
+export const DEFAULT_AUCTION_SETTINGS: AuctionSettings = {
+  enabled: false,
+  commissionPercent: 32.94,
+  shippingCost: 0,
+};
+
+// ============================================
 // Utility Functions
 // ============================================
 

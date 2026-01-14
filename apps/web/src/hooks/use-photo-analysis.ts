@@ -11,6 +11,7 @@ import type {
   PhotoAnalysisResult,
   PhotoAnalysisItem,
   PrimaryAnalysisModel,
+  AIModel,
 } from '@/lib/purchase-evaluator/photo-types';
 import type { ItemRegion, RegionDetectionResult } from '@/lib/purchase-evaluator/image-chunking.service';
 
@@ -67,6 +68,27 @@ async function analyzePhotosApi(
 
   if (!response.ok) {
     const error = await response.json();
+
+    // Handle validation errors with more detail
+    if (error.details?.fieldErrors) {
+      const fieldErrors = error.details.fieldErrors;
+      const errorMessages: string[] = [];
+
+      // Check for image-specific errors
+      if (fieldErrors.images) {
+        errorMessages.push(...fieldErrors.images);
+      }
+
+      // Check for nested image errors (e.g., mediaType issues)
+      if (error.details?.formErrors?.length > 0) {
+        errorMessages.push(...error.details.formErrors);
+      }
+
+      if (errorMessages.length > 0) {
+        throw new Error(`Image validation failed: ${errorMessages.join(', ')}`);
+      }
+    }
+
     throw new Error(error.error || 'Photo analysis failed');
   }
 
@@ -97,15 +119,34 @@ function fileToBase64(file: File): Promise<string> {
 
 /**
  * Get media type from file
+ * Normalizes various image types to the supported formats
  */
 function getMediaType(
   file: File
 ): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
   const type = file.type.toLowerCase();
+
+  // Direct matches for supported types
   if (type === 'image/png') return 'image/png';
   if (type === 'image/webp') return 'image/webp';
   if (type === 'image/gif') return 'image/gif';
-  return 'image/jpeg'; // Default to JPEG
+  if (type === 'image/jpeg' || type === 'image/jpg') return 'image/jpeg';
+
+  // Handle other image types by inferring from filename extension
+  const ext = file.name.toLowerCase().split('.').pop();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+
+  // For BMP, TIFF, and other formats, default to PNG (better for screenshots)
+  // since they'll be converted via canvas during base64 encoding
+  if (type === 'image/bmp' || type === 'image/tiff' || type === 'image/x-icon') {
+    return 'image/png';
+  }
+
+  // Default to JPEG for unknown types
+  return 'image/jpeg';
 }
 
 /**
@@ -344,15 +385,15 @@ export function usePhotoAnalysis() {
     const newImages: UploadedImage[] = [];
 
     for (const file of Array.from(files)) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        console.warn(`Skipping non-image file: ${file.name}`);
+      // Validate file type - allow empty type for clipboard pastes
+      if (file.type && !file.type.startsWith('image/')) {
+        console.warn(`[addImages] Skipping non-image file: ${file.name} (type: ${file.type})`);
         continue;
       }
 
       // Check if we already have 10 images
       if (images.length + newImages.length >= 10) {
-        console.warn('Maximum 10 images allowed');
+        console.warn('[addImages] Maximum 10 images allowed');
         break;
       }
 
@@ -360,6 +401,8 @@ export function usePhotoAnalysis() {
         const base64 = await fileToBase64(file);
         const mediaType = getMediaType(file);
         const preview = URL.createObjectURL(file);
+
+        console.log(`[addImages] Processed image: ${file.name}, type: ${file.type} -> ${mediaType}, base64 length: ${base64.length}`);
 
         newImages.push({
           id: generateImageId(),
@@ -369,7 +412,7 @@ export function usePhotoAnalysis() {
           mediaType,
         });
       } catch (error) {
-        console.error(`Failed to process image ${file.name}:`, error);
+        console.error(`[addImages] Failed to process image ${file.name}:`, error);
       }
     }
 
@@ -535,29 +578,68 @@ export function usePhotoAnalysis() {
       }));
     }
 
-    setProgressMessage(options.primaryModel === 'gemini' ? 'Analyzing with Gemini Pro...' : 'Analyzing with Claude...');
+    // Batch images if more than 10 (API limit)
+    const MAX_IMAGES_PER_REQUEST = 10;
+    const batches: Array<typeof imagesToSend> = [];
 
-    const request: AnalyzePhotosRequest = {
-      images: imagesToSend,
-      listingDescription: options.listingDescription,
-      options: {
-        primaryModel: options.primaryModel ?? 'gemini', // Default to Gemini Pro for better OCR
-        useGeminiVerification: options.useGeminiVerification ?? useGeminiVerification,
-        useBrickognize: options.useBrickognize ?? useBrickognize,
-        // Disable server-side chunking since we did it client-side
-        useImageChunking: false,
-      },
-    };
+    for (let i = 0; i < imagesToSend.length; i += MAX_IMAGES_PER_REQUEST) {
+      batches.push(imagesToSend.slice(i, i + MAX_IMAGES_PER_REQUEST));
+    }
+
+    console.log(`[analyzePhotos] Processing ${imagesToSend.length} images in ${batches.length} batch(es)`);
 
     try {
-      const result = await analysisMutation.mutateAsync(request);
+      // Process each batch and merge results
+      const allItems: PhotoAnalysisResult['items'] = [];
+      let totalProcessingTime = 0;
+
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        const batchLabel = batches.length > 1 ? ` (batch ${batchIndex + 1}/${batches.length})` : '';
+
+        setProgressMessage(
+          options.primaryModel === 'gemini'
+            ? `Analyzing with Gemini Pro${batchLabel}...`
+            : `Analyzing with Claude${batchLabel}...`
+        );
+
+        const request: AnalyzePhotosRequest = {
+          images: batch,
+          listingDescription: options.listingDescription,
+          options: {
+            primaryModel: options.primaryModel ?? 'gemini',
+            useGeminiVerification: options.useGeminiVerification ?? useGeminiVerification,
+            useBrickognize: options.useBrickognize ?? useBrickognize,
+            useImageChunking: false,
+          },
+        };
+
+        const batchResult = await analysisMutation.mutateAsync(request);
+        allItems.push(...batchResult.items);
+        totalProcessingTime += batchResult.processingTimeMs;
+      }
+
+      // Merge results from all batches
+      const mergedResult: PhotoAnalysisResult = {
+        items: allItems,
+        processingTimeMs: totalProcessingTime,
+        modelsUsed: [(options.primaryModel === 'claude' ? 'opus' : options.primaryModel ?? 'gemini') as AIModel],
+        overallNotes: '',
+        analysisConfidence: allItems.length > 0
+          ? allItems.reduce((sum, item) => sum + (item.confidenceScore || 0), 0) / allItems.length
+          : 0,
+        warnings: [],
+        sourceDescription: listingDescription || null,
+      };
+
       setProgressMessage(null);
-      return result;
+      setAnalysisResult(mergedResult);
+      return mergedResult;
     } catch (error) {
       setProgressMessage(null);
       throw error;
     }
-  }, [images, useGeminiVerification, useBrickognize, analysisMutation]);
+  }, [images, useGeminiVerification, useBrickognize, analysisMutation, setAnalysisResult]);
 
   return {
     // Image state

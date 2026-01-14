@@ -8,7 +8,7 @@
  * Where: TargetProfit = SellPrice × TargetMargin
  */
 
-import type { EbayFeeBreakdown, AmazonFeeBreakdown } from './photo-types';
+import type { EbayFeeBreakdown, AmazonFeeBreakdown, AuctionBreakdown } from './photo-types';
 
 // ============================================
 // eBay Fee Constants (UK 2026)
@@ -367,4 +367,219 @@ export function getMaxPriceColor(maxPrice: number, sellPrice: number): string {
   if (ratio >= 0.3) return 'text-yellow-600'; // Can pay up to 30%
   if (ratio >= 0.2) return 'text-orange-600'; // Can pay up to 20%
   return 'text-red-600'; // Less than 20% margin for cost
+}
+
+// ============================================
+// Auction Mode Calculations
+// ============================================
+
+/**
+ * Calculate platform fees for an item (fees + shipping) without the target profit deduction
+ *
+ * This is used to calculate the total fees for a lot of items when determining
+ * the auction max bid from total revenue.
+ *
+ * @param sellPrice - Expected selling price
+ * @param platform - Target platform ('amazon' or 'ebay')
+ * @returns Total fees including platform fees and shipping
+ */
+export function calculatePlatformFeesOnly(
+  sellPrice: number,
+  platform: 'amazon' | 'ebay'
+): { fees: number; shipping: number; total: number } {
+  if (sellPrice <= 0) {
+    return { fees: 0, shipping: 0, total: 0 };
+  }
+
+  if (platform === 'ebay') {
+    const finalValueFee = sellPrice * EBAY_FINAL_VALUE_FEE_RATE;
+    const regulatoryFee = sellPrice * EBAY_REGULATORY_FEE_RATE;
+    const paymentProcessingFee = sellPrice * EBAY_PAYMENT_PROCESSING_RATE;
+    const perOrderFee = EBAY_PER_ORDER_FEE;
+    const fees = finalValueFee + regulatoryFee + paymentProcessingFee + perOrderFee;
+    const shipping = EBAY_ESTIMATED_SHIPPING;
+    return {
+      fees: Math.round(fees * 100) / 100,
+      shipping,
+      total: Math.round((fees + shipping) * 100) / 100,
+    };
+  } else {
+    // Amazon
+    const referralFee = sellPrice * AMAZON_REFERRAL_FEE_RATE;
+    const digitalServicesTax = referralFee * AMAZON_DST_RATE;
+    const vatOnFees = (referralFee + digitalServicesTax) * AMAZON_VAT_RATE;
+    const fees = referralFee + digitalServicesTax + vatOnFees;
+    const shipping =
+      sellPrice >= AMAZON_SHIPPING_THRESHOLD
+        ? AMAZON_SHIPPING_ABOVE_THRESHOLD
+        : AMAZON_SHIPPING_BELOW_THRESHOLD;
+    return {
+      fees: Math.round(fees * 100) / 100,
+      shipping,
+      total: Math.round((fees + shipping) * 100) / 100,
+    };
+  }
+}
+
+/**
+ * Calculate auction max bid directly from total revenue and platform fees
+ *
+ * This is the CORRECT way to calculate max bid for a lot:
+ * 1. Calculate target profit: Revenue × Target Margin %
+ * 2. Calculate max total paid at auction: Revenue - Platform Fees - Target Profit
+ * 3. Convert max total paid to max bid: (Max Total - Auction Shipping) / (1 + Commission Rate)
+ *
+ * This avoids the double-accounting bug of calculating per-item max purchase prices
+ * (which already deduct target profit) and then summing them.
+ *
+ * @param totalRevenue - Total expected revenue from selling all items
+ * @param totalPlatformFees - Total platform fees (selling fees + shipping) for all items
+ * @param targetMarginPercent - Target profit margin as percentage (e.g., 10 for 10%)
+ * @param commissionPercent - Auction commission as percentage (e.g., 32.94 for 32.94%)
+ * @param auctionShippingCost - Shipping cost from auction house
+ * @returns Breakdown with max bid, commission, and expected profit
+ */
+export function calculateAuctionMaxBidFromRevenue(
+  totalRevenue: number,
+  totalPlatformFees: number,
+  targetMarginPercent: number,
+  commissionPercent: number,
+  auctionShippingCost: number
+): AuctionBreakdown & { targetProfit: number; platformFees: number } {
+  if (totalRevenue <= 0) {
+    return {
+      maxBid: 0,
+      commission: 0,
+      shippingCost: 0,
+      totalPaid: 0,
+      targetProfit: 0,
+      platformFees: 0,
+    };
+  }
+
+  const targetMargin = targetMarginPercent / 100;
+  const commissionRate = commissionPercent / 100;
+
+  // Step 1: Calculate target profit from revenue
+  const targetProfit = totalRevenue * targetMargin;
+
+  // Step 2: Calculate max total you can pay at auction
+  // MaxTotalPaid = Revenue - Platform Fees - Target Profit
+  const maxTotalPaid = Math.max(0, totalRevenue - totalPlatformFees - targetProfit);
+
+  // Step 3: Convert to max bid
+  // MaxBid = (MaxTotalPaid - AuctionShipping) / (1 + CommissionRate)
+  const availableForBidAndCommission = Math.max(0, maxTotalPaid - auctionShippingCost);
+  const maxBid = availableForBidAndCommission / (1 + commissionRate);
+  const commission = maxBid * commissionRate;
+  const totalPaid = maxBid + commission + auctionShippingCost;
+
+  return {
+    maxBid: Math.round(maxBid * 100) / 100,
+    commission: Math.round(commission * 100) / 100,
+    shippingCost: Math.round(auctionShippingCost * 100) / 100,
+    totalPaid: Math.round(totalPaid * 100) / 100,
+    targetProfit: Math.round(targetProfit * 100) / 100,
+    platformFees: Math.round(totalPlatformFees * 100) / 100,
+  };
+}
+
+/**
+ * Calculate max bid for auction, accounting for commission and shipping
+ *
+ * The max purchase price is what you can afford to pay total (including all auction costs).
+ * We work backwards to find the max bid:
+ *
+ * Total Paid = Max Bid + (Max Bid × Commission%) + Shipping
+ * Total Paid = Max Bid × (1 + Commission%) + Shipping
+ * Max Bid = (Total Paid - Shipping) / (1 + Commission%)
+ *
+ * Where Total Paid = Max Purchase Price (what we calculated from platform fees/margin)
+ *
+ * @param maxPurchasePrice - Maximum total amount you can pay (from platform calculation)
+ * @param commissionPercent - Auction commission as percentage (e.g., 32.94 for 32.94%)
+ * @param shippingCost - Shipping cost from auction house
+ * @returns Breakdown with max bid, commission, and total paid
+ */
+export function calculateMaxBidForAuction(
+  maxPurchasePrice: number,
+  commissionPercent: number,
+  shippingCost: number
+): AuctionBreakdown {
+  if (maxPurchasePrice <= 0) {
+    return {
+      maxBid: 0,
+      commission: 0,
+      shippingCost: 0,
+      totalPaid: 0,
+    };
+  }
+
+  const commissionRate = commissionPercent / 100;
+
+  // Calculate how much is available for bid + commission after shipping
+  const availableForBidAndCommission = Math.max(0, maxPurchasePrice - shippingCost);
+
+  // Max Bid × (1 + Commission Rate) = Available
+  // Max Bid = Available / (1 + Commission Rate)
+  const maxBid = availableForBidAndCommission / (1 + commissionRate);
+  const commission = maxBid * commissionRate;
+  const totalPaid = maxBid + commission + shippingCost;
+
+  return {
+    maxBid: Math.round(maxBid * 100) / 100,
+    commission: Math.round(commission * 100) / 100,
+    shippingCost: Math.round(shippingCost * 100) / 100,
+    totalPaid: Math.round(totalPaid * 100) / 100,
+  };
+}
+
+/**
+ * Calculate total paid from a given bid amount
+ *
+ * Use this when you want to see what a specific bid will cost you total.
+ *
+ * @param bidAmount - The bid amount you want to enter
+ * @param commissionPercent - Auction commission as percentage
+ * @param shippingCost - Shipping cost from auction house
+ * @returns Commission and total paid
+ */
+export function calculateTotalPaidFromBid(
+  bidAmount: number,
+  commissionPercent: number,
+  shippingCost: number
+): { commission: number; totalPaid: number } {
+  if (bidAmount <= 0) {
+    return {
+      commission: 0,
+      totalPaid: shippingCost,
+    };
+  }
+
+  const commission = bidAmount * (commissionPercent / 100);
+  const totalPaid = bidAmount + commission + shippingCost;
+
+  return {
+    commission: Math.round(commission * 100) / 100,
+    totalPaid: Math.round(totalPaid * 100) / 100,
+  };
+}
+
+/**
+ * Calculate auction breakdown for a lot total
+ *
+ * For a lot with multiple items, the shipping is for the whole lot,
+ * but each item contributes proportionally to the max bid.
+ *
+ * @param totalMaxPurchasePrice - Total max purchase price for all items
+ * @param commissionPercent - Auction commission as percentage
+ * @param shippingCost - Shipping cost for entire lot
+ * @returns Breakdown for the entire lot
+ */
+export function calculateLotAuctionBreakdown(
+  totalMaxPurchasePrice: number,
+  commissionPercent: number,
+  shippingCost: number
+): AuctionBreakdown {
+  return calculateMaxBidForAuction(totalMaxPurchasePrice, commissionPercent, shippingCost);
 }

@@ -24,6 +24,7 @@ import {
   Scale,
   Sparkles,
   Calculator,
+  PenLine,
 } from 'lucide-react';
 
 interface NavItem {
@@ -41,6 +42,7 @@ const mainNavItems: NavItem[] = [
   { href: '/transactions', label: 'Transactions', icon: Landmark },
   { href: '/set-lookup', label: 'Set Lookup', icon: Search },
   { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
+  { href: '/listing-assistant', label: 'Listing Assistant', icon: PenLine },
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 

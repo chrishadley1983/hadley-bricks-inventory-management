@@ -371,6 +371,7 @@ export default function EvaluationDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Set Number</TableHead>
+                  <TableHead>Name</TableHead>
                   <TableHead>Condition</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
                   <TableHead className="text-right">Cost</TableHead>
@@ -429,6 +430,9 @@ export default function EvaluationDetailPage() {
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.setNumber}</TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={item.setName || undefined}>
+                        {item.setName || '-'}
+                      </TableCell>
                       <TableCell>{item.condition}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">

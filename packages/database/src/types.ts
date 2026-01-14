@@ -2767,6 +2767,83 @@ export type Database = {
           },
         ]
       }
+      generated_listings: {
+        Row: {
+          condition: string
+          created_at: string | null
+          description: string
+          ebay_sold_data: Json | null
+          id: string
+          inventory_item_id: string | null
+          item_name: string
+          price_range: string | null
+          source_urls: string[] | null
+          status: string | null
+          template_id: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          condition: string
+          created_at?: string | null
+          description: string
+          ebay_sold_data?: Json | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name: string
+          price_range?: string | null
+          source_urls?: string[] | null
+          status?: string | null
+          template_id?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          condition?: string
+          created_at?: string | null
+          description?: string
+          ebay_sold_data?: Json | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name?: string
+          price_range?: string | null
+          source_urls?: string[] | null
+          status?: string | null
+          template_id?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_listings_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_listings_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_listings_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "listing_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           amazon_asin: string | null
@@ -2921,6 +2998,82 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_assistant_settings: {
+        Row: {
+          created_at: string | null
+          default_condition: string | null
+          default_tone: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          default_condition?: string | null
+          default_tone?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          default_condition?: string | null
+          default_tone?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_assistant_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_templates: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          type?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_templates_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

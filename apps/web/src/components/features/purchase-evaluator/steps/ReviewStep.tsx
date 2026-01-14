@@ -11,10 +11,13 @@ import {
   RefreshCw,
   AlertCircle,
   ChevronDown,
+  Gavel,
+  Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -42,12 +45,22 @@ import {
 import type { PurchaseEvaluation, EvaluationItem, TargetPlatform } from '@/lib/purchase-evaluator';
 import { formatCurrencyGBP } from '@/lib/arbitrage/calculations';
 import type { EvaluationMode } from '../PurchaseEvaluatorWizard';
-import { calculateMaxPurchasePriceEbay, calculateMaxPurchasePriceAmazon } from '@/lib/purchase-evaluator/reverse-calculations';
+import type { AuctionSettings } from '@/lib/purchase-evaluator/photo-types';
+import { DEFAULT_AUCTION_SETTINGS } from '@/lib/purchase-evaluator/photo-types';
+import {
+  calculateMaxPurchasePriceEbay,
+  calculateMaxPurchasePriceAmazon,
+  calculatePlatformFeesOnly,
+  calculateAuctionMaxBidFromRevenue,
+} from '@/lib/purchase-evaluator/reverse-calculations';
 
 interface ReviewStepProps {
   evaluation: PurchaseEvaluation;
   evaluationMode?: EvaluationMode;
   targetMarginPercent?: number;
+  onTargetMarginChange?: (margin: number) => void;
+  auctionSettings?: AuctionSettings;
+  onAuctionSettingsChange?: (settings: AuctionSettings) => void;
   onSave: () => void;
   onBack: () => void;
   onUpdateItems?: (updates: Array<{
@@ -97,6 +110,9 @@ export function ReviewStep({
   evaluation,
   evaluationMode = 'cost_known',
   targetMarginPercent = 30,
+  onTargetMarginChange,
+  auctionSettings = DEFAULT_AUCTION_SETTINGS,
+  onAuctionSettingsChange,
   onSave,
   onBack,
   onUpdateItems,
@@ -131,7 +147,26 @@ export function ReviewStep({
   // Calculate total expected profit from grossProfit (which accounts for platform fees)
   const totalExpectedProfit = items.reduce((sum, item) => sum + (item.grossProfit || 0), 0);
 
-  // For max_bid mode: Calculate total max purchase price
+  // For max_bid mode: Calculate expected revenue from sell prices
+  const calculatedExpectedRevenue = items.reduce((sum, item) => {
+    const sellPrice = getSellPrice(item);
+    return sum + ((sellPrice || 0) * (item.quantity || 1));
+  }, 0);
+
+  // For max_bid mode: Calculate total platform fees using the dedicated function
+  // This calculates fees WITHOUT deducting target profit (unlike maxPurchasePrice functions)
+  const calculatedPlatformFees = evaluationMode === 'max_bid'
+    ? items.reduce((sum, item) => {
+        const sellPrice = getSellPrice(item);
+        if (!sellPrice || sellPrice <= 0) return sum;
+
+        // Use the fee-only function that doesn't include target profit deduction
+        const feeResult = calculatePlatformFeesOnly(sellPrice, item.targetPlatform);
+        return sum + (feeResult.total * (item.quantity || 1));
+      }, 0)
+    : 0;
+
+  // For max_bid mode: Calculate total max purchase price (for non-auction mode display)
   const totalMaxPurchasePrice = evaluationMode === 'max_bid'
     ? items.reduce((sum, item) => {
         const maxPrice = getMaxPurchasePrice(item, targetMarginPercent);
@@ -139,15 +174,28 @@ export function ReviewStep({
       }, 0)
     : 0;
 
-  // For max_bid mode: Calculate expected revenue from sell prices
-  const calculatedExpectedRevenue = items.reduce((sum, item) => {
-    const sellPrice = getSellPrice(item);
-    return sum + ((sellPrice || 0) * (item.quantity || 1));
-  }, 0);
-
   // Count items with calculable max price
   const itemsWithMaxPrice = evaluationMode === 'max_bid'
     ? items.filter((item) => getMaxPurchasePrice(item, targetMarginPercent) !== null).length
+    : 0;
+
+  // For auction mode: Calculate auction breakdown using the CORRECT method
+  // This calculates max bid from revenue - fees - target profit, avoiding double-accounting
+  const auctionBreakdown = evaluationMode === 'max_bid' && auctionSettings.enabled
+    ? calculateAuctionMaxBidFromRevenue(
+        calculatedExpectedRevenue,
+        calculatedPlatformFees,
+        targetMarginPercent,
+        auctionSettings.commissionPercent,
+        auctionSettings.shippingCost
+      )
+    : null;
+
+  // For max_bid mode: Calculate expected profit
+  // The target profit is: Revenue × Target Margin %
+  // This is what the max bid/price calculations are designed to achieve
+  const calculatedExpectedProfit = evaluationMode === 'max_bid'
+    ? calculatedExpectedRevenue * (targetMarginPercent / 100)
     : 0;
 
   // Format percentage with color
@@ -258,26 +306,213 @@ export function ReviewStep({
         </CardHeader>
         <CardContent>
           {evaluationMode === 'max_bid' ? (
-            // Max Bid Mode Summary
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="text-center p-6 bg-primary/5 border-2 border-primary rounded-lg">
-                <p className="text-3xl font-bold text-primary">
-                  {formatCurrencyGBP(totalMaxPurchasePrice)}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">Maximum Purchase Price</p>
-                <p className="text-xs text-muted-foreground">
-                  For {targetMarginPercent}% profit margin
-                </p>
+            // Max Bid Mode Summary - different layouts for auction vs non-auction
+            auctionBreakdown ? (
+              // Auction Mode: Show Max Bid, Total Paid, Expected Revenue, Expected Profit, Items
+              <div className="grid gap-4 md:grid-cols-5">
+                <div className="text-center p-6 bg-primary/5 border-2 border-primary rounded-lg">
+                  <p className="text-3xl font-bold text-primary">
+                    {formatCurrencyGBP(auctionBreakdown.maxBid)}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">Maximum Bid</p>
+                  <p className="text-xs text-muted-foreground">Enter this in auction</p>
+                </div>
+                <div className="text-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-2xl font-bold text-amber-700">
+                    {formatCurrencyGBP(auctionBreakdown.totalPaid)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Total Amount Paid</p>
+                  <p className="text-xs text-muted-foreground">
+                    +{auctionSettings.commissionPercent}% + £{auctionSettings.shippingCost.toFixed(2)}
+                  </p>
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-center p-4 bg-muted/50 rounded-lg cursor-help">
+                        <p className="text-2xl font-bold">{formatCurrencyGBP(calculatedExpectedRevenue)}</p>
+                        <p className="text-sm text-muted-foreground">Expected Revenue</p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="space-y-2 text-xs">
+                        <p className="font-semibold">Revenue Breakdown</p>
+                        <div className="max-h-48 overflow-y-auto space-y-1">
+                          {items.map((item) => {
+                            const itemSellPrice = getSellPrice(item);
+                            return (
+                              <div key={item.id} className="flex justify-between gap-4">
+                                <span className="text-muted-foreground truncate max-w-[180px]">
+                                  {item.setNumber} {item.quantity > 1 ? `×${item.quantity}` : ''}
+                                </span>
+                                <span>{itemSellPrice ? formatCurrencyGBP(itemSellPrice * (item.quantity || 1)) : '—'}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="border-t pt-1 flex justify-between font-semibold">
+                          <span>Total</span>
+                          <span>{formatCurrencyGBP(calculatedExpectedRevenue)}</span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={`text-center p-4 rounded-lg cursor-help ${calculatedExpectedProfit > 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                        <p className={`text-2xl font-bold ${calculatedExpectedProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrencyGBP(calculatedExpectedProfit)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Expected Profit</p>
+                        <p className="text-xs text-muted-foreground">
+                          {calculatedExpectedRevenue > 0 ? `${((calculatedExpectedProfit / calculatedExpectedRevenue) * 100).toFixed(1)}% margin` : '—'}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="space-y-2 text-xs">
+                        <p className="font-semibold">Profit Calculation at {targetMarginPercent}% Target Margin</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Expected Revenue:</span>
+                            <span>{formatCurrencyGBP(calculatedExpectedRevenue)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Platform Fees:</span>
+                            <span className="text-orange-600">-{formatCurrencyGBP(calculatedPlatformFees)}</span>
+                          </div>
+                          {auctionBreakdown && (
+                            <>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Auction Cost (at max bid):</span>
+                                <span className="text-amber-600">-{formatCurrencyGBP(auctionBreakdown.totalPaid)}</span>
+                              </div>
+                            </>
+                          )}
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">× Target Margin:</span>
+                            <span>{targetMarginPercent}%</span>
+                          </div>
+                        </div>
+                        <div className="border-t pt-1 flex justify-between font-semibold">
+                          <span>Target Profit:</span>
+                          <span className={calculatedExpectedProfit > 0 ? 'text-green-600' : 'text-red-600'}>
+                            {formatCurrencyGBP(calculatedExpectedProfit)}
+                          </span>
+                        </div>
+                        <div className="border-t pt-2 mt-2 text-muted-foreground">
+                          <p>The max bid ({auctionBreakdown ? formatCurrencyGBP(auctionBreakdown.maxBid) : '—'}) is calculated so that:</p>
+                          <p className="mt-1">Revenue - Platform Fees - Auction Costs = Target Profit</p>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold">{items.length}</p>
+                  <p className="text-sm text-muted-foreground">Items Identified</p>
+                </div>
               </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-2xl font-bold">{formatCurrencyGBP(calculatedExpectedRevenue)}</p>
-                <p className="text-sm text-muted-foreground">Expected Revenue</p>
+            ) : (
+              // Non-Auction Mode: Show Max Purchase Price, Expected Revenue, Expected Profit, Items
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="text-center p-6 bg-primary/5 border-2 border-primary rounded-lg">
+                  <p className="text-3xl font-bold text-primary">
+                    {formatCurrencyGBP(totalMaxPurchasePrice)}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">Maximum Purchase Price</p>
+                  <p className="text-xs text-muted-foreground">
+                    For {targetMarginPercent}% profit margin
+                  </p>
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-center p-4 bg-muted/50 rounded-lg cursor-help">
+                        <p className="text-2xl font-bold">{formatCurrencyGBP(calculatedExpectedRevenue)}</p>
+                        <p className="text-sm text-muted-foreground">Expected Revenue</p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="space-y-2 text-xs">
+                        <p className="font-semibold">Revenue Breakdown</p>
+                        <div className="max-h-48 overflow-y-auto space-y-1">
+                          {items.map((item) => {
+                            const itemSellPrice = getSellPrice(item);
+                            return (
+                              <div key={item.id} className="flex justify-between gap-4">
+                                <span className="text-muted-foreground truncate max-w-[180px]">
+                                  {item.setNumber} {item.quantity > 1 ? `×${item.quantity}` : ''}
+                                </span>
+                                <span>{itemSellPrice ? formatCurrencyGBP(itemSellPrice * (item.quantity || 1)) : '—'}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="border-t pt-1 flex justify-between font-semibold">
+                          <span>Total</span>
+                          <span>{formatCurrencyGBP(calculatedExpectedRevenue)}</span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={`text-center p-4 rounded-lg cursor-help ${calculatedExpectedProfit > 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                        <p className={`text-2xl font-bold ${calculatedExpectedProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrencyGBP(calculatedExpectedProfit)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Expected Profit</p>
+                        <p className="text-xs text-muted-foreground">
+                          {calculatedExpectedRevenue > 0 ? `${((calculatedExpectedProfit / calculatedExpectedRevenue) * 100).toFixed(1)}% margin` : '—'}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="space-y-2 text-xs">
+                        <p className="font-semibold">Profit Calculation at {targetMarginPercent}% Target Margin</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Expected Revenue:</span>
+                            <span>{formatCurrencyGBP(calculatedExpectedRevenue)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Platform Fees:</span>
+                            <span className="text-orange-600">-{formatCurrencyGBP(calculatedPlatformFees)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Max Purchase Price:</span>
+                            <span className="text-amber-600">-{formatCurrencyGBP(totalMaxPurchasePrice)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">× Target Margin:</span>
+                            <span>{targetMarginPercent}%</span>
+                          </div>
+                        </div>
+                        <div className="border-t pt-1 flex justify-between font-semibold">
+                          <span>Target Profit:</span>
+                          <span className={calculatedExpectedProfit > 0 ? 'text-green-600' : 'text-red-600'}>
+                            {formatCurrencyGBP(calculatedExpectedProfit)}
+                          </span>
+                        </div>
+                        <div className="border-t pt-2 mt-2 text-muted-foreground">
+                          <p>Max purchase price ({formatCurrencyGBP(totalMaxPurchasePrice)}) is calculated so that:</p>
+                          <p className="mt-1">Revenue - Platform Fees - Cost = Target Profit</p>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold">{items.length}</p>
+                  <p className="text-sm text-muted-foreground">Items Identified</p>
+                </div>
               </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-2xl font-bold">{items.length}</p>
-                <p className="text-sm text-muted-foreground">Items Identified</p>
-              </div>
-            </div>
+            )
           ) : (
             // Traditional Mode Summary
             <div className="grid gap-4 md:grid-cols-4">
@@ -326,6 +561,94 @@ export function ReviewStep({
         </CardContent>
       </Card>
 
+      {/* Settings Card - show in max_bid mode for adjusting target margin and auction settings */}
+      {evaluationMode === 'max_bid' && (
+        <Card className={auctionSettings.enabled ? 'border-amber-200 bg-amber-50/50' : ''}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              {auctionSettings.enabled ? <Gavel className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+              {auctionSettings.enabled ? 'Bid Calculation Settings' : 'Calculation Settings'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4 items-end">
+              {/* Target Margin - always shown */}
+              {onTargetMarginChange && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Target Margin %</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    className="w-24 h-8"
+                    value={targetMarginPercent}
+                    onChange={(e) => onTargetMarginChange(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              )}
+              {/* Auction settings - only when auction enabled */}
+              {auctionSettings.enabled && onAuctionSettingsChange && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Commission %</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      className="w-24 h-8"
+                      value={auctionSettings.commissionPercent}
+                      onChange={(e) =>
+                        onAuctionSettingsChange({
+                          ...auctionSettings,
+                          commissionPercent: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Shipping (£)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-24 h-8"
+                      value={auctionSettings.shippingCost}
+                      onChange={(e) =>
+                        onAuctionSettingsChange({
+                          ...auctionSettings,
+                          shippingCost: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+              {onRecalculateCosts && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRecalculateCosts}
+                  disabled={isRecalculating}
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${isRecalculating ? 'animate-spin' : ''}`} />
+                  Recalculate
+                </Button>
+              )}
+              {auctionSettings.enabled && auctionBreakdown && (
+                <div className="flex-1 text-right">
+                  <p className="text-xs text-muted-foreground">
+                    Commission: {formatCurrencyGBP(auctionBreakdown.commission)} |
+                    Shipping: {formatCurrencyGBP(auctionSettings.shippingCost)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Items Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -333,7 +656,9 @@ export function ReviewStep({
             <CardTitle>Items ({items.length})</CardTitle>
             <CardDescription>
               {evaluationMode === 'max_bid'
-                ? 'Review identified items and their maximum purchase prices'
+                ? auctionSettings.enabled
+                  ? 'Review identified items and their maximum bid amounts'
+                  : 'Review identified items and their maximum purchase prices'
                 : 'Review pricing data and profitability for each item'}
             </CardDescription>
           </div>
@@ -343,7 +668,7 @@ export function ReviewStep({
                 Apply Changes
               </Button>
             )}
-            {onRecalculateCosts && (
+            {onRecalculateCosts && !auctionSettings.enabled && (
               <Button
                 variant="outline"
                 size="sm"
@@ -371,7 +696,12 @@ export function ReviewStep({
                     {evaluationMode === 'max_bid' ? (
                       <>
                         <TableHead className="w-[90px]">Sell Price</TableHead>
-                        <TableHead className="w-[90px] bg-primary/5">Max Bid</TableHead>
+                        <TableHead className="w-[90px] bg-primary/5">
+                          {auctionSettings.enabled ? 'Max Bid' : 'Max Price'}
+                        </TableHead>
+                        {auctionSettings.enabled && (
+                          <TableHead className="w-[90px] bg-amber-50">Total Paid</TableHead>
+                        )}
                       </>
                     ) : (
                       <>
@@ -511,7 +841,7 @@ export function ReviewStep({
                           )}
                         </TableCell>
                         {evaluationMode === 'max_bid' ? (
-                          // Max Bid Mode: Show editable sell price and calculated max bid
+                          // Max Bid Mode: Show editable sell price and calculated max bid (or auction bid)
                           <>
                             <TableCell>
                               <Input
@@ -535,38 +865,87 @@ export function ReviewStep({
                                   return <span className="text-muted-foreground text-xs">-</span>;
                                 }
 
-                                // Calculate max bid based on platform
+                                // Get the current platform for this item
                                 const platform = pendingUpdates[item.id]?.targetPlatform ?? item.targetPlatform;
-                                const maxBid = platform === 'ebay'
-                                  ? calculateMaxPurchasePriceEbay(effectiveSellPrice, targetMarginPercent).maxPurchasePrice
-                                  : calculateMaxPurchasePriceAmazon(effectiveSellPrice, targetMarginPercent).maxPurchasePrice;
+
+                                // Calculate platform fees for this item (WITHOUT target profit deduction)
+                                const itemFees = calculatePlatformFeesOnly(effectiveSellPrice, platform);
+
+                                // For non-auction mode, show max purchase price (using old calculation)
+                                // For auction mode, calculate the item's contribution to the lot max bid
+                                if (!auctionSettings.enabled) {
+                                  // Non-auction: use the max purchase price calculation
+                                  const maxPurchasePrice = platform === 'ebay'
+                                    ? calculateMaxPurchasePriceEbay(effectiveSellPrice, targetMarginPercent).maxPurchasePrice
+                                    : calculateMaxPurchasePriceAmazon(effectiveSellPrice, targetMarginPercent).maxPurchasePrice;
+
+                                  return (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="font-semibold text-primary text-xs cursor-help">
+                                            {formatCurrencyGBP(maxPurchasePrice)}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          <div className="space-y-1 text-xs">
+                                            <p className="font-semibold">Max Purchase Price Calculation</p>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                                              <span className="text-muted-foreground">Expected Sell:</span>
+                                              <span>{formatCurrencyGBP(effectiveSellPrice)}</span>
+                                              <span className="text-muted-foreground">Platform Fees:</span>
+                                              <span className="text-orange-600">-{formatCurrencyGBP(itemFees.total)}</span>
+                                              <span className="text-muted-foreground">Target Profit ({targetMarginPercent}%):</span>
+                                              <span className="text-green-600">-{formatCurrencyGBP(effectiveSellPrice * targetMarginPercent / 100)}</span>
+                                              <span className="text-muted-foreground font-semibold border-t pt-1">Max Price:</span>
+                                              <span className="font-semibold text-primary border-t pt-1">
+                                                {formatCurrencyGBP(maxPurchasePrice)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  );
+                                }
+
+                                // Auction mode: Calculate item's contribution to total max bid
+                                // Item's Max Total = Item Revenue - Item Fees - Item Target Profit
+                                // Then convert to bid: Item Max Bid = Item Max Total / (1 + Commission Rate)
+                                const itemTargetProfit = effectiveSellPrice * (targetMarginPercent / 100);
+                                const itemMaxTotal = Math.max(0, effectiveSellPrice - itemFees.total - itemTargetProfit);
+                                const commissionRate = auctionSettings.commissionPercent / 100;
+                                const itemMaxBid = itemMaxTotal / (1 + commissionRate);
 
                                 return (
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span className="font-semibold text-primary text-xs cursor-help">
-                                          {formatCurrencyGBP(maxBid)}
+                                          {formatCurrencyGBP(itemMaxBid)}
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xs">
                                         <div className="space-y-1 text-xs">
-                                          <p className="font-semibold">Max Bid Breakdown</p>
+                                          <p className="font-semibold">Max Bid Calculation (Item Contribution)</p>
                                           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                                             <span className="text-muted-foreground">Expected Sell:</span>
                                             <span>{formatCurrencyGBP(effectiveSellPrice)}</span>
                                             <span className="text-muted-foreground">Platform Fees:</span>
-                                            <span>
-                                              {platform === 'ebay'
-                                                ? '~15.7% + £0.30'
-                                                : '~15% + £3-4'}
+                                            <span className="text-orange-600">-{formatCurrencyGBP(itemFees.total)}</span>
+                                            <span className="text-muted-foreground">Target Profit ({targetMarginPercent}%):</span>
+                                            <span className="text-green-600">-{formatCurrencyGBP(itemTargetProfit)}</span>
+                                            <span className="text-muted-foreground border-t pt-1">Max Total Cost:</span>
+                                            <span className="border-t pt-1">{formatCurrencyGBP(itemMaxTotal)}</span>
+                                            <span className="text-amber-600 font-semibold border-t pt-1">÷ (1 + {auctionSettings.commissionPercent}%):</span>
+                                            <span className="border-t pt-1"></span>
+                                            <span className="text-primary font-semibold">Max Bid:</span>
+                                            <span className="font-semibold text-primary">
+                                              {formatCurrencyGBP(itemMaxBid)}
                                             </span>
-                                            <span className="text-muted-foreground">Target Margin:</span>
-                                            <span>{targetMarginPercent}%</span>
-                                            <span className="text-muted-foreground font-semibold border-t pt-1">Max Bid:</span>
-                                            <span className="font-semibold text-primary border-t pt-1">
-                                              {formatCurrencyGBP(maxBid)}
-                                            </span>
+                                          </div>
+                                          <div className="border-t pt-1 mt-1 text-muted-foreground">
+                                            <p>Note: Lot shipping ({formatCurrencyGBP(auctionSettings.shippingCost)}) is allocated at lot level</p>
                                           </div>
                                         </div>
                                       </TooltipContent>
@@ -575,6 +954,32 @@ export function ReviewStep({
                                 );
                               })()}
                             </TableCell>
+                            {/* Total Paid column for auction mode */}
+                            {auctionSettings.enabled && (
+                              <TableCell className="bg-amber-50">
+                                {(() => {
+                                  const effectiveSellPrice = typeof currentPrice === 'string' && currentPrice !== ''
+                                    ? parseFloat(currentPrice)
+                                    : sellPrice;
+
+                                  if (!effectiveSellPrice || effectiveSellPrice <= 0) {
+                                    return <span className="text-muted-foreground text-xs">-</span>;
+                                  }
+
+                                  const platform = pendingUpdates[item.id]?.targetPlatform ?? item.targetPlatform;
+                                  const itemFees = calculatePlatformFeesOnly(effectiveSellPrice, platform);
+                                  const itemTargetProfit = effectiveSellPrice * (targetMarginPercent / 100);
+                                  const itemMaxTotal = Math.max(0, effectiveSellPrice - itemFees.total - itemTargetProfit);
+
+                                  // Total paid for this item = itemMaxTotal (excludes lot shipping)
+                                  return (
+                                    <span className="text-amber-700 text-xs">
+                                      {formatCurrencyGBP(itemMaxTotal)}
+                                    </span>
+                                  );
+                                })()}
+                              </TableCell>
+                            )}
                           </>
                         ) : (
                           // Traditional Mode: Show editable cost and price

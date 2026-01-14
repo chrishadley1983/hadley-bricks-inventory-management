@@ -1,20 +1,28 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, Plus, List, Calculator, TrendingUp, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Plus, List, Calculator, TrendingUp, TrendingDown, Gavel } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { PurchaseEvaluation, EvaluationItem } from '@/lib/purchase-evaluator';
 import { formatCurrencyGBP } from '@/lib/arbitrage/calculations';
-import { calculateMaxPurchasePriceAmazon, calculateMaxPurchasePriceEbay } from '@/lib/purchase-evaluator/reverse-calculations';
+import type { AuctionSettings } from '@/lib/purchase-evaluator/photo-types';
+import { DEFAULT_AUCTION_SETTINGS } from '@/lib/purchase-evaluator/photo-types';
+import {
+  calculateMaxPurchasePriceAmazon,
+  calculateMaxPurchasePriceEbay,
+  calculatePlatformFeesOnly,
+  calculateAuctionMaxBidFromRevenue,
+} from '@/lib/purchase-evaluator/reverse-calculations';
 
 interface SavedStepProps {
   evaluationId: string | null;
   evaluation?: PurchaseEvaluation | null;
   evaluationMode?: 'cost_known' | 'max_bid';
   targetMarginPercent?: number;
+  auctionSettings?: AuctionSettings;
   onNewEvaluation: () => void;
   onViewAll: () => void;
   onUpdateActualCost?: (actualCost: number) => Promise<void>;
@@ -33,17 +41,6 @@ function getSellPrice(item: EvaluationItem): number | null {
   return item.amazonBuyBoxPrice || item.amazonWasPrice || null;
 }
 
-/**
- * Calculate platform fees for a given sell price
- */
-function calculateFees(sellPrice: number, platform: 'amazon' | 'ebay'): number {
-  if (platform === 'ebay') {
-    // eBay: ~12.8% FVF + 0.36% regulatory + 2.5% PayPal + £0.30
-    return sellPrice * 0.1566 + 0.30;
-  }
-  // Amazon FBM: ~15% referral
-  return sellPrice * 0.15;
-}
 
 /**
  * Final step showing success message after saving
@@ -54,6 +51,7 @@ export function SavedStep({
   evaluation,
   evaluationMode = 'cost_known',
   targetMarginPercent = 30,
+  auctionSettings = DEFAULT_AUCTION_SETTINGS,
   onNewEvaluation,
   onViewAll,
   onUpdateActualCost,
@@ -70,15 +68,15 @@ export function SavedStep({
     return sum + ((sellPrice || 0) * (item.quantity || 1));
   }, 0);
 
-  // Calculate total platform fees
+  // Calculate total platform fees using the dedicated function (consistent with ReviewStep)
   const totalFees = items.reduce((sum, item) => {
     const sellPrice = getSellPrice(item);
     if (!sellPrice) return sum;
-    const fees = calculateFees(sellPrice, item.targetPlatform);
-    return sum + (fees * (item.quantity || 1));
+    const feeResult = calculatePlatformFeesOnly(sellPrice, item.targetPlatform);
+    return sum + (feeResult.total * (item.quantity || 1));
   }, 0);
 
-  // Calculate max purchase price (recommended bid)
+  // Calculate max purchase price for non-auction mode display
   const totalMaxPurchasePrice = items.reduce((sum, item) => {
     const sellPrice = getSellPrice(item);
     if (!sellPrice || sellPrice <= 0) return sum;
@@ -89,6 +87,18 @@ export function SavedStep({
 
     return sum + (result.maxPurchasePrice * (item.quantity || 1));
   }, 0);
+
+  // Calculate auction breakdown using the CORRECT method
+  // This calculates max bid from revenue - fees - target profit, avoiding double-accounting
+  const auctionBreakdown = auctionSettings.enabled
+    ? calculateAuctionMaxBidFromRevenue(
+        totalExpectedRevenue,
+        totalFees,
+        targetMarginPercent,
+        auctionSettings.commissionPercent,
+        auctionSettings.shippingCost
+      )
+    : null;
 
   // Calculate profit based on actual cost entered
   const actualCostNum = parseFloat(actualCost) || 0;
@@ -148,11 +158,48 @@ export function SavedStep({
           <div>
             <p className="text-lg font-medium">Evaluation Saved!</p>
             <p className="text-sm text-muted-foreground">
-              Your photo-based evaluation has been saved with max bid: {formatCurrencyGBP(totalMaxPurchasePrice)}
+              {auctionBreakdown
+                ? `Your photo-based evaluation has been saved with max bid: ${formatCurrencyGBP(auctionBreakdown.maxBid)}`
+                : `Your photo-based evaluation has been saved with max purchase price: ${formatCurrencyGBP(totalMaxPurchasePrice)}`}
             </p>
           </div>
         </CardContent>
       </Card>
+
+      {/* Auction Summary - only show if auction mode was enabled */}
+      {auctionBreakdown && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Gavel className="h-4 w-4" />
+              Auction Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div className="text-center p-4 rounded-lg bg-primary/10 border-2 border-primary">
+                <p className="text-2xl font-bold text-primary">{formatCurrencyGBP(auctionBreakdown.maxBid)}</p>
+                <p className="text-sm text-muted-foreground">Max Bid</p>
+                <p className="text-xs text-muted-foreground">Enter this amount</p>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <p className="text-xl font-bold">{formatCurrencyGBP(auctionBreakdown.commission)}</p>
+                <p className="text-sm text-muted-foreground">Commission</p>
+                <p className="text-xs text-muted-foreground">{auctionSettings.commissionPercent}%</p>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <p className="text-xl font-bold">{formatCurrencyGBP(auctionBreakdown.shippingCost)}</p>
+                <p className="text-sm text-muted-foreground">Shipping</p>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-amber-100 border border-amber-300">
+                <p className="text-xl font-bold text-amber-700">{formatCurrencyGBP(auctionBreakdown.totalPaid)}</p>
+                <p className="text-sm text-muted-foreground">Total Paid</p>
+                <p className="text-xs text-muted-foreground">Your max cost</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Actual Cost Calculator */}
       <Card>
@@ -252,26 +299,37 @@ export function SavedStep({
             </div>
           </div>
 
-          {/* Comparison to Max Bid */}
+          {/* Comparison to Max Bid/Price */}
           {actualCostNum > 0 && (
             <div className="p-4 rounded-lg border bg-muted/30">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">Comparison to Recommended Max Bid</p>
+                  <p className="text-sm font-medium">
+                    {auctionBreakdown ? 'Comparison to Recommended Total Paid' : 'Comparison to Recommended Max Price'}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    Max bid for {targetMarginPercent}% margin: {formatCurrencyGBP(totalMaxPurchasePrice)}
+                    {auctionBreakdown
+                      ? `Max total for ${targetMarginPercent}% margin: ${formatCurrencyGBP(auctionBreakdown.totalPaid)} (bid: ${formatCurrencyGBP(auctionBreakdown.maxBid)})`
+                      : `Max price for ${targetMarginPercent}% margin: ${formatCurrencyGBP(totalMaxPurchasePrice)}`}
                   </p>
                 </div>
                 <div className="text-right">
-                  {actualCostNum <= totalMaxPurchasePrice ? (
-                    <p className="text-sm font-medium text-green-600">
-                      Good deal! Saved {formatCurrencyGBP(totalMaxPurchasePrice - actualCostNum)}
-                    </p>
-                  ) : (
-                    <p className="text-sm font-medium text-orange-600">
-                      Paid {formatCurrencyGBP(actualCostNum - totalMaxPurchasePrice)} over max bid
-                    </p>
-                  )}
+                  {(() => {
+                    const compareValue = auctionBreakdown ? auctionBreakdown.totalPaid : totalMaxPurchasePrice;
+                    if (actualCostNum <= compareValue) {
+                      return (
+                        <p className="text-sm font-medium text-green-600">
+                          Good deal! Saved {formatCurrencyGBP(compareValue - actualCostNum)}
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-sm font-medium text-orange-600">
+                          Paid {formatCurrencyGBP(actualCostNum - compareValue)} over max
+                        </p>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             </div>

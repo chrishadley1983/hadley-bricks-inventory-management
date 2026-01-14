@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Upload, X, Camera, FileText, Settings2, Clipboard } from 'lucide-react';
+import { Upload, X, Camera, FileText, Settings2, Clipboard, Gavel } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
@@ -23,7 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useImageDrop, type UploadedImage } from '@/hooks/use-photo-analysis';
 import type { TargetPlatform } from '@/lib/purchase-evaluator';
-import type { PrimaryAnalysisModel } from '@/lib/purchase-evaluator/photo-types';
+import type { PrimaryAnalysisModel, AuctionSettings } from '@/lib/purchase-evaluator/photo-types';
 
 // ============================================
 // Types
@@ -47,6 +48,8 @@ interface PhotoInputStepProps {
   onUseBrickognizeChange: (value: boolean) => void;
   useImageChunking: boolean;
   onUseImageChunkingChange: (value: boolean) => void;
+  auctionSettings: AuctionSettings;
+  onAuctionSettingsChange: (settings: AuctionSettings) => void;
   onAnalyze: () => void;
   isAnalyzing: boolean;
   progressMessage?: string | null;
@@ -75,6 +78,8 @@ export function PhotoInputStep({
   onUseGeminiVerificationChange,
   useBrickognize,
   onUseBrickognizeChange,
+  auctionSettings,
+  onAuctionSettingsChange,
   onAnalyze,
   isAnalyzing,
   progressMessage,
@@ -345,6 +350,96 @@ export function PhotoInputStep({
             </p>
           </div>
         </CardContent>
+      </Card>
+
+      {/* Auction Mode Card */}
+      <Card className={cn(auctionSettings.enabled && 'border-amber-300 bg-amber-50/30')}>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Gavel className="h-5 w-5" />
+              <div>
+                <CardTitle>Auction Mode</CardTitle>
+                <CardDescription>
+                  Account for auction house commission and shipping in bid calculations.
+                </CardDescription>
+              </div>
+            </div>
+            <Switch
+              checked={auctionSettings.enabled}
+              onCheckedChange={(checked: boolean) =>
+                onAuctionSettingsChange({ ...auctionSettings, enabled: checked })
+              }
+            />
+          </div>
+        </CardHeader>
+
+        {auctionSettings.enabled && (
+          <CardContent className="space-y-4 pt-0">
+            {/* Commission % Input */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="commission">Commission Rate</Label>
+                <span className="text-sm font-medium">{auctionSettings.commissionPercent}%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="commission"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  className="w-28"
+                  value={auctionSettings.commissionPercent}
+                  onChange={(e) =>
+                    onAuctionSettingsChange({
+                      ...auctionSettings,
+                      commissionPercent: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+                <span className="text-sm text-muted-foreground">% (inc. VAT/fees)</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total buyer&apos;s premium including VAT and fees. Common UK auction rate is 32.94%.
+              </p>
+            </div>
+
+            {/* Shipping Cost Input */}
+            <div className="space-y-2">
+              <Label htmlFor="auction-shipping">Estimated Shipping</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">£</span>
+                <Input
+                  id="auction-shipping"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="w-28"
+                  value={auctionSettings.shippingCost}
+                  onChange={(e) =>
+                    onAuctionSettingsChange({
+                      ...auctionSettings,
+                      shippingCost: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Shipping cost from auction house to you (for the entire lot).
+              </p>
+            </div>
+
+            {/* Info Box */}
+            <div className="rounded-md bg-amber-100 p-3 text-sm">
+              <p className="text-amber-800">
+                <strong>How it works:</strong> We&apos;ll calculate the maximum bid you should enter,
+                accounting for commission and shipping. The &quot;Total Paid&quot; will equal your
+                target maximum purchase price.
+              </p>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* Advanced Options */}
