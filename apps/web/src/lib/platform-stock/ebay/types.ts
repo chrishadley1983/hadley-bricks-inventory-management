@@ -349,3 +349,293 @@ export interface GetMyeBaySellingResult {
   totalPages: number;
   currentPage: number;
 }
+
+// ============================================================================
+// LISTING MANAGEMENT TYPES (End, Create, Get Full Details)
+// ============================================================================
+
+/**
+ * Reason codes for ending a listing
+ * @see https://developer.ebay.com/Devzone/XML/docs/Reference/eBay/types/EndReasonCodeType.html
+ */
+export type EndReasonCode =
+  | 'NotAvailable'
+  | 'Incorrect'
+  | 'LostOrBroken'
+  | 'OtherListingError'
+  | 'SellToHighBidder'
+  | 'Sold';
+
+/**
+ * Result from EndFixedPriceItem call
+ */
+export interface EndItemResult {
+  success: boolean;
+  itemId: string;
+  endTime?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/**
+ * Full item details from GetItem response
+ * Used to capture complete listing data before ending
+ */
+export interface FullItemDetails {
+  itemId: string;
+  title: string;
+  description: string;
+  sku: string | null;
+  quantity: number;
+  startPrice: number;
+  currency: string;
+  conditionId: number | null;
+  conditionDescription: string | null;
+  categoryId: string;
+  categoryName: string | null;
+  storeCategoryId: string | null;
+  storeCategoryName: string | null;
+  listingType: string;
+  listingDuration: string | null;
+  pictureUrls: string[];
+  galleryUrl: string | null;
+  viewItemUrl: string | null;
+
+  // Best offer settings
+  bestOfferEnabled: boolean;
+  bestOfferAutoAcceptPrice: number | null;
+  minimumBestOfferPrice: number | null;
+
+  // Shipping and return policies (IDs for business policies)
+  shippingProfileId: string | null;
+  returnProfileId: string | null;
+  paymentProfileId: string | null;
+
+  // Shipping details (fallback if no business policies)
+  shippingServiceOptions: ShippingServiceOption[];
+  dispatchTimeMax: number | null;
+
+  // Return policy details (fallback if no business policies)
+  returnsAccepted: boolean;
+  returnsWithin: string | null;
+  refundOption: string | null;
+  shippingCostPaidBy: string | null;
+
+  // Item specifics
+  itemSpecifics: Array<{ name: string; value: string }>;
+
+  // Location
+  location: string | null;
+  country: string | null;
+  postalCode: string | null;
+
+  // Dates
+  listingStartDate: string;
+  listingEndDate: string | null;
+
+  // Engagement
+  watchers: number;
+  hitCount: number | null;
+  quantitySold: number;
+  quantityAvailable: number;
+}
+
+/**
+ * Shipping service option for listing creation
+ */
+export interface ShippingServiceOption {
+  shippingService: string;
+  shippingServiceCost: number;
+  shippingServiceAdditionalCost?: number;
+  shippingServicePriority: number;
+  freeShipping?: boolean;
+}
+
+/**
+ * Request data for creating a new fixed price listing
+ */
+export interface AddFixedPriceItemRequest {
+  title: string;
+  description: string;
+  sku?: string;
+  startPrice: number;
+  quantity: number;
+  currency?: string;
+  conditionId?: number;
+  conditionDescription?: string;
+  categoryId: string;
+  storeCategoryId?: string;
+  listingDuration?: string;
+  pictureUrls: string[];
+
+  // Best offer
+  bestOfferEnabled?: boolean;
+  bestOfferAutoAcceptPrice?: number;
+  minimumBestOfferPrice?: number;
+
+  // Business policies (preferred)
+  shippingProfileId?: string;
+  returnProfileId?: string;
+  paymentProfileId?: string;
+
+  // Shipping details (fallback)
+  shippingServiceOptions?: ShippingServiceOption[];
+  dispatchTimeMax?: number;
+
+  // Return policy (fallback)
+  returnsAccepted?: boolean;
+  returnsWithin?: string;
+  refundOption?: string;
+  shippingCostPaidBy?: string;
+
+  // Item specifics
+  itemSpecifics?: Array<{ name: string; value: string }>;
+
+  // Location
+  location?: string;
+  country?: string;
+  postalCode?: string;
+}
+
+/**
+ * Result from AddFixedPriceItem call
+ */
+export interface AddItemResult {
+  success: boolean;
+  itemId?: string;
+  startTime?: string;
+  endTime?: string;
+  fees?: EbayFee[];
+  errorCode?: string;
+  errorMessage?: string;
+  warnings?: string[];
+}
+
+/**
+ * Fee information from listing creation
+ */
+export interface EbayFee {
+  name: string;
+  fee: number;
+  currency: string;
+}
+
+/**
+ * Generic Trading API response structure
+ */
+export interface TradingApiResponse {
+  Ack: 'Success' | 'Failure' | 'Warning' | 'PartialFailure';
+  Errors?: TradingApiError | TradingApiError[];
+  Timestamp?: string;
+  Version?: string;
+  Build?: string;
+}
+
+/**
+ * GetItem API Response (parsed from XML)
+ */
+export interface GetItemResponse {
+  GetItemResponse: TradingApiResponse & {
+    Item?: TradingApiFullItem;
+  };
+}
+
+/**
+ * EndFixedPriceItem API Response
+ */
+export interface EndItemResponse {
+  EndFixedPriceItemResponse: TradingApiResponse & {
+    EndTime?: string;
+  };
+}
+
+/**
+ * AddFixedPriceItem API Response
+ */
+export interface AddItemResponse {
+  AddFixedPriceItemResponse: TradingApiResponse & {
+    ItemID?: string;
+    StartTime?: string;
+    EndTime?: string;
+    Fees?: {
+      Fee?: TradingApiFee | TradingApiFee[];
+    };
+  };
+}
+
+/**
+ * Fee from Trading API response
+ */
+export interface TradingApiFee {
+  Name: string;
+  Fee: {
+    '#text'?: string;
+    _?: string;
+    '@_currencyID'?: string;
+    _currencyID?: string;
+  };
+}
+
+/**
+ * Full item from GetItem response with all details
+ */
+export interface TradingApiFullItem extends TradingApiItem {
+  Description?: string;
+  PictureDetails?: {
+    GalleryURL?: string;
+    PictureURL?: string | string[];
+  };
+  ListingDuration?: string;
+  ShippingDetails?: {
+    ShippingServiceOptions?: TradingApiShippingOption | TradingApiShippingOption[];
+    ShippingType?: string;
+  };
+  ReturnPolicy?: {
+    ReturnsAcceptedOption?: string;
+    ReturnsWithinOption?: string;
+    RefundOption?: string;
+    ShippingCostPaidByOption?: string;
+    Description?: string;
+  };
+  SellerProfiles?: {
+    SellerShippingProfile?: { ShippingProfileID?: string };
+    SellerReturnProfile?: { ReturnProfileID?: string };
+    SellerPaymentProfile?: { PaymentProfileID?: string };
+  };
+  ItemSpecifics?: {
+    NameValueList?: TradingApiNameValue | TradingApiNameValue[];
+  };
+  Location?: string;
+  Country?: string;
+  PostalCode?: string;
+  DispatchTimeMax?: string | number;
+}
+
+/**
+ * Shipping option from Trading API
+ */
+export interface TradingApiShippingOption {
+  ShippingService?: string;
+  ShippingServiceCost?: {
+    '#text'?: string;
+    _?: string;
+    '@_currencyID'?: string;
+    _currencyID?: string;
+  };
+  ShippingServiceAdditionalCost?: {
+    '#text'?: string;
+    _?: string;
+    '@_currencyID'?: string;
+    _currencyID?: string;
+  };
+  ShippingServicePriority?: string | number;
+  FreeShipping?: string | boolean;
+}
+
+/**
+ * Name-value pair from item specifics
+ */
+export interface TradingApiNameValue {
+  Name: string;
+  Value: string | string[];
+}

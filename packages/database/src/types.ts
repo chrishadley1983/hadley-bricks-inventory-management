@@ -2049,6 +2049,236 @@ export type Database = {
           },
         ]
       }
+      ebay_listing_refresh_items: {
+        Row: {
+          cached_listing_data: Json | null
+          create_completed_at: string | null
+          created_at: string
+          end_completed_at: string | null
+          error_code: string | null
+          error_message: string | null
+          error_phase: string | null
+          fetch_completed_at: string | null
+          id: string
+          modified_price: number | null
+          modified_quantity: number | null
+          modified_title: string | null
+          new_item_id: string | null
+          new_listing_start_date: string | null
+          new_listing_url: string | null
+          original_best_offer_auto_accept: number | null
+          original_best_offer_enabled: boolean | null
+          original_category_id: string | null
+          original_category_name: string | null
+          original_condition: string | null
+          original_condition_id: number | null
+          original_description: string | null
+          original_gallery_url: string | null
+          original_image_urls: string[] | null
+          original_item_id: string
+          original_listing_end_date: string | null
+          original_listing_start_date: string | null
+          original_listing_type: string | null
+          original_minimum_best_offer: number | null
+          original_payment_policy_id: string | null
+          original_price: number | null
+          original_quantity: number | null
+          original_quantity_sold: number | null
+          original_return_policy_id: string | null
+          original_shipping_policy_id: string | null
+          original_sku: string | null
+          original_store_category_id: string | null
+          original_store_category_name: string | null
+          original_title: string
+          original_view_item_url: string | null
+          original_views: number | null
+          original_watchers: number | null
+          refresh_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cached_listing_data?: Json | null
+          create_completed_at?: string | null
+          created_at?: string
+          end_completed_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          error_phase?: string | null
+          fetch_completed_at?: string | null
+          id?: string
+          modified_price?: number | null
+          modified_quantity?: number | null
+          modified_title?: string | null
+          new_item_id?: string | null
+          new_listing_start_date?: string | null
+          new_listing_url?: string | null
+          original_best_offer_auto_accept?: number | null
+          original_best_offer_enabled?: boolean | null
+          original_category_id?: string | null
+          original_category_name?: string | null
+          original_condition?: string | null
+          original_condition_id?: number | null
+          original_description?: string | null
+          original_gallery_url?: string | null
+          original_image_urls?: string[] | null
+          original_item_id: string
+          original_listing_end_date?: string | null
+          original_listing_start_date?: string | null
+          original_listing_type?: string | null
+          original_minimum_best_offer?: number | null
+          original_payment_policy_id?: string | null
+          original_price?: number | null
+          original_quantity?: number | null
+          original_quantity_sold?: number | null
+          original_return_policy_id?: string | null
+          original_shipping_policy_id?: string | null
+          original_sku?: string | null
+          original_store_category_id?: string | null
+          original_store_category_name?: string | null
+          original_title: string
+          original_view_item_url?: string | null
+          original_views?: number | null
+          original_watchers?: number | null
+          refresh_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cached_listing_data?: Json | null
+          create_completed_at?: string | null
+          created_at?: string
+          end_completed_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          error_phase?: string | null
+          fetch_completed_at?: string | null
+          id?: string
+          modified_price?: number | null
+          modified_quantity?: number | null
+          modified_title?: string | null
+          new_item_id?: string | null
+          new_listing_start_date?: string | null
+          new_listing_url?: string | null
+          original_best_offer_auto_accept?: number | null
+          original_best_offer_enabled?: boolean | null
+          original_category_id?: string | null
+          original_category_name?: string | null
+          original_condition?: string | null
+          original_condition_id?: number | null
+          original_description?: string | null
+          original_gallery_url?: string | null
+          original_image_urls?: string[] | null
+          original_item_id?: string
+          original_listing_end_date?: string | null
+          original_listing_start_date?: string | null
+          original_listing_type?: string | null
+          original_minimum_best_offer?: number | null
+          original_payment_policy_id?: string | null
+          original_price?: number | null
+          original_quantity?: number | null
+          original_quantity_sold?: number | null
+          original_return_policy_id?: string | null
+          original_shipping_policy_id?: string | null
+          original_sku?: string | null
+          original_store_category_id?: string | null
+          original_store_category_name?: string | null
+          original_title?: string
+          original_view_item_url?: string | null
+          original_views?: number | null
+          original_watchers?: number | null
+          refresh_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_listing_refresh_items_refresh_id_fkey"
+            columns: ["refresh_id"]
+            isOneToOne: false
+            referencedRelation: "ebay_listing_refreshes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_listing_refresh_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ebay_listing_refreshes: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_count: number
+          end_phase_completed_at: string | null
+          ended_count: number
+          error_message: string | null
+          failed_count: number
+          fetch_phase_completed_at: string | null
+          fetched_count: number
+          id: string
+          review_mode: boolean
+          skipped_count: number
+          started_at: string | null
+          status: string
+          total_listings: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_count?: number
+          end_phase_completed_at?: string | null
+          ended_count?: number
+          error_message?: string | null
+          failed_count?: number
+          fetch_phase_completed_at?: string | null
+          fetched_count?: number
+          id?: string
+          review_mode?: boolean
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          total_listings?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_count?: number
+          end_phase_completed_at?: string | null
+          ended_count?: number
+          error_message?: string | null
+          failed_count?: number
+          fetch_phase_completed_at?: string | null
+          fetched_count?: number
+          id?: string
+          review_mode?: boolean
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          total_listings?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_listing_refreshes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_order_line_items: {
         Row: {
           created_at: string

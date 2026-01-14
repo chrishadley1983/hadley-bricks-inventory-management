@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PenLine, Image as ImageIcon, FileText, History } from 'lucide-react';
+import { PenLine, Image as ImageIcon, FileText, History, RefreshCw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,8 +21,11 @@ const TemplatesTab = React.lazy(() =>
 const HistoryTab = React.lazy(() =>
   import('./tabs/HistoryTab').then((m) => ({ default: m.HistoryTab }))
 );
+const RefreshTab = React.lazy(() =>
+  import('./tabs/RefreshTab').then((m) => ({ default: m.RefreshTab }))
+);
 
-type TabValue = 'create' | 'studio' | 'templates' | 'history';
+type TabValue = 'create' | 'studio' | 'templates' | 'history' | 'refresh';
 
 interface TabConfig {
   value: TabValue;
@@ -34,6 +37,7 @@ const tabs: TabConfig[] = [
   { value: 'create', label: 'Create Listing', icon: <PenLine className="h-4 w-4" aria-hidden="true" /> },
   { value: 'studio', label: 'Image Studio', icon: <ImageIcon className="h-4 w-4" aria-hidden="true" /> },
   { value: 'templates', label: 'Templates', icon: <FileText className="h-4 w-4" aria-hidden="true" /> },
+  { value: 'refresh', label: 'Refresh', icon: <RefreshCw className="h-4 w-4" aria-hidden="true" /> },
   { value: 'history', label: 'History', icon: <History className="h-4 w-4" aria-hidden="true" /> },
 ];
 
@@ -65,7 +69,7 @@ export function ListingAssistantTabs() {
 
   return (
     <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as TabValue)}>
-      <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+      <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
         {tabs.map((tab) => (
           <TabsTrigger
             key={tab.value}
@@ -98,6 +102,12 @@ export function ListingAssistantTabs() {
       <TabsContent value="templates" className="mt-6">
         <Suspense fallback={<TabLoadingFallback />}>
           <TemplatesTab />
+        </Suspense>
+      </TabsContent>
+
+      <TabsContent value="refresh" className="mt-6">
+        <Suspense fallback={<TabLoadingFallback />}>
+          <RefreshTab />
         </Suspense>
       </TabsContent>
 

@@ -51,10 +51,33 @@ interface EbayAuthState {
 // Required OAuth Scopes
 // ============================================================================
 
-const REQUIRED_SCOPES = [
+/**
+ * Base scopes required for order sync and finances
+ */
+const BASE_SCOPES = [
   'https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly',
   'https://api.ebay.com/oauth/api_scope/sell.finances',
 ];
+
+/**
+ * Additional scopes required for listing management (end/create listings)
+ */
+const LISTING_MANAGEMENT_SCOPES = [
+  'https://api.ebay.com/oauth/api_scope/sell.inventory',
+  'https://api.ebay.com/oauth/api_scope/sell.account',
+];
+
+/**
+ * Scope required for analytics/traffic data (views)
+ */
+const ANALYTICS_SCOPES = [
+  'https://api.ebay.com/oauth/api_scope/sell.analytics.readonly',
+];
+
+/**
+ * All required scopes for full functionality
+ */
+const REQUIRED_SCOPES = [...BASE_SCOPES, ...LISTING_MANAGEMENT_SCOPES, ...ANALYTICS_SCOPES];
 
 // ============================================================================
 // EbayAuthService Class
@@ -318,6 +341,94 @@ export class EbayAuthService {
   async isConnected(userId: string): Promise<boolean> {
     const status = await this.getConnectionStatus(userId);
     return status.isConnected;
+  }
+
+  // ============================================================================
+  // Scope Validation
+  // ============================================================================
+
+  /**
+   * Check if user has the required scopes for listing management
+   * @param userId The user ID to check
+   * @returns Object with hasScopes boolean and array of missing scopes
+   */
+  async hasListingManagementScopes(userId: string): Promise<{
+    hasScopes: boolean;
+    missingScopes: string[];
+    currentScopes: string[];
+  }> {
+    const credentials = await this.getCredentials(userId);
+
+    // Listing refresh needs both listing management AND analytics scopes
+    const requiredForRefresh = [...LISTING_MANAGEMENT_SCOPES, ...ANALYTICS_SCOPES];
+
+    if (!credentials) {
+      return {
+        hasScopes: false,
+        missingScopes: requiredForRefresh,
+        currentScopes: [],
+      };
+    }
+
+    const currentScopes = credentials.scopes || [];
+    const currentScopeSet = new Set(currentScopes);
+    const missingScopes = requiredForRefresh.filter(
+      (scope) => !currentScopeSet.has(scope)
+    );
+
+    return {
+      hasScopes: missingScopes.length === 0,
+      missingScopes,
+      currentScopes,
+    };
+  }
+
+  /**
+   * Check if user has analytics scope for views data
+   * @param userId The user ID to check
+   * @returns Object with hasScope boolean
+   */
+  async hasAnalyticsScope(userId: string): Promise<boolean> {
+    const credentials = await this.getCredentials(userId);
+    if (!credentials) return false;
+
+    const currentScopes = credentials.scopes || [];
+    const currentScopeSet = new Set(currentScopes);
+
+    return ANALYTICS_SCOPES.every((scope) => currentScopeSet.has(scope));
+  }
+
+  /**
+   * Check if user has all required scopes (base + listing management)
+   * @param userId The user ID to check
+   * @returns Object with hasScopes boolean and array of missing scopes
+   */
+  async hasAllRequiredScopes(userId: string): Promise<{
+    hasScopes: boolean;
+    missingScopes: string[];
+    currentScopes: string[];
+  }> {
+    const credentials = await this.getCredentials(userId);
+
+    if (!credentials) {
+      return {
+        hasScopes: false,
+        missingScopes: REQUIRED_SCOPES,
+        currentScopes: [],
+      };
+    }
+
+    const currentScopes = credentials.scopes || [];
+    const currentScopeSet = new Set(currentScopes);
+    const missingScopes = REQUIRED_SCOPES.filter(
+      (scope) => !currentScopeSet.has(scope)
+    );
+
+    return {
+      hasScopes: missingScopes.length === 0,
+      missingScopes,
+      currentScopes,
+    };
   }
 
   // ============================================================================
