@@ -28,7 +28,12 @@ import type {
   FeedProcessingReport,
   ListingsValidationResult,
   PriceConflict,
+  TwoPhaseResult,
+  TwoPhaseStepResult,
 } from './amazon-sync.types';
+import { TWO_PHASE_DEFAULTS } from './amazon-sync.types';
+import { emailService } from '@/lib/email';
+import { pushoverService } from '@/lib/notifications';
 
 // Re-export constants
 export { UK_MARKETPLACE_ID, DEFAULT_PRODUCT_TYPE, PRODUCT_TYPE_CACHE_TTL_DAYS } from './amazon-sync.types';
@@ -707,6 +712,771 @@ export class AmazonSyncService {
     }
   }
 
+  // ==========================================================================
+  // TWO-PHASE SYNC (ASYNC/BACKGROUND VERSION)
+  // ==========================================================================
+
+  /**
+   * Submit feed using two-phase sync (price first, then quantity)
+   *
+   * IMPORTANT: This method returns IMMEDIATELY after submitting the price feed.
+   * The caller should poll using processTwoPhaseStep() to continue processing.
+   *
+   * Flow:
+   * 1. Submit price-only feed → RETURN IMMEDIATELY
+   * 2. Client polls processTwoPhaseStep() which handles:
+   *    - Polling for price feed completion
+   *    - Verifying price is live on Amazon
+   *    - Submitting quantity feed
+   *    - Polling for quantity feed completion
+   *    - Sending notifications
+   *
+   * @param options - Submission options
+   * @returns Result with price feed and initial status (processing continues in background)
+   */
+  async submitTwoPhaseFeed(options: {
+    dryRun: boolean;
+    userEmail: string;
+    priceVerificationTimeout?: number;
+    priceVerificationInterval?: number;
+  }): Promise<TwoPhaseResult> {
+    const { dryRun, userEmail } = options;
+
+    console.log('[AmazonSyncService] Starting two-phase sync (async mode)');
+
+    // Get credentials and aggregated items
+    const credentials = await this.getAmazonCredentials();
+    if (!credentials) {
+      throw new Error('Amazon credentials not configured');
+    }
+
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    if (aggregatedItems.length === 0) {
+      throw new Error('No items in the sync queue');
+    }
+
+    // Submit price-only feed
+    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed');
+    const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
+
+    if (dryRun) {
+      return {
+        priceFeed,
+        status: 'price_verified',
+      };
+    }
+
+    // Set up background processing state
+    // Note: two_phase_* columns added by migration 20260123000002_two_phase_background.sql
+    await this.updateFeedRecord(priceFeed.id, {
+      two_phase_step: 'price_submitted',
+      two_phase_started_at: new Date().toISOString(),
+      two_phase_user_email: userEmail,
+      two_phase_poll_count: 0,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Return immediately - processing continues via processTwoPhaseStep()
+    return {
+      priceFeed: await this.getFeed(priceFeed.id),
+      status: 'price_submitted',
+    };
+  }
+
+  /**
+   * Process the next step of a two-phase sync
+   *
+   * Call this repeatedly to advance through the two-phase sync process.
+   * Each call processes one step and returns the current state.
+   *
+   * Steps:
+   * 1. price_polling - Poll Amazon for price feed status
+   * 2. price_verification - Check if price is live on Amazon
+   * 3. quantity_submission - Submit quantity feed
+   * 4. quantity_polling - Poll Amazon for quantity feed status
+   * 5. complete - All done, notifications sent
+   *
+   * @param feedId - The price feed ID
+   * @param userEmail - User email for notifications
+   * @returns Current state and whether processing is complete
+   */
+  async processTwoPhaseStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    const feed = await this.getFeedWithTwoPhaseState(feedId);
+
+    if (!feed) {
+      throw new Error('Feed not found');
+    }
+
+    // Check if this is a two-phase feed
+    if (feed.sync_mode !== 'two_phase') {
+      throw new Error('Feed is not a two-phase sync');
+    }
+
+    const step = feed.two_phase_step as string;
+
+    // Update poll tracking
+    await this.updateFeedRecord(feedId, {
+      two_phase_last_poll_at: new Date().toISOString(),
+      two_phase_poll_count: (feed.two_phase_poll_count ?? 0) + 1,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Check for timeout (30 minutes from start)
+    const startedAt = feed.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : 0;
+    const elapsed = Date.now() - startedAt;
+    const timeout = TWO_PHASE_DEFAULTS.priceVerificationTimeout;
+
+    if (elapsed > timeout && step !== 'complete' && step !== 'failed') {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Timeout: Two-phase sync exceeded 30 minute limit');
+    }
+
+    // Process based on current step
+    switch (step) {
+      case 'price_submitted':
+      case 'price_polling':
+        return this.processPricePollingStep(feedId, userEmail);
+
+      case 'price_verifying':
+        return this.processPriceVerificationStep(feedId, userEmail);
+
+      case 'quantity_submitted':
+      case 'quantity_polling':
+        return this.processQuantityPollingStep(feedId, userEmail);
+
+      case 'complete':
+        return {
+          feedId,
+          status: 'completed',
+          step: 'complete',
+          isComplete: true,
+          message: 'Two-phase sync completed successfully',
+          priceFeed: await this.getFeed(feedId),
+          quantityFeed: feed.quantity_feed_id ? await this.getFeed(feed.quantity_feed_id) : undefined,
+        };
+
+      case 'failed':
+        return {
+          feedId,
+          status: 'failed',
+          step: 'complete',
+          isComplete: true,
+          message: feed.error_message || 'Two-phase sync failed',
+          error: feed.error_message || undefined,
+          priceFeed: await this.getFeed(feedId),
+        };
+
+      default:
+        throw new Error(`Unknown two-phase step: ${step}`);
+    }
+  }
+
+  /**
+   * Process price feed polling step
+   */
+  private async processPricePollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    // Poll Amazon for price feed status
+    const feed = await this.pollFeedStatus(feedId);
+
+    if (feed.status === 'submitted' || feed.status === 'processing') {
+      // Still processing - continue polling
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'price_polling',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'price_processing',
+        step: 'price_polling',
+        isComplete: false,
+        message: 'Price feed still processing on Amazon',
+        priceFeed: feed,
+        nextPollDelay: 5000,
+      };
+    }
+
+    if (feed.status === 'error' || (feed.error_count ?? 0) > 0) {
+      // Price feed rejected
+      return this.failTwoPhaseSync(feedId, userEmail, feed.error_message || 'Price feed rejected by Amazon', 'price');
+    }
+
+    if (feed.status === 'done') {
+      // Price feed accepted - move to verification
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'price_verifying',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'price_verifying',
+        step: 'price_verification',
+        isComplete: false,
+        message: 'Price feed accepted, verifying price is live on Amazon',
+        priceFeed: feed,
+        nextPollDelay: 30000, // 30 seconds for verification
+      };
+    }
+
+    // Unexpected status
+    return this.failTwoPhaseSync(feedId, userEmail, `Unexpected feed status: ${feed.status}`);
+  }
+
+  /**
+   * Process price verification step
+   *
+   * Uses queue items for verification. If queue is empty (edge case), falls back to feed items.
+   */
+  private async processPriceVerificationStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    // Try to get items from queue first
+    let aggregatedItems = await this.getAggregatedQueueItems();
+
+    // Fallback: If queue is empty, reconstruct from feed items
+    // This handles edge cases where queue was cleared unexpectedly
+    if (aggregatedItems.length === 0) {
+      console.log('[AmazonSyncService] Queue empty - reconstructing from feed items');
+      const feedItems = await this.getFeedItems(feedId);
+
+      if (feedItems.length === 0) {
+        return this.failTwoPhaseSync(feedId, userEmail, 'No items found for verification');
+      }
+
+      // Reconstruct aggregated items from feed items
+      aggregatedItems = feedItems.map((item) => ({
+        asin: item.asin,
+        amazonSku: item.amazon_sku,
+        price: Number(item.submitted_price),
+        queueQuantity: item.submitted_quantity,
+        existingAmazonQuantity: 0, // Not needed for verification
+        totalQuantity: item.submitted_quantity,
+        inventoryItemIds: item.inventory_item_ids,
+        queueItemIds: [], // Not available
+        itemNames: [],
+        productType: DEFAULT_PRODUCT_TYPE,
+        isNewSku: item.is_new_sku ?? false,
+      }));
+    }
+
+    // Check if prices are live
+    const credentials = await this.getAmazonCredentials();
+    if (!credentials) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Amazon credentials not available');
+    }
+
+    const listingsClient = new AmazonListingsClient(credentials);
+    let allVerified = true;
+    const failedSkus: string[] = [];
+
+    for (const item of aggregatedItems) {
+      try {
+        const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', ['offers']);
+        const offer = listing?.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
+        const livePrice = offer?.price?.amount;
+
+        if (livePrice === undefined || Math.abs(livePrice - item.price) > 0.01) {
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+          console.log(
+            `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
+              `expected ${item.price}, got ${livePrice}`
+          );
+        }
+      } catch (error) {
+        allVerified = false;
+        failedSkus.push(item.amazonSku);
+        console.error(`[AmazonSyncService] Error checking price for ${item.amazonSku}:`, error);
+      }
+    }
+
+    if (!allVerified) {
+      // Still waiting - check if we've exceeded timeout
+      const feed = await this.getFeedWithTwoPhaseState(feedId);
+      const startedAt = feed?.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : Date.now();
+      const elapsed = Date.now() - startedAt;
+
+      if (elapsed > TWO_PHASE_DEFAULTS.priceVerificationTimeout) {
+        // Timeout - fail with verification error
+        return this.failTwoPhaseVerification(feedId, userEmail, failedSkus);
+      }
+
+      return {
+        feedId,
+        status: 'price_verifying',
+        step: 'price_verification',
+        isComplete: false,
+        message: `Waiting for price to appear on Amazon (${Math.round(elapsed / 1000)}s elapsed)`,
+        priceFeed: await this.getFeed(feedId),
+        nextPollDelay: 30000,
+      };
+    }
+
+    // All prices verified - submit quantity feed
+    console.log('[AmazonSyncService] Prices verified - submitting quantity feed');
+
+    const priceVerifiedAt = new Date().toISOString();
+    await this.updateFeedRecord(feedId, {
+      status: 'verified',
+      price_verified_at: priceVerifiedAt,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Submit quantity feed
+    const quantityFeed = await this.submitQuantityOnlyFeed(aggregatedItems, credentials, feedId);
+
+    // Update parent feed with quantity feed reference
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'quantity_submitted',
+      quantity_feed_id: quantityFeed.id,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    return {
+      feedId,
+      status: 'quantity_submitted',
+      step: 'quantity_submission',
+      isComplete: false,
+      message: 'Quantity feed submitted to Amazon',
+      priceFeed: await this.getFeed(feedId),
+      quantityFeed,
+      priceVerifiedAt,
+      nextPollDelay: 5000,
+    };
+  }
+
+  /**
+   * Process quantity feed polling step
+   */
+  private async processQuantityPollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
+    const quantityFeedId = priceFeed?.quantity_feed_id;
+
+    if (!quantityFeedId) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Quantity feed ID not found');
+    }
+
+    // Poll quantity feed status
+    const quantityFeed = await this.pollFeedStatus(quantityFeedId);
+
+    if (quantityFeed.status === 'submitted' || quantityFeed.status === 'processing') {
+      // Still processing
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'quantity_polling',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'quantity_processing',
+        step: 'quantity_polling',
+        isComplete: false,
+        message: 'Quantity feed still processing on Amazon',
+        priceFeed: await this.getFeed(feedId),
+        quantityFeed,
+        nextPollDelay: 5000,
+      };
+    }
+
+    if (quantityFeed.status === 'done') {
+      // SUCCESS - complete the two-phase sync
+      return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
+    }
+
+    // Quantity feed failed
+    return this.failTwoPhaseSync(
+      feedId,
+      userEmail,
+      quantityFeed.error_message || 'Quantity feed rejected by Amazon',
+      'quantity'
+    );
+  }
+
+  /**
+   * Complete a successful two-phase sync
+   */
+  private async completeTwoPhaseSync(
+    feedId: string,
+    userEmail: string,
+    quantityFeedId: string
+  ): Promise<TwoPhaseStepResult> {
+    const aggregatedItems = await this.getAggregatedQueueItems();
+
+    // Clear queue
+    await this.clearQueueForFeed(aggregatedItems);
+
+    // Update feed status
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'complete',
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send success notifications
+    const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
+    const startedAt = priceFeed?.two_phase_started_at ? new Date(priceFeed.two_phase_started_at).getTime() : Date.now();
+    const verificationDuration = Date.now() - startedAt;
+
+    const itemDetails = aggregatedItems.map((item) => ({
+      sku: item.amazonSku,
+      asin: item.asin,
+      setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
+      itemName: item.itemNames[0] ?? 'Unknown',
+      price: item.price,
+    }));
+
+    await emailService.sendTwoPhaseSuccess({
+      userEmail,
+      feedId,
+      itemCount: aggregatedItems.length,
+      priceVerificationTime: verificationDuration,
+      itemDetails,
+    });
+
+    await pushoverService.sendSyncSuccess({
+      feedId,
+      itemCount: aggregatedItems.length,
+      verificationTime: verificationDuration,
+    });
+
+    return {
+      feedId,
+      status: 'completed',
+      step: 'complete',
+      isComplete: true,
+      message: 'Two-phase sync completed successfully! Notifications sent.',
+      priceFeed: await this.getFeed(feedId),
+      quantityFeed: await this.getFeed(quantityFeedId),
+    };
+  }
+
+  /**
+   * Fail a two-phase sync with notifications
+   */
+  private async failTwoPhaseSync(
+    feedId: string,
+    userEmail: string,
+    reason: string,
+    phase?: 'price' | 'quantity'
+  ): Promise<TwoPhaseStepResult> {
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'failed',
+      status: 'error',
+      error_message: reason,
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send failure notifications
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    const itemDetails = this.buildItemDetails(aggregatedItems);
+
+    if (phase) {
+      await emailService.sendFeedRejectionFailure({
+        userEmail,
+        feedId,
+        phase,
+        errorMessage: reason,
+        itemDetails,
+      });
+    }
+
+    await pushoverService.sendSyncFailure({
+      feedId,
+      itemCount: aggregatedItems.length,
+      reason,
+      phase: phase === 'price' ? 'price_rejected' : phase === 'quantity' ? 'quantity_rejected' : 'price_verification',
+    });
+
+    return {
+      feedId,
+      status: 'failed',
+      step: 'complete',
+      isComplete: true,
+      message: `Two-phase sync failed: ${reason}`,
+      error: reason,
+      priceFeed: await this.getFeed(feedId),
+    };
+  }
+
+  /**
+   * Fail specifically due to price verification timeout
+   */
+  private async failTwoPhaseVerification(
+    feedId: string,
+    userEmail: string,
+    failedSkus: string[]
+  ): Promise<TwoPhaseStepResult> {
+    const reason = `Price verification failed for: ${failedSkus.join(', ')}`;
+
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'failed',
+      status: 'verification_failed',
+      error_message: reason,
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send failure notifications
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    const itemDetails = this.buildItemDetails(aggregatedItems);
+
+    await emailService.sendTwoPhaseFailure({
+      userEmail,
+      feedId,
+      failedSkus,
+      submittedPrice: aggregatedItems[0]?.price ?? 0,
+      verificationDuration: TWO_PHASE_DEFAULTS.priceVerificationTimeout,
+      itemDetails,
+    });
+
+    await pushoverService.sendSyncFailure({
+      feedId,
+      itemCount: failedSkus.length,
+      reason: `Price not visible after ${TWO_PHASE_DEFAULTS.priceVerificationTimeout / 60000} mins`,
+      phase: 'price_verification',
+    });
+
+    return {
+      feedId,
+      status: 'failed',
+      step: 'complete',
+      isComplete: true,
+      message: `Price verification timeout: ${reason}`,
+      error: reason,
+      priceFeed: await this.getFeed(feedId),
+    };
+  }
+
+  /**
+   * Get feed with two-phase state columns
+   */
+  private async getFeedWithTwoPhaseState(feedId: string) {
+    const { data, error } = await this.supabase
+      .from('amazon_sync_feeds')
+      .select('*')
+      .eq('id', feedId)
+      .eq('user_id', this.userId)
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to get feed: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Submit price-only feed
+   */
+  private async submitPriceOnlyFeed(
+    items: AggregatedQueueItem[],
+    credentials: AmazonCredentials,
+    dryRun: boolean
+  ): Promise<SyncFeed> {
+    // Create feed record
+    const feed = await this.createFeedRecord(items.length, dryRun);
+
+    // Update with sync mode and phase
+    // Note: sync_mode and phase added by migration 20260123000001_two_phase_sync.sql
+    await this.updateFeedRecord(feed.id, {
+      sync_mode: 'two_phase',
+      phase: 'price',
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Build price-only payload
+    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
+      messageId: index + 1,
+      sku: item.amazonSku,
+      operationType: 'PATCH' as const,
+      productType: item.productType,
+      patches: this.buildPriceOnlyPatches(item),
+    }));
+
+    const payload: ListingsFeedPayload = {
+      header: {
+        sellerId: credentials.sellerId,
+        version: '2.0',
+        issueLocale: 'en_GB',
+      },
+      messages,
+    };
+
+    // Update feed with payload
+    await this.updateFeedRecord(feed.id, {
+      request_payload:
+        payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+    });
+
+    // Create feed items
+    await this.createFeedItems(feed.id, items);
+
+    if (dryRun) {
+      // Validate via Listings API
+      const listingsClient = new AmazonListingsClient(credentials);
+      const validationResults = await this.validateItems(listingsClient, items);
+      await this.updateFeedItemsWithValidation(feed.id, validationResults);
+
+      const successCount = validationResults.filter((r) => r.status === 'VALID').length;
+      await this.updateFeedRecord(feed.id, {
+        status: 'done',
+        success_count: successCount,
+        error_count: validationResults.length - successCount,
+        completed_at: new Date().toISOString(),
+      });
+    } else {
+      // Submit to Amazon
+      const feedsClient = new AmazonFeedsClient(credentials);
+      const { feedId, feedDocumentId } = await feedsClient.submitFeed(
+        payload,
+        'JSON_LISTINGS_FEED',
+        ['A1F83G8C2ARO7P']
+      );
+
+      await this.updateFeedRecord(feed.id, {
+        amazon_feed_id: feedId,
+        amazon_feed_document_id: feedDocumentId,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+      });
+    }
+
+    return this.getFeed(feed.id);
+  }
+
+  /**
+   * Submit quantity-only feed
+   */
+  private async submitQuantityOnlyFeed(
+    items: AggregatedQueueItem[],
+    credentials: AmazonCredentials,
+    parentFeedId: string
+  ): Promise<SyncFeed> {
+    // Create feed record linked to parent
+    // Note: sync_mode, phase, parent_feed_id added by migration 20260123000001_two_phase_sync.sql
+    const { data: feed, error } = await this.supabase
+      .from('amazon_sync_feeds')
+      .insert({
+        user_id: this.userId,
+        feed_type: 'JSON_LISTINGS_FEED',
+        is_dry_run: false,
+        marketplace_id: 'A1F83G8C2ARO7P',
+        status: 'pending',
+        total_items: items.length,
+        sync_mode: 'two_phase',
+        phase: 'quantity',
+        parent_feed_id: parentFeedId,
+      } as Database['public']['Tables']['amazon_sync_feeds']['Insert'])
+      .select()
+      .single();
+
+    if (error || !feed) {
+      throw new Error(`Failed to create quantity feed: ${error?.message}`);
+    }
+
+    // Build quantity-only payload
+    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
+      messageId: index + 1,
+      sku: item.amazonSku,
+      operationType: 'PATCH' as const,
+      productType: item.productType,
+      patches: this.buildQuantityOnlyPatches(item),
+    }));
+
+    const payload: ListingsFeedPayload = {
+      header: {
+        sellerId: credentials.sellerId,
+        version: '2.0',
+        issueLocale: 'en_GB',
+      },
+      messages,
+    };
+
+    // Update feed with payload
+    await this.updateFeedRecord(feed.id, {
+      request_payload:
+        payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+    });
+
+    // Create feed items
+    await this.createFeedItems(feed.id, items);
+
+    // Submit to Amazon
+    const feedsClient = new AmazonFeedsClient(credentials);
+    const { feedId, feedDocumentId } = await feedsClient.submitFeed(
+      payload,
+      'JSON_LISTINGS_FEED',
+      ['A1F83G8C2ARO7P']
+    );
+
+    await this.updateFeedRecord(feed.id, {
+      amazon_feed_id: feedId,
+      amazon_feed_document_id: feedDocumentId,
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+    });
+
+    return this.getFeed(feed.id);
+  }
+
+  /**
+   * Build patches for price-only update (Phase 1 of two-phase sync)
+   */
+  private buildPriceOnlyPatches(item: AggregatedQueueItem): ListingsFeedPatch[] {
+    const purchasableOffer = buildPurchasableOffer(item.price);
+
+    return [
+      {
+        op: 'replace',
+        path: '/attributes/purchasable_offer',
+        value: purchasableOffer,
+      },
+      // Also update list_price for UK marketplace compliance
+      {
+        op: 'replace',
+        path: '/attributes/list_price',
+        value: [
+          {
+            marketplace_id: 'A1F83G8C2ARO7P',
+            currency: 'GBP',
+            value_with_tax: item.price,
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Build patches for quantity-only update (Phase 2 of two-phase sync)
+   */
+  private buildQuantityOnlyPatches(item: AggregatedQueueItem): ListingsFeedPatch[] {
+    return [
+      {
+        op: 'replace',
+        path: '/attributes/fulfillment_availability',
+        value: [
+          {
+            fulfillment_channel_code: 'DEFAULT',
+            quantity: item.totalQuantity,
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Build item details for notification emails
+   */
+  private buildItemDetails(
+    items: AggregatedQueueItem[]
+  ): Array<{ sku: string; asin: string; setNumber: string; itemName: string }> {
+    return items.map((item) => ({
+      sku: item.amazonSku,
+      asin: item.asin,
+      setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
+      itemName: item.itemNames[0] ?? 'Unknown',
+    }));
+  }
+
+  /**
+   * Helper to add delay
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // ==========================================================================
+  // FEED POLLING
+  // ==========================================================================
+
   /**
    * Poll Amazon for feed status update
    */
@@ -794,14 +1564,20 @@ export class AmazonSyncService {
       }
 
       // Clear queue items for successful/accepted submissions
-      const aggregated = await this.getAggregatedQueueItems();
-      const successfulAsins = items
-        .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
-        .map((i) => i.asin);
-      const successfulAggregated = aggregated.filter((a) =>
-        successfulAsins.includes(a.asin)
-      );
-      await this.clearQueueForFeed(successfulAggregated);
+      // IMPORTANT: Don't clear for two-phase sync price phase - we need items for quantity phase
+      const isTwoPhasePriceFeed = feed.sync_mode === 'two_phase' && feed.phase === 'price';
+      if (!isTwoPhasePriceFeed) {
+        const aggregated = await this.getAggregatedQueueItems();
+        const successfulAsins = items
+          .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
+          .map((i) => i.asin);
+        const successfulAggregated = aggregated.filter((a) =>
+          successfulAsins.includes(a.asin)
+        );
+        await this.clearQueueForFeed(successfulAggregated);
+      } else {
+        console.log('[AmazonSyncService] Skipping queue clear for two-phase price feed - items needed for quantity phase');
+      }
     } else if (status.processingStatus === 'IN_PROGRESS') {
       updates.status = 'processing';
     } else if (
@@ -1027,7 +1803,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('user_id', this.userId)
       .eq('status', 'done_verifying')
@@ -1051,7 +1827,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('user_id', this.userId)
       .order('created_at', { ascending: false })
@@ -1138,7 +1914,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('id', feedId)
       .eq('user_id', this.userId)

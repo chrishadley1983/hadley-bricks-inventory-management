@@ -498,3 +498,119 @@ export const VERIFICATION_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** Maximum number of verification attempts */
 export const MAX_VERIFICATION_ATTEMPTS = 6;
+
+// ============================================================================
+// TWO-PHASE SYNC TYPES
+// ============================================================================
+
+/**
+ * Sync mode determines how price and quantity updates are submitted
+ *
+ * - single: Current behavior - price and quantity in one feed
+ * - two_phase: Price feed first, verify, then quantity feed
+ */
+export type SyncMode = 'single' | 'two_phase';
+
+/**
+ * Phase within a two-phase sync
+ */
+export type SyncPhase = 'price' | 'quantity';
+
+/**
+ * Extended feed status for two-phase sync tracking
+ *
+ * Combines with FeedStatus for full status tracking:
+ * - price_pending: Price feed not yet submitted
+ * - price_submitted: Price feed submitted to Amazon
+ * - price_processing: Amazon processing price feed
+ * - price_verifying: Waiting for price to propagate (up to 30 min)
+ * - price_verified: Price confirmed live - ready for quantity
+ * - quantity_pending: Quantity feed not yet submitted
+ * - quantity_submitted: Quantity feed submitted
+ * - quantity_processing: Amazon processing quantity
+ * - completed: Both phases complete
+ * - failed: Either phase failed
+ */
+export type TwoPhaseStatus =
+  | 'price_pending'
+  | 'price_submitted'
+  | 'price_processing'
+  | 'price_verifying'
+  | 'price_verified'
+  | 'quantity_pending'
+  | 'quantity_submitted'
+  | 'quantity_processing'
+  | 'completed'
+  | 'failed';
+
+/**
+ * Options for feed submission
+ */
+export interface SubmitFeedOptions {
+  dryRun: boolean;
+  syncMode: SyncMode;
+  /** User email for notifications (required for two_phase mode) */
+  userEmail?: string;
+  /** For two_phase: max time to wait for price verification (ms) */
+  priceVerificationTimeout?: number;
+  /** For two_phase: polling interval for price verification (ms) */
+  priceVerificationInterval?: number;
+}
+
+/**
+ * Two-phase sync result
+ */
+export interface TwoPhaseResult {
+  priceFeed: SyncFeed;
+  quantityFeed?: SyncFeed;
+  status: TwoPhaseStatus;
+  priceVerifiedAt?: string;
+  error?: string;
+}
+
+/**
+ * Result from processing a single step of two-phase sync
+ * Used by the background processor
+ */
+export interface TwoPhaseStepResult {
+  feedId: string;
+  status: TwoPhaseStatus;
+  /** Current step that was just processed */
+  step: 'price_polling' | 'price_verification' | 'quantity_submission' | 'quantity_polling' | 'complete';
+  /** Whether processing is complete (success or failure) */
+  isComplete: boolean;
+  /** Message describing what happened */
+  message: string;
+  /** Error message if failed */
+  error?: string;
+  /** Price feed details */
+  priceFeed?: SyncFeed;
+  /** Quantity feed details (only after quantity submission) */
+  quantityFeed?: SyncFeed;
+  /** When price was verified (ISO string) */
+  priceVerifiedAt?: string;
+  /** Recommended delay before next poll (ms) */
+  nextPollDelay?: number;
+}
+
+// ============================================================================
+// TWO-PHASE SYNC CONSTANTS
+// ============================================================================
+
+/**
+ * Default two-phase sync configuration
+ */
+export const TWO_PHASE_DEFAULTS = {
+  /** Max time to wait for price verification (30 minutes - Amazon can be slow) */
+  priceVerificationTimeout: 30 * 60 * 1000,
+
+  /** How often to check if price is live (30 seconds) */
+  priceVerificationInterval: 30 * 1000,
+
+  /** Whether two-phase is the default mode */
+  defaultSyncMode: 'single' as const,
+
+  /** Email notifications (always enabled for two-phase) */
+  emailOnSuccess: true,
+  emailOnFailure: true,
+};

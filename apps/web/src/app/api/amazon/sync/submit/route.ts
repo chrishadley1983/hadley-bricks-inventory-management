@@ -2,6 +2,10 @@
  * Amazon Sync Submit API Route
  *
  * POST /api/amazon/sync/submit - Submit queue to Amazon
+ *
+ * Supports two sync modes:
+ * - single: Submit price and quantity in one feed (default)
+ * - two_phase: Submit price first, verify it's live, then submit quantity
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +19,9 @@ import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 
 const SubmitSchema = z.object({
   dryRun: z.boolean().default(false),
+  syncMode: z.enum(['single', 'two_phase']).default('single'),
+  priceVerificationTimeout: z.number().optional(),
+  priceVerificationInterval: z.number().optional(),
 });
 
 // ============================================================================
@@ -43,12 +50,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { dryRun, syncMode, priceVerificationTimeout, priceVerificationInterval } = parsed.data;
     const service = new AmazonSyncService(supabase, user.id);
-    const feed = await service.submitFeed(parsed.data.dryRun);
 
-    const message = parsed.data.dryRun
-      ? 'Validation completed'
-      : 'Feed submitted to Amazon';
+    if (syncMode === 'two_phase') {
+      // Two-phase sync: price first, verify, then quantity
+      // Requires user email for notifications
+      const result = await service.submitTwoPhaseFeed({
+        dryRun,
+        userEmail: user.email || '',
+        priceVerificationTimeout,
+        priceVerificationInterval,
+      });
+
+      const message =
+        result.status === 'completed'
+          ? 'Two-phase sync completed successfully'
+          : result.status === 'failed'
+            ? result.error || 'Two-phase sync failed'
+            : dryRun
+              ? 'Validation completed'
+              : 'Two-phase sync in progress';
+
+      return NextResponse.json(
+        {
+          data: { result },
+          message,
+        },
+        { status: 201 }
+      );
+    }
+
+    // Single-phase sync (default): price and quantity in one feed
+    const feed = await service.submitFeed(dryRun);
+
+    const message = dryRun ? 'Validation completed' : 'Feed submitted to Amazon';
 
     return NextResponse.json(
       {
@@ -70,9 +106,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
