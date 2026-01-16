@@ -66,6 +66,47 @@ export class GoogleSheetsClient {
   }
 
   /**
+   * Execute an operation with retry and exponential backoff
+   * Handles rate limits (429), server errors (5xx), and connection resets
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: unknown) {
+        const isLastAttempt = attempt === maxRetries;
+        const err = error as { code?: number | string; status?: number; message?: string };
+
+        // Check if error is retryable
+        const isRateLimited = err.code === 429 || err.status === 429;
+        const isServerError =
+          (typeof err.status === 'number' && err.status >= 500) ||
+          (typeof err.code === 'number' && err.code >= 500);
+        const isConnectionReset =
+          err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND';
+        const isRetryable = isRateLimited || isServerError || isConnectionReset;
+
+        if (!isRetryable || isLastAttempt) {
+          throw error;
+        }
+
+        // Calculate delay with exponential backoff + jitter
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
+        console.warn(
+          `[GoogleSheetsClient] Retrying after ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`,
+          err.message || err.code
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('Max retries exceeded');
+  }
+
+  /**
    * Initialize the Google Sheets API client
    */
   private async getClient(): Promise<sheets_v4.Sheets> {
@@ -270,25 +311,27 @@ export class GoogleSheetsClient {
    * Read all data from a specific sheet
    */
   async readSheet(sheetTitle: string): Promise<Record<string, string>[]> {
-    const client = await this.getClient();
+    return this.withRetry(async () => {
+      const client = await this.getClient();
 
-    const response = await client.spreadsheets.values.get({
-      spreadsheetId: this.config.spreadsheetId,
-      range: `'${sheetTitle}'`,
-    });
-
-    const rows = response.data.values || [];
-    if (rows.length < 2) return [];
-
-    const headers = rows[0].map((h) => h?.toString() || '');
-    const dataRows = rows.slice(1);
-
-    return dataRows.map((row) => {
-      const record: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        record[header] = row[index]?.toString() || '';
+      const response = await client.spreadsheets.values.get({
+        spreadsheetId: this.config.spreadsheetId,
+        range: `'${sheetTitle}'`,
       });
-      return record;
+
+      const rows = response.data.values || [];
+      if (rows.length < 2) return [];
+
+      const headers = rows[0].map((h) => h?.toString() || '');
+      const dataRows = rows.slice(1);
+
+      return dataRows.map((row) => {
+        const record: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          record[header] = row[index]?.toString() || '';
+        });
+        return record;
+      });
     });
   }
 
@@ -296,30 +339,34 @@ export class GoogleSheetsClient {
    * Read a range of data from a specific sheet
    */
   async readRange(range: string): Promise<string[][]> {
-    const client = await this.getClient();
+    return this.withRetry(async () => {
+      const client = await this.getClient();
 
-    const response = await client.spreadsheets.values.get({
-      spreadsheetId: this.config.spreadsheetId,
-      range,
+      const response = await client.spreadsheets.values.get({
+        spreadsheetId: this.config.spreadsheetId,
+        range,
+      });
+
+      return (response.data.values || []).map((row) => row.map((cell) => cell?.toString() || ''));
     });
-
-    return (response.data.values || []).map((row) => row.map((cell) => cell?.toString() || ''));
   }
 
   /**
    * Append a row to a sheet
    */
   async appendRow(sheetTitle: string, values: (string | number | null)[]): Promise<void> {
-    const client = await this.getClient();
+    return this.withRetry(async () => {
+      const client = await this.getClient();
 
-    await client.spreadsheets.values.append({
-      spreadsheetId: this.config.spreadsheetId,
-      range: `'${sheetTitle}'!A:A`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [values],
-      },
+      await client.spreadsheets.values.append({
+        spreadsheetId: this.config.spreadsheetId,
+        range: `'${sheetTitle}'!A:A`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: [values],
+        },
+      });
     });
   }
 
@@ -331,16 +378,18 @@ export class GoogleSheetsClient {
     rowNumber: number,
     values: (string | number | null)[]
   ): Promise<void> {
-    const client = await this.getClient();
-    const lastColumn = this.columnIndexToLetter(values.length - 1);
+    return this.withRetry(async () => {
+      const client = await this.getClient();
+      const lastColumn = this.columnIndexToLetter(values.length - 1);
 
-    await client.spreadsheets.values.update({
-      spreadsheetId: this.config.spreadsheetId,
-      range: `'${sheetTitle}'!A${rowNumber}:${lastColumn}${rowNumber}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [values],
-      },
+      await client.spreadsheets.values.update({
+        spreadsheetId: this.config.spreadsheetId,
+        range: `'${sheetTitle}'!A${rowNumber}:${lastColumn}${rowNumber}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [values],
+        },
+      });
     });
   }
 
@@ -370,37 +419,39 @@ export class GoogleSheetsClient {
    * Delete a row from a sheet
    */
   async deleteRow(sheetTitle: string, rowNumber: number): Promise<void> {
-    const client = await this.getClient();
+    return this.withRetry(async () => {
+      const client = await this.getClient();
 
-    // Get the sheet ID
-    const sheetsResponse = await client.spreadsheets.get({
-      spreadsheetId: this.config.spreadsheetId,
-      fields: 'sheets.properties',
-    });
+      // Get the sheet ID
+      const sheetsResponse = await client.spreadsheets.get({
+        spreadsheetId: this.config.spreadsheetId,
+        fields: 'sheets.properties',
+      });
 
-    const sheet = sheetsResponse.data.sheets?.find((s) => s.properties?.title === sheetTitle);
-    if (!sheet) {
-      throw new Error(`Sheet "${sheetTitle}" not found`);
-    }
+      const sheet = sheetsResponse.data.sheets?.find((s) => s.properties?.title === sheetTitle);
+      if (!sheet) {
+        throw new Error(`Sheet "${sheetTitle}" not found`);
+      }
 
-    const sheetId = sheet.properties?.sheetId;
+      const sheetId = sheet.properties?.sheetId;
 
-    await client.spreadsheets.batchUpdate({
-      spreadsheetId: this.config.spreadsheetId,
-      requestBody: {
-        requests: [
-          {
-            deleteDimension: {
-              range: {
-                sheetId,
-                dimension: 'ROWS',
-                startIndex: rowNumber - 1, // 0-indexed
-                endIndex: rowNumber,
+      await client.spreadsheets.batchUpdate({
+        spreadsheetId: this.config.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId,
+                  dimension: 'ROWS',
+                  startIndex: rowNumber - 1, // 0-indexed
+                  endIndex: rowNumber,
+                },
               },
             },
-          },
-        ],
-      },
+          ],
+        },
+      });
     });
   }
 }

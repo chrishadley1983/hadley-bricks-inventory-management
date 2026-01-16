@@ -5820,6 +5820,42 @@ export type Database = {
         Args: { created_at: string; purchase_date: string }
         Returns: number
       }
+      calculate_ebay_transaction_summary: {
+        Args: {
+          p_from_date?: string
+          p_search?: string
+          p_to_date?: string
+          p_transaction_type?: string
+          p_user_id: string
+        }
+        Returns: {
+          total_fees: number
+          total_refunds: number
+          total_sales: number
+          transaction_count: number
+        }[]
+      }
+      calculate_monzo_transaction_summary: {
+        Args: {
+          p_category?: string
+          p_end_date?: string
+          p_local_category?: string
+          p_search?: string
+          p_start_date?: string
+          p_user_id: string
+        }
+        Returns: {
+          total_expenses: number
+          total_income: number
+          transaction_count: number
+        }[]
+      }
+      get_monzo_local_categories: {
+        Args: { p_user_id: string }
+        Returns: {
+          local_category: string
+        }[]
+      }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
       initialize_seeded_asins: {
         Args: never

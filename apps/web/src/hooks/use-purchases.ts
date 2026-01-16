@@ -38,6 +38,7 @@ export function usePurchaseList(filters?: PurchaseFilters, pagination?: Paginati
   return useQuery({
     queryKey: purchaseKeys.list(filters, pagination),
     queryFn: () => fetchPurchases(filters, pagination),
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
   });
 }
 
@@ -49,6 +50,7 @@ export function usePurchase(id: string | undefined) {
     queryKey: purchaseKeys.detail(id!),
     queryFn: () => fetchPurchase(id!),
     enabled: !!id,
+    staleTime: 10 * 60 * 1000, // 10 minutes - purchase details don't change often
   });
 }
 
@@ -61,7 +63,8 @@ export function useCreatePurchase() {
   return useMutation({
     mutationFn: (data: Omit<PurchaseInsert, 'user_id'>) => createPurchase(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+      // Surgical invalidation - only invalidate lists, not detail views
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
     },
   });
 }
@@ -106,7 +109,8 @@ export function useBulkUpdatePurchases() {
   return useMutation({
     mutationFn: (input: BulkUpdatePurchaseInput) => bulkUpdatePurchases(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+      // Surgical invalidation - only lists are affected by bulk updates
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
     },
   });
 }
@@ -119,8 +123,13 @@ export function useBulkDeletePurchases() {
 
   return useMutation({
     mutationFn: (ids: string[]) => bulkDeletePurchases(ids),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+    onSuccess: (_, deletedIds) => {
+      // Remove deleted items from cache
+      deletedIds.forEach((id) => {
+        queryClient.removeQueries({ queryKey: purchaseKeys.detail(id) });
+      });
+      // Surgical invalidation - only lists are affected
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
     },
   });
 }

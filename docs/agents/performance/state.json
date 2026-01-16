@@ -1,15 +1,92 @@
 {
   "agent": "performance",
-  "lastRun": null,
-  "lastCommit": null,
-  "lastMode": null,
-  "status": "never_run",
-  "metrics": null,
+  "lastRun": "2026-01-16T12:00:00Z",
+  "lastCommit": "0cdd213d58b7bd04ba8e46b88dba1eea6113da41",
+  "lastMode": "full",
+  "status": "success",
+  "metrics": {
+    "filesAnalysed": 745,
+    "issuesFound": 47,
+    "criticalIssues": 8,
+    "highPriorityIssues": 12,
+    "mediumPriorityIssues": 19,
+    "lowPriorityIssues": 8,
+    "estimatedDebt": "40+ hours"
+  },
   "baselines": {
     "bundleSize": null,
     "lcpTarget": 2500,
-    "apiAvgResponse": 500
+    "apiAvgResponse": 500,
+    "bulkInventoryCreate100Items": "300-500 seconds (current)",
+    "purchaseCreateLatency": "3-5 seconds (current)"
   },
-  "knownIssues": [],
-  "previousReports": []
+  "knownIssues": [
+    {
+      "id": "PERF-001",
+      "description": "Google Sheets ID generation reads entire sheet",
+      "severity": "CRITICAL",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN",
+      "file": "lib/sync/sheets-write.service.ts",
+      "lines": "308-321"
+    },
+    {
+      "id": "PERF-002",
+      "description": "Sequential dual-writes in bulk operations",
+      "severity": "CRITICAL",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN",
+      "file": "lib/repositories/inventory.repository.ts",
+      "lines": "440-467"
+    },
+    {
+      "id": "PERF-003",
+      "description": "No retry/backoff on Google Sheets API calls",
+      "severity": "CRITICAL",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN",
+      "file": "lib/google/sheets-client.ts"
+    },
+    {
+      "id": "PERF-004",
+      "description": "Sequential summary loops in transactions API",
+      "severity": "CRITICAL",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN",
+      "file": "app/api/ebay/transactions/route.ts",
+      "lines": "95-154"
+    },
+    {
+      "id": "PERF-005",
+      "description": "15 components exceed 500 lines",
+      "severity": "HIGH",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN",
+      "file": "components/features/purchase-evaluator/steps/ReviewStep.tsx (1167 lines)"
+    },
+    {
+      "id": "PERF-006",
+      "description": "23 routes missing loading.tsx",
+      "severity": "MEDIUM",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN"
+    },
+    {
+      "id": "PERF-007",
+      "description": "Recharts not lazy loaded in report pages",
+      "severity": "MEDIUM",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN"
+    },
+    {
+      "id": "PERF-008",
+      "description": "FileReader leaks in photo upload components",
+      "severity": "HIGH",
+      "firstDetected": "2026-01-16",
+      "status": "OPEN"
+    }
+  ],
+  "previousReports": [
+    "docs/agents/performance/reports/2026-01-16-performance-report.md"
+  ]
 }

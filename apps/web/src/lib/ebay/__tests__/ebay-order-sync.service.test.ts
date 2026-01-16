@@ -487,7 +487,7 @@ describe('EbayOrderSyncService', () => {
       expect(mockOrder.lineItems).toHaveLength(2);
       expect(mockOrder.lineItems[0].sku).toBe('SKU-TEST-001');
       expect(mockOrder.lineItems[0].quantity).toBe(2);
-      expect(mockOrder.lineItems[1].sku).toBeNull();
+      expect(mockOrder.lineItems[1].sku).toBeUndefined();
     });
   });
 

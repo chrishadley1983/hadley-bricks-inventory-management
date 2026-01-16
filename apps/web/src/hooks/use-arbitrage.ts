@@ -57,12 +57,15 @@ interface SyncResult {
 
 export const arbitrageKeys = {
   all: ['arbitrage'] as const,
-  list: (filters?: ArbitrageFilterOptions) => [...arbitrageKeys.all, 'list', filters] as const,
-  item: (asin: string) => [...arbitrageKeys.all, 'item', asin] as const,
+  lists: () => [...arbitrageKeys.all, 'list'] as const,
+  list: (filters?: ArbitrageFilterOptions) => [...arbitrageKeys.lists(), filters] as const,
+  items: () => [...arbitrageKeys.all, 'item'] as const,
+  item: (asin: string) => [...arbitrageKeys.items(), asin] as const,
   excluded: () => [...arbitrageKeys.all, 'excluded'] as const,
   unmapped: () => [...arbitrageKeys.all, 'unmapped'] as const,
   syncStatus: () => [...arbitrageKeys.all, 'sync-status'] as const,
   summary: (minMargin?: number) => [...arbitrageKeys.all, 'summary', minMargin] as const,
+  ebayExclusions: (setNumber?: string) => [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
 };
 
 // ============================================================================
@@ -315,8 +318,10 @@ export function useExcludeAsin() {
   return useMutation({
     mutationFn: excludeAsin,
     onSuccess: () => {
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+      // Surgical invalidation - only invalidate lists, excluded, and summary
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.excluded() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
     },
   });
 }
@@ -330,7 +335,10 @@ export function useRestoreAsin() {
   return useMutation({
     mutationFn: restoreAsin,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+      // Surgical invalidation - only invalidate lists, excluded, and summary
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.excluded() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
     },
   });
 }
@@ -375,7 +383,10 @@ export function useTriggerSync() {
   return useMutation({
     mutationFn: triggerSync,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+      // Surgical invalidation - sync affects lists, summary, and sync status
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });
     },
   });
 }
@@ -395,6 +406,7 @@ export interface EbaySyncProgress {
 
 /**
  * Trigger eBay sync with streaming progress updates
+ * Properly releases the reader lock to prevent memory leaks
  */
 export function useEbaySyncWithProgress() {
   const queryClient = useQueryClient();
@@ -418,30 +430,38 @@ export function useEbaySyncWithProgress() {
       const decoder = new TextDecoder();
       let lastProgress: EbaySyncProgress = { type: 'start' };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6)) as EbaySyncProgress;
-              lastProgress = data;
-              onProgress(data);
-            } catch {
-              // Ignore parse errors
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6)) as EbaySyncProgress;
+                lastProgress = data;
+                onProgress(data);
+              } catch {
+                // Ignore parse errors
+              }
             }
           }
         }
+      } finally {
+        // Always release the reader lock to prevent memory leaks
+        reader.releaseLock();
       }
 
       return lastProgress;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+      // Surgical invalidation - eBay sync affects lists, summary, and sync status
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });
     },
   });
 }
@@ -465,7 +485,7 @@ export interface ExcludedEbayListing {
  */
 export function useExcludedEbayListings(setNumber?: string) {
   return useQuery({
-    queryKey: [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
+    queryKey: arbitrageKeys.ebayExclusions(setNumber),
     queryFn: async (): Promise<ExcludedEbayListing[]> => {
       const params = setNumber ? `?setNumber=${setNumber}` : '';
       const response = await fetch(`/api/arbitrage/ebay-exclusions${params}`);
@@ -514,8 +534,10 @@ export function useExcludeEbayListing() {
 
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+    onSuccess: (_, variables) => {
+      // Surgical invalidation - only invalidate eBay exclusions and lists
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions(variables.setNumber) });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
     },
   });
 }
@@ -541,7 +563,9 @@ export function useRestoreEbayListing() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.all });
+      // Surgical invalidation - invalidate all eBay exclusions and lists
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
     },
   });
 }

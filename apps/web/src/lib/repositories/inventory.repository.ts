@@ -437,33 +437,43 @@ export class InventoryRepository extends BaseRepository<
 
     const results = (data ?? []) as InventoryItem[];
 
-    // Dual-write each item to Google Sheets (fire-and-forget)
+    // Dual-write items to Google Sheets in parallel batches (fire-and-forget)
     if (isDualWriteEnabled()) {
       const dualWriteService = getDualWriteService();
-      for (const item of results) {
-        dualWriteService
-          .writeInventoryToSheets(
-            {
-              sku: item.sku || '',
-              set_number: item.set_number,
-              item_name: item.item_name,
-              condition: item.condition as 'New' | 'Used' | null | undefined,
-              status: item.status,
-              source: item.source,
-              purchase_date: item.purchase_date,
-              cost: item.cost,
-              listing_date: item.listing_date,
-              listing_value: item.listing_value,
-              storage_location: item.storage_location,
-              linked_lot: item.linked_lot,
-              amazon_asin: item.amazon_asin,
-              listing_platform: item.listing_platform,
-              notes: item.notes,
-            },
-            'create'
-          )
-          .catch((err) => console.error('[DualWrite] CreateMany failed:', err));
-      }
+      const BATCH_SIZE = 5; // Process 5 items concurrently to avoid rate limits
+
+      // Process in background without blocking
+      (async () => {
+        for (let i = 0; i < results.length; i += BATCH_SIZE) {
+          const batch = results.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map((item) =>
+              dualWriteService
+                .writeInventoryToSheets(
+                  {
+                    sku: item.sku || '',
+                    set_number: item.set_number,
+                    item_name: item.item_name,
+                    condition: item.condition as 'New' | 'Used' | null | undefined,
+                    status: item.status,
+                    source: item.source,
+                    purchase_date: item.purchase_date,
+                    cost: item.cost,
+                    listing_date: item.listing_date,
+                    listing_value: item.listing_value,
+                    storage_location: item.storage_location,
+                    linked_lot: item.linked_lot,
+                    amazon_asin: item.amazon_asin,
+                    listing_platform: item.listing_platform,
+                    notes: item.notes,
+                  },
+                  'create'
+                )
+                .catch((err) => console.error('[DualWrite] CreateMany batch item failed:', err))
+            )
+          );
+        }
+      })().catch((err) => console.error('[DualWrite] CreateMany batch processing failed:', err));
     }
 
     return results;
@@ -496,33 +506,43 @@ export class InventoryRepository extends BaseRepository<
 
     const items = (results ?? []) as InventoryItem[];
 
-    // Dual-write each updated item to Google Sheets (fire-and-forget)
+    // Dual-write updated items to Google Sheets in parallel batches (fire-and-forget)
     if (isDualWriteEnabled()) {
       const dualWriteService = getDualWriteService();
-      for (const item of items) {
-        dualWriteService
-          .writeInventoryToSheets(
-            {
-              sku: item.sku || '',
-              set_number: item.set_number,
-              item_name: item.item_name,
-              condition: item.condition as 'New' | 'Used' | null | undefined,
-              status: item.status,
-              source: item.source,
-              purchase_date: item.purchase_date,
-              cost: item.cost,
-              listing_date: item.listing_date,
-              listing_value: item.listing_value,
-              storage_location: item.storage_location,
-              linked_lot: item.linked_lot,
-              amazon_asin: item.amazon_asin,
-              listing_platform: item.listing_platform,
-              notes: item.notes,
-            },
-            'update'
-          )
-          .catch((err) => console.error('[DualWrite] BulkUpdate failed:', err));
-      }
+      const BATCH_SIZE = 5; // Process 5 items concurrently to avoid rate limits
+
+      // Process in background without blocking
+      (async () => {
+        for (let i = 0; i < items.length; i += BATCH_SIZE) {
+          const batch = items.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map((item) =>
+              dualWriteService
+                .writeInventoryToSheets(
+                  {
+                    sku: item.sku || '',
+                    set_number: item.set_number,
+                    item_name: item.item_name,
+                    condition: item.condition as 'New' | 'Used' | null | undefined,
+                    status: item.status,
+                    source: item.source,
+                    purchase_date: item.purchase_date,
+                    cost: item.cost,
+                    listing_date: item.listing_date,
+                    listing_value: item.listing_value,
+                    storage_location: item.storage_location,
+                    linked_lot: item.linked_lot,
+                    amazon_asin: item.amazon_asin,
+                    listing_platform: item.listing_platform,
+                    notes: item.notes,
+                  },
+                  'update'
+                )
+                .catch((err) => console.error('[DualWrite] BulkUpdate batch item failed:', err))
+            )
+          );
+        }
+      })().catch((err) => console.error('[DualWrite] BulkUpdate batch processing failed:', err));
     }
 
     return items;

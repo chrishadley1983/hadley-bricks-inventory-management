@@ -55,6 +55,7 @@ const mockOrderRepo = {
   upsert: vi.fn(),
   replaceOrderItems: vi.fn(),
   getStats: vi.fn(),
+  getOrderStatusTimestamps: vi.fn(),
   supabase: mockSupabaseQuery,
 };
 
@@ -227,13 +228,27 @@ describe('BrickLinkSyncService', () => {
     });
 
     it('should track updated orders when they exist', async () => {
-      const mockOrders = [{ order_id: 123, status: 'Paid', disp_cost: { grand_total: 100 } }];
+      const mockOrders = [{
+        order_id: 123,
+        status: 'Paid',
+        disp_cost: { grand_total: 100 },
+        date_status_changed: '2024-12-20T12:00:00Z' // newer than existing
+      }];
 
       mockBrickLinkClient.getSalesOrders.mockResolvedValue(mockOrders);
-      mockOrderRepo.findByPlatformOrderId.mockResolvedValue({ id: 'existing-id' });
+      mockBrickLinkClient.getOrderWithItems.mockResolvedValue({
+        order: mockOrders[0],
+        items: [],
+      });
+      // Return a map with the existing order having an older timestamp
+      mockOrderRepo.getOrderStatusTimestamps.mockResolvedValue(
+        new Map([['123', new Date('2024-12-19T12:00:00Z')]])
+      );
       mockOrderRepo.upsert.mockResolvedValue({ id: 'existing-id' });
+      mockOrderRepo.replaceOrderItems.mockResolvedValue([]);
 
-      const result = await service.syncOrders('test-user-id');
+      // includeItems: true is needed to trigger the update check
+      const result = await service.syncOrders('test-user-id', { includeItems: true });
 
       expect(result.ordersUpdated).toBe(1);
       expect(result.ordersCreated).toBe(0);
@@ -250,7 +265,8 @@ describe('BrickLinkSyncService', () => {
         order: mockOrders[0],
         items: mockItems,
       });
-      mockOrderRepo.findByPlatformOrderId.mockResolvedValue(null);
+      // Empty map means all orders are new
+      mockOrderRepo.getOrderStatusTimestamps.mockResolvedValue(new Map());
       mockOrderRepo.upsert.mockResolvedValue({ id: 'new-id' });
       mockOrderRepo.replaceOrderItems.mockResolvedValue([]);
 

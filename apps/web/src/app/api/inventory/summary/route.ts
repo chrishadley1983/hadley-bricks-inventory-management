@@ -28,7 +28,14 @@ export async function GET(request: NextRequest) {
     const service = new InventoryService(supabase, user.id);
     const summary = await service.getSummary({ excludeSold, platform });
 
-    return NextResponse.json({ data: summary });
+    return NextResponse.json(
+      { data: summary },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        },
+      }
+    );
   } catch (error) {
     console.error('[GET /api/inventory/summary] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -156,7 +156,14 @@ export async function GET(request: NextRequest) {
       { page, pageSize }
     );
 
-    return NextResponse.json({ data: result });
+    return NextResponse.json(
+      { data: result },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=30',
+        },
+      }
+    );
   } catch (error) {
     console.error('[GET /api/inventory] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

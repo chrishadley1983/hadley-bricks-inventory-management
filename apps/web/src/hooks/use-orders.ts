@@ -128,6 +128,7 @@ export function useOrders(filters: OrderFilters = {}) {
   return useQuery({
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
   });
 }
 
@@ -139,6 +140,7 @@ export function useOrder(id: string | undefined) {
     queryKey: ['order', id],
     queryFn: () => fetchOrder(id!),
     enabled: !!id,
+    staleTime: 10 * 60 * 1000, // 10 minutes - order details don't change often
   });
 }
 
@@ -149,6 +151,7 @@ export function useOrderStats(platform?: string) {
   return useQuery({
     queryKey: ['orders', 'stats', platform],
     queryFn: () => fetchOrderStats(platform),
+    staleTime: 5 * 60 * 1000, // 5 minutes - stats are computed aggregates
   });
 }
 
@@ -190,5 +193,6 @@ export function useBrickLinkCredentials() {
       if (!response.ok) throw new Error('Failed to check credentials');
       return response.json() as Promise<{ configured: boolean }>;
     },
+    staleTime: 10 * 60 * 1000, // 10 minutes - credentials rarely change
   });
 }

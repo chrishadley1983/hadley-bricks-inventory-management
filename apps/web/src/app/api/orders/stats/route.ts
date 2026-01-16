@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
     const orderRepo = new OrderRepository(supabase);
     const stats = await orderRepo.getStats(user.id, platform);
 
-    return NextResponse.json({ data: stats });
+    return NextResponse.json(
+      { data: stats },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+        },
+      }
+    );
   } catch (error) {
     console.error('[GET /api/orders/stats] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -306,10 +306,11 @@ export class SheetsWriteService {
   }
 
   private async generatePurchaseId(): Promise<string> {
-    // Read existing purchases to get next ID
-    const data = await this.sheetsClient.readSheet('Purchases');
-    const maxId = data.reduce((max, row) => {
-      const id = row['ID'];
+    // Read only the ID column (A) instead of the entire sheet - much faster!
+    const ids = await this.sheetsClient.readRange("'Purchases'!A:A");
+    const maxId = ids.slice(1).reduce((max, row) => {
+      // Skip header row (slice(1)) and get first cell of each row
+      const id = row[0];
       if (id) {
         const num = parseInt(id.replace(/\D/g, ''), 10);
         return Math.max(max, isNaN(num) ? 0 : num);

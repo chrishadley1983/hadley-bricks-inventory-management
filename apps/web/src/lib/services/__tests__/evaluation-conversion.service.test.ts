@@ -321,8 +321,8 @@ describe('EvaluationConversionService', () => {
         cost: 100,
         source: 'Car Boot Sale',
         payment_method: 'cash',
-        reference: undefined,
-        description: undefined,
+        reference: null,
+        description: null,
       });
 
       expect(mockInventoryService.createMany).toHaveBeenCalledWith([

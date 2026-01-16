@@ -64,6 +64,7 @@ export abstract class BaseRepository<TRow, TInsert, TUpdate> {
 
   /**
    * Find all records with optional pagination
+   * Performance: Uses single query with count option instead of two separate queries
    */
   async findAll(options?: PaginationOptions): Promise<PaginatedResult<TRow>> {
     const page = options?.page ?? 1;
@@ -71,19 +72,10 @@ export abstract class BaseRepository<TRow, TInsert, TUpdate> {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    // Get count first
-    const { count, error: countError } = await this.supabase
+    // Single query with count - combines count and data fetch into one database call
+    const { data, count, error } = await this.supabase
       .from(this.tableName)
-      .select('*', { count: 'exact', head: true });
-
-    if (countError) {
-      throw new Error(`Failed to count ${String(this.tableName)}: ${countError.message}`);
-    }
-
-    // Get paginated data
-    const { data, error } = await this.supabase
-      .from(this.tableName)
-      .select('*')
+      .select('*', { count: 'exact' })
       .range(from, to)
       .order('created_at', { ascending: false });
 

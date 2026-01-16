@@ -92,66 +92,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
     }
 
-    // Calculate summary totals from ALL matching transactions (not just current page)
-    // We need to fetch all transactions matching the filters to calculate accurate totals
-    // Use pagination to handle large datasets
-    let totalSales = 0;
-    let totalFees = 0;
-    let totalRefunds = 0;
-    const summaryPageSize = 1000;
-    let summaryOffset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      let summaryQuery = supabase
-        .from('ebay_transactions')
-        .select('transaction_type, amount, total_fee_amount')
-        .eq('user_id', user.id);
-
-      // Apply same filters as main query
-      if (transactionType) {
-        summaryQuery = summaryQuery.eq('transaction_type', transactionType);
+    // Calculate summary totals using server-side SQL aggregation
+    // This replaces the client-side loop that fetched all data in batches
+    const { data: summaryResult, error: summaryError } = await supabase.rpc(
+      'calculate_ebay_transaction_summary',
+      {
+        p_user_id: user.id,
+        p_transaction_type: transactionType || undefined,
+        p_from_date: fromDate || undefined,
+        p_to_date: toDate || undefined,
+        p_search: search || undefined,
       }
-      if (fromDate) {
-        summaryQuery = summaryQuery.gte('transaction_date', fromDate);
-      }
-      if (toDate) {
-        summaryQuery = summaryQuery.lte('transaction_date', toDate);
-      }
-      if (search) {
-        summaryQuery = summaryQuery.or(
-          `item_title.ilike.%${search}%,custom_label.ilike.%${search}%,ebay_order_id.ilike.%${search}%,buyer_username.ilike.%${search}%`
-        );
-      }
+    );
 
-      summaryQuery = summaryQuery.range(summaryOffset, summaryOffset + summaryPageSize - 1);
-
-      const { data: summaryData, error: summaryError } = await summaryQuery;
-
-      if (summaryError) {
-        console.error('[GET /api/ebay/transactions] Summary query error:', summaryError);
-        break;
-      }
-
-      for (const tx of summaryData || []) {
-        if (tx.transaction_type === 'SALE') {
-          // Sales = gross amount (net amount + fees deducted)
-          // This matches eBay's "Total sales" which includes item price + postage
-          const netAmount = tx.amount || 0;
-          const feesDeducted = Math.abs(tx.total_fee_amount || 0);
-          totalSales += netAmount + feesDeducted; // Gross sales
-          totalFees += feesDeducted; // Fees from sales
-        } else if (tx.transaction_type === 'REFUND') {
-          totalRefunds += Math.abs(tx.amount || 0);
-        } else if (tx.transaction_type === 'NON_SALE_CHARGE') {
-          // Standalone fee transactions (promoted listings, etc.)
-          totalFees += Math.abs(tx.amount || 0);
-        }
-      }
-
-      hasMore = (summaryData?.length || 0) === summaryPageSize;
-      summaryOffset += summaryPageSize;
+    if (summaryError) {
+      console.error('[GET /api/ebay/transactions] Summary RPC error:', summaryError);
     }
+
+    // Extract summary values (RPC returns an array with one row)
+    const summary = summaryResult?.[0] || {
+      total_sales: 0,
+      total_fees: 0,
+      total_refunds: 0,
+    };
+    const totalSales = Number(summary.total_sales) || 0;
+    const totalFees = Number(summary.total_fees) || 0;
+    const totalRefunds = Number(summary.total_refunds) || 0;
 
     return NextResponse.json({
       transactions: transactions || [],

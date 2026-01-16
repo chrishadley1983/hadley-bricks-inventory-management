@@ -15,6 +15,7 @@ const mockSheetsClient = {
   appendRow: vi.fn(),
   deleteRow: vi.fn(),
   readSheet: vi.fn(),
+  readRange: vi.fn(),
 };
 
 // Mock getSheetsClient
@@ -258,10 +259,12 @@ describe('SheetsWriteService', () => {
     });
 
     it('should generate ID and append row for create operation', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([
-        { ID: 'P0001' },
-        { ID: 'P0002' },
-        { ID: 'P0003' },
+      // readRange returns array of arrays: [[header], [value1], [value2], ...]
+      mockSheetsClient.readRange.mockResolvedValue([
+        ['ID'],
+        ['P0001'],
+        ['P0002'],
+        ['P0003'],
       ]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
@@ -273,7 +276,8 @@ describe('SheetsWriteService', () => {
     });
 
     it('should generate ID starting from P0001 when no purchases exist', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([]);
+      // Only header row
+      mockSheetsClient.readRange.mockResolvedValue([['ID']]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
       const result = await service.writePurchase(purchaseData, 'create');
@@ -282,11 +286,12 @@ describe('SheetsWriteService', () => {
     });
 
     it('should handle non-standard ID formats in existing data', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([
-        { ID: 'P0005' },
-        { ID: 'INVALID' },
-        { ID: '' },
-        { ID: 'P0010' },
+      mockSheetsClient.readRange.mockResolvedValue([
+        ['ID'],
+        ['P0005'],
+        ['INVALID'],
+        [''],
+        ['P0010'],
       ]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
@@ -319,7 +324,8 @@ describe('SheetsWriteService', () => {
     });
 
     it('should format purchase row data correctly', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([]);
+      // readRange returns array of arrays: [[header]] when no data
+      mockSheetsClient.readRange.mockResolvedValue([['ID']]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
       await service.writePurchase(purchaseData, 'create');
@@ -338,7 +344,8 @@ describe('SheetsWriteService', () => {
     });
 
     it('should handle null optional fields', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([]);
+      // readRange returns array of arrays: [[header]] when no data
+      mockSheetsClient.readRange.mockResolvedValue([['ID']]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
       const minimalData: PurchaseWriteData = {
@@ -362,7 +369,8 @@ describe('SheetsWriteService', () => {
     });
 
     it('should call onSupabaseSync callback', async () => {
-      mockSheetsClient.readSheet.mockResolvedValue([]);
+      // readRange returns array of arrays: [[header]] when no data
+      mockSheetsClient.readRange.mockResolvedValue([['ID']]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
       const syncCallback = vi.fn().mockResolvedValue(undefined);
 
@@ -374,7 +382,7 @@ describe('SheetsWriteService', () => {
     });
 
     it('should return error on sheets write failure', async () => {
-      mockSheetsClient.readSheet.mockRejectedValue(new Error('Sheets API error'));
+      mockSheetsClient.readRange.mockRejectedValue(new Error('Sheets API error'));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await service.writePurchase(purchaseData, 'create');

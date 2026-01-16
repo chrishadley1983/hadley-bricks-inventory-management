@@ -10,12 +10,11 @@ import { purchaseKeys } from './use-purchases';
  * Sync a table from Google Sheets
  */
 async function syncTable(tableName: 'inventory' | 'purchases'): Promise<{ count: number }> {
-  // Log who triggered the sync
-  const timestamp = new Date().toISOString();
-  console.log(`[syncTable] ========== SYNC TRIGGERED ==========`);
-  console.log(`[syncTable] Table: ${tableName}`);
-  console.log(`[syncTable] Timestamp: ${timestamp}`);
-  console.log(`[syncTable] Stack trace:`, new Error().stack?.split('\n').slice(1, 8).join('\n'));
+  // Only log detailed sync info in development to avoid performance impact in production
+  if (process.env.NODE_ENV === 'development') {
+    const timestamp = new Date().toISOString();
+    console.log(`[syncTable] Table: ${tableName}, Timestamp: ${timestamp}`);
+  }
 
   const response = await fetch(`/api/sync/${tableName}`, {
     method: 'POST',
@@ -27,7 +26,9 @@ async function syncTable(tableName: 'inventory' | 'purchases'): Promise<{ count:
   }
 
   const result = await response.json();
-  console.log(`[syncTable] Sync complete for ${tableName}:`, result);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[syncTable] Sync complete for ${tableName}:`, result);
+  }
   return result.data;
 }
 
@@ -59,11 +60,12 @@ export function useSyncTable(tableName: 'inventory' | 'purchases') {
     },
     onSuccess: (data) => {
       setTableSynced(tableName, data.count);
-      // Invalidate queries to trigger refetch
+      // Surgical invalidation - only invalidate lists and summary, not detail views
       if (tableName === 'inventory') {
-        queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
+        queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
       } else {
-        queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+        queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
       }
     },
     onError: (error: Error) => {
@@ -110,9 +112,10 @@ export function useSyncAll() {
         setTableError('purchases', purchasesResult.reason?.message || 'Sync failed');
       }
 
-      // Invalidate queries to trigger refetch
-      queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
-      queryClient.invalidateQueries({ queryKey: purchaseKeys.all });
+      // Surgical invalidation - only invalidate lists and summary, not detail views
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Sync failed');
     } finally {

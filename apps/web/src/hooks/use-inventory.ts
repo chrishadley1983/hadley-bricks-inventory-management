@@ -38,6 +38,7 @@ export function useInventoryList(filters?: InventoryFilters, pagination?: Pagina
   return useQuery({
     queryKey: inventoryKeys.list(filters, pagination),
     queryFn: () => fetchInventory(filters, pagination),
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
   });
 }
 
@@ -49,7 +50,7 @@ export function useInventoryItem(id: string | undefined) {
     queryKey: inventoryKeys.detail(id!),
     queryFn: () => fetchInventoryItem(id!),
     enabled: !!id,
-    staleTime: 0, // Always refetch to ensure fresh data
+    staleTime: 10 * 60 * 1000, // 10 minutes - item details don't change often
   });
 }
 
@@ -63,6 +64,7 @@ export function useInventorySummary(options?: { excludeSold?: boolean; platform?
       excludeSold: options?.excludeSold,
       platform: options?.platform || undefined,
     }),
+    staleTime: 5 * 60 * 1000, // 5 minutes - summary is expensive to compute
   });
 }
 
