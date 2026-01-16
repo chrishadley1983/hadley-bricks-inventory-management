@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
         .select('id, amazon_asin, set_number, item_name, storage_location, status, listing_platform, created_at')
         .eq('user_id', user.id)
         .in('amazon_asin', Array.from(allAsins))
-        .ilike('listing_platform', 'amazon')
+        .ilike('listing_platform', '%amazon%')
         .in('status', ['BACKLOG', 'LISTED'])
         .order('created_at', { ascending: true }); // FIFO - oldest first
       inventoryByAsin = data || [];

@@ -1,3 +1,12 @@
+/**
+ * Tests for /api/orders API Routes
+ *
+ * Tests the orders operations:
+ * - GET /api/orders - List orders with filters
+ * - GET /api/orders/[id] - Get single order
+ * - DELETE /api/orders/[id] - Delete order
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -9,17 +18,70 @@ vi.mock('@/lib/supabase/server', () => ({
 // Mock the OrderRepository
 const mockOrderRepo = {
   findByUser: vi.fn(),
+  findById: vi.fn(),
+  findByIdWithItems: vi.fn(),
+  delete: vi.fn(),
 };
 
 vi.mock('@/lib/repositories', () => ({
   OrderRepository: class MockOrderRepository {
     findByUser = mockOrderRepo.findByUser;
+    findById = mockOrderRepo.findById;
+    findByIdWithItems = mockOrderRepo.findByIdWithItems;
+    delete = mockOrderRepo.delete;
   },
 }));
 
+// Suppress console logs during tests
+vi.spyOn(console, 'log').mockImplementation(() => {});
+vi.spyOn(console, 'error').mockImplementation(() => {});
+
 import { createClient } from '@/lib/supabase/server';
 import { GET } from '../orders/route';
+import { GET as GetOrder, DELETE as DeleteOrder } from '../orders/[id]/route';
 import { testBrickLinkOrders, testBrickOwlOrders } from '@/test/fixtures';
+
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+function createMockOrder(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'order-001',
+    user_id: 'test-user-id',
+    platform: 'ebay',
+    platform_order_id: 'ebay-12345',
+    buyer_name: 'Test Buyer',
+    status: 'Paid',
+    total_amount: 99.99,
+    currency: 'GBP',
+    order_date: '2024-01-15T10:00:00Z',
+    created_at: '2024-01-15T10:00:00Z',
+    ...overrides,
+  };
+}
+
+function createAuthenticatedClient() {
+  return {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { id: 'test-user-id' } },
+        error: null,
+      }),
+    },
+  };
+}
+
+function createUnauthenticatedClient() {
+  return {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: null },
+        error: { message: 'Not authenticated' },
+      }),
+    },
+  };
+}
 
 describe('Orders API Routes', () => {
   beforeEach(() => {
@@ -266,6 +328,159 @@ describe('Orders API Routes', () => {
         }),
         expect.any(Object)
       );
+    });
+
+    it('should return 500 on service error', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findByUser.mockRejectedValue(new Error('Database error'));
+
+      const request = new NextRequest('http://localhost:3000/api/orders');
+      const response = await GET(request);
+
+      expect(response.status).toBe(500);
+    });
+  });
+
+  // ==========================================================================
+  // GET /api/orders/[id]
+  // ==========================================================================
+
+  describe('GET /api/orders/[id]', () => {
+    it('should return 401 when not authenticated', async () => {
+      vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001');
+      const response = await GetOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 404 when order not found', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findByIdWithItems.mockResolvedValue(null);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/nonexistent');
+      const response = await GetOrder(request, { params: Promise.resolve({ id: 'nonexistent' }) });
+
+      expect(response.status).toBe(404);
+      const json = await response.json();
+      expect(json.error).toBe('Order not found');
+    });
+
+    it('should return 403 when accessing another users order', async () => {
+      const otherUserOrder = createMockOrder({ user_id: 'other-user-456' });
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findByIdWithItems.mockResolvedValue(otherUserOrder);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001');
+      const response = await GetOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(403);
+      const json = await response.json();
+      expect(json.error).toBe('Forbidden');
+    });
+
+    it('should return order with items when found', async () => {
+      const orderWithItems = {
+        ...createMockOrder(),
+        order_items: [
+          { id: 'item-1', quantity: 1, unit_price: 49.99 },
+          { id: 'item-2', quantity: 2, unit_price: 25.0 },
+        ],
+      };
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findByIdWithItems.mockResolvedValue(orderWithItems);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001');
+      const response = await GetOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.data.id).toBe('order-001');
+      expect(json.data.order_items).toHaveLength(2);
+    });
+
+    it('should return 500 on service error', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findByIdWithItems.mockRejectedValue(new Error('Database error'));
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001');
+      const response = await GetOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(500);
+    });
+  });
+
+  // ==========================================================================
+  // DELETE /api/orders/[id]
+  // ==========================================================================
+
+  describe('DELETE /api/orders/[id]', () => {
+    it('should return 401 when not authenticated', async () => {
+      vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 404 when order not found', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findById.mockResolvedValue(null);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/nonexistent', {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, {
+        params: Promise.resolve({ id: 'nonexistent' }),
+      });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 403 when deleting another users order', async () => {
+      const otherUserOrder = createMockOrder({ user_id: 'other-user-456' });
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findById.mockResolvedValue(otherUserOrder);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should delete order successfully', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findById.mockResolvedValue(createMockOrder());
+      mockOrderRepo.delete.mockResolvedValue(undefined);
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.success).toBe(true);
+      expect(mockOrderRepo.delete).toHaveBeenCalledWith('order-001');
+    });
+
+    it('should return 500 on service error', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
+      mockOrderRepo.findById.mockResolvedValue(createMockOrder());
+      mockOrderRepo.delete.mockRejectedValue(new Error('Database error'));
+
+      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(500);
     });
   });
 });

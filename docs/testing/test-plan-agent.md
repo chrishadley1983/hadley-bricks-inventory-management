@@ -259,7 +259,19 @@ Save to: `docs/testing/registry/test-manifest-{date}.json`
 
 Manifest saved to: `docs/testing/registry/test-manifest-2025-12-20.json`
 
-Use `/test-build critical` to generate tests for critical gaps.
+### Quick Reference Order
+
+| Step | Command | Fixes |
+|------|---------|-------|
+| 1 | `/test-build fix-mocks` | Infrastructure issues |
+| 2 | `/test-execute quick` | Verify fixes |
+| 3 | `/test-build feature:orders` | GAP-001, GAP-002 |
+| 4 | `/test-build feature:inventory` | GAP-003 |
+| 5 | `/test-build feature:bricqer` | GAP-004 |
+| 6 | `/test-build feature:bricklink` | GAP-005 |
+| 7 | `/test-execute pre-merge` | Final validation |
+
+Start with step 1 to unblock failing tests, then proceed sequentially.
 ```
 
 ### 4.2 Save Report
@@ -292,6 +304,42 @@ Save to: `docs/testing/analysis/coverage-report-{date}.md`
 8. **Account for platform specifics** - Hadley Bricks uses Sheets-primary architecture
 9. **Check dual-write coverage** - Both Sheets and Supabase paths
 10. **Verify adapter coverage** - All platform adapters need mocking
+11. **ALWAYS generate Quick Reference Order** - Every analysis MUST end with an actionable command sequence
+
+---
+
+## Quick Reference Order (REQUIRED)
+
+**Every test plan analysis MUST include a Quick Reference Order table at the end.**
+
+This table provides users with a clear, sequential list of slash commands to execute to address all identified gaps.
+
+### Format
+
+```markdown
+### Quick Reference Order
+
+| Step | Command | Fixes |
+|------|---------|-------|
+| 1 | `/test-build fix-mocks` | Infrastructure issues (X failing tests) |
+| 2 | `/test-execute quick` | Verify fixes |
+| 3 | `/test-build feature:<name>` | GAP-XXX |
+| ... | ... | ... |
+| N-1 | `/test-execute pre-merge` | Final validation |
+| N | `/test-plan coverage` | Updated report |
+
+Start with step 1 (`/test-build fix-mocks`) to unblock failing tests.
+```
+
+### Rules for Quick Reference Order
+
+1. **Always start with fix-mocks** if there are failing tests due to mock issues
+2. **Include verification step** after fixes (`/test-execute quick`)
+3. **Order by priority** - CRITICAL gaps first, then HIGH, MEDIUM, LOW
+4. **Group related gaps** - Combine related features in single commands where appropriate
+5. **End with validation** - Always include `/test-execute pre-merge` and `/test-plan coverage`
+6. **Include gap IDs** - Reference which GAP-XXX each command addresses
+7. **Keep it concise** - Maximum 15 steps; combine if needed
 
 ---
 
@@ -376,11 +424,23 @@ Mapping coverage to features...
 | MEDIUM | 6 | 15 unit, 5 api |
 | **Total** | **26** | **107 tests** |
 
-### Next Steps
+### Quick Reference Order
 
-1. Run `/test-build critical` to generate tests for critical gaps
-2. Address Bricqer adapter (0% coverage)
-3. Add dual-write integration tests
+| Step | Command | Fixes |
+|------|---------|-------|
+| 1 | `/test-build fix-mocks` | Fix mock infrastructure |
+| 2 | `/test-execute quick` | Verify fixes |
+| 3 | `/test-build feature:orders` | GAP-001, GAP-002 |
+| 4 | `/test-build feature:inventory` | GAP-003 |
+| 5 | `/test-build feature:purchases` | GAP-004 |
+| 6 | `/test-build feature:bricqer` | GAP-005 |
+| 7 | `/test-build feature:bricklink` | GAP-006 |
+| 8 | `/test-build feature:brickowl` | GAP-007 |
+| 9 | `/test-build feature:sheets` | GAP-008 |
+| 10 | `/test-execute pre-merge` | Final validation |
+| 11 | `/test-plan coverage` | Updated report |
+
+Start with step 1 (`/test-build fix-mocks`) to unblock failing tests.
 
 ### Trend
 

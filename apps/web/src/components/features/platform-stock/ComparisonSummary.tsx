@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Package,
   ShoppingCart,
+  Link2Off,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -99,7 +100,7 @@ export function ComparisonSummary({
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 6 }).map((_, i) => (
+        {Array.from({ length: 7 }).map((_, i) => (
           <SummaryCardSkeleton key={i} />
         ))}
       </div>
@@ -122,7 +123,7 @@ export function ComparisonSummary({
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       <SummaryCard
         title="Platform Listings"
         value={summary.totalPlatformListings}
@@ -135,6 +136,16 @@ export function ComparisonSummary({
         value={summary.totalInventoryItems}
         icon={<Package className="h-4 w-4 text-muted-foreground" />}
         description="Items in database"
+      />
+
+      <SummaryCard
+        title="Missing ASIN"
+        value={summary.missingAsinItems}
+        icon={<Link2Off className="h-4 w-4 text-purple-600" />}
+        description="No ASIN to match"
+        variant="error"
+        isActive={activeFilter === 'missing_asin'}
+        onClick={() => handleClick('missing_asin')}
       />
 
       <SummaryCard

@@ -27,14 +27,14 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
   async findAllFiltered(
     filters?: PurchaseFilters,
     pagination?: PaginationOptions
-  ): Promise<PaginatedResult<Purchase>> {
+  ): Promise<PaginatedResult<Purchase & { image_count: number }>> {
     const page = pagination?.page ?? 1;
     const pageSize = pagination?.pageSize ?? 50;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    // Build the query
-    let query = this.supabase.from(this.tableName).select('*', { count: 'exact' });
+    // Build the query - include image count from purchase_images
+    let query = this.supabase.from(this.tableName).select('*, purchase_images(count)', { count: 'exact' });
 
     // Apply filters
     if (filters?.source) {
@@ -70,8 +70,17 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
 
     const total = count ?? 0;
 
+    // Transform data to include image_count as a number
+    const transformedData = (data ?? []).map((item) => {
+      const { purchase_images, ...rest } = item as Purchase & { purchase_images: { count: number }[] };
+      return {
+        ...rest,
+        image_count: purchase_images?.[0]?.count ?? 0,
+      };
+    });
+
     return {
-      data: (data ?? []) as Purchase[],
+      data: transformedData as (Purchase & { image_count: number })[],
       total,
       page,
       pageSize,

@@ -146,7 +146,8 @@ export type DiscrepancyType =
   | 'platform_only' // Listed on platform but not in inventory
   | 'inventory_only' // In inventory but not listed on platform
   | 'quantity_mismatch' // Both exist but quantities differ
-  | 'price_mismatch'; // Both exist but prices differ significantly
+  | 'price_mismatch' // Both exist but prices differ significantly
+  | 'missing_asin'; // Platform set but no ASIN to match against
 
 /**
  * Stock comparison result for a single item (by ASIN/Item ID)
@@ -200,6 +201,7 @@ export interface ComparisonSummary {
   inventoryOnlyItems: number;
   quantityMismatches: number;
   priceMismatches: number;
+  missingAsinItems: number;
   lastImportAt: string | null;
 }
 

@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign, ShoppingCart, Archive } from 'lucide-react';
-import { useInventoryItem, useDeleteInventory, usePurchase } from '@/hooks';
+import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign, ShoppingCart, Archive, Store, RotateCcw, Eye } from 'lucide-react';
+import { useInventoryItem, useDeleteInventory, useUpdateInventory, usePurchase } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { CreateEbayListingModal } from './CreateEbayListingModal';
+import { EbayListingDetailsDialog } from './EbayListingDetailsDialog';
 
 interface InventoryDetailProps {
   id: string;
@@ -34,7 +36,11 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const router = useRouter();
   const { data: item, isLoading, error } = useInventoryItem(id);
   const deleteMutation = useDeleteInventory();
+  const updateMutation = useUpdateInventory();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showResetEbayDialog, setShowResetEbayDialog] = useState(false);
+  const [showCreateListingModal, setShowCreateListingModal] = useState(false);
+  const [showListingDetailsDialog, setShowListingDetailsDialog] = useState(false);
 
   // Fetch linked purchase if purchase_id exists
   const { data: linkedPurchase } = usePurchase(item?.purchase_id ?? undefined);
@@ -42,6 +48,18 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const handleDelete = async () => {
     await deleteMutation.mutateAsync(id);
     router.push('/inventory');
+  };
+
+  const handleResetEbayListing = async () => {
+    await updateMutation.mutateAsync({
+      id,
+      data: {
+        ebay_listing_id: null,
+        ebay_listing_url: null,
+        status: 'BACKLOG',
+      },
+    });
+    setShowResetEbayDialog(false);
   };
 
   if (isLoading) {
@@ -96,6 +114,35 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
             <p className="text-muted-foreground">Set #{item.set_number}</p>
           </div>
           <div className="flex gap-2">
+            {/* Create eBay Listing button - disabled for LISTED or SOLD items */}
+            <Button
+              variant="default"
+              onClick={() => setShowCreateListingModal(true)}
+              disabled={item.status === 'LISTED' || item.status === 'SOLD' || !!item.ebay_listing_id}
+            >
+              <Store className="mr-2 h-4 w-4" />
+              Create eBay Listing
+            </Button>
+            {/* View eBay Listing button - only show if item has eBay listing */}
+            {item.ebay_listing_id && (
+              <Button
+                variant="outline"
+                onClick={() => setShowListingDetailsDialog(true)}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                View eBay Listing
+              </Button>
+            )}
+            {/* Reset eBay Listing button - only show if item has eBay listing */}
+            {item.ebay_listing_id && (
+              <Button
+                variant="outline"
+                onClick={() => setShowResetEbayDialog(true)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset eBay
+              </Button>
+            )}
             <Button variant="outline" asChild>
               <Link href={`/inventory/${id}/edit`}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -334,6 +381,53 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset eBay Listing Confirmation Dialog */}
+      <Dialog open={showResetEbayDialog} onOpenChange={setShowResetEbayDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset eBay Listing</DialogTitle>
+            <DialogDescription>
+              This will clear the eBay listing ID and URL from this item and reset its status to BACKLOG.
+              The listing on eBay will NOT be affected - you must end it manually if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetEbayDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetEbayListing}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'Resetting...' : 'Reset'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create eBay Listing Modal */}
+      <CreateEbayListingModal
+        open={showCreateListingModal}
+        onOpenChange={setShowCreateListingModal}
+        inventoryItem={{
+          id: item.id,
+          set_number: item.set_number,
+          set_name: item.item_name,
+          theme: item.listing_platform, // Theme not directly available, using platform as fallback
+          condition: item.condition,
+          listing_value: item.listing_value,
+          status: item.status,
+          ebay_listing_id: item.ebay_listing_id,
+        }}
+      />
+
+      {/* eBay Listing Details Dialog */}
+      <EbayListingDetailsDialog
+        inventoryId={item.id}
+        open={showListingDetailsDialog}
+        onOpenChange={setShowListingDetailsDialog}
+      />
     </>
   );
 }

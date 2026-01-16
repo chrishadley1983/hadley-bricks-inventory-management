@@ -3,22 +3,27 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { InventoryService } from '@/lib/services';
 
+// Transform empty strings to null for optional fields
+const emptyToNull = z.string().transform((val) => (val === '' ? null : val));
+const emptyToNullOptional = emptyToNull.nullable().optional();
+
 const UpdateInventorySchema = z.object({
   set_number: z.string().min(1).optional(),
   item_name: z.string().optional(),
   condition: z.enum(['New', 'Used']).optional(),
   status: z.string().optional(),
-  source: z.string().optional(),
-  purchase_date: z.string().optional(),
-  cost: z.number().optional(),
-  listing_date: z.string().optional(),
-  listing_value: z.number().optional(),
-  storage_location: z.string().optional(),
-  sku: z.string().optional(),
-  linked_lot: z.string().optional(),
-  amazon_asin: z.string().optional(),
-  listing_platform: z.string().optional(),
-  notes: z.string().optional(),
+  source: emptyToNullOptional,
+  purchase_date: emptyToNullOptional,
+  cost: z.number().nullable().optional(),
+  purchase_id: emptyToNullOptional,
+  listing_date: emptyToNullOptional,
+  listing_value: z.number().nullable().optional(),
+  storage_location: emptyToNullOptional,
+  sku: emptyToNullOptional,
+  linked_lot: emptyToNullOptional,
+  amazon_asin: emptyToNullOptional,
+  listing_platform: emptyToNullOptional,
+  notes: emptyToNullOptional,
 });
 
 /**
@@ -54,9 +59,21 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 /**
  * PUT /api/inventory/[id]
- * Update an inventory item
+ * Update an inventory item (full update)
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return handleUpdate(request, params);
+}
+
+/**
+ * PATCH /api/inventory/[id]
+ * Update an inventory item (partial update)
+ */
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return handleUpdate(request, params);
+}
+
+async function handleUpdate(request: NextRequest, params: Promise<{ id: string }>) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -90,7 +107,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const result = await service.update(id, parsed.data);
     return NextResponse.json({ data: result });
   } catch (error) {
-    console.error('[PUT /api/inventory/[id]] Error:', error);
+    console.error('[PUT/PATCH /api/inventory/[id]] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

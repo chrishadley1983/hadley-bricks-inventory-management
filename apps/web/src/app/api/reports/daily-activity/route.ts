@@ -54,8 +54,10 @@ export async function GET(request: NextRequest) {
     const reportingService = new ReportingService(supabase);
 
     // Get date range from preset or custom dates
+    // If startDate and endDate are provided without a preset, use 'custom' to ensure they're respected
+    const effectivePreset = startDate && endDate && !preset ? 'custom' : (preset || 'this_month');
     const dateRange = reportingService.getDateRangeFromPreset(
-      preset || 'this_month',
+      effectivePreset,
       startDate && endDate
         ? { startDate: new Date(startDate), endDate: new Date(endDate) }
         : undefined

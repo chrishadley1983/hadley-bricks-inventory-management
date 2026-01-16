@@ -181,6 +181,7 @@ export interface NormalizedOrder {
   platformOrderId: string;
   platform: 'bricklink';
   orderDate: Date;
+  statusChangedAt?: Date;
   status: string;
   buyerName: string;
   buyerEmail?: string;

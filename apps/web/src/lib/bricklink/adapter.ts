@@ -103,6 +103,7 @@ export function normalizeOrder(
     platformOrderId: String(order.order_id),
     platform: 'bricklink',
     orderDate: new Date(order.date_ordered),
+    statusChangedAt: order.date_status_changed ? new Date(order.date_status_changed) : undefined,
     status: normalizeStatus(order.status),
     buyerName: order.buyer_name,
     buyerEmail: order.buyer_email,

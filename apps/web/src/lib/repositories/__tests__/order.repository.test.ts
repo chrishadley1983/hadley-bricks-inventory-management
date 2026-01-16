@@ -71,6 +71,7 @@ describe('OrderRepository', () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         range: vi.fn().mockResolvedValue({
           data: paidOrders,
@@ -83,6 +84,7 @@ describe('OrderRepository', () => {
       const result = await repository.findByUser('test-user-id', { status: 'Paid' });
 
       expect(result.data).toEqual(paidOrders);
+      expect(mockQuery.or).toHaveBeenCalled();
     });
 
     it('should filter by date range', async () => {
@@ -424,7 +426,9 @@ describe('OrderRepository', () => {
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: orders, error: null }),
+          eq: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({ data: orders, error: null }),
+          }),
         }),
       });
 
@@ -440,28 +444,28 @@ describe('OrderRepository', () => {
     });
 
     it('should filter by platform', async () => {
-      // The query calls eq() twice: first for user_id, then for platform
-      // The second eq() returns the promise with data
+      // The query chains: .select().eq(user_id).range().eq(platform)
+      const platformEq = vi.fn().mockResolvedValue({ data: [], error: null });
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockImplementation((field: string, _value: string) => {
-          if (field === 'platform') {
-            return Promise.resolve({ data: [], error: null });
-          }
-          return mockQuery; // Return self for user_id call to chain
+        eq: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnValue({
+          eq: platformEq,
         }),
       };
       mockSupabase.from.mockReturnValue(mockQuery);
 
       await repository.getStats('test-user-id', 'bricklink');
 
-      expect(mockQuery.eq).toHaveBeenCalledWith('platform', 'bricklink');
+      expect(platformEq).toHaveBeenCalledWith('platform', 'bricklink');
     });
 
     it('should handle empty orders', async () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          eq: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
         }),
       });
 

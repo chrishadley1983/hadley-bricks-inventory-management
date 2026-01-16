@@ -19,6 +19,21 @@ import type {
   EbayTransactionFetchParams,
   EbayPayoutFetchParams,
   EbayErrorResponse,
+  // Account API types
+  EbayFulfillmentPoliciesResponse,
+  EbayPaymentPoliciesResponse,
+  EbayReturnPoliciesResponse,
+  // Inventory API types
+  EbayInventoryItem,
+  EbayOfferRequest,
+  EbayCreateOfferResponse,
+  EbayPublishOfferResponse,
+  EbayOfferResponse,
+  EbayInventoryLocation,
+  EbayInventoryLocationInput,
+  // Taxonomy API types
+  EbayCategorySuggestionsResponse,
+  EbayItemAspectsResponse,
 } from './types';
 import type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
 import { ebaySignatureService } from './ebay-signature.service';
@@ -33,6 +48,12 @@ const EBAY_SANDBOX_API_BASE_URL = 'https://api.sandbox.ebay.com';
 
 const FULFILMENT_API_PATH = '/sell/fulfillment/v1';
 const FINANCES_API_PATH = '/sell/finances/v1';
+const ACCOUNT_API_PATH = '/sell/account/v1';
+const INVENTORY_API_PATH = '/sell/inventory/v1';
+const TAXONOMY_API_PATH = '/commerce/taxonomy/v1';
+
+// UK category tree ID for LEGO items
+const UK_CATEGORY_TREE_ID = '3';
 
 const DEFAULT_RATE_LIMIT_DELAY_MS = 100;
 const MAX_RETRIES = 3;
@@ -234,6 +255,229 @@ export class EbayApiAdapter {
     return this.request<EbayPayoutResponse>(
       `${FINANCES_API_PATH}/payout/${encodeURIComponent(payoutId)}`,
       { requiresSignature: true }
+    );
+  }
+
+  // ============================================================================
+  // Account API Methods (Business Policies)
+  // ============================================================================
+
+  /**
+   * Get all fulfillment (shipping) policies
+   * @see https://developer.ebay.com/api-docs/sell/account/resources/fulfillment_policy/methods/getFulfillmentPolicies
+   */
+  async getFulfillmentPolicies(): Promise<EbayFulfillmentPoliciesResponse> {
+    return this.request<EbayFulfillmentPoliciesResponse>(
+      `${ACCOUNT_API_PATH}/fulfillment_policy`,
+      { params: { marketplace_id: this.marketplaceId } }
+    );
+  }
+
+  /**
+   * Get all payment policies
+   * @see https://developer.ebay.com/api-docs/sell/account/resources/payment_policy/methods/getPaymentPolicies
+   */
+  async getPaymentPolicies(): Promise<EbayPaymentPoliciesResponse> {
+    return this.request<EbayPaymentPoliciesResponse>(
+      `${ACCOUNT_API_PATH}/payment_policy`,
+      { params: { marketplace_id: this.marketplaceId } }
+    );
+  }
+
+  /**
+   * Get all return policies
+   * @see https://developer.ebay.com/api-docs/sell/account/resources/return_policy/methods/getReturnPolicies
+   */
+  async getReturnPolicies(): Promise<EbayReturnPoliciesResponse> {
+    return this.request<EbayReturnPoliciesResponse>(
+      `${ACCOUNT_API_PATH}/return_policy`,
+      { params: { marketplace_id: this.marketplaceId } }
+    );
+  }
+
+  // ============================================================================
+  // Inventory API Methods
+  // ============================================================================
+
+  /**
+   * Create or replace an inventory item
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/inventory_item/methods/createOrReplaceInventoryItem
+   */
+  async createOrReplaceInventoryItem(sku: string, item: EbayInventoryItem): Promise<void> {
+    await this.request<void>(
+      `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`,
+      {
+        method: 'PUT',
+        body: item,
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  /**
+   * Get an inventory item by SKU
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/inventory_item/methods/getInventoryItem
+   */
+  async getInventoryItem(sku: string): Promise<EbayInventoryItem> {
+    return this.request<EbayInventoryItem>(
+      `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`
+    );
+  }
+
+  /**
+   * Delete an inventory item by SKU
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/inventory_item/methods/deleteInventoryItem
+   */
+  async deleteInventoryItem(sku: string): Promise<void> {
+    await this.request<void>(
+      `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  /**
+   * Create an offer for an inventory item
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/createOffer
+   */
+  async createOffer(offer: EbayOfferRequest): Promise<EbayCreateOfferResponse> {
+    return this.request<EbayCreateOfferResponse>(
+      `${INVENTORY_API_PATH}/offer`,
+      {
+        method: 'POST',
+        body: offer,
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  /**
+   * Update an existing offer
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/updateOffer
+   */
+  async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<EbayOfferResponse> {
+    return this.request<EbayOfferResponse>(
+      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`,
+      {
+        method: 'PUT',
+        body: offer,
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  /**
+   * Get an offer by ID
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/getOffer
+   */
+  async getOffer(offerId: string): Promise<EbayOfferResponse> {
+    return this.request<EbayOfferResponse>(
+      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`
+    );
+  }
+
+  /**
+   * Publish an offer to create an eBay listing
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/publishOffer
+   */
+  async publishOffer(offerId: string): Promise<EbayPublishOfferResponse> {
+    return this.request<EbayPublishOfferResponse>(
+      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}/publish`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  /**
+   * Withdraw an offer (end a listing)
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/withdrawOffer
+   */
+  async withdrawOffer(offerId: string): Promise<void> {
+    await this.request<void>(
+      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}/withdraw`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  // ============================================================================
+  // Merchant Location API Methods
+  // ============================================================================
+
+  /**
+   * Get merchant locations
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/location/methods/getInventoryLocations
+   */
+  async getInventoryLocations(): Promise<{ locations: EbayInventoryLocation[] }> {
+    return this.request<{ locations: EbayInventoryLocation[] }>(
+      `${INVENTORY_API_PATH}/location`,
+      {
+        headers: {
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  /**
+   * Create or update a merchant inventory location
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/location/methods/createInventoryLocation
+   */
+  async createInventoryLocation(merchantLocationKey: string, location: EbayInventoryLocationInput): Promise<void> {
+    await this.request<void>(
+      `${INVENTORY_API_PATH}/location/${encodeURIComponent(merchantLocationKey)}`,
+      {
+        method: 'POST',
+        body: location,
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
+    );
+  }
+
+  // ============================================================================
+  // Taxonomy API Methods
+  // ============================================================================
+
+  /**
+   * Get category suggestions based on keywords
+   * @see https://developer.ebay.com/api-docs/commerce/taxonomy/resources/category_tree/methods/getCategorySuggestions
+   */
+  async getCategorySuggestions(keywords: string): Promise<EbayCategorySuggestionsResponse> {
+    return this.request<EbayCategorySuggestionsResponse>(
+      `${TAXONOMY_API_PATH}/category_tree/${UK_CATEGORY_TREE_ID}/get_category_suggestions`,
+      { params: { q: keywords } }
+    );
+  }
+
+  /**
+   * Get item aspects (required fields) for a category
+   * @see https://developer.ebay.com/api-docs/commerce/taxonomy/resources/category_tree/methods/getItemAspectsForCategory
+   */
+  async getItemAspectsForCategory(categoryId: string): Promise<EbayItemAspectsResponse> {
+    return this.request<EbayItemAspectsResponse>(
+      `${TAXONOMY_API_PATH}/category_tree/${UK_CATEGORY_TREE_ID}/get_item_aspects_for_category`,
+      { params: { category_id: categoryId } }
     );
   }
 
@@ -539,6 +783,12 @@ export class EbayApiAdapter {
             response.status,
             errorResponse?.errors
           );
+        }
+
+        // Handle 204 No Content responses (e.g., createOrReplaceInventoryItem)
+        if (response.status === 204) {
+          console.log(`[EbayApiAdapter] Success - 204 No Content`);
+          return undefined as T;
         }
 
         const data = (await response.json()) as T;

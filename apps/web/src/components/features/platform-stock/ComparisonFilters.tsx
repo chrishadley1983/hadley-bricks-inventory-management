@@ -22,6 +22,7 @@ interface ComparisonFiltersProps {
 
 const discrepancyOptions: { value: DiscrepancyType | 'all'; label: string }[] = [
   { value: 'all', label: 'All Items' },
+  { value: 'missing_asin', label: 'Missing ASIN' },
   { value: 'platform_only', label: 'Platform Only' },
   { value: 'inventory_only', label: 'Inventory Only' },
   { value: 'quantity_mismatch', label: 'Quantity Mismatch' },

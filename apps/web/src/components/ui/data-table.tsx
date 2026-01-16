@@ -49,6 +49,8 @@ import {
   Copy,
   Pencil,
   CloudUpload,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
 import { Skeleton } from './skeleton';
 
@@ -78,6 +80,8 @@ interface DataTableProps<TData, TValue> {
   columnDisplayNames?: Record<string, string>;
   /** Initial column visibility state - columns not listed default to visible */
   initialColumnVisibility?: VisibilityState;
+  /** Storage key for persisting column visibility to localStorage */
+  columnVisibilityStorageKey?: string;
   pagination?: {
     page: number;
     pageSize: number;
@@ -104,12 +108,42 @@ export function DataTable<TData, TValue>({
   enableColumnVisibility = false,
   columnDisplayNames = {},
   initialColumnVisibility = {},
+  columnVisibilityStorageKey,
   pagination,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+  // Load column visibility from localStorage or use initial value
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
+    if (columnVisibilityStorageKey && typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(columnVisibilityStorageKey);
+        if (saved) {
+          return JSON.parse(saved) as VisibilityState;
+        }
+      } catch {
+        // If parsing fails, fall back to initial value
+      }
+    }
+    return initialColumnVisibility;
+  });
+
+  // Save column visibility as default
+  const saveColumnVisibilityAsDefault = React.useCallback(() => {
+    if (columnVisibilityStorageKey && typeof window !== 'undefined') {
+      localStorage.setItem(columnVisibilityStorageKey, JSON.stringify(columnVisibility));
+    }
+  }, [columnVisibilityStorageKey, columnVisibility]);
+
+  // Reset to initial (non-saved) defaults
+  const resetColumnVisibility = React.useCallback(() => {
+    setColumnVisibility(initialColumnVisibility);
+    if (columnVisibilityStorageKey && typeof window !== 'undefined') {
+      localStorage.removeItem(columnVisibilityStorageKey);
+    }
+  }, [initialColumnVisibility, columnVisibilityStorageKey]);
 
   // Build columns with selection checkbox if enabled
   const tableColumns = React.useMemo(() => {
@@ -290,7 +324,7 @@ export function DataTable<TData, TValue>({
                   Columns
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuContent align="end" className="w-[200px] max-h-[400px] overflow-y-auto">
                 <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {table
@@ -307,6 +341,31 @@ export function DataTable<TData, TValue>({
                       </DropdownMenuCheckboxItem>
                     );
                   })}
+                {columnVisibilityStorageKey && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="p-1 space-y-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={saveColumnVisibilityAsDefault}
+                      >
+                        <Save className="h-3.5 w-3.5 mr-2" />
+                        Save as Default
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={resetColumnVisibility}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                        Reset to Default
+                      </Button>
+                    </div>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

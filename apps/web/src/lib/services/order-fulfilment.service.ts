@@ -283,7 +283,7 @@ export class OrderFulfilmentService {
         .select('*')
         .eq('user_id', userId)
         .eq('amazon_asin', orderItem.item_number)
-        .ilike('listing_platform', 'amazon')
+        .ilike('listing_platform', '%amazon%')
         .in('status', ['BACKLOG', 'LISTED'])
         .order('created_at', { ascending: true });
 

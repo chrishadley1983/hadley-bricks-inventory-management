@@ -20,7 +20,8 @@ function createSupabaseMock(mockData: Record<string, unknown[]> = {}) {
       in: vi.fn().mockReturnThis(),
       lt: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
-      lte: vi.fn().mockImplementation(() => createChainableResult(tableData)),
+      lte: vi.fn().mockReturnThis(),
+      range: vi.fn().mockImplementation(() => createChainableResult(tableData)),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockImplementation(() => {
         // For findEarliestDate queries, return first item if available
@@ -156,7 +157,8 @@ describe('ProfitLossReportService', () => {
           in: vi.fn().mockReturnThis(),
           lt: vi.fn().mockReturnThis(),
           gte: vi.fn().mockReturnThis(),
-          lte: vi.fn().mockRejectedValue(new Error('Database error')),
+          lte: vi.fn().mockReturnThis(),
+          range: vi.fn().mockRejectedValue(new Error('Database error')),
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue({ data: [], error: null }),
         })),
@@ -230,13 +232,13 @@ describe('ProfitLossReportService', () => {
       const billsRows = result.rows.filter((r) => r.category === 'Bills');
 
       // Expected row counts per category
-      expect(incomeRows.length).toBe(5); // eBay Gross Sales, eBay Refunds, BrickLink, Amazon Sales, Amazon Refunds
-      expect(sellingFeesRows.length).toBe(11); // BrickLink Fees, Amazon Fees, 8 eBay fee types + Ad Hoc Refund
+      expect(incomeRows.length).toBe(6); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Amazon Sales, Amazon Refunds
+      expect(sellingFeesRows.length).toBe(10); // BrickLink Fees, Amazon Fees, 8 eBay fee types
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(2); // Postage, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website, Office, Mileage
 
-      // Total should be 25 rows (not 26 - originally planned 26 but some were consolidated)
+      // Total should be 25 rows (6 income + 10 selling fees + 2 stock + 2 packing + 5 bills)
       expect(result.rows.length).toBe(25);
     });
 
@@ -316,7 +318,8 @@ describe('ProfitLossReportService', () => {
           in: vi.fn().mockReturnThis(),
           lt: vi.fn().mockReturnThis(),
           gte: vi.fn().mockReturnThis(),
-          lte: vi.fn().mockResolvedValue({ data: [], error: null }),
+          lte: vi.fn().mockReturnThis(),
+          range: vi.fn().mockResolvedValue({ data: [], error: null }),
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockImplementation(() => {
             // Return early date for ebay_transactions only

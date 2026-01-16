@@ -11,16 +11,60 @@ import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repos
 import { getDualWriteService, isDualWriteEnabled } from '@/lib/migration';
 
 /**
+ * Numeric range filter
+ */
+export interface NumericRangeFilter {
+  min?: number;
+  max?: number;
+}
+
+/**
+ * Date range filter
+ */
+export interface DateRangeFilter {
+  from?: string;
+  to?: string;
+}
+
+/**
+ * Empty/non-empty filter
+ */
+export type EmptyFilter = 'empty' | 'not_empty';
+
+/**
  * Filter options for inventory queries
  */
 export interface InventoryFilters {
   status?: InventoryStatus | InventoryStatus[];
   condition?: ItemCondition;
-  platform?: string;
+  platform?: string; // listing_platform
+  salePlatform?: string; // sold_platform
+  source?: string; // purchase source
   linkedLot?: string;
   purchaseId?: string;
   searchTerm?: string;
   excludeLinkedToOrders?: boolean;
+  // Advanced numeric range filters
+  costRange?: NumericRangeFilter;
+  listingValueRange?: NumericRangeFilter;
+  soldGrossRange?: NumericRangeFilter;
+  soldNetRange?: NumericRangeFilter;
+  profitRange?: NumericRangeFilter;
+  soldFeesRange?: NumericRangeFilter;
+  soldPostageRange?: NumericRangeFilter;
+  // Date range filters
+  purchaseDateRange?: DateRangeFilter;
+  listingDateRange?: DateRangeFilter;
+  soldDateRange?: DateRangeFilter;
+  // Empty/non-empty filters
+  storageLocationFilter?: EmptyFilter;
+  amazonAsinFilter?: EmptyFilter;
+  linkedLotEmptyFilter?: EmptyFilter;
+  linkedOrderFilter?: EmptyFilter; // sold_order_id
+  notesFilter?: EmptyFilter;
+  skuFilter?: EmptyFilter;
+  ebayListingFilter?: EmptyFilter; // ebay_listing_id
+  archiveLocationFilter?: EmptyFilter;
 }
 
 /**
@@ -80,6 +124,14 @@ export class InventoryRepository extends BaseRepository<
       query = query.eq('listing_platform', filters.platform);
     }
 
+    if (filters?.salePlatform) {
+      query = query.ilike('sold_platform', filters.salePlatform);
+    }
+
+    if (filters?.source) {
+      query = query.ilike('source', filters.source);
+    }
+
     if (filters?.linkedLot) {
       query = query.eq('linked_lot', filters.linkedLot);
     }
@@ -100,6 +152,108 @@ export class InventoryRepository extends BaseRepository<
       // However, this has a limit on array size. For large arrays, we'll need a different approach.
       // For now, this should work for reasonable data sizes.
       query = query.not('id', 'in', `(${linkedInventoryIds.join(',')})`);
+    }
+
+    // Numeric range filters
+    if (filters?.costRange?.min !== undefined) {
+      query = query.gte('cost', filters.costRange.min);
+    }
+    if (filters?.costRange?.max !== undefined) {
+      query = query.lte('cost', filters.costRange.max);
+    }
+    if (filters?.listingValueRange?.min !== undefined) {
+      query = query.gte('listing_value', filters.listingValueRange.min);
+    }
+    if (filters?.listingValueRange?.max !== undefined) {
+      query = query.lte('listing_value', filters.listingValueRange.max);
+    }
+    if (filters?.soldGrossRange?.min !== undefined) {
+      query = query.gte('sold_gross_amount', filters.soldGrossRange.min);
+    }
+    if (filters?.soldGrossRange?.max !== undefined) {
+      query = query.lte('sold_gross_amount', filters.soldGrossRange.max);
+    }
+    if (filters?.soldNetRange?.min !== undefined) {
+      query = query.gte('sold_net_amount', filters.soldNetRange.min);
+    }
+    if (filters?.soldNetRange?.max !== undefined) {
+      query = query.lte('sold_net_amount', filters.soldNetRange.max);
+    }
+    if (filters?.soldFeesRange?.min !== undefined) {
+      query = query.gte('sold_fees_amount', filters.soldFeesRange.min);
+    }
+    if (filters?.soldFeesRange?.max !== undefined) {
+      query = query.lte('sold_fees_amount', filters.soldFeesRange.max);
+    }
+    if (filters?.soldPostageRange?.min !== undefined) {
+      query = query.gte('sold_postage_received', filters.soldPostageRange.min);
+    }
+    if (filters?.soldPostageRange?.max !== undefined) {
+      query = query.lte('sold_postage_received', filters.soldPostageRange.max);
+    }
+    // Note: profit filtering requires post-processing as it's a computed field (sold_net_amount - cost)
+    // We'll handle this separately if needed, or filter on the client side for now
+
+    // Date range filters
+    if (filters?.purchaseDateRange?.from) {
+      query = query.gte('purchase_date', filters.purchaseDateRange.from);
+    }
+    if (filters?.purchaseDateRange?.to) {
+      query = query.lte('purchase_date', filters.purchaseDateRange.to);
+    }
+    if (filters?.listingDateRange?.from) {
+      query = query.gte('listing_date', filters.listingDateRange.from);
+    }
+    if (filters?.listingDateRange?.to) {
+      query = query.lte('listing_date', filters.listingDateRange.to);
+    }
+    if (filters?.soldDateRange?.from) {
+      query = query.gte('sold_date', filters.soldDateRange.from);
+    }
+    if (filters?.soldDateRange?.to) {
+      query = query.lte('sold_date', filters.soldDateRange.to);
+    }
+
+    // Empty/non-empty filters
+    if (filters?.storageLocationFilter === 'empty') {
+      query = query.is('storage_location', null);
+    } else if (filters?.storageLocationFilter === 'not_empty') {
+      query = query.not('storage_location', 'is', null);
+    }
+    if (filters?.amazonAsinFilter === 'empty') {
+      query = query.is('amazon_asin', null);
+    } else if (filters?.amazonAsinFilter === 'not_empty') {
+      query = query.not('amazon_asin', 'is', null);
+    }
+    if (filters?.linkedLotEmptyFilter === 'empty') {
+      query = query.is('linked_lot', null);
+    } else if (filters?.linkedLotEmptyFilter === 'not_empty') {
+      query = query.not('linked_lot', 'is', null);
+    }
+    if (filters?.notesFilter === 'empty') {
+      query = query.is('notes', null);
+    } else if (filters?.notesFilter === 'not_empty') {
+      query = query.not('notes', 'is', null);
+    }
+    if (filters?.skuFilter === 'empty') {
+      query = query.is('sku', null);
+    } else if (filters?.skuFilter === 'not_empty') {
+      query = query.not('sku', 'is', null);
+    }
+    if (filters?.linkedOrderFilter === 'empty') {
+      query = query.is('sold_order_id', null);
+    } else if (filters?.linkedOrderFilter === 'not_empty') {
+      query = query.not('sold_order_id', 'is', null);
+    }
+    if (filters?.ebayListingFilter === 'empty') {
+      query = query.is('ebay_listing_id', null);
+    } else if (filters?.ebayListingFilter === 'not_empty') {
+      query = query.not('ebay_listing_id', 'is', null);
+    }
+    if (filters?.archiveLocationFilter === 'empty') {
+      query = query.is('archive_location', null);
+    } else if (filters?.archiveLocationFilter === 'not_empty') {
+      query = query.not('archive_location', 'is', null);
     }
 
     // Apply pagination

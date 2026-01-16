@@ -15,6 +15,7 @@ const mockInventoryRepo = {
   findByStatus: vi.fn(),
   getCountByStatus: vi.fn(),
   getTotalValue: vi.fn(),
+  getValueByStatus: vi.fn(),
   findBySku: vi.fn(),
   findByAsin: vi.fn(),
   findByLinkedLot: vi.fn(),
@@ -335,9 +336,15 @@ describe('InventoryService', () => {
         cost: 5000.0,
         listingValue: 8000.0,
       };
+      const valueByStatus = {
+        BACKLOG: { cost: 2000.0, listingValue: 3000.0, count: 10 },
+        LISTED: { cost: 1500.0, listingValue: 2500.0, count: 5 },
+        SOLD: { cost: 1500.0, listingValue: 2500.0, count: 20 },
+      };
 
       mockInventoryRepo.getCountByStatus.mockResolvedValue(countByStatus);
       mockInventoryRepo.getTotalValue.mockResolvedValue(values);
+      mockInventoryRepo.getValueByStatus.mockResolvedValue(valueByStatus);
 
       const result = await service.getSummary();
 
@@ -345,17 +352,20 @@ describe('InventoryService', () => {
       expect(result.byStatus).toEqual(countByStatus);
       expect(result.totalCost).toBe(5000.0);
       expect(result.totalListingValue).toBe(8000.0);
+      expect(result.valueByStatus).toEqual(valueByStatus);
     });
 
     it('should handle empty inventory', async () => {
       mockInventoryRepo.getCountByStatus.mockResolvedValue({});
       mockInventoryRepo.getTotalValue.mockResolvedValue({ cost: 0, listingValue: 0 });
+      mockInventoryRepo.getValueByStatus.mockResolvedValue({});
 
       const result = await service.getSummary();
 
       expect(result.totalItems).toBe(0);
       expect(result.totalCost).toBe(0);
       expect(result.totalListingValue).toBe(0);
+      expect(result.valueByStatus).toEqual({});
     });
   });
 

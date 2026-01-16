@@ -102,8 +102,10 @@ export function InventoryAddTabs() {
           ))}
         </TabsList>
 
-        <TabsContent value="single" className="mt-6">
-          <InventoryForm mode="create" showHeader={false} />
+        <TabsContent value="single" className="mt-6" forceMount>
+          <div className={activeTab !== 'single' ? 'hidden' : ''}>
+            <InventoryForm mode="create" showHeader={false} />
+          </div>
         </TabsContent>
 
         <TabsContent value="natural-language" className="mt-6">

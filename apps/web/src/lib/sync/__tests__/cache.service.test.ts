@@ -184,6 +184,7 @@ describe('CacheService', () => {
       const deleteQuery = { eq: vi.fn().mockResolvedValue({ error: null }) };
       const insertQuery = { error: null };
 
+      let inventorySelectCallCount = 0;
       mockSupabase.from.mockImplementation((table) => {
         if (table === 'cache_metadata') {
           return {
@@ -197,6 +198,11 @@ describe('CacheService', () => {
         }
         if (table === 'inventory_items') {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                count: inventorySelectCallCount++ === 0 ? 0 : 0, // First call: existing count, second: after delete
+              }),
+            }),
             delete: vi.fn().mockReturnValue(deleteQuery),
             insert: vi.fn().mockResolvedValue(insertQuery),
           };
@@ -256,6 +262,9 @@ describe('CacheService', () => {
         }
         if (table === 'inventory_items') {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 0 }),
+            }),
             delete: vi.fn().mockReturnValue(deleteQuery),
             insert: vi.fn().mockResolvedValue({ error: null }),
           };

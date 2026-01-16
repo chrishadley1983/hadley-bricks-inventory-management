@@ -513,7 +513,9 @@ describe('OrderStatusService', () => {
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+          eq: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+          }),
         }),
       });
 
@@ -522,6 +524,465 @@ describe('OrderStatusService', () => {
       expect(result.Paid).toBe(2);
       expect(result.Shipped).toBe(1);
       expect(result.Completed).toBe(1);
+    });
+
+    it('should filter by platform when provided', async () => {
+      const mockOrders = [{ internal_status: 'Paid', status: null }];
+
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await service.getStatusSummary('test-user-id', 'amazon');
+
+      expect(result.Paid).toBe(1);
+    });
+
+    it('should filter by date range when provided', async () => {
+      const mockOrders = [{ internal_status: 'Shipped', status: null }];
+
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockReturnValue({
+              lte: vi.fn().mockReturnValue({
+                range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await service.getStatusSummary('test-user-id', undefined, {
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-12-31'),
+      });
+
+      expect(result.Shipped).toBe(1);
+    });
+
+    it('should throw error on query failure', async () => {
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'Database error' },
+            }),
+          }),
+        }),
+      });
+
+      await expect(service.getStatusSummary('test-user-id')).rejects.toThrow(
+        'Failed to get status summary'
+      );
+    });
+
+    it('should handle pagination for large datasets', async () => {
+      // Mock 1000 orders (pagination boundary)
+      const mockOrders = Array(1000).fill({ internal_status: 'Pending', status: null });
+
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+          }),
+        }),
+      });
+
+      const result = await service.getStatusSummary('test-user-id');
+
+      expect(result.Pending).toBe(1000);
+    });
+  });
+
+  describe('getOrdersByStatus with options', () => {
+    it('should apply platform filter when provided', async () => {
+      const mockOrders = [{ id: 'order-001', internal_status: 'Paid', platform: 'amazon' }];
+
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await service.getOrdersByStatus('test-user-id', 'Paid', {
+        platform: 'amazon',
+      });
+
+      expect(result).toEqual(mockOrders);
+    });
+
+    it('should apply limit and offset when provided', async () => {
+      const mockOrders = [{ id: 'order-001', internal_status: 'Paid' }];
+
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const result = await service.getOrdersByStatus('test-user-id', 'Paid', {
+        limit: 10,
+        offset: 20,
+      });
+
+      expect(result).toEqual(mockOrders);
+    });
+
+    it('should throw error on fetch failure', async () => {
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: 'Database error' },
+              }),
+            }),
+          }),
+        }),
+      });
+
+      await expect(service.getOrdersByStatus('test-user-id', 'Paid')).rejects.toThrow(
+        'Failed to fetch orders by status'
+      );
+    });
+  });
+
+  describe('updateStatus with shipping info', () => {
+    it('should set shipping fields when shipping to Shipped status', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Packed',
+        status: 'Packed',
+      };
+
+      const shipping = {
+        carrier: 'Royal Mail',
+        trackingNumber: 'RM123456789GB',
+        method: 'Tracked 48',
+        actualCost: 4.5,
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else if (callCount === 2) {
+          return {
+            update: vi.fn().mockImplementation((data) => {
+              // Verify shipping fields are included in update
+              expect(data).toMatchObject({
+                internal_status: 'Shipped',
+                shipping_carrier: 'Royal Mail',
+                tracking_number: 'RM123456789GB',
+                shipping_method: 'Tracked 48',
+                shipping_cost_actual: 4.5,
+              });
+              return {
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { ...mockOrder, internal_status: 'Shipped' },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }),
+          };
+        } else {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
+          };
+        }
+      });
+
+      const result = await service.updateStatus(orderId, 'Shipped', { shipping });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should set packed_at timestamp when status is Packed', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Paid',
+        status: 'Paid',
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else if (callCount === 2) {
+          return {
+            update: vi.fn().mockImplementation((data) => {
+              expect(data.packed_at).toBeDefined();
+              expect(data.internal_status).toBe('Packed');
+              return {
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { ...mockOrder, internal_status: 'Packed' },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }),
+          };
+        } else {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
+          };
+        }
+      });
+
+      const result = await service.updateStatus(orderId, 'Packed');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should set cancelled_at timestamp when status is Cancelled', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Pending',
+        status: 'Pending',
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else if (callCount === 2) {
+          return {
+            update: vi.fn().mockImplementation((data) => {
+              expect(data.cancelled_at).toBeDefined();
+              expect(data.internal_status).toBe('Cancelled');
+              return {
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { ...mockOrder, internal_status: 'Cancelled' },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }),
+          };
+        } else {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
+          };
+        }
+      });
+
+      const result = await service.updateStatus(orderId, 'Cancelled');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should set completed_at timestamp when status is Completed', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Shipped',
+        status: 'Shipped',
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else if (callCount === 2) {
+          return {
+            update: vi.fn().mockImplementation((data) => {
+              expect(data.completed_at).toBeDefined();
+              expect(data.internal_status).toBe('Completed');
+              return {
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { ...mockOrder, internal_status: 'Completed' },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }),
+          };
+        } else {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
+          };
+        }
+      });
+
+      const result = await service.updateStatus(orderId, 'Completed');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle history insert failure gracefully', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Paid',
+        status: 'Paid',
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else if (callCount === 2) {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { ...mockOrder, internal_status: 'Packed' },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        } else {
+          // History insert fails but should not throw
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: 'History insert failed' },
+                }),
+              }),
+            }),
+          };
+        }
+      });
+
+      // Should not throw even if history insert fails
+      const result = await service.updateStatus(orderId, 'Packed');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should throw error when update fails', async () => {
+      const orderId = 'order-001';
+      const mockOrder = {
+        id: orderId,
+        internal_status: 'Paid',
+        status: 'Paid',
+      };
+
+      let callCount = 0;
+      mockSupabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+              }),
+            }),
+          };
+        } else {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: 'Update failed' },
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+      });
+
+      await expect(service.updateStatus(orderId, 'Packed')).rejects.toThrow(
+        'Failed to update order status: Update failed'
+      );
     });
   });
 });

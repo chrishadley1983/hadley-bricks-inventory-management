@@ -541,11 +541,12 @@ export class EbayStockService extends PlatformStockService {
 
     // 7. Sort: issues first (platform_only, inventory_only, quantity_mismatch, match)
     const discrepancyOrder: Record<DiscrepancyType, number> = {
-      platform_only: 0,
-      inventory_only: 1,
-      quantity_mismatch: 2,
-      price_mismatch: 3,
-      match: 4,
+      missing_asin: 0, // Not applicable to eBay but needed for type completeness
+      platform_only: 1,
+      inventory_only: 2,
+      quantity_mismatch: 3,
+      price_mismatch: 4,
+      match: 5,
     };
 
     filtered.sort((a, b) => {
@@ -575,6 +576,7 @@ export class EbayStockService extends PlatformStockService {
       ).length,
       priceMismatches: comparisons.filter((c) => c.discrepancyType === 'price_mismatch')
         .length,
+      missingAsinItems: 0, // Not applicable to eBay (uses SKU matching, not ASIN)
       lastImportAt: (await this.getLatestImport())?.completedAt || null,
     };
 

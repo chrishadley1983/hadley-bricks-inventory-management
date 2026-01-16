@@ -14,6 +14,11 @@ export { MileageService, DEFAULT_MILEAGE_RATE } from './mileage.service';
 export { BricksetCredentialsService } from './brickset-credentials.service';
 export { EvaluationConversionService } from './evaluation-conversion.service';
 export type { ConversionValidationError } from './evaluation-conversion.service';
+export { PurchaseProfitabilityService } from './purchase-profitability.service';
+export type {
+  PurchaseProfitability,
+  PurchaseItemProfitability,
+} from './purchase-profitability.service';
 export type { SyncResult as BrickLinkSyncResult, BrickLinkSyncOptions } from './bricklink-sync.service';
 export type { BrickOwlSyncOptions } from './brickowl-sync.service';
 export type { BricqerSyncOptions } from './bricqer-sync.service';

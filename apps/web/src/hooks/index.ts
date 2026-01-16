@@ -14,6 +14,7 @@ export {
 export {
   usePurchaseList,
   usePurchase,
+  usePurchaseProfitability,
   useCreatePurchase,
   useUpdatePurchase,
   useDeletePurchase,
@@ -63,3 +64,13 @@ export {
 export { useParseInventory } from './use-parse-inventory';
 export { useExtractSetNumbers } from './use-extract-set-numbers';
 export { useInventoryImport, parseCsvContent } from './use-inventory-import';
+export {
+  useListingAudit,
+  listingAuditKeys,
+  type ListingAuditData,
+} from './use-listing-audit';
+export {
+  useListingChat,
+  type ChatMessage,
+  type UseListingChatReturn,
+} from './use-listing-chat';

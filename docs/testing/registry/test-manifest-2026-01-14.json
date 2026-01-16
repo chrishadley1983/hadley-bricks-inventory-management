@@ -1,0 +1,597 @@
+{
+  "generatedAt": "2026-01-14T14:00:00.000Z",
+  "mode": "complete",
+  "summary": {
+    "totalGaps": 32,
+    "byPriority": {
+      "CRITICAL": 4,
+      "HIGH": 12,
+      "MEDIUM": 10,
+      "LOW": 6
+    },
+    "byType": {
+      "unit": 45,
+      "api": 25,
+      "integration": 15,
+      "e2e": 5
+    }
+  },
+  "infrastructureIssues": [
+    {
+      "id": "INFRA-001",
+      "type": "mock-configuration",
+      "description": "Supabase mock missing chained methods (.range(), .eq() chains)",
+      "affectedTests": 30,
+      "priority": "CRITICAL",
+      "fix": "Update src/test/setup.ts to properly mock Supabase client builder pattern"
+    },
+    {
+      "id": "INFRA-002",
+      "type": "mock-exports",
+      "description": "Repository mocks not exported correctly from vi.mock()",
+      "affectedTests": 21,
+      "priority": "CRITICAL",
+      "fix": "Use importOriginal helper in vi.mock() to spread actual exports"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "feature": "eBay Integration",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "file": "lib/ebay/ebay-api.adapter.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "OAuth token refresh",
+        "API request signing",
+        "Error handling for rate limits",
+        "Response parsing"
+      ],
+      "dependencies": ["ebay-api-mock-fixtures"]
+    },
+    {
+      "id": "GAP-002",
+      "feature": "eBay Integration",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "file": "lib/ebay/ebay-order-sync.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Fetch orders from eBay",
+        "Map eBay order to internal format",
+        "Handle order updates",
+        "Sync conflict resolution"
+      ],
+      "dependencies": ["ebay-api-mock-fixtures", "order-repository-mock"]
+    },
+    {
+      "id": "GAP-003",
+      "feature": "eBay Integration",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "file": "lib/ebay/ebay-inventory-linking.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Link eBay item to inventory",
+        "Match by SKU",
+        "Handle unmatched items",
+        "Resolution queue management"
+      ],
+      "dependencies": ["ebay-api-mock-fixtures", "inventory-repository-mock"]
+    },
+    {
+      "id": "GAP-004",
+      "feature": "Amazon Integration",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "file": "lib/amazon/adapter.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "SP-API authentication",
+        "Order fetch",
+        "Error handling",
+        "Rate limit handling"
+      ],
+      "dependencies": ["amazon-api-mock-fixtures"]
+    },
+    {
+      "id": "GAP-005",
+      "feature": "Order Fulfilment",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/services/order-fulfilment.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 85,
+      "scenarios": [
+        "Mark order as fulfilled",
+        "Update tracking information",
+        "Multi-platform fulfilment",
+        "Error handling"
+      ],
+      "dependencies": ["order-repository-mock", "platform-adapter-mocks"]
+    },
+    {
+      "id": "GAP-006",
+      "feature": "Listing Assistant",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/listing-assistant/templates.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Create template",
+        "Update template",
+        "Delete template",
+        "Get default templates",
+        "Template variable substitution"
+      ],
+      "dependencies": ["supabase-mock"]
+    },
+    {
+      "id": "GAP-007",
+      "feature": "Listing Assistant",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/listing-assistant/listings.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Create listing",
+        "Update listing",
+        "Save draft",
+        "Generate from template"
+      ],
+      "dependencies": ["supabase-mock", "templates-service-mock"]
+    },
+    {
+      "id": "GAP-008",
+      "feature": "Listing Assistant",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/listing-assistant/ai-service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Generate description",
+        "Analyze image",
+        "Suggest pricing",
+        "Handle API errors"
+      ],
+      "dependencies": ["anthropic-api-mock"]
+    },
+    {
+      "id": "GAP-009",
+      "feature": "Listing Assistant",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/listing-assistant/image-processing.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Resize image",
+        "Apply filters (brightness, contrast, sharpness)",
+        "Temperature adjustment",
+        "Smart crop/bounding box detection",
+        "Base64 conversion"
+      ],
+      "dependencies": ["canvas-mock"]
+    },
+    {
+      "id": "GAP-010",
+      "feature": "Listing Assistant",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "hooks/listing-assistant/use-image-processor.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Add images",
+        "Remove images",
+        "Update settings",
+        "Apply presets",
+        "Download processed images"
+      ],
+      "dependencies": ["react-testing-library", "image-processing-mock"]
+    },
+    {
+      "id": "GAP-011",
+      "feature": "BrickLink Adapter",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/bricklink/adapter.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "OAuth 1.0a authentication",
+        "Fetch orders",
+        "Inventory operations",
+        "Error handling"
+      ],
+      "dependencies": ["bricklink-api-mock-fixtures"]
+    },
+    {
+      "id": "GAP-012",
+      "feature": "Brick Owl Adapter",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/brickowl/adapter.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "API key authentication",
+        "Fetch orders",
+        "Inventory operations",
+        "Error handling"
+      ],
+      "dependencies": ["brickowl-api-mock-fixtures"]
+    },
+    {
+      "id": "GAP-013",
+      "feature": "PayPal Integration",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/paypal/paypal-api.adapter.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "OAuth authentication",
+        "Fetch transactions",
+        "Handle webhooks",
+        "Error handling"
+      ],
+      "dependencies": ["paypal-api-mock-fixtures"]
+    },
+    {
+      "id": "GAP-014",
+      "feature": "Credentials Repository",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "lib/repositories/credentials.repository.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Store encrypted credentials",
+        "Retrieve and decrypt credentials",
+        "Update credentials",
+        "Delete credentials"
+      ],
+      "dependencies": ["supabase-mock", "crypto-mock"]
+    },
+    {
+      "id": "GAP-015",
+      "feature": "Mileage Repository",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/repositories/mileage.repository.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Create mileage entry",
+        "Update mileage entry",
+        "Delete mileage entry",
+        "List with filters"
+      ],
+      "dependencies": ["supabase-mock"]
+    },
+    {
+      "id": "GAP-016",
+      "feature": "Mileage Service",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/mileage.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Calculate distance",
+        "Get mileage summary",
+        "Export for tax purposes"
+      ],
+      "dependencies": ["mileage-repository-mock"]
+    },
+    {
+      "id": "GAP-017",
+      "feature": "Profit Service",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/profit.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Calculate item profit",
+        "Calculate order profit",
+        "Include all fee types",
+        "Currency conversion"
+      ],
+      "dependencies": ["order-repository-mock", "inventory-repository-mock"]
+    },
+    {
+      "id": "GAP-018",
+      "feature": "Amazon Backfill",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/amazon-backfill.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Fetch historical orders",
+        "Match with existing orders",
+        "Handle duplicates"
+      ],
+      "dependencies": ["amazon-api-mock", "order-repository-mock"]
+    },
+    {
+      "id": "GAP-019",
+      "feature": "Amazon Fee Reconciliation",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/amazon-fee-reconciliation.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Match fees to orders",
+        "Handle refund fees",
+        "Calculate net proceeds"
+      ],
+      "dependencies": ["amazon-api-mock"]
+    },
+    {
+      "id": "GAP-020",
+      "feature": "Brickset Credentials",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/brickset-credentials.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Store API key",
+        "Validate API key",
+        "Fetch set data"
+      ],
+      "dependencies": ["brickset-api-mock"]
+    },
+    {
+      "id": "GAP-021",
+      "feature": "eBay Finances",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/ebay/ebay-finances.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Fetch payouts",
+        "Fetch transactions",
+        "Match to orders",
+        "Calculate fees"
+      ],
+      "dependencies": ["ebay-api-mock"]
+    },
+    {
+      "id": "GAP-022",
+      "feature": "BrickLink Uploads",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/bricklink-upload.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Upload inventory",
+        "Update inventory",
+        "Handle upload errors",
+        "Track upload status"
+      ],
+      "dependencies": ["bricklink-api-mock"]
+    },
+    {
+      "id": "GAP-023",
+      "feature": "Evaluation Conversion",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/services/evaluation-conversion.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Convert evaluation to inventory",
+        "Create purchase from evaluation",
+        "Handle bulk conversion"
+      ],
+      "dependencies": ["inventory-repository-mock", "purchase-repository-mock"]
+    },
+    {
+      "id": "GAP-024",
+      "feature": "Sheets Write Service",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "lib/sync/sheets-write.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 75,
+      "scenarios": [
+        "Write inventory to sheets",
+        "Write purchases to sheets",
+        "Handle write conflicts",
+        "Batch updates"
+      ],
+      "dependencies": ["google-sheets-mock"]
+    },
+    {
+      "id": "GAP-025",
+      "feature": "API Routes - Integrations",
+      "priority": "MEDIUM",
+      "type": "api",
+      "file": "app/api/integrations/**/*.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Platform connection flow",
+        "Credential validation",
+        "Sync endpoints",
+        "Status endpoints"
+      ],
+      "dependencies": ["platform-adapter-mocks", "auth-mock"]
+    },
+    {
+      "id": "GAP-026",
+      "feature": "API Routes - Reports",
+      "priority": "MEDIUM",
+      "type": "api",
+      "file": "app/api/reports/**/*.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Inventory valuation",
+        "Platform performance",
+        "Purchase analysis",
+        "Daily activity"
+      ],
+      "dependencies": ["reporting-service-mock"]
+    },
+    {
+      "id": "GAP-027",
+      "feature": "User Repository",
+      "priority": "LOW",
+      "type": "unit",
+      "file": "lib/repositories/user.repository.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Get user by ID",
+        "Update user settings"
+      ],
+      "dependencies": ["supabase-mock"]
+    },
+    {
+      "id": "GAP-028",
+      "feature": "Base Repository",
+      "priority": "LOW",
+      "type": "unit",
+      "file": "lib/repositories/base.repository.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Pagination handling",
+        "Error handling",
+        "Query building"
+      ],
+      "dependencies": ["supabase-mock"]
+    },
+    {
+      "id": "GAP-029",
+      "feature": "Monzo Integration",
+      "priority": "LOW",
+      "type": "unit",
+      "file": "lib/monzo/**/*.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "OAuth flow",
+        "Transaction fetch",
+        "Sheets sync"
+      ],
+      "dependencies": ["monzo-api-mock"]
+    },
+    {
+      "id": "GAP-030",
+      "feature": "Transaction Sync Services",
+      "priority": "LOW",
+      "type": "unit",
+      "file": "lib/**/transaction-sync.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Fetch transactions",
+        "Match to orders",
+        "Handle duplicates"
+      ],
+      "dependencies": ["platform-api-mocks"]
+    },
+    {
+      "id": "GAP-031",
+      "feature": "Bricqer Batch Sync",
+      "priority": "LOW",
+      "type": "unit",
+      "file": "lib/bricqer/bricqer-batch-sync.service.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 60,
+      "scenarios": [
+        "Batch inventory sync",
+        "Progress tracking",
+        "Error recovery"
+      ],
+      "dependencies": ["bricqer-api-mock"]
+    },
+    {
+      "id": "GAP-032",
+      "feature": "Listing Assistant Hooks",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "hooks/listing-assistant/*.ts",
+      "currentCoverage": 0,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Template management hooks",
+        "Listing state management",
+        "Settings persistence"
+      ],
+      "dependencies": ["react-testing-library", "tanstack-query-mock"]
+    }
+  ],
+  "fixtures": {
+    "required": [
+      {
+        "name": "ebay-api-mock-fixtures",
+        "description": "Mock responses for eBay API endpoints",
+        "priority": "CRITICAL"
+      },
+      {
+        "name": "amazon-api-mock-fixtures",
+        "description": "Mock responses for Amazon SP-API endpoints",
+        "priority": "CRITICAL"
+      },
+      {
+        "name": "supabase-mock-update",
+        "description": "Update Supabase mock to support chained methods",
+        "priority": "CRITICAL"
+      },
+      {
+        "name": "platform-adapter-mocks",
+        "description": "Generic mock factory for platform adapters",
+        "priority": "HIGH"
+      },
+      {
+        "name": "canvas-mock",
+        "description": "Mock for HTML5 Canvas API for image processing tests",
+        "priority": "HIGH"
+      }
+    ]
+  },
+  "nextActions": [
+    {
+      "action": "Fix mock infrastructure",
+      "priority": "CRITICAL",
+      "estimatedTests": 0,
+      "impact": "Unblocks 47 failing tests"
+    },
+    {
+      "action": "Add eBay integration tests",
+      "priority": "CRITICAL",
+      "estimatedTests": 25,
+      "impact": "Covers critical business path"
+    },
+    {
+      "action": "Add Listing Assistant tests",
+      "priority": "HIGH",
+      "estimatedTests": 30,
+      "impact": "Covers new feature"
+    },
+    {
+      "action": "Add platform adapter tests",
+      "priority": "HIGH",
+      "estimatedTests": 20,
+      "impact": "Covers all integrations"
+    }
+  ]
+}

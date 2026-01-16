@@ -30,6 +30,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MileageSection } from './MileageSection';
 import { MileageFormInline, type PendingMileageEntry } from './MileageFormInline';
+import { PhotoUploadInline, type PendingImage } from './PhotoUploadInline';
+import { PurchaseImages } from './PurchaseImages';
 import type { Purchase } from '@hadley-bricks/database';
 
 const purchaseSchema = z.object({
@@ -81,6 +83,9 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
   // State for pending mileage entries (used in create mode)
   const [pendingMileageEntries, setPendingMileageEntries] = useState<PendingMileageEntry[]>([]);
 
+  // State for pending images (used in create mode)
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+
   const today = new Date().toISOString().split('T')[0];
 
   const form = useForm<PurchaseFormValues>({
@@ -129,6 +134,37 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
             })
           )
         );
+      }
+
+      // Upload any pending images
+      if (pendingImages.length > 0) {
+        const imageData = pendingImages.map((img) => ({
+          id: img.id,
+          base64: img.base64,
+          mimeType: img.mimeType,
+          filename: img.filename,
+        }));
+
+        try {
+          const uploadResponse = await fetch(`/api/purchases/${result.id}/images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: imageData }),
+          });
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json();
+            console.error('[PurchaseForm] Image upload failed:', errorData);
+          } else {
+            const uploadResult = await uploadResponse.json();
+            console.log('[PurchaseForm] Image upload result:', uploadResult);
+          }
+        } catch (uploadError) {
+          console.error('[PurchaseForm] Image upload error:', uploadError);
+        }
+
+        // Cleanup preview URLs
+        pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
       }
     } else {
       result = await updateMutation.mutateAsync({
@@ -328,6 +364,16 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
             purchaseId={initialData?.id}
             purchaseDate={form.watch('purchase_date')}
           />
+        )}
+
+        {/* Photos Section */}
+        {mode === 'create' ? (
+          <PhotoUploadInline
+            pendingImages={pendingImages}
+            onImagesChange={setPendingImages}
+          />
+        ) : (
+          <PurchaseImages purchaseId={initialData!.id} />
         )}
 
         {/* Form Actions */}

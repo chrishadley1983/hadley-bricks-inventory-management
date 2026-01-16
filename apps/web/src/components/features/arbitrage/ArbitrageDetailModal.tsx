@@ -45,12 +45,13 @@ export function ArbitrageDetailModal({
     defaultBuyPrice > 0 ? defaultBuyPrice.toFixed(2) : ''
   );
 
-  // Reset buy price when item changes
+  // Reset buy price when item changes (only when asin or blMinPrice changes, not on every render)
   useEffect(() => {
     if (item) {
       const newDefault = item.blMinPrice ?? 0;
       setBuyPriceInput(newDefault > 0 ? newDefault.toFixed(2) : '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only reset on asin/blMinPrice change
   }, [item?.asin, item?.blMinPrice]);
 
   if (!item) return null;

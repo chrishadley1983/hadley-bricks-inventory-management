@@ -163,9 +163,10 @@ export class AmazonStockService extends PlatformStockService {
    *
    * Algorithm:
    * 1. Fetch all Amazon listings from platform_listings
-   * 2. Fetch inventory items where listing_platform='amazon' and status='LISTED'
-   * 3. Group inventory by ASIN (since individual items are separate rows)
-   * 4. Compare quantities and identify discrepancies
+   * 2. Fetch inventory items where listing_platform='amazon' and status='LISTED' (with ASIN)
+   * 3. Fetch inventory items where listing_platform='amazon' but no ASIN (missing link)
+   * 4. Group inventory by ASIN (since individual items are separate rows)
+   * 5. Compare quantities and identify discrepancies
    */
   async getStockComparison(filters: ComparisonFilters): Promise<{
     comparisons: StockComparison[];
@@ -176,10 +177,14 @@ export class AmazonStockService extends PlatformStockService {
     // 1. Get all Amazon listings
     const listings = await this.getAllListings();
 
-    // 2. Get inventory items listed on Amazon
+    // 2. Get inventory items listed on Amazon (with ASIN)
     const inventoryItems = await this.getAmazonInventoryItems();
 
-    // 3. Build comparison map keyed by ASIN
+    // 3. Get inventory items marked as Amazon but missing ASIN
+    const missingAsinItems = await this.getAmazonInventoryItemsMissingAsin();
+    console.log(`[AmazonStockService] Found ${missingAsinItems.length} items missing ASIN`);
+
+    // 4. Build comparison map keyed by ASIN
     const comparisonMap = new Map<string, StockComparison>();
 
     // Process platform listings first
@@ -202,6 +207,52 @@ export class AmazonStockService extends PlatformStockService {
         priceDifference: null,
       });
     }
+
+    // Process inventory items missing ASIN (group by set_number as pseudo-key)
+    // These are items marked as Amazon platform but without a linked ASIN
+    const missingAsinBySetNumber = new Map<string, AmazonInventoryItem[]>();
+    for (const item of missingAsinItems) {
+      const existing = missingAsinBySetNumber.get(item.setNumber) || [];
+      existing.push(item);
+      missingAsinBySetNumber.set(item.setNumber, existing);
+    }
+
+    console.log(`[AmazonStockService] Missing ASIN grouped into ${missingAsinBySetNumber.size} unique set numbers`);
+
+    // Add missing ASIN items to comparison map with special key prefix
+    for (const [setNumber, items] of missingAsinBySetNumber) {
+      const key = `NO_ASIN:${setNumber}`;
+      const totalValue = items.reduce((sum, i) => sum + (i.listingValue || 0), 0);
+
+      comparisonMap.set(key, {
+        platformItemId: key,
+        platformTitle: items[0].itemName || `Set ${setNumber} (Missing ASIN)`,
+        platformQuantity: 0, // Not on platform (no ASIN to match)
+        platformListingStatus: null,
+        platformFulfillmentChannel: null,
+        platformPrice: null,
+        platformSku: null,
+        inventoryQuantity: items.length,
+        inventoryTotalValue: totalValue,
+        inventoryItems: items.map((item) => ({
+          id: item.id,
+          setNumber: item.setNumber,
+          itemName: item.itemName,
+          condition: item.condition,
+          listingValue: item.listingValue,
+          storageLocation: item.storageLocation,
+          sku: item.sku,
+          status: item.status,
+          createdAt: item.createdAt,
+        })),
+        discrepancyType: 'missing_asin',
+        quantityDifference: -items.length, // All are missing from platform
+        priceDifference: null,
+      });
+      console.log(`[AmazonStockService] Added missing ASIN entry for set ${setNumber} with ${items.length} items`);
+    }
+
+    console.log(`[AmazonStockService] Comparison map size after adding missing ASIN: ${comparisonMap.size}`);
 
     // Process inventory items
     for (const item of inventoryItems) {
@@ -261,6 +312,11 @@ export class AmazonStockService extends PlatformStockService {
     for (const comparison of comparisonMap.values()) {
       comparison.quantityDifference =
         comparison.platformQuantity - comparison.inventoryQuantity;
+
+      // Skip items that already have missing_asin type - don't overwrite
+      if (comparison.discrepancyType === 'missing_asin') {
+        continue;
+      }
 
       // Determine discrepancy type
       if (comparison.quantityDifference === 0) {
@@ -329,11 +385,12 @@ export class AmazonStockService extends PlatformStockService {
 
     // Sort by discrepancy type (issues first) then by title
     const discrepancyOrder: Record<DiscrepancyType, number> = {
-      platform_only: 0,
-      inventory_only: 1,
-      quantity_mismatch: 2,
-      price_mismatch: 3,
-      match: 4,
+      missing_asin: 0, // Most critical - can't even verify if listed
+      platform_only: 1,
+      inventory_only: 2,
+      quantity_mismatch: 3,
+      price_mismatch: 4,
+      match: 5,
     };
 
     comparisons.sort((a, b) => {
@@ -351,7 +408,7 @@ export class AmazonStockService extends PlatformStockService {
     const summary: ComparisonSummary = {
       totalPlatformListings: listings.length,
       totalPlatformQuantity: listings.reduce((sum, l) => sum + l.quantity, 0),
-      totalInventoryItems: inventoryItems.length,
+      totalInventoryItems: inventoryItems.length + missingAsinItems.length,
       matchedItems: allComparisons.filter((c) => c.discrepancyType === 'match')
         .length,
       platformOnlyItems: allComparisons.filter(
@@ -366,12 +423,20 @@ export class AmazonStockService extends PlatformStockService {
       priceMismatches: allComparisons.filter(
         (c) => c.discrepancyType === 'price_mismatch'
       ).length,
+      missingAsinItems: allComparisons.filter(
+        (c) => c.discrepancyType === 'missing_asin'
+      ).length,
       lastImportAt: latestImport?.completedAt || null,
     };
 
     console.log(
       `[AmazonStockService] Comparison complete: ${comparisons.length} items after filters`
     );
+    console.log(`[AmazonStockService] Summary: missingAsinItems=${summary.missingAsinItems}, allComparisons count=${allComparisons.length}`);
+
+    // Debug: count missing_asin items
+    const missingAsinCount = allComparisons.filter((c) => c.discrepancyType === 'missing_asin').length;
+    console.log(`[AmazonStockService] Direct count of missing_asin: ${missingAsinCount}`);
 
     return { comparisons, summary };
   }
@@ -399,7 +464,7 @@ export class AmazonStockService extends PlatformStockService {
   }
 
   /**
-   * Get inventory items listed on Amazon
+   * Get inventory items listed on Amazon (with ASIN)
    *
    * Fetches items where:
    * - status = 'LISTED'
@@ -412,6 +477,8 @@ export class AmazonStockService extends PlatformStockService {
     let page = 0;
     let hasMore = true;
 
+    console.log(`[AmazonStockService] getAmazonInventoryItems: userId=${this.userId}`);
+
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('inventory_items')
@@ -420,9 +487,11 @@ export class AmazonStockService extends PlatformStockService {
         )
         .eq('user_id', this.userId)
         .eq('status', 'LISTED')
-        .ilike('listing_platform', 'amazon')
+        .ilike('listing_platform', '%amazon%')
         .not('amazon_asin', 'is', null)
         .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      console.log(`[AmazonStockService] Inventory WITH ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`);
 
       if (error) {
         throw new Error(`Failed to fetch inventory items: ${error.message}`);
@@ -438,6 +507,66 @@ export class AmazonStockService extends PlatformStockService {
         storageLocation: row.storage_location,
         sku: row.sku,
         status: row.status || 'LISTED', // Default to LISTED since we filter by it
+        createdAt: row.created_at,
+      }));
+
+      allItems.push(...items);
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+    }
+
+    return allItems;
+  }
+
+  /**
+   * Get inventory items marked as Amazon platform but missing ASIN
+   *
+   * Fetches items where:
+   * - status = 'LISTED'
+   * - listing_platform ILIKE 'amazon'
+   * - amazon_asin IS NULL
+   *
+   * These represent items supposedly listed on Amazon but without a linked ASIN
+   */
+  private async getAmazonInventoryItemsMissingAsin(): Promise<AmazonInventoryItem[]> {
+    const allItems: AmazonInventoryItem[] = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+
+    console.log(`[AmazonStockService] getAmazonInventoryItemsMissingAsin: userId=${this.userId}`);
+
+    while (hasMore) {
+      const { data, error } = await this.supabase
+        .from('inventory_items')
+        .select(
+          'id, set_number, item_name, condition, amazon_asin, listing_value, storage_location, sku, status, created_at, listing_platform'
+        )
+        .eq('user_id', this.userId)
+        .eq('status', 'LISTED')
+        .ilike('listing_platform', '%amazon%')
+        .is('amazon_asin', null)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      console.log(`[AmazonStockService] Missing ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`);
+      if (data && data.length > 0) {
+        console.log(`[AmazonStockService] First item:`, JSON.stringify(data[0]));
+      }
+
+      if (error) {
+        throw new Error(`Failed to fetch inventory items missing ASIN: ${error.message}`);
+      }
+
+      const items = (data || []).map((row) => ({
+        id: row.id,
+        setNumber: row.set_number,
+        itemName: row.item_name,
+        condition: row.condition,
+        amazonAsin: row.amazon_asin,
+        listingValue: row.listing_value ? Number(row.listing_value) : null,
+        storageLocation: row.storage_location,
+        sku: row.sku,
+        status: row.status || 'LISTED',
         createdAt: row.created_at,
       }));
 

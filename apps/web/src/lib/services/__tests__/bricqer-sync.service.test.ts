@@ -5,6 +5,7 @@ import { BricqerSyncService } from '../bricqer-sync.service';
 const mockBricqerClient = {
   testConnection: vi.fn(),
   getSalesOrders: vi.fn(),
+  getAllOrders: vi.fn(),
   getOrderWithItems: vi.fn(),
 };
 
@@ -186,7 +187,7 @@ describe('BricqerSyncService', () => {
     ];
 
     beforeEach(() => {
-      mockBricqerClient.getSalesOrders.mockResolvedValue(mockOrders);
+      mockBricqerClient.getAllOrders.mockResolvedValue(mockOrders);
       mockOrderRepo.findByPlatformOrderId.mockResolvedValue(null);
       mockOrderRepo.upsert.mockResolvedValue({ id: 'order-id' });
     });
@@ -214,7 +215,7 @@ describe('BricqerSyncService', () => {
     });
 
     it('should use order_number for platform order ID when available', async () => {
-      mockBricqerClient.getSalesOrders.mockResolvedValue([
+      mockBricqerClient.getAllOrders.mockResolvedValue([
         { id: 1, order_number: 'BQ-001' },
       ]);
 
@@ -228,7 +229,7 @@ describe('BricqerSyncService', () => {
     });
 
     it('should use id as fallback for platform order ID', async () => {
-      mockBricqerClient.getSalesOrders.mockResolvedValue([{ id: 123 }]);
+      mockBricqerClient.getAllOrders.mockResolvedValue([{ id: 123 }]);
 
       await service.syncOrders(testUserId);
 
@@ -239,14 +240,15 @@ describe('BricqerSyncService', () => {
       );
     });
 
-    it('should respect limit option', async () => {
-      await service.syncOrders(testUserId, { limit: 10 });
+    it('should call getAllOrders for both archived and active orders by default', async () => {
+      await service.syncOrders(testUserId);
 
-      expect(mockBricqerClient.getSalesOrders).toHaveBeenCalledWith(undefined, 10);
+      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith({ filed: true });
+      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith({ filed: false });
     });
 
     it('should include items when requested', async () => {
-      mockBricqerClient.getSalesOrders.mockResolvedValue([{ id: 1, order_number: 'BQ-001' }]);
+      mockBricqerClient.getAllOrders.mockResolvedValue([{ id: 1, order_number: 'BQ-001' }]);
       mockBricqerClient.getOrderWithItems.mockResolvedValue({
         order: { id: 1, order_number: 'BQ-001' },
         items: [{ id: 'item-1', quantity: 2 }],
@@ -270,7 +272,7 @@ describe('BricqerSyncService', () => {
 
     it('should handle rate limit errors', async () => {
       const { BricqerRateLimitError } = await import('../../bricqer');
-      mockBricqerClient.getSalesOrders.mockRejectedValue(
+      mockBricqerClient.getAllOrders.mockRejectedValue(
         new BricqerRateLimitError('Rate limited', {
           remaining: 0,
           resetTime: new Date('2024-12-20T12:00:00Z'),
@@ -286,7 +288,7 @@ describe('BricqerSyncService', () => {
 
     it('should handle auth errors', async () => {
       const { BricqerAuthError } = await import('../../bricqer');
-      mockBricqerClient.getSalesOrders.mockRejectedValue(
+      mockBricqerClient.getAllOrders.mockRejectedValue(
         new BricqerAuthError('Invalid credentials')
       );
 
@@ -298,7 +300,7 @@ describe('BricqerSyncService', () => {
 
     it('should handle API errors', async () => {
       const { BricqerApiError } = await import('../../bricqer');
-      mockBricqerClient.getSalesOrders.mockRejectedValue(
+      mockBricqerClient.getAllOrders.mockRejectedValue(
         new BricqerApiError('Invalid request', 'BAD_REQUEST')
       );
 
@@ -310,7 +312,7 @@ describe('BricqerSyncService', () => {
     });
 
     it('should handle unknown errors', async () => {
-      mockBricqerClient.getSalesOrders.mockRejectedValue('Unknown error string');
+      mockBricqerClient.getAllOrders.mockRejectedValue('Unknown error string');
 
       const result = await service.syncOrders(testUserId);
 

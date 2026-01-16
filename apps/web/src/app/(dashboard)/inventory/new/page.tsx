@@ -1,21 +1,7 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-
-// Dynamically import Header to prevent SSR issues with Supabase
-const Header = dynamic(
-  () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
-);
-
-// Dynamically import InventoryAddTabs to prevent SSR issues
-const InventoryAddTabs = dynamic(
-  () =>
-    import('@/components/features/inventory/InventoryAddTabs').then((mod) => ({
-      default: mod.InventoryAddTabs,
-    })),
-  { ssr: false }
-);
+import { Header } from '@/components/layout';
+import { InventoryAddTabs } from '@/components/features/inventory/InventoryAddTabs';
 
 export default function NewInventoryPage() {
   return (

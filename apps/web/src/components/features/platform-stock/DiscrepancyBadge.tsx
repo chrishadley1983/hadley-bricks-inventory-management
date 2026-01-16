@@ -9,6 +9,7 @@ import {
   XCircle,
   AlertTriangle,
   MinusCircle,
+  Link2Off,
 } from 'lucide-react';
 
 interface DiscrepancyBadgeProps {
@@ -61,6 +62,13 @@ const discrepancyConfig: Record<
     icon: MinusCircle,
     className: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
     iconClassName: 'text-blue-600 dark:text-blue-400',
+  },
+  missing_asin: {
+    label: 'Missing ASIN',
+    shortLabel: 'No ASIN',
+    icon: Link2Off,
+    className: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800',
+    iconClassName: 'text-purple-600 dark:text-purple-400',
   },
 };
 

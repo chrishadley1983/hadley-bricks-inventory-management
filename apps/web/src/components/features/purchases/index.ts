@@ -7,3 +7,7 @@ export { QuickAddPurchase } from './QuickAddPurchase';
 export { MileageFormInline, type PendingMileageEntry } from './MileageFormInline';
 export { MileageSection } from './MileageSection';
 export { PurchaseBulkEditDialog } from './PurchaseBulkEditDialog';
+export { PurchaseImages } from './PurchaseImages';
+export { PhotoUploadInline, type PendingImage } from './PhotoUploadInline';
+export { PurchaseProfitability } from './PurchaseProfitability';
+export { PurchaseProfitabilityHoverCard } from './PurchaseProfitabilityHoverCard';

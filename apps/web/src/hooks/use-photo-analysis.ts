@@ -639,7 +639,7 @@ export function usePhotoAnalysis() {
       setProgressMessage(null);
       throw error;
     }
-  }, [images, useGeminiVerification, useBrickognize, analysisMutation, setAnalysisResult]);
+  }, [images, useGeminiVerification, useBrickognize, analysisMutation, setAnalysisResult, listingDescription]);
 
   return {
     // Image state

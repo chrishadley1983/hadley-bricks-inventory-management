@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { amazonTransactionSyncService } from '@/lib/amazon';
+import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 
 const SyncSchema = z.object({
   fullSync: z.boolean().optional().default(false),
@@ -41,9 +42,22 @@ export async function POST(request: NextRequest) {
       { fullSync }
     );
 
+    // After syncing transactions, backfill fee data for linked inventory items
+    let backfillResult = null;
+    if (result.success && result.recordsCreated > 0) {
+      try {
+        const linkingService = new AmazonInventoryLinkingService(supabase, user.id);
+        backfillResult = await linkingService.backfillFeeData();
+        console.log('[Amazon Transaction Sync] Fee backfill complete:', backfillResult);
+      } catch (backfillError) {
+        console.error('[Amazon Transaction Sync] Fee backfill error:', backfillError);
+      }
+    }
+
     return NextResponse.json({
       success: result.success,
       result,
+      backfill: backfillResult,
     });
   } catch (error) {
     console.error(

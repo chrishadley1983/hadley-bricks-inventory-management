@@ -167,6 +167,9 @@ export class AmazonInventoryLinkingService {
    * Automatically detects mode based on whether inventory_item_id is populated
    */
   async processShippedOrder(orderId: string, options: ProcessingOptions = {}): Promise<LinkingResult> {
+    // Set includeSold flag from options
+    this.includeSold = options.includeSold || false;
+
     const result: LinkingResult = {
       orderId,
       status: 'pending',
@@ -498,7 +501,7 @@ export class AmazonInventoryLinkingService {
       .select('id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id')
       .eq('user_id', this.userId)
       .eq('amazon_asin', asin)
-      .ilike('listing_platform', 'amazon') // Case-insensitive match for AMAZON/amazon
+      .ilike('listing_platform', '%amazon%') // Case-insensitive match for AMAZON/amazon
       .in('status', this.getValidStatuses())
       .order('created_at', { ascending: true }) // FIFO - oldest first
       .limit(limit * 2); // Fetch extra to account for filtering
@@ -1039,6 +1042,198 @@ export class AmazonInventoryLinkingService {
     };
 
     return stats;
+  }
+
+  // --------------------------------------------------------------------------
+  // Fee Backfill
+  // --------------------------------------------------------------------------
+
+  /**
+   * Backfill fee data for inventory items that are linked to Amazon orders
+   * but are missing transaction fee data (sold_fees_amount is null)
+   */
+  async backfillFeeData(): Promise<{
+    processed: number;
+    updated: number;
+    stillPending: number;
+    errors: string[];
+  }> {
+    const result = {
+      processed: 0,
+      updated: 0,
+      stillPending: 0,
+      errors: [] as string[],
+    };
+
+    // Find inventory items sold on Amazon with missing fee data
+    const { data: itemsNeedingFees, error: fetchError } = await this.supabase
+      .from('inventory_items')
+      .select('id, sold_order_id, amazon_asin, sold_price')
+      .eq('user_id', this.userId)
+      .eq('sold_platform', 'amazon')
+      .not('sold_order_id', 'is', null)
+      .is('sold_fees_amount', null);
+
+    if (fetchError) {
+      result.errors.push(`Failed to fetch items: ${fetchError.message}`);
+      return result;
+    }
+
+    if (!itemsNeedingFees || itemsNeedingFees.length === 0) {
+      return result;
+    }
+
+    console.log(`[AmazonFeeBackfill] Found ${itemsNeedingFees.length} items needing fee data`);
+
+    for (const item of itemsNeedingFees) {
+      result.processed++;
+
+      try {
+        // Look up transaction by order ID and optionally ASIN
+        let transaction = null;
+
+        // First try with ASIN if available
+        if (item.amazon_asin) {
+          const { data } = await this.supabase
+            .from('amazon_transactions')
+            .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+            .eq('user_id', this.userId)
+            .eq('amazon_order_id', item.sold_order_id)
+            .eq('asin', item.amazon_asin)
+            .eq('transaction_type', 'Shipment')
+            .single();
+          transaction = data;
+        }
+
+        // Fall back to order-level transaction without ASIN
+        if (!transaction) {
+          const { data } = await this.supabase
+            .from('amazon_transactions')
+            .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+            .eq('user_id', this.userId)
+            .eq('amazon_order_id', item.sold_order_id)
+            .eq('transaction_type', 'Shipment')
+            .single();
+          transaction = data;
+        }
+
+        if (!transaction) {
+          // Transaction not yet available
+          result.stillPending++;
+          continue;
+        }
+
+        // Update inventory item with fee data
+        // Note: FBA fee breakdown (fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee) is available
+        // in transaction data if detailed breakdown is needed in the future
+        const { error: updateError } = await this.supabase
+          .from('inventory_items')
+          .update({
+            sold_gross_amount: transaction.gross_sales_amount || item.sold_price,
+            sold_fees_amount: transaction.total_fees,
+            sold_net_amount: transaction.total_amount,
+          })
+          .eq('id', item.id)
+          .eq('user_id', this.userId);
+
+        if (updateError) {
+          result.errors.push(`Failed to update item ${item.id}: ${updateError.message}`);
+        } else {
+          result.updated++;
+          console.log(`[AmazonFeeBackfill] Updated item ${item.id} with fees: ${transaction.total_fees}`);
+        }
+      } catch (err) {
+        result.errors.push(`Error processing item ${item.id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    console.log(`[AmazonFeeBackfill] Complete: ${result.updated} updated, ${result.stillPending} still pending`);
+    return result;
+  }
+
+  // --------------------------------------------------------------------------
+  // Auto-Complete Old Orders
+  // --------------------------------------------------------------------------
+
+  /**
+   * Auto-complete old Amazon orders that are:
+   * 1. Linked to inventory (inventory_link_status = 'complete')
+   * 2. Status is 'Shipped' (not yet marked completed)
+   * 3. Order is older than the specified number of days
+   *
+   * This replicates the ConfirmOrdersDialog behavior for old orders.
+   */
+  async autoCompleteOldOrders(daysOld: number = 14): Promise<{
+    processed: number;
+    completed: number;
+    errors: string[];
+  }> {
+    const result = {
+      processed: 0,
+      completed: 0,
+      errors: [] as string[],
+    };
+
+    // Calculate the cutoff date
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+    // Find Amazon orders that are:
+    // - Shipped status (raw Amazon status)
+    // - Linked to inventory (inventory_link_status = 'complete')
+    // - Not already marked as Completed internally
+    // - Older than cutoff date
+    const { data: orders, error: fetchError } = await this.supabase
+      .from('platform_orders')
+      .select('id, platform_order_id, order_date, status, internal_status, inventory_link_status')
+      .eq('user_id', this.userId)
+      .eq('platform', 'amazon')
+      .eq('status', 'Shipped')
+      .eq('inventory_link_status', 'complete')
+      .or('internal_status.is.null,internal_status.neq.Completed')
+      .lt('order_date', cutoffDate.toISOString());
+
+    if (fetchError) {
+      result.errors.push(`Failed to fetch orders: ${fetchError.message}`);
+      return result;
+    }
+
+    if (!orders || orders.length === 0) {
+      console.log('[AutoCompleteOldOrders] No orders found to auto-complete');
+      return result;
+    }
+
+    console.log(`[AutoCompleteOldOrders] Found ${orders.length} orders to auto-complete (>${daysOld} days old)`);
+
+    const now = new Date().toISOString();
+
+    for (const order of orders) {
+      result.processed++;
+
+      try {
+        // Update order to Completed (same as ConfirmOrdersDialog)
+        const { error: updateError } = await this.supabase
+          .from('platform_orders')
+          .update({
+            fulfilled_at: now,
+            internal_status: 'Completed',
+          })
+          .eq('id', order.id)
+          .eq('user_id', this.userId);
+
+        if (updateError) {
+          result.errors.push(`Failed to complete order ${order.platform_order_id}: ${updateError.message}`);
+        } else {
+          result.completed++;
+          console.log(`[AutoCompleteOldOrders] Completed order ${order.platform_order_id} (${order.order_date})`);
+        }
+      } catch (err) {
+        result.errors.push(`Error processing order ${order.platform_order_id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    console.log(`[AutoCompleteOldOrders] Complete: ${result.completed} orders marked as Completed`);
+    return result;
   }
 }
 
