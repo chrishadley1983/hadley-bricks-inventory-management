@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<
     label: string;
     variant: 'default' | 'secondary' | 'destructive' | 'outline';
     color?: string;
+    description?: string;
   }
 > = {
   pending: {
@@ -58,17 +59,20 @@ const STATUS_CONFIG: Record<
     label: 'Verifying Prices',
     variant: 'default',
     color: 'text-amber-500',
+    description: 'Waiting for price to propagate on Amazon',
   },
   verified: {
     icon: CheckCircle2,
     label: 'Verified',
     variant: 'default',
     color: 'text-green-500',
+    description: 'Price verified live on Amazon',
   },
   verification_failed: {
     icon: AlertTriangle,
     label: 'Verification Failed',
     variant: 'destructive',
+    description: 'Price not visible after timeout - quantity NOT updated',
   },
   cancelled: {
     icon: XCircle,
@@ -89,6 +93,74 @@ const STATUS_CONFIG: Record<
     icon: AlertTriangle,
     label: 'Timeout',
     variant: 'destructive',
+  },
+  // Two-phase sync statuses
+  price_pending: {
+    icon: Clock,
+    label: 'Price Pending',
+    variant: 'secondary',
+    description: 'Price feed not yet submitted',
+  },
+  price_submitted: {
+    icon: Loader2,
+    label: 'Price Submitted',
+    variant: 'default',
+    color: 'text-blue-500',
+    description: 'Price feed submitted to Amazon',
+  },
+  price_processing: {
+    icon: Loader2,
+    label: 'Price Processing',
+    variant: 'default',
+    color: 'text-blue-500',
+    description: 'Amazon processing price update',
+  },
+  price_verifying: {
+    icon: Loader2,
+    label: 'Price Verifying',
+    variant: 'default',
+    color: 'text-amber-500',
+    description: 'Waiting for price to be visible on Amazon (up to 30 min)',
+  },
+  price_verified: {
+    icon: CheckCircle2,
+    label: 'Price Verified',
+    variant: 'default',
+    color: 'text-green-500',
+    description: 'Price confirmed live - submitting quantity',
+  },
+  quantity_pending: {
+    icon: Clock,
+    label: 'Quantity Pending',
+    variant: 'secondary',
+    description: 'Quantity feed not yet submitted',
+  },
+  quantity_submitted: {
+    icon: Loader2,
+    label: 'Quantity Submitted',
+    variant: 'default',
+    color: 'text-blue-500',
+    description: 'Quantity feed submitted to Amazon',
+  },
+  quantity_processing: {
+    icon: Loader2,
+    label: 'Quantity Processing',
+    variant: 'default',
+    color: 'text-blue-500',
+    description: 'Amazon processing quantity update',
+  },
+  completed: {
+    icon: CheckCircle2,
+    label: 'Completed',
+    variant: 'default',
+    color: 'text-green-500',
+    description: 'Two-phase sync completed successfully',
+  },
+  failed: {
+    icon: XCircle,
+    label: 'Failed',
+    variant: 'destructive',
+    description: 'Two-phase sync failed - check notifications',
   },
 };
 
@@ -186,6 +258,10 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
           </div>
           <Progress value={pollProgress} className="h-1" />
         </div>
+      )}
+
+      {config.description && !feed.error_message && (
+        <p className="text-xs text-muted-foreground">{config.description}</p>
       )}
 
       {feed.error_message && (

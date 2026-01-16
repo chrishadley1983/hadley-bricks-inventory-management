@@ -27,13 +27,24 @@ function formatDate(dateString: string | null): string {
 function getStatusIcon(status: string): React.ElementType {
   switch (status) {
     case 'done':
+    case 'verified':
+    case 'completed':
+    case 'price_verified':
       return CheckCircle2;
     case 'cancelled':
     case 'fatal':
     case 'error':
+    case 'failed':
+    case 'verification_failed':
       return XCircle;
     case 'submitted':
     case 'processing':
+    case 'done_verifying':
+    case 'price_verifying':
+    case 'price_submitted':
+    case 'price_processing':
+    case 'quantity_submitted':
+    case 'quantity_processing':
       return Loader2;
     case 'processing_timeout':
       return AlertTriangle;
@@ -47,14 +58,25 @@ function getStatusVariant(
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'done':
+    case 'verified':
+    case 'completed':
+    case 'price_verified':
       return 'default';
     case 'cancelled':
     case 'fatal':
     case 'error':
+    case 'failed':
+    case 'verification_failed':
     case 'processing_timeout':
       return 'destructive';
     case 'submitted':
     case 'processing':
+    case 'done_verifying':
+    case 'price_verifying':
+    case 'price_submitted':
+    case 'price_processing':
+    case 'quantity_submitted':
+    case 'quantity_processing':
       return 'secondary';
     default:
       return 'outline';
@@ -91,11 +113,24 @@ function getColumns(onViewDetails: (feed: SyncFeed) => void): ColumnDef<SyncFeed
     {
       accessorKey: 'is_dry_run',
       header: 'Type',
-      cell: ({ row }) => (
-        <Badge variant="outline">
-          {row.original.is_dry_run ? 'Dry Run' : 'Live'}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const feed = row.original as SyncFeed & { sync_mode?: string; phase?: string };
+        const isTwoPhase = feed.sync_mode === 'two_phase';
+        const phase = feed.phase;
+
+        return (
+          <div className="flex flex-col gap-0.5">
+            <Badge variant="outline">
+              {row.original.is_dry_run ? 'Dry Run' : 'Live'}
+            </Badge>
+            {isTwoPhase && (
+              <Badge variant="secondary" className="text-xs">
+                {phase === 'price' ? 'Price' : phase === 'quantity' ? 'Qty' : '2-Phase'}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'total_items',

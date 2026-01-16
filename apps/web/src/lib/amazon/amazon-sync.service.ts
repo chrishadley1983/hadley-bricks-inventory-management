@@ -28,7 +28,11 @@ import type {
   FeedProcessingReport,
   ListingsValidationResult,
   PriceConflict,
+  TwoPhaseResult,
 } from './amazon-sync.types';
+import { TWO_PHASE_DEFAULTS } from './amazon-sync.types';
+import { emailService } from '@/lib/email';
+import { pushoverService } from '@/lib/notifications';
 
 // Re-export constants
 export { UK_MARKETPLACE_ID, DEFAULT_PRODUCT_TYPE, PRODUCT_TYPE_CACHE_TTL_DAYS } from './amazon-sync.types';
@@ -706,6 +710,522 @@ export class AmazonSyncService {
       throw error;
     }
   }
+
+  // ==========================================================================
+  // TWO-PHASE SYNC
+  // ==========================================================================
+
+  /**
+   * Submit feed using two-phase sync (price first, then quantity)
+   *
+   * Flow:
+   * 1. Submit price-only feed
+   * 2. Poll until Amazon accepts
+   * 3. Verify price is live on listing
+   * 4. Submit quantity-only feed
+   * 5. Poll until complete
+   * 6. Send notifications (email + Pushover)
+   *
+   * @param options - Submission options
+   * @returns Result with both feeds and final status
+   */
+  async submitTwoPhaseFeed(options: {
+    dryRun: boolean;
+    userEmail: string;
+    priceVerificationTimeout?: number;
+    priceVerificationInterval?: number;
+  }): Promise<TwoPhaseResult> {
+    const {
+      dryRun,
+      userEmail,
+      priceVerificationTimeout = TWO_PHASE_DEFAULTS.priceVerificationTimeout,
+      priceVerificationInterval = TWO_PHASE_DEFAULTS.priceVerificationInterval,
+    } = options;
+
+    console.log('[AmazonSyncService] Starting two-phase sync');
+    console.log(`[AmazonSyncService] Timeout: ${priceVerificationTimeout / 60000} min`);
+    console.log(`[AmazonSyncService] Interval: ${priceVerificationInterval / 1000} sec`);
+
+    // Get credentials and aggregated items
+    const credentials = await this.getAmazonCredentials();
+    if (!credentials) {
+      throw new Error('Amazon credentials not configured');
+    }
+
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    if (aggregatedItems.length === 0) {
+      throw new Error('No items in the sync queue');
+    }
+
+    // ========================================
+    // PHASE 1: Price-only feed
+    // ========================================
+    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed');
+
+    const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
+
+    if (dryRun) {
+      return {
+        priceFeed,
+        status: 'price_verified',
+      };
+    }
+
+    // Poll until price feed is processed
+    let currentPriceFeed = priceFeed;
+    while (currentPriceFeed.status === 'submitted' || currentPriceFeed.status === 'processing') {
+      await this.delay(5000); // 5 second polling interval
+      currentPriceFeed = await this.pollFeedStatus(priceFeed.id);
+    }
+
+    if (currentPriceFeed.status === 'error' || (currentPriceFeed.error_count ?? 0) > 0) {
+      // Send failure notifications for price feed rejection
+      const itemDetails = this.buildItemDetails(aggregatedItems);
+      await emailService.sendFeedRejectionFailure({
+        userEmail,
+        feedId: priceFeed.id,
+        phase: 'price',
+        errorMessage: currentPriceFeed.error_message || 'Price feed rejected by Amazon',
+        itemDetails,
+      });
+      await pushoverService.sendSyncFailure({
+        feedId: priceFeed.id,
+        itemCount: aggregatedItems.length,
+        reason: currentPriceFeed.error_message || 'Feed rejected',
+        phase: 'price_rejected',
+      });
+
+      return {
+        priceFeed: currentPriceFeed,
+        status: 'failed',
+        error: currentPriceFeed.error_message || 'Price feed failed. Notifications sent.',
+      };
+    }
+
+    // ========================================
+    // VERIFICATION: Wait for price to be live
+    // ========================================
+    console.log('[AmazonSyncService] Verifying prices are live on Amazon');
+
+    const verificationResult = await this.waitForPriceVerification(
+      aggregatedItems,
+      priceVerificationTimeout,
+      priceVerificationInterval
+    );
+
+    if (!verificationResult.allVerified) {
+      // Update price feed status
+      await this.updateFeedRecord(priceFeed.id, {
+        status: 'verification_failed',
+        error_message: `Price verification failed for: ${verificationResult.failedSkus.join(', ')}`,
+      });
+
+      // Send failure notifications
+      const itemDetails = this.buildItemDetails(aggregatedItems);
+      await emailService.sendTwoPhaseFailure({
+        userEmail,
+        feedId: priceFeed.id,
+        failedSkus: verificationResult.failedSkus,
+        submittedPrice: aggregatedItems[0]?.price ?? 0,
+        verificationDuration: priceVerificationTimeout,
+        itemDetails,
+      });
+      await pushoverService.sendSyncFailure({
+        feedId: priceFeed.id,
+        itemCount: verificationResult.failedSkus.length,
+        reason: `Price not visible after ${priceVerificationTimeout / 60000} mins`,
+        phase: 'price_verification',
+      });
+
+      return {
+        priceFeed: await this.getFeed(priceFeed.id),
+        status: 'failed',
+        error: `Price not visible on Amazon after ${priceVerificationTimeout / 60000} minutes. Notifications sent.`,
+      };
+    }
+
+    // Update price feed as verified
+    // Note: price_verified_at added by migration 20260123000001_two_phase_sync.sql
+    await this.updateFeedRecord(priceFeed.id, {
+      status: 'verified',
+      price_verified_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // ========================================
+    // PHASE 2: Quantity-only feed
+    // ========================================
+    console.log('[AmazonSyncService] Phase 2: Submitting quantity-only feed');
+
+    const quantityFeed = await this.submitQuantityOnlyFeed(
+      aggregatedItems,
+      credentials,
+      priceFeed.id
+    );
+
+    // Poll until quantity feed is processed
+    let currentQuantityFeed = quantityFeed;
+    while (
+      currentQuantityFeed.status === 'submitted' ||
+      currentQuantityFeed.status === 'processing'
+    ) {
+      await this.delay(5000);
+      currentQuantityFeed = await this.pollFeedStatus(quantityFeed.id);
+    }
+
+    // Handle quantity feed result
+    if (currentQuantityFeed.status === 'done') {
+      // SUCCESS: Clear queue and send success notifications
+      await this.clearQueueForFeed(aggregatedItems);
+
+      const itemDetails = aggregatedItems.map((item) => ({
+        sku: item.amazonSku,
+        asin: item.asin,
+        setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
+        itemName: item.itemNames[0] ?? 'Unknown',
+        price: item.price,
+      }));
+
+      await emailService.sendTwoPhaseSuccess({
+        userEmail,
+        feedId: priceFeed.id,
+        itemCount: aggregatedItems.length,
+        priceVerificationTime: verificationResult.verificationDuration ?? 0,
+        itemDetails,
+      });
+      await pushoverService.sendSyncSuccess({
+        feedId: priceFeed.id,
+        itemCount: aggregatedItems.length,
+        verificationTime: verificationResult.verificationDuration ?? 0,
+      });
+
+      return {
+        priceFeed: await this.getFeed(priceFeed.id),
+        quantityFeed: currentQuantityFeed,
+        status: 'completed',
+        priceVerifiedAt: verificationResult.verifiedAt,
+      };
+    }
+
+    // FAILURE: Quantity feed was rejected
+    const itemDetails = this.buildItemDetails(aggregatedItems);
+    await emailService.sendFeedRejectionFailure({
+      userEmail,
+      feedId: quantityFeed.id,
+      phase: 'quantity',
+      errorMessage: currentQuantityFeed.error_message || 'Quantity feed rejected by Amazon',
+      itemDetails,
+    });
+    await pushoverService.sendSyncFailure({
+      feedId: quantityFeed.id,
+      itemCount: aggregatedItems.length,
+      reason: currentQuantityFeed.error_message || 'Feed rejected',
+      phase: 'quantity_rejected',
+    });
+
+    return {
+      priceFeed: await this.getFeed(priceFeed.id),
+      quantityFeed: currentQuantityFeed,
+      status: 'failed',
+      priceVerifiedAt: verificationResult.verifiedAt,
+      error: 'Quantity feed failed. Price was updated but quantity was NOT. Notifications sent.',
+    };
+  }
+
+  /**
+   * Wait for prices to be verified on Amazon
+   */
+  private async waitForPriceVerification(
+    items: AggregatedQueueItem[],
+    timeout: number,
+    interval: number
+  ): Promise<{
+    allVerified: boolean;
+    verifiedAt?: string;
+    verificationDuration?: number;
+    failedSkus: string[];
+  }> {
+    const credentials = await this.getAmazonCredentials();
+    if (!credentials) {
+      throw new Error('No credentials');
+    }
+
+    const listingsClient = new AmazonListingsClient(credentials);
+    const startTime = Date.now();
+    const failedSkus: string[] = [];
+
+    while (Date.now() - startTime < timeout) {
+      let allVerified = true;
+      failedSkus.length = 0;
+
+      for (const item of items) {
+        try {
+          const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
+            'offers',
+          ]);
+
+          const offer = listing?.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
+          const livePrice = offer?.price?.amount;
+
+          if (livePrice === undefined || Math.abs(livePrice - item.price) > 0.01) {
+            allVerified = false;
+            failedSkus.push(item.amazonSku);
+            console.log(
+              `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
+                `expected ${item.price}, got ${livePrice}`
+            );
+          }
+        } catch (error) {
+          // API error - treat as not verified
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+          console.error(`[AmazonSyncService] Error checking price for ${item.amazonSku}:`, error);
+        }
+      }
+
+      if (allVerified) {
+        return {
+          allVerified: true,
+          verifiedAt: new Date().toISOString(),
+          verificationDuration: Date.now() - startTime,
+          failedSkus: [],
+        };
+      }
+
+      console.log(
+        `[AmazonSyncService] Waiting for price verification... ` +
+          `(${Math.round((Date.now() - startTime) / 1000)}s elapsed)`
+      );
+      await this.delay(interval);
+    }
+
+    return {
+      allVerified: false,
+      failedSkus,
+    };
+  }
+
+  /**
+   * Submit price-only feed
+   */
+  private async submitPriceOnlyFeed(
+    items: AggregatedQueueItem[],
+    credentials: AmazonCredentials,
+    dryRun: boolean
+  ): Promise<SyncFeed> {
+    // Create feed record
+    const feed = await this.createFeedRecord(items.length, dryRun);
+
+    // Update with sync mode and phase
+    // Note: sync_mode and phase added by migration 20260123000001_two_phase_sync.sql
+    await this.updateFeedRecord(feed.id, {
+      sync_mode: 'two_phase',
+      phase: 'price',
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Build price-only payload
+    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
+      messageId: index + 1,
+      sku: item.amazonSku,
+      operationType: 'PATCH' as const,
+      productType: item.productType,
+      patches: this.buildPriceOnlyPatches(item),
+    }));
+
+    const payload: ListingsFeedPayload = {
+      header: {
+        sellerId: credentials.sellerId,
+        version: '2.0',
+        issueLocale: 'en_GB',
+      },
+      messages,
+    };
+
+    // Update feed with payload
+    await this.updateFeedRecord(feed.id, {
+      request_payload:
+        payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+    });
+
+    // Create feed items
+    await this.createFeedItems(feed.id, items);
+
+    if (dryRun) {
+      // Validate via Listings API
+      const listingsClient = new AmazonListingsClient(credentials);
+      const validationResults = await this.validateItems(listingsClient, items);
+      await this.updateFeedItemsWithValidation(feed.id, validationResults);
+
+      const successCount = validationResults.filter((r) => r.status === 'VALID').length;
+      await this.updateFeedRecord(feed.id, {
+        status: 'done',
+        success_count: successCount,
+        error_count: validationResults.length - successCount,
+        completed_at: new Date().toISOString(),
+      });
+    } else {
+      // Submit to Amazon
+      const feedsClient = new AmazonFeedsClient(credentials);
+      const { feedId, feedDocumentId } = await feedsClient.submitFeed(
+        payload,
+        'JSON_LISTINGS_FEED',
+        ['A1F83G8C2ARO7P']
+      );
+
+      await this.updateFeedRecord(feed.id, {
+        amazon_feed_id: feedId,
+        amazon_feed_document_id: feedDocumentId,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+      });
+    }
+
+    return this.getFeed(feed.id);
+  }
+
+  /**
+   * Submit quantity-only feed
+   */
+  private async submitQuantityOnlyFeed(
+    items: AggregatedQueueItem[],
+    credentials: AmazonCredentials,
+    parentFeedId: string
+  ): Promise<SyncFeed> {
+    // Create feed record linked to parent
+    // Note: sync_mode, phase, parent_feed_id added by migration 20260123000001_two_phase_sync.sql
+    const { data: feed, error } = await this.supabase
+      .from('amazon_sync_feeds')
+      .insert({
+        user_id: this.userId,
+        feed_type: 'JSON_LISTINGS_FEED',
+        is_dry_run: false,
+        marketplace_id: 'A1F83G8C2ARO7P',
+        status: 'pending',
+        total_items: items.length,
+        sync_mode: 'two_phase',
+        phase: 'quantity',
+        parent_feed_id: parentFeedId,
+      } as Database['public']['Tables']['amazon_sync_feeds']['Insert'])
+      .select()
+      .single();
+
+    if (error || !feed) {
+      throw new Error(`Failed to create quantity feed: ${error?.message}`);
+    }
+
+    // Build quantity-only payload
+    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
+      messageId: index + 1,
+      sku: item.amazonSku,
+      operationType: 'PATCH' as const,
+      productType: item.productType,
+      patches: this.buildQuantityOnlyPatches(item),
+    }));
+
+    const payload: ListingsFeedPayload = {
+      header: {
+        sellerId: credentials.sellerId,
+        version: '2.0',
+        issueLocale: 'en_GB',
+      },
+      messages,
+    };
+
+    // Update feed with payload
+    await this.updateFeedRecord(feed.id, {
+      request_payload:
+        payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+    });
+
+    // Create feed items
+    await this.createFeedItems(feed.id, items);
+
+    // Submit to Amazon
+    const feedsClient = new AmazonFeedsClient(credentials);
+    const { feedId, feedDocumentId } = await feedsClient.submitFeed(
+      payload,
+      'JSON_LISTINGS_FEED',
+      ['A1F83G8C2ARO7P']
+    );
+
+    await this.updateFeedRecord(feed.id, {
+      amazon_feed_id: feedId,
+      amazon_feed_document_id: feedDocumentId,
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+    });
+
+    return this.getFeed(feed.id);
+  }
+
+  /**
+   * Build patches for price-only update (Phase 1 of two-phase sync)
+   */
+  private buildPriceOnlyPatches(item: AggregatedQueueItem): ListingsFeedPatch[] {
+    const purchasableOffer = buildPurchasableOffer(item.price);
+
+    return [
+      {
+        op: 'replace',
+        path: '/attributes/purchasable_offer',
+        value: purchasableOffer,
+      },
+      // Also update list_price for UK marketplace compliance
+      {
+        op: 'replace',
+        path: '/attributes/list_price',
+        value: [
+          {
+            marketplace_id: 'A1F83G8C2ARO7P',
+            currency: 'GBP',
+            value_with_tax: item.price,
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Build patches for quantity-only update (Phase 2 of two-phase sync)
+   */
+  private buildQuantityOnlyPatches(item: AggregatedQueueItem): ListingsFeedPatch[] {
+    return [
+      {
+        op: 'replace',
+        path: '/attributes/fulfillment_availability',
+        value: [
+          {
+            fulfillment_channel_code: 'DEFAULT',
+            quantity: item.totalQuantity,
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Build item details for notification emails
+   */
+  private buildItemDetails(
+    items: AggregatedQueueItem[]
+  ): Array<{ sku: string; asin: string; setNumber: string; itemName: string }> {
+    return items.map((item) => ({
+      sku: item.amazonSku,
+      asin: item.asin,
+      setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
+      itemName: item.itemNames[0] ?? 'Unknown',
+    }));
+  }
+
+  /**
+   * Helper to add delay
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // ==========================================================================
+  // FEED POLLING
+  // ==========================================================================
 
   /**
    * Poll Amazon for feed status update

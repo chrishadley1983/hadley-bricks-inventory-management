@@ -14,11 +14,13 @@ import type {
   SyncFeedWithDetails,
   AmazonSyncQueueRow,
   PriceConflict,
+  SyncMode,
+  TwoPhaseResult,
 } from '@/lib/amazon/amazon-sync.types';
 
 // Re-export types and constants
-export { POLL_INTERVAL_MS } from '@/lib/amazon/amazon-sync.types';
-export type { PriceConflict } from '@/lib/amazon/amazon-sync.types';
+export { POLL_INTERVAL_MS, TWO_PHASE_DEFAULTS } from '@/lib/amazon/amazon-sync.types';
+export type { PriceConflict, SyncMode, TwoPhaseResult } from '@/lib/amazon/amazon-sync.types';
 
 // ============================================================================
 // TYPES
@@ -45,8 +47,16 @@ interface AddToQueueResponse {
 }
 
 interface SubmitFeedResponse {
-  feed: SyncFeed;
+  feed?: SyncFeed;
+  result?: TwoPhaseResult;
   message: string;
+}
+
+interface SubmitFeedOptions {
+  dryRun: boolean;
+  syncMode?: SyncMode;
+  priceVerificationTimeout?: number;
+  priceVerificationInterval?: number;
 }
 
 interface PollFeedResponse {
@@ -125,11 +135,11 @@ async function clearQueue(): Promise<{ deleted: number }> {
   return json.data;
 }
 
-async function submitFeed(dryRun: boolean): Promise<SubmitFeedResponse> {
+async function submitFeed(options: SubmitFeedOptions): Promise<SubmitFeedResponse> {
   const response = await fetch('/api/amazon/sync/submit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dryRun }),
+    body: JSON.stringify(options),
   });
 
   if (!response.ok) {
@@ -138,7 +148,11 @@ async function submitFeed(dryRun: boolean): Promise<SubmitFeedResponse> {
   }
 
   const json = await response.json();
-  return { feed: json.data.feed, message: json.message };
+  return {
+    feed: json.data.feed,
+    result: json.data.result,
+    message: json.message,
+  };
 }
 
 async function fetchFeedHistory(limit: number = 20): Promise<SyncFeed[]> {
@@ -292,20 +306,36 @@ export function useClearSyncQueue() {
 
 /**
  * Submit the queue to Amazon
+ *
+ * Supports both single-phase and two-phase sync:
+ * - single: Submit price and quantity in one feed (default)
+ * - two_phase: Submit price first, verify it's live, then submit quantity
  */
 export function useSubmitSyncFeed() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (dryRun: boolean) => submitFeed(dryRun),
+    mutationFn: (options: SubmitFeedOptions) => submitFeed(options),
     onSuccess: (data) => {
       // Invalidate queue (items may be cleared after successful submission)
       queryClient.invalidateQueries({ queryKey: amazonSyncKeys.queue() });
       // Invalidate feed history to include new feed
       queryClient.invalidateQueries({ queryKey: amazonSyncKeys.feeds() });
-      // Set the new feed in cache
+      // Set the new feed(s) in cache
       if (data.feed) {
         queryClient.setQueryData(amazonSyncKeys.feed(data.feed.id), data.feed);
+      }
+      if (data.result?.priceFeed) {
+        queryClient.setQueryData(
+          amazonSyncKeys.feed(data.result.priceFeed.id),
+          data.result.priceFeed
+        );
+      }
+      if (data.result?.quantityFeed) {
+        queryClient.setQueryData(
+          amazonSyncKeys.feed(data.result.quantityFeed.id),
+          data.result.quantityFeed
+        );
       }
     },
     onError: (error) => {
