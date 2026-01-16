@@ -165,6 +165,7 @@ This project uses a suite of development agents for consistent, high-quality wor
 | `/test-execute` | Test Execution Agent | Run tests and report |
 | `/code-review` | Code Review Agent | Review code changes |
 | `/merge-feature` | Merge Feature Agent | Safely merge branches |
+| `/performance` | Performance Agent | Analyse app performance |
 
 ### Standard Workflow
 
@@ -195,6 +196,7 @@ This project uses a suite of development agents for consistent, high-quality wor
 - Test Execution Agent: `docs/testing/test-execution-agent.md`
 - Code Review Agent: `docs/reviews/code-review-agent.md`
 - Merge Feature Agent: `docs/agents/merge-feature-agent.md`
+- Performance Agent: `docs/agents/performance/spec.md`
 
 ---
 

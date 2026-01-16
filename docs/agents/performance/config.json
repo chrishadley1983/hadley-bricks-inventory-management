@@ -1,0 +1,26 @@
+{
+  "thresholds": {
+    "bundleSizeWarning": 800000,
+    "bundleSizeCritical": 1200000,
+    "apiResponseWarning": 1000,
+    "apiResponseCritical": 3000,
+    "queryRowsWarning": 100,
+    "queryRowsCritical": 500,
+    "componentLinesWarning": 300,
+    "componentLinesCritical": 500
+  },
+  "exclusions": {
+    "paths": ["node_modules", ".next", "dist"],
+    "files": ["*.test.ts", "*.spec.ts"]
+  },
+  "focusAreas": [
+    "apps/web/app/(dashboard)/inventory/**",
+    "apps/web/lib/repositories/**",
+    "apps/web/app/api/**"
+  ],
+  "criticalPaths": [
+    "/dashboard",
+    "/inventory",
+    "/purchases"
+  ]
+}

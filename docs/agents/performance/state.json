@@ -1,0 +1,15 @@
+{
+  "agent": "performance",
+  "lastRun": null,
+  "lastCommit": null,
+  "lastMode": null,
+  "status": "never_run",
+  "metrics": null,
+  "baselines": {
+    "bundleSize": null,
+    "lcpTarget": 2500,
+    "apiAvgResponse": 500
+  },
+  "knownIssues": [],
+  "previousReports": []
+}
