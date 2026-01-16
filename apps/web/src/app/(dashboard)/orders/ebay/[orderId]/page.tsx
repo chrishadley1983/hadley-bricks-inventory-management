@@ -47,6 +47,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useState } from 'react';
+import { EbaySkuMatcherDialog } from '@/components/features/orders/EbaySkuMatcherDialog';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -65,7 +66,7 @@ interface LineItem {
   total_currency: string;
   fulfilment_status: string;
   item_location: string | null;
-  match_status: 'matched' | 'unmatched' | 'manual';
+  match_status: 'matched' | 'unmatched' | 'manual' | 'no_sku';
   matched_inventory: {
     id: string;
     sku: string;
@@ -126,7 +127,7 @@ async function fetchOrderDetail(orderId: string): Promise<{ data: EbayOrderDetai
 
 async function confirmOrder(orderId: string, skipUnmatched: boolean = false): Promise<{
   success: boolean;
-  data?: { inventoryUpdated: number; unmatchedItems: number };
+  data?: { inventoryUpdated: number; unmatchedItems: number; isLateMatch?: boolean };
   error?: string;
   unmatchedItems?: string[];
 }> {
@@ -153,7 +154,7 @@ function getStatusColor(status: string): string {
   }
 }
 
-function getMatchStatusBadge(status: 'matched' | 'unmatched' | 'manual') {
+function getMatchStatusBadge(status: 'matched' | 'unmatched' | 'manual' | 'no_sku') {
   switch (status) {
     case 'matched':
       return <Badge className="bg-green-100 text-green-800"><Check className="h-3 w-3 mr-1" />Matched</Badge>;
@@ -161,6 +162,8 @@ function getMatchStatusBadge(status: 'matched' | 'unmatched' | 'manual') {
       return <Badge className="bg-blue-100 text-blue-800"><Link2 className="h-3 w-3 mr-1" />Manual</Badge>;
     case 'unmatched':
       return <Badge className="bg-orange-100 text-orange-800"><X className="h-3 w-3 mr-1" />Unmatched</Badge>;
+    case 'no_sku':
+      return <Badge className="bg-gray-100 text-gray-600">No SKU</Badge>;
   }
 }
 
@@ -181,6 +184,8 @@ export default function EbayOrderDetailPage({
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [unmatchedWarning, setUnmatchedWarning] = useState<string[] | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [skuMatcherOpen, setSkuMatcherOpen] = useState(false);
+  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{ sku: string; title: string } | null>(null);
 
   const { data: orderData, isLoading, error } = useQuery({
     queryKey: ['ebay', 'order', orderId],
@@ -193,10 +198,14 @@ export default function EbayOrderDetailPage({
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['ebay', 'order', orderId] });
         queryClient.invalidateQueries({ queryKey: ['ebay', 'orders'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
         setConfirmDialogOpen(false);
         setUnmatchedWarning(null);
+        const isLateMatch = data.data?.isLateMatch;
         setSuccessMessage(
-          `Order confirmed! ${data.data?.inventoryUpdated || 0} inventory items updated.`
+          isLateMatch
+            ? `Inventory updated! ${data.data?.inventoryUpdated || 0} items marked as sold.`
+            : `Order confirmed! ${data.data?.inventoryUpdated || 0} inventory items updated.`
         );
       } else if (data.unmatchedItems && data.unmatchedItems.length > 0) {
         setUnmatchedWarning(data.unmatchedItems);
@@ -235,7 +244,15 @@ export default function EbayOrderDetailPage({
   }
 
   const canConfirm = order.ui_status === 'Paid';
+  const isAlreadyShipped = order.ui_status === 'Completed';
   const unmatchedCount = order.line_items.filter((li) => li.match_status === 'unmatched').length;
+  // Check if there are matched items that might need inventory updates (for late matching)
+  const hasMatchedItems = order.line_items.some(
+    (li) => li.match_status === 'matched' || li.match_status === 'manual'
+  );
+  // Show "Update Inventory" button for shipped orders that have any matched items
+  // (inventory may not have been updated if the matching was done after shipping)
+  const canUpdateInventory = isAlreadyShipped && hasMatchedItems;
 
   return (
     <>
@@ -263,6 +280,20 @@ export default function EbayOrderDetailPage({
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                 )}
                 Confirm Order
+              </Button>
+            )}
+            {canUpdateInventory && (
+              <Button
+                variant="secondary"
+                onClick={() => confirmMutation.mutate(false)}
+                disabled={confirmMutation.isPending}
+              >
+                {confirmMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                Update Inventory
               </Button>
             )}
             <a
@@ -440,7 +471,20 @@ export default function EbayOrderDetailPage({
                         {item.matched_inventory?.storage_location || item.item_location || '-'}
                       </TableCell>
                       <TableCell>
-                        {getMatchStatusBadge(item.match_status)}
+                        {item.match_status === 'unmatched' && item.sku ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedItemForMatching({ sku: item.sku!, title: item.title });
+                              setSkuMatcherOpen(true);
+                            }}
+                            className="hover:opacity-80 transition-opacity cursor-pointer"
+                          >
+                            {getMatchStatusBadge(item.match_status)}
+                          </button>
+                        ) : (
+                          getMatchStatusBadge(item.match_status)
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -517,6 +561,20 @@ export default function EbayOrderDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* SKU Matcher Dialog */}
+      {selectedItemForMatching && (
+        <EbaySkuMatcherDialog
+          open={skuMatcherOpen}
+          onOpenChange={setSkuMatcherOpen}
+          ebaySku={selectedItemForMatching.sku}
+          itemTitle={selectedItemForMatching.title}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['ebay', 'order', orderId] });
+            setSelectedItemForMatching(null);
+          }}
+        />
+      )}
     </>
   );
 }

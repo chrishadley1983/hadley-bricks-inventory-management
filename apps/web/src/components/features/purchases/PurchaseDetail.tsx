@@ -13,8 +13,11 @@ import {
   FileText,
   Package,
   Plus,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
-import { usePurchase, useDeletePurchase, useInventoryList } from '@/hooks';
+import { usePurchase, useDeletePurchase, useInventoryList, usePurchaseProfitability } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,8 +29,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { MileageSection } from './MileageSection';
+import { PurchaseImages } from './PurchaseImages';
+import { PurchaseProfitability } from './PurchaseProfitability';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 
 interface PurchaseDetailProps {
   id: string;
@@ -36,14 +47,21 @@ interface PurchaseDetailProps {
 export function PurchaseDetail({ id }: PurchaseDetailProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const { data: purchase, isLoading, error } = usePurchase(id);
   const deleteMutation = useDeletePurchase();
+  const { data: profitabilityData } = usePurchaseProfitability(id);
 
   // Fetch linked inventory items by purchase_id foreign key
   const { data: inventoryData } = useInventoryList(
     { purchaseId: id },
     { page: 1, pageSize: 50 }
+  );
+
+  // Create a map of item profitability data for quick lookup
+  const itemProfitMap = new Map(
+    profitabilityData?.items?.map((item) => [item.id, item]) ?? []
   );
 
   const handleDelete = async () => {
@@ -147,32 +165,44 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                   <span className="text-lg font-bold">{formatCurrency(purchase.cost)}</span>
                 </div>
               </div>
+
+              {/* Collapsible Notes Section */}
+              {(purchase.description || purchase.reference) && (
+                <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full pt-3 border-t">
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        notesOpen && 'rotate-180'
+                      )}
+                    />
+                    Notes & Reference
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-3 space-y-3">
+                    {purchase.description && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Description</span>
+                        <p className="text-sm mt-0.5">{purchase.description}</p>
+                      </div>
+                    )}
+                    {purchase.reference && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Reference</span>
+                        <p className="text-sm font-mono mt-0.5">{purchase.reference}</p>
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {purchase.description && (
-                <div>
-                  <span className="text-sm text-muted-foreground">Description</span>
-                  <p className="mt-1">{purchase.description}</p>
-                </div>
-              )}
-              {purchase.reference && (
-                <div>
-                  <span className="text-sm text-muted-foreground">Reference</span>
-                  <p className="mt-1 font-mono text-sm">{purchase.reference}</p>
-                </div>
-              )}
-              {!purchase.description && !purchase.reference && (
-                <p className="text-muted-foreground">No additional information</p>
-              )}
-            </CardContent>
-          </Card>
+          {/* Profitability Section */}
+          <PurchaseProfitability purchaseId={id} />
         </div>
+
+        {/* Photos & Receipts */}
+        <PurchaseImages purchaseId={id} />
 
         {/* Mileage & Travel Costs */}
         <MileageSection purchaseId={id} purchaseDate={purchase.purchase_date} />
@@ -197,30 +227,122 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
           <CardContent>
             {inventoryData?.data && inventoryData.data.length > 0 ? (
               <div className="space-y-2">
-                {inventoryData.data.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div>
-                      <Link
-                        href={`/inventory/${item.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {item.item_name || `Set ${item.set_number}`}
-                      </Link>
-                      <p className="text-sm text-muted-foreground">
-                        {item.set_number} &middot; {item.condition || 'Unknown'}
-                      </p>
+                {inventoryData.data.map((item) => {
+                  const profitData = itemProfitMap.get(item.id);
+                  const isSold = item.status?.toUpperCase() === 'SOLD';
+                  const hasListing = item.listing_value && item.listing_value > 0;
+                  const profit = isSold
+                    ? profitData?.soldProfit
+                    : profitData?.projectedProfit;
+                  const margin = isSold
+                    ? profitData?.soldMarginPercent
+                    : profitData?.projectedMarginPercent;
+                  const hasCost = profitData?.hasCost ?? (item.cost !== null && item.cost > 0);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-lg border p-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/inventory/${item.id}`}
+                            className="font-medium hover:underline truncate"
+                          >
+                            {item.item_name || `Set ${item.set_number}`}
+                          </Link>
+                          {!hasCost && (
+                            <span title="No cost assigned">
+                              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {item.set_number} &middot; {item.condition || 'Unknown'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {/* Cost */}
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Cost</p>
+                          <p className="font-medium">
+                            {item.cost ? formatCurrency(item.cost) : '-'}
+                          </p>
+                        </div>
+
+                        {/* Sale/Listing Value */}
+                        {isSold ? (
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">
+                              {item.sold_gross_amount ? 'Sold' : 'Sold (est.)'}
+                            </p>
+                            <p className="font-medium">
+                              {item.sold_gross_amount
+                                ? formatCurrency(item.sold_gross_amount)
+                                : profitData?.soldGrossAmount
+                                  ? formatCurrency(profitData.soldGrossAmount)
+                                  : '-'}
+                            </p>
+                          </div>
+                        ) : hasListing && item.listing_value ? (
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Listed</p>
+                            <p className="font-medium">
+                              {formatCurrency(item.listing_value)}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {/* Profit */}
+                        {hasCost && profit !== null && profit !== undefined && (
+                          <div className="text-right min-w-[80px]">
+                            <p className="text-xs text-muted-foreground">
+                              {isSold && item.sold_gross_amount ? 'Profit' : 'Est. Profit'}
+                            </p>
+                            <div className="flex items-center justify-end gap-1">
+                              {profit >= 0 ? (
+                                <TrendingUp className="h-3 w-3 text-green-600" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3 text-red-600" />
+                              )}
+                              <span
+                                className={cn(
+                                  'font-medium',
+                                  profit >= 0 ? 'text-green-600' : 'text-red-600'
+                                )}
+                              >
+                                {formatCurrency(profit)}
+                              </span>
+                            </div>
+                            {margin !== null && margin !== undefined && (
+                              <p
+                                className={cn(
+                                  'text-xs',
+                                  margin >= 0 ? 'text-green-600' : 'text-red-600'
+                                )}
+                              >
+                                {margin >= 0 ? '+' : ''}{margin.toFixed(0)}%
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Status Badge */}
+                        <Badge
+                          variant={isSold ? 'default' : hasListing ? 'secondary' : 'outline'}
+                          className={cn(
+                            'min-w-[70px] justify-center',
+                            isSold && 'bg-green-600'
+                          )}
+                        >
+                          {item.status || 'Unknown'}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">
-                        {item.cost ? formatCurrency(item.cost) : '-'}
-                      </p>
-                      <Badge variant="outline">{item.status}</Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-muted-foreground py-4 text-center">

@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
         ordersProcessed: orderResult?.ordersProcessed ?? 0,
         ordersCreated: orderResult?.ordersCreated ?? 0,
         ordersUpdated: orderResult?.ordersUpdated ?? 0,
+        ordersSkipped: orderResult?.ordersSkipped ?? 0,
         errors: orderResult?.errors ?? [],
         lastSyncedAt: orderResult?.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
         // Transaction sync results (bricklink_transactions)

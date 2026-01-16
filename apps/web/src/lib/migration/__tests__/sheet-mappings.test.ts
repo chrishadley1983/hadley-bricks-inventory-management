@@ -83,24 +83,26 @@ describe('normalizeStatus', () => {
   it('normalizes uppercase status values', () => {
     expect(normalizeStatus('SOLD')).toBe('SOLD');
     expect(normalizeStatus('LISTED')).toBe('LISTED');
-    expect(normalizeStatus('IN STOCK')).toBe('IN STOCK');
+    expect(normalizeStatus('BACKLOG')).toBe('BACKLOG');
     expect(normalizeStatus('NOT YET RECEIVED')).toBe('NOT YET RECEIVED');
   });
 
   it('normalizes lowercase status values', () => {
     expect(normalizeStatus('sold')).toBe('SOLD');
     expect(normalizeStatus('listed')).toBe('LISTED');
-    expect(normalizeStatus('in stock')).toBe('IN STOCK');
+    expect(normalizeStatus('backlog')).toBe('BACKLOG');
   });
 
-  it('handles variations', () => {
-    expect(normalizeStatus('stock')).toBe('IN STOCK');
+  it('handles legacy IN STOCK mapping to BACKLOG', () => {
+    expect(normalizeStatus('IN STOCK')).toBe('BACKLOG');
+    expect(normalizeStatus('in stock')).toBe('BACKLOG');
+    expect(normalizeStatus('stock')).toBe('BACKLOG');
     expect(normalizeStatus('pending')).toBe('NOT YET RECEIVED');
   });
 
-  it('defaults to IN STOCK for unknown values', () => {
-    expect(normalizeStatus('unknown')).toBe('IN STOCK');
-    expect(normalizeStatus('')).toBe('IN STOCK');
+  it('defaults to BACKLOG for unknown values', () => {
+    expect(normalizeStatus('unknown')).toBe('BACKLOG');
+    expect(normalizeStatus('')).toBe('BACKLOG');
   });
 });
 
@@ -141,7 +143,7 @@ describe('transformRow', () => {
     expect(result.source).toBe('LEGO Store');
     expect(result.purchase_date).toBe('2024-01-15');
     expect(result.cost).toBe(650);
-    expect(result.status).toBe('IN STOCK');
+    expect(result.status).toBe('BACKLOG'); // Legacy 'IN STOCK' maps to 'BACKLOG'
     expect(result.storage_location).toBe('Shelf A');
   });
 

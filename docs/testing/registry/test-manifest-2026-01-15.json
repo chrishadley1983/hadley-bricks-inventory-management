@@ -1,0 +1,237 @@
+{
+  "generatedAt": "2026-01-15T23:30:00.000Z",
+  "mode": "complete",
+  "summary": {
+    "totalGaps": 9,
+    "byPriority": {
+      "CRITICAL": 2,
+      "HIGH": 3,
+      "MEDIUM": 2,
+      "LOW": 2
+    },
+    "byType": {
+      "unit": 7,
+      "api": 2
+    },
+    "testResults": {
+      "totalTests": 2487,
+      "passing": 2487,
+      "failing": 0,
+      "todo": 0,
+      "skipped": 0
+    },
+    "coverage": {
+      "statements": 64.63,
+      "branches": 56.72,
+      "functions": 65.94,
+      "lines": 65.12
+    }
+  },
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "feature": "amazon-core",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "files": [
+        "src/lib/amazon/amazon-catalog.client.ts",
+        "src/lib/amazon/amazon-feeds.client.ts",
+        "src/lib/amazon/amazon-listings.client.ts",
+        "src/lib/amazon/amazon-reports.client.ts",
+        "src/lib/amazon/order-sync.service.ts"
+      ],
+      "currentCoverage": 23.14,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Catalog search and ASIN lookup",
+        "Feed submission and processing",
+        "Inventory listing updates",
+        "Order report parsing",
+        "Order sync with error handling"
+      ],
+      "testsNeeded": 45
+    },
+    {
+      "id": "GAP-002",
+      "feature": "brickset-api",
+      "priority": "CRITICAL",
+      "type": "unit",
+      "files": [
+        "src/lib/brickset/brickset-api.ts",
+        "src/lib/brickset/brickset-cache.service.ts"
+      ],
+      "currentCoverage": 1.11,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Set lookup by number",
+        "Set lookup by theme",
+        "Cache hit/miss scenarios",
+        "Rate limiting handling",
+        "Invalid credentials handling"
+      ],
+      "testsNeeded": 25
+    },
+    {
+      "id": "GAP-003",
+      "feature": "ebay-services",
+      "priority": "HIGH",
+      "type": "unit",
+      "files": [
+        "src/lib/ebay/ebay-auth.service.ts",
+        "src/lib/ebay/ebay-browse.client.ts",
+        "src/lib/ebay/ebay-listing.client.ts",
+        "src/lib/ebay/ebay-fulfilment.service.ts",
+        "src/lib/ebay/ebay-order-sync.service.ts"
+      ],
+      "currentCoverage": 46.86,
+      "targetCoverage": 75,
+      "scenarios": [
+        "OAuth token refresh",
+        "Browse API search",
+        "Listing creation and update",
+        "Order fulfilment with tracking",
+        "Order sync with pagination"
+      ],
+      "testsNeeded": 40
+    },
+    {
+      "id": "GAP-004",
+      "feature": "crypto-encryption",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "src/lib/crypto/encryption.ts",
+      "currentCoverage": 20.51,
+      "targetCoverage": 90,
+      "scenarios": [
+        "Encrypt credential string",
+        "Decrypt credential string",
+        "Handle invalid key",
+        "Handle corrupted data",
+        "Key rotation"
+      ],
+      "testsNeeded": 15
+    },
+    {
+      "id": "GAP-005",
+      "feature": "arbitrage-mapping",
+      "priority": "HIGH",
+      "type": "unit",
+      "file": "src/lib/arbitrage/mapping.service.ts",
+      "currentCoverage": 28.04,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Map ASIN to set number",
+        "Batch mapping operations",
+        "Handle unmapped ASINs",
+        "Manual mapping workflow",
+        "Mapping conflict resolution"
+      ],
+      "testsNeeded": 20
+    },
+    {
+      "id": "GAP-006",
+      "feature": "hooks-inventory",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "src/hooks/use-inventory.ts",
+      "currentCoverage": 36.95,
+      "targetCoverage": 70,
+      "scenarios": [
+        "Fetch inventory items",
+        "Filter and sort inventory",
+        "Bulk update operations",
+        "Optimistic updates",
+        "Error recovery"
+      ],
+      "testsNeeded": 25
+    },
+    {
+      "id": "GAP-007",
+      "feature": "hooks-reports",
+      "priority": "MEDIUM",
+      "type": "unit",
+      "file": "src/hooks/use-reports.ts",
+      "currentCoverage": 66.3,
+      "targetCoverage": 80,
+      "scenarios": [
+        "Fetch profit report",
+        "Fetch sales report",
+        "Export report data",
+        "Date range filtering",
+        "Report caching"
+      ],
+      "testsNeeded": 15
+    },
+    {
+      "id": "GAP-008",
+      "feature": "purchase-evaluator-service",
+      "priority": "LOW",
+      "type": "unit",
+      "files": [
+        "src/lib/purchase-evaluator/evaluator.service.ts",
+        "src/lib/purchase-evaluator/pricing.service.ts"
+      ],
+      "currentCoverage": 31.86,
+      "targetCoverage": 65,
+      "scenarios": [
+        "Evaluate purchase profitability",
+        "Calculate break-even price",
+        "Process multiple items",
+        "Handle partial data",
+        "Pricing API integration"
+      ],
+      "testsNeeded": 30
+    },
+    {
+      "id": "GAP-009",
+      "feature": "api-routes-integration",
+      "priority": "LOW",
+      "type": "api",
+      "files": [
+        "src/app/api/integrations/**/*.ts",
+        "src/app/api/reports/**/*.ts"
+      ],
+      "currentCoverage": 0,
+      "targetCoverage": 50,
+      "scenarios": [
+        "Integration OAuth flows",
+        "Sync trigger endpoints",
+        "Report generation endpoints",
+        "Webhook receivers",
+        "Error response formats"
+      ],
+      "testsNeeded": 50
+    }
+  ],
+  "recommendations": {
+    "immediate": [
+      "Add Amazon core client tests (GAP-001) - 45 tests",
+      "Add Brickset API tests (GAP-002) - 25 tests"
+    ],
+    "thisWeek": [
+      "Improve eBay service coverage (GAP-003) - 40 tests",
+      "Add encryption tests (GAP-004) - 15 tests",
+      "Add arbitrage mapping tests (GAP-005) - 20 tests"
+    ],
+    "nextSprint": [
+      "Add inventory hook tests (GAP-006) - 25 tests",
+      "Add reports hook tests (GAP-007) - 15 tests"
+    ],
+    "backlog": [
+      "Purchase evaluator tests (GAP-008) - 30 tests",
+      "API integration tests (GAP-009) - 50 tests"
+    ]
+  },
+  "metadata": {
+    "totalSourceFiles": 189,
+    "totalTestFiles": 80,
+    "overallCoverage": {
+      "statements": "64.63%",
+      "branches": "56.72%",
+      "functions": "65.94%",
+      "lines": "65.12%"
+    },
+    "targetCoverage": "80%",
+    "coverageGap": "14.88%"
+  }
+}

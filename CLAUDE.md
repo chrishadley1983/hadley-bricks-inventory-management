@@ -29,6 +29,8 @@ A comprehensive Lego resale business management system for tracking inventory, p
 
 **This project uses cloud Supabase only. There is no local Supabase instance.**
 
+- **Supabase Project ID:** `modjoikyuhqzouxvieua`
+- **Project Name:** Inventory Management App
 - All database operations connect to the cloud instance
 - No `npx supabase start` required
 - Migrations are pushed directly to cloud: `npm run db:push`

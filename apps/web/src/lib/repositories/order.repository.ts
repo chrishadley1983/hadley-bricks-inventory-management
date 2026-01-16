@@ -370,4 +370,45 @@ export class OrderRepository extends BaseRepository<
 
     return count ?? 0;
   }
+
+  /**
+   * Get existing orders for a platform with their status_changed_at timestamps
+   * Used for incremental sync to determine which orders need item fetching
+   * Returns a map of platform_order_id -> platform_status_changed_at
+   */
+  async getOrderStatusTimestamps(
+    userId: string,
+    platform: string
+  ): Promise<Map<string, Date | null>> {
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    const timestamps = new Map<string, Date | null>();
+
+    while (hasMore) {
+      const { data, error } = await this.supabase
+        .from('platform_orders')
+        .select('platform_order_id, platform_status_changed_at')
+        .eq('user_id', userId)
+        .eq('platform', platform)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        throw new Error(`Failed to get order timestamps: ${error.message}`);
+      }
+
+      const orders = data ?? [];
+      for (const order of orders) {
+        timestamps.set(
+          order.platform_order_id,
+          order.platform_status_changed_at ? new Date(order.platform_status_changed_at) : null
+        );
+      }
+
+      hasMore = orders.length === pageSize;
+      page++;
+    }
+
+    return timestamps;
+  }
 }

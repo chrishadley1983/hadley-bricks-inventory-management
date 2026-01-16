@@ -55,8 +55,11 @@ export function EbayDetailModal({
     [excludedListings]
   );
 
-  // Get eBay listings from the item
-  const allEbayListings = (item?.ebayListings ?? []) as EbayListing[];
+  // Get eBay listings from the item (memoized to prevent unnecessary re-renders)
+  const allEbayListings = useMemo(
+    () => (item?.ebayListings ?? []) as EbayListing[],
+    [item?.ebayListings]
+  );
 
   // Filter out excluded listings, sort by totalPrice, and separate them
   const activeListings = useMemo(
@@ -96,6 +99,7 @@ export function EbayDetailModal({
       const newDefault = ebayStats.minPrice ?? 0;
       setBuyPriceInput(newDefault > 0 ? newDefault.toFixed(2) : '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only reset on asin/minPrice change
   }, [item?.asin, ebayStats.minPrice]);
 
   if (!item) return null;

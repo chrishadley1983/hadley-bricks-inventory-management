@@ -21,6 +21,12 @@ const mockBricqerSync = {
   testConnection: vi.fn(),
 };
 
+const mockAmazonSync = {
+  syncOrders: vi.fn(),
+  getSyncStatus: vi.fn(),
+  testConnection: vi.fn(),
+};
+
 const mockCredentialsRepo = {
   getConfiguredPlatforms: vi.fn(),
 };
@@ -43,9 +49,19 @@ vi.mock('../bricqer-sync.service', () => ({
   },
 }));
 
+vi.mock('../amazon-sync.service', () => ({
+  AmazonSyncService: function MockAmazonSyncService() {
+    return mockAmazonSync;
+  },
+}));
+
 vi.mock('../../repositories', () => ({
   CredentialsRepository: function MockCredentialsRepository() {
     return mockCredentialsRepo;
+  },
+  // Also mock OrderRepository since AmazonSyncService imports it
+  OrderRepository: function MockOrderRepository() {
+    return {};
   },
 }));
 
@@ -126,11 +142,29 @@ describe('OrderSyncService', () => {
       });
     });
 
-    it('should handle unknown platform', async () => {
-      const result = await service.getPlatformSyncStatus('test-user-id', 'amazon' as Platform);
+    it('should return Amazon sync status', async () => {
+      mockAmazonSync.getSyncStatus.mockResolvedValue({
+        isConfigured: true,
+        totalOrders: 50,
+        lastSyncedAt: new Date('2024-12-21T10:00:00Z'),
+      });
+
+      const result = await service.getPlatformSyncStatus('test-user-id', 'amazon');
 
       expect(result).toEqual({
         platform: 'amazon',
+        isConfigured: true,
+        totalOrders: 50,
+        lastSyncedAt: expect.any(Date),
+        connectionStatus: 'connected',
+      });
+    });
+
+    it('should handle unknown platform', async () => {
+      const result = await service.getPlatformSyncStatus('test-user-id', 'ebay' as Platform);
+
+      expect(result).toEqual({
+        platform: 'ebay',
         isConfigured: false,
         totalOrders: 0,
         lastSyncedAt: null,
@@ -255,11 +289,32 @@ describe('OrderSyncService', () => {
       );
     });
 
+    it('should sync orders from Amazon', async () => {
+      mockAmazonSync.syncOrders.mockResolvedValue({
+        success: true,
+        ordersProcessed: 20,
+        ordersCreated: 15,
+        ordersUpdated: 5,
+        errors: [],
+        lastSyncedAt: new Date(),
+      });
+
+      const result = await service.syncFromPlatform('test-user-id', 'amazon');
+
+      expect(result.success).toBe(true);
+      expect(result.platform).toBe('amazon');
+      expect(result.ordersProcessed).toBe(20);
+      expect(mockAmazonSync.syncOrders).toHaveBeenCalledWith(
+        'test-user-id',
+        expect.objectContaining({ includeItems: false })
+      );
+    });
+
     it('should return error for unsupported platform', async () => {
-      const result = await service.syncFromPlatform('test-user-id', 'amazon' as Platform);
+      const result = await service.syncFromPlatform('test-user-id', 'ebay' as Platform);
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('Platform amazon sync not implemented');
+      expect(result.errors).toContain('Platform ebay sync not implemented');
     });
   });
 

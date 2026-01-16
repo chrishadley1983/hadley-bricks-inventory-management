@@ -12,7 +12,9 @@ const ConfirmSchema = z.object({
 
 /**
  * POST /api/orders/ebay/:orderId/confirm
- * Confirm an eBay order and update inventory
+ * Confirm an eBay order and update inventory.
+ * Also supports "late matching" - if order is already fulfilled (shipped),
+ * we still update inventory status to SOLD but skip order status changes.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -73,14 +75,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check order is eligible for confirmation
-    if (order.order_fulfilment_status === 'FULFILLED') {
-      return NextResponse.json(
-        { error: 'Order is already fulfilled' },
-        { status: 400 }
-      );
-    }
+    // Check if this is a "late match" scenario (order already shipped)
+    const isLateMatch = order.order_fulfilment_status === 'FULFILLED';
 
+    // Block refunded orders - can't confirm/match these
     if (order.order_payment_status === 'FULLY_REFUNDED') {
       return NextResponse.json(
         { error: 'Cannot confirm a refunded order' },
@@ -172,39 +170,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Update order status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: orderUpdateError } = await (supabase as any)
-      .from('ebay_orders')
-      .update({
-        order_fulfilment_status: 'FULFILLED',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', orderId)
-      .eq('user_id', user.id);
+    // Update order status (skip for late matches - order is already fulfilled)
+    if (!isLateMatch) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: orderUpdateError } = await (supabase as any)
+        .from('ebay_orders')
+        .update({
+          order_fulfilment_status: 'FULFILLED',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+        .eq('user_id', user.id);
 
-    if (orderUpdateError) {
-      console.error('[POST /api/orders/ebay/:orderId/confirm] Order update error:', orderUpdateError);
-      return NextResponse.json(
-        { error: 'Failed to update order status' },
-        { status: 500 }
-      );
-    }
+      if (orderUpdateError) {
+        console.error('[POST /api/orders/ebay/:orderId/confirm] Order update error:', orderUpdateError);
+        return NextResponse.json(
+          { error: 'Failed to update order status' },
+          { status: 500 }
+        );
+      }
 
-    // Update line items status
-    const lineItemIds = order.line_items.map((li: { id: string }) => li.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: lineItemUpdateError } = await (supabase as any)
-      .from('ebay_order_line_items')
-      .update({
-        fulfilment_status: 'FULFILLED',
-        updated_at: new Date().toISOString(),
-      })
-      .in('id', lineItemIds);
+      // Update line items status
+      const lineItemIds = order.line_items.map((li: { id: string }) => li.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: lineItemUpdateError } = await (supabase as any)
+        .from('ebay_order_line_items')
+        .update({
+          fulfilment_status: 'FULFILLED',
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', lineItemIds);
 
-    if (lineItemUpdateError) {
-      console.error('[POST /api/orders/ebay/:orderId/confirm] Line item update error:', lineItemUpdateError);
-      // Non-fatal, continue
+      if (lineItemUpdateError) {
+        console.error('[POST /api/orders/ebay/:orderId/confirm] Line item update error:', lineItemUpdateError);
+        // Non-fatal, continue
+      }
     }
 
     // Update inventory items
@@ -245,6 +245,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         orderId,
         ebayOrderId: order.ebay_order_id,
         status: 'FULFILLED',
+        isLateMatch,
         inventoryUpdated,
         inventorySkipped,
         unmatchedItems: unmatchedItems.length,

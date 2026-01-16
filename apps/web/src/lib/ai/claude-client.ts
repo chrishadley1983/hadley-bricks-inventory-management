@@ -235,3 +235,52 @@ export async function sendMessageForJSON<T>(
     throw new Error('Failed to parse AI response as JSON');
   }
 }
+
+/**
+ * Chat message type for multi-turn conversations
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Send a multi-turn conversation to Claude
+ * Supports conversation history for contextual responses
+ */
+export async function sendConversation(
+  systemPrompt: string,
+  messages: ChatMessage[],
+  options: {
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+  } = {}
+): Promise<string> {
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 1024,
+    temperature = 0.5,
+  } = options;
+
+  const anthropic = getClaudeClient();
+
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    system: systemPrompt,
+    messages: messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+  });
+
+  // Extract text from the response
+  const textBlock = response.content.find((block) => block.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+
+  return textBlock.text;
+}

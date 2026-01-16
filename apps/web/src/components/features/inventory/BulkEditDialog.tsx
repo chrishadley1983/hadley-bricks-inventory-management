@@ -41,6 +41,7 @@ interface BulkEditFormState {
   status: BulkEditField;
   source: BulkEditField;
   listing_platform: BulkEditField;
+  amazon_asin: BulkEditField;
 }
 
 interface BulkEditDialogProps {
@@ -75,6 +76,7 @@ export function BulkEditDialog({
     status: initialFieldState(),
     source: initialFieldState(),
     listing_platform: initialFieldState(),
+    amazon_asin: initialFieldState(),
   });
 
   // State for PurchaseLookup and QuickPurchaseDialog
@@ -121,6 +123,7 @@ export function BulkEditDialog({
       status: initialFieldState(),
       source: initialFieldState(),
       listing_platform: initialFieldState(),
+      amazon_asin: initialFieldState(),
     });
     setSelectedPurchase(null);
     onOpenChange(false);
@@ -287,6 +290,29 @@ export function BulkEditDialog({
                   ))}
                 </SelectContent>
               </Select>
+            )}
+          </div>
+
+          {/* Amazon ASIN */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-amazon-asin"
+                checked={formState.amazon_asin.enabled}
+                onCheckedChange={(checked: boolean | 'indeterminate') =>
+                  handleFieldToggle('amazon_asin', !!checked)
+                }
+              />
+              <Label htmlFor="edit-amazon-asin" className="font-medium">
+                Amazon ASIN
+              </Label>
+            </div>
+            {formState.amazon_asin.enabled && (
+              <Input
+                placeholder="Enter Amazon ASIN (e.g., B08XYZ1234)"
+                value={formState.amazon_asin.value || ''}
+                onChange={(e) => handleFieldChange('amazon_asin', e.target.value || null)}
+              />
             )}
           </div>
 

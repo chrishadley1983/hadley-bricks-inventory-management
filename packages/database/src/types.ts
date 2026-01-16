@@ -1892,6 +1892,47 @@ export type Database = {
         }
         Relationships: []
       }
+      ebay_business_policies: {
+        Row: {
+          cached_at: string | null
+          id: string
+          is_default: boolean | null
+          policy_data: Json
+          policy_id: string
+          policy_name: string
+          policy_type: string
+          user_id: string
+        }
+        Insert: {
+          cached_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          policy_data: Json
+          policy_id: string
+          policy_name: string
+          policy_type: string
+          user_id: string
+        }
+        Update: {
+          cached_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          policy_data?: Json
+          policy_id?: string
+          policy_name?: string
+          policy_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_business_policies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_credentials: {
         Row: {
           access_token: string
@@ -3079,10 +3120,13 @@ export type Database = {
           amazon_asin: string | null
           amazon_order_item_id: string | null
           archive_location: string | null
+          audited: string | null
           condition: string | null
           cost: number | null
           created_at: string
           ebay_line_item_id: string | null
+          ebay_listing_id: string | null
+          ebay_listing_url: string | null
           id: string
           item_name: string | null
           linked_lot: string | null
@@ -3115,10 +3159,13 @@ export type Database = {
           amazon_asin?: string | null
           amazon_order_item_id?: string | null
           archive_location?: string | null
+          audited?: string | null
           condition?: string | null
           cost?: number | null
           created_at?: string
           ebay_line_item_id?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_url?: string | null
           id?: string
           item_name?: string | null
           linked_lot?: string | null
@@ -3151,10 +3198,13 @@ export type Database = {
           amazon_asin?: string | null
           amazon_order_item_id?: string | null
           archive_location?: string | null
+          audited?: string | null
           condition?: string | null
           cost?: number | null
           created_at?: string
           ebay_line_item_id?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_url?: string | null
           id?: string
           item_name?: string | null
           linked_lot?: string | null
@@ -3265,6 +3315,220 @@ export type Database = {
             foreignKeyName: "listing_assistant_settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_creation_audit: {
+        Row: {
+          action: string
+          ai_confidence_score: number | null
+          ai_generation_time_ms: number | null
+          ai_model_used: string | null
+          ai_recommendations: Json | null
+          best_offer_auto_accept_percent: number | null
+          best_offer_auto_decline_percent: number | null
+          best_offer_enabled: boolean | null
+          category_id: string | null
+          category_name: string | null
+          completed_at: string | null
+          created_at: string | null
+          description_style: string | null
+          ebay_listing_id: string | null
+          ebay_offer_id: string | null
+          error_details: Json | null
+          error_message: string | null
+          error_step: string | null
+          fulfillment_policy_id: string | null
+          generated_description: string | null
+          generated_title: string | null
+          id: string
+          inventory_item_id: string
+          item_specifics: Json | null
+          listing_price: number | null
+          listing_type: string | null
+          payment_policy_id: string | null
+          photo_count: number | null
+          photos_enhanced: boolean | null
+          quality_feedback: Json | null
+          quality_review_time_ms: number | null
+          quality_score: number | null
+          research_sources: Json | null
+          return_policy_id: string | null
+          scheduled_date: string | null
+          status: string
+          template_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          ai_confidence_score?: number | null
+          ai_generation_time_ms?: number | null
+          ai_model_used?: string | null
+          ai_recommendations?: Json | null
+          best_offer_auto_accept_percent?: number | null
+          best_offer_auto_decline_percent?: number | null
+          best_offer_enabled?: boolean | null
+          category_id?: string | null
+          category_name?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description_style?: string | null
+          ebay_listing_id?: string | null
+          ebay_offer_id?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          error_step?: string | null
+          fulfillment_policy_id?: string | null
+          generated_description?: string | null
+          generated_title?: string | null
+          id?: string
+          inventory_item_id: string
+          item_specifics?: Json | null
+          listing_price?: number | null
+          listing_type?: string | null
+          payment_policy_id?: string | null
+          photo_count?: number | null
+          photos_enhanced?: boolean | null
+          quality_feedback?: Json | null
+          quality_review_time_ms?: number | null
+          quality_score?: number | null
+          research_sources?: Json | null
+          return_policy_id?: string | null
+          scheduled_date?: string | null
+          status: string
+          template_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          ai_confidence_score?: number | null
+          ai_generation_time_ms?: number | null
+          ai_model_used?: string | null
+          ai_recommendations?: Json | null
+          best_offer_auto_accept_percent?: number | null
+          best_offer_auto_decline_percent?: number | null
+          best_offer_enabled?: boolean | null
+          category_id?: string | null
+          category_name?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description_style?: string | null
+          ebay_listing_id?: string | null
+          ebay_offer_id?: string | null
+          error_details?: Json | null
+          error_message?: string | null
+          error_step?: string | null
+          fulfillment_policy_id?: string | null
+          generated_description?: string | null
+          generated_title?: string | null
+          id?: string
+          inventory_item_id?: string
+          item_specifics?: Json | null
+          listing_price?: number | null
+          listing_type?: string | null
+          payment_policy_id?: string | null
+          photo_count?: number | null
+          photos_enhanced?: boolean | null
+          quality_feedback?: Json | null
+          quality_review_time_ms?: number | null
+          quality_score?: number | null
+          research_sources?: Json | null
+          return_policy_id?: string | null
+          scheduled_date?: string | null
+          status?: string
+          template_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_creation_audit_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_creation_audit_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_creation_audit_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "listing_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_creation_audit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_local_drafts: {
+        Row: {
+          created_at: string | null
+          draft_data: Json
+          error_context: Json | null
+          failed_audit_id: string | null
+          id: string
+          inventory_item_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          draft_data: Json
+          error_context?: Json | null
+          failed_audit_id?: string | null
+          id?: string
+          inventory_item_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          draft_data?: Json
+          error_context?: Json | null
+          failed_audit_id?: string | null
+          id?: string
+          inventory_item_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_local_drafts_failed_audit_id_fkey"
+            columns: ["failed_audit_id"]
+            isOneToOne: false
+            referencedRelation: "listing_creation_audit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_local_drafts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_local_drafts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_local_drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -4158,6 +4422,7 @@ export type Database = {
           packed_at: string | null
           platform: string
           platform_order_id: string
+          platform_status_changed_at: string | null
           raw_data: Json | null
           shipped_at: string | null
           shipping: number | null
@@ -4189,6 +4454,7 @@ export type Database = {
           packed_at?: string | null
           platform: string
           platform_order_id: string
+          platform_status_changed_at?: string | null
           raw_data?: Json | null
           shipped_at?: string | null
           shipping?: number | null
@@ -4220,6 +4486,7 @@ export type Database = {
           packed_at?: string | null
           platform?: string
           platform_order_id?: string
+          platform_status_changed_at?: string | null
           raw_data?: Json | null
           shipped_at?: string | null
           shipping?: number | null
@@ -4601,6 +4868,70 @@ export type Database = {
           },
           {
             foreignKeyName: "purchase_evaluations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_images: {
+        Row: {
+          caption: string | null
+          created_at: string
+          file_size: number | null
+          filename: string
+          id: string
+          mime_type: string
+          public_url: string
+          purchase_id: string
+          sort_order: number | null
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          mime_type: string
+          public_url: string
+          purchase_id: string
+          sort_order?: number | null
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string
+          public_url?: string
+          purchase_id?: string
+          sort_order?: number | null
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_images_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_roi_view"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "purchase_images_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_images_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

@@ -1,5 +1,6 @@
 import type { Purchase, PurchaseInsert, PurchaseUpdate } from '@hadley-bricks/database';
 import type { PaginationParams, PaginatedResponse } from './inventory';
+import type { PurchaseProfitability } from '@/lib/services/purchase-profitability.service';
 
 /**
  * Purchase search result for combobox lookup
@@ -251,6 +252,21 @@ export async function calculateMileage(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to calculate distance');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+/**
+ * Fetch profitability metrics for a purchase
+ */
+export async function fetchPurchaseProfitability(id: string): Promise<PurchaseProfitability> {
+  const response = await fetch(`/api/purchases/${id}/profitability`);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch purchase profitability');
   }
 
   const result = await response.json();

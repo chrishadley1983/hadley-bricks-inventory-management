@@ -178,7 +178,24 @@
       "Bash(cmd /c \"del /f nul 2>nul\")",
       "mcp__supabase__generate_typescript_types",
       "mcp__playwright__browser_file_upload",
-      "mcp__playwright__browser_hover"
+      "mcp__playwright__browser_hover",
+      "Bash(Remove-Item:*)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Chris Hadley\\\\.claude\\\\projects\\\\c--Users-Chris-Hadley-hadley-bricks-inventory-management\\\\2ee55d89-4e19-4f14-a42a-72386e2c6a1e\\\\tool-results\\\\mcp-supabase-execute_sql-1768400584388.txt\")",
+      "Bash(ForEach-Object { $_text })",
+      "Bash($env:NODE_OPTIONS='--max-old-space-size=4096')",
+      "Bash(Select-String -Pattern \"platform-stock|DiscrepancyBadge|ComparisonSummary|ComparisonFilters|amazon-stock|ebay-stock\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\web\\\\coverage\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Sort-Object Name)",
+      "Bash(Select-Object -Last 1 -ExpandProperty Name)",
+      "Bash(Select-Object -Last 3)",
+      "Bash(del \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\supabase\\\\migrations\\\\20260115000001_add_draft_status_to_audit.sql\")",
+      "mcp__supabase__get_logs",
+      "Bash($env:NODE_OPTIONS=\"--max-old-space-size=8192\")",
+      "Bash(Get-Content:*)",
+      "Bash(Select-Object -First 100)",
+      "Bash(Select-String \"error TS\")",
+      "Bash(Measure-Object -Line)",
+      "Bash(Select-Object -ExpandProperty Lines)"
     ]
   },
   "hooks": {

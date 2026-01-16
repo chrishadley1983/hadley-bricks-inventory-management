@@ -15,6 +15,7 @@ const BulkUpdateSchema = z.object({
     listing_platform: z.string().nullish(),
     purchase_id: z.string().uuid().nullish(),
     purchase_date: z.string().nullish(),
+    amazon_asin: z.string().nullish(),
   }),
 });
 

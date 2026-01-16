@@ -22,6 +22,7 @@ export interface SyncResult {
   ordersProcessed: number;
   ordersCreated: number;
   ordersUpdated: number;
+  ordersSkipped: number;
   errors: string[];
   lastSyncedAt: Date;
 }
@@ -95,6 +96,13 @@ export class BrickLinkSyncService {
 
   /**
    * Sync sales orders from BrickLink
+   *
+   * Incremental sync optimization:
+   * - Fetches all order summaries in a single API call
+   * - Only fetches full order details (with items) for orders that:
+   *   1. Don't exist in the database yet (new orders)
+   *   2. Have a newer date_status_changed than our stored timestamp (changed orders)
+   * - Orders that haven't changed are skipped (no item fetch needed)
    */
   async syncOrders(userId: string, options: BrickLinkSyncOptions = {}): Promise<SyncResult> {
     const result: SyncResult = {
@@ -102,6 +110,7 @@ export class BrickLinkSyncService {
       ordersProcessed: 0,
       ordersCreated: 0,
       ordersUpdated: 0,
+      ordersSkipped: 0,
       errors: [],
       lastSyncedAt: new Date(),
     };
@@ -109,26 +118,54 @@ export class BrickLinkSyncService {
     try {
       const client = await this.getClient(userId);
 
-      // Get sales orders (direction=out)
+      // Get sales orders (direction=out) - single API call
       const orders = await client.getSalesOrders(undefined, options.includeFiled);
       result.ordersProcessed = orders.length;
 
-      // Process orders in batches
+      // For incremental sync, get existing order timestamps from DB
+      // This allows us to skip fetching items for unchanged orders
+      let existingTimestamps: Map<string, Date | null> = new Map();
+      if (!options.fullSync && options.includeItems) {
+        existingTimestamps = await this.orderRepo.getOrderStatusTimestamps(userId, 'bricklink');
+        console.log(`[BrickLinkSync] Found ${existingTimestamps.size} existing orders for incremental comparison`);
+      }
+
+      // Process orders
       for (const orderSummary of orders) {
         try {
-          await this.processOrder(userId, client, orderSummary, options.includeItems ?? false);
+          const orderId = String(orderSummary.order_id);
+          const existingTimestamp = existingTimestamps.get(orderId);
+          const isNewOrder = existingTimestamp === undefined;
 
-          // Check if order already exists
-          const existing = await this.orderRepo.findByPlatformOrderId(
-            userId,
-            'bricklink',
-            String(orderSummary.order_id)
-          );
+          // Determine if we need to fetch items for this order
+          let needsItemFetch = false;
+          if (options.includeItems) {
+            if (options.fullSync) {
+              // Full sync: always fetch items
+              needsItemFetch = true;
+            } else if (isNewOrder) {
+              // New order: fetch items
+              needsItemFetch = true;
+            } else if (orderSummary.date_status_changed) {
+              // Existing order: compare timestamps
+              const remoteStatusChanged = new Date(orderSummary.date_status_changed);
+              if (!existingTimestamp || remoteStatusChanged > existingTimestamp) {
+                // Order has been updated since our last sync
+                needsItemFetch = true;
+              }
+            }
+          }
 
-          if (existing) {
+          // Process the order (with or without items)
+          await this.processOrder(userId, client, orderSummary, needsItemFetch);
+
+          // Track results
+          if (isNewOrder) {
+            result.ordersCreated++;
+          } else if (needsItemFetch) {
             result.ordersUpdated++;
           } else {
-            result.ordersCreated++;
+            result.ordersSkipped++;
           }
         } catch (orderError) {
           const errorMsg = orderError instanceof Error ? orderError.message : 'Unknown error';
@@ -136,6 +173,7 @@ export class BrickLinkSyncService {
         }
       }
 
+      console.log(`[BrickLinkSync] Completed: ${result.ordersCreated} created, ${result.ordersUpdated} updated, ${result.ordersSkipped} skipped (unchanged)`);
       result.success = result.errors.length === 0;
     } catch (error) {
       if (error instanceof RateLimitError) {
@@ -176,6 +214,7 @@ export class BrickLinkSyncService {
       platform: 'bricklink',
       platform_order_id: normalized.platformOrderId,
       order_date: normalized.orderDate.toISOString(),
+      platform_status_changed_at: normalized.statusChangedAt?.toISOString() ?? null,
       buyer_name: normalized.buyerName,
       buyer_email: normalized.buyerEmail,
       status: normalized.status,
@@ -230,6 +269,7 @@ export class BrickLinkSyncService {
       platform: 'bricklink',
       platform_order_id: normalized.platformOrderId,
       order_date: normalized.orderDate.toISOString(),
+      platform_status_changed_at: normalized.statusChangedAt?.toISOString() ?? null,
       buyer_name: normalized.buyerName,
       buyer_email: normalized.buyerEmail,
       status: normalized.status,

@@ -902,12 +902,11 @@ export default function OrdersPage() {
           {/* Amazon Card */}
           <Card className={`${platform === 'amazon' ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle
-                className="text-sm font-medium cursor-pointer hover:text-primary"
-                onClick={() => setPlatform(platform === 'amazon' ? 'all' : 'amazon')}
-              >
-                Amazon
-              </CardTitle>
+              <Link href="/orders/amazon">
+                <CardTitle className="text-sm font-medium cursor-pointer hover:text-primary">
+                  Amazon
+                </CardTitle>
+              </Link>
               {amazonStatus?.isConfigured ? (
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               ) : (
@@ -1150,12 +1149,11 @@ export default function OrdersPage() {
           {/* eBay Card */}
           <Card className={`${platform === 'ebay' ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle
-                className="text-sm font-medium cursor-pointer hover:text-primary"
-                onClick={() => setPlatform(platform === 'ebay' ? 'all' : 'ebay')}
-              >
-                eBay
-              </CardTitle>
+              <Link href="/orders/ebay">
+                <CardTitle className="text-sm font-medium cursor-pointer hover:text-primary">
+                  eBay
+                </CardTitle>
+              </Link>
               {ebayConnected ? (
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               ) : (
@@ -1404,6 +1402,7 @@ export default function OrdersPage() {
                     <TableHead>Platform</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Buyer</TableHead>
+                    <TableHead>Description</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead></TableHead>
@@ -1412,14 +1411,14 @@ export default function OrdersPage() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                       </TableCell>
                     </TableRow>
                   ) : orders.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center py-8 text-muted-foreground"
                       >
                         {isEbayPlatform
@@ -1444,9 +1443,27 @@ export default function OrdersPage() {
                           {order.platform_order_id}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {order.platform}
-                          </Badge>
+                          {order.platform === 'ebay' ? (
+                            <Link href="/orders/ebay">
+                              <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                                {order.platform}
+                              </Badge>
+                            </Link>
+                          ) : order.platform === 'amazon' ? (
+                            <Link href="/orders/amazon">
+                              <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                                {order.platform}
+                              </Badge>
+                            </Link>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="capitalize cursor-pointer hover:bg-muted"
+                              onClick={() => setPlatform(order.platform)}
+                            >
+                              {order.platform}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           {order.order_date
@@ -1454,6 +1471,9 @@ export default function OrdersPage() {
                             : '-'}
                         </TableCell>
                         <TableCell>{order.buyer_name || '-'}</TableCell>
+                        <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground" title={(order as PlatformOrder & { items?: Array<{ title?: string }> }).items?.map((item) => item.title).filter(Boolean).join(', ') || order.notes || '-'}>
+                          {(order as PlatformOrder & { items?: Array<{ title?: string }> }).items?.map((item) => item.title).filter(Boolean).join(', ') || order.notes || '-'}
+                        </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(getEffectiveStatus(order))}>
                             {getEffectiveStatus(order)}

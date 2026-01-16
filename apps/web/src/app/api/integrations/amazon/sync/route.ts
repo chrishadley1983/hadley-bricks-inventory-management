@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
+import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 
 const SyncOptionsSchema = z.object({
   createdAfter: z.string().datetime().optional(),
@@ -78,6 +79,36 @@ export async function POST(request: NextRequest) {
     console.log('[POST /api/integrations/amazon/sync] Starting sync...');
     const result = await syncService.syncOrders(user.id, syncOptions);
 
+    // After syncing, automatically link shipped orders to inventory
+    // Always run linking on successful sync - there may be previously synced orders that weren't linked
+    let linkingResult = null;
+    let autoCompleteResult = null;
+    if (result.success) {
+      const linkingService = new AmazonInventoryLinkingService(supabase, user.id);
+
+      // Step 1: Link shipped orders to inventory
+      try {
+        console.log('[POST /api/integrations/amazon/sync] Running inventory linking...');
+        linkingResult = await linkingService.processHistoricalOrders({
+          mode: 'auto',
+          includeSold: true,
+        });
+        console.log('[POST /api/integrations/amazon/sync] Linking complete:', linkingResult);
+      } catch (linkingError) {
+        console.error('[POST /api/integrations/amazon/sync] Linking error:', linkingError);
+      }
+
+      // Step 2: Auto-complete old orders that are linked but still showing as "Shipped"
+      // Orders > 14 days old with inventory linked are assumed delivered
+      try {
+        console.log('[POST /api/integrations/amazon/sync] Auto-completing old orders...');
+        autoCompleteResult = await linkingService.autoCompleteOldOrders(14);
+        console.log('[POST /api/integrations/amazon/sync] Auto-complete done:', autoCompleteResult);
+      } catch (autoCompleteError) {
+        console.error('[POST /api/integrations/amazon/sync] Auto-complete error:', autoCompleteError);
+      }
+    }
+
     return NextResponse.json({
       success: result.success,
       ordersProcessed: result.ordersProcessed,
@@ -85,6 +116,8 @@ export async function POST(request: NextRequest) {
       ordersUpdated: result.ordersUpdated,
       errors: result.errors,
       lastSyncedAt: result.lastSyncedAt.toISOString(),
+      linking: linkingResult,
+      autoComplete: autoCompleteResult,
     });
   } catch (error) {
     console.error('[POST /api/integrations/amazon/sync] Error:', error);

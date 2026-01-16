@@ -146,11 +146,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Enhance line items with match status
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const enhancedLineItems = order.line_items.map((lineItem: any) => {
-      let matchStatus: 'matched' | 'unmatched' | 'manual' = 'unmatched';
+      let matchStatus: 'matched' | 'unmatched' | 'manual' | 'no_sku' = 'unmatched';
       let matchedInventory = null;
 
+      // Items without SKU can't be matched
+      if (!lineItem.sku) {
+        return {
+          ...lineItem,
+          match_status: 'no_sku' as const,
+          matched_inventory: null,
+        };
+      }
+
       // Check manual mapping first
-      if (lineItem.sku && mappingsMap.has(lineItem.sku)) {
+      if (mappingsMap.has(lineItem.sku)) {
         const inventoryId = mappingsMap.get(lineItem.sku);
         const inventory = inventoryByIdMap.get(inventoryId);
         if (inventory) {
@@ -160,7 +169,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
 
       // Check direct SKU match
-      if (matchStatus === 'unmatched' && lineItem.sku) {
+      if (matchStatus === 'unmatched') {
         const inventory = inventoryBySkuMap.get(lineItem.sku);
         if (inventory) {
           matchStatus = 'matched';

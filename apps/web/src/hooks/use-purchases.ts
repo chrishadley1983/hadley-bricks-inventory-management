@@ -5,6 +5,7 @@ import type { PurchaseInsert, PurchaseUpdate } from '@hadley-bricks/database';
 import {
   fetchPurchases,
   fetchPurchase,
+  fetchPurchaseProfitability,
   createPurchase,
   updatePurchase,
   deletePurchase,
@@ -27,6 +28,7 @@ export const purchaseKeys = {
     [...purchaseKeys.lists(), { filters, pagination }] as const,
   details: () => [...purchaseKeys.all, 'detail'] as const,
   detail: (id: string) => [...purchaseKeys.details(), id] as const,
+  profitability: (id: string) => [...purchaseKeys.all, 'profitability', id] as const,
 };
 
 /**
@@ -139,5 +141,17 @@ export function useCalculateMileage() {
   return useMutation({
     mutationFn: ({ fromPostcode, toPostcode }: { fromPostcode: string; toPostcode: string }) =>
       calculateMileage(fromPostcode, toPostcode),
+  });
+}
+
+/**
+ * Hook to fetch profitability metrics for a purchase
+ */
+export function usePurchaseProfitability(purchaseId: string | undefined) {
+  return useQuery({
+    queryKey: purchaseKeys.profitability(purchaseId!),
+    queryFn: () => fetchPurchaseProfitability(purchaseId!),
+    enabled: !!purchaseId,
+    staleTime: 60000, // 1 minute cache
   });
 }

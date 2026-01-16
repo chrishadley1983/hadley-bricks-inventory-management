@@ -13,6 +13,11 @@ const nextConfig = {
         hostname: 'img.bricklink.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/**',
+      },
     ],
   },
   // Security headers

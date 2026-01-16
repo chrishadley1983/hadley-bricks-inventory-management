@@ -5,8 +5,10 @@ export {
   sendMessageWithImage,
   sendMessageWithImages,
   sendMessageWithImagesForJSON,
+  sendConversation,
   type ImageMediaType,
   type ImageInput,
+  type ChatMessage,
 } from './claude-client';
 export {
   PARSE_PURCHASE_SYSTEM_PROMPT,

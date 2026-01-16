@@ -49,6 +49,7 @@ export function useInventoryItem(id: string | undefined) {
     queryKey: inventoryKeys.detail(id!),
     queryFn: () => fetchInventoryItem(id!),
     enabled: !!id,
+    staleTime: 0, // Always refetch to ensure fresh data
   });
 }
 

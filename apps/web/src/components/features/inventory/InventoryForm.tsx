@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Search, Loader2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import type { Purchase } from '@hadley-bricks/database';
 import { SELLING_PLATFORMS, PLATFORM_LABELS, type SellingPlatform } from '@hadley-bricks/database';
@@ -29,9 +29,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import { useCreateInventory, useUpdateInventory, useInventoryItem } from '@/hooks';
 import { PurchaseLookup } from './PurchaseLookup';
 import { QuickPurchaseDialog } from './QuickPurchaseDialog';
+import { SetNumberLookup } from './SetNumberLookup';
 import type { PurchaseSearchResult } from '@/lib/api';
 
 const inventoryFormSchema = z.object({
@@ -99,6 +101,7 @@ function normalizeStatus(value: string | null | undefined): InventoryFormValues[
 
 export function InventoryForm({ mode, itemId, showHeader = true }: InventoryFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const createMutation = useCreateInventory();
   const updateMutation = useUpdateInventory();
   const { data: existingItem, isLoading: isLoadingItem } = useInventoryItem(
@@ -109,6 +112,10 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
   const [selectedPurchase, setSelectedPurchase] = React.useState<PurchaseSearchResult | null>(null);
   const [quickPurchaseOpen, setQuickPurchaseOpen] = React.useState(false);
   const [quickPurchaseDefaultDesc, setQuickPurchaseDefaultDesc] = React.useState('');
+
+  // State for field lookups
+  const [isLookingUpAsin, setIsLookingUpAsin] = React.useState(false);
+  const [selectedSetEan, setSelectedSetEan] = React.useState<string | null>(null);
 
   const form = useForm<InventoryFormValues>({
     resolver: zodResolver(inventoryFormSchema),
@@ -159,6 +166,36 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
     }
   }, [existingItem, mode, reset]);
 
+  // Load linked purchase details when editing an item with a purchase_id
+  React.useEffect(() => {
+    async function loadLinkedPurchase() {
+      if (existingItem?.purchase_id && mode === 'edit') {
+        try {
+          const response = await fetch(`/api/purchases/${existingItem.purchase_id}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.data) {
+              // Transform purchase data to PurchaseSearchResult format
+              const purchaseResult: PurchaseSearchResult = {
+                id: result.data.id,
+                short_description: result.data.short_description,
+                purchase_date: result.data.purchase_date,
+                cost: result.data.cost,
+                source: result.data.source,
+                reference: result.data.reference,
+                items_linked: result.data.items_linked ?? 0,
+              };
+              setSelectedPurchase(purchaseResult);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load linked purchase:', error);
+        }
+      }
+    }
+    loadLinkedPurchase();
+  }, [existingItem?.purchase_id, mode]);
+
   // Handle purchase selection from lookup
   const handlePurchaseSelect = React.useCallback(
     (purchase: PurchaseSearchResult | null, suggestedCost: number | null) => {
@@ -202,6 +239,79 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
     },
     [handlePurchaseSelect]
   );
+
+  // Handle set selection from SetNumberLookup
+  const handleSetSelected = React.useCallback(
+    (set: { setNumber: string; setName: string; ean?: string }) => {
+      // Save only the base set number (without variant suffix like "-1")
+      const baseSetNumber = set.setNumber.split('-')[0];
+      form.setValue('set_number', baseSetNumber);
+      form.setValue('item_name', set.setName);
+      setSelectedSetEan(set.ean || null);
+      // Clear ASIN when set changes (user can look up new one)
+      form.setValue('amazon_asin', '');
+      toast({
+        title: 'Set selected',
+        description: `${set.setNumber} - ${set.setName}`,
+      });
+    },
+    [form, toast]
+  );
+
+  // Look up ASIN from inventory or Amazon
+  const handleLookupAsin = React.useCallback(async () => {
+    const setNumber = form.getValues('set_number');
+    const setName = form.getValues('item_name');
+
+    if (!setNumber) {
+      toast({
+        title: 'Set number required',
+        description: 'Please enter a set number first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLookingUpAsin(true);
+
+    try {
+      // Build URL with optional EAN parameter
+      let url = `/api/inventory/lookup-asin?setNumber=${encodeURIComponent(setNumber)}`;
+      if (selectedSetEan) {
+        url += `&ean=${encodeURIComponent(selectedSetEan)}`;
+      }
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Lookup failed');
+      }
+
+      if (result.data?.asin) {
+        form.setValue('amazon_asin', result.data.asin);
+        const sourceLabel = result.data.source === 'inventory' ? 'existing inventory' : 'Amazon catalog';
+        toast({
+          title: 'ASIN found',
+          description: `Found ${result.data.asin} from ${sourceLabel}`,
+        });
+      } else {
+        toast({
+          title: 'ASIN not found',
+          description: result.message || `No ASIN found for set ${setNumber}${setName ? ` (${setName})` : ''}`,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Lookup failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLookingUpAsin(false);
+    }
+  }, [form, toast, selectedSetEan]);
 
   const onSubmit = async (values: InventoryFormValues) => {
     const costNum = values.cost ? parseFloat(values.cost) : undefined;
@@ -270,8 +380,16 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                   <FormItem>
                     <FormLabel>Set Number *</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 75192" {...field} />
+                      <SetNumberLookup
+                        value={field.value}
+                        onChange={field.onChange}
+                        onSetSelected={handleSetSelected}
+                        placeholder="e.g., 75192"
+                      />
                     </FormControl>
+                    <FormDescription>
+                      Type to search Brickset for set details
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -286,6 +404,9 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                     <FormControl>
                       <Input placeholder="e.g., Millennium Falcon" {...field} />
                     </FormControl>
+                    <FormDescription>
+                      Auto-filled when you select a set above
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -435,8 +556,9 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                   <FormItem>
                     <FormLabel>Listing Platform</FormLabel>
                     <Select
-                      value={field.value || ''}
+                      value={field.value || undefined}
                       onValueChange={(val: string) => field.onChange(val || '')}
+                      key={`listing_platform-${field.value || 'empty'}`}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -522,9 +644,45 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Amazon ASIN</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., B07BMGGZY5" {...field} />
-                    </FormControl>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input placeholder="e.g., B07BMGGZY5" {...field} />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleLookupAsin}
+                        disabled={isLookingUpAsin}
+                        title="Look up ASIN from inventory or Amazon"
+                      >
+                        {isLookingUpAsin ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {field.value && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          asChild
+                          title="View on Amazon"
+                        >
+                          <a
+                            href={`https://www.amazon.co.uk/dp/${field.value}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                    <FormDescription>
+                      Click search to find ASIN from inventory or Amazon
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

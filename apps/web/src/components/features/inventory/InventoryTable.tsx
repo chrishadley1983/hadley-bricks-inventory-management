@@ -240,6 +240,7 @@ export function InventoryTable() {
           enableRowSelection
           enableColumnVisibility
           columnDisplayNames={COLUMN_DISPLAY_NAMES}
+          columnVisibilityStorageKey="inventory-table-columns"
           initialColumnVisibility={{
             // Hide these columns by default - users can enable via Columns menu
             sku: false,

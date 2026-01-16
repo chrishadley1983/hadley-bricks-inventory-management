@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2, Edit } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2, Edit, Camera } from 'lucide-react';
 import Link from 'next/link';
 import type { Purchase } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { PurchaseProfitabilityHoverCard } from './PurchaseProfitabilityHoverCard';
 
 /**
  * Human-readable display names for purchase columns
@@ -75,7 +76,15 @@ export function getPurchaseColumns({ onDelete }: ColumnsProps = {}): ColumnDef<P
       header: 'Description',
       cell: ({ row }) => {
         const description = row.getValue('short_description') as string;
-        return <span className="max-w-[250px] truncate block">{description}</span>;
+        const imageCount = (row.original as Purchase & { image_count?: number }).image_count ?? 0;
+        return (
+          <span className="max-w-[250px] truncate flex items-center gap-1.5">
+            {description}
+            {imageCount > 0 && (
+              <Camera className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            )}
+          </span>
+        );
       },
     },
     {
@@ -94,7 +103,13 @@ export function getPurchaseColumns({ onDelete }: ColumnsProps = {}): ColumnDef<P
       },
       cell: ({ row }) => {
         const cost = row.getValue('cost') as number;
-        return <span className="font-medium">{formatCurrency(cost)}</span>;
+        return (
+          <PurchaseProfitabilityHoverCard purchaseId={row.original.id}>
+            <span className="font-medium cursor-help border-b border-dotted border-muted-foreground/50">
+              {formatCurrency(cost)}
+            </span>
+          </PurchaseProfitabilityHoverCard>
+        );
       },
     },
     {

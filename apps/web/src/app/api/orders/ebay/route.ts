@@ -142,17 +142,86 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform orders to include mapped status
+    // Get all SKUs from line items to check for matches
+    const allSkus = (orders || [])
+      .flatMap((order: { line_items?: Array<{ sku: string | null }> }) =>
+        (order.line_items || []).map((li) => li.sku).filter(Boolean)
+      ) as string[];
+
+    // Fetch SKU mappings for this user
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transformedOrders = (orders || []).map((order: any) => ({
-      ...order,
-      ui_status: mapEbayStatusToUI(
+    const { data: skuMappings } = await (supabase as any)
+      .from('ebay_sku_mappings')
+      .select('ebay_sku')
+      .eq('user_id', user.id);
+    const mappedSkus = new Set((skuMappings || []).map((m: { ebay_sku: string }) => m.ebay_sku));
+
+    // Fetch inventory items that match SKUs directly
+    let matchedInventorySkus = new Set<string>();
+    if (allSkus.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: inventoryMatches } = await (supabase as any)
+        .from('inventory_items')
+        .select('sku')
+        .eq('user_id', user.id)
+        .in('sku', allSkus);
+      matchedInventorySkus = new Set(
+        (inventoryMatches || []).map((i: { sku: string }) => i.sku)
+      );
+    }
+
+    // Transform orders to include mapped status and match info
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transformedOrders = (orders || []).map((order: any) => {
+      const uiStatus = mapEbayStatusToUI(
         order.order_fulfilment_status,
         order.order_payment_status
-      ),
-      total: order.pricing_summary?.total?.value || 0,
-      currency: order.pricing_summary?.total?.currency || 'GBP',
-    }));
+      );
+
+      // Check match status for each line item
+      const lineItemsWithMatch = (order.line_items || []).map((li: { sku: string | null }) => {
+        const hasMapping = li.sku && mappedSkus.has(li.sku);
+        const hasDirectMatch = li.sku && matchedInventorySkus.has(li.sku);
+        // Items without SKU are considered "no_sku" - can't be matched
+        const matchStatus = !li.sku
+          ? 'no_sku'
+          : hasMapping
+            ? 'manual'
+            : hasDirectMatch
+              ? 'matched'
+              : 'unmatched';
+        return {
+          ...li,
+          match_status: matchStatus,
+        };
+      });
+
+      // Calculate order-level match summary
+      // Only count items WITH SKUs that are unmatched (items without SKUs can't be linked via SKU)
+      const itemsWithSku = lineItemsWithMatch.filter(
+        (li: { match_status: string }) => li.match_status !== 'no_sku'
+      );
+      const unmatchedCount = itemsWithSku.filter(
+        (li: { match_status: string }) => li.match_status === 'unmatched'
+      ).length;
+      const noSkuCount = lineItemsWithMatch.filter(
+        (li: { match_status: string }) => li.match_status === 'no_sku'
+      ).length;
+
+      return {
+        ...order,
+        line_items: lineItemsWithMatch,
+        ui_status: uiStatus,
+        total: order.pricing_summary?.total?.value || 0,
+        currency: order.pricing_summary?.total?.currency || 'GBP',
+        match_summary: {
+          total: lineItemsWithMatch.length,
+          unmatched: unmatchedCount,
+          no_sku: noSkuCount,
+          all_matched: unmatchedCount === 0 && noSkuCount === 0,
+        },
+      };
+    });
 
     return NextResponse.json({
       data: transformedOrders,

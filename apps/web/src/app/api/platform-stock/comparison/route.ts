@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log(`[API /platform-stock/comparison] Authenticated user: ${user.id}, email: ${user.email}`);
+
     const { searchParams } = new URL(request.url);
 
     // Parse query parameters
@@ -41,6 +43,21 @@ export async function GET(request: NextRequest) {
 
     // Get service based on platform
     if (platform === 'amazon') {
+      // Debug: Test raw query to see what the authenticated user can see
+      const { data: debugData, error: debugError } = await supabase
+        .from('inventory_items')
+        .select('id, set_number, listing_platform, amazon_asin, status')
+        .eq('user_id', user.id)
+        .eq('status', 'LISTED')
+        .ilike('listing_platform', '%amazon%')
+        .is('amazon_asin', null)
+        .limit(10);
+
+      console.log(`[DEBUG] User ${user.id} missing ASIN query: error=${debugError?.message || 'none'}, count=${debugData?.length || 0}`);
+      if (debugData && debugData.length > 0) {
+        console.log(`[DEBUG] First item:`, JSON.stringify(debugData[0]));
+      }
+
       const service = new AmazonStockService(supabase, user.id);
       const result = await service.getStockComparison(filters);
 

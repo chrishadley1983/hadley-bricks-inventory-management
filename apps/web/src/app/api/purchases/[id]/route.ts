@@ -7,11 +7,11 @@ const UpdatePurchaseSchema = z.object({
   purchase_date: z.string().optional(),
   short_description: z.string().min(1).optional(),
   cost: z.number().positive().optional(),
-  source: z.string().optional(),
-  payment_method: z.string().optional(),
-  description: z.string().optional(),
-  reference: z.string().optional(),
-  image_url: z.string().url().optional().or(z.literal('')),
+  source: z.string().nullable().optional(),
+  payment_method: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  reference: z.string().nullable().optional(),
+  image_url: z.string().url().nullable().optional().or(z.literal('')),
 });
 
 /**
