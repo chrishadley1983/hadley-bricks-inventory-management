@@ -18,7 +18,6 @@ export default defineConfig({
     // Use forks pool for process isolation
     pool: 'forks',
     maxWorkers: 2, // Parallel workers for speed
-    minWorkers: 1,
     fileParallelism: true,
     isolate: true,
     testTimeout: 30000,
