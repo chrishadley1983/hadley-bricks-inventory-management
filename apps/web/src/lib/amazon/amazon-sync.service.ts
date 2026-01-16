@@ -920,13 +920,37 @@ export class AmazonSyncService {
 
   /**
    * Process price verification step
+   *
+   * Uses queue items for verification. If queue is empty (edge case), falls back to feed items.
    */
   private async processPriceVerificationStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
-    const aggregatedItems = await this.getAggregatedQueueItems();
+    // Try to get items from queue first
+    let aggregatedItems = await this.getAggregatedQueueItems();
 
+    // Fallback: If queue is empty, reconstruct from feed items
+    // This handles edge cases where queue was cleared unexpectedly
     if (aggregatedItems.length === 0) {
-      // Queue was cleared - check if we should still verify
-      return this.failTwoPhaseSync(feedId, userEmail, 'Queue items no longer available for verification');
+      console.log('[AmazonSyncService] Queue empty - reconstructing from feed items');
+      const feedItems = await this.getFeedItems(feedId);
+
+      if (feedItems.length === 0) {
+        return this.failTwoPhaseSync(feedId, userEmail, 'No items found for verification');
+      }
+
+      // Reconstruct aggregated items from feed items
+      aggregatedItems = feedItems.map((item) => ({
+        asin: item.asin,
+        amazonSku: item.amazon_sku,
+        price: Number(item.submitted_price),
+        queueQuantity: item.submitted_quantity,
+        existingAmazonQuantity: 0, // Not needed for verification
+        totalQuantity: item.submitted_quantity,
+        inventoryItemIds: item.inventory_item_ids,
+        queueItemIds: [], // Not available
+        itemNames: [],
+        productType: DEFAULT_PRODUCT_TYPE,
+        isNewSku: item.is_new_sku ?? false,
+      }));
     }
 
     // Check if prices are live
