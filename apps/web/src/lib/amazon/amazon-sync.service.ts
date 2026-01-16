@@ -1540,14 +1540,20 @@ export class AmazonSyncService {
       }
 
       // Clear queue items for successful/accepted submissions
-      const aggregated = await this.getAggregatedQueueItems();
-      const successfulAsins = items
-        .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
-        .map((i) => i.asin);
-      const successfulAggregated = aggregated.filter((a) =>
-        successfulAsins.includes(a.asin)
-      );
-      await this.clearQueueForFeed(successfulAggregated);
+      // IMPORTANT: Don't clear for two-phase sync price phase - we need items for quantity phase
+      const isTwoPhasePriceFeed = feed.sync_mode === 'two_phase' && feed.phase === 'price';
+      if (!isTwoPhasePriceFeed) {
+        const aggregated = await this.getAggregatedQueueItems();
+        const successfulAsins = items
+          .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
+          .map((i) => i.asin);
+        const successfulAggregated = aggregated.filter((a) =>
+          successfulAsins.includes(a.asin)
+        );
+        await this.clearQueueForFeed(successfulAggregated);
+      } else {
+        console.log('[AmazonSyncService] Skipping queue clear for two-phase price feed - items needed for quantity phase');
+      }
     } else if (status.processingStatus === 'IN_PROGRESS') {
       updates.status = 'processing';
     } else if (
