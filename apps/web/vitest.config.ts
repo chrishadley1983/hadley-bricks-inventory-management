@@ -14,6 +14,18 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/', 'src/test/'],
     },
+    // Memory optimization for large test suites (2500+ tests)
+    // Use forks pool for process isolation
+    pool: 'forks',
+    maxWorkers: 2, // Parallel workers for speed
+    minWorkers: 1,
+    fileParallelism: true,
+    isolate: true,
+    testTimeout: 30000,
+    // Disable watch mode by default
+    watch: false,
+    // Bail on first failure to avoid wasted memory
+    bail: 0,
   },
   resolve: {
     alias: {

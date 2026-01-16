@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:batched": "node scripts/run-tests-batched.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "migrate:inventory": "tsx scripts/migrate-inventory.ts",
