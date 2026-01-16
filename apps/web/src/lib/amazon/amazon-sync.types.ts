@@ -568,6 +568,31 @@ export interface TwoPhaseResult {
   error?: string;
 }
 
+/**
+ * Result from processing a single step of two-phase sync
+ * Used by the background processor
+ */
+export interface TwoPhaseStepResult {
+  feedId: string;
+  status: TwoPhaseStatus;
+  /** Current step that was just processed */
+  step: 'price_polling' | 'price_verification' | 'quantity_submission' | 'quantity_polling' | 'complete';
+  /** Whether processing is complete (success or failure) */
+  isComplete: boolean;
+  /** Message describing what happened */
+  message: string;
+  /** Error message if failed */
+  error?: string;
+  /** Price feed details */
+  priceFeed?: SyncFeed;
+  /** Quantity feed details (only after quantity submission) */
+  quantityFeed?: SyncFeed;
+  /** When price was verified (ISO string) */
+  priceVerifiedAt?: string;
+  /** Recommended delay before next poll (ms) */
+  nextPollDelay?: number;
+}
+
 // ============================================================================
 // TWO-PHASE SYNC CONSTANTS
 // ============================================================================

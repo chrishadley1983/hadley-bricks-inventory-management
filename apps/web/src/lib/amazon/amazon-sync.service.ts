@@ -29,6 +29,7 @@ import type {
   ListingsValidationResult,
   PriceConflict,
   TwoPhaseResult,
+  TwoPhaseStepResult,
 } from './amazon-sync.types';
 import { TWO_PHASE_DEFAULTS } from './amazon-sync.types';
 import { emailService } from '@/lib/email';
@@ -712,22 +713,26 @@ export class AmazonSyncService {
   }
 
   // ==========================================================================
-  // TWO-PHASE SYNC
+  // TWO-PHASE SYNC (ASYNC/BACKGROUND VERSION)
   // ==========================================================================
 
   /**
    * Submit feed using two-phase sync (price first, then quantity)
    *
+   * IMPORTANT: This method returns IMMEDIATELY after submitting the price feed.
+   * The caller should poll using processTwoPhaseStep() to continue processing.
+   *
    * Flow:
-   * 1. Submit price-only feed
-   * 2. Poll until Amazon accepts
-   * 3. Verify price is live on listing
-   * 4. Submit quantity-only feed
-   * 5. Poll until complete
-   * 6. Send notifications (email + Pushover)
+   * 1. Submit price-only feed → RETURN IMMEDIATELY
+   * 2. Client polls processTwoPhaseStep() which handles:
+   *    - Polling for price feed completion
+   *    - Verifying price is live on Amazon
+   *    - Submitting quantity feed
+   *    - Polling for quantity feed completion
+   *    - Sending notifications
    *
    * @param options - Submission options
-   * @returns Result with both feeds and final status
+   * @returns Result with price feed and initial status (processing continues in background)
    */
   async submitTwoPhaseFeed(options: {
     dryRun: boolean;
@@ -735,16 +740,9 @@ export class AmazonSyncService {
     priceVerificationTimeout?: number;
     priceVerificationInterval?: number;
   }): Promise<TwoPhaseResult> {
-    const {
-      dryRun,
-      userEmail,
-      priceVerificationTimeout = TWO_PHASE_DEFAULTS.priceVerificationTimeout,
-      priceVerificationInterval = TWO_PHASE_DEFAULTS.priceVerificationInterval,
-    } = options;
+    const { dryRun, userEmail } = options;
 
-    console.log('[AmazonSyncService] Starting two-phase sync');
-    console.log(`[AmazonSyncService] Timeout: ${priceVerificationTimeout / 60000} min`);
-    console.log(`[AmazonSyncService] Interval: ${priceVerificationInterval / 1000} sec`);
+    console.log('[AmazonSyncService] Starting two-phase sync (async mode)');
 
     // Get credentials and aggregated items
     const credentials = await this.getAmazonCredentials();
@@ -757,11 +755,8 @@ export class AmazonSyncService {
       throw new Error('No items in the sync queue');
     }
 
-    // ========================================
-    // PHASE 1: Price-only feed
-    // ========================================
+    // Submit price-only feed
     console.log('[AmazonSyncService] Phase 1: Submitting price-only feed');
-
     const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
 
     if (dryRun) {
@@ -771,237 +766,468 @@ export class AmazonSyncService {
       };
     }
 
-    // Poll until price feed is processed
-    let currentPriceFeed = priceFeed;
-    while (currentPriceFeed.status === 'submitted' || currentPriceFeed.status === 'processing') {
-      await this.delay(5000); // 5 second polling interval
-      currentPriceFeed = await this.pollFeedStatus(priceFeed.id);
-    }
-
-    if (currentPriceFeed.status === 'error' || (currentPriceFeed.error_count ?? 0) > 0) {
-      // Send failure notifications for price feed rejection
-      const itemDetails = this.buildItemDetails(aggregatedItems);
-      await emailService.sendFeedRejectionFailure({
-        userEmail,
-        feedId: priceFeed.id,
-        phase: 'price',
-        errorMessage: currentPriceFeed.error_message || 'Price feed rejected by Amazon',
-        itemDetails,
-      });
-      await pushoverService.sendSyncFailure({
-        feedId: priceFeed.id,
-        itemCount: aggregatedItems.length,
-        reason: currentPriceFeed.error_message || 'Feed rejected',
-        phase: 'price_rejected',
-      });
-
-      return {
-        priceFeed: currentPriceFeed,
-        status: 'failed',
-        error: currentPriceFeed.error_message || 'Price feed failed. Notifications sent.',
-      };
-    }
-
-    // ========================================
-    // VERIFICATION: Wait for price to be live
-    // ========================================
-    console.log('[AmazonSyncService] Verifying prices are live on Amazon');
-
-    const verificationResult = await this.waitForPriceVerification(
-      aggregatedItems,
-      priceVerificationTimeout,
-      priceVerificationInterval
-    );
-
-    if (!verificationResult.allVerified) {
-      // Update price feed status
-      await this.updateFeedRecord(priceFeed.id, {
-        status: 'verification_failed',
-        error_message: `Price verification failed for: ${verificationResult.failedSkus.join(', ')}`,
-      });
-
-      // Send failure notifications
-      const itemDetails = this.buildItemDetails(aggregatedItems);
-      await emailService.sendTwoPhaseFailure({
-        userEmail,
-        feedId: priceFeed.id,
-        failedSkus: verificationResult.failedSkus,
-        submittedPrice: aggregatedItems[0]?.price ?? 0,
-        verificationDuration: priceVerificationTimeout,
-        itemDetails,
-      });
-      await pushoverService.sendSyncFailure({
-        feedId: priceFeed.id,
-        itemCount: verificationResult.failedSkus.length,
-        reason: `Price not visible after ${priceVerificationTimeout / 60000} mins`,
-        phase: 'price_verification',
-      });
-
-      return {
-        priceFeed: await this.getFeed(priceFeed.id),
-        status: 'failed',
-        error: `Price not visible on Amazon after ${priceVerificationTimeout / 60000} minutes. Notifications sent.`,
-      };
-    }
-
-    // Update price feed as verified
-    // Note: price_verified_at added by migration 20260123000001_two_phase_sync.sql
+    // Set up background processing state
+    // Note: two_phase_* columns added by migration 20260123000002_two_phase_background.sql
     await this.updateFeedRecord(priceFeed.id, {
-      status: 'verified',
-      price_verified_at: new Date().toISOString(),
+      two_phase_step: 'price_submitted',
+      two_phase_started_at: new Date().toISOString(),
+      two_phase_user_email: userEmail,
+      two_phase_poll_count: 0,
     } as Parameters<typeof this.updateFeedRecord>[1]);
 
-    // ========================================
-    // PHASE 2: Quantity-only feed
-    // ========================================
-    console.log('[AmazonSyncService] Phase 2: Submitting quantity-only feed');
-
-    const quantityFeed = await this.submitQuantityOnlyFeed(
-      aggregatedItems,
-      credentials,
-      priceFeed.id
-    );
-
-    // Poll until quantity feed is processed
-    let currentQuantityFeed = quantityFeed;
-    while (
-      currentQuantityFeed.status === 'submitted' ||
-      currentQuantityFeed.status === 'processing'
-    ) {
-      await this.delay(5000);
-      currentQuantityFeed = await this.pollFeedStatus(quantityFeed.id);
-    }
-
-    // Handle quantity feed result
-    if (currentQuantityFeed.status === 'done') {
-      // SUCCESS: Clear queue and send success notifications
-      await this.clearQueueForFeed(aggregatedItems);
-
-      const itemDetails = aggregatedItems.map((item) => ({
-        sku: item.amazonSku,
-        asin: item.asin,
-        setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
-        itemName: item.itemNames[0] ?? 'Unknown',
-        price: item.price,
-      }));
-
-      await emailService.sendTwoPhaseSuccess({
-        userEmail,
-        feedId: priceFeed.id,
-        itemCount: aggregatedItems.length,
-        priceVerificationTime: verificationResult.verificationDuration ?? 0,
-        itemDetails,
-      });
-      await pushoverService.sendSyncSuccess({
-        feedId: priceFeed.id,
-        itemCount: aggregatedItems.length,
-        verificationTime: verificationResult.verificationDuration ?? 0,
-      });
-
-      return {
-        priceFeed: await this.getFeed(priceFeed.id),
-        quantityFeed: currentQuantityFeed,
-        status: 'completed',
-        priceVerifiedAt: verificationResult.verifiedAt,
-      };
-    }
-
-    // FAILURE: Quantity feed was rejected
-    const itemDetails = this.buildItemDetails(aggregatedItems);
-    await emailService.sendFeedRejectionFailure({
-      userEmail,
-      feedId: quantityFeed.id,
-      phase: 'quantity',
-      errorMessage: currentQuantityFeed.error_message || 'Quantity feed rejected by Amazon',
-      itemDetails,
-    });
-    await pushoverService.sendSyncFailure({
-      feedId: quantityFeed.id,
-      itemCount: aggregatedItems.length,
-      reason: currentQuantityFeed.error_message || 'Feed rejected',
-      phase: 'quantity_rejected',
-    });
-
+    // Return immediately - processing continues via processTwoPhaseStep()
     return {
       priceFeed: await this.getFeed(priceFeed.id),
-      quantityFeed: currentQuantityFeed,
-      status: 'failed',
-      priceVerifiedAt: verificationResult.verifiedAt,
-      error: 'Quantity feed failed. Price was updated but quantity was NOT. Notifications sent.',
+      status: 'price_submitted',
     };
   }
 
   /**
-   * Wait for prices to be verified on Amazon
+   * Process the next step of a two-phase sync
+   *
+   * Call this repeatedly to advance through the two-phase sync process.
+   * Each call processes one step and returns the current state.
+   *
+   * Steps:
+   * 1. price_polling - Poll Amazon for price feed status
+   * 2. price_verification - Check if price is live on Amazon
+   * 3. quantity_submission - Submit quantity feed
+   * 4. quantity_polling - Poll Amazon for quantity feed status
+   * 5. complete - All done, notifications sent
+   *
+   * @param feedId - The price feed ID
+   * @param userEmail - User email for notifications
+   * @returns Current state and whether processing is complete
    */
-  private async waitForPriceVerification(
-    items: AggregatedQueueItem[],
-    timeout: number,
-    interval: number
-  ): Promise<{
-    allVerified: boolean;
-    verifiedAt?: string;
-    verificationDuration?: number;
-    failedSkus: string[];
-  }> {
+  async processTwoPhaseStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    const feed = await this.getFeedWithTwoPhaseState(feedId);
+
+    if (!feed) {
+      throw new Error('Feed not found');
+    }
+
+    // Check if this is a two-phase feed
+    if (feed.sync_mode !== 'two_phase') {
+      throw new Error('Feed is not a two-phase sync');
+    }
+
+    const step = feed.two_phase_step as string;
+
+    // Update poll tracking
+    await this.updateFeedRecord(feedId, {
+      two_phase_last_poll_at: new Date().toISOString(),
+      two_phase_poll_count: (feed.two_phase_poll_count ?? 0) + 1,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Check for timeout (30 minutes from start)
+    const startedAt = feed.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : 0;
+    const elapsed = Date.now() - startedAt;
+    const timeout = TWO_PHASE_DEFAULTS.priceVerificationTimeout;
+
+    if (elapsed > timeout && step !== 'complete' && step !== 'failed') {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Timeout: Two-phase sync exceeded 30 minute limit');
+    }
+
+    // Process based on current step
+    switch (step) {
+      case 'price_submitted':
+      case 'price_polling':
+        return this.processPricePollingStep(feedId, userEmail);
+
+      case 'price_verifying':
+        return this.processPriceVerificationStep(feedId, userEmail);
+
+      case 'quantity_submitted':
+      case 'quantity_polling':
+        return this.processQuantityPollingStep(feedId, userEmail);
+
+      case 'complete':
+        return {
+          feedId,
+          status: 'completed',
+          step: 'complete',
+          isComplete: true,
+          message: 'Two-phase sync completed successfully',
+          priceFeed: await this.getFeed(feedId),
+          quantityFeed: feed.quantity_feed_id ? await this.getFeed(feed.quantity_feed_id) : undefined,
+        };
+
+      case 'failed':
+        return {
+          feedId,
+          status: 'failed',
+          step: 'complete',
+          isComplete: true,
+          message: feed.error_message || 'Two-phase sync failed',
+          error: feed.error_message || undefined,
+          priceFeed: await this.getFeed(feedId),
+        };
+
+      default:
+        throw new Error(`Unknown two-phase step: ${step}`);
+    }
+  }
+
+  /**
+   * Process price feed polling step
+   */
+  private async processPricePollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    // Poll Amazon for price feed status
+    const feed = await this.pollFeedStatus(feedId);
+
+    if (feed.status === 'submitted' || feed.status === 'processing') {
+      // Still processing - continue polling
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'price_polling',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'price_processing',
+        step: 'price_polling',
+        isComplete: false,
+        message: 'Price feed still processing on Amazon',
+        priceFeed: feed,
+        nextPollDelay: 5000,
+      };
+    }
+
+    if (feed.status === 'error' || (feed.error_count ?? 0) > 0) {
+      // Price feed rejected
+      return this.failTwoPhaseSync(feedId, userEmail, feed.error_message || 'Price feed rejected by Amazon', 'price');
+    }
+
+    if (feed.status === 'done') {
+      // Price feed accepted - move to verification
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'price_verifying',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'price_verifying',
+        step: 'price_verification',
+        isComplete: false,
+        message: 'Price feed accepted, verifying price is live on Amazon',
+        priceFeed: feed,
+        nextPollDelay: 30000, // 30 seconds for verification
+      };
+    }
+
+    // Unexpected status
+    return this.failTwoPhaseSync(feedId, userEmail, `Unexpected feed status: ${feed.status}`);
+  }
+
+  /**
+   * Process price verification step
+   */
+  private async processPriceVerificationStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    const aggregatedItems = await this.getAggregatedQueueItems();
+
+    if (aggregatedItems.length === 0) {
+      // Queue was cleared - check if we should still verify
+      return this.failTwoPhaseSync(feedId, userEmail, 'Queue items no longer available for verification');
+    }
+
+    // Check if prices are live
     const credentials = await this.getAmazonCredentials();
     if (!credentials) {
-      throw new Error('No credentials');
+      return this.failTwoPhaseSync(feedId, userEmail, 'Amazon credentials not available');
     }
 
     const listingsClient = new AmazonListingsClient(credentials);
-    const startTime = Date.now();
+    let allVerified = true;
     const failedSkus: string[] = [];
 
-    while (Date.now() - startTime < timeout) {
-      let allVerified = true;
-      failedSkus.length = 0;
+    for (const item of aggregatedItems) {
+      try {
+        const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', ['offers']);
+        const offer = listing?.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
+        const livePrice = offer?.price?.amount;
 
-      for (const item of items) {
-        try {
-          const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
-            'offers',
-          ]);
-
-          const offer = listing?.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
-          const livePrice = offer?.price?.amount;
-
-          if (livePrice === undefined || Math.abs(livePrice - item.price) > 0.01) {
-            allVerified = false;
-            failedSkus.push(item.amazonSku);
-            console.log(
-              `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
-                `expected ${item.price}, got ${livePrice}`
-            );
-          }
-        } catch (error) {
-          // API error - treat as not verified
+        if (livePrice === undefined || Math.abs(livePrice - item.price) > 0.01) {
           allVerified = false;
           failedSkus.push(item.amazonSku);
-          console.error(`[AmazonSyncService] Error checking price for ${item.amazonSku}:`, error);
+          console.log(
+            `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
+              `expected ${item.price}, got ${livePrice}`
+          );
         }
+      } catch (error) {
+        allVerified = false;
+        failedSkus.push(item.amazonSku);
+        console.error(`[AmazonSyncService] Error checking price for ${item.amazonSku}:`, error);
       }
-
-      if (allVerified) {
-        return {
-          allVerified: true,
-          verifiedAt: new Date().toISOString(),
-          verificationDuration: Date.now() - startTime,
-          failedSkus: [],
-        };
-      }
-
-      console.log(
-        `[AmazonSyncService] Waiting for price verification... ` +
-          `(${Math.round((Date.now() - startTime) / 1000)}s elapsed)`
-      );
-      await this.delay(interval);
     }
 
+    if (!allVerified) {
+      // Still waiting - check if we've exceeded timeout
+      const feed = await this.getFeedWithTwoPhaseState(feedId);
+      const startedAt = feed?.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : Date.now();
+      const elapsed = Date.now() - startedAt;
+
+      if (elapsed > TWO_PHASE_DEFAULTS.priceVerificationTimeout) {
+        // Timeout - fail with verification error
+        return this.failTwoPhaseVerification(feedId, userEmail, failedSkus);
+      }
+
+      return {
+        feedId,
+        status: 'price_verifying',
+        step: 'price_verification',
+        isComplete: false,
+        message: `Waiting for price to appear on Amazon (${Math.round(elapsed / 1000)}s elapsed)`,
+        priceFeed: await this.getFeed(feedId),
+        nextPollDelay: 30000,
+      };
+    }
+
+    // All prices verified - submit quantity feed
+    console.log('[AmazonSyncService] Prices verified - submitting quantity feed');
+
+    const priceVerifiedAt = new Date().toISOString();
+    await this.updateFeedRecord(feedId, {
+      status: 'verified',
+      price_verified_at: priceVerifiedAt,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Submit quantity feed
+    const quantityFeed = await this.submitQuantityOnlyFeed(aggregatedItems, credentials, feedId);
+
+    // Update parent feed with quantity feed reference
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'quantity_submitted',
+      quantity_feed_id: quantityFeed.id,
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
     return {
-      allVerified: false,
-      failedSkus,
+      feedId,
+      status: 'quantity_submitted',
+      step: 'quantity_submission',
+      isComplete: false,
+      message: 'Quantity feed submitted to Amazon',
+      priceFeed: await this.getFeed(feedId),
+      quantityFeed,
+      priceVerifiedAt,
+      nextPollDelay: 5000,
     };
+  }
+
+  /**
+   * Process quantity feed polling step
+   */
+  private async processQuantityPollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+    const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
+    const quantityFeedId = priceFeed?.quantity_feed_id;
+
+    if (!quantityFeedId) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Quantity feed ID not found');
+    }
+
+    // Poll quantity feed status
+    const quantityFeed = await this.pollFeedStatus(quantityFeedId);
+
+    if (quantityFeed.status === 'submitted' || quantityFeed.status === 'processing') {
+      // Still processing
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'quantity_polling',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'quantity_processing',
+        step: 'quantity_polling',
+        isComplete: false,
+        message: 'Quantity feed still processing on Amazon',
+        priceFeed: await this.getFeed(feedId),
+        quantityFeed,
+        nextPollDelay: 5000,
+      };
+    }
+
+    if (quantityFeed.status === 'done') {
+      // SUCCESS - complete the two-phase sync
+      return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
+    }
+
+    // Quantity feed failed
+    return this.failTwoPhaseSync(
+      feedId,
+      userEmail,
+      quantityFeed.error_message || 'Quantity feed rejected by Amazon',
+      'quantity'
+    );
+  }
+
+  /**
+   * Complete a successful two-phase sync
+   */
+  private async completeTwoPhaseSync(
+    feedId: string,
+    userEmail: string,
+    quantityFeedId: string
+  ): Promise<TwoPhaseStepResult> {
+    const aggregatedItems = await this.getAggregatedQueueItems();
+
+    // Clear queue
+    await this.clearQueueForFeed(aggregatedItems);
+
+    // Update feed status
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'complete',
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send success notifications
+    const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
+    const startedAt = priceFeed?.two_phase_started_at ? new Date(priceFeed.two_phase_started_at).getTime() : Date.now();
+    const verificationDuration = Date.now() - startedAt;
+
+    const itemDetails = aggregatedItems.map((item) => ({
+      sku: item.amazonSku,
+      asin: item.asin,
+      setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
+      itemName: item.itemNames[0] ?? 'Unknown',
+      price: item.price,
+    }));
+
+    await emailService.sendTwoPhaseSuccess({
+      userEmail,
+      feedId,
+      itemCount: aggregatedItems.length,
+      priceVerificationTime: verificationDuration,
+      itemDetails,
+    });
+
+    await pushoverService.sendSyncSuccess({
+      feedId,
+      itemCount: aggregatedItems.length,
+      verificationTime: verificationDuration,
+    });
+
+    return {
+      feedId,
+      status: 'completed',
+      step: 'complete',
+      isComplete: true,
+      message: 'Two-phase sync completed successfully! Notifications sent.',
+      priceFeed: await this.getFeed(feedId),
+      quantityFeed: await this.getFeed(quantityFeedId),
+    };
+  }
+
+  /**
+   * Fail a two-phase sync with notifications
+   */
+  private async failTwoPhaseSync(
+    feedId: string,
+    userEmail: string,
+    reason: string,
+    phase?: 'price' | 'quantity'
+  ): Promise<TwoPhaseStepResult> {
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'failed',
+      status: 'error',
+      error_message: reason,
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send failure notifications
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    const itemDetails = this.buildItemDetails(aggregatedItems);
+
+    if (phase) {
+      await emailService.sendFeedRejectionFailure({
+        userEmail,
+        feedId,
+        phase,
+        errorMessage: reason,
+        itemDetails,
+      });
+    }
+
+    await pushoverService.sendSyncFailure({
+      feedId,
+      itemCount: aggregatedItems.length,
+      reason,
+      phase: phase === 'price' ? 'price_rejected' : phase === 'quantity' ? 'quantity_rejected' : 'price_verification',
+    });
+
+    return {
+      feedId,
+      status: 'failed',
+      step: 'complete',
+      isComplete: true,
+      message: `Two-phase sync failed: ${reason}`,
+      error: reason,
+      priceFeed: await this.getFeed(feedId),
+    };
+  }
+
+  /**
+   * Fail specifically due to price verification timeout
+   */
+  private async failTwoPhaseVerification(
+    feedId: string,
+    userEmail: string,
+    failedSkus: string[]
+  ): Promise<TwoPhaseStepResult> {
+    const reason = `Price verification failed for: ${failedSkus.join(', ')}`;
+
+    await this.updateFeedRecord(feedId, {
+      two_phase_step: 'failed',
+      status: 'verification_failed',
+      error_message: reason,
+      completed_at: new Date().toISOString(),
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Send failure notifications
+    const aggregatedItems = await this.getAggregatedQueueItems();
+    const itemDetails = this.buildItemDetails(aggregatedItems);
+
+    await emailService.sendTwoPhaseFailure({
+      userEmail,
+      feedId,
+      failedSkus,
+      submittedPrice: aggregatedItems[0]?.price ?? 0,
+      verificationDuration: TWO_PHASE_DEFAULTS.priceVerificationTimeout,
+      itemDetails,
+    });
+
+    await pushoverService.sendSyncFailure({
+      feedId,
+      itemCount: failedSkus.length,
+      reason: `Price not visible after ${TWO_PHASE_DEFAULTS.priceVerificationTimeout / 60000} mins`,
+      phase: 'price_verification',
+    });
+
+    return {
+      feedId,
+      status: 'failed',
+      step: 'complete',
+      isComplete: true,
+      message: `Price verification timeout: ${reason}`,
+      error: reason,
+      priceFeed: await this.getFeed(feedId),
+    };
+  }
+
+  /**
+   * Get feed with two-phase state columns
+   */
+  private async getFeedWithTwoPhaseState(feedId: string) {
+    const { data, error } = await this.supabase
+      .from('amazon_sync_feeds')
+      .select('*')
+      .eq('id', feedId)
+      .eq('user_id', this.userId)
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to get feed: ${error.message}`);
+    }
+
+    return data;
   }
 
   /**
@@ -1547,7 +1773,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('user_id', this.userId)
       .eq('status', 'done_verifying')
@@ -1571,7 +1797,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('user_id', this.userId)
       .order('created_at', { ascending: false })
@@ -1658,7 +1884,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, two_phase_last_poll_at, two_phase_poll_count, two_phase_started_at, two_phase_step, two_phase_user_email'
       )
       .eq('id', feedId)
       .eq('user_id', this.userId)

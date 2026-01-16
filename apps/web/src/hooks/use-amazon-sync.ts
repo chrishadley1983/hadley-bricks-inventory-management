@@ -7,6 +7,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useCallback } from 'react';
 import type {
   QueueItemWithDetails,
   AggregatedQueueItem,
@@ -16,11 +17,12 @@ import type {
   PriceConflict,
   SyncMode,
   TwoPhaseResult,
+  TwoPhaseStepResult,
 } from '@/lib/amazon/amazon-sync.types';
 
 // Re-export types and constants
 export { POLL_INTERVAL_MS, TWO_PHASE_DEFAULTS } from '@/lib/amazon/amazon-sync.types';
-export type { PriceConflict, SyncMode, TwoPhaseResult } from '@/lib/amazon/amazon-sync.types';
+export type { PriceConflict, SyncMode, TwoPhaseResult, TwoPhaseStepResult } from '@/lib/amazon/amazon-sync.types';
 
 // ============================================================================
 // TYPES
@@ -191,6 +193,25 @@ async function pollFeed(feedId: string): Promise<PollFeedResponse> {
 
   const json = await response.json();
   return { ...json.data, message: json.message };
+}
+
+/**
+ * Process the next step of a two-phase sync
+ */
+async function processTwoPhaseStep(feedId: string): Promise<TwoPhaseStepResult> {
+  const response = await fetch('/api/amazon/sync/two-phase/process', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to process two-phase step');
+  }
+
+  const json = await response.json();
+  return json.data;
 }
 
 // ============================================================================
@@ -367,6 +388,142 @@ export function usePollSyncFeed() {
       console.error('[usePollSyncFeed] Error:', error);
     },
   });
+}
+
+/**
+ * Process a step of two-phase sync
+ */
+export function useProcessTwoPhaseStep() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (feedId: string) => processTwoPhaseStep(feedId),
+    onSuccess: (data) => {
+      // Update feeds in cache
+      if (data.priceFeed) {
+        queryClient.setQueryData(amazonSyncKeys.feed(data.priceFeed.id), data.priceFeed);
+      }
+      if (data.quantityFeed) {
+        queryClient.setQueryData(amazonSyncKeys.feed(data.quantityFeed.id), data.quantityFeed);
+      }
+
+      // Invalidate feed history
+      queryClient.invalidateQueries({ queryKey: amazonSyncKeys.feeds() });
+
+      // If complete, also invalidate queue
+      if (data.isComplete) {
+        queryClient.invalidateQueries({ queryKey: amazonSyncKeys.queue() });
+      }
+    },
+    onError: (error) => {
+      console.error('[useProcessTwoPhaseStep] Error:', error);
+    },
+  });
+}
+
+/**
+ * Automatically poll two-phase sync progress
+ *
+ * This hook automatically polls the two-phase sync API at the recommended interval
+ * until processing is complete. You can safely navigate away - the sync continues
+ * server-side and you'll receive notifications when done.
+ *
+ * @param feedId - The price feed ID to track
+ * @param options - Configuration options
+ * @returns Current sync state and control functions
+ */
+export function useTwoPhaseSync(
+  feedId: string | null,
+  options?: {
+    /** Whether to start polling immediately (default: true) */
+    enabled?: boolean;
+    /** Callback when sync completes */
+    onComplete?: (result: TwoPhaseStepResult) => void;
+    /** Callback when sync fails */
+    onError?: (error: Error) => void;
+  }
+) {
+  const queryClient = useQueryClient();
+  const processStep = useProcessTwoPhaseStep();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastResultRef = useRef<TwoPhaseStepResult | null>(null);
+
+  const { enabled = true, onComplete, onError } = options ?? {};
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for updates
+  const poll = useCallback(async () => {
+    if (!feedId) return;
+
+    try {
+      const result = await processTwoPhaseStep(feedId);
+      lastResultRef.current = result;
+
+      // Update caches
+      if (result.priceFeed) {
+        queryClient.setQueryData(amazonSyncKeys.feed(result.priceFeed.id), result.priceFeed);
+      }
+      if (result.quantityFeed) {
+        queryClient.setQueryData(amazonSyncKeys.feed(result.quantityFeed.id), result.quantityFeed);
+      }
+      queryClient.invalidateQueries({ queryKey: amazonSyncKeys.feeds() });
+
+      if (result.isComplete) {
+        // Done - stop polling
+        queryClient.invalidateQueries({ queryKey: amazonSyncKeys.queue() });
+        onComplete?.(result);
+      } else {
+        // Schedule next poll
+        const delay = result.nextPollDelay ?? 5000;
+        timerRef.current = setTimeout(poll, delay);
+      }
+    } catch (error) {
+      console.error('[useTwoPhaseSync] Poll error:', error);
+      onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  }, [feedId, queryClient, onComplete, onError]);
+
+  // Start polling when enabled and feedId is set
+  useEffect(() => {
+    if (enabled && feedId && !processStep.isPending) {
+      // Start polling immediately
+      poll();
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [enabled, feedId, poll, processStep.isPending]);
+
+  // Stop polling function
+  const stop = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  return {
+    /** Current sync result (null until first poll completes) */
+    result: lastResultRef.current,
+    /** Whether a poll is currently in progress */
+    isPending: processStep.isPending,
+    /** Stop automatic polling (sync continues server-side) */
+    stop,
+    /** Manually trigger a poll */
+    poll,
+  };
 }
 
 // ============================================================================

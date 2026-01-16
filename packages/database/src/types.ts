@@ -499,6 +499,7 @@ export type Database = {
           phase: string | null
           poll_count: number | null
           price_verified_at: string | null
+          quantity_feed_id: string | null
           request_payload: Json | null
           response_payload: Json | null
           result_payload: Json | null
@@ -507,6 +508,11 @@ export type Database = {
           success_count: number | null
           sync_mode: string | null
           total_items: number
+          two_phase_last_poll_at: string | null
+          two_phase_poll_count: number | null
+          two_phase_started_at: string | null
+          two_phase_step: string | null
+          two_phase_user_email: string | null
           updated_at: string
           user_id: string
           verification_attempts: number | null
@@ -533,6 +539,7 @@ export type Database = {
           phase?: string | null
           poll_count?: number | null
           price_verified_at?: string | null
+          quantity_feed_id?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           result_payload?: Json | null
@@ -541,6 +548,11 @@ export type Database = {
           success_count?: number | null
           sync_mode?: string | null
           total_items?: number
+          two_phase_last_poll_at?: string | null
+          two_phase_poll_count?: number | null
+          two_phase_started_at?: string | null
+          two_phase_step?: string | null
+          two_phase_user_email?: string | null
           updated_at?: string
           user_id: string
           verification_attempts?: number | null
@@ -567,6 +579,7 @@ export type Database = {
           phase?: string | null
           poll_count?: number | null
           price_verified_at?: string | null
+          quantity_feed_id?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           result_payload?: Json | null
@@ -575,6 +588,11 @@ export type Database = {
           success_count?: number | null
           sync_mode?: string | null
           total_items?: number
+          two_phase_last_poll_at?: string | null
+          two_phase_poll_count?: number | null
+          two_phase_started_at?: string | null
+          two_phase_step?: string | null
+          two_phase_user_email?: string | null
           updated_at?: string
           user_id?: string
           verification_attempts?: number | null
@@ -586,6 +604,13 @@ export type Database = {
           {
             foreignKeyName: "amazon_sync_feeds_parent_feed_id_fkey"
             columns: ["parent_feed_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_sync_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_feeds_quantity_feed_id_fkey"
+            columns: ["quantity_feed_id"]
             isOneToOne: false
             referencedRelation: "amazon_sync_feeds"
             referencedColumns: ["id"]

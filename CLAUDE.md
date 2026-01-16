@@ -160,6 +160,10 @@ This project uses a suite of development agents for consistent, high-quality wor
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
+| `/define-done` | Define Done Agent | Define success criteria |
+| `/feature-spec` | Feature Spec Agent | Create implementation plan |
+| `/build-feature` | Build Feature Agent | Autonomous build-verify loop |
+| `/verify-done` | Verify Done Agent | Adversarial verification |
 | `/test-plan` | Test Plan Agent | Analyse coverage gaps |
 | `/test-build` | Test Build Agent | Generate tests for gaps |
 | `/test-execute` | Test Execution Agent | Run tests and report |
@@ -184,13 +188,27 @@ This project uses a suite of development agents for consistent, high-quality wor
 
 **When adding features:**
 ```powershell
+/define-done <feature-name>  # Define success criteria first
 /test-plan analyze           # Find coverage gaps
 /test-build feature:<n>      # Generate tests
 /test-execute feature:<n>    # Verify tests
 ```
 
+**Autonomous feature development:**
+```powershell
+/define-done <feature>       # Define machine-verifiable success criteria
+/feature-spec <feature>      # [Optional] Create implementation plan
+/build-feature <feature>     # Autonomous build-verify loop
+```
+
+The Build Feature Agent runs autonomously until all AUTO_VERIFY criteria pass (CONVERGED), or it escalates to human review (ESCALATED/BLOCKED).
+
 ### Agent Documentation
 
+- Define Done Agent: `docs/agents/define-done/spec.md`
+- Feature Spec Agent: `docs/agents/feature-spec/spec.md`
+- Build Feature Agent: `docs/agents/build-feature/spec.md`
+- Verify Done Agent: `docs/agents/verify-done/spec.md`
 - Test Plan Agent: `docs/testing/test-plan-agent.md`
 - Test Build Agent: `docs/testing/test-build-agent.md`
 - Test Execution Agent: `docs/testing/test-execution-agent.md`
@@ -747,6 +765,11 @@ EBAY_CLIENT_ID=              # eBay App ID (Client ID)
 EBAY_CLIENT_SECRET=          # eBay Cert ID (Client Secret)
 EBAY_REDIRECT_URI=           # OAuth callback URL (e.g., http://localhost:3000/api/integrations/ebay/callback)
 EBAY_SANDBOX=false           # Set to 'true' for sandbox testing
+
+# Notifications (optional - for two-phase Amazon sync)
+RESEND_API_KEY=              # Resend API key for email notifications
+PUSHOVER_USER_KEY=           # Pushover user key for push notifications
+PUSHOVER_API_TOKEN=          # Pushover application token
 
 # Platform credentials stored encrypted in platform_credentials table
 ```
