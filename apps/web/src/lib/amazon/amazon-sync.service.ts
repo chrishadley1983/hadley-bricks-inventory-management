@@ -1547,7 +1547,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
       )
       .eq('user_id', this.userId)
       .eq('status', 'done_verifying')
@@ -1571,7 +1571,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
       )
       .eq('user_id', this.userId)
       .order('created_at', { ascending: false })
@@ -1658,7 +1658,7 @@ export class AmazonSyncService {
     const { data, error } = await this.supabase
       .from('amazon_sync_feeds')
       .select(
-        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at'
+        'id, user_id, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, submitted_at, last_poll_at, poll_count, completed_at, error_message, error_details, created_at, updated_at, verification_started_at, verification_completed_at, verification_attempts, last_verification_at, sync_mode, phase, parent_feed_id, price_verified_at'
       )
       .eq('id', feedId)
       .eq('user_id', this.userId)

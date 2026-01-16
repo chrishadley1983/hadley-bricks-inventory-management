@@ -377,7 +377,10 @@ export type Database = {
           id: string
           inventory_item_ids: string[]
           is_new_sku: boolean | null
+          phase: string | null
+          price_feed_id: string | null
           price_verified: boolean | null
+          quantity_feed_id: string | null
           quantity_verified: boolean | null
           status: string
           submitted_price: number
@@ -402,7 +405,10 @@ export type Database = {
           id?: string
           inventory_item_ids?: string[]
           is_new_sku?: boolean | null
+          phase?: string | null
+          price_feed_id?: string | null
           price_verified?: boolean | null
+          quantity_feed_id?: string | null
           quantity_verified?: boolean | null
           status?: string
           submitted_price: number
@@ -427,7 +433,10 @@ export type Database = {
           id?: string
           inventory_item_ids?: string[]
           is_new_sku?: boolean | null
+          phase?: string | null
+          price_feed_id?: string | null
           price_verified?: boolean | null
+          quantity_feed_id?: string | null
           quantity_verified?: boolean | null
           status?: string
           submitted_price?: number
@@ -443,6 +452,20 @@ export type Database = {
           {
             foreignKeyName: "amazon_sync_feed_items_feed_id_fkey"
             columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_sync_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_feed_items_price_feed_id_fkey"
+            columns: ["price_feed_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_sync_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amazon_sync_feed_items_quantity_feed_id_fkey"
+            columns: ["quantity_feed_id"]
             isOneToOne: false
             referencedRelation: "amazon_sync_feeds"
             referencedColumns: ["id"]
@@ -472,13 +495,17 @@ export type Database = {
           last_poll_at: string | null
           last_verification_at: string | null
           marketplace_id: string
+          parent_feed_id: string | null
+          phase: string | null
           poll_count: number | null
+          price_verified_at: string | null
           request_payload: Json | null
           response_payload: Json | null
           result_payload: Json | null
           status: string
           submitted_at: string | null
           success_count: number | null
+          sync_mode: string | null
           total_items: number
           updated_at: string
           user_id: string
@@ -502,13 +529,17 @@ export type Database = {
           last_poll_at?: string | null
           last_verification_at?: string | null
           marketplace_id?: string
+          parent_feed_id?: string | null
+          phase?: string | null
           poll_count?: number | null
+          price_verified_at?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           result_payload?: Json | null
           status?: string
           submitted_at?: string | null
           success_count?: number | null
+          sync_mode?: string | null
           total_items?: number
           updated_at?: string
           user_id: string
@@ -532,13 +563,17 @@ export type Database = {
           last_poll_at?: string | null
           last_verification_at?: string | null
           marketplace_id?: string
+          parent_feed_id?: string | null
+          phase?: string | null
           poll_count?: number | null
+          price_verified_at?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           result_payload?: Json | null
           status?: string
           submitted_at?: string | null
           success_count?: number | null
+          sync_mode?: string | null
           total_items?: number
           updated_at?: string
           user_id?: string
@@ -548,6 +583,13 @@ export type Database = {
           warning_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "amazon_sync_feeds_parent_feed_id_fkey"
+            columns: ["parent_feed_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_sync_feeds"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "amazon_sync_feeds_user_id_fkey"
             columns: ["user_id"]
