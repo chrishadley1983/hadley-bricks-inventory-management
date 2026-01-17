@@ -29,6 +29,9 @@ import type {
   AddItemResponse,
   TradingApiFee,
   ShippingServiceOption,
+  ReviseItemRequest,
+  ReviseItemResult,
+  ReviseItemResponse,
 } from './types';
 import type { ListingStatus } from '../types';
 
@@ -277,6 +280,73 @@ export class EbayTradingClient {
       if (error instanceof EbayTradingApiError) {
         return {
           success: false,
+          errorCode: error.errorCode,
+          errorMessage: error.message,
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Revise an existing fixed-price listing
+   *
+   * @see https://developer.ebay.com/Devzone/XML/docs/Reference/eBay/ReviseFixedPriceItem.html
+   */
+  async reviseFixedPriceItem(request: ReviseItemRequest): Promise<ReviseItemResult> {
+    // Validate required itemId
+    if (!request.itemId?.trim()) {
+      return {
+        success: false,
+        itemId: request.itemId ?? '',
+        errorMessage: 'itemId is required and cannot be empty',
+      };
+    }
+
+    const requestXml = this.buildReviseItemRequest(request);
+
+    try {
+      const response = await this.executeGenericRequest<ReviseItemResponse>(
+        'ReviseFixedPriceItem',
+        requestXml
+      );
+
+      const apiResponse = response.ReviseFixedPriceItemResponse;
+      if (!apiResponse) {
+        throw new EbayTradingApiError('Invalid API response: missing ReviseFixedPriceItemResponse');
+      }
+
+      // Extract warnings if any
+      const warnings = this.extractWarnings(apiResponse.Errors);
+
+      // Check for errors
+      if (apiResponse.Ack === 'Failure') {
+        const errors = this.extractErrors(apiResponse.Errors);
+        return {
+          success: false,
+          itemId: request.itemId,
+          errorCode: errors[0]?.ErrorCode,
+          errorMessage: errors.map((e) => e.LongMessage || e.ShortMessage).join('; '),
+          warnings: warnings.length > 0 ? warnings : undefined,
+        };
+      }
+
+      // Parse fees
+      const fees = this.parseFees(apiResponse.Fees?.Fee);
+
+      return {
+        success: true,
+        itemId: apiResponse.ItemID || request.itemId,
+        startTime: apiResponse.StartTime,
+        endTime: apiResponse.EndTime,
+        fees,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      };
+    } catch (error) {
+      if (error instanceof EbayTradingApiError) {
+        return {
+          success: false,
+          itemId: request.itemId,
           errorCode: error.errorCode,
           errorMessage: error.message,
         };
@@ -749,6 +819,67 @@ export class EbayTradingClient {
     };
 
     return '<?xml version="1.0" encoding="utf-8"?>\n' + this.xmlBuilder.build(request);
+  }
+
+  /**
+   * Build XML request for ReviseFixedPriceItem
+   */
+  private buildReviseItemRequest(request: ReviseItemRequest): string {
+    const itemNode: Record<string, unknown> = {
+      ItemID: request.itemId,
+    };
+
+    // Only include fields that are being updated
+    if (request.title !== undefined) {
+      itemNode.Title = request.title;
+    }
+
+    if (request.description !== undefined) {
+      itemNode.Description = { '#text': request.description };
+    }
+
+    if (request.startPrice !== undefined) {
+      itemNode.StartPrice = {
+        '@_currencyID': 'GBP',
+        '#text': String(request.startPrice),
+      };
+    }
+
+    if (request.quantity !== undefined) {
+      itemNode.Quantity = String(request.quantity);
+    }
+
+    if (request.conditionId !== undefined) {
+      itemNode.ConditionID = String(request.conditionId);
+    }
+
+    if (request.conditionDescription !== undefined) {
+      itemNode.ConditionDescription = request.conditionDescription;
+    }
+
+    if (request.pictureUrls !== undefined && request.pictureUrls.length > 0) {
+      itemNode.PictureDetails = {
+        PictureURL: request.pictureUrls,
+      };
+    }
+
+    if (request.itemSpecifics !== undefined && request.itemSpecifics.length > 0) {
+      itemNode.ItemSpecifics = {
+        NameValueList: request.itemSpecifics.map((spec) => ({
+          Name: spec.name,
+          Value: spec.value,
+        })),
+      };
+    }
+
+    const xmlRequest = {
+      ReviseFixedPriceItemRequest: {
+        '@_xmlns': 'urn:ebay:apis:eBLBaseComponents',
+        Item: itemNode,
+      },
+    };
+
+    return '<?xml version="1.0" encoding="utf-8"?>\n' + this.xmlBuilder.build(xmlRequest);
   }
 
   // ============================================================================

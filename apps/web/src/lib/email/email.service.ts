@@ -51,7 +51,7 @@ export interface TwoPhaseSuccessParams {
 }
 
 export class EmailService {
-  private defaultFrom = 'Hadley Bricks <notifications@hadleybricks.com>';
+  private defaultFrom = 'Hadley Bricks <onboarding@resend.dev>';
   private enabled: boolean;
 
   constructor() {

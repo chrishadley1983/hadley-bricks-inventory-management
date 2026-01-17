@@ -639,3 +639,51 @@ export interface TradingApiNameValue {
   Name: string;
   Value: string | string[];
 }
+
+// ============================================================================
+// REVISE ITEM TYPES
+// ============================================================================
+
+/**
+ * Request data for revising an existing listing
+ * All fields are optional - only provided fields will be updated
+ */
+export interface ReviseItemRequest {
+  itemId: string;
+  title?: string;
+  description?: string;
+  startPrice?: number;
+  quantity?: number;
+  conditionId?: number;
+  conditionDescription?: string;
+  itemSpecifics?: Array<{ name: string; value: string }>;
+  pictureUrls?: string[];
+}
+
+/**
+ * Result from ReviseFixedPriceItem call
+ */
+export interface ReviseItemResult {
+  success: boolean;
+  itemId: string;
+  startTime?: string;
+  endTime?: string;
+  fees?: EbayFee[];
+  errorCode?: string;
+  errorMessage?: string;
+  warnings?: string[];
+}
+
+/**
+ * ReviseFixedPriceItem API Response
+ */
+export interface ReviseItemResponse {
+  ReviseFixedPriceItemResponse: TradingApiResponse & {
+    ItemID?: string;
+    StartTime?: string;
+    EndTime?: string;
+    Fees?: {
+      Fee?: TradingApiFee | TradingApiFee[];
+    };
+  };
+}

@@ -1091,7 +1091,28 @@ export class AmazonSyncService {
     userEmail: string,
     quantityFeedId: string
   ): Promise<TwoPhaseStepResult> {
-    const aggregatedItems = await this.getAggregatedQueueItems();
+    // Get items from queue, with fallback to feed items
+    let aggregatedItems = await this.getAggregatedQueueItems();
+
+    // Fallback: If queue is empty, reconstruct from feed items
+    if (aggregatedItems.length === 0) {
+      console.log('[AmazonSyncService] Queue empty in completeTwoPhaseSync - reconstructing from feed items');
+      const feedItems = await this.getFeedItems(feedId);
+
+      aggregatedItems = feedItems.map((item) => ({
+        asin: item.asin,
+        amazonSku: item.amazon_sku,
+        price: Number(item.submitted_price),
+        queueQuantity: item.submitted_quantity,
+        existingAmazonQuantity: 0,
+        totalQuantity: item.submitted_quantity,
+        inventoryItemIds: item.inventory_item_ids,
+        queueItemIds: [],
+        itemNames: [],
+        productType: DEFAULT_PRODUCT_TYPE,
+        isNewSku: item.is_new_sku ?? false,
+      }));
+    }
 
     // Clear queue
     await this.clearQueueForFeed(aggregatedItems);
@@ -1107,13 +1128,36 @@ export class AmazonSyncService {
     const startedAt = priceFeed?.two_phase_started_at ? new Date(priceFeed.two_phase_started_at).getTime() : Date.now();
     const verificationDuration = Date.now() - startedAt;
 
-    const itemDetails = aggregatedItems.map((item) => ({
-      sku: item.amazonSku,
-      asin: item.asin,
-      setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
-      itemName: item.itemNames[0] ?? 'Unknown',
-      price: item.price,
-    }));
+    // Get item details - try to enrich with inventory data
+    const allInventoryIds = aggregatedItems.flatMap((item) => item.inventoryItemIds);
+    let inventoryMap = new Map<string, { set_number: string; item_name: string | null }>();
+
+    if (allInventoryIds.length > 0) {
+      const { data: inventoryItems } = await this.supabase
+        .from('inventory_items')
+        .select('id, set_number, item_name')
+        .in('id', allInventoryIds);
+
+      if (inventoryItems) {
+        inventoryMap = new Map(
+          inventoryItems.map((inv) => [inv.id, { set_number: inv.set_number, item_name: inv.item_name }])
+        );
+      }
+    }
+
+    const itemDetails = aggregatedItems.map((item) => {
+      // Try to get item name from inventory
+      const firstInvId = item.inventoryItemIds[0];
+      const inv = firstInvId ? inventoryMap.get(firstInvId) : undefined;
+
+      return {
+        sku: item.amazonSku,
+        asin: item.asin,
+        setNumber: inv?.set_number ?? item.asin,
+        itemName: inv?.item_name ?? item.itemNames[0] ?? 'Unknown',
+        price: item.price,
+      };
+    });
 
     await emailService.sendTwoPhaseSuccess({
       userEmail,
@@ -1564,9 +1608,9 @@ export class AmazonSyncService {
       }
 
       // Clear queue items for successful/accepted submissions
-      // IMPORTANT: Don't clear for two-phase sync price phase - we need items for quantity phase
-      const isTwoPhasePriceFeed = feed.sync_mode === 'two_phase' && feed.phase === 'price';
-      if (!isTwoPhasePriceFeed) {
+      // IMPORTANT: Don't clear for two-phase sync feeds - completeTwoPhaseSync handles this
+      const isTwoPhaseFeed = feed.sync_mode === 'two_phase';
+      if (!isTwoPhaseFeed) {
         const aggregated = await this.getAggregatedQueueItems();
         const successfulAsins = items
           .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
@@ -1576,7 +1620,7 @@ export class AmazonSyncService {
         );
         await this.clearQueueForFeed(successfulAggregated);
       } else {
-        console.log('[AmazonSyncService] Skipping queue clear for two-phase price feed - items needed for quantity phase');
+        console.log('[AmazonSyncService] Skipping queue clear for two-phase feed - completeTwoPhaseSync handles this');
       }
     } else if (status.processingStatus === 'IN_PROGRESS') {
       updates.status = 'processing';

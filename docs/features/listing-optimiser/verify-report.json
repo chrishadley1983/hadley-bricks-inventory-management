@@ -1,0 +1,168 @@
+{
+  "feature": "listing-optimiser",
+  "date": "2026-01-17",
+  "verifier": "Verify Done Agent",
+  "result": "PASSED",
+  "summary": {
+    "total_criteria": 48,
+    "passed": 48,
+    "failed": 0,
+    "pass_rate": "100%"
+  },
+  "categories": {
+    "core_ui": {
+      "criteria_count": 7,
+      "passed": 7,
+      "failed": 0,
+      "criteria": [
+        { "id": "F1", "name": "Listings Page Exists", "result": "PASS" },
+        { "id": "F2", "name": "Listings Table Columns", "result": "PASS" },
+        { "id": "F3", "name": "Filter Functionality", "result": "PASS" },
+        { "id": "F4", "name": "Sort Functionality", "result": "PASS" },
+        { "id": "F5", "name": "Multi-Select", "result": "PASS" },
+        { "id": "F6", "name": "Analyse Button State", "result": "PASS" },
+        { "id": "F7", "name": "Empty Selection Error", "result": "PASS" }
+      ]
+    },
+    "analysis": {
+      "criteria_count": 6,
+      "passed": 6,
+      "failed": 0,
+      "criteria": [
+        { "id": "A1", "name": "Fetch Listing Data", "result": "PASS" },
+        { "id": "A2", "name": "AI Model", "result": "PASS" },
+        { "id": "A3", "name": "Scoring Categories", "result": "PASS" },
+        { "id": "A4", "name": "Specification Alignment", "result": "PASS" },
+        { "id": "A5", "name": "Overall Score and Grade", "result": "PASS" },
+        { "id": "A6", "name": "Improvement Suggestions", "result": "PASS" }
+      ]
+    },
+    "suggestions_display": {
+      "criteria_count": 4,
+      "passed": 4,
+      "failed": 0,
+      "criteria": [
+        { "id": "S1", "name": "Title Suggestion Format", "result": "PASS" },
+        { "id": "S2", "name": "Side-by-Side View", "result": "PASS" },
+        { "id": "S3", "name": "Approval Buttons", "result": "PASS" },
+        { "id": "S4", "name": "One-by-One Approval", "result": "PASS" }
+      ]
+    },
+    "pricing_analysis": {
+      "criteria_count": 7,
+      "passed": 7,
+      "failed": 0,
+      "criteria": [
+        { "id": "PR1", "name": "Competitor Data", "result": "PASS" },
+        { "id": "PR2", "name": "Sold Data", "result": "PASS" },
+        { "id": "PR3", "name": "Pricing Display", "result": "PASS" },
+        { "id": "PR4", "name": "Profit Estimate", "result": "PASS" },
+        { "id": "PR5", "name": "Profit Margin", "result": "PASS" },
+        { "id": "PR6", "name": "Cost Source", "result": "PASS" },
+        { "id": "PR7", "name": "No Cost Fallback", "result": "PASS" }
+      ]
+    },
+    "apply_changes": {
+      "criteria_count": 4,
+      "passed": 4,
+      "failed": 0,
+      "criteria": [
+        { "id": "AP1", "name": "ReviseItem API", "result": "PASS" },
+        { "id": "AP2", "name": "Success Confirmation", "result": "PASS" },
+        { "id": "AP3", "name": "Auto Re-Analysis", "result": "PASS" },
+        { "id": "AP4", "name": "Score Comparison", "result": "PASS" }
+      ]
+    },
+    "dashboard_summary": {
+      "criteria_count": 5,
+      "passed": 5,
+      "failed": 0,
+      "criteria": [
+        { "id": "D1", "name": "Total Listings Count", "result": "PASS" },
+        { "id": "D2", "name": "Reviewed Count", "result": "PASS" },
+        { "id": "D3", "name": "Average Score", "result": "PASS" },
+        { "id": "D4", "name": "Low Score Count", "result": "PASS" },
+        { "id": "D5", "name": "Dynamic Updates", "result": "PASS" }
+      ]
+    },
+    "data_persistence": {
+      "criteria_count": 5,
+      "passed": 5,
+      "failed": 0,
+      "criteria": [
+        { "id": "DP1", "name": "Last Reviewed Timestamp", "result": "PASS" },
+        { "id": "DP2", "name": "Last Updated Timestamp", "result": "PASS" },
+        { "id": "DP3", "name": "Quality Score Storage", "result": "PASS" },
+        { "id": "DP4", "name": "Quality Grade Storage", "result": "PASS" },
+        { "id": "DP5", "name": "Historical Reviews Table", "result": "PASS" }
+      ]
+    },
+    "error_handling": {
+      "criteria_count": 4,
+      "passed": 4,
+      "failed": 0,
+      "criteria": [
+        { "id": "E1", "name": "Listing Fetch Error", "result": "PASS" },
+        { "id": "E2", "name": "ReviseItem Error", "result": "PASS" },
+        { "id": "E3", "name": "AI Analysis Error", "result": "PASS" },
+        { "id": "E4", "name": "Pricing API Error", "result": "PASS" }
+      ]
+    },
+    "performance": {
+      "criteria_count": 3,
+      "passed": 3,
+      "failed": 0,
+      "criteria": [
+        { "id": "P1", "name": "Listing Fetch Speed", "result": "PASS" },
+        { "id": "P2", "name": "Analysis Speed", "result": "PASS" },
+        { "id": "P3", "name": "Apply Changes Speed", "result": "PASS" }
+      ]
+    },
+    "integration": {
+      "criteria_count": 3,
+      "passed": 3,
+      "failed": 0,
+      "criteria": [
+        { "id": "I1", "name": "Existing eBay Auth", "result": "PASS" },
+        { "id": "I2", "name": "Connection Required", "result": "PASS" },
+        { "id": "I3", "name": "Inventory Linking", "result": "PASS" }
+      ]
+    }
+  },
+  "code_quality": {
+    "typescript": {
+      "status": "PASS",
+      "command": "npm run typecheck",
+      "errors": 0
+    },
+    "eslint": {
+      "status": "PASS",
+      "command": "npx eslint <files>",
+      "errors": 0,
+      "warnings": 2
+    }
+  },
+  "database": {
+    "migration_applied": true,
+    "migration_name": "20260124000001_listing_optimiser",
+    "tables_created": ["listing_quality_reviews"],
+    "columns_added": ["last_reviewed_at", "last_updated_at", "quality_score", "quality_grade"]
+  },
+  "files_created": [
+    "supabase/migrations/20260124000001_listing_optimiser.sql",
+    "apps/web/src/lib/ebay/listing-optimiser.service.ts",
+    "apps/web/src/lib/ai/prompts/analyse-listing.ts",
+    "apps/web/src/app/api/listing-optimiser/route.ts",
+    "apps/web/src/app/api/listing-optimiser/analyse/route.ts",
+    "apps/web/src/app/api/listing-optimiser/apply/route.ts",
+    "apps/web/src/app/api/listing-optimiser/[itemId]/route.ts",
+    "apps/web/src/components/features/listing-optimiser/OptimiserFilters.tsx",
+    "apps/web/src/components/features/listing-optimiser/OptimiserTable.tsx",
+    "apps/web/src/components/features/listing-optimiser/AnalysisPanel.tsx",
+    "apps/web/src/components/features/listing-optimiser/types.ts",
+    "apps/web/src/components/features/listing-optimiser/index.ts",
+    "apps/web/src/hooks/useListingOptimiser.ts",
+    "apps/web/src/app/(dashboard)/listing-optimiser/page.tsx",
+    "apps/web/src/app/(dashboard)/listing-optimiser/loading.tsx"
+  ]
+}
