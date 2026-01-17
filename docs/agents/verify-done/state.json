@@ -1,0 +1,23 @@
+{
+  "agent": "verify-done",
+  "lastRun": null,
+  "lastCommit": null,
+  "status": "never_run",
+  "verificationCount": 0,
+  "recentVerifications": [],
+  "commonFailures": [],
+  "verificationMethods": {
+    "domCheck": "Playwright locator query for element existence",
+    "apiCheck": "HTTP request with response validation",
+    "fileCheck": "Download event capture + content parsing",
+    "performanceCheck": "Timed execution measurement",
+    "consoleCheck": "Browser console listener for errors",
+    "toastCheck": "Wait for toast/alert element appearance"
+  },
+  "verdictDefinitions": {
+    "CONVERGED": "All AUTO_VERIFY criteria pass with evidence",
+    "FAILED": "One or more AUTO_VERIFY criteria not met",
+    "BLOCKED": "Cannot verify - app not running, missing deps, etc.",
+    "PARTIAL": "Some pass, some unverifiable"
+  }
+}

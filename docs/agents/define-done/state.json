@@ -1,0 +1,89 @@
+{
+  "agent": "define-done",
+  "lastRun": "2026-01-17T12:00:00Z",
+  "lastCommit": null,
+  "status": "success",
+  "featuresDefinedCount": 1,
+  "averageCriteriaPerFeature": 42,
+  "recentFeatures": [
+    {
+      "name": "listing-optimiser",
+      "criteriaCount": 42,
+      "autoVerifyCount": 42,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-17T12:00:00Z"
+    }
+  ],
+  "criteriaPatterns": {
+    "functional": [
+      "Button/element exists on page (DOM query)",
+      "API returns expected data shape (schema validation)",
+      "Data persists to database (query verification)",
+      "File downloads on action (network response check)",
+      "Navigation occurs on trigger (URL change)",
+      "Multi-select with checkbox (selection count)",
+      "Filter reduces visible rows (count comparison)",
+      "Sort changes row order (order verification)"
+    ],
+    "error": [
+      "Toast on error condition (toast component check)",
+      "Validation message on invalid input (error element visible)",
+      "Graceful handling of network failure (error state shown)",
+      "Empty state message when no data (placeholder visible)",
+      "Retry button on API failure (button visible)",
+      "Fallback message when data unavailable"
+    ],
+    "performance": [
+      "Operation completes under X seconds (timed execution)",
+      "Handles N items without degradation (load test)",
+      "No memory leaks during operation (heap snapshot)",
+      "API round-trip under threshold (network timing)"
+    ],
+    "ui": [
+      "Component uses shadcn/ui (class inspection)",
+      "Responsive at 375px, 768px, 1024px (viewport test)",
+      "Keyboard navigation works (focus management)",
+      "Loading skeleton shown during fetch (skeleton visible)",
+      "Side-by-side comparison view (layout check)",
+      "Summary bar with metrics (DOM elements present)"
+    ]
+  },
+  "antiVagueTransformations": [
+    {
+      "vague": "works correctly",
+      "specific": "Returns HTTP 200 with JSON body containing expected fields"
+    },
+    {
+      "vague": "fast",
+      "specific": "Completes in < X ms (specify threshold)"
+    },
+    {
+      "vague": "user-friendly",
+      "specific": "Shows inline validation errors within 100ms of blur"
+    },
+    {
+      "vague": "handles errors",
+      "specific": "Network timeout shows retry button; 401 redirects to login"
+    },
+    {
+      "vague": "looks good",
+      "specific": "Uses project design system components (shadcn/ui)"
+    },
+    {
+      "vague": "secure",
+      "specific": "API validates auth token; rejects requests without valid session"
+    },
+    {
+      "vague": "reliable",
+      "specific": "Succeeds on 3 consecutive attempts; no data corruption"
+    },
+    {
+      "vague": "shows pricing",
+      "specific": "Displays current price, competitor average, sold average, suggested price"
+    },
+    {
+      "vague": "analyses listing",
+      "specific": "Scores on 5 categories with specific point allocations"
+    }
+  ]
+}

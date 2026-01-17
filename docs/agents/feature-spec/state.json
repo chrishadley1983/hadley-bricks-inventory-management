@@ -1,0 +1,47 @@
+{
+  "agent": "feature-spec",
+  "lastRun": "2026-01-17T10:30:00Z",
+  "lastCommit": null,
+  "status": "completed",
+  "specsGenerated": 1,
+  "recentSpecs": [
+    {
+      "feature": "listing-optimiser",
+      "generatedAt": "2026-01-17T10:30:00Z",
+      "criteriaCount": 51,
+      "filesPlanned": 29,
+      "feasibilityIssues": 0,
+      "status": "READY_FOR_BUILD",
+      "complexity": "large"
+    }
+  ],
+  "commonPatterns": {
+    "exportFeature": {
+      "description": "API route + button trigger + download",
+      "files": ["api/<resource>/export/route.ts", "<resource>/page.tsx"],
+      "components": ["Button with Download icon", "Loading state"]
+    },
+    "crudFeature": {
+      "description": "Repository + API + UI form + list",
+      "files": ["lib/repositories/<resource>.ts", "api/<resource>/route.ts", "components/<Resource>Form.tsx"],
+      "components": ["DataTable", "Form with validation", "Delete confirmation"]
+    },
+    "integrationFeature": {
+      "description": "Service adapter + sync mechanism",
+      "files": ["lib/adapters/<platform>.ts", "lib/services/<platform>.service.ts"],
+      "components": ["Connection status", "Sync button", "Error handling"]
+    },
+    "analysisFeature": {
+      "description": "AI analysis + results display + action flow",
+      "files": ["api/<resource>/analyse/route.ts", "lib/<service>.service.ts", "components/<Resource>AnalysisPanel.tsx"],
+      "components": ["Analysis results", "Suggestion cards", "Approval flow", "Score display"]
+    }
+  },
+  "feasibilityChecks": {
+    "databaseChanges": "Does this require new tables/columns?",
+    "externalDependencies": "Does this need new npm packages?",
+    "performanceConstraints": "Are there speed/scale requirements?",
+    "securityImplications": "Does this touch auth/permissions?",
+    "integrationPoints": "What existing code does this connect to?"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "agent": "build-feature",
+  "lastRun": null,
+  "lastCommit": null,
+  "status": "never_run",
+  "buildsCompleted": 0,
+  "convergedCount": 0,
+  "escalatedCount": 0,
+  "blockedCount": 0,
+  "averageIterationsToConverge": 0,
+  "recentBuilds": [],
+  "scopeGuards": {
+    "requiresApproval": [
+      "package.json",
+      "package-lock.json",
+      "*.config.js",
+      "*.config.ts",
+      "supabase/migrations/*",
+      ".env*",
+      "CLAUDE.md"
+    ],
+    "confirmRequired": [
+      "lib/auth/*",
+      "lib/supabase/*",
+      "middleware.ts"
+    ],
+    "maxFilesPerIteration": 10,
+    "maxLinesPerIteration": 500
+  },
+  "antiThrashing": {
+    "maxRepeatedFailures": 2,
+    "detectOscillation": true,
+    "maxConsecutiveSameSignature": 2
+  },
+  "exitConditions": {
+    "CONVERGED": "All AUTO_VERIFY criteria pass",
+    "ESCALATED_MAX_ITERATIONS": "Max iterations reached without convergence",
+    "ESCALATED_STUCK": "Same failure signature repeated",
+    "ESCALATED_REGRESSION": "Previously passing criteria now failing",
+    "BLOCKED": "Cannot proceed - requires human intervention"
+  }
+}
