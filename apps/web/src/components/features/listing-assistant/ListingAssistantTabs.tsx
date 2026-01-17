@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PenLine, Image as ImageIcon, FileText, History, RefreshCw } from 'lucide-react';
+import { PenLine, Image as ImageIcon, FileText, History, RefreshCw, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,8 +24,11 @@ const HistoryTab = React.lazy(() =>
 const RefreshTab = React.lazy(() =>
   import('./tabs/RefreshTab').then((m) => ({ default: m.RefreshTab }))
 );
+const OptimiserTab = React.lazy(() =>
+  import('./tabs/OptimiserTab').then((m) => ({ default: m.OptimiserTab }))
+);
 
-type TabValue = 'create' | 'studio' | 'templates' | 'history' | 'refresh';
+type TabValue = 'create' | 'studio' | 'templates' | 'history' | 'refresh' | 'optimiser';
 
 interface TabConfig {
   value: TabValue;
@@ -38,6 +41,7 @@ const tabs: TabConfig[] = [
   { value: 'studio', label: 'Image Studio', icon: <ImageIcon className="h-4 w-4" aria-hidden="true" /> },
   { value: 'templates', label: 'Templates', icon: <FileText className="h-4 w-4" aria-hidden="true" /> },
   { value: 'refresh', label: 'Refresh', icon: <RefreshCw className="h-4 w-4" aria-hidden="true" /> },
+  { value: 'optimiser', label: 'Optimiser', icon: <Sparkles className="h-4 w-4" aria-hidden="true" /> },
   { value: 'history', label: 'History', icon: <History className="h-4 w-4" aria-hidden="true" /> },
 ];
 
@@ -69,7 +73,7 @@ export function ListingAssistantTabs() {
 
   return (
     <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as TabValue)}>
-      <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+      <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
         {tabs.map((tab) => (
           <TabsTrigger
             key={tab.value}
@@ -108,6 +112,12 @@ export function ListingAssistantTabs() {
       <TabsContent value="refresh" className="mt-6">
         <Suspense fallback={<TabLoadingFallback />}>
           <RefreshTab />
+        </Suspense>
+      </TabsContent>
+
+      <TabsContent value="optimiser" className="mt-6">
+        <Suspense fallback={<TabLoadingFallback />}>
+          <OptimiserTab />
         </Suspense>
       </TabsContent>
 

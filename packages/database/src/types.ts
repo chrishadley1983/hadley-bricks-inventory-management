@@ -3601,6 +3601,45 @@ export type Database = {
           },
         ]
       }
+      listing_quality_reviews: {
+        Row: {
+          breakdown: Json
+          created_at: string
+          ebay_listing_id: string
+          id: string
+          pricing_analysis: Json | null
+          quality_grade: string
+          quality_score: number
+          reviewed_at: string
+          suggestions: Json | null
+          user_id: string
+        }
+        Insert: {
+          breakdown: Json
+          created_at?: string
+          ebay_listing_id: string
+          id?: string
+          pricing_analysis?: Json | null
+          quality_grade: string
+          quality_score: number
+          reviewed_at?: string
+          suggestions?: Json | null
+          user_id: string
+        }
+        Update: {
+          breakdown?: Json
+          created_at?: string
+          ebay_listing_id?: string
+          id?: string
+          pricing_analysis?: Json | null
+          quality_grade?: string
+          quality_score?: number
+          reviewed_at?: string
+          suggestions?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       listing_templates: {
         Row: {
           content: string
@@ -4403,11 +4442,15 @@ export type Database = {
           fulfillment_channel: string | null
           id: string
           import_id: string
+          last_reviewed_at: string | null
+          last_updated_at: string | null
           listing_status: string | null
           platform: string
           platform_item_id: string
           platform_sku: string | null
           price: number | null
+          quality_grade: string | null
+          quality_score: number | null
           quantity: number | null
           raw_data: Json
           title: string | null
@@ -4423,11 +4466,15 @@ export type Database = {
           fulfillment_channel?: string | null
           id?: string
           import_id: string
+          last_reviewed_at?: string | null
+          last_updated_at?: string | null
           listing_status?: string | null
           platform: string
           platform_item_id: string
           platform_sku?: string | null
           price?: number | null
+          quality_grade?: string | null
+          quality_score?: number | null
           quantity?: number | null
           raw_data: Json
           title?: string | null
@@ -4443,11 +4490,15 @@ export type Database = {
           fulfillment_channel?: string | null
           id?: string
           import_id?: string
+          last_reviewed_at?: string | null
+          last_updated_at?: string | null
           listing_status?: string | null
           platform?: string
           platform_item_id?: string
           platform_sku?: string | null
           price?: number | null
+          quality_grade?: string | null
+          quality_score?: number | null
           quantity?: number | null
           raw_data?: Json
           title?: string | null
@@ -5915,6 +5966,27 @@ export type Database = {
           total_expenses: number
           total_income: number
           transaction_count: number
+        }[]
+      }
+      get_latest_listing_review: {
+        Args: { p_listing_id: string; p_user_id: string }
+        Returns: {
+          breakdown: Json
+          id: string
+          pricing_analysis: Json
+          quality_grade: string
+          quality_score: number
+          reviewed_at: string
+          suggestions: Json
+        }[]
+      }
+      get_listing_optimiser_summary: {
+        Args: { p_user_id: string }
+        Returns: {
+          average_score: number
+          low_score_count: number
+          reviewed_count: number
+          total_listings: number
         }[]
       }
       get_monzo_local_categories: {
