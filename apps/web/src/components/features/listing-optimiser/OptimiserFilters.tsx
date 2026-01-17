@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, X, BarChart3, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Search, X, BarChart3, AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
 import type { OptimiserFilters, ListingOptimiserSummary } from './types';
 
 interface OptimiserFiltersProps {
@@ -23,6 +23,8 @@ interface OptimiserFiltersProps {
   selectedCount?: number;
   onAnalyse?: () => void;
   isAnalysing?: boolean;
+  onSync?: () => void;
+  isSyncing?: boolean;
 }
 
 export function OptimiserFilters({
@@ -32,6 +34,8 @@ export function OptimiserFilters({
   selectedCount = 0,
   onAnalyse,
   isAnalysing = false,
+  onSync,
+  isSyncing = false,
 }: OptimiserFiltersProps) {
   const [searchValue, setSearchValue] = useState(filters.search || '');
 
@@ -202,12 +206,22 @@ export function OptimiserFilters({
           />
         </div>
 
-        {/* Analyse button */}
+        {/* Actions */}
         <div className="ml-auto flex items-center gap-3">
           {selectedCount > 0 && (
             <span className="text-sm text-muted-foreground">
               {selectedCount} selected
             </span>
+          )}
+          {onSync && (
+            <Button
+              variant="outline"
+              onClick={onSync}
+              disabled={isSyncing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync eBay'}
+            </Button>
           )}
           <Button
             onClick={onAnalyse}

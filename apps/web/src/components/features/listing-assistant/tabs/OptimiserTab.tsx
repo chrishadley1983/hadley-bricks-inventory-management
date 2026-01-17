@@ -20,10 +20,14 @@ import {
   useListingOptimiserListings,
   useAnalyseListings,
   useApplySuggestion,
+  listingOptimiserKeys,
 } from '@/hooks/useListingOptimiser';
+import { useTriggerEbayImport } from '@/hooks/use-ebay-stock';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function OptimiserTab() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Filters state
   const [filters, setFilters] = useState<FilterType>({});
@@ -41,6 +45,23 @@ export function OptimiserTab() {
   const { data, isLoading, error, refetch } = useListingOptimiserListings(filters);
   const analyseMutation = useAnalyseListings();
   const applyMutation = useApplySuggestion();
+  const syncMutation = useTriggerEbayImport();
+
+  // Handle sync
+  const handleSync = useCallback(async () => {
+    try {
+      await syncMutation.mutateAsync();
+      // Invalidate listing optimiser queries to refresh data
+      queryClient.invalidateQueries({ queryKey: listingOptimiserKeys.all });
+      toast({ title: 'Sync Complete', description: 'eBay listings have been updated' });
+    } catch (err) {
+      toast({
+        title: 'Sync Failed',
+        description: err instanceof Error ? err.message : 'Failed to sync eBay listings',
+        variant: 'destructive',
+      });
+    }
+  }, [syncMutation, queryClient, toast]);
 
   // Handle analyse
   const handleAnalyse = useCallback(async () => {
@@ -176,6 +197,8 @@ export function OptimiserTab() {
         selectedCount={selectedIds.size}
         onAnalyse={handleAnalyse}
         isAnalysing={analyseMutation.isPending}
+        onSync={handleSync}
+        isSyncing={syncMutation.isPending}
       />
 
       {/* Listings table */}

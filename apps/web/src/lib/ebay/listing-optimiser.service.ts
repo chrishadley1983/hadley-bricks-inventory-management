@@ -175,7 +175,7 @@ export class ListingOptimiserService {
       `)
       .eq('user_id', userId)
       .eq('platform', 'ebay')
-      .eq('listing_status', 'active');
+      .eq('listing_status', 'Active');
 
     // Apply filters
     if (filters?.search) {
