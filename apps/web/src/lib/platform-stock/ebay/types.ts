@@ -56,6 +56,7 @@ export interface TradingApiItem {
   };
   ConditionID?: string | number;
   ConditionDisplayName?: string;
+  ConditionDescription?: string; // Seller's custom condition notes (different from ConditionDisplayName)
   PrimaryCategory?: {
     CategoryID: string;
     CategoryName: string;

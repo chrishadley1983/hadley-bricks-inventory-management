@@ -20,17 +20,20 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser();
 
+    console.log('[GET /api/listing-optimiser] Auth check:', { userId: user?.id, authError: authError?.message });
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Check eBay connection
+    // 2. Check eBay connection (eBay uses its own credentials table)
     const { data: credentials } = await supabase
-      .from('platform_credentials')
+      .from('ebay_credentials')
       .select('id')
       .eq('user_id', user.id)
-      .eq('platform', 'ebay')
       .single();
+
+    console.log('[GET /api/listing-optimiser] eBay credentials:', { hasCredentials: !!credentials });
 
     if (!credentials) {
       return NextResponse.json(
@@ -63,8 +66,11 @@ export async function GET(request: NextRequest) {
     };
 
     // 4. Get listings and summary
+    console.log('[GET /api/listing-optimiser] Fetching listings for user:', user.id, 'with filters:', filters);
     const service = getListingOptimiserService();
     const { listings, summary } = await service.getListings(user.id, filters);
+
+    console.log('[GET /api/listing-optimiser] Result:', { listingCount: listings.length, summary });
 
     // 5. Return response
     return NextResponse.json({

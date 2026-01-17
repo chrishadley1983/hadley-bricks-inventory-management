@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/hooks/use-toast';
 import { Link2Off } from 'lucide-react';
@@ -43,11 +43,42 @@ export default function ListingOptimiserPage() {
   const [currentAnalysis, setCurrentAnalysis] = useState<FullAnalysisResult | null>(null);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [currentListingId, setCurrentListingId] = useState<string | null>(null);
+  const hasApprovedAnyRef = useRef(false); // Ref to track if any suggestions were approved (ref avoids stale closures)
+  const [pendingReanalyse, setPendingReanalyse] = useState(false); // Track if we need to re-analyse after apply completes
 
   // Queries and mutations
   const { data, isLoading, error, refetch } = useListingOptimiserListings(filters);
   const analyseMutation = useAnalyseListings();
   const applyMutation = useApplySuggestion();
+
+  // Effect to trigger re-analysis when apply completes and we have a pending re-analyse
+  useEffect(() => {
+    if (pendingReanalyse && !applyMutation.isPending && currentListingId) {
+      console.log('[ListingOptimiser] Apply completed, triggering pending re-analysis');
+      setPendingReanalyse(false);
+
+      // Trigger re-analysis
+      analyseMutation.mutateAsync([currentListingId]).then((result) => {
+        if (result.results.length > 0) {
+          const newAnalysis = result.results[0];
+
+          setCurrentAnalysis((prev) => {
+            if (prev) {
+              setPreviousScore(prev.analysis.score);
+            }
+            return { ...newAnalysis };
+          });
+
+          toast({
+            title: 'Re-analysed',
+            description: `New score: ${newAnalysis.analysis.score}/100 (${newAnalysis.analysis.grade})`,
+          });
+        }
+      }).catch(() => {
+        // Error handled by mutation
+      });
+    }
+  }, [pendingReanalyse, applyMutation.isPending, currentListingId, analyseMutation, toast]);
 
   // Handle analyse
   const handleAnalyse = useCallback(async () => {
@@ -108,30 +139,49 @@ export default function ListingOptimiserPage() {
         toast({ title: 'Tip', description: 'Click "Analyse" to review this listing' });
       }
     },
-    []
+    [toast]
   );
 
-  // Handle approve suggestion
+  // Handle approve suggestion - apply change but don't re-analyse yet (wait until all reviewed)
   const handleApprove = useCallback(
     async (suggestion: ListingSuggestion) => {
       if (!currentListingId) return;
 
+      // IMPORTANT: Mark approval BEFORE the async call starts
+      // This ensures the ref is set when onAllReviewed is triggered by the panel
+      // (which happens synchronously after onApprove is called, not after it completes)
+      hasApprovedAnyRef.current = true;
+
       try {
+        // Apply the change to eBay
         await applyMutation.mutateAsync({
           itemId: currentListingId,
           suggestion,
         });
 
-        // Re-analyse after change to update scores
-        const result = await analyseMutation.mutateAsync([currentListingId]);
-        if (result.results.length > 0) {
-          setCurrentAnalysis(result.results[0]);
-        }
-      } catch {
-        // Error handled by mutation
+        // Show success toast
+        toast({
+          title: 'Applied',
+          description: `${suggestion.field} updated on eBay`,
+        });
+      } catch (error) {
+        // Show error to user with more prominent notification
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[ListingOptimiser] Apply failed:', errorMessage);
+
+        toast({
+          title: 'Failed to apply change',
+          description: errorMessage,
+          variant: 'destructive',
+          duration: 10000, // Show for 10 seconds for important errors
+        });
+
+        // Note: We intentionally do NOT reset hasApprovedAnyRef here
+        // because a failed apply still means the user wanted to approve something
+        // and re-analysis might still be useful to see updated state
       }
     },
-    [currentListingId, applyMutation, analyseMutation]
+    [currentListingId, applyMutation, toast]
   );
 
   // Handle skip suggestion
@@ -140,12 +190,82 @@ export default function ListingOptimiserPage() {
     toast({ title: 'Skipped', description: 'Suggestion skipped' });
   }, [toast]);
 
+  // Handle re-analyse (from "Re-analyse" button after all suggestions reviewed)
+  const handleReanalyse = useCallback(async () => {
+    if (!currentListingId) return;
+
+    try {
+      const result = await analyseMutation.mutateAsync([currentListingId]);
+      if (result.results.length > 0) {
+        const newAnalysis = result.results[0];
+
+        // Use functional update to capture the current score before updating
+        setCurrentAnalysis((prev) => {
+          if (prev) {
+            setPreviousScore(prev.analysis.score);
+          }
+          // Spread to create new reference and ensure re-render
+          return { ...newAnalysis };
+        });
+
+        toast({
+          title: 'Re-analysed',
+          description: `Score: ${newAnalysis.analysis.score}/100 (${newAnalysis.analysis.grade})`,
+        });
+      }
+    } catch {
+      // Error handled by mutation
+    }
+  }, [currentListingId, analyseMutation, toast]);
+
+  // Handle all suggestions reviewed - auto re-analyse if any were approved
+  const handleAllReviewed = useCallback(async () => {
+    // Use ref to get current value (avoids stale closure)
+    if (!currentListingId || !hasApprovedAnyRef.current) {
+      console.log('[ListingOptimiser] All reviewed but no approvals - skipping re-analysis');
+      return;
+    }
+
+    // If apply is still pending, mark that we need to re-analyse when it completes
+    if (applyMutation.isPending) {
+      console.log('[ListingOptimiser] Apply still pending - will re-analyse when complete');
+      setPendingReanalyse(true);
+      return;
+    }
+
+    console.log('[ListingOptimiser] All reviewed with approvals - starting re-analysis');
+
+    try {
+      const result = await analyseMutation.mutateAsync([currentListingId]);
+      if (result.results.length > 0) {
+        const newAnalysis = result.results[0];
+
+        // Use functional update to capture the current score before updating
+        setCurrentAnalysis((prev) => {
+          if (prev) {
+            setPreviousScore(prev.analysis.score);
+          }
+          return { ...newAnalysis };
+        });
+
+        toast({
+          title: 'Re-analysed',
+          description: `New score: ${newAnalysis.analysis.score}/100 (${newAnalysis.analysis.grade})`,
+        });
+      }
+    } catch {
+      // Error handled by mutation
+    }
+  }, [currentListingId, applyMutation.isPending, analyseMutation, toast]);
+
   // Handle panel close
   const handlePanelClose = useCallback(() => {
     setIsPanelOpen(false);
     setCurrentAnalysis(null);
     setCurrentListingId(null);
     setPreviousScore(null);
+    hasApprovedAnyRef.current = false; // Reset for next session
+    setPendingReanalyse(false); // Cancel any pending re-analysis
     refetch();
   }, [refetch]);
 
@@ -206,7 +326,10 @@ export default function ListingOptimiserPage() {
           onClose={handlePanelClose}
           onApprove={handleApprove}
           onSkip={handleSkip}
+          onReanalyse={handleReanalyse}
+          onAllReviewed={handleAllReviewed}
           isApplying={applyMutation.isPending}
+          isReanalysing={analyseMutation.isPending}
           previousScore={previousScore}
         />
       </div>

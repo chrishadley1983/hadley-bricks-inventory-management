@@ -3352,6 +3352,53 @@ export type Database = {
           },
         ]
       }
+      listing_applied_suggestions: {
+        Row: {
+          applied_at: string
+          applied_value: string
+          category: string
+          created_at: string
+          ebay_listing_id: string
+          field: string
+          id: string
+          original_value: string | null
+          review_id: string | null
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string
+          applied_value: string
+          category: string
+          created_at?: string
+          ebay_listing_id: string
+          field: string
+          id?: string
+          original_value?: string | null
+          review_id?: string | null
+          user_id: string
+        }
+        Update: {
+          applied_at?: string
+          applied_value?: string
+          category?: string
+          created_at?: string
+          ebay_listing_id?: string
+          field?: string
+          id?: string
+          original_value?: string | null
+          review_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_applied_suggestions_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "listing_quality_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_assistant_settings: {
         Row: {
           created_at: string | null
@@ -5978,6 +6025,15 @@ export type Database = {
           quality_score: number
           reviewed_at: string
           suggestions: Json
+        }[]
+      }
+      get_listing_applied_suggestions: {
+        Args: { p_days_back?: number; p_listing_id: string; p_user_id: string }
+        Returns: {
+          applied_at: string
+          applied_value: string
+          category: string
+          field: string
         }[]
       }
       get_listing_optimiser_summary: {

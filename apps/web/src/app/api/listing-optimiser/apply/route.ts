@@ -50,12 +50,11 @@ export async function POST(request: NextRequest) {
 
     const { itemId, suggestion } = parsed.data;
 
-    // 3. Check eBay connection
+    // 3. Check eBay connection (eBay uses its own credentials table)
     const { data: credentials } = await supabase
-      .from('platform_credentials')
+      .from('ebay_credentials')
       .select('id')
       .eq('user_id', user.id)
-      .eq('platform', 'ebay')
       .single();
 
     if (!credentials) {

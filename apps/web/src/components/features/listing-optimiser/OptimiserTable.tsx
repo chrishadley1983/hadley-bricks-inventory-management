@@ -24,13 +24,16 @@ interface OptimiserTableProps {
 }
 
 /**
- * Get grade badge variant
+ * Get traffic light colors for score badge
+ * Green: 85+ (A+/A)
+ * Amber: 65-84 (B/C)
+ * Red: <65 (D/F)
  */
-function getGradeVariant(grade: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (!grade) return 'outline';
-  if (grade === 'A+' || grade === 'A') return 'default';
-  if (grade === 'B') return 'secondary';
-  return 'destructive';
+function getScoreColors(score: number | null): string {
+  if (score === null) return 'bg-muted text-muted-foreground';
+  if (score >= 85) return 'bg-green-600 text-white hover:bg-green-600';
+  if (score >= 65) return 'bg-amber-500 text-white hover:bg-amber-500';
+  return 'bg-red-600 text-white hover:bg-red-600';
 }
 
 /**
@@ -286,7 +289,7 @@ export function OptimiserTable({
                 </TableCell>
                 <TableCell className="text-center">
                   {listing.qualityScore !== null ? (
-                    <Badge variant={getGradeVariant(listing.qualityGrade)}>
+                    <Badge className={getScoreColors(listing.qualityScore)}>
                       {listing.qualityGrade} ({listing.qualityScore})
                     </Badge>
                   ) : (

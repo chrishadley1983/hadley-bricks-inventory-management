@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,13 @@ import {
   Check,
   X,
   ChevronRight,
+  ChevronLeft,
   ArrowRight,
   AlertTriangle,
   TrendingUp,
   DollarSign,
   Package,
+  RotateCcw,
 } from 'lucide-react';
 import type { FullAnalysisResult, ListingSuggestion } from './types';
 
@@ -30,7 +32,10 @@ interface AnalysisPanelProps {
   onClose: () => void;
   onApprove: (suggestion: ListingSuggestion) => void;
   onSkip: (suggestion: ListingSuggestion) => void;
+  onReanalyse?: () => void;
+  onAllReviewed?: () => void; // Called when user finishes reviewing all suggestions
   isApplying?: boolean;
+  isReanalysing?: boolean;
   previousScore?: number | null;
 }
 
@@ -58,32 +63,74 @@ export function AnalysisPanel({
   onClose,
   onApprove,
   onSkip,
+  onReanalyse,
+  onAllReviewed,
   isApplying = false,
+  isReanalysing = false,
   previousScore = null,
 }: AnalysisPanelProps) {
   const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState(0);
+  const [hasTriggeredAllReviewed, setHasTriggeredAllReviewed] = useState(false);
 
-  if (!result) return null;
-
-  const { analysis, pricing } = result;
-  const suggestions = analysis.suggestions || [];
+  // Compute derived values (handle null result case)
+  const analysis = result?.analysis;
+  const pricing = result?.pricing;
+  // Filter out category suggestions - they can't be applied via eBay API
+  const suggestions = (analysis?.suggestions || []).filter(
+    (s) => !s.field.toLowerCase().includes('category')
+  );
   const currentSuggestion = suggestions[currentSuggestionIndex];
   const hasMoreSuggestions = currentSuggestionIndex < suggestions.length - 1;
+  const hasPreviousSuggestions = currentSuggestionIndex > 0;
+  const allReviewed = currentSuggestionIndex >= suggestions.length;
+
+  // Reset index when result changes OR when panel opens (for re-viewing same listing)
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[AnalysisPanel] Panel opened or result changed - resetting state');
+      setCurrentSuggestionIndex(0);
+      setHasTriggeredAllReviewed(false);
+    }
+  }, [result?.reviewId, isOpen]);
+
+  // Trigger onAllReviewed when all suggestions have been reviewed (once per session)
+  // IMPORTANT: This hook must be BEFORE the early return to maintain consistent hook order
+  useEffect(() => {
+    if (!result) return; // Guard for when result is null
+
+    console.log(`[AnalysisPanel] useEffect: allReviewed=${allReviewed}, suggestions.length=${suggestions.length}, hasTriggeredAllReviewed=${hasTriggeredAllReviewed}, hasOnAllReviewed=${!!onAllReviewed}`);
+    if (allReviewed && suggestions.length > 0 && !hasTriggeredAllReviewed && onAllReviewed) {
+      console.log('[AnalysisPanel] ALL CONDITIONS MET - Triggering onAllReviewed NOW');
+      setHasTriggeredAllReviewed(true);
+      onAllReviewed();
+    }
+  }, [result, allReviewed, suggestions.length, hasTriggeredAllReviewed, onAllReviewed]);
+
+  // Early return AFTER all hooks
+  if (!result || !analysis || !pricing) return null;
 
   const handleApprove = () => {
     if (!currentSuggestion) return;
+    console.log(`[AnalysisPanel] Approving suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`);
     onApprove(currentSuggestion);
-    if (hasMoreSuggestions) {
-      setCurrentSuggestionIndex((prev) => prev + 1);
-    }
+    // Always advance to next (or past the end to show "all reviewed")
+    setCurrentSuggestionIndex((prev) => {
+      const next = prev + 1;
+      console.log(`[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`);
+      return next;
+    });
   };
 
   const handleSkip = () => {
     if (!currentSuggestion) return;
+    console.log(`[AnalysisPanel] Skipping suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`);
     onSkip(currentSuggestion);
-    if (hasMoreSuggestions) {
-      setCurrentSuggestionIndex((prev) => prev + 1);
-    }
+    // Always advance to next (or past the end to show "all reviewed")
+    setCurrentSuggestionIndex((prev) => {
+      const next = prev + 1;
+      console.log(`[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`);
+      return next;
+    });
   };
 
   return (
@@ -112,7 +159,15 @@ export function AnalysisPanel({
 
         <div className="mt-6 space-y-6">
           {/* Score Breakdown */}
-          <Card>
+          <Card className="relative">
+            {isReanalysing && (
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span className="text-sm">Updating scores...</span>
+                </div>
+              </div>
+            )}
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Score Breakdown</CardTitle>
             </CardHeader>
@@ -222,9 +277,11 @@ export function AnalysisPanel({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center justify-between">
                   Suggestions
-                  <span className="text-muted-foreground font-normal">
-                    {currentSuggestionIndex + 1} of {suggestions.length}
-                  </span>
+                  {!allReviewed && (
+                    <span className="text-muted-foreground font-normal">
+                      {currentSuggestionIndex + 1} of {suggestions.length}
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -280,6 +337,16 @@ export function AnalysisPanel({
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-3 pt-2">
+                      {hasPreviousSuggestions && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setCurrentSuggestionIndex((prev) => prev - 1)}
+                          disabled={isApplying}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="default"
                         onClick={handleApprove}
@@ -304,10 +371,45 @@ export function AnalysisPanel({
                       </Button>
                     </div>
                   </div>
+                ) : allReviewed ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    {isReanalysing ? (
+                      <>
+                        <span className="h-8 w-8 mx-auto mb-2 animate-spin rounded-full border-4 border-primary border-t-transparent block" />
+                        <p className="font-medium text-foreground">Recalculating score...</p>
+                        <p className="text-sm mt-1">Analysing your changes</p>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-8 w-8 mx-auto mb-2 text-green-600" />
+                        <p>All suggestions reviewed!</p>
+                        <div className="mt-4 flex gap-2 justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentSuggestionIndex(0)}
+                          >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Review Again
+                          </Button>
+                          {onReanalyse && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={onReanalyse}
+                              disabled={isReanalysing}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Re-analyse
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <div className="text-center py-6 text-muted-foreground">
-                    <Check className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                    All suggestions reviewed!
+                    No suggestions for this listing
                   </div>
                 )}
               </CardContent>
@@ -335,6 +437,53 @@ export function AnalysisPanel({
               </CardContent>
             </Card>
           )}
+
+          {/* Manual Actions Required - show only when SEO feedback indicates category is WRONG */}
+          {/* Check for negative phrases about category - not just any mention of the word */}
+          {(() => {
+            const seoFeedback = analysis.breakdown.seoOptimization.feedback.toLowerCase();
+            const hasCategoryIssue =
+              (seoFeedback.includes('category') &&
+                (seoFeedback.includes('wrong') ||
+                  seoFeedback.includes('incorrect') ||
+                  seoFeedback.includes('should be') ||
+                  seoFeedback.includes('needs') ||
+                  seoFeedback.includes('change') ||
+                  seoFeedback.includes('update'))) ||
+              // Also check criticalIssues for category mentions
+              analysis.criticalIssues?.some(
+                (issue) =>
+                  issue.toLowerCase().includes('category') &&
+                  (issue.toLowerCase().includes('wrong') ||
+                    issue.toLowerCase().includes('incorrect') ||
+                    issue.toLowerCase().includes('should'))
+              );
+            return hasCategoryIssue ? (
+              <Card className="border-amber-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-amber-600 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Manual Action Required
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    The listing category may need updating. Category changes cannot be applied
+                    automatically and must be updated directly on eBay.
+                  </p>
+                  <div className="text-xs space-y-1">
+                    <p>
+                      <strong>19006</strong> - LEGO Complete Sets &amp; Packs (for boxed sets)
+                    </p>
+                    <p>
+                      <strong>183448</strong> - LEGO Bricks &amp; Building Pieces (for loose
+                      parts/bulk)
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null;
+          })()}
 
           {/* Highlights */}
           {analysis.highlights && analysis.highlights.length > 0 && (

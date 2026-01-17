@@ -304,24 +304,46 @@ export class EbayTradingClient {
     }
 
     const requestXml = this.buildReviseItemRequest(request);
+    console.log(`[EbayTradingClient] ===== ReviseFixedPriceItem for ${request.itemId} =====`);
+    console.log(`[EbayTradingClient] Request details:`, JSON.stringify({
+      itemId: request.itemId,
+      hasTitle: !!request.title,
+      hasDescription: !!request.description,
+      hasItemSpecifics: !!(request.itemSpecifics && request.itemSpecifics.length > 0),
+      itemSpecificsCount: request.itemSpecifics?.length || 0,
+      itemSpecifics: request.itemSpecifics?.map(s => ({ name: s.name, value: s.value })),
+    }, null, 2));
+    console.log(`[EbayTradingClient] Full Request XML:\n`, requestXml);
 
     try {
-      const response = await this.executeGenericRequest<ReviseItemResponse>(
+      const response = await this.executeGenericRequestWithRawResponse<ReviseItemResponse>(
         'ReviseFixedPriceItem',
         requestXml
       );
 
-      const apiResponse = response.ReviseFixedPriceItemResponse;
+      const apiResponse = response.parsed.ReviseFixedPriceItemResponse;
+      console.log(`[EbayTradingClient] Response Ack:`, apiResponse?.Ack);
+      console.log(`[EbayTradingClient] Full Response XML:\n`, response.rawXml);
+
       if (!apiResponse) {
         throw new EbayTradingApiError('Invalid API response: missing ReviseFixedPriceItemResponse');
       }
 
+      // Log all errors/warnings from the response
+      if (apiResponse.Errors) {
+        console.log(`[EbayTradingClient] Response Errors/Warnings:`, JSON.stringify(apiResponse.Errors, null, 2));
+      }
+
       // Extract warnings if any
       const warnings = this.extractWarnings(apiResponse.Errors);
+      if (warnings.length > 0) {
+        console.log(`[EbayTradingClient] Extracted warnings:`, warnings);
+      }
 
       // Check for errors
       if (apiResponse.Ack === 'Failure') {
         const errors = this.extractErrors(apiResponse.Errors);
+        console.error(`[EbayTradingClient] ReviseFixedPriceItem FAILED:`, errors);
         return {
           success: false,
           itemId: request.itemId,
@@ -333,6 +355,7 @@ export class EbayTradingClient {
 
       // Parse fees
       const fees = this.parseFees(apiResponse.Fees?.Fee);
+      console.log(`[EbayTradingClient] ReviseFixedPriceItem SUCCESS for ${request.itemId}`);
 
       return {
         success: true,
@@ -343,6 +366,7 @@ export class EbayTradingClient {
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     } catch (error) {
+      console.error(`[EbayTradingClient] ReviseFixedPriceItem EXCEPTION:`, error);
       if (error instanceof EbayTradingApiError) {
         return {
           success: false,
@@ -864,6 +888,8 @@ export class EbayTradingClient {
     }
 
     if (request.itemSpecifics !== undefined && request.itemSpecifics.length > 0) {
+      console.log(`[EbayTradingClient] Building ItemSpecifics with ${request.itemSpecifics.length} items:`,
+        request.itemSpecifics.map(s => `${s.name}=${s.value}`).join(', '));
       itemNode.ItemSpecifics = {
         NameValueList: request.itemSpecifics.map((spec) => ({
           Name: spec.name,
@@ -890,6 +916,17 @@ export class EbayTradingClient {
    * Execute a Trading API request with retries (generic version)
    */
   private async executeGenericRequest<T>(callName: string, requestXml: string): Promise<T> {
+    const result = await this.executeGenericRequestWithRawResponse<T>(callName, requestXml);
+    return result.parsed;
+  }
+
+  /**
+   * Execute a Trading API request with retries, returning both parsed and raw response
+   */
+  private async executeGenericRequestWithRawResponse<T>(
+    callName: string,
+    requestXml: string
+  ): Promise<{ parsed: T; rawXml: string }> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -914,7 +951,10 @@ export class EbayTradingClient {
         }
 
         const responseText = await response.text();
-        return this.xmlParser.parse(responseText) as T;
+        return {
+          parsed: this.xmlParser.parse(responseText) as T,
+          rawXml: responseText,
+        };
       } catch (error) {
         lastError = error as Error;
 
@@ -982,7 +1022,9 @@ export class EbayTradingClient {
       startPrice: priceValue,
       currency,
       conditionId: item.ConditionID ? parseInt(String(item.ConditionID), 10) : null,
-      conditionDescription: item.ConditionDisplayName || null,
+      // ConditionDescription is the seller's custom condition notes (e.g., "Minor shelf wear on box")
+      // ConditionDisplayName is the eBay condition name (e.g., "New", "Used")
+      conditionDescription: item.ConditionDescription || null,
       categoryId: item.PrimaryCategory?.CategoryID || '',
       categoryName: item.PrimaryCategory?.CategoryName || null,
       storeCategoryId: item.Storefront?.StoreCategoryID || null,

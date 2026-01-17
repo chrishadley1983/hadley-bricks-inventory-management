@@ -136,16 +136,16 @@ export function OptimiserTab() {
           suggestion,
         });
 
-        // Re-analyse after change to update scores
-        const result = await analyseMutation.mutateAsync([currentListingId]);
-        if (result.results.length > 0) {
-          setCurrentAnalysis(result.results[0]);
-        }
+        // Show success toast - don't re-analyse (that creates infinite loop)
+        toast({
+          title: 'Change Applied',
+          description: `${suggestion.category} updated on eBay`,
+        });
       } catch {
         // Error handled by mutation
       }
     },
-    [currentListingId, applyMutation, analyseMutation]
+    [currentListingId, applyMutation, toast]
   );
 
   // Handle skip suggestion
@@ -153,6 +153,34 @@ export function OptimiserTab() {
     // Just move to next suggestion - no action needed
     toast({ title: 'Skipped', description: 'Suggestion skipped' });
   }, [toast]);
+
+  // Handle re-analyse (after applying changes)
+  const handleReanalyse = useCallback(async () => {
+    if (!currentListingId) return;
+
+    try {
+      // Store current score before re-analysis
+      const oldScore = currentAnalysis?.analysis.score ?? null;
+      setPreviousScore(oldScore);
+
+      const result = await analyseMutation.mutateAsync([currentListingId]);
+
+      if (result.results.length > 0) {
+        const analysisResult = result.results[0];
+        setCurrentAnalysis(analysisResult);
+        toast({
+          title: 'Re-analysis Complete',
+          description: `Score updated: ${analysisResult.analysis.score}/100`,
+        });
+      }
+    } catch {
+      toast({
+        title: 'Re-analysis Failed',
+        description: 'Failed to re-analyse listing',
+        variant: 'destructive',
+      });
+    }
+  }, [currentListingId, currentAnalysis, analyseMutation, toast]);
 
   // Handle panel close
   const handlePanelClose = useCallback(() => {
@@ -217,7 +245,9 @@ export function OptimiserTab() {
         onClose={handlePanelClose}
         onApprove={handleApprove}
         onSkip={handleSkip}
+        onReanalyse={handleReanalyse}
         isApplying={applyMutation.isPending}
+        isReanalysing={analyseMutation.isPending}
         previousScore={previousScore}
       />
     </div>
