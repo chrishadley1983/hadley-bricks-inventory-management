@@ -1959,6 +1959,179 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_model_package_costs: {
+        Row: {
+          bubble_wrap: number
+          business_card: number | null
+          cardboard: number
+          created_at: string | null
+          id: string
+          lego_card: number | null
+          package_type: string
+          postage: number
+          scenario_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          bubble_wrap: number
+          business_card?: number | null
+          cardboard: number
+          created_at?: string | null
+          id?: string
+          lego_card?: number | null
+          package_type: string
+          postage: number
+          scenario_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          bubble_wrap?: number
+          business_card?: number | null
+          cardboard?: number
+          created_at?: string | null
+          id?: string
+          lego_card?: number | null
+          package_type?: string
+          postage?: number
+          scenario_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_model_package_costs_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "cost_model_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_model_scenarios: {
+        Row: {
+          accountant_cost_if_vat: number | null
+          amazon_avg_postage_cost: number | null
+          amazon_avg_sale_value: number | null
+          amazon_cog_percent: number | null
+          amazon_fee_rate: number | null
+          amazon_sales_per_month: number | null
+          annual_accountant_cost: number | null
+          annual_misc_costs: number | null
+          bl_avg_postage_cost: number | null
+          bl_avg_sale_value: number | null
+          bl_cog_percent: number | null
+          bl_fee_rate: number | null
+          bl_sales_per_month: number | null
+          created_at: string | null
+          description: string | null
+          draft_data: Json | null
+          draft_updated_at: string | null
+          ebay_avg_postage_cost: number | null
+          ebay_avg_sale_value: number | null
+          ebay_cog_percent: number | null
+          ebay_fee_rate: number | null
+          ebay_sales_per_month: number | null
+          fixed_amazon: number | null
+          fixed_ebay_store: number | null
+          fixed_seller_tools: number | null
+          fixed_shopify: number | null
+          fixed_storage: number | null
+          id: string
+          income_tax_rate: number | null
+          is_default: boolean | null
+          is_vat_registered: boolean | null
+          lego_parts_percent: number | null
+          name: string
+          ni_rate: number | null
+          personal_allowance: number | null
+          target_annual_profit: number | null
+          updated_at: string | null
+          user_id: string
+          vat_flat_rate: number | null
+        }
+        Insert: {
+          accountant_cost_if_vat?: number | null
+          amazon_avg_postage_cost?: number | null
+          amazon_avg_sale_value?: number | null
+          amazon_cog_percent?: number | null
+          amazon_fee_rate?: number | null
+          amazon_sales_per_month?: number | null
+          annual_accountant_cost?: number | null
+          annual_misc_costs?: number | null
+          bl_avg_postage_cost?: number | null
+          bl_avg_sale_value?: number | null
+          bl_cog_percent?: number | null
+          bl_fee_rate?: number | null
+          bl_sales_per_month?: number | null
+          created_at?: string | null
+          description?: string | null
+          draft_data?: Json | null
+          draft_updated_at?: string | null
+          ebay_avg_postage_cost?: number | null
+          ebay_avg_sale_value?: number | null
+          ebay_cog_percent?: number | null
+          ebay_fee_rate?: number | null
+          ebay_sales_per_month?: number | null
+          fixed_amazon?: number | null
+          fixed_ebay_store?: number | null
+          fixed_seller_tools?: number | null
+          fixed_shopify?: number | null
+          fixed_storage?: number | null
+          id?: string
+          income_tax_rate?: number | null
+          is_default?: boolean | null
+          is_vat_registered?: boolean | null
+          lego_parts_percent?: number | null
+          name: string
+          ni_rate?: number | null
+          personal_allowance?: number | null
+          target_annual_profit?: number | null
+          updated_at?: string | null
+          user_id: string
+          vat_flat_rate?: number | null
+        }
+        Update: {
+          accountant_cost_if_vat?: number | null
+          amazon_avg_postage_cost?: number | null
+          amazon_avg_sale_value?: number | null
+          amazon_cog_percent?: number | null
+          amazon_fee_rate?: number | null
+          amazon_sales_per_month?: number | null
+          annual_accountant_cost?: number | null
+          annual_misc_costs?: number | null
+          bl_avg_postage_cost?: number | null
+          bl_avg_sale_value?: number | null
+          bl_cog_percent?: number | null
+          bl_fee_rate?: number | null
+          bl_sales_per_month?: number | null
+          created_at?: string | null
+          description?: string | null
+          draft_data?: Json | null
+          draft_updated_at?: string | null
+          ebay_avg_postage_cost?: number | null
+          ebay_avg_sale_value?: number | null
+          ebay_cog_percent?: number | null
+          ebay_fee_rate?: number | null
+          ebay_sales_per_month?: number | null
+          fixed_amazon?: number | null
+          fixed_ebay_store?: number | null
+          fixed_seller_tools?: number | null
+          fixed_shopify?: number | null
+          fixed_storage?: number | null
+          id?: string
+          income_tax_rate?: number | null
+          is_default?: boolean | null
+          is_vat_registered?: boolean | null
+          lego_parts_percent?: number | null
+          name?: string
+          ni_rate?: number | null
+          personal_allowance?: number | null
+          target_annual_profit?: number | null
+          updated_at?: string | null
+          user_id?: string
+          vat_flat_rate?: number | null
+        }
+        Relationships: []
+      }
       ebay_business_policies: {
         Row: {
           cached_at: string | null
@@ -4183,6 +4356,53 @@ export type Database = {
           },
         ]
       }
+      off_system_task_presets: {
+        Row: {
+          category: string
+          created_at: string | null
+          default_duration_minutes: number | null
+          default_priority: number | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          sort_order: number | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          default_duration_minutes?: number | null
+          default_priority?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          sort_order?: number | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          default_duration_minutes?: number | null
+          default_priority?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          sort_order?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "off_system_task_presets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           amazon_link_method: string | null
@@ -4760,6 +4980,7 @@ export type Database = {
           cancelled_at: string | null
           completed_at: string | null
           currency: string | null
+          dispatch_by: string | null
           fees: number | null
           fulfilled_at: string | null
           id: string
@@ -4792,6 +5013,7 @@ export type Database = {
           cancelled_at?: string | null
           completed_at?: string | null
           currency?: string | null
+          dispatch_by?: string | null
           fees?: number | null
           fulfilled_at?: string | null
           id?: string
@@ -4824,6 +5046,7 @@ export type Database = {
           cancelled_at?: string | null
           completed_at?: string | null
           currency?: string | null
+          dispatch_by?: string | null
           fees?: number | null
           fulfilled_at?: string | null
           id?: string
@@ -4891,6 +5114,81 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "platform_store_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pomodoro_sessions: {
+        Row: {
+          break_completed_at: string | null
+          break_minutes: number
+          category: string | null
+          created_at: string | null
+          id: string
+          mode: string
+          paused_at: string | null
+          paused_duration_seconds: number | null
+          session_date: string
+          session_number: number
+          started_at: string
+          status: string | null
+          time_entry_id: string | null
+          updated_at: string | null
+          user_id: string
+          work_completed_at: string | null
+          work_minutes: number
+        }
+        Insert: {
+          break_completed_at?: string | null
+          break_minutes: number
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          mode: string
+          paused_at?: string | null
+          paused_duration_seconds?: number | null
+          session_date: string
+          session_number: number
+          started_at: string
+          status?: string | null
+          time_entry_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          work_completed_at?: string | null
+          work_minutes: number
+        }
+        Update: {
+          break_completed_at?: string | null
+          break_minutes?: number
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          mode?: string
+          paused_at?: string | null
+          paused_duration_seconds?: number | null
+          session_date?: string
+          session_number?: number
+          started_at?: string
+          status?: string | null
+          time_entry_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          work_completed_at?: string | null
+          work_minutes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pomodoro_sessions_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pomodoro_sessions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -5630,6 +5928,127 @@ export type Database = {
           },
         ]
       }
+      stock_pickups: {
+        Row: {
+          address_line1: string
+          address_line2: string | null
+          agreed_price: number | null
+          city: string
+          completed_at: string | null
+          completion_notes: string | null
+          created_at: string | null
+          description: string | null
+          estimated_duration_minutes: number | null
+          estimated_value: number | null
+          final_amount_paid: number | null
+          id: string
+          is_recurring: boolean | null
+          mileage: number | null
+          mileage_cost: number | null
+          notes: string | null
+          outcome: string | null
+          parent_pickup_id: string | null
+          postcode: string
+          purchase_id: string | null
+          recurrence_pattern: string | null
+          reminder_day_before: boolean | null
+          scheduled_date: string
+          scheduled_time: string | null
+          source_platform: string | null
+          status: string | null
+          task_instance_id: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          address_line1: string
+          address_line2?: string | null
+          agreed_price?: number | null
+          city: string
+          completed_at?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          description?: string | null
+          estimated_duration_minutes?: number | null
+          estimated_value?: number | null
+          final_amount_paid?: number | null
+          id?: string
+          is_recurring?: boolean | null
+          mileage?: number | null
+          mileage_cost?: number | null
+          notes?: string | null
+          outcome?: string | null
+          parent_pickup_id?: string | null
+          postcode: string
+          purchase_id?: string | null
+          recurrence_pattern?: string | null
+          reminder_day_before?: boolean | null
+          scheduled_date: string
+          scheduled_time?: string | null
+          source_platform?: string | null
+          status?: string | null
+          task_instance_id?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string | null
+          agreed_price?: number | null
+          city?: string
+          completed_at?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          description?: string | null
+          estimated_duration_minutes?: number | null
+          estimated_value?: number | null
+          final_amount_paid?: number | null
+          id?: string
+          is_recurring?: boolean | null
+          mileage?: number | null
+          mileage_cost?: number | null
+          notes?: string | null
+          outcome?: string | null
+          parent_pickup_id?: string | null
+          postcode?: string
+          purchase_id?: string | null
+          recurrence_pattern?: string | null
+          reminder_day_before?: boolean | null
+          scheduled_date?: string
+          scheduled_time?: string | null
+          source_platform?: string | null
+          status?: string | null
+          task_instance_id?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_pickups_parent_pickup_id_fkey"
+            columns: ["parent_pickup_id"]
+            isOneToOne: false
+            referencedRelation: "stock_pickups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_pickups_task_instance_id_fkey"
+            columns: ["task_instance_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_task_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_pickups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_audit_log: {
         Row: {
           action: string
@@ -5680,6 +6099,122 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      time_daily_summaries: {
+        Row: {
+          admin_seconds: number | null
+          created_at: string | null
+          development_seconds: number | null
+          id: string
+          listing_seconds: number | null
+          other_seconds: number | null
+          shipping_seconds: number | null
+          sourcing_seconds: number | null
+          summary_date: string
+          total_seconds: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_seconds?: number | null
+          created_at?: string | null
+          development_seconds?: number | null
+          id?: string
+          listing_seconds?: number | null
+          other_seconds?: number | null
+          shipping_seconds?: number | null
+          sourcing_seconds?: number | null
+          summary_date: string
+          total_seconds?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_seconds?: number | null
+          created_at?: string | null
+          development_seconds?: number | null
+          id?: string
+          listing_seconds?: number | null
+          other_seconds?: number | null
+          shipping_seconds?: number | null
+          sourcing_seconds?: number | null
+          summary_date?: string
+          total_seconds?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_daily_summaries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          category: string
+          created_at: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          is_manual_entry: boolean | null
+          is_paused: boolean | null
+          notes: string | null
+          paused_duration_seconds: number | null
+          started_at: string
+          task_instance_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          is_manual_entry?: boolean | null
+          is_paused?: boolean | null
+          notes?: string | null
+          paused_duration_seconds?: number | null
+          started_at: string
+          task_instance_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          is_manual_entry?: boolean | null
+          is_paused?: boolean | null
+          notes?: string | null
+          paused_duration_seconds?: number | null
+          started_at?: string
+          task_instance_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_task_instance_id_fkey"
+            columns: ["task_instance_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_task_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tracked_asins: {
         Row: {
@@ -5875,6 +6410,259 @@ export type Database = {
             foreignKeyName: "user_settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_config: {
+        Row: {
+          audio_break_complete: string | null
+          audio_enabled: boolean | null
+          audio_work_complete: string | null
+          created_at: string | null
+          id: string
+          notification_dispatch_hours: number | null
+          notification_overdue_orders: boolean | null
+          notification_resolution_threshold: number | null
+          notification_sync_failure: boolean | null
+          notifications_enabled: boolean | null
+          pomodoro_classic_break: number | null
+          pomodoro_classic_work: number | null
+          pomodoro_daily_target: number | null
+          pomodoro_long_break: number | null
+          pomodoro_long_work: number | null
+          pomodoro_sessions_before_long_break: number | null
+          target_amazon_listings: number | null
+          target_bricklink_weekly_value: number | null
+          target_daily_listed_value: number | null
+          target_daily_sold_value: number | null
+          target_ebay_listings: number | null
+          time_categories: Json | null
+          updated_at: string | null
+          user_id: string
+          working_days: number | null
+        }
+        Insert: {
+          audio_break_complete?: string | null
+          audio_enabled?: boolean | null
+          audio_work_complete?: string | null
+          created_at?: string | null
+          id?: string
+          notification_dispatch_hours?: number | null
+          notification_overdue_orders?: boolean | null
+          notification_resolution_threshold?: number | null
+          notification_sync_failure?: boolean | null
+          notifications_enabled?: boolean | null
+          pomodoro_classic_break?: number | null
+          pomodoro_classic_work?: number | null
+          pomodoro_daily_target?: number | null
+          pomodoro_long_break?: number | null
+          pomodoro_long_work?: number | null
+          pomodoro_sessions_before_long_break?: number | null
+          target_amazon_listings?: number | null
+          target_bricklink_weekly_value?: number | null
+          target_daily_listed_value?: number | null
+          target_daily_sold_value?: number | null
+          target_ebay_listings?: number | null
+          time_categories?: Json | null
+          updated_at?: string | null
+          user_id: string
+          working_days?: number | null
+        }
+        Update: {
+          audio_break_complete?: string | null
+          audio_enabled?: boolean | null
+          audio_work_complete?: string | null
+          created_at?: string | null
+          id?: string
+          notification_dispatch_hours?: number | null
+          notification_overdue_orders?: boolean | null
+          notification_resolution_threshold?: number | null
+          notification_sync_failure?: boolean | null
+          notifications_enabled?: boolean | null
+          pomodoro_classic_break?: number | null
+          pomodoro_classic_work?: number | null
+          pomodoro_daily_target?: number | null
+          pomodoro_long_break?: number | null
+          pomodoro_long_work?: number | null
+          pomodoro_sessions_before_long_break?: number | null
+          target_amazon_listings?: number | null
+          target_bricklink_weekly_value?: number | null
+          target_daily_listed_value?: number | null
+          target_daily_sold_value?: number | null
+          target_ebay_listings?: number | null
+          time_categories?: Json | null
+          updated_at?: string | null
+          user_id?: string
+          working_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_task_definitions: {
+        Row: {
+          category: string
+          count_source: string | null
+          created_at: string | null
+          deep_link_params: Json | null
+          deep_link_url: string | null
+          description: string | null
+          estimated_minutes: number | null
+          frequency: string
+          frequency_days: number[] | null
+          icon: string | null
+          id: string
+          ideal_time: string | null
+          is_active: boolean | null
+          is_system: boolean | null
+          name: string
+          priority: number | null
+          sort_order: number | null
+          task_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          count_source?: string | null
+          created_at?: string | null
+          deep_link_params?: Json | null
+          deep_link_url?: string | null
+          description?: string | null
+          estimated_minutes?: number | null
+          frequency: string
+          frequency_days?: number[] | null
+          icon?: string | null
+          id?: string
+          ideal_time?: string | null
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name: string
+          priority?: number | null
+          sort_order?: number | null
+          task_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          count_source?: string | null
+          created_at?: string | null
+          deep_link_params?: Json | null
+          deep_link_url?: string | null
+          description?: string | null
+          estimated_minutes?: number | null
+          frequency?: string
+          frequency_days?: number[] | null
+          icon?: string | null
+          id?: string
+          ideal_time?: string | null
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name?: string
+          priority?: number | null
+          sort_order?: number | null
+          task_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_task_definitions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_task_instances: {
+        Row: {
+          category: string | null
+          completed_at: string | null
+          created_at: string | null
+          deep_link_url: string | null
+          deferred_from_date: string | null
+          description: string | null
+          due_time: string | null
+          estimated_minutes: number | null
+          icon: string | null
+          id: string
+          name: string | null
+          priority: number | null
+          scheduled_date: string
+          started_at: string | null
+          status: string | null
+          task_definition_id: string | null
+          task_type: string | null
+          time_spent_seconds: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          deep_link_url?: string | null
+          deferred_from_date?: string | null
+          description?: string | null
+          due_time?: string | null
+          estimated_minutes?: number | null
+          icon?: string | null
+          id?: string
+          name?: string | null
+          priority?: number | null
+          scheduled_date: string
+          started_at?: string | null
+          status?: string | null
+          task_definition_id?: string | null
+          task_type?: string | null
+          time_spent_seconds?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          deep_link_url?: string | null
+          deferred_from_date?: string | null
+          description?: string | null
+          due_time?: string | null
+          estimated_minutes?: number | null
+          icon?: string | null
+          id?: string
+          name?: string | null
+          priority?: number | null
+          scheduled_date?: string
+          started_at?: string | null
+          status?: string | null
+          task_definition_id?: string | null
+          task_type?: string | null
+          time_spent_seconds?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_task_instances_task_definition_id_fkey"
+            columns: ["task_definition_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_task_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_task_instances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -6212,6 +7000,10 @@ export type Database = {
           last_offer_date: string
         }[]
       }
+      create_recurring_pickups: {
+        Args: { p_count?: number; p_pickup_id: string }
+        Returns: undefined
+      }
       get_latest_listing_review: {
         Args: { p_listing_id: string; p_user_id: string }
         Returns: {
@@ -6261,6 +7053,7 @@ export type Database = {
           total_offers_sent: number
         }[]
       }
+      get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
       initialize_seeded_asins: {
         Args: never
@@ -6269,6 +7062,9 @@ export type Database = {
           skipped_count: number
         }[]
       }
+      seed_workflow_data:
+        | { Args: never; Returns: undefined }
+        | { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

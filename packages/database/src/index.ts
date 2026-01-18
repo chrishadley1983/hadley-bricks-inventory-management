@@ -92,3 +92,32 @@ export type BricqerStatsCache = Tables<'bricqer_stats_cache'>;
 export type PlatformCredential = PlatformCredentials;
 export type PlatformCredentialInsert = PlatformCredentialsInsert;
 export type PlatformCredentialUpdate = PlatformCredentialsUpdate;
+
+// Workflow types
+export type WorkflowConfig = Tables<'workflow_config'>;
+export type WorkflowConfigInsert = TablesInsert<'workflow_config'>;
+export type WorkflowConfigUpdate = TablesUpdate<'workflow_config'>;
+
+export type WorkflowTaskDefinition = Tables<'workflow_task_definitions'>;
+export type WorkflowTaskDefinitionInsert = TablesInsert<'workflow_task_definitions'>;
+export type WorkflowTaskDefinitionUpdate = TablesUpdate<'workflow_task_definitions'>;
+
+export type WorkflowTaskInstance = Tables<'workflow_task_instances'>;
+export type WorkflowTaskInstanceInsert = TablesInsert<'workflow_task_instances'>;
+export type WorkflowTaskInstanceUpdate = TablesUpdate<'workflow_task_instances'>;
+
+export type OffSystemTaskPreset = Tables<'off_system_task_presets'>;
+export type OffSystemTaskPresetInsert = TablesInsert<'off_system_task_presets'>;
+export type OffSystemTaskPresetUpdate = TablesUpdate<'off_system_task_presets'>;
+
+// Task status type
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'deferred';
+
+// Task priority type
+export type TaskPriority = 1 | 2 | 3 | 4; // 1=Critical, 2=Important, 3=Regular, 4=Low
+
+// Task frequency type
+export type TaskFrequency = 'daily' | 'twice_daily' | 'twice_weekly' | 'weekly' | 'monthly' | 'quarterly' | 'biannual' | 'adhoc';
+
+// Task category type
+export type TaskCategory = 'Development' | 'Listing' | 'Shipping' | 'Sourcing' | 'Admin' | 'Other';

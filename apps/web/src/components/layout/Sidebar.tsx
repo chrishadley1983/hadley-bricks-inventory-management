@@ -25,6 +25,7 @@ import {
   Sparkles,
   Calculator,
   PenLine,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -35,6 +36,7 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
+  { href: '/workflow', label: 'Workflow', icon: ClipboardList },
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
   { href: '/inventory', label: 'Inventory', icon: Package },
@@ -49,6 +51,7 @@ const mainNavItems: NavItem[] = [
 const reportNavItems: NavItem[] = [
   { href: '/reports', label: 'All Reports', icon: BarChart3 },
   { href: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
+  { href: '/cost-modelling', label: 'Cost Modelling', icon: Calculator },
   { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
   { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
 ];
