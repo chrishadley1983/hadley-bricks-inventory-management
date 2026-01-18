@@ -3999,6 +3999,190 @@ export type Database = {
           },
         ]
       }
+      negotiation_config: {
+        Row: {
+          automation_enabled: boolean
+          created_at: string
+          id: string
+          last_auto_run_at: string | null
+          last_auto_run_offers_sent: number | null
+          min_days_before_offer: number
+          offer_message_template: string | null
+          re_offer_cooldown_days: number
+          re_offer_escalation_percent: number
+          updated_at: string
+          user_id: string
+          weight_category: number
+          weight_item_value: number
+          weight_listing_age: number
+          weight_stock_level: number
+          weight_watchers: number
+        }
+        Insert: {
+          automation_enabled?: boolean
+          created_at?: string
+          id?: string
+          last_auto_run_at?: string | null
+          last_auto_run_offers_sent?: number | null
+          min_days_before_offer?: number
+          offer_message_template?: string | null
+          re_offer_cooldown_days?: number
+          re_offer_escalation_percent?: number
+          updated_at?: string
+          user_id: string
+          weight_category?: number
+          weight_item_value?: number
+          weight_listing_age?: number
+          weight_stock_level?: number
+          weight_watchers?: number
+        }
+        Update: {
+          automation_enabled?: boolean
+          created_at?: string
+          id?: string
+          last_auto_run_at?: string | null
+          last_auto_run_offers_sent?: number | null
+          min_days_before_offer?: number
+          offer_message_template?: string | null
+          re_offer_cooldown_days?: number
+          re_offer_escalation_percent?: number
+          updated_at?: string
+          user_id?: string
+          weight_category?: number
+          weight_item_value?: number
+          weight_listing_age?: number
+          weight_stock_level?: number
+          weight_watchers?: number
+        }
+        Relationships: []
+      }
+      negotiation_discount_rules: {
+        Row: {
+          created_at: string
+          discount_percentage: number
+          id: string
+          max_score: number
+          min_score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_percentage: number
+          id?: string
+          max_score: number
+          min_score: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          max_score?: number
+          min_score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      negotiation_offers: {
+        Row: {
+          buyer_masked_username: string | null
+          created_at: string
+          discount_percentage: number
+          ebay_listing_id: string
+          ebay_offer_id: string | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          inventory_item_id: string | null
+          is_re_offer: boolean
+          listing_title: string | null
+          offer_message: string | null
+          offer_price: number | null
+          original_price: number | null
+          previous_offer_id: string | null
+          score: number
+          score_factors: Json
+          sent_at: string
+          status: string
+          status_updated_at: string | null
+          trigger_type: string
+          user_id: string
+        }
+        Insert: {
+          buyer_masked_username?: string | null
+          created_at?: string
+          discount_percentage: number
+          ebay_listing_id: string
+          ebay_offer_id?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          is_re_offer?: boolean
+          listing_title?: string | null
+          offer_message?: string | null
+          offer_price?: number | null
+          original_price?: number | null
+          previous_offer_id?: string | null
+          score: number
+          score_factors?: Json
+          sent_at?: string
+          status?: string
+          status_updated_at?: string | null
+          trigger_type?: string
+          user_id: string
+        }
+        Update: {
+          buyer_masked_username?: string | null
+          created_at?: string
+          discount_percentage?: number
+          ebay_listing_id?: string
+          ebay_offer_id?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          is_re_offer?: boolean
+          listing_title?: string | null
+          offer_message?: string | null
+          offer_price?: number | null
+          original_price?: number | null
+          previous_offer_id?: string | null
+          score?: number
+          score_factors?: Json
+          sent_at?: string
+          status?: string
+          status_updated_at?: string | null
+          trigger_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negotiation_offers_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negotiation_offers_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negotiation_offers_previous_offer_id_fkey"
+            columns: ["previous_offer_id"]
+            isOneToOne: false
+            referencedRelation: "negotiation_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           amazon_link_method: string | null
@@ -6015,6 +6199,19 @@ export type Database = {
           transaction_count: number
         }[]
       }
+      can_re_offer: {
+        Args: {
+          p_cooldown_days?: number
+          p_ebay_listing_id: string
+          p_user_id: string
+        }
+        Returns: {
+          can_send: boolean
+          days_since_last: number
+          last_discount: number
+          last_offer_date: string
+        }[]
+      }
       get_latest_listing_review: {
         Args: { p_listing_id: string; p_user_id: string }
         Returns: {
@@ -6049,6 +6246,19 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: {
           local_category: string
+        }[]
+      }
+      get_negotiation_metrics: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          acceptance_rate: number
+          avg_discount_converted: number
+          avg_discount_sent: number
+          offers_accepted: number
+          offers_declined: number
+          offers_expired: number
+          offers_pending: number
+          total_offers_sent: number
         }[]
       }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }

@@ -1,0 +1,870 @@
+{
+  "version": "1.0",
+  "lastFullRun": "2026-01-18T12:00:00.000Z",
+  "lastIncrementalRun": "2026-01-18T19:00:00.000Z",
+  "runInProgress": false,
+  "lastRunStatus": "document-complete",
+  "coverage": {
+    "inventory": 100,
+    "purchases": 100,
+    "orders": 100,
+    "ebay": 100,
+    "amazon": 100,
+    "listing-assistant": 100,
+    "listing-optimiser": 100,
+    "purchase-evaluator": 100,
+    "reports": 100,
+    "transactions": 100,
+    "arbitrage": 100,
+    "bricklink": 100,
+    "brickowl": 100,
+    "dashboard": 100,
+    "sync": 100,
+    "authentication": 100,
+    "repricing": 100,
+    "platform-stock": 100,
+    "set-lookup": 100,
+    "settings": 100
+  },
+  "overallCoverage": 100,
+  "queue": {
+    "pending": [],
+    "inProgress": null,
+    "completed": ["inventory", "purchases", "orders", "ebay", "amazon", "listing-assistant", "listing-optimiser", "purchase-evaluator", "reports", "transactions", "arbitrage", "bricklink", "brickowl", "dashboard", "sync", "authentication", "repricing", "platform-stock", "set-lookup", "settings"],
+    "failed": []
+  },
+  "documentedFiles": {
+    "inventory": [
+      "docs/functional/inventory/overview.md",
+      "docs/functional/inventory/viewing-inventory.md",
+      "docs/functional/inventory/adding-inventory.md",
+      "docs/functional/inventory/bulk-operations.md",
+      "docs/functional/inventory/ebay-integration.md"
+    ],
+    "purchases": [
+      "docs/functional/purchases/overview.md",
+      "docs/functional/purchases/viewing-purchases.md",
+      "docs/functional/purchases/adding-purchases.md",
+      "docs/functional/purchases/mileage-tracking.md"
+    ],
+    "orders": [
+      "docs/functional/orders/overview.md",
+      "docs/functional/orders/viewing-orders.md",
+      "docs/functional/orders/ebay-orders.md",
+      "docs/functional/orders/amazon-orders.md",
+      "docs/functional/orders/order-confirmation.md"
+    ],
+    "ebay": [
+      "docs/functional/ebay/overview.md",
+      "docs/functional/ebay/ebay-authentication.md",
+      "docs/functional/ebay/ebay-stock-management.md",
+      "docs/functional/ebay/listing-creation.md",
+      "docs/functional/ebay/listing-optimiser.md",
+      "docs/functional/ebay/ebay-transaction-sync.md"
+    ],
+    "amazon": [
+      "docs/functional/amazon/overview.md",
+      "docs/functional/amazon/sync-queue.md",
+      "docs/functional/amazon/order-sync.md",
+      "docs/functional/amazon/transaction-sync.md"
+    ],
+    "listing-assistant": [
+      "docs/functional/listing-assistant/overview.md",
+      "docs/functional/listing-assistant/generator.md",
+      "docs/functional/listing-assistant/templates.md",
+      "docs/functional/listing-assistant/image-studio.md",
+      "docs/functional/listing-assistant/listing-refresh.md"
+    ],
+    "listing-optimiser": [
+      "docs/functional/listing-optimiser/overview.md",
+      "docs/functional/listing-optimiser/buyer-negotiation.md",
+      "docs/functional/ebay/listing-optimiser.md"
+    ],
+    "purchase-evaluator": [
+      "docs/functional/purchase-evaluator/overview.md",
+      "docs/functional/purchase-evaluator/creating-evaluation.md",
+      "docs/functional/purchase-evaluator/photo-analysis.md",
+      "docs/functional/purchase-evaluator/conversion.md"
+    ],
+    "reports": [
+      "docs/functional/reports/overview.md",
+      "docs/functional/reports/profit-loss.md",
+      "docs/functional/reports/inventory-valuation.md",
+      "docs/functional/reports/inventory-aging.md",
+      "docs/functional/reports/platform-performance.md",
+      "docs/functional/reports/purchase-analysis.md",
+      "docs/functional/reports/daily-activity.md"
+    ],
+    "transactions": [
+      "docs/functional/transactions/overview.md",
+      "docs/functional/transactions/monzo.md",
+      "docs/functional/transactions/ebay.md",
+      "docs/functional/transactions/paypal.md",
+      "docs/functional/transactions/bricklink.md",
+      "docs/functional/transactions/brickowl.md",
+      "docs/functional/transactions/amazon.md"
+    ],
+    "arbitrage": [
+      "docs/functional/arbitrage/overview.md",
+      "docs/functional/arbitrage/amazon-arbitrage.md",
+      "docs/functional/arbitrage/ebay-arbitrage.md",
+      "docs/functional/arbitrage/seeded-asins.md"
+    ],
+    "bricklink": [
+      "docs/functional/bricklink/overview.md",
+      "docs/functional/bricklink/bricklink-uploads.md",
+      "docs/functional/bricklink/bricklink-authentication.md",
+      "docs/functional/bricklink/order-sync.md"
+    ],
+    "brickowl": [
+      "docs/functional/brickowl/overview.md",
+      "docs/functional/brickowl/brickowl-authentication.md",
+      "docs/functional/brickowl/order-sync.md"
+    ],
+    "dashboard": [
+      "docs/functional/dashboard/overview.md"
+    ],
+    "sync": [
+      "docs/functional/sync/overview.md"
+    ],
+    "authentication": [
+      "docs/functional/authentication/overview.md",
+      "docs/functional/authentication/sign-in.md",
+      "docs/functional/authentication/registration.md"
+    ],
+    "repricing": [
+      "docs/functional/repricing/overview.md",
+      "docs/functional/repricing/viewing-repricing.md",
+      "docs/functional/repricing/editing-prices.md",
+      "docs/functional/repricing/profit-analysis.md"
+    ],
+    "platform-stock": [
+      "docs/functional/platform-stock/overview.md",
+      "docs/functional/platform-stock/viewing-listings.md",
+      "docs/functional/platform-stock/comparing-stock.md",
+      "docs/functional/platform-stock/importing-listings.md"
+    ],
+    "set-lookup": [
+      "docs/functional/set-lookup/overview.md",
+      "docs/functional/set-lookup/looking-up-set.md",
+      "docs/functional/set-lookup/viewing-pricing.md"
+    ],
+    "settings": [
+      "docs/functional/settings/overview.md",
+      "docs/functional/settings/managing-integrations.md",
+      "docs/functional/settings/resolving-inventory.md"
+    ]
+  },
+  "userJourneys": {
+    "inventory": [
+      "viewing-inventory",
+      "adding-inventory",
+      "bulk-operations",
+      "ebay-integration"
+    ],
+    "purchases": [
+      "viewing-purchases",
+      "adding-purchases",
+      "mileage-tracking"
+    ],
+    "orders": [
+      "viewing-orders",
+      "ebay-orders",
+      "amazon-orders",
+      "order-confirmation"
+    ],
+    "ebay": [
+      "ebay-authentication",
+      "ebay-stock-management",
+      "listing-creation",
+      "listing-optimiser",
+      "ebay-transaction-sync"
+    ],
+    "amazon": [
+      "sync-queue",
+      "order-sync",
+      "transaction-sync"
+    ],
+    "listing-assistant": [
+      "generator",
+      "templates",
+      "image-studio",
+      "listing-refresh"
+    ],
+    "listing-optimiser": [
+      "ai-analysis",
+      "buyer-negotiation"
+    ],
+    "purchase-evaluator": [
+      "creating-evaluation",
+      "photo-analysis",
+      "conversion"
+    ],
+    "reports": [
+      "profit-loss",
+      "inventory-valuation",
+      "inventory-aging",
+      "platform-performance",
+      "purchase-analysis",
+      "daily-activity"
+    ],
+    "transactions": [
+      "monzo",
+      "ebay",
+      "paypal",
+      "bricklink",
+      "brickowl",
+      "amazon"
+    ],
+    "arbitrage": [
+      "amazon-arbitrage",
+      "ebay-arbitrage",
+      "seeded-asins"
+    ],
+    "bricklink": [
+      "bricklink-uploads",
+      "bricklink-authentication",
+      "order-sync"
+    ],
+    "brickowl": [
+      "brickowl-authentication",
+      "order-sync"
+    ],
+    "dashboard": [],
+    "authentication": [
+      "sign-in",
+      "registration"
+    ],
+    "sync": [
+      "google-sheets-sync",
+      "monzo-auto-sync",
+      "paypal-sync"
+    ],
+    "repricing": [
+      "viewing-repricing",
+      "editing-prices",
+      "profit-analysis"
+    ],
+    "platform-stock": [
+      "viewing-listings",
+      "comparing-stock",
+      "importing-listings"
+    ],
+    "set-lookup": [
+      "looking-up-set",
+      "viewing-pricing"
+    ],
+    "settings": [
+      "managing-integrations",
+      "resolving-inventory"
+    ]
+  },
+  "screenshots": {},
+  "featureAreas": {
+    "inventory": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T12:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/inventory/page.tsx",
+          "apps/web/src/app/(dashboard)/inventory/[id]/page.tsx",
+          "apps/web/src/app/(dashboard)/inventory/[id]/edit/page.tsx",
+          "apps/web/src/app/(dashboard)/inventory/new/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/inventory/InventoryColumns.tsx",
+          "apps/web/src/components/features/inventory/InventoryFilters.tsx",
+          "apps/web/src/components/features/inventory/InventoryDetail.tsx",
+          "apps/web/src/components/features/inventory/AdvancedFilters.tsx",
+          "apps/web/src/components/features/inventory/BulkEditDialog.tsx",
+          "apps/web/src/components/features/inventory/NaturalLanguageInput.tsx",
+          "apps/web/src/components/features/inventory/BulkEntryGrid.tsx",
+          "apps/web/src/components/features/inventory/CsvImportWizard.tsx",
+          "apps/web/src/components/features/inventory/PhotoInput.tsx",
+          "apps/web/src/components/features/inventory/PurchaseLookup.tsx",
+          "apps/web/src/components/features/inventory/QuickPurchaseDialog.tsx",
+          "apps/web/src/components/features/inventory/InventoryAddTabs.tsx",
+          "apps/web/src/components/features/inventory/CreateEbayListingModal.tsx",
+          "apps/web/src/components/features/inventory/EbayListingDetailsDialog.tsx",
+          "apps/web/src/components/features/inventory/PushToEbayButton.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/inventory.service.ts"
+        ],
+        "repositories": [
+          "apps/web/src/lib/repositories/inventory.repository.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-inventory.ts",
+          "apps/web/src/hooks/use-inventory-import.ts",
+          "apps/web/src/hooks/use-parse-inventory.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 1
+    },
+    "purchases": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T14:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/purchases/page.tsx",
+          "apps/web/src/app/(dashboard)/purchases/[id]/page.tsx",
+          "apps/web/src/app/(dashboard)/purchases/[id]/edit/page.tsx",
+          "apps/web/src/app/(dashboard)/purchases/new/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/purchases/PurchaseTable.tsx",
+          "apps/web/src/components/features/purchases/PurchaseFilters.tsx",
+          "apps/web/src/components/features/purchases/PurchaseBulkEditDialog.tsx",
+          "apps/web/src/components/features/purchases/QuickAddPurchase.tsx",
+          "apps/web/src/components/features/purchases/MileageSection.tsx",
+          "apps/web/src/components/features/purchases/MileageFormInline.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/purchase.service.ts",
+          "apps/web/src/lib/services/purchase-image.service.ts",
+          "apps/web/src/lib/services/purchase-profitability.service.ts"
+        ],
+        "repositories": [
+          "apps/web/src/lib/repositories/purchase.repository.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-purchases.ts",
+          "apps/web/src/hooks/use-purchase-search.ts",
+          "apps/web/src/hooks/use-purchase-images.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 2
+    },
+    "orders": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T16:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/orders/page.tsx",
+          "apps/web/src/app/(dashboard)/orders/[id]/page.tsx",
+          "apps/web/src/app/(dashboard)/orders/ebay/page.tsx",
+          "apps/web/src/app/(dashboard)/orders/ebay/[orderId]/page.tsx",
+          "apps/web/src/app/(dashboard)/orders/amazon/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/orders/ConfirmOrdersDialog.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/order-sync.service.ts",
+          "apps/web/src/lib/services/order-status.service.ts",
+          "apps/web/src/lib/services/order-fulfilment.service.ts"
+        ],
+        "repositories": [
+          "apps/web/src/lib/repositories/order.repository.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-orders.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 3
+    },
+    "ebay": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T17:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/ebay-stock/page.tsx",
+          "apps/web/src/app/(dashboard)/ebay-stock/sku-issues/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/ebay-stock/EbayListingsView.tsx",
+          "apps/web/src/components/features/ebay-stock/EbayListingsFilters.tsx",
+          "apps/web/src/components/features/ebay-stock/EbayComparisonView.tsx",
+          "apps/web/src/components/features/ebay-stock/EbayComparisonFilters.tsx",
+          "apps/web/src/components/features/ebay-stock/EbayStockHeader.tsx",
+          "apps/web/src/components/features/ebay-stock/SkuIssuesBanner.tsx",
+          "apps/web/src/components/features/ebay-stock/PriceUpdateDialog.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/ebay/ebay-auth.service.ts",
+          "apps/web/src/lib/ebay/ebay-order-sync.service.ts",
+          "apps/web/src/lib/ebay/ebay-transaction-sync.service.ts",
+          "apps/web/src/lib/ebay/ebay-inventory-linking.service.ts",
+          "apps/web/src/lib/ebay/ebay-fulfilment.service.ts",
+          "apps/web/src/lib/ebay/ebay-finances.service.ts",
+          "apps/web/src/lib/ebay/ebay-auto-sync.service.ts",
+          "apps/web/src/lib/ebay/ebay-signature.service.ts",
+          "apps/web/src/lib/ebay/listing-creation.service.ts",
+          "apps/web/src/lib/ebay/listing-generation.service.ts",
+          "apps/web/src/lib/ebay/listing-quality-review.service.ts",
+          "apps/web/src/lib/ebay/ebay-listing-refresh.service.ts",
+          "apps/web/src/lib/ebay/listing-optimiser.service.ts",
+          "apps/web/src/lib/ebay/negotiation.service.ts",
+          "apps/web/src/lib/ebay/negotiation-scoring.service.ts",
+          "apps/web/src/lib/ebay/ebay-business-policies.service.ts",
+          "apps/web/src/lib/ebay/ebay-image-upload.service.ts",
+          "apps/web/src/lib/ebay/best-offer-bulk-update.service.ts"
+        ],
+        "clients": [
+          "apps/web/src/lib/ebay/ebay-api.adapter.ts",
+          "apps/web/src/lib/ebay/ebay-browse.client.ts",
+          "apps/web/src/lib/ebay/ebay-analytics.client.ts",
+          "apps/web/src/lib/ebay/ebay-finding.client.ts",
+          "apps/web/src/lib/ebay/ebay-negotiation.client.ts",
+          "apps/web/src/lib/platform-stock/ebay/ebay-trading.client.ts",
+          "apps/web/src/lib/platform-stock/ebay/ebay-stock.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-ebay-sync.ts",
+          "apps/web/src/hooks/use-ebay-stock.ts"
+        ]
+      },
+      "complexity": "very-high",
+      "priority": 4
+    },
+    "amazon": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T17:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/amazon-sync/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/amazon-sync/AddToSyncButton.tsx",
+          "apps/web/src/components/features/amazon-sync/PriceConflictDialog.tsx",
+          "apps/web/src/components/features/amazon-sync/SyncFeedDetailDialog.tsx",
+          "apps/web/src/components/features/amazon-sync/SyncQueueEmptyState.tsx",
+          "apps/web/src/components/features/amazon-sync/SyncQueueSummary.tsx",
+          "apps/web/src/components/features/amazon-sync/SyncQueueTable.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/amazon-sync.service.ts",
+          "apps/web/src/lib/services/amazon-backfill.service.ts",
+          "apps/web/src/lib/services/amazon-fee-reconciliation.service.ts",
+          "apps/web/src/lib/amazon/amazon-transaction-sync.service.ts",
+          "apps/web/src/lib/amazon/amazon-inventory-linking.service.ts",
+          "apps/web/src/lib/amazon/amazon-sync.service.ts"
+        ],
+        "clients": [
+          "apps/web/src/lib/amazon/client.ts",
+          "apps/web/src/lib/amazon/adapter.ts",
+          "apps/web/src/lib/amazon/amazon-finances.client.ts",
+          "apps/web/src/lib/amazon/amazon-feeds.client.ts",
+          "apps/web/src/lib/amazon/amazon-catalog.client.ts",
+          "apps/web/src/lib/amazon/amazon-pricing.client.ts",
+          "apps/web/src/lib/amazon/amazon-listings.client.ts",
+          "apps/web/src/lib/platform-stock/amazon/amazon-stock.service.ts",
+          "apps/web/src/lib/platform-stock/amazon/amazon-reports.client.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-amazon-sync.ts",
+          "apps/web/src/hooks/use-amazon-transaction-sync.ts"
+        ]
+      },
+      "complexity": "very-high",
+      "priority": 5
+    },
+    "listing-assistant": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T18:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/listing-assistant/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/listing-assistant/tabs/GeneratorTab.tsx",
+          "apps/web/src/components/features/listing-assistant/tabs/TemplatesTab.tsx",
+          "apps/web/src/components/features/listing-assistant/tabs/HistoryTab.tsx",
+          "apps/web/src/components/features/listing-assistant/tabs/ImageStudioTab.tsx",
+          "apps/web/src/components/features/listing-assistant/tabs/RefreshTab.tsx",
+          "apps/web/src/components/features/listing-assistant/generator/ImageUpload.tsx",
+          "apps/web/src/components/features/listing-assistant/generator/InventoryImportModal.tsx",
+          "apps/web/src/components/features/listing-assistant/generator/EbaySoldItemsDisplay.tsx",
+          "apps/web/src/components/features/listing-assistant/shared/RichTextEditor.tsx",
+          "apps/web/src/components/features/listing-assistant/refresh/EligibleListingsTable.tsx",
+          "apps/web/src/components/features/listing-assistant/refresh/RefreshJobProgress.tsx"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/listing-assistant/use-generator.ts",
+          "apps/web/src/hooks/listing-assistant/use-templates.ts",
+          "apps/web/src/hooks/listing-assistant/use-listings.ts",
+          "apps/web/src/hooks/listing-assistant/use-settings.ts",
+          "apps/web/src/hooks/listing-assistant/use-image-processor.ts",
+          "apps/web/src/hooks/listing-refresh/use-eligible-listings.ts",
+          "apps/web/src/hooks/listing-refresh/use-execute-refresh.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 6
+    },
+    "listing-optimiser": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T18:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/listing-optimiser/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/listing-assistant/tabs/OptimiserTab.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/ebay/listing-optimiser.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/useListingOptimiser.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 7
+    },
+    "purchase-evaluator": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:15:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/purchase-evaluator/page.tsx",
+          "apps/web/src/app/(dashboard)/purchase-evaluator/[id]/page.tsx",
+          "apps/web/src/app/(dashboard)/purchase-evaluator/[id]/edit/page.tsx",
+          "apps/web/src/app/(dashboard)/purchase-evaluator/new/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/purchase-evaluator/PurchaseEvaluatorWizard.tsx",
+          "apps/web/src/components/features/purchase-evaluator/InventoryItemsEditor.tsx",
+          "apps/web/src/components/features/purchase-evaluator/ConvertToPurchaseDialog.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/InputStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/LookupStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/ParseStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/PhotoAnalysisStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/PhotoInputStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/ReviewStep.tsx",
+          "apps/web/src/components/features/purchase-evaluator/steps/SavedStep.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/evaluation-conversion.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-purchase-evaluator.ts",
+          "apps/web/src/hooks/use-photo-analysis.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 8
+    },
+    "reports": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/reports/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/inventory-valuation/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/platform-performance/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/purchase-analysis/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/inventory-aging/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/profit-loss/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/daily-activity/page.tsx",
+          "apps/web/src/app/(dashboard)/reports/settings/page.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/reporting.service.ts",
+          "apps/web/src/lib/services/profit-loss-report.service.ts",
+          "apps/web/src/lib/services/profit.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-reports.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 9
+    },
+    "transactions": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:45:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/transactions/page.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/ebay/ebay-transaction-sync.service.ts",
+          "apps/web/src/lib/amazon/amazon-transaction-sync.service.ts",
+          "apps/web/src/lib/bricklink/bricklink-transaction-sync.service.ts",
+          "apps/web/src/lib/brickowl/brickowl-transaction-sync.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-bricklink-transaction-sync.ts",
+          "apps/web/src/hooks/use-brickowl-transaction-sync.ts",
+          "apps/web/src/hooks/use-amazon-transaction-sync.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 10
+    },
+    "bricklink": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T21:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/bricklink-uploads/page.tsx",
+          "apps/web/src/app/(dashboard)/bricklink-uploads/[id]/page.tsx",
+          "apps/web/src/app/(dashboard)/bricklink-uploads/[id]/edit/page.tsx",
+          "apps/web/src/app/(dashboard)/bricklink-uploads/new/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadTable.tsx",
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadForm.tsx",
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadDetail.tsx",
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadFilters.tsx",
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadSummary.tsx",
+          "apps/web/src/components/features/bricklink-uploads/BrickLinkUploadColumns.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/bricklink-sync.service.ts",
+          "apps/web/src/lib/services/bricklink-upload.service.ts",
+          "apps/web/src/lib/bricklink/bricklink-transaction-sync.service.ts"
+        ],
+        "clients": [
+          "apps/web/src/lib/bricklink/client.ts",
+          "apps/web/src/lib/bricklink/adapter.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-bricklink-uploads.ts",
+          "apps/web/src/hooks/use-bricklink-transaction-sync.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 11
+    },
+    "brickowl": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T22:00:00.000Z",
+      "files": {
+        "services": [
+          "apps/web/src/lib/services/brickowl-sync.service.ts",
+          "apps/web/src/lib/brickowl/brickowl-transaction-sync.service.ts"
+        ],
+        "clients": [
+          "apps/web/src/lib/brickowl/client.ts",
+          "apps/web/src/lib/brickowl/adapter.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-brickowl-transaction-sync.ts"
+        ]
+      },
+      "complexity": "low",
+      "priority": 12
+    },
+    "arbitrage": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T20:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/arbitrage/amazon/page.tsx",
+          "apps/web/src/app/(dashboard)/arbitrage/ebay/page.tsx",
+          "apps/web/src/app/(dashboard)/arbitrage/seeded/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/arbitrage/ArbitrageTable.tsx",
+          "apps/web/src/components/features/arbitrage/ArbitrageFilters.tsx",
+          "apps/web/src/components/features/arbitrage/ArbitrageDetailModal.tsx",
+          "apps/web/src/components/features/arbitrage/AmazonOffersModal.tsx",
+          "apps/web/src/components/features/arbitrage/EbayDetailModal.tsx",
+          "apps/web/src/components/features/arbitrage/ExcludedAsinsModal.tsx",
+          "apps/web/src/components/features/arbitrage/UnmappedAsinsTable.tsx",
+          "apps/web/src/components/features/arbitrage/SeededAsinManager.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/arbitrage/arbitrage.service.ts",
+          "apps/web/src/lib/arbitrage/seeded-discovery.service.ts",
+          "apps/web/src/lib/arbitrage/mapping.service.ts",
+          "apps/web/src/lib/arbitrage/calculations.ts",
+          "apps/web/src/lib/arbitrage/amazon-sync.service.ts",
+          "apps/web/src/lib/arbitrage/bricklink-sync.service.ts",
+          "apps/web/src/lib/arbitrage/ebay-sync.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-arbitrage.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 13
+    },
+    "repricing": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:00:00.000Z",
+      "files": {
+        "components": [
+          "apps/web/src/components/features/repricing/RepricingTable.tsx",
+          "apps/web/src/components/features/repricing/RepricingFilters.tsx",
+          "apps/web/src/components/features/repricing/RepricingView.tsx",
+          "apps/web/src/components/features/repricing/RepricingRow.tsx",
+          "apps/web/src/components/features/repricing/PushPriceButton.tsx",
+          "apps/web/src/components/features/repricing/ProfitCalculator.tsx"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-repricing.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 14
+    },
+    "platform-stock": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/platform-stock/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/platform-stock/ListingsView.tsx",
+          "apps/web/src/components/features/platform-stock/ListingsFilters.tsx",
+          "apps/web/src/components/features/platform-stock/ComparisonView.tsx",
+          "apps/web/src/components/features/platform-stock/PlatformStockHeader.tsx",
+          "apps/web/src/components/features/platform-stock/ImportStatusBanner.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/platform-stock/platform-stock.service.ts",
+          "apps/web/src/lib/platform-stock/ebay/ebay-stock.service.ts",
+          "apps/web/src/lib/platform-stock/amazon/amazon-stock.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-platform-stock.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 15
+    },
+    "dashboard": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T22:45:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/dashboard/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/dashboard/DashboardSummaryWidget.tsx",
+          "apps/web/src/components/features/dashboard/InventorySummaryWidget.tsx",
+          "apps/web/src/components/features/dashboard/StatusBreakdownWidget.tsx",
+          "apps/web/src/components/features/dashboard/FinancialSnapshotWidget.tsx",
+          "apps/web/src/components/features/dashboard/LowStockWidget.tsx",
+          "apps/web/src/components/features/dashboard/RecentActivityWidget.tsx",
+          "apps/web/src/components/features/dashboard/BricqerInventoryWidget.tsx"
+        ]
+      },
+      "complexity": "low",
+      "priority": 16
+    },
+    "set-lookup": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/set-lookup/page.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/brickset/SetLookupForm.tsx",
+          "apps/web/src/components/features/brickset/SetDetailsCard.tsx",
+          "apps/web/src/components/features/brickset/SetStockCard.tsx",
+          "apps/web/src/components/features/brickset/SetStockModal.tsx",
+          "apps/web/src/components/features/brickset/SetLookupEbayModal.tsx",
+          "apps/web/src/components/features/brickset/AmazonOffersModal.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/brickset-credentials.service.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 17
+    },
+    "settings": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T19:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/settings/integrations/page.tsx",
+          "apps/web/src/app/(dashboard)/settings/inventory-resolution/page.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/mileage.service.ts"
+        ],
+        "repositories": [
+          "apps/web/src/lib/repositories/credentials.repository.ts",
+          "apps/web/src/lib/repositories/mileage.repository.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-mileage.ts"
+        ]
+      },
+      "complexity": "low",
+      "priority": 18
+    },
+    "authentication": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T18:00:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(auth)/login/page.tsx",
+          "apps/web/src/app/(auth)/register/page.tsx",
+          "apps/web/src/app/(auth)/layout.tsx"
+        ],
+        "apiRoutes": [
+          "apps/web/src/app/api/auth/login/route.ts",
+          "apps/web/src/app/api/auth/register/route.ts",
+          "apps/web/src/app/api/auth/callback/route.ts"
+        ],
+        "services": [
+          "apps/web/src/lib/supabase/client.ts",
+          "apps/web/src/lib/supabase/server.ts"
+        ],
+        "repositories": [
+          "apps/web/src/lib/repositories/user.repository.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-auth.ts"
+        ],
+        "middleware": [
+          "apps/web/src/middleware.ts"
+        ]
+      },
+      "complexity": "low",
+      "priority": 19
+    },
+    "sync": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-18T23:15:00.000Z",
+      "files": {
+        "components": [
+          "apps/web/src/components/features/sync/SyncStatusBadge.tsx",
+          "apps/web/src/components/features/sync/SyncControls.tsx"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-sync.ts",
+          "apps/web/src/hooks/use-monzo-auto-sync.ts",
+          "apps/web/src/hooks/use-paypal-sync.ts"
+        ],
+        "stores": [
+          "apps/web/src/stores/sync.store.ts"
+        ]
+      },
+      "complexity": "medium",
+      "priority": 20
+    }
+  }
+}

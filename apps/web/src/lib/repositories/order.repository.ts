@@ -68,10 +68,10 @@ export class OrderRepository extends BaseRepository<
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    // Build query
+    // Build query - include order_items for display
     let query = this.supabase
       .from('platform_orders')
-      .select('*', { count: 'exact' })
+      .select('*, order_items(id, item_name, item_number, inventory_item_id)', { count: 'exact' })
       .eq('user_id', userId);
 
     if (filters?.platform) {

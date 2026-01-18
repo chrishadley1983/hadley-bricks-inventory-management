@@ -25,6 +25,7 @@ import {
   Download,
   Square,
   Calculator,
+  ExternalLink,
 } from 'lucide-react';
 import { ConfirmOrdersDialog } from '@/components/features/orders/ConfirmOrdersDialog';
 import { Button } from '@/components/ui/button';
@@ -1471,8 +1472,33 @@ export default function OrdersPage() {
                             : '-'}
                         </TableCell>
                         <TableCell>{order.buyer_name || '-'}</TableCell>
-                        <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground" title={(order as PlatformOrder & { items?: Array<{ title?: string }> }).items?.map((item) => item.title).filter(Boolean).join(', ') || order.notes || '-'}>
-                          {(order as PlatformOrder & { items?: Array<{ title?: string }> }).items?.map((item) => item.title).filter(Boolean).join(', ') || order.notes || '-'}
+                        <TableCell className="max-w-[200px]">
+                          {(() => {
+                            const orderWithItems = order as PlatformOrder & { order_items?: Array<{ id: string; item_name?: string | null; item_number?: string | null; inventory_item_id?: string | null }> };
+                            const items = orderWithItems.order_items || [];
+                            const itemNames = items.map((item) => item.item_name).filter(Boolean).join(', ');
+                            const linkedItem = items.find((item) => item.inventory_item_id);
+
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-sm text-muted-foreground" title={itemNames || order.notes || '-'}>
+                                  {itemNames || order.notes || '-'}
+                                </span>
+                                {linkedItem?.inventory_item_id && (
+                                  <a
+                                    href={`/inventory/${linkedItem.inventory_item_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="View linked inventory item"
+                                    className="flex-shrink-0"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5 text-green-600 hover:text-green-700" />
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(getEffectiveStatus(order))}>

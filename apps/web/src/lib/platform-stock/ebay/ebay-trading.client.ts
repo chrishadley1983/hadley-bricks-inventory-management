@@ -898,6 +898,51 @@ export class EbayTradingClient {
       };
     }
 
+    // Best Offer fields
+    if (request.bestOfferEnabled !== undefined) {
+      const currency = request.currency || 'GBP';
+      const bestOfferDetails: Record<string, unknown> = {
+        BestOfferEnabled: request.bestOfferEnabled ? 'true' : 'false',
+      };
+
+      // Only include prices when enabling Best Offer
+      if (request.bestOfferEnabled) {
+        if (request.bestOfferAutoAcceptPrice !== undefined) {
+          bestOfferDetails.BestOfferAutoAcceptPrice = {
+            '@_currencyID': currency,
+            '#text': String(request.bestOfferAutoAcceptPrice),
+          };
+        }
+        if (request.minimumBestOfferPrice !== undefined) {
+          bestOfferDetails.MinimumBestOfferPrice = {
+            '@_currencyID': currency,
+            '#text': String(request.minimumBestOfferPrice),
+          };
+        }
+      }
+
+      itemNode.BestOfferDetails = bestOfferDetails;
+    } else if (request.bestOfferAutoAcceptPrice !== undefined || request.minimumBestOfferPrice !== undefined) {
+      // Update just the prices without changing BestOfferEnabled status
+      const currency = request.currency || 'GBP';
+      const bestOfferDetails: Record<string, unknown> = {};
+
+      if (request.bestOfferAutoAcceptPrice !== undefined) {
+        bestOfferDetails.BestOfferAutoAcceptPrice = {
+          '@_currencyID': currency,
+          '#text': String(request.bestOfferAutoAcceptPrice),
+        };
+      }
+      if (request.minimumBestOfferPrice !== undefined) {
+        bestOfferDetails.MinimumBestOfferPrice = {
+          '@_currencyID': currency,
+          '#text': String(request.minimumBestOfferPrice),
+        };
+      }
+
+      itemNode.BestOfferDetails = bestOfferDetails;
+    }
+
     const xmlRequest = {
       ReviseFixedPriceItemRequest: {
         '@_xmlns': 'urn:ebay:apis:eBLBaseComponents',

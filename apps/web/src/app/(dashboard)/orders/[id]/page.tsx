@@ -530,17 +530,65 @@ export default function OrderDetailPage({
             {(() => {
               const rawData = order.raw_data as { lotCount?: number } | null;
               const lotCount = rawData?.lotCount;
-              const pieceCount = order.items_count;
+              const itemCount = order.items?.length || order.items_count || 0;
 
-              if (pieceCount || lotCount) {
-                const parts = [];
-                if (pieceCount) parts.push(`${pieceCount} item${pieceCount !== 1 ? 's' : ''}`);
-                if (lotCount) parts.push(`${lotCount} lot${lotCount !== 1 ? 's' : ''}`);
-                return (
-                  <p className="text-lg font-medium">{parts.join(' / ')}</p>
-                );
-              }
-              return <p className="text-muted-foreground">No item details available</p>;
+              return (
+                <div className="space-y-4">
+                  {/* Item count summary */}
+                  <p className="text-muted-foreground">
+                    {itemCount} item{itemCount !== 1 ? 's' : ''}
+                    {lotCount ? ` / ${lotCount} lot${lotCount !== 1 ? 's' : ''}` : ''}
+                  </p>
+
+                  {/* Item list */}
+                  {order.items && order.items.length > 0 ? (
+                    <div className="space-y-3">
+                      {order.items.map((item, index) => (
+                        <div key={item.id || index} className="flex items-start justify-between gap-4 py-2 border-b last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{item.item_name || 'Unknown Item'}</p>
+                              {item.inventory_item_id && (
+                                <a
+                                  href={`/inventory/${item.inventory_item_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="View linked inventory item"
+                                >
+                                  <Badge variant="outline" className="text-xs text-green-600 border-green-300 bg-green-50 hover:bg-green-100 cursor-pointer">
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    Linked
+                                  </Badge>
+                                </a>
+                              )}
+                            </div>
+                            {item.item_number && (
+                              <p className="text-sm text-muted-foreground font-mono">
+                                {order.platform === 'amazon' ? 'ASIN: ' : 'SKU: '}{item.item_number}
+                              </p>
+                            )}
+                            {item.condition && (
+                              <Badge variant="outline" className="mt-1 text-xs">
+                                {item.condition}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                            {item.unit_price !== null && (
+                              <p className="font-medium">
+                                {formatCurrency(item.unit_price, item.currency || order.currency)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No item details available</p>
+                  )}
+                </div>
+              );
             })()}
           </CardContent>
         </Card>

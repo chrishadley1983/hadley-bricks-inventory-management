@@ -6,11 +6,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Link2Off } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   OptimiserFilters,
   OptimiserTable,
   AnalysisPanel,
 } from '@/components/features/listing-optimiser';
+import { OffersTab } from '@/components/features/negotiation';
 import type {
   OptimiserFilters as FilterType,
   OptimiserListing,
@@ -294,44 +296,57 @@ export default function ListingOptimiserPage() {
     <>
       <Header title="Listing Optimiser" />
       <div className="p-6 space-y-6">
-        {/* Description */}
-        <div className="text-sm text-muted-foreground">
-          Review and optimize your eBay listings to improve quality scores and visibility.
-          Select listings and click Analyse to get AI-powered improvement suggestions.
-        </div>
+        <Tabs defaultValue="optimiser" className="w-full">
+          <TabsList>
+            <TabsTrigger value="optimiser">Optimiser</TabsTrigger>
+            <TabsTrigger value="offers" data-testid="negotiation-tab">Offers</TabsTrigger>
+          </TabsList>
 
-        {/* Filters and summary */}
-        <OptimiserFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          summary={data?.summary}
-          selectedCount={selectedIds.size}
-          onAnalyse={handleAnalyse}
-          isAnalysing={analyseMutation.isPending}
-        />
+          <TabsContent value="optimiser" className="mt-6 space-y-6">
+            {/* Description */}
+            <div className="text-sm text-muted-foreground">
+              Review and optimize your eBay listings to improve quality scores and visibility.
+              Select listings and click Analyse to get AI-powered improvement suggestions.
+            </div>
 
-        {/* Listings table */}
-        <OptimiserTable
-          listings={data?.listings || []}
-          isLoading={isLoading}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          onRowClick={handleRowClick}
-        />
+            {/* Filters and summary */}
+            <OptimiserFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              summary={data?.summary}
+              selectedCount={selectedIds.size}
+              onAnalyse={handleAnalyse}
+              isAnalysing={analyseMutation.isPending}
+            />
 
-        {/* Analysis panel */}
-        <AnalysisPanel
-          result={currentAnalysis}
-          isOpen={isPanelOpen}
-          onClose={handlePanelClose}
-          onApprove={handleApprove}
-          onSkip={handleSkip}
-          onReanalyse={handleReanalyse}
-          onAllReviewed={handleAllReviewed}
-          isApplying={applyMutation.isPending}
-          isReanalysing={analyseMutation.isPending}
-          previousScore={previousScore}
-        />
+            {/* Listings table */}
+            <OptimiserTable
+              listings={data?.listings || []}
+              isLoading={isLoading}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              onRowClick={handleRowClick}
+            />
+
+            {/* Analysis panel */}
+            <AnalysisPanel
+              result={currentAnalysis}
+              isOpen={isPanelOpen}
+              onClose={handlePanelClose}
+              onApprove={handleApprove}
+              onSkip={handleSkip}
+              onReanalyse={handleReanalyse}
+              onAllReviewed={handleAllReviewed}
+              isApplying={applyMutation.isPending}
+              isReanalysing={analyseMutation.isPending}
+              previousScore={previousScore}
+            />
+          </TabsContent>
+
+          <TabsContent value="offers" className="mt-6">
+            <OffersTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );

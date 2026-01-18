@@ -41,7 +41,21 @@ import {
   Package,
   Archive,
   Search,
+  MapPin,
+  ClipboardList,
 } from 'lucide-react';
+
+interface InventoryCandidate {
+  id: string;
+  set_number: string;
+  item_name: string | null;
+  storage_location: string | null;
+  status: string | null;
+  condition?: string | null;
+  amazon_asin?: string | null;
+  created_at?: string | null;
+  isPickListRecommended?: boolean; // True for the first item (FIFO pick list selection)
+}
 
 interface OrderItemMatch {
   orderItemId: string;
@@ -49,14 +63,9 @@ interface OrderItemMatch {
   itemName: string;
   quantity: number;
   matchedInventoryId: string | null;
-  matchedInventory: {
-    id: string;
-    set_number: string;
-    item_name: string | null;
-    storage_location: string | null;
-    status: string | null;
-  } | null;
+  matchedInventory: InventoryCandidate | null;
   matchStatus: 'matched' | 'unmatched' | 'multiple';
+  matchCandidates?: InventoryCandidate[];
 }
 
 interface OrderMatchResult {
@@ -141,6 +150,7 @@ async function fetchOrdersForConfirmation(
 async function confirmOrders(data: {
   orderIds: string[];
   archiveLocation?: string;
+  itemMappings?: Record<string, string>;
 }): Promise<ConfirmOrdersResponse> {
   const response = await fetch('/api/orders/confirm-fulfilled', {
     method: 'POST',
@@ -673,6 +683,9 @@ function AmazonConfirmContent({
     `SOLD-${new Date().toISOString().slice(0, 7)}`
   );
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
+  // Track manual inventory selections for items with multiple matches
+  // Key: orderItemId, Value: inventoryId
+  const [itemMappings, setItemMappings] = useState<Record<string, string>>({});
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['orders', 'confirm', 'amazon'],
@@ -700,16 +713,37 @@ function AmazonConfirmContent({
     ? orders.filter((o) => !o.allMatched)
     : orders;
 
-  const matchedOrders = orders.filter((o) => o.allMatched);
-  const selectedMatchedOrders = Array.from(selectedOrderIds).filter((id) =>
-    matchedOrders.some((o) => o.orderId === id)
+  // Helper function to check if an item is resolved (matched or manually selected)
+  const isItemResolved = (item: OrderItemMatch): boolean => {
+    if (item.matchStatus === 'matched') return true;
+    if (item.matchStatus === 'multiple' && itemMappings[item.orderItemId]) return true;
+    return false;
+  };
+
+  // Helper function to check if an order is fully resolved (all items matched or selected)
+  const isOrderResolved = (order: OrderMatchResult): boolean => {
+    return order.items.every(isItemResolved);
+  };
+
+  // Orders that are ready to confirm (all items resolved)
+  const resolvedOrders = orders.filter(isOrderResolved);
+  const selectedResolvedOrders = Array.from(selectedOrderIds).filter((id) =>
+    resolvedOrders.some((o) => o.orderId === id)
   );
 
+  // Handle selecting an inventory item for a "multiple" item
+  const handleSelectInventory = (orderItemId: string, inventoryId: string) => {
+    setItemMappings((prev) => ({
+      ...prev,
+      [orderItemId]: inventoryId,
+    }));
+  };
+
   const handleSelectAll = () => {
-    if (selectedMatchedOrders.length === matchedOrders.length) {
+    if (selectedResolvedOrders.length === resolvedOrders.length) {
       setSelectedOrderIds(new Set());
     } else {
-      setSelectedOrderIds(new Set(matchedOrders.map((o) => o.orderId)));
+      setSelectedOrderIds(new Set(resolvedOrders.map((o) => o.orderId)));
     }
   };
 
@@ -724,10 +758,11 @@ function AmazonConfirmContent({
   };
 
   const handleConfirm = () => {
-    if (selectedMatchedOrders.length === 0) return;
+    if (selectedResolvedOrders.length === 0) return;
     confirmMutation.mutate({
-      orderIds: selectedMatchedOrders,
+      orderIds: selectedResolvedOrders,
       archiveLocation,
+      itemMappings: Object.keys(itemMappings).length > 0 ? itemMappings : undefined,
     });
   };
 
@@ -829,11 +864,11 @@ function AmazonConfirmContent({
                   <TableHead className="w-12">
                     <Checkbox
                       checked={
-                        matchedOrders.length > 0 &&
-                        selectedMatchedOrders.length === matchedOrders.length
+                        resolvedOrders.length > 0 &&
+                        selectedResolvedOrders.length === resolvedOrders.length
                       }
                       onCheckedChange={handleSelectAll}
-                      disabled={matchedOrders.length === 0}
+                      disabled={resolvedOrders.length === 0}
                     />
                   </TableHead>
                   <TableHead>Order</TableHead>
@@ -843,74 +878,149 @@ function AmazonConfirmContent({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {displayedOrders.map((order) => (
-                  <TableRow
-                    key={order.orderId}
-                    className={selectedOrderIds.has(order.orderId) ? 'bg-muted/50' : ''}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedOrderIds.has(order.orderId)}
-                        onCheckedChange={() => handleToggleOrder(order.orderId)}
-                        disabled={!order.allMatched}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-mono text-sm">{order.platformOrderId}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {order.buyerName || 'Unknown buyer'}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {order.orderDate
-                        ? format(new Date(order.orderDate), 'MMM d, yyyy')
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {order.items.map((item) => (
-                          <div
-                            key={item.orderItemId}
-                            className="flex items-center gap-2 text-xs"
-                          >
-                            {getMatchStatusBadge(item.matchStatus)}
-                            <span className="truncate max-w-[200px]" title={item.itemName}>
-                              {item.itemNumber || 'No SKU'}: {item.itemName}
-                            </span>
-                            {item.matchedInventory && (
-                              <span className="text-muted-foreground">
-                                @ {item.matchedInventory.storage_location || 'No location'}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {order.allMatched ? (
-                        <Badge className="bg-green-100 text-green-800">
-                          Ready
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-yellow-600">
-                          {order.unmatchedCount} unmatched
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {displayedOrders.map((order) => {
+                  const orderResolved = isOrderResolved(order);
+                  return (
+                    <TableRow
+                      key={order.orderId}
+                      className={selectedOrderIds.has(order.orderId) ? 'bg-muted/50' : ''}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedOrderIds.has(order.orderId)}
+                          onCheckedChange={() => handleToggleOrder(order.orderId)}
+                          disabled={!orderResolved}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-mono text-sm">{order.platformOrderId}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {order.buyerName || 'Unknown buyer'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {order.orderDate
+                          ? format(new Date(order.orderDate), 'MMM d, yyyy')
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          {order.items.map((item) => {
+                            const selectedInventoryId = itemMappings[item.orderItemId];
+                            const selectedCandidate = selectedInventoryId
+                              ? item.matchCandidates?.find((c) => c.id === selectedInventoryId)
+                              : null;
+                            const displayInventory = item.matchedInventory || selectedCandidate;
+
+                            return (
+                              <div
+                                key={item.orderItemId}
+                                className="space-y-1"
+                              >
+                                <div className="flex items-center gap-2 text-xs">
+                                  {/* Show badge based on resolution status */}
+                                  {item.matchStatus === 'matched' ? (
+                                    getMatchStatusBadge('matched')
+                                  ) : item.matchStatus === 'multiple' && selectedInventoryId ? (
+                                    <Badge className="bg-green-100 text-green-800">
+                                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                                      Selected
+                                    </Badge>
+                                  ) : (
+                                    getMatchStatusBadge(item.matchStatus)
+                                  )}
+                                  <span className="truncate max-w-[150px]" title={item.itemName}>
+                                    {item.itemNumber || 'No SKU'}: {item.itemName}
+                                  </span>
+                                </div>
+
+                                {/* Show storage location for matched/selected items */}
+                                {displayInventory && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground ml-4">
+                                    <MapPin className="h-3 w-3" />
+                                    <span>{displayInventory.storage_location || 'No location'}</span>
+                                    {/* Show pick list indicator if item was pre-linked (matched from pick list) */}
+                                    {item.matchStatus === 'matched' && item.matchedInventory && (
+                                      <span className="flex items-center gap-1 text-blue-600 ml-2" title="Pre-linked via pick list">
+                                        <ClipboardList className="h-3 w-3" />
+                                        Pick list
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Show dropdown for multiple matches */}
+                                {item.matchStatus === 'multiple' && item.matchCandidates && item.matchCandidates.length > 0 && (
+                                  <div className="ml-4">
+                                    <Select
+                                      value={selectedInventoryId || ''}
+                                      onValueChange={(value: string) => handleSelectInventory(item.orderItemId, value)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs w-[320px]">
+                                        <SelectValue placeholder={`Select from ${item.matchCandidates.length} options...`} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {item.matchCandidates.map((candidate, index) => (
+                                          <SelectItem key={candidate.id} value={candidate.id}>
+                                            <div className="flex items-center gap-2">
+                                              {/* First item is the FIFO pick list recommendation */}
+                                              {index === 0 && (
+                                                <span className="flex items-center gap-1 text-blue-600" title="Pick list recommended (FIFO)">
+                                                  <ClipboardList className="h-3 w-3" />
+                                                </span>
+                                              )}
+                                              <span className="font-mono text-xs">
+                                                {candidate.set_number || candidate.item_name || candidate.id.slice(0, 8)}
+                                              </span>
+                                              {candidate.storage_location && (
+                                                <span className="flex items-center gap-1 text-muted-foreground">
+                                                  <MapPin className="h-3 w-3" />
+                                                  {candidate.storage_location}
+                                                </span>
+                                              )}
+                                              {candidate.condition && (
+                                                <Badge variant="outline" className="text-xs py-0 h-4">
+                                                  {candidate.condition}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {orderResolved ? (
+                          <Badge className="bg-green-100 text-green-800">
+                            Ready
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-yellow-600">
+                            {order.items.filter((i) => !isItemResolved(i)).length} need selection
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </ScrollArea>
 
-          {/* Unmatched Warning */}
-          {summary && summary.partialMatchOrders + summary.unmatchedOrders > 0 && (
+          {/* Orders with multiple matches info */}
+          {orders.some((o) => o.items.some((i) => i.matchStatus === 'multiple')) && (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                {summary.partialMatchOrders + summary.unmatchedOrders} order(s) have
-                unmatched items. Update inventory ASIN/SKU mappings to enable
-                confirmation.
+                Some orders have items with multiple inventory matches. Use the dropdown to select
+                which inventory item to use for each. Storage locations are shown to help identify
+                the correct item.
               </AlertDescription>
             </Alert>
           )}
@@ -953,7 +1063,7 @@ function AmazonConfirmContent({
         <Button
           onClick={handleConfirm}
           disabled={
-            selectedMatchedOrders.length === 0 ||
+            selectedResolvedOrders.length === 0 ||
             confirmMutation.isPending ||
             isLoading
           }
@@ -966,8 +1076,8 @@ function AmazonConfirmContent({
           ) : (
             <>
               <CheckCircle2 className="mr-2 h-4 w-4" />
-              Confirm {selectedMatchedOrders.length} Order
-              {selectedMatchedOrders.length !== 1 ? 's' : ''}
+              Confirm {selectedResolvedOrders.length} Order
+              {selectedResolvedOrders.length !== 1 ? 's' : ''}
             </>
           )}
         </Button>

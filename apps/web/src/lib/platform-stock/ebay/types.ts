@@ -272,6 +272,10 @@ export interface EbayListingFilters {
   condition?: string | 'all';
   listingType?: string | 'all';
   hasQuantity?: boolean;
+  sort?: {
+    column: 'sku' | 'itemId' | 'title' | 'quantity' | 'price' | 'status' | 'condition';
+    direction: 'asc' | 'desc';
+  };
 }
 
 /**
@@ -659,6 +663,11 @@ export interface ReviseItemRequest {
   conditionDescription?: string;
   itemSpecifics?: Array<{ name: string; value: string }>;
   pictureUrls?: string[];
+  // Best Offer fields
+  bestOfferEnabled?: boolean;
+  bestOfferAutoAcceptPrice?: number;
+  minimumBestOfferPrice?: number;
+  currency?: string; // Required when setting Best Offer prices
 }
 
 /**

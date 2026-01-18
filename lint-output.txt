@@ -1,0 +1,8 @@
+
+> hadley-bricks@0.1.0 lint
+> npm run lint --workspace=apps/web
+
+
+> web@0.1.0 lint
+> next lint
+

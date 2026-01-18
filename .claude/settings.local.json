@@ -231,7 +231,20 @@
       "Bash(npm ls:*)",
       "Bash(git rev-parse:*)",
       "Bash(Move-Item -Path \"supabase\\\\migrations\\\\20260116200001_transaction_summary_functions.sql\" -Destination \"supabase\\\\migrations\\\\20260122000001_transaction_summary_functions.sql\" -Force)",
-      "Bash(Select-Object -Last 30)"
+      "Bash(Select-Object -Last 30)",
+      "Bash(Move-Item \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\supabase\\\\migrations\\\\20260117000001_listing_applied_suggestions.sql\" \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\supabase\\\\migrations\\\\20260117120000_listing_applied_suggestions.sql\")",
+      "Bash(Select-String -Path \"C:\\\\Users\\\\Chris Hadley\\\\.claude\\\\projects\\\\c--Users-Chris-Hadley-hadley-bricks-inventory-management\\\\1fe126e7-634b-4234-a7a1-c20556f1f5ca\\\\tool-results\\\\mcp-playwright-browser_snapshot-1768678052189.txt\" -Pattern \"Approve\")",
+      "mcp__playwright__browser_tabs",
+      "Bash(Write-Host \"Server file exists\")",
+      "mcp__supabase__search_docs",
+      "Bash(Write-Host \"Deleted test endpoint\")",
+      "Skill(verify-done)",
+      "Skill(verify-done:*)",
+      "Bash(Start-Process ngrok -ArgumentList \"http\", \"3000\" -WindowStyle Hidden)",
+      "Bash(Invoke-RestMethod -Uri \"http://127.0.0.1:4040/api/tunnels\" -ErrorAction SilentlyContinue)",
+      "Bash(ConvertTo-Json)",
+      "Bash(Move-Item \"20260118000001_add_offer_message_template.sql\" \"20260126000001_add_offer_message_template.sql\")",
+      "Skill(docs)"
     ]
   },
   "hooks": {

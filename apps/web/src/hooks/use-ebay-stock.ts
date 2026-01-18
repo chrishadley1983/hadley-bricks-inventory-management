@@ -97,6 +97,10 @@ async function fetchEbayListings(
     params.set('status', filters.listingStatus);
   }
   if (filters.hasQuantity) params.set('hasQuantity', 'true');
+  if (filters.sort) {
+    params.set('sortColumn', filters.sort.column);
+    params.set('sortDirection', filters.sort.direction);
+  }
 
   const response = await fetch(`/api/ebay-stock?${params.toString()}`);
 
@@ -250,4 +254,61 @@ export function useEbayLatestImport() {
 export function useEbayIsImporting() {
   const latestImport = useEbayLatestImport();
   return latestImport?.status === 'processing';
+}
+
+// ============================================================================
+// Price Update Types and Functions
+// ============================================================================
+
+export interface UpdatePriceParams {
+  itemId: string;
+  newPrice: number;
+  updateBestOffer?: boolean;
+  autoAcceptPercent?: number;
+  minOfferPercent?: number;
+}
+
+export interface UpdatePriceResult {
+  success: boolean;
+  itemId: string;
+  newPrice: number;
+  autoAcceptPrice: number | null;
+  minOfferPrice: number | null;
+  warnings?: string[];
+}
+
+async function updateEbayPrice(params: UpdatePriceParams): Promise<UpdatePriceResult> {
+  const response = await fetch(`/api/ebay-stock/${params.itemId}/price`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      newPrice: params.newPrice,
+      updateBestOffer: params.updateBestOffer ?? true,
+      autoAcceptPercent: params.autoAcceptPercent ?? 90,
+      minOfferPercent: params.minOfferPercent ?? 70,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.details || error.error || 'Failed to update price');
+  }
+
+  const data = await response.json();
+  return data.data;
+}
+
+/**
+ * Update eBay listing price with Best Offer thresholds
+ */
+export function useUpdateEbayPrice() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateEbayPrice,
+    onSuccess: () => {
+      // Invalidate listings to refresh the table
+      queryClient.invalidateQueries({ queryKey: ebayStockKeys.all });
+    },
+  });
 }

@@ -170,6 +170,7 @@ This project uses a suite of development agents for consistent, high-quality wor
 | `/code-review` | Code Review Agent | Review code changes |
 | `/merge-feature` | Merge Feature Agent | Safely merge branches |
 | `/performance` | Performance Agent | Analyse app performance |
+| `/docs` | Functional Docs Agent | Generate & maintain functional documentation |
 
 ### Standard Workflow
 
@@ -203,6 +204,13 @@ This project uses a suite of development agents for consistent, high-quality wor
 
 The Build Feature Agent runs autonomously until all AUTO_VERIFY criteria pass (CONVERGED), or it escalates to human review (ESCALATED/BLOCKED).
 
+**After shipping features:**
+```powershell
+/docs update                 # Update docs for changed code
+/docs discover               # Find undocumented features
+/docs status                 # Check documentation coverage
+```
+
 ### Agent Documentation
 
 - Define Done Agent: `docs/agents/define-done/spec.md`
@@ -215,6 +223,7 @@ The Build Feature Agent runs autonomously until all AUTO_VERIFY criteria pass (C
 - Code Review Agent: `docs/reviews/code-review-agent.md`
 - Merge Feature Agent: `docs/agents/merge-feature-agent.md`
 - Performance Agent: `docs/agents/performance/spec.md`
+- Functional Docs Agent: `docs/agents/functional-docs/spec.md`
 
 ---
 

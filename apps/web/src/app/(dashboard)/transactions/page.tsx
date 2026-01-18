@@ -353,7 +353,7 @@ type EbaySortField = 'transaction_date' | 'amount' | 'item_title';
 type PayPalSortField = 'transaction_date' | 'fee_amount' | 'gross_amount' | 'payer_name';
 type BrickLinkSortField = 'order_date' | 'buyer_name' | 'order_status' | 'base_grand_total' | 'shipping';
 type BrickOwlSortField = 'order_date' | 'buyer_name' | 'order_status' | 'base_grand_total' | 'shipping';
-type AmazonSortField = 'posted_date' | 'total_amount' | 'asin';
+type AmazonSortField = 'purchase_date' | 'posted_date' | 'total_amount' | 'asin';
 type SortDirection = 'asc' | 'desc';
 
 type DateRangeKey = '__all__' | 'this_month' | 'last_month' | 'last_quarter' | 'last_year';
@@ -806,7 +806,7 @@ export default function TransactionsPage() {
   const [amazonDebouncedSearch, setAmazonDebouncedSearch] = useState('');
   const [amazonTransactionTypeFilter, setAmazonTransactionTypeFilter] = useState<string>('');
   const [amazonDateRangeKey, setAmazonDateRangeKey] = useState<DateRangeKey>('__all__');
-  const [amazonSortField, setAmazonSortField] = useState<AmazonSortField>('posted_date');
+  const [amazonSortField, setAmazonSortField] = useState<AmazonSortField>('purchase_date');
   const [amazonSortDirection, setAmazonSortDirection] = useState<SortDirection>('desc');
   const [amazonMessage, setAmazonMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [selectedAmazonTransaction, setSelectedAmazonTransaction] = useState<AmazonTransaction | null>(null);
@@ -3212,10 +3212,10 @@ export default function TransactionsPage() {
                               <Button
                                 variant="ghost"
                                 className="h-auto p-0 font-medium hover:bg-transparent"
-                                onClick={() => handleAmazonSort('posted_date')}
+                                onClick={() => handleAmazonSort('purchase_date')}
                               >
                                 Purchase Date
-                                <AmazonSortIcon field="posted_date" />
+                                <AmazonSortIcon field="purchase_date" />
                               </Button>
                             </TableHead>
                             <TableHead>Type</TableHead>

@@ -209,6 +209,25 @@ export interface ComparisonSummary {
 // FILTER INTERFACES
 // ============================================================================
 
+/** Sort direction */
+export type SortDirection = 'asc' | 'desc';
+
+/** Sortable columns for listings */
+export type ListingSortColumn =
+  | 'sku'
+  | 'itemId'
+  | 'title'
+  | 'quantity'
+  | 'price'
+  | 'status'
+  | 'condition';
+
+/** Sort configuration */
+export interface SortConfig {
+  column: ListingSortColumn;
+  direction: SortDirection;
+}
+
 /**
  * Filters for listing view
  */
@@ -217,6 +236,7 @@ export interface ListingFilters {
   listingStatus?: ListingStatus | 'all';
   fulfillmentChannel?: string | 'all';
   hasQuantity?: boolean;
+  sort?: SortConfig;
 }
 
 /**

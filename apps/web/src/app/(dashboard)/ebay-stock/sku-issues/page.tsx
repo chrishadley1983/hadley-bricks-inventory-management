@@ -214,7 +214,18 @@ export default function SkuIssuesPage() {
                           <TableRow key={issue.id}>
                             <TableCell className="font-mono text-sm">
                               <div className="flex items-center gap-2">
-                                {issue.itemId}
+                                {issue.viewItemUrl ? (
+                                  <a
+                                    href={issue.viewItemUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:underline text-blue-600"
+                                  >
+                                    {issue.itemId}
+                                  </a>
+                                ) : (
+                                  issue.itemId
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -298,7 +309,18 @@ export default function SkuIssuesPage() {
                               <TableRow key={item.id}>
                                 <TableCell className="font-mono text-sm">
                                   <div className="flex items-center gap-2">
-                                    {item.itemId}
+                                    {item.viewItemUrl ? (
+                                      <a
+                                        href={item.viewItemUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:underline text-blue-600"
+                                      >
+                                        {item.itemId}
+                                      </a>
+                                    ) : (
+                                      item.itemId
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="icon"

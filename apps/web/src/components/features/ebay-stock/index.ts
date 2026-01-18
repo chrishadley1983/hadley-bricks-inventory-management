@@ -10,3 +10,4 @@ export { EbayComparisonView } from './EbayComparisonView';
 export { EbayComparisonFilters } from './EbayComparisonFilters';
 export { EbayStockHeader } from './EbayStockHeader';
 export { SkuIssuesBanner } from './SkuIssuesBanner';
+export { PriceUpdateDialog } from './PriceUpdateDialog';

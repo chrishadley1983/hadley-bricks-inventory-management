@@ -151,10 +151,31 @@ export abstract class PlatformStockService {
       );
     }
 
+    // Apply sorting
+    if (filters.sort) {
+      const columnMap: Record<string, string> = {
+        sku: 'platform_sku',
+        itemId: 'platform_item_id',
+        title: 'title',
+        quantity: 'quantity',
+        price: 'price',
+        status: 'listing_status',
+        condition: 'listing_status', // Fallback - condition sorting done client-side for eBay
+      };
+      const dbColumn = columnMap[filters.sort.column] || 'title';
+      query = query.order(dbColumn, {
+        ascending: filters.sort.direction === 'asc',
+        nullsFirst: false,
+      });
+    } else {
+      // Default sort by title
+      query = query.order('title', { ascending: true });
+    }
+
     // Apply pagination
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
-    query = query.range(from, to).order('title', { ascending: true });
+    query = query.range(from, to);
 
     const { data, error, count } = await query;
 

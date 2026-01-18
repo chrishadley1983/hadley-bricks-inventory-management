@@ -82,16 +82,17 @@ export class EbayStockService extends PlatformStockService {
 
       console.log(`[EbayStockService] Fetched ${allListings.length} listings`);
 
-      // 5. Delete old listings
-      await this.deleteOldListings();
-
-      // 6. Convert to database format and insert in batches
-      const listingsToInsert = allListings.map((listing) =>
+      // 5. Upsert listings (preserving review data atomically)
+      const listingsToUpsert = allListings.map((listing) =>
         this.convertToDbListing(importId, listing)
       );
 
-      const insertedCount = await this.insertListingsBatch(importId, listingsToInsert);
-      console.log(`[EbayStockService] Inserted ${insertedCount} listings`);
+      const upsertedCount = await this.upsertListingsBatch(importId, listingsToUpsert);
+      console.log(`[EbayStockService] Upserted ${upsertedCount} listings`);
+
+      // 6. Delete listings that no longer exist on eBay (but preserve review data in case of re-listing)
+      const currentItemIds = new Set(allListings.map((l) => l.platformItemId));
+      await this.deleteStaleListings(currentItemIds);
 
       // 7. Validate SKUs and get issues
       const skuValidation = await this.validateSkus();
@@ -101,7 +102,7 @@ export class EbayStockService extends PlatformStockService {
         status: 'completed',
         completed_at: new Date().toISOString(),
         total_rows: allListings.length,
-        processed_rows: insertedCount,
+        processed_rows: upsertedCount,
         error_count: skuValidation.totalIssueCount,
         error_details: skuValidation.hasIssues ? (skuValidation as unknown as Database['public']['Tables']['platform_listing_imports']['Update']['error_details']) : null,
       });
@@ -153,6 +154,97 @@ export class EbayStockService extends PlatformStockService {
       import_id: importId,
       raw_data: listing.ebayData as unknown as Database['public']['Tables']['platform_listings']['Insert']['raw_data'],
     };
+  }
+
+  // ============================================================================
+  // UPSERT AND CLEANUP METHODS
+  // ============================================================================
+
+  /**
+   * Upsert listings in batches, preserving review data (quality_score, quality_grade, last_reviewed_at)
+   * Uses ON CONFLICT to update existing records while keeping review fields intact
+   */
+  private async upsertListingsBatch(
+    importId: string,
+    listings: PlatformListingInsert[]
+  ): Promise<number> {
+    if (listings.length === 0) return 0;
+
+    const BATCH_SIZE = 500;
+    let totalUpserted = 0;
+
+    for (let i = 0; i < listings.length; i += BATCH_SIZE) {
+      const batch = listings.slice(i, i + BATCH_SIZE);
+
+      // Use upsert with onConflict to preserve review data
+      // The conflict target is (user_id, platform, platform_item_id)
+      const { data, error } = await this.supabase
+        .from('platform_listings')
+        .upsert(
+          batch.map((listing) => ({
+            ...listing,
+            updated_at: new Date().toISOString(),
+          })),
+          {
+            onConflict: 'user_id,platform,platform_item_id',
+            ignoreDuplicates: false, // Update existing records
+          }
+        )
+        .select('id');
+
+      if (error) {
+        console.error(`[EbayStockService] Error upserting batch ${i / BATCH_SIZE + 1}:`, error);
+        // Continue with other batches
+      } else {
+        totalUpserted += data?.length || batch.length;
+      }
+    }
+
+    return totalUpserted;
+  }
+
+  /**
+   * Delete listings that no longer exist on eBay
+   * Only deletes listings not in the current import set
+   */
+  private async deleteStaleListings(currentItemIds: Set<string>): Promise<void> {
+    // Get all existing listing IDs
+    const { data: existingListings, error: fetchError } = await this.supabase
+      .from('platform_listings')
+      .select('id, platform_item_id')
+      .eq('user_id', this.userId)
+      .eq('platform', 'ebay');
+
+    if (fetchError) {
+      console.error('[EbayStockService] Error fetching existing listings for cleanup:', fetchError);
+      return;
+    }
+
+    // Find IDs to delete (listings that no longer exist on eBay)
+    const idsToDelete = (existingListings || [])
+      .filter((listing) => !currentItemIds.has(listing.platform_item_id))
+      .map((listing) => listing.id);
+
+    if (idsToDelete.length === 0) {
+      console.log('[EbayStockService] No stale listings to delete');
+      return;
+    }
+
+    console.log(`[EbayStockService] Deleting ${idsToDelete.length} stale listings`);
+
+    // Delete in batches
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+      const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+      const { error } = await this.supabase
+        .from('platform_listings')
+        .delete()
+        .in('id', batch);
+
+      if (error) {
+        console.error(`[EbayStockService] Error deleting stale batch ${i / BATCH_SIZE + 1}:`, error);
+      }
+    }
   }
 
   // ============================================================================
