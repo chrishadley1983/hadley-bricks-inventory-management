@@ -67,7 +67,7 @@ export function CompareMode({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scenario A Column */}
         <div className="space-y-6 border-r-0 lg:border-r lg:pr-6">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 h-9">
             <div className="w-3 h-3 rounded-full bg-blue-500" />
             <h3 className="text-lg font-semibold">{scenarioAName}</h3>
             <span className="text-xs text-muted-foreground">(Scenario A)</span>
@@ -110,7 +110,7 @@ export function CompareMode({
 
         {/* Scenario B Column */}
         <div className="space-y-6 lg:pl-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 h-9">
             <div className="w-3 h-3 rounded-full bg-green-500" />
             <Label htmlFor="scenario-b-select" className="text-lg font-semibold">
               Scenario B

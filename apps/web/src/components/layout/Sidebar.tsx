@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Home,
   Package,
@@ -26,6 +29,7 @@ import {
   Calculator,
   PenLine,
   ClipboardList,
+  ChevronDown,
 } from 'lucide-react';
 
 interface NavItem {
@@ -33,6 +37,13 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   disabled?: boolean;
+}
+
+interface NavSection {
+  id: string;
+  title: string;
+  items: NavItem[];
+  defaultOpen?: boolean;
 }
 
 const mainNavItems: NavItem[] = [
@@ -48,42 +59,74 @@ const mainNavItems: NavItem[] = [
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 
-const reportNavItems: NavItem[] = [
-  { href: '/reports', label: 'All Reports', icon: BarChart3 },
-  { href: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
-  { href: '/cost-modelling', label: 'Cost Modelling', icon: Calculator },
-  { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
-  { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
-];
-
-const integrationNavItems: NavItem[] = [
-  { href: '/settings/integrations', label: 'Platforms', icon: ExternalLink },
-  { href: '/platform-stock', label: 'Amazon Stock', icon: Layers },
-  { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
-  { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
-];
-
-const arbitrageNavItems: NavItem[] = [
-  { href: '/arbitrage/amazon', label: 'BrickLink', icon: Scale },
-  { href: '/arbitrage/ebay', label: 'eBay', icon: Scale },
-  { href: '/arbitrage/seeded', label: 'Seeded ASINs', icon: Sparkles },
-  { href: '/arbitrage/vinted', label: 'Vinted', icon: Scale, disabled: true },
-  { href: '/arbitrage/facebook', label: 'Facebook', icon: Scale, disabled: true },
-];
-
-// Commented out - Data Sync page not currently needed, but keeping code for future use
-// Note: Monzo Transactions still links to Google Sheets - do not remove connection type code
-// const adminNavItems: NavItem[] = [
-//   { href: '/admin/sync', label: 'Data Sync', icon: RefreshCw },
-//   { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
-// ];
-
-const adminNavItems: NavItem[] = [
-  { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
+const navSections: NavSection[] = [
+  {
+    id: 'reports',
+    title: 'Reports',
+    defaultOpen: true,
+    items: [
+      { href: '/reports', label: 'All Reports', icon: BarChart3 },
+      { href: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
+      { href: '/cost-modelling', label: 'Cost Modelling', icon: Calculator },
+      { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
+      { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
+    ],
+  },
+  {
+    id: 'integrations',
+    title: 'Integrations',
+    defaultOpen: true,
+    items: [
+      { href: '/settings/integrations', label: 'Platforms', icon: ExternalLink },
+      { href: '/platform-stock', label: 'Amazon Stock', icon: Layers },
+      { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
+      { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
+    ],
+  },
+  {
+    id: 'arbitrage',
+    title: 'Arbitrage Tracker',
+    defaultOpen: false,
+    items: [
+      { href: '/arbitrage/amazon', label: 'BrickLink', icon: Scale },
+      { href: '/arbitrage/ebay', label: 'eBay', icon: Scale },
+      { href: '/arbitrage/seeded', label: 'Seeded ASINs', icon: Sparkles },
+      { href: '/arbitrage/vinted', label: 'Vinted', icon: Scale, disabled: true },
+      { href: '/arbitrage/facebook', label: 'Facebook', icon: Scale, disabled: true },
+    ],
+  },
+  {
+    id: 'admin',
+    title: 'Admin',
+    defaultOpen: false,
+    items: [
+      { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
+    ],
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  // Check if any item in a section is active
+  const isSectionActive = (items: NavItem[]) => {
+    return items.some(
+      (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+    );
+  };
+
+  // Initialize section open states - open if has active item or defaultOpen
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    navSections.forEach((section) => {
+      initial[section.id] = section.defaultOpen || isSectionActive(section.items);
+    });
+    return initial;
+  });
+
+  const toggleSection = (id: string) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const NavLink = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -117,66 +160,54 @@ export function Sidebar() {
     );
   };
 
+  const NavSectionComponent = ({ section }: { section: NavSection }) => {
+    const isOpen = openSections[section.id];
+    const hasActiveItem = isSectionActive(section.items);
+
+    return (
+      <Collapsible open={isOpen} onOpenChange={() => toggleSection(section.id)}>
+        <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+          <span className={cn(hasActiveItem && 'text-foreground')}>{section.title}</span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform duration-200',
+              isOpen && 'rotate-180'
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-1 pt-1">
+          {section.items.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
   return (
     <aside className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-14 items-center border-b px-4">
+      <div className="flex h-14 items-center border-b px-4 flex-shrink-0">
         <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
           <Package className="h-6 w-6 text-primary" />
           <span>Hadley Bricks</span>
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-6 px-3 py-4">
-        <div className="space-y-1">
-          {mainNavItems.map((item) => (
-            <NavLink key={item.href} item={item} />
+      <ScrollArea className="flex-1">
+        <nav className="space-y-4 px-3 py-4">
+          {/* Main navigation - always visible */}
+          <div className="space-y-1">
+            {mainNavItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
+          </div>
+
+          {/* Collapsible sections */}
+          {navSections.map((section) => (
+            <NavSectionComponent key={section.id} section={section} />
           ))}
-        </div>
-
-        <div>
-          <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Reports
-          </h3>
-          <div className="space-y-1">
-            {reportNavItems.map((item) => (
-              <NavLink key={item.href} item={item} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Integrations
-          </h3>
-          <div className="space-y-1">
-            {integrationNavItems.map((item) => (
-              <NavLink key={item.href} item={item} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Arbitrage Tracker
-          </h3>
-          <div className="space-y-1">
-            {arbitrageNavItems.map((item) => (
-              <NavLink key={item.href} item={item} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Admin
-          </h3>
-          <div className="space-y-1">
-            {adminNavItems.map((item) => (
-              <NavLink key={item.href} item={item} />
-            ))}
-          </div>
-        </div>
-      </nav>
+        </nav>
+      </ScrollArea>
     </aside>
   );
 }

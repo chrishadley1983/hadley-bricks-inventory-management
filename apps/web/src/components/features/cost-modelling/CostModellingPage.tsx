@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import {
   useCostScenarios,
   useCostScenario,
@@ -301,6 +301,27 @@ export function CostModellingPage() {
         </div>
       </div>
 
+      {/* Scenario Name and Notes */}
+      {selectedScenarioId && scenarios && (
+        <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg border">
+          <FileText className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-semibold">
+              {scenarios.find((s) => s.id === selectedScenarioId)?.name || 'Untitled Scenario'}
+            </h2>
+            {scenarios.find((s) => s.id === selectedScenarioId)?.description ? (
+              <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                {scenarios.find((s) => s.id === selectedScenarioId)?.description}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground/60 mt-1 italic">
+                No notes added. Click the &quot;...&quot; menu above to add notes.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       {compareMode ? (
         <>
@@ -317,6 +338,7 @@ export function CostModellingPage() {
             onFormBChange={handleFormBChange}
             loadingA={loadingScenarioA}
             loadingB={loadingScenarioB}
+            deltas={comparisonDeltas}
           />
           {comparisonDeltas && (
             <ComparisonSummary deltas={comparisonDeltas} />
