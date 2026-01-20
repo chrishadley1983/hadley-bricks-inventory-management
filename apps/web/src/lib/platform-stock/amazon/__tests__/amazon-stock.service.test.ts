@@ -239,10 +239,8 @@ describe('AmazonStockService', () => {
       // Mock database operations
       const importId = 'import-123';
 
-      // Track call count to provide different responses
-      let fromCallCount = 0;
+      // Track call count to provide different responses (unused but kept for debugging)
       mockSupabase.from = vi.fn((table: string) => {
-        fromCallCount++;
 
         if (table === 'platform_listing_imports') {
           // First call: createImportRecord (insert)

@@ -65,59 +65,85 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
     },
   ];
 
-  // F33: Weekly view calculations
+  // F33: Weekly view calculations (aligned with daily format)
   const weeklyData = [
     {
       platform: 'BrickLink',
-      cogBudget: calculations.blCogBudgetPerWeek,
-      salesTarget: calculations.blTurnover / 52,
-      salesVolume: (data.blSalesPerMonth * 12) / 52,
+      salesPerWeek: (data.blSalesPerMonth * 12) / 52,
+      cogPerItem: calculations.blCogPerItem,
+      salePrice: data.blAvgSaleValue,
+      salePriceExcPostage: data.blAvgSaleValue - data.blAvgPostageCost,
+      turnoverPerWeek: calculations.blTurnover / 52,
+      cogBudgetPerWeek: calculations.blCogBudgetPerWeek,
     },
     {
       platform: 'Amazon',
-      cogBudget: calculations.amazonCogBudgetPerWeek,
-      salesTarget: calculations.amazonTurnover / 52,
-      salesVolume: (data.amazonSalesPerMonth * 12) / 52,
+      salesPerWeek: (data.amazonSalesPerMonth * 12) / 52,
+      cogPerItem: calculations.amazonCogPerItem,
+      salePrice: data.amazonAvgSaleValue,
+      salePriceExcPostage: data.amazonAvgSaleValue - data.amazonAvgPostageCost,
+      turnoverPerWeek: calculations.amazonTurnover / 52,
+      cogBudgetPerWeek: calculations.amazonCogBudgetPerWeek,
     },
     {
       platform: 'eBay',
-      cogBudget: calculations.ebayCogBudgetPerWeek,
-      salesTarget: calculations.ebayTurnover / 52,
-      salesVolume: (data.ebaySalesPerMonth * 12) / 52,
+      salesPerWeek: (data.ebaySalesPerMonth * 12) / 52,
+      cogPerItem: calculations.ebayCogPerItem,
+      salePrice: data.ebayAvgSaleValue,
+      salePriceExcPostage: data.ebayAvgSaleValue - data.ebayAvgPostageCost,
+      turnoverPerWeek: calculations.ebayTurnover / 52,
+      cogBudgetPerWeek: calculations.ebayCogBudgetPerWeek,
     },
     {
       platform: 'Total',
-      cogBudget: calculations.cogBudgetPerWeek,
-      salesTarget: calculations.turnoverPerWeek,
-      salesVolume: calculations.salesPerWeek,
+      salesPerWeek: calculations.salesPerWeek,
+      cogPerItem: calculations.totalCog / calculations.totalAnnualSales,
+      salePrice: calculations.totalTurnover / calculations.totalAnnualSales,
+      salePriceExcPostage:
+        (calculations.totalTurnover - calculations.totalPostage) / calculations.totalAnnualSales,
+      turnoverPerWeek: calculations.turnoverPerWeek,
+      cogBudgetPerWeek: calculations.cogBudgetPerWeek,
     },
   ];
 
-  // F34: Monthly view calculations (matching assumption inputs)
+  // F34: Monthly view calculations (aligned with daily format)
   const monthlyData = [
     {
       platform: 'BrickLink',
-      cogBudget: calculations.blCog / 12,
-      salesTarget: calculations.blTurnover / 12,
-      salesVolume: data.blSalesPerMonth,
+      salesPerMonth: data.blSalesPerMonth,
+      cogPerItem: calculations.blCogPerItem,
+      salePrice: data.blAvgSaleValue,
+      salePriceExcPostage: data.blAvgSaleValue - data.blAvgPostageCost,
+      turnoverPerMonth: calculations.blTurnover / 12,
+      cogBudgetPerMonth: calculations.blCog / 12,
     },
     {
       platform: 'Amazon',
-      cogBudget: calculations.amazonCog / 12,
-      salesTarget: calculations.amazonTurnover / 12,
-      salesVolume: data.amazonSalesPerMonth,
+      salesPerMonth: data.amazonSalesPerMonth,
+      cogPerItem: calculations.amazonCogPerItem,
+      salePrice: data.amazonAvgSaleValue,
+      salePriceExcPostage: data.amazonAvgSaleValue - data.amazonAvgPostageCost,
+      turnoverPerMonth: calculations.amazonTurnover / 12,
+      cogBudgetPerMonth: calculations.amazonCog / 12,
     },
     {
       platform: 'eBay',
-      cogBudget: calculations.ebayCog / 12,
-      salesTarget: calculations.ebayTurnover / 12,
-      salesVolume: data.ebaySalesPerMonth,
+      salesPerMonth: data.ebaySalesPerMonth,
+      cogPerItem: calculations.ebayCogPerItem,
+      salePrice: data.ebayAvgSaleValue,
+      salePriceExcPostage: data.ebayAvgSaleValue - data.ebayAvgPostageCost,
+      turnoverPerMonth: calculations.ebayTurnover / 12,
+      cogBudgetPerMonth: calculations.ebayCog / 12,
     },
     {
       platform: 'Total',
-      cogBudget: calculations.totalCog / 12,
-      salesTarget: calculations.totalTurnover / 12,
-      salesVolume: calculations.totalMonthlySales,
+      salesPerMonth: calculations.totalMonthlySales,
+      cogPerItem: calculations.totalCog / calculations.totalAnnualSales,
+      salePrice: calculations.totalTurnover / calculations.totalAnnualSales,
+      salePriceExcPostage:
+        (calculations.totalTurnover - calculations.totalPostage) / calculations.totalAnnualSales,
+      turnoverPerMonth: calculations.totalTurnover / 12,
+      cogBudgetPerMonth: calculations.totalCog / 12,
     },
   ];
 
@@ -176,9 +202,12 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Platform</TableHead>
-                    <TableHead className="text-right">COG Budget</TableHead>
-                    <TableHead className="text-right">Sales Target</TableHead>
-                    <TableHead className="text-right">Sales Volume</TableHead>
+                    <TableHead className="text-right">Sales/Week</TableHead>
+                    <TableHead className="text-right">COG/Item</TableHead>
+                    <TableHead className="text-right">Sale Price</TableHead>
+                    <TableHead className="text-right">Exc. Postage</TableHead>
+                    <TableHead className="text-right">Turnover/Week</TableHead>
+                    <TableHead className="text-right">COG Budget/Week</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -188,9 +217,12 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                       className={row.platform === 'Total' ? 'font-bold border-t-2' : ''}
                     >
                       <TableCell className="font-medium">{row.platform}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cogBudget)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.salesTarget)}</TableCell>
-                      <TableCell className="text-right">{row.salesVolume.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">{row.salesPerWeek.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.cogPerItem)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.salePrice)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.salePriceExcPostage)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.turnoverPerWeek)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.cogBudgetPerWeek)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -205,9 +237,12 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Platform</TableHead>
-                    <TableHead className="text-right">COG Budget</TableHead>
-                    <TableHead className="text-right">Sales Target</TableHead>
-                    <TableHead className="text-right">Sales Volume</TableHead>
+                    <TableHead className="text-right">Sales/Month</TableHead>
+                    <TableHead className="text-right">COG/Item</TableHead>
+                    <TableHead className="text-right">Sale Price</TableHead>
+                    <TableHead className="text-right">Exc. Postage</TableHead>
+                    <TableHead className="text-right">Turnover/Month</TableHead>
+                    <TableHead className="text-right">COG Budget/Month</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,9 +252,12 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                       className={row.platform === 'Total' ? 'font-bold border-t-2' : ''}
                     >
                       <TableCell className="font-medium">{row.platform}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cogBudget)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.salesTarget)}</TableCell>
-                      <TableCell className="text-right">{row.salesVolume}</TableCell>
+                      <TableCell className="text-right">{row.salesPerMonth.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.cogPerItem)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.salePrice)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.salePriceExcPostage)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.turnoverPerMonth)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.cogBudgetPerMonth)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

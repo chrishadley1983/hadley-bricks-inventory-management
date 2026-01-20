@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   parseAmazonListingsReport,
   getReportColumns,
   getColumnLabel,
-  type ParsedAmazonListing,
 } from '../amazon-report-parser';
 
 // Suppress console logs during tests

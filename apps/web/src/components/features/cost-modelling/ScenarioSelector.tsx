@@ -22,16 +22,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, Copy, Trash2, MoreHorizontal } from 'lucide-react';
+import { Loader2, Plus, Copy, Trash2, MoreHorizontal, Pencil } from 'lucide-react';
 import {
   useCreateCostScenario,
   useDeleteCostScenario,
   useDuplicateCostScenario,
+  useRenameCostScenario,
 } from '@/hooks/use-cost-modelling';
 import { useToast } from '@/hooks/use-toast';
 import type { ScenarioListItem } from '@/types/cost-modelling';
 import { SaveAsDialog } from './SaveAsDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { EditScenarioDialog } from './EditScenarioDialog';
 
 interface ScenarioSelectorProps {
   scenarios: ScenarioListItem[];
@@ -49,10 +51,12 @@ export function ScenarioSelector({
   const { toast } = useToast();
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   const createMutation = useCreateCostScenario();
   const deleteMutation = useDeleteCostScenario();
   const duplicateMutation = useDuplicateCostScenario();
+  const renameMutation = useRenameCostScenario();
 
   const selectedScenario = scenarios.find((s) => s.id === selectedId);
   const isLastScenario = scenarios.length <= 1;
@@ -94,6 +98,19 @@ export function ScenarioSelector({
       }
       toast({ title: 'Scenario deleted' });
       setShowDeleteDialog(false);
+    } catch (error) {
+      if (error instanceof Error) {
+        toast({ title: error.message, variant: 'destructive' });
+      }
+    }
+  };
+
+  const handleRename = async (name: string, description: string) => {
+    if (!selectedId) return;
+    try {
+      await renameMutation.mutateAsync({ id: selectedId, name, description });
+      toast({ title: 'Scenario updated' });
+      setShowEditDialog(false);
     } catch (error) {
       if (error instanceof Error) {
         toast({ title: error.message, variant: 'destructive' });
@@ -151,6 +168,12 @@ export function ScenarioSelector({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
+            onClick={() => setShowEditDialog(true)}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            Rename / Edit Notes
+          </DropdownMenuItem>
+          <DropdownMenuItem
             onClick={handleDuplicate}
             disabled={duplicateMutation.isPending}
           >
@@ -189,6 +212,16 @@ export function ScenarioSelector({
         onConfirm={handleDelete}
         isPending={deleteMutation.isPending}
         scenarioName={selectedScenario?.name || ''}
+      />
+
+      {/* Edit scenario dialog */}
+      <EditScenarioDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        onSave={handleRename}
+        isPending={renameMutation.isPending}
+        currentName={selectedScenario?.name || ''}
+        currentDescription={selectedScenario?.description || null}
       />
     </div>
   );

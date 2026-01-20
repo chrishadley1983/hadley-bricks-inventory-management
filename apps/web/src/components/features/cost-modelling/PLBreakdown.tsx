@@ -6,11 +6,14 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatCurrency } from '@/lib/services/cost-calculations';
 import type { CalculatedResults } from '@/types/cost-modelling';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+
+type PeriodType = 'yearly' | 'monthly';
 
 interface PLBreakdownProps {
   calculations: CalculatedResults;
@@ -28,6 +31,7 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
     cog: defaultExpanded,
     tax: defaultExpanded,
   });
+  const [period, setPeriod] = useState<PeriodType>('yearly');
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -36,40 +40,88 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
     }));
   };
 
+  // Scale values based on period
+  const divisor = period === 'monthly' ? 12 : 1;
+  const scaled = useMemo(() => {
+    const scale = (value: number) => value / divisor;
+    return {
+      totalTurnover: scale(calculations.totalTurnover),
+      blTurnover: scale(calculations.blTurnover),
+      amazonTurnover: scale(calculations.amazonTurnover),
+      ebayTurnover: scale(calculations.ebayTurnover),
+      totalFees: scale(calculations.totalFees),
+      blFees: scale(calculations.blFees),
+      amazonFees: scale(calculations.amazonFees),
+      ebayFees: scale(calculations.ebayFees),
+      vatAmount: scale(calculations.vatAmount),
+      totalOtherCosts: scale(calculations.totalOtherCosts),
+      annualFixedCosts: scale(calculations.annualFixedCosts),
+      totalPostage: scale(calculations.totalPostage),
+      packagingMaterials: scale(calculations.packagingMaterials),
+      legoParts: scale(calculations.legoParts),
+      accountantCost: scale(calculations.accountantCost),
+      grossProfit: scale(calculations.grossProfit),
+      totalCog: scale(calculations.totalCog),
+      blCog: scale(calculations.blCog),
+      amazonCog: scale(calculations.amazonCog),
+      ebayCog: scale(calculations.ebayCog),
+      netProfit: scale(calculations.netProfit),
+      totalTax: scale(calculations.totalTax),
+      taxableIncome: scale(calculations.taxableIncome),
+      incomeTax: scale(calculations.incomeTax),
+      nationalInsurance: scale(calculations.nationalInsurance),
+      takeHome: scale(calculations.takeHome),
+      weeklyTakeHome: calculations.weeklyTakeHome, // Already weekly
+    };
+  }, [calculations, divisor]);
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>P&L Breakdown</CardTitle>
+        <ToggleGroup
+          type="single"
+          value={period}
+          onValueChange={(value: string) => value && setPeriod(value as PeriodType)}
+          size="sm"
+        >
+          <ToggleGroupItem value="yearly" aria-label="Yearly view">
+            Yearly
+          </ToggleGroupItem>
+          <ToggleGroupItem value="monthly" aria-label="Monthly view">
+            Monthly
+          </ToggleGroupItem>
+        </ToggleGroup>
       </CardHeader>
       <CardContent className="space-y-2">
         {/* Revenue Section */}
         <SectionHeader
           title="Revenue (Turnover)"
-          total={calculations.totalTurnover}
+          total={scaled.totalTurnover}
           expanded={expandedSections.revenue}
           onToggle={() => toggleSection('revenue')}
         />
         {expandedSections.revenue && (
           <div className="ml-6 space-y-1">
-            <LineItem label="BrickLink" value={calculations.blTurnover} />
-            <LineItem label="Amazon" value={calculations.amazonTurnover} />
-            <LineItem label="eBay" value={calculations.ebayTurnover} />
+            <LineItem label="BrickLink" value={scaled.blTurnover} />
+            <LineItem label="Amazon" value={scaled.amazonTurnover} />
+            <LineItem label="eBay" value={scaled.ebayTurnover} />
           </div>
         )}
 
         {/* Platform Fees Section */}
         <SectionHeader
           title="Platform Fees"
-          total={-calculations.totalFees}
+          total={-scaled.totalFees}
           expanded={expandedSections.fees}
           onToggle={() => toggleSection('fees')}
           negative
         />
         {expandedSections.fees && (
           <div className="ml-6 space-y-1">
-            <LineItem label="BrickLink (10%)" value={-calculations.blFees} negative />
-            <LineItem label="Amazon (18.3%)" value={-calculations.amazonFees} negative />
-            <LineItem label="eBay (20%)" value={-calculations.ebayFees} negative />
+            <LineItem label="BrickLink (10%)" value={-scaled.blFees} negative />
+            <LineItem label="Amazon (18.3%)" value={-scaled.amazonFees} negative />
+            <LineItem label="eBay (20%)" value={-scaled.ebayFees} negative />
           </div>
         )}
 
@@ -77,7 +129,7 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {isVatRegistered && (
           <LineItem
             label="VAT (Flat Rate)"
-            value={-calculations.vatAmount}
+            value={-scaled.vatAmount}
             negative
             isBold
           />
@@ -86,18 +138,18 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {/* Other Costs Section */}
         <SectionHeader
           title="Other Costs"
-          total={-calculations.totalOtherCosts}
+          total={-scaled.totalOtherCosts}
           expanded={expandedSections.otherCosts}
           onToggle={() => toggleSection('otherCosts')}
           negative
         />
         {expandedSections.otherCosts && (
           <div className="ml-6 space-y-1">
-            <LineItem label="Fixed Costs (Annual)" value={-calculations.annualFixedCosts} negative />
-            <LineItem label="Postage" value={-calculations.totalPostage} negative />
-            <LineItem label="Packaging Materials" value={-calculations.packagingMaterials} negative />
-            <LineItem label="Lego Parts" value={-calculations.legoParts} negative />
-            <LineItem label="Accountant" value={-calculations.accountantCost} negative />
+            <LineItem label="Fixed Costs" value={-scaled.annualFixedCosts} negative />
+            <LineItem label="Postage" value={-scaled.totalPostage} negative />
+            <LineItem label="Packaging Materials" value={-scaled.packagingMaterials} negative />
+            <LineItem label="Lego Parts" value={-scaled.legoParts} negative />
+            <LineItem label="Accountant" value={-scaled.accountantCost} negative />
           </div>
         )}
 
@@ -106,24 +158,24 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {/* Gross Profit */}
         <LineItem
           label="Gross Profit"
-          value={calculations.grossProfit}
+          value={scaled.grossProfit}
           isBold
-          highlight={calculations.grossProfit > 0}
+          highlight={scaled.grossProfit > 0}
         />
 
         {/* COG Section */}
         <SectionHeader
           title="Cost of Goods (COG)"
-          total={-calculations.totalCog}
+          total={-scaled.totalCog}
           expanded={expandedSections.cog}
           onToggle={() => toggleSection('cog')}
           negative
         />
         {expandedSections.cog && (
           <div className="ml-6 space-y-1">
-            <LineItem label="BrickLink (20%)" value={-calculations.blCog} negative />
-            <LineItem label="Amazon (35%)" value={-calculations.amazonCog} negative />
-            <LineItem label="eBay (30%)" value={-calculations.ebayCog} negative />
+            <LineItem label="BrickLink (20%)" value={-scaled.blCog} negative />
+            <LineItem label="Amazon (35%)" value={-scaled.amazonCog} negative />
+            <LineItem label="eBay (30%)" value={-scaled.ebayCog} negative />
           </div>
         )}
 
@@ -132,16 +184,16 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {/* Net Profit */}
         <LineItem
           label="Net Profit"
-          value={calculations.netProfit}
+          value={scaled.netProfit}
           isBold
           isLarge
-          highlight={calculations.netProfit > 0}
+          highlight={scaled.netProfit > 0}
         />
 
         {/* Tax Section */}
         <SectionHeader
           title="Tax"
-          total={-calculations.totalTax}
+          total={-scaled.totalTax}
           expanded={expandedSections.tax}
           onToggle={() => toggleSection('tax')}
           negative
@@ -149,12 +201,12 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {expandedSections.tax && (
           <div className="ml-6 space-y-1">
             <LineItem
-              label={`Taxable Income (after £${calculations.taxableIncome > 0 ? (calculations.netProfit - calculations.taxableIncome).toLocaleString() : 0} allowance)`}
-              value={calculations.taxableIncome}
+              label={`Taxable Income (after £${scaled.taxableIncome > 0 ? Math.round((scaled.netProfit - scaled.taxableIncome)).toLocaleString() : 0} allowance)`}
+              value={scaled.taxableIncome}
               muted
             />
-            <LineItem label="Income Tax (20%)" value={-calculations.incomeTax} negative />
-            <LineItem label="National Insurance (6%)" value={-calculations.nationalInsurance} negative />
+            <LineItem label="Income Tax (20%)" value={-scaled.incomeTax} negative />
+            <LineItem label="National Insurance (6%)" value={-scaled.nationalInsurance} negative />
           </div>
         )}
 
@@ -163,14 +215,14 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {/* Take-Home */}
         <LineItem
           label="Take-Home (After Tax)"
-          value={calculations.takeHome}
+          value={scaled.takeHome}
           isBold
           isLarge
-          highlight={calculations.takeHome > 0}
+          highlight={scaled.takeHome > 0}
         />
         <LineItem
           label="Weekly Take-Home"
-          value={calculations.weeklyTakeHome}
+          value={scaled.weeklyTakeHome}
           muted
         />
       </CardContent>

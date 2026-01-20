@@ -52,7 +52,7 @@ All values displayed as **negative** (expenses).
 
 | # | Transaction Type | Database Source | Query Logic |
 |---|-----------------|-----------------|-------------|
-| 6 | **BrickLink Fees** | `paypal_transactions` | `SUM(fee_amount)` - all PayPal fees are BrickLink-related |
+| 6 | **BrickLink / Brick Owl / Bricqer Fees** | `monzo_transactions` | `SUM(ABS(amount))/100` WHERE `local_category='Selling Fees'` - platform subscription fees for BrickLink, Brick Owl, and Bricqer |
 | 7 | **Amazon Fees** | `amazon_transactions` | `SUM(COALESCE(referral_fee, 0) + COALESCE(fba_fulfillment_fee, 0) + COALESCE(fba_per_unit_fee, 0) + COALESCE(fba_weight_fee, 0) + COALESCE(fba_inventory_storage_fee, 0) + COALESCE(other_fees, 0)) WHERE transaction_type = 'Shipment'` |
 | 8 | **eBay Insertion Fees** | `ebay_transactions` | `SUM(amount) WHERE transaction_type='NON_SALE_CHARGE' AND booking_entry='DEBIT' AND raw_response->>'feeType'='INSERTION_FEE'` |
 | 9 | **eBay Ad Fees - Standard** | `ebay_transactions` | `SUM(amount) WHERE transaction_type='NON_SALE_CHARGE' AND booking_entry='DEBIT' AND raw_response->>'feeType'='AD_FEE'` |

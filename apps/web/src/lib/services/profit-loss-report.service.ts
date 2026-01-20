@@ -513,7 +513,8 @@ async function queryMonzoByCategory(
 }
 
 /**
- * Query BrickLink Fees (from Monzo 'Selling Fees' category)
+ * Query BrickLink / Brick Owl / Bricqer Fees (from Monzo 'Selling Fees' category)
+ * This includes platform subscription fees paid via Monzo for all three platforms
  */
 async function queryBrickLinkFees(
   supabase: SupabaseClient<Database>,
@@ -1031,7 +1032,7 @@ function getRowDefinitions(): RowDefinition[] {
     // SELLING FEES
     {
       category: 'Selling Fees',
-      transactionType: 'BrickLink Fees',
+      transactionType: 'BrickLink / Brick Owl / Bricqer Fees',
       queryFn: queryBrickLinkFees,
       signMultiplier: -1,
     },

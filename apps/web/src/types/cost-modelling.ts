@@ -284,6 +284,7 @@ export interface UpdateScenarioRequest extends Partial<CostModelScenarioFormData
 export interface ScenarioListItem {
   id: string;
   name: string;
+  description: string | null;
   updated_at: string;
   is_default: boolean;
 }

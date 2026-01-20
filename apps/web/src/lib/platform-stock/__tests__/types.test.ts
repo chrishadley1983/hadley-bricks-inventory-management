@@ -19,7 +19,6 @@ import type {
   DiscrepancyType,
   PlatformListing,
   AmazonListing,
-  AmazonListingData,
   EbayListing,
   BrickLinkListing,
   ListingImport,

@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
         line_items:ebay_order_line_items(
           id,
           ebay_line_item_id,
+          legacy_item_id,
           sku,
           title,
           quantity,
@@ -78,7 +79,8 @@ export async function GET(request: NextRequest) {
           total_amount,
           total_currency,
           fulfilment_status,
-          item_location
+          item_location,
+          inventory_item_id
         ),
         fulfilments:ebay_shipping_fulfilments(
           id,

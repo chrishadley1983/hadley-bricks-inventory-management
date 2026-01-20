@@ -12,7 +12,47 @@ import type {
   EbayOrderResponse,
   EbayShippingFulfilmentResponse,
   EbayLineItem,
+  EbayFulfilmentStartInstruction,
 } from './types';
+
+/**
+ * Extract dispatch_by date from eBay fulfillmentStartInstructions
+ *
+ * eBay provides minEstimatedDeliveryDate and maxEstimatedDeliveryDate.
+ * We use minEstimatedDeliveryDate minus 2 days as the ship-by date,
+ * which accounts for typical UK domestic shipping time.
+ * If that's not available, we fall back to order creation date + 1 day.
+ */
+function extractDispatchByDate(
+  instructions: EbayFulfilmentStartInstruction[] | undefined,
+  creationDate: string
+): string | null {
+  if (!instructions || instructions.length === 0) {
+    return null;
+  }
+
+  // Use the first instruction (usually there's only one)
+  const instruction = instructions[0];
+
+  // Prefer minEstimatedDeliveryDate - subtract 2 days for shipping time
+  if (instruction.minEstimatedDeliveryDate) {
+    const deliveryDate = new Date(instruction.minEstimatedDeliveryDate);
+    deliveryDate.setDate(deliveryDate.getDate() - 2);
+    return deliveryDate.toISOString();
+  }
+
+  // Fall back to maxEstimatedDeliveryDate - subtract 3 days
+  if (instruction.maxEstimatedDeliveryDate) {
+    const deliveryDate = new Date(instruction.maxEstimatedDeliveryDate);
+    deliveryDate.setDate(deliveryDate.getDate() - 3);
+    return deliveryDate.toISOString();
+  }
+
+  // No delivery dates available - use order creation + 1 day (standard handling time)
+  const creationDateObj = new Date(creationDate);
+  creationDateObj.setDate(creationDateObj.getDate() + 1);
+  return creationDateObj.toISOString();
+}
 
 // ============================================================================
 // Types
@@ -460,6 +500,7 @@ export class EbayFulfilmentService {
       pricing_summary: order.pricingSummary || null,
       payment_summary: order.paymentSummary || null,
       fulfilment_instructions: order.fulfillmentStartInstructions || null,
+      dispatch_by: extractDispatchByDate(order.fulfillmentStartInstructions, order.creationDate),
       raw_response: order,
     };
 

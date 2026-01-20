@@ -501,10 +501,10 @@ describe('AmazonReportsClient', () => {
 
   describe('type exports', () => {
     it('should export report types', async () => {
-      const module = await import('../amazon-reports.client');
+      const clientModule = await import('../amazon-reports.client');
 
-      expect(module).toHaveProperty('AmazonReportsClient');
-      expect(module).toHaveProperty('createAmazonReportsClient');
+      expect(clientModule).toHaveProperty('AmazonReportsClient');
+      expect(clientModule).toHaveProperty('createAmazonReportsClient');
     });
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MileageRepository } from '../mileage.repository';
 import type { ExpenseType } from '../mileage.repository';

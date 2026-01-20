@@ -196,6 +196,16 @@ async function fetchEbaySyncLog(): Promise<{ logs: Array<{ started_at: string; s
 }
 
 // eBay orders for the table
+interface EbayLineItem {
+  id: string;
+  ebay_line_item_id: string;
+  sku: string | null;
+  title: string;
+  quantity: number;
+  legacy_item_id?: string;
+  inventory_item_id?: string | null;
+}
+
 interface EbayOrder {
   id: string;
   ebay_order_id: string;
@@ -206,6 +216,7 @@ interface EbayOrder {
   order_fulfilment_status: string;
   order_payment_status: string;
   ui_status: string;
+  line_items?: EbayLineItem[];
 }
 
 interface EbayOrdersResponse {
@@ -233,7 +244,16 @@ async function fetchEbayOrders(
 }
 
 // Transform eBay order to PlatformOrder-like format for display
-function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder {
+function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder & { order_items?: Array<{ id: string; item_name: string | null; item_number: string | null; inventory_item_id: string | null; legacy_item_id?: string }> } {
+  // Transform line_items to order_items format for consistent display
+  const orderItems = (ebayOrder.line_items || []).map((li) => ({
+    id: li.id,
+    item_name: li.title,
+    item_number: li.sku,
+    inventory_item_id: li.inventory_item_id || null,
+    legacy_item_id: li.legacy_item_id,
+  }));
+
   return {
     id: ebayOrder.id,
     platform: 'ebay',
@@ -255,6 +275,7 @@ function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder {
     synced_at: null,
     user_id: '',
     items: [],
+    order_items: orderItems,
     // Additional fields expected by PlatformOrder
     cancelled_at: null,
     completed_at: null,
@@ -263,7 +284,7 @@ function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder {
     packed_at: null,
     payment_method: null,
     shipped_at: null,
-  } as unknown as PlatformOrder;
+  } as unknown as PlatformOrder & { order_items?: Array<{ id: string; item_name: string | null; item_number: string | null; inventory_item_id: string | null; legacy_item_id?: string }> };
 }
 
 // Backfill types and functions
@@ -1472,18 +1493,47 @@ export default function OrdersPage() {
                             : '-'}
                         </TableCell>
                         <TableCell>{order.buyer_name || '-'}</TableCell>
-                        <TableCell className="max-w-[200px]">
+                        <TableCell className="max-w-[300px]">
                           {(() => {
-                            const orderWithItems = order as PlatformOrder & { order_items?: Array<{ id: string; item_name?: string | null; item_number?: string | null; inventory_item_id?: string | null }> };
+                            const orderWithItems = order as PlatformOrder & { order_items?: Array<{ id: string; item_name?: string | null; item_number?: string | null; inventory_item_id?: string | null; legacy_item_id?: string }> };
                             const items = orderWithItems.order_items || [];
                             const itemNames = items.map((item) => item.item_name).filter(Boolean).join(', ');
                             const linkedItem = items.find((item) => item.inventory_item_id);
+                            const firstItem = items[0];
+                            // For eBay orders, get legacy_item_id for external link
+                            const ebayItemId = order.platform === 'ebay' && firstItem?.legacy_item_id;
+                            // For Amazon orders, item_number contains the ASIN
+                            const amazonAsin = order.platform === 'amazon' && firstItem?.item_number;
 
                             return (
                               <div className="flex items-center gap-2">
-                                <span className="truncate text-sm text-muted-foreground" title={itemNames || order.notes || '-'}>
+                                <span className="truncate text-sm" title={itemNames || order.notes || '-'}>
                                   {itemNames || order.notes || '-'}
                                 </span>
+                                {ebayItemId && (
+                                  <a
+                                    href={`https://www.ebay.co.uk/itm/${ebayItemId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="View on eBay"
+                                    className="flex-shrink-0"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                  </a>
+                                )}
+                                {amazonAsin && (
+                                  <a
+                                    href={`https://www.amazon.co.uk/dp/${amazonAsin}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="View on Amazon"
+                                    className="flex-shrink-0"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                  </a>
+                                )}
                                 {linkedItem?.inventory_item_id && (
                                   <a
                                     href={`/inventory/${linkedItem.inventory_item_id}`}

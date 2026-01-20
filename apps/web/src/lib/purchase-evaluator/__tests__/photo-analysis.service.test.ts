@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all external dependencies
 vi.mock('../../ai/claude-client', () => ({
@@ -697,10 +697,10 @@ describe('Photo Analysis Service', () => {
 
   describe('isGeminiConfigured export', () => {
     it('should re-export isGeminiConfigured from gemini-client', async () => {
-      const module = await import('../photo-analysis.service');
+      const serviceModule = await import('../photo-analysis.service');
 
-      expect(module).toHaveProperty('isGeminiConfigured');
-      expect(typeof module.isGeminiConfigured).toBe('function');
+      expect(serviceModule).toHaveProperty('isGeminiConfigured');
+      expect(typeof serviceModule.isGeminiConfigured).toBe('function');
     });
   });
 });

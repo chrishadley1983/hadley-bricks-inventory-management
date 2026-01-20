@@ -244,7 +244,13 @@
       "Bash(Invoke-RestMethod -Uri \"http://127.0.0.1:4040/api/tunnels\" -ErrorAction SilentlyContinue)",
       "Bash(ConvertTo-Json)",
       "Bash(Move-Item \"20260118000001_add_offer_message_template.sql\" \"20260126000001_add_offer_message_template.sql\")",
-      "Skill(docs)"
+      "Skill(docs)",
+      "Bash(for dir in */)",
+      "Bash(do [ \"$dir\" != \"__tests__/\" ])",
+      "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\web\\\\src\\\\app\\\\api\\\\workflow\\\\tasks\\\\today\", \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\web\\\\src\\\\app\\\\api\\\\workflow\\\\tasks\\\\[id]\", \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\web\\\\src\\\\app\\\\api\\\\workflow\\\\presets\")",
+      "Bash(Invoke-WebRequest -Uri \"http://localhost:3001/workflow\" -TimeoutSec 5 -ErrorAction SilentlyContinue)",
+      "Bash(Move-Item -Path \"20260120100001_amazon_order_sync_log.sql\" -Destination \"20260120100001_amazon_order_sync_log.sql\" -Force)",
+      "Bash(ForEach-Object { $_Name })"
     ]
   },
   "hooks": {

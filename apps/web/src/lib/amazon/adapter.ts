@@ -131,6 +131,7 @@ export function normalizeOrder(
     marketplace: getMarketplaceName(order.MarketplaceId),
     marketplaceId: order.MarketplaceId,
     fulfillmentChannel: order.FulfillmentChannel === 'AFN' ? 'FBA' : 'FBM',
+    latestShipDate: order.LatestShipDate ? new Date(order.LatestShipDate) : undefined,
     shippingAddress,
     items: normalizedItems,
     rawData: order,

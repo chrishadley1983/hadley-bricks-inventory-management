@@ -268,14 +268,37 @@ export class OrderRepository extends BaseRepository<
 
   /**
    * Replace order items (delete existing and insert new)
+   * Preserves inventory_item_id links by matching on item_number (ASIN for Amazon)
    */
   async replaceOrderItems(orderId: string, items: Omit<OrderItemInsert, 'order_id'>[]): Promise<OrderItem[]> {
+    // First, fetch existing order items to preserve inventory_item_id links
+    const existingItems = await this.getOrderItems(orderId);
+
+    // Create a map of item_number -> inventory_item_id for items that have links
+    // item_number holds the ASIN for Amazon orders
+    const inventoryLinksByItemNumber = new Map<string, string>();
+    for (const item of existingItems) {
+      if (item.inventory_item_id && item.item_number) {
+        inventoryLinksByItemNumber.set(item.item_number, item.inventory_item_id);
+      }
+    }
+
+    // Delete existing items
     await this.deleteOrderItems(orderId);
 
-    const itemsWithOrderId = items.map((item) => ({
-      ...item,
-      order_id: orderId,
-    }));
+    // Insert new items, preserving inventory_item_id where item_number matches
+    const itemsWithOrderId = items.map((item) => {
+      const preservedInventoryItemId = item.item_number
+        ? inventoryLinksByItemNumber.get(item.item_number)
+        : undefined;
+
+      return {
+        ...item,
+        order_id: orderId,
+        // Preserve the inventory link if we had one for this item
+        inventory_item_id: preservedInventoryItemId ?? item.inventory_item_id ?? null,
+      };
+    });
 
     return this.insertOrderItems(itemsWithOrderId);
   }

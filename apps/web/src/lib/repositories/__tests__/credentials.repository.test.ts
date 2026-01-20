@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CredentialsRepository } from '../credentials.repository';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Platform } from '@hadley-bricks/database';
+import type { Database } from '@hadley-bricks/database';
 
 // Mock crypto functions
 vi.mock('../../crypto', () => ({

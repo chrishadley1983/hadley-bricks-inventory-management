@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { BaseRepository, PaginationOptions, PaginatedResult } from '../base.repository';
+import { BaseRepository } from '../base.repository';
 
 // Concrete implementation for testing
 class TestRepository extends BaseRepository<

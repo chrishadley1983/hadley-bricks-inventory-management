@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EbayTransactionSyncService, ebayTransactionSyncService } from '../ebay-transaction-sync.service';
 import type { EbayTransactionResponse, EbayPayoutResponse } from '../types';

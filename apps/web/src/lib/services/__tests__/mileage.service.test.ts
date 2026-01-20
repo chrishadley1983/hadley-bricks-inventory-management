@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MileageService, DEFAULT_MILEAGE_RATE } from '../mileage.service';
 import type { ExpenseType } from '../../repositories';

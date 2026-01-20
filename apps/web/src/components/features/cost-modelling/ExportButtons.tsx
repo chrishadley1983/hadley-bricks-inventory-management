@@ -179,32 +179,39 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
       const { default: autoTable } = await import('jspdf-autotable');
 
       const doc = new jsPDF();
-      let yPos = 20;
+      let yPos = 15;
+
+      // Compact table styles for single-page fit
+      const tableStyles = {
+        fontSize: 8,
+        cellPadding: 2,
+      };
+      const headStyles = {
+        fontSize: 8,
+        cellPadding: 2,
+      };
 
       // Title
-      doc.setFontSize(20);
+      doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.text('Cost Modelling Report', 14, yPos);
-      yPos += 10;
+      yPos += 7;
 
-      // Scenario name
-      doc.setFontSize(14);
+      // Scenario name and date on same line
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text(formData.name, 14, yPos);
-      yPos += 6;
-
-      // Date
-      doc.setFontSize(10);
+      doc.setFontSize(8);
       doc.setTextColor(100);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, yPos);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 196, yPos, { align: 'right' });
       doc.setTextColor(0);
-      yPos += 15;
+      yPos += 8;
 
       // Hero Metrics
-      doc.setFontSize(14);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text('Summary', 14, yPos);
-      yPos += 8;
+      yPos += 5;
 
       autoTable(doc, {
         startY: yPos,
@@ -216,16 +223,18 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
           ['vs Target', formatCurrency(calculations.profitVsTarget)],
         ],
         theme: 'grid',
-        headStyles: { fillColor: [41, 128, 185] },
+        styles: tableStyles,
+        headStyles: { ...headStyles, fillColor: [41, 128, 185] },
+        margin: { left: 14, right: 14 },
       });
 
-      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
+      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
       // Revenue by platform
-      doc.setFontSize(14);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text('Revenue by Platform', 14, yPos);
-      yPos += 8;
+      yPos += 5;
 
       autoTable(doc, {
         startY: yPos,
@@ -237,24 +246,35 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
           ['Total', formatCurrency(calculations.totalTurnover), formatCurrency(calculations.totalFees), formatCurrency(calculations.totalCog), formatCurrency(calculations.totalTurnover - calculations.totalFees - calculations.totalCog)],
         ],
         theme: 'grid',
-        headStyles: { fillColor: [46, 204, 113] },
-        footStyles: { fillColor: [236, 240, 241], fontStyle: 'bold' },
+        styles: tableStyles,
+        headStyles: { ...headStyles, fillColor: [46, 204, 113] },
+        margin: { left: 14, right: 14 },
       });
 
-      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
+      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
-      // Other Costs
-      doc.setFontSize(14);
+      // Two-column layout for Costs and Tax
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const colWidth = (pageWidth - 28 - 10) / 2; // 14 margin each side, 10 gap
+
+      // Other Costs (left column)
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text('Costs Breakdown', 14, yPos);
-      yPos += 8;
+
+      // Tax breakdown (right column)
+      doc.text('Tax Summary', 14 + colWidth + 10, yPos);
+      yPos += 5;
+
+      const costsStartY = yPos;
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Cost Category', 'Annual Amount']],
+        head: [['Cost Category', 'Amount']],
         body: [
           ['Fixed Costs', formatCurrency(calculations.annualFixedCosts)],
           ['Postage', formatCurrency(calculations.totalPostage)],
+          ['Packaging', formatCurrency(calculations.packagingMaterials)],
           ['Lego Parts', formatCurrency(calculations.legoParts)],
           ['Accountant', formatCurrency(calculations.accountantCost)],
           ['COG', formatCurrency(calculations.totalCog)],
@@ -262,19 +282,14 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
           ...(calculations.vatAmount > 0 ? [['VAT', formatCurrency(calculations.vatAmount)]] : []),
         ],
         theme: 'grid',
-        headStyles: { fillColor: [231, 76, 60] },
+        styles: tableStyles,
+        headStyles: { ...headStyles, fillColor: [231, 76, 60] },
+        margin: { left: 14 },
+        tableWidth: colWidth,
       });
 
-      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
-
-      // Tax breakdown
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Tax Summary', 14, yPos);
-      yPos += 8;
-
       autoTable(doc, {
-        startY: yPos,
+        startY: costsStartY,
         head: [['Tax Type', 'Amount']],
         body: [
           ['Taxable Income', formatCurrency(calculations.taxableIncome)],
@@ -283,7 +298,10 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
           ['Total Tax', formatCurrency(calculations.totalTax)],
         ],
         theme: 'grid',
-        headStyles: { fillColor: [155, 89, 182] },
+        styles: tableStyles,
+        headStyles: { ...headStyles, fillColor: [155, 89, 182] },
+        margin: { left: 14 + colWidth + 10 },
+        tableWidth: colWidth,
       });
 
       // Save PDF

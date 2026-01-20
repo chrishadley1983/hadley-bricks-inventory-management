@@ -1,11 +1,32 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-01-17T19:30:00Z",
+  "lastRun": "2026-01-18T14:00:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 2,
-  "averageCriteriaPerFeature": 34,
+  "featuresDefinedCount": 5,
+  "averageCriteriaPerFeature": 53,
   "recentFeatures": [
+    {
+      "name": "cost-modelling",
+      "criteriaCount": 77,
+      "autoVerifyCount": 77,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-18T14:00:00Z"
+    },
+    {
+      "name": "business-workflow-phases-2-6",
+      "criteriaCount": 142,
+      "autoVerifyCount": 142,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-18T12:00:00Z"
+    },
+    {
+      "name": "business-workflow",
+      "criteriaCount": 46,
+      "autoVerifyCount": 46,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-18T10:00:00Z"
+    },
     {
       "name": "ebay-negotiation-automation-engine",
       "criteriaCount": 27,
@@ -34,7 +55,20 @@
       "Service class exports expected methods (file grep)",
       "Score calculation returns weighted factors (unit test)",
       "Configurable threshold stored in database (table query)",
-      "Cron job triggers at scheduled times (log verification)"
+      "Cron job triggers at scheduled times (log verification)",
+      "Page renders three sections in correct order (DOM order)",
+      "Task queue sorted by priority then due time (order verification)",
+      "Dynamic counts match database queries (count comparison)",
+      "Deep-link URL navigates to correct page (route validation)",
+      "Timer countdown displays remaining time (UI state check)",
+      "Start/stop button toggles tracking state (state validation)",
+      "Calendar shows dates with scheduled items (DOM check)",
+      "Progress bar shows percentage toward target (width calculation)",
+      "Scenario CRUD operations (create, read, update, delete)",
+      "Form inputs editable and persist on save",
+      "Live calculation on input change (no API call)",
+      "Collapsible sections with state persistence",
+      "Compare mode with side-by-side layout"
     ],
     "error": [
       "Toast on error condition (toast component check)",
@@ -44,14 +78,28 @@
       "Retry button on API failure (button visible)",
       "Fallback message when data unavailable",
       "Partial failure handling (successful items saved)",
-      "Rate limit retry with backoff (retry logic test)"
+      "Rate limit retry with backoff (retry logic test)",
+      "Partial load on API failure (other sections still render)",
+      "Error badge on failed section (visual indicator)",
+      "Permission denied shows graceful fallback (in-app notifications)",
+      "Negative value prevention (min attribute)",
+      "Delete last item prevention (disabled state)",
+      "Concurrent edit warning (optimistic locking)"
     ],
     "performance": [
       "Operation completes under X seconds (timed execution)",
       "Handles N items without degradation (load test)",
       "No memory leaks during operation (heap snapshot)",
       "API round-trip under threshold (network timing)",
-      "Batch processing handles 50+ items (load test)"
+      "Batch processing handles 50+ items (load test)",
+      "Page initial load under threshold (time to interactive)",
+      "Progressive loading of dynamic data (non-blocking render)",
+      "Optimistic UI update under 1 second (perceived latency)",
+      "Timer updates every second without jank (smooth animation)",
+      "Sections load independently (parallel requests)",
+      "Client-side calculation under 50ms (no perceptible delay)",
+      "PDF generation under 5 seconds",
+      "CSV generation under 1 second"
     ],
     "ui": [
       "Component uses shadcn/ui (class inspection)",
@@ -62,7 +110,17 @@
       "Summary bar with metrics (DOM elements present)",
       "Tab navigation between sections (tab click test)",
       "Toggle switch for enable/disable (toggle interaction)",
-      "Grid/table editor for CRUD (row add/edit/delete test)"
+      "Grid/table editor for CRUD (row add/edit/delete test)",
+      "Colour-coded priority indicators (CSS class verification)",
+      "Collapsible sections (toggle state persistence)",
+      "Progress indicators (circular/bar for timers)",
+      "Sparkline charts for trend visualization (chart element)",
+      "Calendar mini-view with day selection (date grid)",
+      "Currency formatting with £ symbol and 2 decimals",
+      "Percentage formatting with % symbol",
+      "Positive/negative value colouring (green/red)",
+      "Read-only calculated fields (visual distinction)",
+      "Button loading states (spinner during operation)"
     ]
   },
   "antiVagueTransformations": [
@@ -109,6 +167,46 @@
     {
       "vague": "tracks success",
       "specific": "Calculates acceptance rate and avg discount converted from offer records"
+    },
+    {
+      "vague": "shows tasks",
+      "specific": "Displays prioritised list sorted by priority then due time with dynamic counts"
+    },
+    {
+      "vague": "tracks dispatch deadlines",
+      "specific": "Stores dispatch_by timestamp from platform API; displays countdown timer"
+    },
+    {
+      "vague": "tracks time",
+      "specific": "Timer with start/stop, category selection, daily/weekly totals displayed"
+    },
+    {
+      "vague": "pomodoro timer",
+      "specific": "Countdown with work/break phases, session counter, streak tracking, audio notifications"
+    },
+    {
+      "vague": "shows progress",
+      "specific": "Progress bar with percentage, current vs target values, colour-coded status"
+    },
+    {
+      "vague": "calendar view",
+      "specific": "Month grid with day selection, icons on scheduled days, navigation arrows"
+    },
+    {
+      "vague": "notifications",
+      "specific": "Browser push notifications for configured events with permission handling"
+    },
+    {
+      "vague": "calculates P&L",
+      "specific": "Turnover - Fees - VAT - Costs - COG = Net Profit; Tax calculated on taxable income"
+    },
+    {
+      "vague": "compare scenarios",
+      "specific": "Side-by-side layout with delta values and % change; highlight >10% differences"
+    },
+    {
+      "vague": "auto-saves",
+      "specific": "Draft saved to server every 30 seconds; restoration prompt on page load"
     }
   ]
 }

@@ -75,9 +75,37 @@ export async function POST(request: NextRequest) {
       limit: options.limit,
     };
 
+    // Create sync log entry for order sync
+    const { data: syncLog } = await supabase
+      .from('amazon_sync_log')
+      .insert({
+        user_id: user.id,
+        sync_type: 'ORDERS',
+        sync_mode: syncOptions.createdAfter || syncOptions.updatedAfter ? 'INCREMENTAL' : 'FULL',
+        status: 'RUNNING',
+        started_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
     // Run sync
     console.log('[POST /api/integrations/amazon/sync] Starting sync...');
     const result = await syncService.syncOrders(user.id, syncOptions);
+
+    // Update sync log with results
+    if (syncLog?.id) {
+      await supabase
+        .from('amazon_sync_log')
+        .update({
+          status: result.success ? 'COMPLETED' : 'FAILED',
+          records_processed: result.ordersProcessed,
+          records_created: result.ordersCreated,
+          records_updated: result.ordersUpdated,
+          error_message: result.errors.length > 0 ? result.errors.join('; ') : null,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', syncLog.id);
+    }
 
     // After syncing, automatically link shipped orders to inventory
     // Always run linking on successful sync - there may be previously synced orders that weren't linked

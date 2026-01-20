@@ -143,7 +143,7 @@ export function PackageCostMatrix({ data, fixedCostPerSale, onChange }: PackageC
                 {PACKAGE_COLUMNS.map((col) => (
                   <TableCell
                     key={`${col.type}-${row.key}`}
-                    className={`p-1 ${
+                    className={`p-1 text-center ${
                       col.platform === 'amazon'
                         ? 'bg-blue-50/30 dark:bg-blue-950/10'
                         : 'bg-orange-50/30 dark:bg-orange-950/10'
@@ -155,7 +155,7 @@ export function PackageCostMatrix({ data, fixedCostPerSale, onChange }: PackageC
                       min="0"
                       value={getCost(col.type, row.key)}
                       onChange={(e) => handleCostChange(col.type, row.key, e.target.value)}
-                      className="h-8 text-right text-sm w-20"
+                      className="h-8 text-center text-sm w-20 mx-auto"
                     />
                   </TableCell>
                 ))}

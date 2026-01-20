@@ -4,7 +4,7 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -37,6 +37,7 @@ import type { ProfitLossCategory } from '@/lib/services/profit-loss-report.servi
 import { cn } from '@/lib/utils';
 import { BarChart } from '@/components/charts/bar-chart';
 import { ComboChart } from '@/components/charts/combo-chart';
+import { useToast } from '@/hooks/use-toast';
 
 // View preset types
 type ViewPreset = 'last_12_months' | 'this_year' | 'last_year' | 'this_quarter' | 'last_quarter' | 'custom';
@@ -163,6 +164,8 @@ export default function ProfitLossReportPage() {
 
   const { data: report, isLoading, error } = useProfitLossReport(dateRange, false);
   const exportMutation = useExportReport();
+  const { toast } = useToast();
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const handleExport = (format: 'csv' | 'json') => {
     exportMutation.mutate({
@@ -170,6 +173,317 @@ export default function ProfitLossReportPage() {
       format,
       dateRange,
     });
+  };
+
+  // PDF Export handler
+  const handleExportPdf = async () => {
+    if (!report || displayMonths.length === 0) {
+      toast({ title: 'No data to export', variant: 'destructive' });
+      return;
+    }
+
+    setExportingPdf(true);
+
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      // Use landscape for more columns
+      const doc = new jsPDF({ orientation: 'landscape' });
+      let yPos = 12;
+
+      // Compact styles
+      const tableStyles = { fontSize: 6, cellPadding: 1 };
+      const headStyles = { fontSize: 6, cellPadding: 1 };
+
+      // Title and period
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Profit & Loss Report', 14, yPos);
+
+      const periodLabel = viewPreset === 'last_12_months' ? 'Last 12 Months'
+        : viewPreset === 'this_year' ? `${new Date().getFullYear()} YTD`
+        : viewPreset === 'last_year' ? `${new Date().getFullYear() - 1} Full Year`
+        : viewPreset === 'this_quarter' ? `Q${getCurrentQuarter()} ${new Date().getFullYear()}`
+        : viewPreset === 'last_quarter' ? `Q${getCurrentQuarter() === 1 ? 4 : getCurrentQuarter() - 1} ${getCurrentQuarter() === 1 ? new Date().getFullYear() - 1 : new Date().getFullYear()}`
+        : 'Custom';
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(` - ${periodLabel}`, 75, yPos);
+
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 283, yPos, { align: 'right' });
+      doc.setTextColor(0);
+      yPos += 6;
+
+      // Summary row (horizontal)
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      const summaryText = `Income: ${formatCurrency(summaryMetrics.income)}  |  Expenses: ${formatCurrency(summaryMetrics.expenses)}  |  Net Profit: ${formatCurrency(summaryMetrics.netProfit)}  |  Margin: ${summaryMetrics.profitMargin.toFixed(1)}%`;
+      doc.text(summaryText, 14, yPos);
+      yPos += 6;
+
+      // Detailed breakdown table with all transaction types
+      doc.setFontSize(8);
+      doc.text('Detailed Breakdown', 14, yPos);
+      yPos += 4;
+
+      // Build detailed table with categories and their transaction types
+      const categories = ['Income', 'Selling Fees', 'Stock Purchase', 'Packing & Postage', 'Bills'] as ProfitLossCategory[];
+      const tableHead = ['Category / Transaction Type', ...displayMonths.map(formatMonth), 'Total', 'Monthly Avg'];
+      const tableBody: (string | { content: string; styles?: Record<string, unknown> })[][] = [];
+
+      // Track row indices for styling
+      const categoryRowIndices: number[] = [];
+      let rowIndex = 0;
+
+      for (const category of categories) {
+        const categoryTotals = report.categoryTotals?.[category] || {};
+        const categoryTotal = displayMonths.reduce((sum, m) => sum + (categoryTotals[m] || 0), 0);
+
+        // Skip empty categories
+        if (categoryTotal === 0) continue;
+
+        const categoryMonthlyAvg = displayMonths.length > 0 ? categoryTotal / displayMonths.length : 0;
+
+        // Category header row
+        categoryRowIndices.push(rowIndex);
+        tableBody.push([
+          { content: category, styles: { fontStyle: 'bold' } },
+          ...displayMonths.map(m => formatCurrency(categoryTotals[m] || 0)),
+          formatCurrency(categoryTotal),
+          formatCurrency(categoryMonthlyAvg),
+        ]);
+        rowIndex++;
+
+        // Transaction type rows within this category
+        const categoryRows = report.rows.filter(r => r.category === category);
+        for (const row of categoryRows) {
+          const rowTotal = displayMonths.reduce((sum, m) => sum + (row.monthlyValues[m] || 0), 0);
+          // Skip zero rows
+          if (rowTotal === 0) continue;
+
+          const rowMonthlyAvg = displayMonths.length > 0 ? rowTotal / displayMonths.length : 0;
+          tableBody.push([
+            `  ${row.transactionType}`,
+            ...displayMonths.map(m => formatCurrency(row.monthlyValues[m] || 0)),
+            formatCurrency(rowTotal),
+            formatCurrency(rowMonthlyAvg),
+          ]);
+          rowIndex++;
+        }
+      }
+
+      // Net Profit row
+      const netProfitTotal = displayMonths.reduce((sum, m) => sum + (report.grandTotal?.[m] || 0), 0);
+      const netProfitMonthlyAvg = displayMonths.length > 0 ? netProfitTotal / displayMonths.length : 0;
+      const netProfitRowIndex = rowIndex;
+      tableBody.push([
+        { content: 'Net Profit / (Loss)', styles: { fontStyle: 'bold' } },
+        ...displayMonths.map(m => formatCurrency(report.grandTotal?.[m] || 0)),
+        formatCurrency(netProfitTotal),
+        formatCurrency(netProfitMonthlyAvg),
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [tableHead],
+        body: tableBody,
+        theme: 'grid',
+        styles: tableStyles,
+        headStyles: { ...headStyles, fillColor: [41, 128, 185] },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            // Style category rows with light background
+            if (categoryRowIndices.includes(data.row.index)) {
+              data.cell.styles.fillColor = [245, 245, 245];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            // Style Net Profit row
+            if (data.row.index === netProfitRowIndex) {
+              data.cell.styles.fillColor = [220, 237, 200];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            // Color negative values red, positive green (skip first column)
+            if (data.column.index > 0) {
+              const cellText = String(data.cell.raw);
+              if (cellText.startsWith('-') || cellText.startsWith('−')) {
+                data.cell.styles.textColor = [220, 53, 69];
+              } else if (cellText.startsWith('£') && !cellText.includes('0.00')) {
+                data.cell.styles.textColor = [40, 167, 69];
+              }
+            }
+          }
+        },
+        columnStyles: {
+          0: { cellWidth: 45 }, // Category column wider
+        },
+      });
+
+      // ========== PAGE 2: Summary & Charts ==========
+      doc.addPage('landscape');
+      yPos = 12;
+
+      // Page 2 header
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Profit & Loss Report - Summary & Analysis', 14, yPos);
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text(`${periodLabel} | Generated: ${new Date().toLocaleString()}`, 283, yPos, { align: 'right' });
+      doc.setTextColor(0);
+      yPos += 8;
+
+      // Period Summary Table
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Period Summary', 14, yPos);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${formatMonth(displayMonths[0])} - ${formatMonth(displayMonths[displayMonths.length - 1])} (${displayMonths.length} month${displayMonths.length !== 1 ? 's' : ''})`, 55, yPos);
+      yPos += 5;
+
+      const summaryTableBody: string[][] = [];
+      for (const category of categories) {
+        const categoryTotals = report.categoryTotals?.[category] || {};
+        const total = displayMonths.reduce((sum, m) => sum + (categoryTotals[m] || 0), 0);
+        if (total === 0) continue;
+        const monthlyAvg = displayMonths.length > 0 ? total / displayMonths.length : 0;
+        summaryTableBody.push([category, formatCurrency(total), formatCurrency(monthlyAvg)]);
+      }
+      summaryTableBody.push(['Net Profit / (Loss)', formatCurrency(netProfitTotal), formatCurrency(netProfitMonthlyAvg)]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Category', 'Total', 'Monthly Avg']],
+        body: summaryTableBody,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fontSize: 8, cellPadding: 2, fillColor: [41, 128, 185] },
+        margin: { left: 14 },
+        tableWidth: 120,
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            // Style Net Profit row
+            if (data.row.index === summaryTableBody.length - 1) {
+              data.cell.styles.fillColor = [220, 237, 200];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            // Color values
+            if (data.column.index > 0) {
+              const cellText = String(data.cell.raw);
+              if (cellText.startsWith('-') || cellText.startsWith('−')) {
+                data.cell.styles.textColor = [220, 53, 69];
+              } else if (cellText.startsWith('£') && !cellText.includes('0.00')) {
+                data.cell.styles.textColor = [40, 167, 69];
+              }
+            }
+          }
+        },
+      });
+
+      yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+      // Turnover by Platform Chart (bar chart representation)
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Turnover by Platform', 14, yPos);
+      yPos += 5;
+
+      // Get platform data
+      const ebayRow = report.rows.find(r => r.transactionType === 'eBay Gross Sales');
+      const bricklinkRow = report.rows.find(r => r.transactionType === 'BrickLink Gross Sales');
+      const amazonRow = report.rows.find(r => r.transactionType === 'Amazon Sales');
+      const brickowlRow = report.rows.find(r => r.transactionType === 'Brick Owl Gross Sales');
+
+      const platformTotals = [
+        { name: 'eBay', total: displayMonths.reduce((sum, m) => sum + (ebayRow?.monthlyValues[m] || 0), 0), color: [59, 130, 246] },
+        { name: 'BrickLink', total: displayMonths.reduce((sum, m) => sum + (bricklinkRow?.monthlyValues[m] || 0), 0), color: [239, 68, 68] },
+        { name: 'Amazon', total: displayMonths.reduce((sum, m) => sum + (amazonRow?.monthlyValues[m] || 0), 0), color: [249, 115, 22] },
+        { name: 'Brick Owl', total: displayMonths.reduce((sum, m) => sum + (brickowlRow?.monthlyValues[m] || 0), 0), color: [139, 92, 246] },
+      ].filter(p => p.total > 0);
+
+      const maxPlatformTotal = Math.max(...platformTotals.map(p => p.total));
+      const barChartWidth = 200;
+      const barHeight = 12;
+      const barGap = 4;
+
+      for (const platform of platformTotals) {
+        const barWidth = maxPlatformTotal > 0 ? (platform.total / maxPlatformTotal) * barChartWidth : 0;
+
+        // Draw bar
+        doc.setFillColor(platform.color[0], platform.color[1], platform.color[2]);
+        doc.rect(70, yPos - 8, barWidth, barHeight, 'F');
+
+        // Platform name
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text(platform.name, 14, yPos);
+
+        // Value at end of bar
+        doc.text(formatCurrency(platform.total), 75 + barWidth, yPos);
+
+        yPos += barHeight + barGap;
+      }
+
+      yPos += 8;
+
+      // Profit by Month Chart (simplified table view)
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Monthly Profit Trend', 14, yPos);
+      yPos += 5;
+
+      const profitTrendBody: string[][] = displayMonths.map(month => {
+        const turnover = report.categoryTotals?.['Income']?.[month] || 0;
+        const sellingFees = Math.abs(report.categoryTotals?.['Selling Fees']?.[month] || 0);
+        const packingPostage = Math.abs(report.categoryTotals?.['Packing & Postage']?.[month] || 0);
+        const bills = Math.abs(report.categoryTotals?.['Bills']?.[month] || 0);
+        const cog = Math.abs(report.categoryTotals?.['Stock Purchase']?.[month] || 0);
+        const profit = report.grandTotal?.[month] || 0;
+
+        return [
+          formatMonth(month),
+          formatCurrency(turnover),
+          formatCurrency(sellingFees + packingPostage + bills),
+          formatCurrency(cog),
+          formatCurrency(profit),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Month', 'Turnover', 'Selling & Ops', 'COG', 'Profit']],
+        body: profitTrendBody,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fontSize: 7, cellPadding: 1.5, fillColor: [46, 204, 113] },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 4) {
+            // Color profit column
+            const cellText = String(data.cell.raw);
+            if (cellText.startsWith('-') || cellText.startsWith('−')) {
+              data.cell.styles.textColor = [220, 53, 69];
+            } else if (!cellText.includes('0.00')) {
+              data.cell.styles.textColor = [40, 167, 69];
+            }
+          }
+        },
+      });
+
+      doc.save(`profit-loss-${periodLabel.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.pdf`);
+      toast({ title: 'PDF exported successfully' });
+    } catch (error) {
+      console.error('PDF export error:', error);
+      toast({ title: 'Failed to export PDF', variant: 'destructive' });
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const toggleCategory = (category: ProfitLossCategory) => {
@@ -327,6 +641,18 @@ export default function ProfitLossReportPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleExportPdf}
+                disabled={exportingPdf || isLoading}
+              >
+                {exportingPdf ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="mr-2 h-4 w-4" />
+                )}
+                Export PDF
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => handleExport('csv')}

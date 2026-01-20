@@ -2667,6 +2667,7 @@ export type Database = {
           cancel_status: Json | null
           created_at: string
           creation_date: string
+          dispatch_by: string | null
           ebay_order_id: string
           fulfilment_instructions: Json | null
           id: string
@@ -2691,6 +2692,7 @@ export type Database = {
           cancel_status?: Json | null
           created_at?: string
           creation_date: string
+          dispatch_by?: string | null
           ebay_order_id: string
           fulfilment_instructions?: Json | null
           id?: string
@@ -2715,6 +2717,7 @@ export type Database = {
           cancel_status?: Json | null
           created_at?: string
           creation_date?: string
+          dispatch_by?: string | null
           ebay_order_id?: string
           fulfilment_instructions?: Json | null
           id?: string

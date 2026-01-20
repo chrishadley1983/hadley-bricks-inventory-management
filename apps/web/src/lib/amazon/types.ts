@@ -340,6 +340,7 @@ export interface NormalizedAmazonOrder {
   marketplace: string;
   marketplaceId: string;
   fulfillmentChannel: string;
+  latestShipDate?: Date;
   shippingAddress?: {
     name: string;
     address1?: string;

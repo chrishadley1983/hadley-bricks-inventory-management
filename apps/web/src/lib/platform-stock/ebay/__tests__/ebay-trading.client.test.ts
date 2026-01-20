@@ -976,13 +976,13 @@ describe('EbayTradingClient', () => {
 
   describe('type exports', () => {
     it('should export EbayTradingClient class', async () => {
-      const module = await import('../ebay-trading.client');
-      expect(module.EbayTradingClient).toBeDefined();
+      const clientModule = await import('../ebay-trading.client');
+      expect(clientModule.EbayTradingClient).toBeDefined();
     });
 
     it('should export EbayTradingApiError class', async () => {
-      const module = await import('../ebay-trading.client');
-      expect(module.EbayTradingApiError).toBeDefined();
+      const clientModule = await import('../ebay-trading.client');
+      expect(clientModule.EbayTradingApiError).toBeDefined();
     });
   });
 });

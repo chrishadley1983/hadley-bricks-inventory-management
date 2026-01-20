@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AmazonBackfillService } from '../amazon-backfill.service';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used in mock below
 import { AmazonRateLimitError } from '../../amazon';
 
 // Mock repositories

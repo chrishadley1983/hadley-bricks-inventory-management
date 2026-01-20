@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { PayPalTransactionSyncService } from '../paypal-transaction-sync.service';
 

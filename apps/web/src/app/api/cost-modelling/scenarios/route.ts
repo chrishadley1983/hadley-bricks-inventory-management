@@ -42,6 +42,7 @@ export async function GET() {
           {
             id: defaultScenario.id,
             name: defaultScenario.name,
+            description: defaultScenario.description,
             updated_at: defaultScenario.updated_at,
             is_default: defaultScenario.is_default,
           },

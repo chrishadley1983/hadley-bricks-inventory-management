@@ -233,7 +233,7 @@ describe('ProfitLossReportService', () => {
 
       // Expected row counts per category
       expect(incomeRows.length).toBe(6); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Amazon Sales, Amazon Refunds
-      expect(sellingFeesRows.length).toBe(10); // BrickLink Fees, Amazon Fees, 8 eBay fee types
+      expect(sellingFeesRows.length).toBe(10); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, 8 eBay fee types
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(2); // Postage, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website, Office, Mileage
@@ -277,7 +277,7 @@ describe('ProfitLossReportService', () => {
         .filter((r) => r.category === 'Selling Fees')
         .map((r) => r.transactionType);
 
-      expect(feeRowTypes).toContain('BrickLink Fees');
+      expect(feeRowTypes).toContain('BrickLink / Brick Owl / Bricqer Fees');
       expect(feeRowTypes).toContain('Amazon Fees');
       expect(feeRowTypes).toContain('eBay Insertion Fees');
       expect(feeRowTypes).toContain('eBay Ad Fees - Standard');

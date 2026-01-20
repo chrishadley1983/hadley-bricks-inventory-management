@@ -197,7 +197,7 @@ export function useDraftCheck(id: string | null) {
     queryKey: costModellingKeys.draft(id!),
     queryFn: () => checkDraft(id!),
     enabled: !!id,
-    staleTime: 0, // Always fresh
+    staleTime: 30 * 1000, // 30 seconds - matches auto-save interval
   });
 }
 
@@ -263,18 +263,55 @@ export function useDuplicateCostScenario() {
 }
 
 /**
- * Hook to save draft
+ * Rename/update scenario metadata (name and description only)
  */
-export function useSaveDraft() {
+async function renameScenario(params: {
+  id: string;
+  name: string;
+  description?: string;
+}): Promise<CostModelScenario> {
+  const response = await fetch(`/api/cost-modelling/scenarios/${params.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: params.name,
+      description: params.description,
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to rename scenario');
+  }
+  const { data } = await response.json();
+  return data;
+}
+
+/**
+ * Hook to rename/update scenario metadata
+ */
+export function useRenameCostScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: saveDraft,
+    mutationFn: renameScenario,
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: costModellingKeys.draft(variables.id),
+        queryKey: costModellingKeys.scenario(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: costModellingKeys.scenarios(),
       });
     },
+  });
+}
+
+/**
+ * Hook to save draft
+ */
+export function useSaveDraft() {
+  return useMutation({
+    mutationFn: saveDraft,
+    // No invalidation needed - we just saved the draft, no need to refetch it
   });
 }
 

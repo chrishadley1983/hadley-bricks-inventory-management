@@ -3,6 +3,34 @@ import { createClient } from '@/lib/supabase/server';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+/**
+ * Natural sort comparison for strings with numeric suffixes
+ * e.g., "Loft - S5" comes before "Loft - S49"
+ */
+function naturalCompare(a: string, b: string): number {
+  const regex = /(\d+)|(\D+)/g;
+  const aParts = a.match(regex) || [];
+  const bParts = b.match(regex) || [];
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aPart = aParts[i] || '';
+    const bPart = bParts[i] || '';
+
+    // If both parts are numeric, compare as numbers
+    const aNum = parseInt(aPart, 10);
+    const bNum = parseInt(bPart, 10);
+
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      if (aNum !== bNum) return aNum - bNum;
+    } else {
+      // Otherwise compare as strings
+      const cmp = aPart.localeCompare(bPart);
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
+
 export interface AmazonPickingListItem {
   location: string | null;
   setNo: string | null;
@@ -262,11 +290,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort by location, then by set number
+    // Sort by location (natural sort for numeric suffixes), then by set number
     pickingListItems.sort((a, b) => {
       const locA = a.location || 'ZZZ'; // Put null locations at end
       const locB = b.location || 'ZZZ';
-      if (locA !== locB) return locA.localeCompare(locB);
+      if (locA !== locB) return naturalCompare(locA, locB);
       const setA = a.setNo || '';
       const setB = b.setNo || '';
       return setA.localeCompare(setB);

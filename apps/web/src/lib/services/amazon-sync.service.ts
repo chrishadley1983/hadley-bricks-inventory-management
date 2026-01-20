@@ -340,6 +340,7 @@ export class AmazonSyncService {
       currency: normalized.currency,
       shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       items_count: normalized.items.length,
+      dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
         ...normalized.rawData,
         marketplace: normalized.marketplace,
@@ -412,6 +413,7 @@ export class AmazonSyncService {
       currency: normalized.currency,
       shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       items_count: normalized.items.length,
+      dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
         ...normalized.rawData,
         marketplace: normalized.marketplace,

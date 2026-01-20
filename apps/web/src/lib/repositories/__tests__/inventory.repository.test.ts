@@ -718,10 +718,13 @@ describe('InventoryRepository', () => {
       // First page: 1000 items
       const firstPage = Array(1000).fill({ status: 'BACKLOG' });
       // Second page: 500 items (less than 1000 so pagination stops)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Kept for documentation
       const secondPage = Array(500).fill({ status: 'LISTED' });
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, prefer-const -- Test scaffolding
       let callCount = 0;
-      // Override the mock to return different data on subsequent calls
+      // Override the mock to return different data on subsequent calls (scaffolding for future)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Test scaffolding
       const originalSetMockResponse = mockSupabase.setMockResponse;
       mockSupabase.setMockResponse('inventory_items', 'query', {
         data: firstPage,

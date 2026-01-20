@@ -80,7 +80,6 @@ export function AnalysisPanel({
     (s) => !s.field.toLowerCase().includes('category')
   );
   const currentSuggestion = suggestions[currentSuggestionIndex];
-  const hasMoreSuggestions = currentSuggestionIndex < suggestions.length - 1;
   const hasPreviousSuggestions = currentSuggestionIndex > 0;
   const allReviewed = currentSuggestionIndex >= suggestions.length;
 

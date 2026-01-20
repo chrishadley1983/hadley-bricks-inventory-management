@@ -123,7 +123,7 @@ export class CostModellingRepository {
   async findAllByUser(userId: string): Promise<ScenarioListItem[]> {
     const { data, error } = await this.supabase
       .from('cost_model_scenarios')
-      .select('id, name, updated_at, is_default')
+      .select('id, name, description, updated_at, is_default')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false });
 

@@ -877,8 +877,8 @@ describe('EbayStockService', () => {
 
   describe('type exports', () => {
     it('should export EbayStockService class', async () => {
-      const module = await import('../ebay-stock.service');
-      expect(module.EbayStockService).toBeDefined();
+      const serviceModule = await import('../ebay-stock.service');
+      expect(serviceModule.EbayStockService).toBeDefined();
     });
   });
 });

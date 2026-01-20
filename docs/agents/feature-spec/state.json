@@ -1,10 +1,77 @@
 {
   "agent": "feature-spec",
-  "lastRun": "2026-01-17T10:30:00Z",
+  "lastRun": "2026-01-18T15:00:00Z",
   "lastCommit": null,
   "status": "completed",
-  "specsGenerated": 1,
+  "specsGenerated": 4,
   "recentSpecs": [
+    {
+      "feature": "cost-modelling",
+      "generatedAt": "2026-01-18T15:00:00Z",
+      "criteriaCount": 77,
+      "filesPlanned": 42,
+      "linesEstimated": 4533,
+      "feasibilityIssues": 0,
+      "status": "READY_FOR_BUILD",
+      "complexity": "large",
+      "phases": ["Phase 1: Core Model", "Phase 2: Package Matrix", "Phase 3: Summary Views", "Phase 4: Compare Mode", "Phase 5: Polish & UX"],
+      "buildOrder": [
+        "Database migration (tables + RLS)",
+        "Repository & service layer",
+        "API routes (CRUD + duplicate)",
+        "Basic page & hooks",
+        "Hero metrics & assumptions panel",
+        "P&L breakdown display",
+        "Package cost matrix",
+        "Summary views (Daily/Weekly/Monthly)",
+        "Compare mode",
+        "Draft & persistence",
+        "Export (PDF/CSV)",
+        "Error handling & validation",
+        "UI polish & responsiveness",
+        "Testing & verification"
+      ]
+    },
+    {
+      "feature": "business-workflow-phases-2-6",
+      "generatedAt": "2026-01-18T14:00:00Z",
+      "criteriaCount": 142,
+      "filesPlanned": 65,
+      "linesEstimated": 8030,
+      "feasibilityIssues": 0,
+      "status": "READY_FOR_BUILD",
+      "complexity": "large",
+      "phases": ["Phase 2: Time Tracking", "Phase 3: Pomodoro", "Phase 4: Targets", "Phase 5: Pickups", "Phase 6: Insights & Settings"],
+      "buildOrder": [
+        "Database migrations (4 migrations)",
+        "Phase 2: Time Tracking (timer, log, breakdown)",
+        "Phase 3: Pomodoro Timer (panel, progress, audio)",
+        "Phase 4: Weekly Targets (metrics, sparklines)",
+        "Phase 5: Stock Pickups (calendar, scheduling, completion)",
+        "Phase 6: Insights & Settings (aggregation, config, notifications)",
+        "Integration & Polish"
+      ]
+    },
+    {
+      "feature": "business-workflow",
+      "generatedAt": "2026-01-18T11:00:00Z",
+      "criteriaCount": 46,
+      "filesPlanned": 29,
+      "feasibilityIssues": 0,
+      "status": "READY_FOR_BUILD",
+      "complexity": "large",
+      "buildOrder": [
+        "Database schema",
+        "Repository & service layer",
+        "Task queue API & components",
+        "Off-system tasks",
+        "Dispatch SLA integration",
+        "Critical actions panel",
+        "Completed today section",
+        "Page assembly",
+        "Integration testing"
+      ]
+    },
     {
       "feature": "listing-optimiser",
       "generatedAt": "2026-01-17T10:30:00Z",
@@ -35,6 +102,41 @@
       "description": "AI analysis + results display + action flow",
       "files": ["api/<resource>/analyse/route.ts", "lib/<service>.service.ts", "components/<Resource>AnalysisPanel.tsx"],
       "components": ["Analysis results", "Suggestion cards", "Approval flow", "Score display"]
+    },
+    "workflowFeature": {
+      "description": "Task queue + status tracking + dynamic counts",
+      "files": ["api/workflow/tasks/route.ts", "lib/services/workflow.service.ts", "components/features/workflow/"],
+      "components": ["TaskQueue", "TaskCard", "CriticalActionsPanel", "StatusGrid"]
+    },
+    "timerFeature": {
+      "description": "Start/stop timer + interval updates + persistence",
+      "files": ["api/<resource>/current/route.ts", "api/<resource>/start/route.ts", "api/<resource>/stop/route.ts"],
+      "components": ["TimerPanel", "TimerDisplay", "CategorySelector"],
+      "patterns": ["useInterval hook", "useRef for start time", "Server-side duration calculation"]
+    },
+    "calendarFeature": {
+      "description": "Mini calendar + date selection + event display",
+      "files": ["components/MiniCalendar.tsx", "api/<resource>/calendar/route.ts"],
+      "components": ["MiniCalendar", "EventCard", "DatePicker"],
+      "patterns": ["date-fns for manipulation", "DATE type storage", "Group by date"]
+    },
+    "metricsFeature": {
+      "description": "Aggregation queries + progress display + sparklines",
+      "files": ["api/workflow/metrics/route.ts", "components/MetricCard.tsx", "components/Sparkline.tsx"],
+      "components": ["MetricCard", "ProgressBar", "Sparkline"],
+      "patterns": ["Parallel queries", "Colour-coded thresholds", "7-day history"]
+    },
+    "settingsFeature": {
+      "description": "Config table + tabbed form + validation",
+      "files": ["api/workflow/config/route.ts", "components/SettingsDialog.tsx"],
+      "components": ["Tabs", "Form fields", "Save button"],
+      "patterns": ["Zod validation", "Optimistic updates", "URL hash for tab state"]
+    },
+    "costModellingFeature": {
+      "description": "Client-side calculations + server persistence + comparison",
+      "files": ["lib/services/cost-calculations.ts", "api/cost-modelling/scenarios/route.ts", "components/features/cost-modelling/"],
+      "components": ["AssumptionsPanel (Accordion)", "PLBreakdown", "PackageCostMatrix", "CompareMode", "ExportButtons"],
+      "patterns": ["useMemo for calculations", "Controlled form state", "Draft auto-save", "jsPDF for PDF export"]
     }
   },
   "feasibilityChecks": {
@@ -42,6 +144,9 @@
     "externalDependencies": "Does this need new npm packages?",
     "performanceConstraints": "Are there speed/scale requirements?",
     "securityImplications": "Does this touch auth/permissions?",
-    "integrationPoints": "What existing code does this connect to?"
+    "integrationPoints": "What existing code does this connect to?",
+    "browserAPIs": "Does this use browser-specific APIs (notifications, audio)?",
+    "timezoneHandling": "Are there date/time calculations that need timezone awareness?",
+    "clientSideCalculations": "Are there complex calculations that should run client-side for performance?"
   }
 }
