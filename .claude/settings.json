@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(Start-Process \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\windows-scanner\\\\HadleyBricksScanner\\\\bin\\\\Release\\\\net8.0-windows\\\\HadleyBricksScanner.exe\")",
+      "Bash($settingsPath = \"$env:LOCALAPPDATA\\\\HadleyBricks\\\\Scanner\\\\settings.json\")",
+      "Bash(Write-Output '{\"\"BaseUrl\"\":\"\"http://localhost:3000\"\"}')",
+      "Bash(Set-Content -Path $settingsPath)"
     ]
   }
 }

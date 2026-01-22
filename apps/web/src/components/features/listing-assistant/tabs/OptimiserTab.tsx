@@ -143,8 +143,12 @@ export function OptimiserTab() {
           title: 'Change Applied',
           description: `${suggestion.category} updated on eBay`,
         });
-      } catch {
-        // Error handled by mutation
+      } catch (err) {
+        toast({
+          title: 'Failed to Apply Change',
+          description: err instanceof Error ? err.message : 'Failed to update listing on eBay',
+          variant: 'destructive',
+        });
       }
     },
     [currentListingId, applyMutation, toast]

@@ -62,6 +62,7 @@ export function TaskCard({
   const isInProgress = task.status === 'in_progress';
   const hasCount = task.count !== undefined && task.count > 0;
   const hasDeepLink = !!task.deepLinkUrl;
+  const hasResolutionStats = !!task.resolutionStats;
 
   const handleDeferSelect = (date: Date | undefined) => {
     if (date) {
@@ -95,28 +96,47 @@ export function TaskCard({
                 {/* Icon */}
                 {task.icon && <span className="text-base">{task.icon}</span>}
 
-                {/* Name with count */}
+                {/* Name with count (hide count when showing resolution stats) */}
                 <span className="font-medium text-sm">
                   {task.name}
-                  {hasCount && (
+                  {hasCount && !hasResolutionStats && (
                     <span className="text-muted-foreground ml-1">({task.count})</span>
                   )}
                 </span>
 
                 {/* Deep link */}
                 {hasDeepLink && deepLinkUrl && (
-                  <Link href={deepLinkUrl} className="text-muted-foreground hover:text-foreground">
+                  <Link
+                    href={deepLinkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Link>
                 )}
               </div>
 
-              {/* Description */}
-              {task.description && (
+              {/* Resolution stats or description */}
+              {hasResolutionStats && task.resolutionStats ? (
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <p>
+                    <span className={task.resolutionStats.pendingReview > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                      {task.resolutionStats.pendingReview} Pending Review
+                    </span>
+                  </p>
+                  <p>
+                    <span className={task.resolutionStats.unlinkedSince2026 > 0 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                      {task.resolutionStats.unlinkedSince2026} Unlinked since Jan 2026
+                    </span>
+                  </p>
+                  <p>{task.resolutionStats.totalUnlinked.toLocaleString()} Total Unlinked</p>
+                </div>
+              ) : task.description ? (
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
                   {task.description}
                 </p>
-              )}
+              ) : null}
 
               {/* Badges row */}
               <div className="flex items-center gap-2 mt-2 flex-wrap">

@@ -1,0 +1,350 @@
+/**
+ * Scan Detail Dialog
+ *
+ * Shows detailed results of a scan including all processed listings
+ */
+
+'use client';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
+import { type ScanLogEntry } from '@/hooks/use-vinted-automation';
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ShieldAlert,
+  ExternalLink,
+  TrendingUp,
+  TrendingDown,
+  Package,
+  Timer,
+  Search,
+  Target,
+} from 'lucide-react';
+import { format } from 'date-fns';
+
+interface ProcessedListing {
+  setNumber: string;
+  title: string;
+  vintedPrice: number;
+  vintedUrl: string;
+  amazonPrice: number | null;
+  asin: string | null;
+  setName: string | null;
+  totalCost: number;
+  cogPercent: number | null;
+  profit: number | null;
+  roi: number | null;
+  isViable: boolean;
+  isNearMiss: boolean;
+}
+
+interface ScanResults {
+  processedListings: ProcessedListing[];
+  summary: {
+    totalListings: number;
+    viableCount: number;
+    nearMissCount: number;
+    setsIdentified: number;
+    cogThreshold: number;
+    nearMissThreshold: number;
+  };
+}
+
+interface ScanDetailDialogProps {
+  scan: ScanLogEntry | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function getStatusBadge(status: ScanLogEntry['status']) {
+  switch (status) {
+    case 'success':
+      return (
+        <Badge className="bg-green-600">
+          <CheckCircle2 className="mr-1 h-3 w-3" />
+          Success
+        </Badge>
+      );
+    case 'failed':
+      return (
+        <Badge variant="destructive">
+          <XCircle className="mr-1 h-3 w-3" />
+          Failed
+        </Badge>
+      );
+    case 'partial':
+      return (
+        <Badge className="bg-yellow-500">
+          <AlertTriangle className="mr-1 h-3 w-3" />
+          Partial
+        </Badge>
+      );
+    case 'captcha':
+      return (
+        <Badge className="bg-orange-500">
+          <ShieldAlert className="mr-1 h-3 w-3" />
+          CAPTCHA
+        </Badge>
+      );
+  }
+}
+
+function getCogBadge(cogPercent: number | null, isViable: boolean, isNearMiss: boolean) {
+  if (cogPercent === null) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  if (isViable) {
+    return (
+      <Badge className="bg-green-600">
+        <TrendingUp className="mr-1 h-3 w-3" />
+        {cogPercent.toFixed(0)}%
+      </Badge>
+    );
+  }
+
+  if (isNearMiss) {
+    return (
+      <Badge className="bg-yellow-500">
+        <AlertTriangle className="mr-1 h-3 w-3" />
+        {cogPercent.toFixed(0)}%
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="secondary">
+      <TrendingDown className="mr-1 h-3 w-3" />
+      {cogPercent.toFixed(0)}%
+    </Badge>
+  );
+}
+
+export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogProps) {
+  if (!scan) return null;
+
+  const scanResults = scan.scan_results as ScanResults | null;
+  const listings = scanResults?.processedListings ?? [];
+  const summary = scanResults?.summary;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[85vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {scan.scan_type === 'broad_sweep' ? (
+              <Search className="h-5 w-5 text-blue-500" />
+            ) : (
+              <Target className="h-5 w-5 text-purple-500" />
+            )}
+            {scan.scan_type === 'broad_sweep' ? 'Broad Sweep' : 'Watchlist'} Scan
+            {scan.set_number && (
+              <span className="font-mono text-muted-foreground">#{scan.set_number}</span>
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {scan.completed_at && format(new Date(scan.completed_at), 'PPpp')}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Listings</span>
+              </div>
+              <p className="text-2xl font-bold">{scan.listings_found}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-muted-foreground">Opportunities</span>
+              </div>
+              <p className="text-2xl font-bold text-green-600">{scan.opportunities_found}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm text-muted-foreground">Near Miss</span>
+              </div>
+              <p className="text-2xl font-bold text-yellow-600">{summary?.nearMissCount ?? 0}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <Timer className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Duration</span>
+              </div>
+              <p className="text-2xl font-bold">
+                {scan.timing_delay_ms ? `${(scan.timing_delay_ms / 1000).toFixed(1)}s` : '-'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span>Status: {getStatusBadge(scan.status)}</span>
+          {summary && (
+            <>
+              <Separator orientation="vertical" className="h-4" />
+              <span>COG Threshold: {summary.cogThreshold}%</span>
+              <Separator orientation="vertical" className="h-4" />
+              <span>Near Miss: {summary.nearMissThreshold}%</span>
+            </>
+          )}
+        </div>
+
+        {scan.error_message && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-700 text-sm">
+            <strong>Error:</strong> {scan.error_message}
+          </div>
+        )}
+
+        <Separator />
+
+        {/* Listings Table */}
+        {listings.length > 0 ? (
+          <ScrollArea className="h-[400px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Set</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead className="text-right">Vinted</TableHead>
+                  <TableHead className="text-right">Amazon</TableHead>
+                  <TableHead className="text-right">COG%</TableHead>
+                  <TableHead className="text-right">Profit</TableHead>
+                  <TableHead className="text-right">Target</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {listings.map((listing, idx) => (
+                  <TableRow
+                    key={idx}
+                    className={
+                      listing.isViable
+                        ? 'bg-green-50 hover:bg-green-100'
+                        : listing.isNearMiss
+                          ? 'bg-yellow-50 hover:bg-yellow-100'
+                          : ''
+                    }
+                  >
+                    <TableCell className="font-mono text-sm">{listing.setNumber}</TableCell>
+                    <TableCell>
+                      <div className="max-w-[200px]">
+                        <p className="truncate text-sm" title={listing.title}>
+                          {listing.title}
+                        </p>
+                        {listing.setName && (
+                          <p className="text-xs text-muted-foreground truncate">{listing.setName}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      £{listing.vintedPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {listing.amazonPrice ? (
+                        `£${listing.amazonPrice.toFixed(2)}`
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {getCogBadge(listing.cogPercent, listing.isViable, listing.isNearMiss)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {listing.profit !== null ? (
+                        <span
+                          className={listing.profit > 0 ? 'text-green-600' : 'text-red-600'}
+                        >
+                          £{listing.profit.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {listing.amazonPrice && summary?.cogThreshold ? (
+                        (() => {
+                          // Calculate target Vinted price to hit COG threshold
+                          // fees = totalCost - vintedPrice
+                          // targetTotalCost = amazonPrice * threshold / 100
+                          // targetVintedPrice = targetTotalCost - fees
+                          const fees = listing.totalCost - listing.vintedPrice;
+                          const targetTotalCost = listing.amazonPrice * (summary.cogThreshold / 100);
+                          const targetPrice = targetTotalCost - fees;
+                          const discount = listing.vintedPrice - targetPrice;
+
+                          if (listing.isViable) {
+                            return <span className="text-green-600">✓</span>;
+                          }
+
+                          return targetPrice > 0 ? (
+                            <span className="text-blue-600" title={`Need £${discount.toFixed(2)} off`}>
+                              £{targetPrice.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <a
+                        href={listing.vintedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            {scan.status === 'success' && scan.listings_found === 0
+              ? 'No listings found for this scan'
+              : 'No detailed results available for this scan'}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1064,6 +1064,63 @@ export type Database = {
           },
         ]
       }
+      bricklink_part_price_cache: {
+        Row: {
+          colour_id: number
+          colour_name: string | null
+          created_at: string
+          fetched_at: string
+          id: string
+          part_number: string
+          part_type: string
+          price_new: number | null
+          price_used: number | null
+          sell_through_rate_new: number | null
+          sell_through_rate_used: number | null
+          stock_available_new: number | null
+          stock_available_used: number | null
+          times_sold_new: number | null
+          times_sold_used: number | null
+          updated_at: string
+        }
+        Insert: {
+          colour_id: number
+          colour_name?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          part_number: string
+          part_type?: string
+          price_new?: number | null
+          price_used?: number | null
+          sell_through_rate_new?: number | null
+          sell_through_rate_used?: number | null
+          stock_available_new?: number | null
+          stock_available_used?: number | null
+          times_sold_new?: number | null
+          times_sold_used?: number | null
+          updated_at?: string
+        }
+        Update: {
+          colour_id?: number
+          colour_name?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          part_number?: string
+          part_type?: string
+          price_new?: number | null
+          price_used?: number | null
+          sell_through_rate_new?: number | null
+          sell_through_rate_used?: number | null
+          stock_available_new?: number | null
+          stock_available_used?: number | null
+          times_sold_new?: number | null
+          times_sold_used?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_sync_config: {
         Row: {
           auto_sync_enabled: boolean
@@ -2040,6 +2097,7 @@ export type Database = {
           is_default: boolean | null
           is_vat_registered: boolean | null
           lego_parts_percent: number | null
+          lego_parts_percent_bl: number | null
           name: string
           ni_rate: number | null
           personal_allowance: number | null
@@ -2081,6 +2139,7 @@ export type Database = {
           is_default?: boolean | null
           is_vat_registered?: boolean | null
           lego_parts_percent?: number | null
+          lego_parts_percent_bl?: number | null
           name: string
           ni_rate?: number | null
           personal_allowance?: number | null
@@ -2122,6 +2181,7 @@ export type Database = {
           is_default?: boolean | null
           is_vat_registered?: boolean | null
           lego_parts_percent?: number | null
+          lego_parts_percent_bl?: number | null
           name?: string
           ni_rate?: number | null
           personal_allowance?: number | null
@@ -3353,6 +3413,53 @@ export type Database = {
             foreignKeyName: "generated_listings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_calendar_credentials: {
+        Row: {
+          access_token: string
+          access_token_expires_at: string
+          created_at: string
+          email: string | null
+          google_user_id: string | null
+          id: string
+          refresh_token: string
+          scopes: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          access_token_expires_at: string
+          created_at?: string
+          email?: string | null
+          google_user_id?: string | null
+          id?: string
+          refresh_token: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          access_token_expires_at?: string
+          created_at?: string
+          email?: string | null
+          google_user_id?: string | null
+          id?: string
+          refresh_token?: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_credentials_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -5859,6 +5966,52 @@ export type Database = {
           },
         ]
       }
+      seeded_asin_rankings: {
+        Row: {
+          asin: string
+          fetched_at: string
+          id: string
+          sales_rank: number | null
+          seeded_asin_id: string
+        }
+        Insert: {
+          asin: string
+          fetched_at?: string
+          id?: string
+          sales_rank?: number | null
+          seeded_asin_id: string
+        }
+        Update: {
+          asin?: string
+          fetched_at?: string
+          id?: string
+          sales_rank?: number | null
+          seeded_asin_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seeded_asin_rankings_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
+            referencedRelation: "seeded_asins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seeded_asin_rankings_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
+            referencedRelation: "seeded_asins_with_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seeded_asin_rankings_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["seeded_asin_id"]
+          },
+        ]
+      }
       seeded_asins: {
         Row: {
           alternative_asins: Json | null
@@ -5944,6 +6097,7 @@ export type Database = {
           estimated_duration_minutes: number | null
           estimated_value: number | null
           final_amount_paid: number | null
+          google_calendar_event_id: string | null
           id: string
           is_recurring: boolean | null
           mileage: number | null
@@ -5956,6 +6110,7 @@ export type Database = {
           recurrence_pattern: string | null
           reminder_day_before: boolean | null
           scheduled_date: string
+          scheduled_end_time: string | null
           scheduled_time: string | null
           source_platform: string | null
           status: string | null
@@ -5976,6 +6131,7 @@ export type Database = {
           estimated_duration_minutes?: number | null
           estimated_value?: number | null
           final_amount_paid?: number | null
+          google_calendar_event_id?: string | null
           id?: string
           is_recurring?: boolean | null
           mileage?: number | null
@@ -5988,6 +6144,7 @@ export type Database = {
           recurrence_pattern?: string | null
           reminder_day_before?: boolean | null
           scheduled_date: string
+          scheduled_end_time?: string | null
           scheduled_time?: string | null
           source_platform?: string | null
           status?: string | null
@@ -6008,6 +6165,7 @@ export type Database = {
           estimated_duration_minutes?: number | null
           estimated_value?: number | null
           final_amount_paid?: number | null
+          google_calendar_event_id?: string | null
           id?: string
           is_recurring?: boolean | null
           mileage?: number | null
@@ -6020,6 +6178,7 @@ export type Database = {
           recurrence_pattern?: string | null
           reminder_day_before?: boolean | null
           scheduled_date?: string
+          scheduled_end_time?: string | null
           scheduled_time?: string | null
           source_platform?: string | null
           status?: string | null
@@ -6365,6 +6524,13 @@ export type Database = {
             foreignKeyName: "user_seeded_asin_preferences_seeded_asin_id_fkey"
             columns: ["seeded_asin_id"]
             isOneToOne: false
+            referencedRelation: "seeded_asins_with_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_seeded_asin_preferences_seeded_asin_id_fkey"
+            columns: ["seeded_asin_id"]
+            isOneToOne: false
             referencedRelation: "user_seeded_arbitrage_items"
             referencedColumns: ["seeded_asin_id"]
           },
@@ -6413,6 +6579,409 @@ export type Database = {
             foreignKeyName: "user_settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_dom_selectors: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          selector_name: string
+          selector_value: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          selector_name: string
+          selector_value: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          selector_name?: string
+          selector_value?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      vinted_opportunities: {
+        Row: {
+          amazon_price: number | null
+          asin: string | null
+          cog_percent: number | null
+          estimated_profit: number | null
+          expires_at: string
+          found_at: string
+          id: string
+          is_viable: boolean
+          listed_at: string | null
+          scan_log_id: string | null
+          set_name: string | null
+          set_number: string
+          status: string
+          user_id: string
+          vinted_listing_id: string
+          vinted_price: number
+          vinted_url: string
+        }
+        Insert: {
+          amazon_price?: number | null
+          asin?: string | null
+          cog_percent?: number | null
+          estimated_profit?: number | null
+          expires_at?: string
+          found_at?: string
+          id?: string
+          is_viable?: boolean
+          listed_at?: string | null
+          scan_log_id?: string | null
+          set_name?: string | null
+          set_number: string
+          status?: string
+          user_id: string
+          vinted_listing_id: string
+          vinted_price: number
+          vinted_url: string
+        }
+        Update: {
+          amazon_price?: number | null
+          asin?: string | null
+          cog_percent?: number | null
+          estimated_profit?: number | null
+          expires_at?: string
+          found_at?: string
+          id?: string
+          is_viable?: boolean
+          listed_at?: string | null
+          scan_log_id?: string | null
+          set_name?: string | null
+          set_number?: string
+          status?: string
+          user_id?: string
+          vinted_listing_id?: string
+          vinted_price?: number
+          vinted_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_opportunities_scan_log_id_fkey"
+            columns: ["scan_log_id"]
+            isOneToOne: false
+            referencedRelation: "vinted_scan_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vinted_opportunities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_scan_log: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          listings_found: number
+          opportunities_found: number
+          scan_results: Json | null
+          scan_type: string
+          set_number: string | null
+          started_at: string
+          status: string
+          timing_delay_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          listings_found?: number
+          opportunities_found?: number
+          scan_results?: Json | null
+          scan_type: string
+          set_number?: string | null
+          started_at?: string
+          status: string
+          timing_delay_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          listings_found?: number
+          opportunities_found?: number
+          scan_results?: Json | null
+          scan_type?: string
+          set_number?: string | null
+          started_at?: string
+          status?: string
+          timing_delay_ms?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_scan_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_scanner_config: {
+        Row: {
+          api_key: string | null
+          broad_sweep_cog_threshold: number
+          captcha_count_30d: number | null
+          captcha_detected_at: string | null
+          config_version: number
+          consecutive_failures: number
+          created_at: string
+          daily_nonce: string | null
+          daily_nonce_date: string | null
+          enabled: boolean
+          end_variance_mins: number | null
+          heartbeat_machine_id: string | null
+          heartbeat_opportunities_today: number
+          heartbeat_scans_today: number
+          heartbeat_status: string | null
+          id: string
+          last_heartbeat_at: string | null
+          last_scan_at: string | null
+          machine_name: string | null
+          near_miss_threshold: number
+          operating_hours_end: string
+          operating_hours_start: string
+          pause_reason: string | null
+          paused: boolean
+          recovery_mode: boolean | null
+          recovery_rate_percent: number | null
+          regenerated_at: string | null
+          regenerated_seed: string | null
+          schedule_version: number
+          start_variance_mins: number | null
+          updated_at: string
+          user_id: string
+          watchlist_cog_threshold: number
+        }
+        Insert: {
+          api_key?: string | null
+          broad_sweep_cog_threshold?: number
+          captcha_count_30d?: number | null
+          captcha_detected_at?: string | null
+          config_version?: number
+          consecutive_failures?: number
+          created_at?: string
+          daily_nonce?: string | null
+          daily_nonce_date?: string | null
+          enabled?: boolean
+          end_variance_mins?: number | null
+          heartbeat_machine_id?: string | null
+          heartbeat_opportunities_today?: number
+          heartbeat_scans_today?: number
+          heartbeat_status?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          last_scan_at?: string | null
+          machine_name?: string | null
+          near_miss_threshold?: number
+          operating_hours_end?: string
+          operating_hours_start?: string
+          pause_reason?: string | null
+          paused?: boolean
+          recovery_mode?: boolean | null
+          recovery_rate_percent?: number | null
+          regenerated_at?: string | null
+          regenerated_seed?: string | null
+          schedule_version?: number
+          start_variance_mins?: number | null
+          updated_at?: string
+          user_id: string
+          watchlist_cog_threshold?: number
+        }
+        Update: {
+          api_key?: string | null
+          broad_sweep_cog_threshold?: number
+          captcha_count_30d?: number | null
+          captcha_detected_at?: string | null
+          config_version?: number
+          consecutive_failures?: number
+          created_at?: string
+          daily_nonce?: string | null
+          daily_nonce_date?: string | null
+          enabled?: boolean
+          end_variance_mins?: number | null
+          heartbeat_machine_id?: string | null
+          heartbeat_opportunities_today?: number
+          heartbeat_scans_today?: number
+          heartbeat_status?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          last_scan_at?: string | null
+          machine_name?: string | null
+          near_miss_threshold?: number
+          operating_hours_end?: string
+          operating_hours_start?: string
+          pause_reason?: string | null
+          paused?: boolean
+          recovery_mode?: boolean | null
+          recovery_rate_percent?: number | null
+          regenerated_at?: string | null
+          regenerated_seed?: string | null
+          schedule_version?: number
+          start_variance_mins?: number | null
+          updated_at?: string
+          user_id?: string
+          watchlist_cog_threshold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_scanner_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_watchlist: {
+        Row: {
+          asin: string | null
+          created_at: string
+          id: string
+          sales_rank: number | null
+          set_number: string
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asin?: string | null
+          created_at?: string
+          id?: string
+          sales_rank?: number | null
+          set_number: string
+          source: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asin?: string | null
+          created_at?: string
+          id?: string
+          sales_rank?: number | null
+          set_number?: string
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_watchlist_exclusions: {
+        Row: {
+          excluded_at: string
+          id: string
+          reason: string | null
+          set_number: string
+          user_id: string
+        }
+        Insert: {
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          set_number: string
+          user_id: string
+        }
+        Update: {
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          set_number?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_watchlist_exclusions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vinted_watchlist_stats: {
+        Row: {
+          first_scanned_at: string
+          id: string
+          last_listing_at: string | null
+          last_viable_at: string | null
+          listings_found: number
+          near_miss_found: number
+          set_number: string
+          total_scans: number
+          updated_at: string
+          user_id: string
+          viable_found: number
+        }
+        Insert: {
+          first_scanned_at?: string
+          id?: string
+          last_listing_at?: string | null
+          last_viable_at?: string | null
+          listings_found?: number
+          near_miss_found?: number
+          set_number: string
+          total_scans?: number
+          updated_at?: string
+          user_id: string
+          viable_found?: number
+        }
+        Update: {
+          first_scanned_at?: string
+          id?: string
+          last_listing_at?: string | null
+          last_viable_at?: string | null
+          listings_found?: number
+          near_miss_found?: number
+          set_number?: string
+          total_scans?: number
+          updated_at?: string
+          user_id?: string
+          viable_found?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinted_watchlist_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -6910,6 +7479,52 @@ export type Database = {
           },
         ]
       }
+      seeded_asins_with_sets: {
+        Row: {
+          alternative_asins: Json | null
+          amazon_brand: string | null
+          amazon_image_url: string | null
+          amazon_price: number | null
+          amazon_title: string | null
+          asin: string | null
+          brickset_image_url: string | null
+          brickset_set_id: string | null
+          created_at: string | null
+          discovery_attempts: number | null
+          discovery_error: string | null
+          discovery_status: string | null
+          ean: string | null
+          id: string | null
+          last_discovery_attempt_at: string | null
+          match_confidence: number | null
+          match_method: string | null
+          pieces: number | null
+          search_text: string | null
+          set_name: string | null
+          set_number: string | null
+          theme: string | null
+          uk_retail_price: number | null
+          upc: string | null
+          updated_at: string | null
+          year_from: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seeded_asins_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: true
+            referencedRelation: "brickset_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seeded_asins_brickset_set_id_fkey"
+            columns: ["brickset_set_id"]
+            isOneToOne: true
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["brickset_set_id"]
+          },
+        ]
+      }
       seeded_discovery_summary: {
         Row: {
           avg_confidence: number | null
@@ -7003,6 +7618,18 @@ export type Database = {
           last_offer_date: string
         }[]
       }
+      count_all_unlinked_order_items_since: {
+        Args: { p_since_date: string; p_user_id: string }
+        Returns: number
+      }
+      count_total_unlinked_order_items: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      count_unlinked_order_items_since: {
+        Args: { p_since_date: string; p_user_id: string }
+        Returns: number
+      }
       create_recurring_pickups: {
         Args: { p_count?: number; p_pickup_id: string }
         Returns: undefined
@@ -7063,6 +7690,30 @@ export type Database = {
         Returns: {
           created_count: number
           skipped_count: number
+        }[]
+      }
+      search_inventory_excluding_linked: {
+        Args: {
+          p_offset?: number
+          p_page_size?: number
+          p_search_term: string
+          p_statuses?: string[]
+          p_user_id: string
+        }
+        Returns: {
+          amazon_asin: string
+          condition: string
+          cost: number
+          created_at: string
+          id: string
+          item_name: string
+          listing_value: number
+          purchase_date: string
+          set_number: string
+          sku: string
+          sold_date: string
+          status: string
+          storage_location: string
         }[]
       }
       seed_workflow_data:

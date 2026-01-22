@@ -33,7 +33,7 @@ interface SyncStatusResponse {
 
 interface SyncSummaryItem {
   platform: string;
-  type: 'order' | 'transaction';
+  type: 'order' | 'transaction' | 'stock';
   status: 'COMPLETED' | 'FAILED' | 'RUNNING';
   processed: number;
   created: number;
@@ -169,6 +169,10 @@ interface SyncOptions {
     brickowl: boolean;
   };
   transactions: boolean;
+  stockImports: {
+    ebay: boolean;
+    amazon: boolean;
+  };
 }
 
 async function syncPlatforms(options: SyncOptions): Promise<void> {
@@ -210,6 +214,14 @@ async function syncPlatforms(options: SyncOptions): Promise<void> {
     promises.push(fetch('/api/integrations/amazon/transactions/sync', { method: 'POST' }));
   }
 
+  // Stock imports
+  if (options.stockImports.ebay) {
+    promises.push(fetch('/api/ebay-stock/import', { method: 'POST' }));
+  }
+  if (options.stockImports.amazon) {
+    promises.push(fetch('/api/platform-stock/amazon/import', { method: 'POST' }));
+  }
+
   await Promise.allSettled(promises);
 }
 
@@ -246,6 +258,10 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
     brickowl: true,
   });
   const [transactionsEnabled, setTransactionsEnabled] = useState(true);
+  const [stockImportsEnabled, setStockImportsEnabled] = useState({
+    ebay: true,
+    amazon: true,
+  });
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -304,11 +320,22 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
     return () => clearInterval(pollInterval);
   }, [syncStatus, pollingCount, pollSyncSummary]);
 
+  // Refresh workflow data when sync completes
+  useEffect(() => {
+    if (syncStatus === 'complete' || syncStatus === 'failed') {
+      // Invalidate all workflow-related queries to refresh the page
+      queryClient.invalidateQueries({ queryKey: ['dispatch-deadlines'] });
+      queryClient.invalidateQueries({ queryKey: ['resolution-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-sync-status'] });
+    }
+  }, [syncStatus, queryClient]);
+
   const syncMutation = useMutation({
     mutationFn: () =>
       syncPlatforms({
         orders: selectedOrders,
         transactions: transactionsEnabled,
+        stockImports: stockImportsEnabled,
       }),
     onMutate: () => {
       setDialogOpen(true);
@@ -333,6 +360,13 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
 
   const toggleOrderPlatform = (platform: keyof typeof selectedOrders) => {
     setSelectedOrders((prev) => ({
+      ...prev,
+      [platform]: !prev[platform],
+    }));
+  };
+
+  const toggleStockImport = (platform: keyof typeof stockImportsEnabled) => {
+    setStockImportsEnabled((prev) => ({
       ...prev,
       [platform]: !prev[platform],
     }));
@@ -388,11 +422,12 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
   }
 
   const platforms = data?.platforms ?? [];
-  const hasSelectedSync = Object.values(selectedOrders).some(Boolean) || transactionsEnabled;
+  const hasSelectedSync = Object.values(selectedOrders).some(Boolean) || transactionsEnabled || Object.values(stockImportsEnabled).some(Boolean);
 
   // Group sync summary items
   const orderItems = syncSummary?.items.filter((item) => item.type === 'order') ?? [];
   const transactionItems = syncSummary?.items.filter((item) => item.type === 'transaction') ?? [];
+  const stockItems = syncSummary?.items.filter((item) => item.type === 'stock') ?? [];
 
   return (
     <>
@@ -488,6 +523,56 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
                   (Monzo, eBay, PayPal, BrickLink, BrickOwl, Amazon)
                 </span>
               </Label>
+            </div>
+
+            {/* Stock imports option */}
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className={cn(
+                  'flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors',
+                  'border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/20',
+                  stockImportsEnabled.ebay && 'ring-2 ring-primary ring-offset-1'
+                )}
+                onClick={() => toggleStockImport('ebay')}
+              >
+                <Checkbox
+                  id="stock-ebay"
+                  checked={stockImportsEnabled.ebay}
+                  onCheckedChange={() => toggleStockImport('ebay')}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  className="flex-shrink-0"
+                />
+                <Label
+                  htmlFor="stock-ebay"
+                  className="flex flex-col cursor-pointer flex-1"
+                >
+                  <span className="text-sm font-medium">eBay Stock</span>
+                  <span className="text-xs text-muted-foreground">Refresh listings</span>
+                </Label>
+              </div>
+              <div
+                className={cn(
+                  'flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors',
+                  'border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/20',
+                  stockImportsEnabled.amazon && 'ring-2 ring-primary ring-offset-1'
+                )}
+                onClick={() => toggleStockImport('amazon')}
+              >
+                <Checkbox
+                  id="stock-amazon"
+                  checked={stockImportsEnabled.amazon}
+                  onCheckedChange={() => toggleStockImport('amazon')}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  className="flex-shrink-0"
+                />
+                <Label
+                  htmlFor="stock-amazon"
+                  className="flex flex-col cursor-pointer flex-1"
+                >
+                  <span className="text-sm font-medium">Amazon Stock</span>
+                  <span className="text-xs text-muted-foreground">Refresh listings</span>
+                </Label>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -610,6 +695,52 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
                             {item.updated}
                           </div>
                           <div>Latest Transaction: {formatDate(item.latestDataDate)}</div>
+                          {item.error && (
+                            <div className="text-red-600 mt-1">Error: {item.error}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stock Imports */}
+              {stockItems.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Stock Imports</h4>
+                  <div className="space-y-2">
+                    {stockItems.map((item, idx) => (
+                      <div
+                        key={`stock-${idx}`}
+                        className={cn(
+                          'p-3 rounded-lg border text-sm',
+                          item.status === 'COMPLETED' &&
+                            'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/20',
+                          item.status === 'FAILED' &&
+                            'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20',
+                          item.status === 'RUNNING' &&
+                            'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20'
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium">{item.platform}</span>
+                          <span
+                            className={cn(
+                              'text-xs px-2 py-0.5 rounded',
+                              item.status === 'COMPLETED' && 'bg-green-200 text-green-800',
+                              item.status === 'FAILED' && 'bg-red-200 text-red-800',
+                              item.status === 'RUNNING' && 'bg-blue-200 text-blue-800'
+                            )}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <div>
+                            Processed: {item.processed} | Created: {item.created} | Updated:{' '}
+                            {item.updated}
+                          </div>
                           {item.error && (
                             <div className="text-red-600 mt-1">Error: {item.error}</div>
                           )}

@@ -1,9 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useTimeSummary, formatDuration, getCategoryColor, type TimeCategory } from '@/hooks/use-time-tracking';
+import { TimeEntryDialog } from './TimeEntryDialog';
 
 interface TimeBreakdownSectionProps {
   className?: string;
@@ -13,6 +16,7 @@ const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourc
 
 export function TimeBreakdownSection({ className }: TimeBreakdownSectionProps) {
   const { data: summary, isLoading, isError } = useTimeSummary();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -87,8 +91,8 @@ export function TimeBreakdownSection({ className }: TimeBreakdownSectionProps) {
           })}
         </div>
 
-        {/* Link to full log */}
-        <div className="pt-2">
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2">
           <Link
             href="/time-tracking"
             className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
@@ -96,8 +100,24 @@ export function TimeBreakdownSection({ className }: TimeBreakdownSectionProps) {
             View full log
             <ArrowRight className="h-3 w-3" />
           </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddDialogOpen(true)}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Add Entry
+          </Button>
         </div>
       </CardContent>
+
+      {/* Add Manual Entry Dialog */}
+      <TimeEntryDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        mode="add"
+        entry={null}
+      />
     </Card>
   );
 }

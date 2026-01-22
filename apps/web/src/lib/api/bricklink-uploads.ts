@@ -13,6 +13,8 @@ export interface BrickLinkUploadFilters {
   source?: string;
   search?: string;
   syncedFromBricqer?: boolean;
+  purchaseId?: string;
+  unlinked?: boolean;
 }
 
 /**
@@ -30,6 +32,9 @@ export async function fetchBrickLinkUploads(
   if (filters?.search) params.set('search', filters.search);
   if (filters?.syncedFromBricqer !== undefined)
     params.set('syncedFromBricqer', String(filters.syncedFromBricqer));
+  if (filters?.purchaseId) params.set('purchaseId', filters.purchaseId);
+  if (filters?.unlinked !== undefined)
+    params.set('unlinked', String(filters.unlinked));
   if (pagination?.page) params.set('page', String(pagination.page));
   if (pagination?.pageSize) params.set('pageSize', String(pagination.pageSize));
 

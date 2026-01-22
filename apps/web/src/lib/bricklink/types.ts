@@ -294,3 +294,49 @@ export interface BrickLinkCatalogItem {
   year_released?: number;
   is_obsolete?: boolean;
 }
+
+// ============================================
+// Subset Types (for Partout Value)
+// ============================================
+
+/** A single entry in a subset (part within a set) */
+export interface BrickLinkSubsetEntryItem {
+  item: {
+    no: string;
+    name: string;
+    type: BrickLinkItemType;
+    category_id: number;
+  };
+  color_id: number;
+  color_name?: string;
+  quantity: number;
+  extra_quantity?: number;
+  is_alternate?: boolean;
+  is_counterpart?: boolean;
+}
+
+/** Subset response from BrickLink API */
+export interface BrickLinkSubsetEntry {
+  match_no: number;
+  entries: BrickLinkSubsetEntryItem[];
+}
+
+/** Options for getSubsets method */
+export interface BrickLinkSubsetOptions {
+  /** Break minifigs into parts (default: false to keep as items) */
+  breakMinifigs?: boolean;
+  /** Break included sets into parts (default: false to keep as items) */
+  breakSets?: boolean;
+}
+
+// ============================================
+// Color Types
+// ============================================
+
+/** BrickLink color information */
+export interface BrickLinkColor {
+  color_id: number;
+  color_name: string;
+  color_code: string;
+  color_type: string;
+}

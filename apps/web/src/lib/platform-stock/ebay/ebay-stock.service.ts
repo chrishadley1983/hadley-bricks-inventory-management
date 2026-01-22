@@ -91,7 +91,8 @@ export class EbayStockService extends PlatformStockService {
       console.log(`[EbayStockService] Upserted ${upsertedCount} listings`);
 
       // 6. Delete listings that no longer exist on eBay (but preserve review data in case of re-listing)
-      const currentItemIds = new Set(allListings.map((l) => l.platformItemId));
+      // Ensure IDs are strings for consistent comparison
+      const currentItemIds = new Set(allListings.map((l) => String(l.platformItemId)));
       await this.deleteStaleListings(currentItemIds);
 
       // 7. Validate SKUs and get issues
@@ -194,9 +195,12 @@ export class EbayStockService extends PlatformStockService {
 
       if (error) {
         console.error(`[EbayStockService] Error upserting batch ${i / BATCH_SIZE + 1}:`, error);
+        console.error(`[EbayStockService] First item in failed batch:`, JSON.stringify(batch[0], null, 2));
         // Continue with other batches
       } else {
-        totalUpserted += data?.length || batch.length;
+        const count = data?.length || 0;
+        console.log(`[EbayStockService] Batch ${i / BATCH_SIZE + 1} upserted ${count} listings`);
+        totalUpserted += count;
       }
     }
 
@@ -221,8 +225,9 @@ export class EbayStockService extends PlatformStockService {
     }
 
     // Find IDs to delete (listings that no longer exist on eBay)
+    // Note: Convert platform_item_id to string for comparison since Set contains strings
     const idsToDelete = (existingListings || [])
-      .filter((listing) => !currentItemIds.has(listing.platform_item_id))
+      .filter((listing) => !currentItemIds.has(String(listing.platform_item_id)))
       .map((listing) => listing.id);
 
     if (idsToDelete.length === 0) {

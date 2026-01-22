@@ -22,15 +22,21 @@ import { RecentOffersTable } from './RecentOffersTable';
 import { PlannedOffersTable } from './PlannedOffersTable';
 import { ConfigModal } from './ConfigModal';
 
+const OFFERS_PAGE_SIZE = 10;
+
 export function OffersTab() {
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedListingIds, setSelectedListingIds] = useState<Set<string>>(new Set());
+  const [offersPage, setOffersPage] = useState(0);
   const { toast } = useToast();
 
   // Data fetching
   const { data: config, isLoading: configLoading } = useNegotiationConfig();
   const { data: metrics, isLoading: metricsLoading } = useNegotiationMetrics(30);
-  const { data: offersData, isLoading: offersLoading } = useNegotiationOffers({ limit: 10 });
+  const { data: offersData, isLoading: offersLoading } = useNegotiationOffers({
+    limit: OFFERS_PAGE_SIZE,
+    offset: offersPage * OFFERS_PAGE_SIZE,
+  });
   const { data: rules, isLoading: rulesLoading } = useDiscountRules();
   const { data: eligibleItems, isLoading: eligibleLoading, error: eligibleError } = useEligibleItems();
 
@@ -185,6 +191,9 @@ export function OffersTab() {
         offers={offersData?.offers}
         isLoading={offersLoading}
         total={offersData?.total}
+        page={offersPage}
+        pageSize={OFFERS_PAGE_SIZE}
+        onPageChange={setOffersPage}
       />
 
       {/* Config Modal */}

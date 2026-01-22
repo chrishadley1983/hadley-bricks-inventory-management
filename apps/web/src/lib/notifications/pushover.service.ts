@@ -46,6 +46,23 @@ export interface SyncSuccessParams {
   verificationTime: number;
 }
 
+export interface VintedOpportunityParams {
+  setNumber: string;
+  setName: string;
+  vintedPrice: number;
+  amazonPrice: number;
+  cogPercent: number;
+  profit: number;
+  vintedUrl: string;
+}
+
+export interface VintedDailySummaryParams {
+  broadSweeps: number;
+  watchlistScans: number;
+  opportunitiesFound: number;
+  nearMissesFound: number;
+}
+
 export class PushoverService {
   private readonly apiUrl = 'https://api.pushover.net/1/messages.json';
   private readonly userKey: string;
@@ -151,6 +168,85 @@ export class PushoverService {
       priority: 0, // Normal priority
       url: `${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}`,
       urlTitle: 'View Feed Details',
+    });
+  }
+
+  // =========================================================================
+  // Vinted Arbitrage Notifications
+  // =========================================================================
+
+  /**
+   * Send Vinted opportunity alert
+   * Uses high priority (1) for excellent deals (<30% COG)
+   */
+  async sendVintedOpportunity(params: VintedOpportunityParams): Promise<void> {
+    const { setNumber, setName, vintedPrice, amazonPrice, cogPercent, profit, vintedUrl } =
+      params;
+
+    // High priority for excellent opportunities (<30% COG)
+    const priority = cogPercent < 30 ? 1 : 0;
+
+    await this.send({
+      title: `🎯 ${setNumber}: ${cogPercent.toFixed(0)}% COG`,
+      message:
+        `${setName}\n` +
+        `Vinted: £${vintedPrice.toFixed(2)}\n` +
+        `Amazon: £${amazonPrice.toFixed(2)}\n` +
+        `Profit: £${profit.toFixed(2)}`,
+      priority: priority as 0 | 1,
+      url: vintedUrl,
+      urlTitle: 'View on Vinted',
+      sound: priority === 1 ? 'cashregister' : 'pushover',
+    });
+  }
+
+  /**
+   * Send CAPTCHA warning - scanner has been auto-paused
+   */
+  async sendVintedCaptchaWarning(): Promise<void> {
+    await this.send({
+      title: '⚠️ CAPTCHA Detected - Scanner Paused',
+      message:
+        'Vinted CAPTCHA detected. Scanner has been automatically paused. ' +
+        'Please resolve the CAPTCHA manually and resume scanning.',
+      priority: 1,
+      url: `${process.env.NEXT_PUBLIC_APP_URL}/arbitrage/vinted/automation`,
+      urlTitle: 'View Scanner Status',
+      sound: 'siren',
+    });
+  }
+
+  /**
+   * Send daily summary of Vinted scanner activity
+   */
+  async sendVintedDailySummary(params: VintedDailySummaryParams): Promise<void> {
+    const { broadSweeps, watchlistScans, opportunitiesFound, nearMissesFound } = params;
+
+    await this.send({
+      title: '📊 Vinted Scanner Daily Summary',
+      message:
+        `Broad sweeps: ${broadSweeps}\n` +
+        `Watchlist scans: ${watchlistScans}\n` +
+        `Opportunities: ${opportunitiesFound}\n` +
+        `Near misses: ${nearMissesFound}`,
+      priority: 0,
+    });
+  }
+
+  /**
+   * Send consecutive failure alert
+   * Triggered after 3+ consecutive scan failures
+   */
+  async sendVintedConsecutiveFailures(failureCount: number): Promise<void> {
+    await this.send({
+      title: '🔴 Vinted Scanner Issues',
+      message:
+        `${failureCount} consecutive scan failures detected.\n` +
+        'Please check scanner status and Vinted accessibility.',
+      priority: 1,
+      url: `${process.env.NEXT_PUBLIC_APP_URL}/arbitrage/vinted/automation`,
+      urlTitle: 'View Scanner Status',
+      sound: 'falling',
     });
   }
 }

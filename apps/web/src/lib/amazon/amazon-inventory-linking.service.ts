@@ -759,6 +759,7 @@ export class AmazonInventoryLinkingService {
 
   /**
    * Mark inventory items as sold with Amazon sale details
+   * @throws Error if any update fails
    */
   private async markInventoryAsSold(
     inventoryIds: string[],
@@ -772,7 +773,7 @@ export class AmazonInventoryLinkingService {
     const perItemNet = netSale.netAmount ? netSale.netAmount / inventoryIds.length : null;
 
     for (const inventoryId of inventoryIds) {
-      await this.supabase
+      const { error, count } = await this.supabase
         .from('inventory_items')
         .update({
           status: 'SOLD',
@@ -789,18 +790,26 @@ export class AmazonInventoryLinkingService {
         })
         .eq('id', inventoryId)
         .eq('user_id', this.userId);
+
+      if (error) {
+        throw new Error(`Failed to mark inventory ${inventoryId} as sold: ${error.message}`);
+      }
+      if (count === 0) {
+        console.warn(`[AmazonInventoryLinking] No rows updated for inventory ${inventoryId} - may not exist or wrong user`);
+      }
     }
   }
 
   /**
    * Link order item to inventory
+   * @throws Error if update fails or no rows updated
    */
   private async linkOrderItemToInventory(
     orderItemId: string,
     inventoryId: string,
     method: 'auto_picklist' | 'auto_asin' | 'manual'
   ): Promise<void> {
-    await this.supabase
+    const { error, count } = await this.supabase
       .from('order_items')
       .update({
         inventory_item_id: inventoryId,
@@ -808,6 +817,13 @@ export class AmazonInventoryLinkingService {
         amazon_link_method: method,
       })
       .eq('id', orderItemId);
+
+    if (error) {
+      throw new Error(`Failed to link order item ${orderItemId} to inventory ${inventoryId}: ${error.message}`);
+    }
+    if (count === 0) {
+      throw new Error(`No rows updated when linking order item ${orderItemId} - item may not exist`);
+    }
   }
 
   /**

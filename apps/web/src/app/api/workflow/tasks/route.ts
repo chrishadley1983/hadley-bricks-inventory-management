@@ -10,6 +10,7 @@ const CreateTaskSchema = z.object({
   icon: z.string().max(10).optional(),
   priority: z.number().int().min(1).max(4).optional(),
   estimatedMinutes: z.number().int().min(1).max(480).optional(),
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   presetId: z.string().uuid().optional(),
 });
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { presetId, name, description, category, icon, priority, estimatedMinutes } = parsed.data;
+    const { presetId, name, description, category, icon, priority, estimatedMinutes, scheduledDate } = parsed.data;
 
     const workflowService = new WorkflowService(supabase);
 
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
         icon,
         priority,
         estimatedMinutes,
+        scheduledDate,
       });
     } else {
       return NextResponse.json(

@@ -14,11 +14,16 @@ import type { Database } from '@hadley-bricks/database';
 const PLATFORM_FEE_RATES: Record<string, number> = {
   ebay: 0.18, // 18% (final value + payment processing)
   amazon: 0.1836, // 18.36% (15% referral x 1.02 DST x 1.20 VAT)
-  bricklink: 0.03, // 3%
-  'brick owl': 0.03, // 3%
-  brickowl: 0.03, // 3%
+  bricklink: 0.1, // 10% (3% BrickLink fee + ~7% PayPal/payment processing)
+  'brick owl': 0.1, // 10% (3% Brick Owl fee + ~7% PayPal/payment processing)
+  brickowl: 0.1, // 10%
   default: 0.1, // 10% fallback
 };
+
+/**
+ * Fee rate for BrickLink uploads (parts sales)
+ */
+const BRICKLINK_UPLOAD_FEE_RATE = 0.1; // 10%
 
 /**
  * Get the estimated fee rate for a platform
@@ -27,6 +32,32 @@ function getFeeRate(platform: string | null): number {
   if (!platform) return PLATFORM_FEE_RATES.default;
   const normalised = platform.toLowerCase().trim();
   return PLATFORM_FEE_RATES[normalised] ?? PLATFORM_FEE_RATES.default;
+}
+
+/**
+ * Profitability metrics for a linked BrickLink upload
+ */
+export interface LinkedUploadProfitability {
+  id: string;
+  uploadDate: string;
+  totalQuantity: number;
+  lots: number | null;
+  condition: string | null;
+  sellingPrice: number;
+  fees: number;
+  cost: number;
+
+  // Realisation (365-day linear)
+  daysSinceUpload: number;
+  realisationPercent: number;
+  realisedRevenue: number;
+  unrealisedRevenue: number;
+
+  // Profit calculations (after fees)
+  realisedProfit: number;
+  unrealisedProfit: number;
+  totalProfit: number;
+  marginPercent: number | null;
 }
 
 /**
@@ -70,6 +101,28 @@ export interface PurchaseProfitability {
 
   // Item-level details for display
   items: PurchaseItemProfitability[];
+
+  // Linked BrickLink Uploads
+  linkedUploads: LinkedUploadProfitability[];
+  uploadCount: number;
+  uploadTotalSellingPrice: number;
+  uploadTotalFees: number;
+  uploadTotalCost: number;
+  uploadRealisedRevenue: number;
+  uploadUnrealisedRevenue: number;
+  uploadRealisedProfit: number;
+  uploadUnrealisedProfit: number;
+  uploadTotalProfit: number;
+  uploadMarginPercent: number | null;
+
+  // Combined totals (inventory items + uploads)
+  combinedRealisedRevenue: number;
+  combinedRealisedProfit: number;
+  combinedUnrealisedValue: number;
+  combinedUnrealisedProfit: number;
+  combinedTotalProjectedRevenue: number;
+  combinedTotalProjectedProfit: number;
+  combinedMarginPercent: number | null;
 }
 
 /**
@@ -135,6 +188,19 @@ export class PurchaseProfitabilityService {
     }
 
     const items = inventoryItems ?? [];
+
+    // Fetch linked BrickLink uploads
+    const { data: uploads, error: uploadsError } = await this.supabase
+      .from('bricklink_uploads')
+      .select('*')
+      .eq('purchase_id', purchaseId)
+      .eq('user_id', this.userId);
+
+    if (uploadsError) {
+      throw new Error(`Failed to fetch linked uploads: ${uploadsError.message}`);
+    }
+
+    const linkedUploads = uploads ?? [];
 
     // Calculate proportional costs for items without assigned costs
     // First, calculate total listing value for items without costs
@@ -349,6 +415,98 @@ export class PurchaseProfitabilityService {
       }
     }
 
+    // =========================================================================
+    // Calculate BrickLink Upload profitability with 365-day linear realisation
+    // =========================================================================
+    const now = new Date();
+    const REALISATION_DAYS = 365;
+
+    const uploadDetails: LinkedUploadProfitability[] = [];
+    let uploadTotalSellingPrice = 0;
+    let uploadTotalFees = 0;
+    let uploadTotalCost = 0;
+    let uploadRealisedRevenue = 0;
+    let uploadUnrealisedRevenue = 0;
+
+    for (const upload of linkedUploads) {
+      const sellingPrice = upload.selling_price ?? 0;
+      const fees = sellingPrice * BRICKLINK_UPLOAD_FEE_RATE; // 10% fees
+      const cost = upload.cost ?? 0;
+      const uploadDate = new Date(upload.upload_date);
+      const daysSinceUpload = Math.max(
+        0,
+        Math.floor((now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24))
+      );
+
+      // Linear realisation: 0% at day 0, 100% at day 365+
+      const realisationPercent = Math.min(1, daysSinceUpload / REALISATION_DAYS);
+      const realisedRev = sellingPrice * realisationPercent;
+      const unrealisedRev = sellingPrice * (1 - realisationPercent);
+
+      // Fees and cost are allocated proportionally to realisation
+      const realisedFeesPortion = fees * realisationPercent;
+      const unrealisedFeesPortion = fees * (1 - realisationPercent);
+      const realisedCostPortion = cost * realisationPercent;
+      const unrealisedCostPortion = cost * (1 - realisationPercent);
+
+      // Profit = Revenue - Fees - Cost
+      const uploadItemRealisedProfit = realisedRev - realisedFeesPortion - realisedCostPortion;
+      const uploadItemUnrealisedProfit = unrealisedRev - unrealisedFeesPortion - unrealisedCostPortion;
+      const uploadItemTotalProfit = sellingPrice - fees - cost;
+      const marginPercent = sellingPrice > 0 ? (uploadItemTotalProfit / sellingPrice) * 100 : null;
+
+      uploadDetails.push({
+        id: upload.id,
+        uploadDate: upload.upload_date,
+        totalQuantity: upload.total_quantity ?? 0,
+        lots: upload.lots,
+        condition: upload.condition,
+        sellingPrice,
+        fees,
+        cost,
+        daysSinceUpload,
+        realisationPercent: realisationPercent * 100, // Store as percentage
+        realisedRevenue: realisedRev,
+        unrealisedRevenue: unrealisedRev,
+        realisedProfit: uploadItemRealisedProfit,
+        unrealisedProfit: uploadItemUnrealisedProfit,
+        totalProfit: uploadItemTotalProfit,
+        marginPercent,
+      });
+
+      uploadTotalSellingPrice += sellingPrice;
+      uploadTotalFees += fees;
+      uploadTotalCost += cost;
+      uploadRealisedRevenue += realisedRev;
+      uploadUnrealisedRevenue += unrealisedRev;
+    }
+
+    // Calculate aggregate upload profits (with fees)
+    const uploadRealisedFeesPortion = uploadTotalFees * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadUnrealisedFeesPortion = uploadTotalFees * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadRealisedCostPortion = uploadTotalCost * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadUnrealisedCostPortion = uploadTotalCost * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
+
+    const uploadRealisedProfit = uploadRealisedRevenue - uploadRealisedFeesPortion - uploadRealisedCostPortion;
+    const uploadUnrealisedProfit = uploadUnrealisedRevenue - uploadUnrealisedFeesPortion - uploadUnrealisedCostPortion;
+    const uploadTotalProfit = uploadTotalSellingPrice - uploadTotalFees - uploadTotalCost;
+    const uploadMarginPercent = uploadTotalSellingPrice > 0
+      ? (uploadTotalProfit / uploadTotalSellingPrice) * 100
+      : null;
+
+    // =========================================================================
+    // Combined totals (inventory items + uploads)
+    // =========================================================================
+    const combinedRealisedRevenue = realisedRevenue + uploadRealisedRevenue;
+    const combinedRealisedProfit = realisedProfit + uploadRealisedProfit;
+    const combinedUnrealisedValue = unrealisedValue + uploadUnrealisedRevenue;
+    const combinedUnrealisedProfit = unrealisedProfit + uploadUnrealisedProfit;
+    const combinedTotalProjectedRevenue = totalProjectedRevenue + uploadTotalSellingPrice;
+    const combinedTotalProjectedProfit = totalProjectedProfit + uploadTotalProfit;
+    const combinedMarginPercent = combinedTotalProjectedRevenue > 0
+      ? (combinedTotalProjectedProfit / combinedTotalProjectedRevenue) * 100
+      : null;
+
     return {
       // Counts
       totalItems: items.length,
@@ -358,21 +516,21 @@ export class PurchaseProfitabilityService {
       itemsWithNoCost,
       itemsWithNoListingValue,
 
-      // Realised
+      // Realised (inventory items)
       realisedRevenue,
       realisedFees,
       realisedCost,
       realisedProfit,
       realisedMarginPercent,
 
-      // Unrealised
+      // Unrealised (inventory items)
       unrealisedValue,
       estimatedFees,
       unrealisedCost,
       unrealisedProfit,
       unrealisedMarginPercent,
 
-      // Totals
+      // Totals (inventory items only)
       totalCost,
       totalProjectedRevenue,
       totalProjectedFees,
@@ -387,6 +545,28 @@ export class PurchaseProfitabilityService {
 
       // Items
       items: itemDetails,
+
+      // Linked BrickLink Uploads
+      linkedUploads: uploadDetails,
+      uploadCount: linkedUploads.length,
+      uploadTotalSellingPrice,
+      uploadTotalFees,
+      uploadTotalCost,
+      uploadRealisedRevenue,
+      uploadUnrealisedRevenue,
+      uploadRealisedProfit,
+      uploadUnrealisedProfit,
+      uploadTotalProfit,
+      uploadMarginPercent,
+
+      // Combined totals
+      combinedRealisedRevenue,
+      combinedRealisedProfit,
+      combinedUnrealisedValue,
+      combinedUnrealisedProfit,
+      combinedTotalProjectedRevenue,
+      combinedTotalProjectedProfit,
+      combinedMarginPercent,
     };
   }
 }

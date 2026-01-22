@@ -67,6 +67,14 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
     ? metrics.bricklinkWeeklyValue.target
     : Math.round(metrics.bricklinkWeeklyValue.target / 7);
 
+  // Listing counts - use daily or weekly counts based on view mode
+  const ebayListingsCount = isWeekly
+    ? metrics.listingCounts.ebay
+    : (metrics.dailyListingCounts?.ebay ?? 0);
+  const amazonListingsCount = isWeekly
+    ? metrics.listingCounts.amazon
+    : (metrics.dailyListingCounts?.amazon ?? 0);
+
   // Listing count targets - weekly targets divided by 7 for daily view
   const ebayListingsTarget = isWeekly
     ? metrics.targets.ebayListings
@@ -108,18 +116,18 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
       </CardHeader>
       <CardContent>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
-          {/* eBay Listings - target scales with view mode */}
+          {/* eBay Listings - count and target scale with view mode */}
           <MetricCard
             label="eBay Listings"
-            current={metrics.listingCounts.ebay}
+            current={ebayListingsCount}
             target={ebayListingsTarget}
             icon={<Package className="h-4 w-4" />}
           />
 
-          {/* Amazon Listings - target scales with view mode */}
+          {/* Amazon Listings - count and target scale with view mode */}
           <MetricCard
             label="Amazon Listings"
-            current={metrics.listingCounts.amazon}
+            current={amazonListingsCount}
             target={amazonListingsTarget}
             icon={<Package className="h-4 w-4" />}
           />

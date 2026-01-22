@@ -49,6 +49,7 @@ export function scenarioToFormData(scenario: CostModelScenario): CostModelScenar
     incomeTaxRate: Number(scenario.income_tax_rate),
     niRate: Number(scenario.ni_rate),
     legoPartsPercent: Number(scenario.lego_parts_percent),
+    legoPartsPercentBl: Number(scenario.lego_parts_percent_bl),
     packageCosts: scenario.package_costs?.map(packageCostToFormData),
   };
 }
@@ -109,6 +110,7 @@ export function formDataToScenario(
     income_tax_rate: formData.incomeTaxRate,
     ni_rate: formData.niRate,
     lego_parts_percent: formData.legoPartsPercent,
+    lego_parts_percent_bl: formData.legoPartsPercentBl,
     is_default: false,
   };
 }
@@ -323,6 +325,7 @@ export class CostModellingRepository {
     if (formData.incomeTaxRate !== undefined) updateData.income_tax_rate = formData.incomeTaxRate;
     if (formData.niRate !== undefined) updateData.ni_rate = formData.niRate;
     if (formData.legoPartsPercent !== undefined) updateData.lego_parts_percent = formData.legoPartsPercent;
+    if (formData.legoPartsPercentBl !== undefined) updateData.lego_parts_percent_bl = formData.legoPartsPercentBl;
 
     const { data, error } = await this.supabase
       .from('cost_model_scenarios')
@@ -435,6 +438,7 @@ export class CostModellingRepository {
         income_tax_rate: original.income_tax_rate,
         ni_rate: original.ni_rate,
         lego_parts_percent: original.lego_parts_percent,
+        lego_parts_percent_bl: original.lego_parts_percent_bl,
         is_default: false,
       })
       .select()

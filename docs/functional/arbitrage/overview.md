@@ -1,16 +1,17 @@
 # Feature: Arbitrage Tracker
 
 > **Category:** Analysis & Sourcing
-> **Primary Entry Point:** `/arbitrage/amazon`, `/arbitrage/ebay`, `/arbitrage/seeded`
+> **Primary Entry Point:** `/arbitrage/amazon`, `/arbitrage/ebay`, `/arbitrage/seeded`, `/arbitrage/vinted`
 > **Complexity:** High
 
 ## Overview
 
-The Arbitrage Tracker is a sophisticated price comparison system that helps identify profitable buying opportunities by comparing your Amazon selling prices against BrickLink and eBay sourcing prices. It tracks ASINs from your Amazon inventory, maps them to BrickLink set numbers, and calculates potential profit margins.
+The Arbitrage Tracker is a sophisticated price comparison system that helps identify profitable buying opportunities by comparing your Amazon selling prices against BrickLink, eBay, and Vinted sourcing prices. It tracks ASINs from your Amazon inventory, maps them to BrickLink set numbers, and calculates potential profit margins.
 
 **Key Value Proposition:**
-- Find sets selling on Amazon for more than they can be sourced on BrickLink or eBay
+- Find sets selling on Amazon for more than they can be sourced on BrickLink, eBay, or Vinted
 - Track your Amazon inventory alongside "seeded" ASINs from the Brickset database
+- Scan Vinted listings in real-time to identify immediate buying opportunities
 - Calculate accurate profit margins accounting for Amazon fees (18.36% effective rate)
 - Manage ASIN-to-BrickLink mappings with automated and manual matching
 
@@ -96,6 +97,31 @@ Margin % = (Amazon Price - eBay Min Price) / Amazon Price × 100
 
 Where:
 - eBay Min Price = Total price (item + shipping) of cheapest eBay listing
+
+### COG% Calculation (Vinted)
+
+Cost of Goods percentage (COG%) is the inverse metric used for Vinted arbitrage:
+
+```
+COG% = (Vinted Price + £2.30 shipping) / Amazon Buy Box Price × 100
+```
+
+Where:
+- Vinted Price = Listed item price
+- £2.30 = Standard Vinted shipping cost
+- Amazon Buy Box Price = Current Buy Box price (or RRP if unavailable)
+
+**COG% Interpretation:**
+
+| COG% | Rating | Description |
+|------|--------|-------------|
+| < 30% | Excellent | Very high profit potential |
+| 30-40% | Good | Target zone for purchases |
+| 40-50% | Marginal | Limited profit after fees |
+| 50-60% | Poor | Minimal or no profit |
+| > 60% | Not Viable | Would result in a loss |
+
+At 40% COG, approximately 30% profit remains after Amazon FBM fees (~18%) and customer shipping (~12%).
 
 ### Amazon FBM Profit Calculation
 
@@ -187,6 +213,8 @@ For UK non-VAT registered sellers (2026 rates):
 | [Amazon Arbitrage](./amazon-arbitrage.md) | Compare Amazon vs BrickLink prices | `/arbitrage/amazon` |
 | [eBay Arbitrage](./ebay-arbitrage.md) | Compare Amazon vs eBay prices | `/arbitrage/ebay` |
 | [Seeded ASINs](./seeded-asins.md) | Discover ASINs from Brickset database | `/arbitrage/seeded` |
+| [Vinted Arbitrage (Manual)](./vinted-arbitrage.md) | Scan Vinted for deals vs Amazon | `/arbitrage/vinted` |
+| [Vinted Automation](./vinted-automation.md) | Automated scanner with Windows tray app | `/arbitrage/vinted/automation` |
 
 ---
 
@@ -196,6 +224,7 @@ For UK non-VAT registered sellers (2026 rates):
 - Track ASINs from your Amazon inventory
 - Add "seeded" ASINs from Brickset for sets you don't own
 - Manual ASIN entry for specific sets
+- Real-time Vinted scanning for immediate opportunities
 
 ### Intelligent Mapping
 - Automatic ASIN-to-BrickLink mapping via:
@@ -241,6 +270,8 @@ For UK non-VAT registered sellers (2026 rates):
 | `/api/arbitrage/discovery` | GET | Get discovery status |
 | `/api/arbitrage/discovery` | POST | Run discovery |
 | `/api/arbitrage/ebay-exclusions` | GET/POST/DELETE | Manage eBay exclusions |
+| `/api/arbitrage/vinted` | GET | Scan Vinted URL for opportunities |
+| `/api/arbitrage/vinted` | POST | Parse provided HTML for listings |
 
 ---
 
@@ -260,6 +291,8 @@ For UK non-VAT registered sellers (2026 rates):
 | [amazon/page.tsx](../../../apps/web/src/app/(dashboard)/arbitrage/amazon/page.tsx) | Amazon arbitrage page |
 | [ebay/page.tsx](../../../apps/web/src/app/(dashboard)/arbitrage/ebay/page.tsx) | eBay arbitrage page |
 | [seeded/page.tsx](../../../apps/web/src/app/(dashboard)/arbitrage/seeded/page.tsx) | Seeded ASINs page |
+| [vinted/page.tsx](../../../apps/web/src/app/(dashboard)/arbitrage/vinted/page.tsx) | Vinted arbitrage page |
+| [vinted/route.ts](../../../apps/web/src/app/api/arbitrage/vinted/route.ts) | Vinted API endpoint |
 
 ---
 

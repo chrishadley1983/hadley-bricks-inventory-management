@@ -164,23 +164,38 @@ export class BricksetCacheService {
     // Fallback to API
     try {
       const apiClient = new BricksetApiClient(apiKey);
-      const apiSets = await apiClient.searchSets(query, {
-        theme: options.theme,
-        year: options.year?.toString(),
-        pageSize: options.limit || 50,
-      });
+
+      // Check if the query looks like a set number (digits, possibly with dash and variant)
+      const isSetNumber = /^\d+(-\d+)?$/.test(query.trim());
+
+      let apiSets: BricksetApiSet[];
+      if (isSetNumber) {
+        // Search by set number for numeric queries
+        const setNumber = query.includes('-') ? query : `${query}-1`;
+        const result = await apiClient.getSetByNumber(setNumber);
+        apiSets = result ? [result] : [];
+      } else {
+        // Search by name/query for text searches
+        apiSets = await apiClient.searchSets(query, {
+          theme: options.theme,
+          year: options.year?.toString(),
+          pageSize: options.limit || 50,
+        });
+      }
 
       if (apiSets.length === 0) {
         return localResults;
       }
 
       // Batch upsert all results to cache
+      // Use service role client because brickset_sets table only has SELECT policy
       const dbData = apiSets.map((apiSet) => ({
         ...internalToDbInsert(apiSetToInternal(apiSet)),
-        raw_response: apiSet,
+        raw_response: JSON.parse(JSON.stringify(apiSet)),
       }));
 
-      const { error: upsertError } = await this.supabase
+      const serviceClient = createServiceRoleClient();
+      const { error: upsertError } = await serviceClient
         .from('brickset_sets')
         .upsert(dbData, { onConflict: 'set_number' });
 

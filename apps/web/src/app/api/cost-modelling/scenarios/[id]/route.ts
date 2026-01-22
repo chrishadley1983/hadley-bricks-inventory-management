@@ -57,6 +57,7 @@ const UpdateScenarioSchema = z.object({
 
   // Lego Parts
   legoPartsPercent: z.number().min(0).max(1).optional(),
+  legoPartsPercentBl: z.number().min(0).max(1).optional(),
 
   // Package Costs
   packageCosts: z.array(z.object({

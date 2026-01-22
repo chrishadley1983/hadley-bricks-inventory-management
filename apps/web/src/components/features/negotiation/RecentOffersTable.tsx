@@ -9,14 +9,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { ExternalLink, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { NegotiationOffer } from '@/lib/ebay/negotiation.types';
 
 interface RecentOffersTableProps {
   offers?: NegotiationOffer[];
   isLoading?: boolean;
   total?: number;
+  page?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
 }
 
 /**
@@ -79,7 +83,18 @@ function TableSkeleton() {
   );
 }
 
-export function RecentOffersTable({ offers, isLoading, total }: RecentOffersTableProps) {
+export function RecentOffersTable({
+  offers,
+  isLoading,
+  total,
+  page = 0,
+  pageSize = 10,
+  onPageChange,
+}: RecentOffersTableProps) {
+  const totalPages = total ? Math.ceil(total / pageSize) : 0;
+  const startIndex = page * pageSize + 1;
+  const endIndex = Math.min((page + 1) * pageSize, total ?? 0);
+
   if (isLoading) {
     return (
       <div className="space-y-4" data-testid="recent-offers-table">
@@ -106,7 +121,7 @@ export function RecentOffersTable({ offers, isLoading, total }: RecentOffersTabl
         <h3 className="text-lg font-semibold">Recent Offers</h3>
         {total !== undefined && (
           <span className="text-sm text-muted-foreground">
-            Showing {offers.length} of {total}
+            Showing {startIndex}-{endIndex} of {total}
           </span>
         )}
       </div>
@@ -182,6 +197,35 @@ export function RecentOffersTable({ offers, isLoading, total }: RecentOffersTabl
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && onPageChange && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages - 1}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -28,6 +28,11 @@ const QuerySchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .optional(),
+  purchaseId: z.string().uuid().optional(),
+  unlinked: z
+    .string()
+    .transform((val) => val === 'true')
+    .optional(),
 });
 
 /**
@@ -57,7 +62,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, dateFrom, dateTo, source, search, syncedFromBricqer } = parsed.data;
+    const { page, pageSize, dateFrom, dateTo, source, search, syncedFromBricqer, purchaseId, unlinked } = parsed.data;
 
     const service = new BrickLinkUploadService(supabase, user.id);
     const result = await service.getAll(
@@ -67,6 +72,8 @@ export async function GET(request: NextRequest) {
         source,
         searchTerm: search,
         syncedFromBricqer,
+        purchaseId,
+        unlinked,
       },
       { page, pageSize }
     );

@@ -1,11 +1,26 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-01-18T14:00:00Z",
+  "lastRun": "2026-01-21T14:30:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 5,
-  "averageCriteriaPerFeature": 53,
+  "featuresDefinedCount": 8,
+  "averageCriteriaPerFeature": 82,
   "recentFeatures": [
+    {
+      "name": "updated-vinted-automation",
+      "criteriaCount": 214,
+      "autoVerifyCount": 209,
+      "humanVerifyCount": 5,
+      "definedAt": "2026-01-21T14:30:00Z",
+      "note": "Refined to add v2 requirements: Windows tray app, server-side scheduling, heartbeat protocol"
+    },
+    {
+      "name": "partout-value",
+      "criteriaCount": 30,
+      "autoVerifyCount": 30,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-20T10:00:00Z"
+    },
     {
       "name": "cost-modelling",
       "criteriaCount": 77,
@@ -68,7 +83,19 @@
       "Form inputs editable and persist on save",
       "Live calculation on input change (no API call)",
       "Collapsible sections with state persistence",
-      "Compare mode with side-by-side layout"
+      "Compare mode with side-by-side layout",
+      "Tab shows external API data (BrickLink partout values)",
+      "Table sorted by value descending (highest first)",
+      "Parts list with full metrics (price, qty, sell-through, stock)",
+      "Claude Code prompt file exists with scanning instructions",
+      "CAPTCHA detection checks URL, DOM, and title",
+      "Cron script has random delay and operating hours check",
+      "Watchlist materialisation produces 200 sets maximum",
+      "Sales rank bootstrap batches requests with rate limiting",
+      "Server-side schedule generation with seeded random",
+      "Heartbeat polling with version synchronization",
+      "Windows tray app with NotifyIcon integration",
+      "Config polling with schedule version detection"
     ],
     "error": [
       "Toast on error condition (toast component check)",
@@ -84,7 +111,15 @@
       "Permission denied shows graceful fallback (in-app notifications)",
       "Negative value prevention (min attribute)",
       "Delete last item prevention (disabled state)",
-      "Concurrent edit warning (optimistic locking)"
+      "Concurrent edit warning (optimistic locking)",
+      "Missing data shows N/A fallback (ratio calculation)",
+      "CAPTCHA triggers automatic pause with reason",
+      "Consecutive failure alert after 3 failures",
+      "Scan history shows success/failed/CAPTCHA status icons",
+      "Chrome not responding retries 3x then pauses",
+      "API unreachable uses cached schedule",
+      "Claude CLI failure skips to next scan",
+      "Disconnection warning after 10 minutes no heartbeat"
     ],
     "performance": [
       "Operation completes under X seconds (timed execution)",
@@ -99,7 +134,14 @@
       "Sections load independently (parallel requests)",
       "Client-side calculation under 50ms (no perceptible delay)",
       "PDF generation under 5 seconds",
-      "CSV generation under 1 second"
+      "CSV generation under 1 second",
+      "External API data loads under 10 seconds (BrickLink POV)",
+      "Automation page loads under 2 seconds",
+      "Watchlist health page handles 200 sets",
+      "Opportunity processing under 5 seconds",
+      "Main loop runs every 30 seconds",
+      "Config polling every 5 minutes",
+      "Heartbeat every 5 minutes"
     ],
     "ui": [
       "Component uses shadcn/ui (class inspection)",
@@ -120,7 +162,30 @@
       "Percentage formatting with % symbol",
       "Positive/negative value colouring (green/red)",
       "Read-only calculated fields (visual distinction)",
-      "Button loading states (spinner during operation)"
+      "Button loading states (spinner during operation)",
+      "Visual recommendation indicator (partout vs sell complete)",
+      "Scanner status card shows running/paused state",
+      "COG% badge is color coded by threshold",
+      "Listed time has visual aging (green→yellow→orange→red)",
+      "Watchlist health flags display with emoji indicators",
+      "Hover popup shows sales and stock data",
+      "System tray icon with four color states",
+      "Tray tooltip shows next scan and progress",
+      "Context menu with pause/resume/dashboard",
+      "Connection status indicator (Connected/Disconnected)",
+      "Machine name displayed in dashboard"
+    ],
+    "windows": [
+      ".NET 8 project with Windows Forms",
+      "NotifyIcon for system tray",
+      "ContextMenuStrip for right-click menu",
+      "Installer creates Start Menu shortcut",
+      "Auto-start registry option",
+      "Log files in LocalAppData with date pattern",
+      "30-day log retention cleanup",
+      "Seeded random for reproducible schedules",
+      "Machine ID for heartbeat identification",
+      "Cached schedule fallback on API failure"
     ]
   },
   "antiVagueTransformations": [
@@ -207,6 +272,42 @@
     {
       "vague": "auto-saves",
       "specific": "Draft saved to server every 30 seconds; restoration prompt on page load"
+    },
+    {
+      "vague": "shows partout value",
+      "specific": "Displays POV for New/Used, ratio vs set price, parts list sorted by value with sell-through rates"
+    },
+    {
+      "vague": "scans automatically",
+      "specific": "Cron triggers with randomised delay; Claude Code executes with Chrome extension; results posted to API"
+    },
+    {
+      "vague": "detects CAPTCHA",
+      "specific": "Checks URL for captcha, DOM for iframe/datadome elements, title for blocked/captcha keywords"
+    },
+    {
+      "vague": "sends alerts",
+      "specific": "Pushover notification with set details, pricing, COG%, profit; high priority for <30% COG"
+    },
+    {
+      "vague": "tracks watchlist effectiveness",
+      "specific": "Stats table with total_scans, listings_found, viable_found; flags: Stale/Low Yield/Active based on thresholds"
+    },
+    {
+      "vague": "server generates schedule",
+      "specific": "Schedule API returns ScheduledScan array with seeded random times; version increments on watchlist change"
+    },
+    {
+      "vague": "tray app runs",
+      "specific": "Windows tray app with NotifyIcon, 4 color states, context menu, 30-second main loop, 5-minute heartbeat"
+    },
+    {
+      "vague": "stays connected",
+      "specific": "Heartbeat every 5 minutes; dashboard shows Connected/Disconnected with last seen time; warning after 10 min"
+    },
+    {
+      "vague": "handles missed scans",
+      "specific": "Skip entirely, do NOT catch-up; resume from next scheduled scan; log warning if gap > 2 hours"
     }
   ]
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CalendarDays, MapPin } from 'lucide-react';
+import { CalendarDays, MapPin, Calendar, Check, ExternalLink, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,11 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useCreatePickup, useUpdatePickup, type CreatePickupInput, type StockPickup } from '@/hooks/use-pickups';
+import {
+  useGoogleCalendarStatus,
+  useConnectGoogleCalendar,
+  useSyncPickupToCalendar,
+} from '@/hooks/use-google-calendar';
 
 interface SchedulePickupDialogProps {
   open: boolean;
@@ -45,6 +50,7 @@ const getInitialFormData = (pickup?: StockPickup | null, initialDate?: string): 
   description: pickup?.description || null,
   scheduled_date: pickup?.scheduled_date || initialDate || new Date().toISOString().split('T')[0],
   scheduled_time: pickup?.scheduled_time || null,
+  scheduled_end_time: pickup?.scheduled_end_time || null,
   address_line1: pickup?.address_line1 || '',
   address_line2: pickup?.address_line2 || null,
   city: pickup?.city || '',
@@ -67,6 +73,14 @@ export function SchedulePickupDialog({
   const createPickup = useCreatePickup();
   const updatePickup = useUpdatePickup();
   const isEditing = !!pickup;
+
+  // Google Calendar hooks
+  const { data: calendarStatus, isLoading: isLoadingCalendarStatus } = useGoogleCalendarStatus();
+  const connectCalendar = useConnectGoogleCalendar();
+  const syncToCalendar = useSyncPickupToCalendar();
+
+  const isCalendarConnected = calendarStatus?.isConnected ?? false;
+  const isPickupSynced = !!pickup?.google_calendar_event_id;
 
   const [formData, setFormData] = useState<CreatePickupInput>(() =>
     getInitialFormData(pickup, initialDate)
@@ -131,6 +145,29 @@ export function SchedulePickupDialog({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleSyncToCalendar = async () => {
+    if (!pickup?.id) return;
+
+    try {
+      await syncToCalendar.mutateAsync(pickup.id);
+      toast({
+        title: 'Synced to Google Calendar',
+        description: 'The pickup has been added to your Google Calendar.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to sync',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleConnectCalendar = () => {
+    // Pass the current URL so user returns here after connecting
+    connectCalendar.mutate(window.location.pathname);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
@@ -168,24 +205,35 @@ export function SchedulePickupDialog({
             />
           </div>
 
-          {/* Date and Time */}
+          {/* Date */}
+          <div className="space-y-2">
+            <Label htmlFor="date">Date *</Label>
+            <Input
+              id="date"
+              type="date"
+              value={formData.scheduled_date}
+              onChange={(e) => updateField('scheduled_date', e.target.value)}
+            />
+          </div>
+
+          {/* Start and End Time */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="date">Date *</Label>
+              <Label htmlFor="start-time">Start Time</Label>
               <Input
-                id="date"
-                type="date"
-                value={formData.scheduled_date}
-                onChange={(e) => updateField('scheduled_date', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="time">Time</Label>
-              <Input
-                id="time"
+                id="start-time"
                 type="time"
                 value={formData.scheduled_time || ''}
                 onChange={(e) => updateField('scheduled_time', e.target.value || null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-time">End Time</Label>
+              <Input
+                id="end-time"
+                type="time"
+                value={formData.scheduled_end_time || ''}
+                onChange={(e) => updateField('scheduled_end_time', e.target.value || null)}
               />
             </div>
           </div>
@@ -301,6 +349,74 @@ export function SchedulePickupDialog({
               rows={2}
             />
           </div>
+
+          {/* Google Calendar Section - Only show when editing */}
+          {isEditing && (
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Google Calendar</Label>
+              </div>
+
+              {isLoadingCalendarStatus ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking calendar status...
+                </div>
+              ) : !isCalendarConnected ? (
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Connect Google Calendar to sync this pickup.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConnectCalendar}
+                    disabled={connectCalendar.isPending}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Connect Google Calendar
+                  </Button>
+                </div>
+              ) : isPickupSynced ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm text-green-700">
+                    <Check className="h-4 w-4" />
+                    <span>Synced to Google Calendar</span>
+                  </div>
+                  <p className="text-xs text-green-600 mt-1">
+                    Changes will auto-sync when you save.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Add this pickup to your Google Calendar.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncToCalendar}
+                    disabled={syncToCalendar.isPending}
+                  >
+                    {syncToCalendar.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Send to Calendar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <DialogFooter>
             <Button

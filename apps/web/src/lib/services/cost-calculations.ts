@@ -73,8 +73,10 @@ export function calculateAll(inputs: CostModelScenarioFormData): CalculatedResul
     inputs.amazonAvgPostageCost * inputs.amazonSalesPerMonth * 12 +
     inputs.ebayAvgPostageCost * inputs.ebaySalesPerMonth * 12;
 
-  // Lego parts (% of eBay turnover)
-  const legoParts = ebayTurnover * inputs.legoPartsPercent;
+  // Lego parts (% of eBay turnover + % of BrickLink turnover)
+  const legoParts =
+    ebayTurnover * inputs.legoPartsPercent +
+    blTurnover * inputs.legoPartsPercentBl;
 
   // Accountant cost depends on VAT status (F13)
   const accountantCost = inputs.isVatRegistered
@@ -397,6 +399,7 @@ export function validateDefaultCalculations(): {
     incomeTaxRate: 0.20,
     niRate: 0.06,
     legoPartsPercent: 0.02,
+    legoPartsPercentBl: 0.02,
   };
 
   const result = calculateAll(defaults);

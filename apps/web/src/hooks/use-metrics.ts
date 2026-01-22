@@ -18,6 +18,7 @@ export interface ListingCounts {
 
 export interface WeeklyMetrics {
   listingCounts: ListingCounts;
+  dailyListingCounts: ListingCounts;
   bricklinkWeeklyValue: MetricData;
   dailyListedValue: MetricData;
   dailySoldValue: MetricData;

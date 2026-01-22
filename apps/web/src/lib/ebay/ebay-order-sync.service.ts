@@ -116,8 +116,8 @@ interface FulfilmentRow {
  * Extract dispatch_by date from eBay fulfillmentStartInstructions
  *
  * eBay provides minEstimatedDeliveryDate and maxEstimatedDeliveryDate.
- * We use minEstimatedDeliveryDate minus 2 days as the ship-by date,
- * which accounts for typical UK domestic shipping time.
+ * We use maxEstimatedDeliveryDate minus 2 days as the ship-by date,
+ * which gives a realistic deadline accounting for shipping time.
  * If that's not available, we fall back to order creation date + 1 day.
  */
 function extractDispatchByDate(order: EbayOrderResponse): string | null {
@@ -129,19 +129,19 @@ function extractDispatchByDate(order: EbayOrderResponse): string | null {
   // Use the first instruction (usually there's only one)
   const instruction = instructions[0];
 
-  // Prefer minEstimatedDeliveryDate - subtract 2 days for shipping time
-  if (instruction.minEstimatedDeliveryDate) {
-    const deliveryDate = new Date(instruction.minEstimatedDeliveryDate);
+  // Prefer maxEstimatedDeliveryDate - subtract 2 days for shipping time
+  if (instruction.maxEstimatedDeliveryDate) {
+    const deliveryDate = new Date(instruction.maxEstimatedDeliveryDate);
     // Subtract 2 days for shipping time
     deliveryDate.setDate(deliveryDate.getDate() - 2);
     return deliveryDate.toISOString();
   }
 
-  // Fall back to maxEstimatedDeliveryDate - subtract 3 days
-  if (instruction.maxEstimatedDeliveryDate) {
-    const deliveryDate = new Date(instruction.maxEstimatedDeliveryDate);
-    // Subtract 3 days for shipping time (more buffer since it's max delivery)
-    deliveryDate.setDate(deliveryDate.getDate() - 3);
+  // Fall back to minEstimatedDeliveryDate - subtract 1 day
+  if (instruction.minEstimatedDeliveryDate) {
+    const deliveryDate = new Date(instruction.minEstimatedDeliveryDate);
+    // Subtract 1 day for shipping time (tighter deadline since it's min delivery)
+    deliveryDate.setDate(deliveryDate.getDate() - 1);
     return deliveryDate.toISOString();
   }
 
@@ -307,7 +307,7 @@ export class EbayOrderSyncService {
         transactionsEnriched = await this.enrichTransactionsFromOrders(userId, allOrders);
       }
 
-      // Process inventory linking for fulfilled orders
+      // Process inventory linking for fulfilled AND paid orders
       let inventoryAutoLinked = 0;
       let inventoryQueuedForResolution = 0;
       try {
@@ -318,6 +318,14 @@ export class EbayOrderSyncService {
           (order) => order.orderFulfillmentStatus === 'FULFILLED'
         );
 
+        // Also get PAID orders (not yet fulfilled) for pre-linking to show location on pick list
+        const paidOrders = allOrders.filter(
+          (order) =>
+            order.orderPaymentStatus === 'PAID' &&
+            order.orderFulfillmentStatus !== 'FULFILLED'
+        );
+
+        // Process fulfilled orders
         for (const order of fulfilledOrders) {
           const dbOrderId = orderIdMap.get(order.orderId);
           if (!dbOrderId) continue;
@@ -336,6 +344,28 @@ export class EbayOrderSyncService {
           }
 
           const linkResult = await linkingService.processFulfilledOrder(dbOrderId);
+          inventoryAutoLinked += linkResult.autoLinked;
+          inventoryQueuedForResolution += linkResult.queuedForResolution;
+        }
+
+        // Process PAID orders for pre-linking (doesn't mark as SOLD)
+        for (const order of paidOrders) {
+          const dbOrderId = orderIdMap.get(order.orderId);
+          if (!dbOrderId) continue;
+
+          // Check if already processed
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: existingOrder } = await (supabase as any)
+            .from('ebay_orders')
+            .select('inventory_link_status')
+            .eq('id', dbOrderId)
+            .single();
+
+          if (existingOrder?.inventory_link_status) {
+            continue; // Already has some linking status
+          }
+
+          const linkResult = await linkingService.processPaidOrder(dbOrderId);
           inventoryAutoLinked += linkResult.autoLinked;
           inventoryQueuedForResolution += linkResult.queuedForResolution;
         }

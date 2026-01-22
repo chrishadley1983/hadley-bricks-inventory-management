@@ -1,0 +1,15 @@
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.AssemblyInfoInputs.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.AssemblyInfo.cs
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.csproj.CoreCompileInputs.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.sourcelink.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\bin\Debug\net8.0-windows\TestClaudeLaunch.exe
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\bin\Debug\net8.0-windows\TestClaudeLaunch.deps.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\bin\Debug\net8.0-windows\TestClaudeLaunch.runtimeconfig.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\bin\Debug\net8.0-windows\TestClaudeLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\bin\Debug\net8.0-windows\TestClaudeLaunch.pdb
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\refint\TestClaudeLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.pdb
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\TestClaudeLaunch.genruntimeconfig.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestClaudeLaunch\obj\Debug\net8.0-windows\ref\TestClaudeLaunch.dll

@@ -68,6 +68,10 @@ export interface OptimiserListing {
   imageUrl: string | null;
   inventoryItemId: string | null;
   costPrice: number | null;
+  // Revision restriction flags - these prevent title/subtitle changes on eBay
+  pendingOfferCount: number;
+  endsWithin12Hours: boolean;
+  listingEndDate: string | null;
 }
 
 /**
@@ -250,8 +254,29 @@ export class ListingOptimiserService {
       }
     }
 
+    // Get pending offer counts for all listings
+    const pendingOfferCounts: Record<string, number> = {};
+    if (itemIds.length > 0) {
+      // Query negotiation_offers for pending offers grouped by listing ID
+      const { data: pendingOffers } = await supabase
+        .from('negotiation_offers')
+        .select('ebay_listing_id')
+        .eq('user_id', userId)
+        .in('ebay_listing_id', itemIds)
+        .eq('status', 'PENDING');
+
+      if (pendingOffers) {
+        for (const offer of pendingOffers) {
+          const listingId = offer.ebay_listing_id;
+          pendingOfferCounts[listingId] = (pendingOfferCounts[listingId] || 0) + 1;
+        }
+      }
+    }
+
     // Transform to OptimiserListing
     const now = new Date();
+    const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
     const transformed: OptimiserListing[] = (listings || []).map((listing) => {
       const ebayData = listing.ebay_data as Record<string, unknown> || {};
 
@@ -263,6 +288,11 @@ export class ListingOptimiserService {
 
       const sku = ebayData.sku as string | undefined;
       const inventoryData = sku ? skuToInventoryMap[sku] : null;
+
+      // Calculate if listing ends within 12 hours
+      const listingEndDateStr = ebayData.listingEndDate as string | null;
+      const listingEndDate = listingEndDateStr ? new Date(listingEndDateStr) : null;
+      const endsWithin12Hours = listingEndDate ? listingEndDate <= twelveHoursFromNow : false;
 
       return {
         id: listing.id,
@@ -281,6 +311,10 @@ export class ListingOptimiserService {
         imageUrl: (ebayData.galleryUrl as string) || null,
         inventoryItemId: inventoryData?.id || null,
         costPrice: inventoryData?.cost || null,
+        // Revision restriction flags
+        pendingOfferCount: pendingOfferCounts[listing.platform_item_id] || 0,
+        endsWithin12Hours,
+        listingEndDate: listingEndDateStr,
       };
     });
 

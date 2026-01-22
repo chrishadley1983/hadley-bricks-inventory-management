@@ -61,6 +61,8 @@ interface InventoryFormProps {
   mode: 'create' | 'edit';
   itemId?: string;
   showHeader?: boolean;
+  /** Pre-select a purchase when adding from a purchase detail page */
+  initialPurchaseId?: string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -99,7 +101,7 @@ function normalizeStatus(value: string | null | undefined): InventoryFormValues[
   return undefined;
 }
 
-export function InventoryForm({ mode, itemId, showHeader = true }: InventoryFormProps) {
+export function InventoryForm({ mode, itemId, showHeader = true, initialPurchaseId }: InventoryFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const createMutation = useCreateInventory();
@@ -195,6 +197,42 @@ export function InventoryForm({ mode, itemId, showHeader = true }: InventoryForm
     }
     loadLinkedPurchase();
   }, [existingItem?.purchase_id, mode]);
+
+  // Load initial purchase when creating from a purchase detail page
+  React.useEffect(() => {
+    async function loadInitialPurchase() {
+      if (initialPurchaseId && mode === 'create') {
+        try {
+          const response = await fetch(`/api/purchases/${initialPurchaseId}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.data) {
+              // Transform purchase data to PurchaseSearchResult format
+              const purchaseResult: PurchaseSearchResult = {
+                id: result.data.id,
+                short_description: result.data.short_description,
+                purchase_date: result.data.purchase_date,
+                cost: result.data.cost,
+                source: result.data.source,
+                reference: result.data.reference,
+                items_linked: result.data.items_linked ?? 0,
+              };
+              // Set the selected purchase and auto-fill form fields
+              setSelectedPurchase(purchaseResult);
+              form.setValue('purchase_id', purchaseResult.id);
+              form.setValue('purchase_date', purchaseResult.purchase_date);
+              if (purchaseResult.source) {
+                form.setValue('source', purchaseResult.source);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load initial purchase:', error);
+        }
+      }
+    }
+    loadInitialPurchase();
+  }, [initialPurchaseId, mode, form]);
 
   // Handle purchase selection from lookup
   const handlePurchaseSelect = React.useCallback(

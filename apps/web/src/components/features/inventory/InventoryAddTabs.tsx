@@ -64,10 +64,15 @@ function ComingSoonPlaceholder({ feature }: { feature: string }) {
   );
 }
 
+interface InventoryAddTabsProps {
+  /** Pre-select a purchase when adding from a purchase detail page */
+  initialPurchaseId?: string | null;
+}
+
 /**
  * Tabbed interface for adding inventory items through multiple input methods
  */
-export function InventoryAddTabs() {
+export function InventoryAddTabs({ initialPurchaseId }: InventoryAddTabsProps) {
   const [activeTab, setActiveTab] = React.useState<TabValue>('single');
 
   return (
@@ -104,7 +109,7 @@ export function InventoryAddTabs() {
 
         <TabsContent value="single" className="mt-6" forceMount>
           <div className={activeTab !== 'single' ? 'hidden' : ''}>
-            <InventoryForm mode="create" showHeader={false} />
+            <InventoryForm mode="create" showHeader={false} initialPurchaseId={initialPurchaseId} />
           </div>
         </TabsContent>
 

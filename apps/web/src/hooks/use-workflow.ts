@@ -8,6 +8,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TaskStatus, OffSystemTaskPreset } from '@hadley-bricks/database';
 
 /**
+ * Resolution stats for inventory resolution task
+ */
+export interface ResolutionStats {
+  pendingReview: number;
+  unlinkedSince2026: number;
+  totalUnlinked: number;
+}
+
+/**
  * Task with dynamic count
  */
 export interface WorkflowTask {
@@ -30,6 +39,7 @@ export interface WorkflowTask {
   completedAt: string | null;
   timeSpentSeconds: number | null;
   count?: number;
+  resolutionStats?: ResolutionStats;
 }
 
 /**
@@ -95,6 +105,7 @@ export const workflowKeys = {
   all: ['workflow'] as const,
   tasks: () => [...workflowKeys.all, 'tasks'] as const,
   todaysTasks: () => [...workflowKeys.tasks(), 'today'] as const,
+  futureTasks: () => [...workflowKeys.tasks(), 'future'] as const,
   presets: () => [...workflowKeys.all, 'presets'] as const,
   definitions: () => [...workflowKeys.all, 'definitions'] as const,
 };
@@ -144,6 +155,7 @@ async function createTask(params: {
   icon?: string;
   priority?: number;
   estimatedMinutes?: number;
+  scheduledDate?: string;
 }): Promise<void> {
   const response = await fetch('/api/workflow/tasks', {
     method: 'POST',
@@ -336,6 +348,7 @@ export function useCreateTask() {
     mutationFn: createTask,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.todaysTasks() });
+      queryClient.invalidateQueries({ queryKey: workflowKeys.futureTasks() });
     },
   });
 }
@@ -485,6 +498,118 @@ export function useDeleteDefinition() {
     mutationFn: deleteDefinition,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.definitions() });
+      queryClient.invalidateQueries({ queryKey: workflowKeys.todaysTasks() });
+    },
+  });
+}
+
+// ============================================================================
+// FUTURE CUSTOM TASKS HOOKS
+// ============================================================================
+
+/**
+ * Future custom task instance
+ */
+export interface FutureTask {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  priority: number;
+  estimatedMinutes: number | null;
+  scheduledDate: string;
+  status: string;
+  createdAt: string;
+}
+
+/**
+ * Fetch future custom tasks
+ */
+async function fetchFutureTasks(): Promise<{ tasks: FutureTask[] }> {
+  const response = await fetch('/api/workflow/tasks/future');
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to fetch future tasks' }));
+    throw new Error(error.error || 'Failed to fetch future tasks');
+  }
+  return response.json();
+}
+
+/**
+ * Update a future custom task
+ */
+async function updateFutureTask(params: {
+  id: string;
+  data: {
+    name?: string;
+    description?: string | null;
+    category?: string;
+    priority?: number;
+    estimatedMinutes?: number | null;
+    scheduledDate?: string;
+  };
+}): Promise<void> {
+  const response = await fetch(`/api/workflow/tasks/${params.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params.data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to update task' }));
+    throw new Error(error.error || 'Failed to update task');
+  }
+}
+
+/**
+ * Delete a future custom task
+ */
+async function deleteFutureTask(id: string): Promise<void> {
+  const response = await fetch(`/api/workflow/tasks/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to delete task' }));
+    throw new Error(error.error || 'Failed to delete task');
+  }
+}
+
+/**
+ * Hook to fetch future custom tasks
+ */
+export function useFutureTasks() {
+  return useQuery({
+    queryKey: workflowKeys.futureTasks(),
+    queryFn: fetchFutureTasks,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook to update a future custom task
+ */
+export function useUpdateFutureTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateFutureTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workflowKeys.futureTasks() });
+      queryClient.invalidateQueries({ queryKey: workflowKeys.todaysTasks() });
+    },
+  });
+}
+
+/**
+ * Hook to delete a future custom task
+ */
+export function useDeleteFutureTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteFutureTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workflowKeys.futureTasks() });
       queryClient.invalidateQueries({ queryKey: workflowKeys.todaysTasks() });
     },
   });

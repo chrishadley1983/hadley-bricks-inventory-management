@@ -8,10 +8,20 @@ import type {
 import { WorkflowRepository, ResolvedTaskInstance, CompletedTaskSummary } from '../repositories/workflow.repository';
 
 /**
+ * Resolution stats for inventory resolution task
+ */
+export interface ResolutionStats {
+  pendingReview: number;
+  unlinkedSince2026: number;
+  totalUnlinked: number;
+}
+
+/**
  * Task with dynamic count
  */
 export interface TaskWithCount extends ResolvedTaskInstance {
   count?: number;
+  resolutionStats?: ResolutionStats;
 }
 
 /**
@@ -67,10 +77,17 @@ export class WorkflowService {
     const counts = await this.getDynamicCounts(userId, countSources);
     const countMap = new Map(counts.map(c => [c.countSource, c.count]));
 
+    // Fetch resolution stats if there's a resolution.pending task
+    let resolutionStats: ResolutionStats | undefined;
+    if (countSources.includes('resolution.pending')) {
+      resolutionStats = await this.getResolutionStats(userId);
+    }
+
     // Merge counts into tasks
     const tasksWithCounts: TaskWithCount[] = pending.map(task => ({
       ...task,
       count: task.countSource ? countMap.get(task.countSource) : undefined,
+      resolutionStats: task.countSource === 'resolution.pending' ? resolutionStats : undefined,
     }));
 
     // Calculate summary
@@ -283,6 +300,46 @@ export class WorkflowService {
         console.warn(`Unknown count source: ${source}`);
         return 0;
     }
+  }
+
+  /**
+   * Get resolution stats for inventory resolution task
+   */
+  private async getResolutionStats(userId: string): Promise<ResolutionStats> {
+    const [ebayPending, amazonPending, unlinked2026, totalUnlinked] = await Promise.all([
+      // eBay pending review count
+      this.supabase
+        .from('ebay_inventory_resolution_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'pending'),
+
+      // Amazon pending review count
+      this.supabase
+        .from('amazon_inventory_resolution_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'pending'),
+
+      // Unlinked order items since Jan 2026 (when app became primary data source)
+      this.supabase.rpc('count_unlinked_order_items_since', {
+        p_user_id: userId,
+        p_since_date: '2026-01-01',
+      }),
+
+      // Total unlinked order items
+      this.supabase
+        .from('order_items')
+        .select('id, platform_orders!inner(user_id)', { count: 'exact', head: true })
+        .is('inventory_item_id', null)
+        .eq('platform_orders.user_id', userId),
+    ]);
+
+    return {
+      pendingReview: (ebayPending.count ?? 0) + (amazonPending.count ?? 0),
+      unlinkedSince2026: unlinked2026.data ?? 0,
+      totalUnlinked: totalUnlinked.count ?? 0,
+    };
   }
 
   /**

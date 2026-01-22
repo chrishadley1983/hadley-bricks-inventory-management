@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
   Settings2,
   Plus,
   Pencil,
   Trash2,
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
   AlertCircle,
-  CheckCircle2,
-  XCircle,
+  CalendarDays,
 } from 'lucide-react';
 import {
   Dialog,
@@ -43,11 +43,21 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import {
   useTaskDefinitions,
   useUpdateDefinition,
   useCreateDefinition,
   useDeleteDefinition,
+  useFutureTasks,
+  useUpdateFutureTask,
+  useDeleteFutureTask,
   type TaskDefinition,
+  type FutureTask,
 } from '@/hooks/use-workflow';
 import { cn } from '@/lib/utils';
 
@@ -180,7 +190,7 @@ function TaskDefinitionRow({
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
           <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
+            <CalendarIcon className="h-3 w-3" />
             {FREQUENCY_LABELS[definition.frequency]}
           </span>
           {definition.estimated_minutes && (
@@ -449,6 +459,217 @@ function TaskDefinitionForm({
   );
 }
 
+// ============================================================================
+// FUTURE CUSTOM TASKS COMPONENTS
+// ============================================================================
+
+function FutureTaskRow({
+  task,
+  onEdit,
+  onDelete,
+  isDeleting,
+}: {
+  task: FutureTask;
+  onEdit: () => void;
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
+  const priorityOption = PRIORITY_OPTIONS.find(p => p.value === task.priority);
+  const scheduledDate = parseISO(task.scheduledDate);
+  const formattedDate = format(scheduledDate, 'EEE, d MMM yyyy');
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium truncate">{task.name}</span>
+          <Badge variant="outline" className="text-xs">Custom</Badge>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" />
+            {formattedDate}
+          </span>
+          {task.estimatedMinutes && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {task.estimatedMinutes}m
+            </span>
+          )}
+          <span className={priorityOption?.color}>
+            {priorityOption?.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onEdit}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          onClick={onDelete}
+          disabled={isDeleting}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface FutureTaskFormData {
+  name: string;
+  description: string;
+  category: string;
+  priority: number;
+  estimated_minutes: number | null;
+  scheduled_date: Date;
+}
+
+function FutureTaskForm({
+  task,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  task: FutureTask;
+  onSave: (data: FutureTaskFormData) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [formData, setFormData] = useState<FutureTaskFormData>({
+    name: task.name,
+    description: task.description ?? '',
+    category: task.category,
+    priority: task.priority,
+    estimated_minutes: task.estimatedMinutes,
+    scheduled_date: parseISO(task.scheduledDate),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="ft-name">Task Name *</Label>
+        <Input
+          id="ft-name"
+          value={formData.name}
+          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="e.g., Call supplier"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="ft-description">Description</Label>
+        <Textarea
+          id="ft-description"
+          value={formData.description}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Additional details..."
+          rows={2}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Category</Label>
+          <Select
+            value={formData.category}
+            onValueChange={(value: string) => setFormData(prev => ({ ...prev, category: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORY_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Priority</Label>
+          <Select
+            value={String(formData.priority)}
+            onValueChange={(value: string) => setFormData(prev => ({ ...prev, priority: parseInt(value) }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITY_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={String(opt.value)}>
+                  <span className={opt.color}>{opt.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="ft-estimated">Est. Duration (minutes)</Label>
+          <Input
+            id="ft-estimated"
+            type="number"
+            min="1"
+            value={formData.estimated_minutes ?? ''}
+            onChange={(e) => setFormData(prev => ({
+              ...prev,
+              estimated_minutes: e.target.value ? parseInt(e.target.value) : null
+            }))}
+            placeholder="e.g., 30"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Due Date *</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {format(formData.scheduled_date, 'dd MMM yyyy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={formData.scheduled_date}
+                onSelect={(date) => date && setFormData(prev => ({ ...prev, scheduled_date: date }))}
+                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4 border-t">
+        <Button variant="outline" onClick={onCancel} disabled={isSaving}>
+          Cancel
+        </Button>
+        <Button onClick={() => onSave(formData)} disabled={isSaving || !formData.name.trim()}>
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDialogProps) {
   const { toast } = useToast();
   const { data, isLoading, error } = useTaskDefinitions();
@@ -456,10 +677,17 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
   const createDefinition = useCreateDefinition();
   const deleteDefinition = useDeleteDefinition();
 
+  // Future custom tasks
+  const { data: futureTasksData, isLoading: futureTasksLoading } = useFutureTasks();
+  const updateFutureTask = useUpdateFutureTask();
+  const deleteFutureTask = useDeleteFutureTask();
+
   const [editingDefinition, setEditingDefinition] = useState<TaskDefinition | null>(null);
+  const [editingFutureTask, setEditingFutureTask] = useState<FutureTask | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const definitions = data?.definitions ?? [];
+  const futureTasks = futureTasksData?.tasks ?? [];
 
   // Group definitions by category
   const groupedDefinitions = definitions.reduce((acc, def) => {
@@ -552,7 +780,52 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
     }
   };
 
+  const handleDeleteFutureTask = async (task: FutureTask) => {
+    if (!confirm(`Are you sure you want to delete "${task.name}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await deleteFutureTask.mutateAsync(task.id);
+      toast({
+        title: 'Task deleted',
+        description: `${task.name} has been removed.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Failed to delete task',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveFutureTask = async (formData: FutureTaskFormData) => {
+    if (!editingFutureTask) return;
+
+    try {
+      await updateFutureTask.mutateAsync({
+        id: editingFutureTask.id,
+        data: {
+          name: formData.name,
+          description: formData.description || null,
+          category: formData.category,
+          priority: formData.priority,
+          estimatedMinutes: formData.estimated_minutes,
+          scheduledDate: format(formData.scheduled_date, 'yyyy-MM-dd'),
+        },
+      });
+      toast({ title: 'Task updated' });
+      setEditingFutureTask(null);
+    } catch {
+      toast({
+        title: 'Failed to save task',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const isEditing = editingDefinition !== null || isCreating;
+  const isEditingFutureTask = editingFutureTask !== null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -567,7 +840,14 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
           </DialogDescription>
         </DialogHeader>
 
-        {isEditing ? (
+        {isEditingFutureTask ? (
+          <FutureTaskForm
+            task={editingFutureTask}
+            onSave={handleSaveFutureTask}
+            onCancel={() => setEditingFutureTask(null)}
+            isSaving={updateFutureTask.isPending}
+          />
+        ) : isEditing ? (
           <TaskDefinitionForm
             definition={editingDefinition}
             onSave={handleSave}
@@ -586,7 +866,7 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
               </Button>
             </div>
 
-            {isLoading ? (
+            {isLoading || futureTasksLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map(i => (
                   <Skeleton key={i} className="h-20 w-full" />
@@ -599,7 +879,7 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
                   Failed to load task definitions. Please try again.
                 </AlertDescription>
               </Alert>
-            ) : definitions.length === 0 ? (
+            ) : definitions.length === 0 && futureTasks.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">No tasks configured yet.</p>
                 <Button variant="link" onClick={() => setIsCreating(true)}>
@@ -608,7 +888,11 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
               </div>
             ) : (
               <ScrollArea className="h-[400px] pr-4">
-                <Accordion type="multiple" defaultValue={Object.keys(groupedDefinitions)} className="space-y-2">
+                <Accordion
+                  type="multiple"
+                  defaultValue={[...Object.keys(groupedDefinitions), ...(futureTasks.length > 0 ? ['__future__'] : [])]}
+                  className="space-y-2"
+                >
                   {Object.entries(groupedDefinitions).map(([category, defs]) => (
                     <AccordionItem key={category} value={category} className="border rounded-lg px-3">
                       <AccordionTrigger className="hover:no-underline py-3">
@@ -633,6 +917,34 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
                       </AccordionContent>
                     </AccordionItem>
                   ))}
+
+                  {futureTasks.length > 0 && (
+                    <AccordionItem value="__future__" className="border rounded-lg px-3 border-dashed">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">Custom Future Tasks</span>
+                          <Badge variant="outline" className="text-xs">
+                            {futureTasks.length}
+                          </Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-2 pb-3">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          One-time tasks scheduled for future dates
+                        </p>
+                        {futureTasks.map(task => (
+                          <FutureTaskRow
+                            key={task.id}
+                            task={task}
+                            onEdit={() => setEditingFutureTask(task)}
+                            onDelete={() => handleDeleteFutureTask(task)}
+                            isDeleting={deleteFutureTask.isPending}
+                          />
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
                 </Accordion>
               </ScrollArea>
             )}

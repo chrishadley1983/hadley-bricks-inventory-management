@@ -29,6 +29,8 @@ export const uploadKeys = {
     [...uploadKeys.lists(), { filters, pagination }] as const,
   details: () => [...uploadKeys.all, 'detail'] as const,
   detail: (id: string) => [...uploadKeys.details(), id] as const,
+  byPurchase: (purchaseId: string) => [...uploadKeys.all, 'byPurchase', purchaseId] as const,
+  unlinked: () => [...uploadKeys.all, 'unlinked'] as const,
   sync: () => [...uploadKeys.all, 'sync'] as const,
 };
 
@@ -57,6 +59,27 @@ export function useBrickLinkUpload(id: string | undefined) {
 }
 
 /**
+ * Hook to fetch uploads linked to a specific purchase
+ */
+export function useBrickLinkUploadsByPurchase(purchaseId: string | undefined) {
+  return useQuery({
+    queryKey: uploadKeys.byPurchase(purchaseId!),
+    queryFn: () => fetchBrickLinkUploads({ purchaseId: purchaseId! }, { page: 1, pageSize: 100 }),
+    enabled: !!purchaseId,
+  });
+}
+
+/**
+ * Hook to fetch unlinked uploads (for linking dialog)
+ */
+export function useUnlinkedBrickLinkUploads(filters?: Omit<BrickLinkUploadFilters, 'unlinked'>, pagination?: PaginationParams) {
+  return useQuery({
+    queryKey: uploadKeys.list({ ...filters, unlinked: true }, pagination),
+    queryFn: () => fetchBrickLinkUploads({ ...filters, unlinked: true }, pagination),
+  });
+}
+
+/**
  * Hook to create a new upload
  */
 export function useCreateBrickLinkUpload() {
@@ -81,7 +104,9 @@ export function useUpdateBrickLinkUpload() {
       updateBrickLinkUpload(id, data),
     onSuccess: (updatedUpload) => {
       queryClient.setQueryData(uploadKeys.detail(updatedUpload.id), updatedUpload);
-      queryClient.invalidateQueries({ queryKey: uploadKeys.lists() });
+      // Invalidate all upload queries including byPurchase queries
+      // This ensures linked uploads appear on purchase detail pages
+      queryClient.invalidateQueries({ queryKey: uploadKeys.all });
     },
   });
 }

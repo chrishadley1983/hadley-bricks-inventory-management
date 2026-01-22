@@ -84,6 +84,7 @@ export interface CostModelScenario {
 
   // Lego Parts
   lego_parts_percent: number;
+  lego_parts_percent_bl: number;
 
   // Draft for auto-save
   draft_data: CostModelScenarioFormData | null;
@@ -150,6 +151,7 @@ export interface CostModelScenarioFormData {
 
   // Lego Parts
   legoPartsPercent: number;
+  legoPartsPercentBl: number;
 
   // Package Costs (optional for form, loaded separately)
   packageCosts?: PackageCostFormData[];
@@ -392,4 +394,5 @@ export const DEFAULT_SCENARIO_VALUES: Omit<CostModelScenarioFormData, 'name' | '
 
   // Lego Parts
   legoPartsPercent: 0.02,
+  legoPartsPercentBl: 0.02,
 };

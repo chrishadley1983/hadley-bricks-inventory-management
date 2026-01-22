@@ -268,10 +268,24 @@ export class NegotiationService {
     const config = await this.getConfig(userId);
     const supabase = this.supabase!;
 
+    // Debug: Track filtering stats
+    const filterStats = {
+      ebayReturned: 0,
+      notInPlatformListings: 0,
+      tooNewForOffer: 0,
+      inReOfferCooldown: 0,
+      passed: 0,
+    };
+    const filteredItems: { listingId: string; reason: string; details?: string }[] = [];
+
     // Fetch eligible items from eBay
     const eligibleItems = await this.negotiationClient!.findAllEligibleItems();
+    filterStats.ebayReturned = eligibleItems.length;
+
+    console.log(`[NegotiationService] eBay returned ${eligibleItems.length} eligible items`);
 
     if (eligibleItems.length === 0) {
+      console.log('[NegotiationService] No eligible items from eBay API');
       return [];
     }
 
@@ -383,6 +397,11 @@ export class NegotiationService {
 
       if (!listing) {
         // Skip items we don't have data for
+        filterStats.notInPlatformListings++;
+        filteredItems.push({
+          listingId: eligibleItem.listingId,
+          reason: 'not_in_platform_listings',
+        });
         continue;
       }
 
@@ -409,6 +428,12 @@ export class NegotiationService {
 
       if (daysSinceListing < config.minDaysBeforeOffer) {
         // Skip listings that haven't been listed long enough
+        filterStats.tooNewForOffer++;
+        filteredItems.push({
+          listingId: eligibleItem.listingId,
+          reason: 'too_new',
+          details: `${daysSinceListing} days old, need ${config.minDaysBeforeOffer}`,
+        });
         continue;
       }
 
@@ -452,10 +477,17 @@ export class NegotiationService {
           );
         } else {
           // Can't re-offer yet, skip this item
+          filterStats.inReOfferCooldown++;
+          filteredItems.push({
+            listingId: eligibleItem.listingId,
+            reason: 're_offer_cooldown',
+            details: `Last offer at ${reOfferCheck.lastDiscount}%, cooldown ${config.reOfferCooldownDays} days`,
+          });
           continue;
         }
       }
 
+      filterStats.passed++;
       enrichedItems.push({
         listingId: eligibleItem.listingId,
         inventoryItemId: inventoryItemId || undefined,
@@ -471,6 +503,22 @@ export class NegotiationService {
         isReOffer,
         previousOfferId,
       });
+    }
+
+    // Log filtering summary
+    console.log('[NegotiationService] Eligible items filter summary:', {
+      ebayReturned: filterStats.ebayReturned,
+      notInPlatformListings: filterStats.notInPlatformListings,
+      tooNewForOffer: filterStats.tooNewForOffer,
+      inReOfferCooldown: filterStats.inReOfferCooldown,
+      passed: filterStats.passed,
+    });
+
+    // Log first few filtered items for debugging
+    if (filteredItems.length > 0) {
+      console.log('[NegotiationService] Sample filtered items (first 10):',
+        filteredItems.slice(0, 10)
+      );
     }
 
     return enrichedItems;

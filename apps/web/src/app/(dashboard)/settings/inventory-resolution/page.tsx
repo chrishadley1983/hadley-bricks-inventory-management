@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -121,6 +121,7 @@ interface InventoryItem {
   storage_location: string | null;
   status: string;
   cost: number | null;
+  sold_date?: string | null;
   linked_order_id?: string | null; // Order ID if already linked
 }
 
@@ -185,12 +186,13 @@ async function skipEbayItem(id: string, reason: 'skipped' | 'no_inventory'): Pro
 
 async function processEbayHistoricalWithProgress(
   includeSold: boolean,
+  includePaid: boolean,
   onProgress: (progress: ProgressState) => void
 ): Promise<ProcessHistoricalResult> {
   const response = await fetch('/api/ebay/inventory-linking/process-historical', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ includeSold }),
+    body: JSON.stringify({ includeSold, includePaid }),
   });
 
   if (!response.ok) {
@@ -306,16 +308,15 @@ async function processStreamResponse(
 }
 
 async function searchInventory(query: string, includeSold: boolean = false): Promise<{ data: InventoryItem[] }> {
-  // When not including sold items, filter to BACKLOG and LISTED statuses (comma-separated)
-  // When including sold, don't filter by status (include all)
+  // Use the dedicated search-unlinked endpoint which efficiently excludes linked items
+  // using a database function instead of client-side filtering with large ID lists
   const statusParam = includeSold ? '' : '&status=BACKLOG,LISTED';
-  // Always exclude items already linked to orders (unless including sold items for legacy data linking)
-  const excludeLinkedParam = includeSold ? '' : '&excludeLinked=true';
-  const response = await fetch(`/api/inventory?search=${encodeURIComponent(query)}&pageSize=20${statusParam}${excludeLinkedParam}`);
+  const includeSoldParam = includeSold ? '&includeSold=true' : '';
+  const response = await fetch(`/api/inventory/search-unlinked?search=${encodeURIComponent(query)}&pageSize=20${statusParam}${includeSoldParam}`);
   if (!response.ok) throw new Error('Failed to search inventory');
   const result = await response.json();
-  // API returns { data: { data: [...], total, page, ... } } - extract the inner data array
-  const inventoryItems: InventoryItem[] = result.data?.data || [];
+  // New API returns { data: [...] } directly
+  const inventoryItems: InventoryItem[] = result.data || [];
 
   // If including sold items, check which ones are already linked to orders
   if (includeSold && inventoryItems.length > 0) {
@@ -395,6 +396,7 @@ export default function InventoryResolutionPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [includeSoldItems, setIncludeSoldItems] = useState(false);
   const [includeSoldForHistorical, setIncludeSoldForHistorical] = useState(false);
+  const [includePaidForHistorical, setIncludePaidForHistorical] = useState(true); // Default to true for eBay
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [processingResult, setProcessingResult] = useState<ProcessHistoricalResult | null>(null);
   const [progress, setProgress] = useState<ProgressState | null>(null);
@@ -491,7 +493,7 @@ export default function InventoryResolutionPage() {
 
     try {
       const result = activeTab === 'ebay'
-        ? await processEbayHistoricalWithProgress(includeSoldForHistorical, setProgress)
+        ? await processEbayHistoricalWithProgress(includeSoldForHistorical, includePaidForHistorical, setProgress)
         : await processAmazonHistoricalWithProgress(includeSoldForHistorical, setProgress);
 
       setMessage({ type: 'success', text: `${activeTab === 'ebay' ? 'eBay' : 'Amazon'} historical orders processed` });
@@ -648,6 +650,19 @@ export default function InventoryResolutionPage() {
                   )}
                   Process eBay Historical Orders
                 </Button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="includePaidHistoricalEbay"
+                    checked={includePaidForHistorical}
+                    onChange={(e) => setIncludePaidForHistorical(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                    disabled={isProcessing}
+                  />
+                  <label htmlFor="includePaidHistoricalEbay" className="text-sm text-muted-foreground">
+                    Include PAID orders (for pre-linking before fulfilment)
+                  </label>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -1079,6 +1094,51 @@ function ResolutionDialogContent({
   isResolving,
   isSkipping,
 }: ResolutionDialogContentProps) {
+  // Track which match candidates are already linked to other orders
+  const [linkedCandidates, setLinkedCandidates] = useState<Record<string, string | null>>({});
+  const [isCheckingLinks, setIsCheckingLinks] = useState(false);
+
+  // Check link status of match candidates when dialog opens
+  useEffect(() => {
+    async function checkCandidateLinks() {
+      if (!matchCandidates || matchCandidates.length === 0) return;
+
+      setIsCheckingLinks(true);
+      try {
+        const candidateIds = matchCandidates.map(c => c.id);
+        const response = await fetch('/api/inventory/check-linked', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inventoryIds: candidateIds }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          setLinkedCandidates(result.data || {});
+        }
+      } catch (error) {
+        console.error('Failed to check candidate links:', error);
+      } finally {
+        setIsCheckingLinks(false);
+      }
+    }
+
+    checkCandidateLinks();
+  }, [matchCandidates]);
+
+  // Filter out already-linked candidates and SOLD items for display
+  const availableCandidates = matchCandidates?.filter(c => {
+    // Exclude if already linked to another order
+    if (linkedCandidates[c.id]) return false;
+    // Exclude SOLD items (unless they're in search with includeSold)
+    if (c.status === 'SOLD') return false;
+    return true;
+  }) || [];
+
+  const unavailableCandidates = matchCandidates?.filter(c => {
+    return linkedCandidates[c.id] || c.status === 'SOLD';
+  }) || [];
+
   return (
     <div className="space-y-4">
       {/* Sale Details */}
@@ -1127,73 +1187,97 @@ function ResolutionDialogContent({
       {/* Match Candidates */}
       {matchCandidates && matchCandidates.length > 0 && (
         <div>
-          <h4 className="font-medium mb-2">Suggested Matches</h4>
-          <div className="border rounded-lg max-h-[250px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {matchCandidates.map((candidate) => (
-                  <TableRow
-                    key={candidate.id}
-                    className={selectedInventoryIds.includes(candidate.id) ? 'bg-green-50' : undefined}
-                  >
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{candidate.item_name || candidate.sku || candidate.amazon_asin || '-'}</p>
-                        {candidate.set_number && (
-                          <p className="text-xs text-muted-foreground">Set: {candidate.set_number}</p>
-                        )}
-                        {candidate.condition && (
-                          <Badge variant="outline" className="text-xs mt-1">{candidate.condition}</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {candidate.storage_location ? (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{candidate.storage_location}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={candidate.score >= 50 ? 'default' : 'secondary'}
-                        className={candidate.score >= 75 ? 'bg-green-600' : undefined}
-                      >
-                        {candidate.score}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant={selectedInventoryIds.includes(candidate.id) ? 'default' : 'outline'}
-                        onClick={() => onSelectCandidate(candidate.id)}
-                        disabled={isResolving}
-                      >
-                        {isResolving ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : selectedInventoryIds.includes(candidate.id) ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          'Select'
-                        )}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium">Suggested Matches</h4>
+            {isCheckingLinks && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Checking availability...
+              </span>
+            )}
           </div>
+
+          {/* Warning if some candidates are no longer available */}
+          {unavailableCandidates.length > 0 && !isCheckingLinks && (
+            <Alert className="mb-2 py-2">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                {unavailableCandidates.length} suggested item{unavailableCandidates.length > 1 ? 's are' : ' is'} no longer available (already linked to other orders). Use Search below to find available inventory.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {availableCandidates.length > 0 ? (
+            <div className="border rounded-lg max-h-[250px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead className="text-center">Score</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {availableCandidates.map((candidate) => (
+                    <TableRow
+                      key={candidate.id}
+                      className={selectedInventoryIds.includes(candidate.id) ? 'bg-green-50' : undefined}
+                    >
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{candidate.item_name || candidate.sku || candidate.amazon_asin || '-'}</p>
+                          {candidate.set_number && (
+                            <p className="text-xs text-muted-foreground">Set: {candidate.set_number}</p>
+                          )}
+                          {candidate.condition && (
+                            <Badge variant="outline" className="text-xs mt-1">{candidate.condition}</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {candidate.storage_location ? (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">{candidate.storage_location}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={candidate.score >= 50 ? 'default' : 'secondary'}
+                          className={candidate.score >= 75 ? 'bg-green-600' : undefined}
+                        >
+                          {candidate.score}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant={selectedInventoryIds.includes(candidate.id) ? 'default' : 'outline'}
+                          onClick={() => onSelectCandidate(candidate.id)}
+                          disabled={isResolving}
+                        >
+                          {isResolving ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : selectedInventoryIds.includes(candidate.id) ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : (
+                            'Select'
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : !isCheckingLinks && (
+            <p className="text-sm text-muted-foreground py-2">
+              No available suggested matches. Use Search below to find inventory.
+            </p>
+          )}
         </div>
       )}
 
@@ -1233,11 +1317,20 @@ function ResolutionDialogContent({
         {searchResults.length > 0 && (
           <div className="border rounded-lg mt-2 max-h-[200px] overflow-y-auto">
             <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {searchResults.map((item) => {
                   const isLinked = !!item.linked_order_id;
+                  const isSold = item.status === 'SOLD';
                   return (
-                    <TableRow key={item.id} className={isLinked ? 'opacity-60 bg-muted/30' : undefined}>
+                    <TableRow key={item.id} className={isLinked || isSold ? 'opacity-60 bg-muted/30' : undefined}>
                       <TableCell>
                         <div>
                           <p className="font-medium">{item.item_name || item.sku || item.amazon_asin || '-'}</p>
@@ -1250,6 +1343,21 @@ function ResolutionDialogContent({
                         </div>
                       </TableCell>
                       <TableCell>{item.storage_location || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant={item.status === 'SOLD' ? 'secondary' : item.status === 'LISTED' ? 'default' : 'outline'}
+                            className={item.status === 'SOLD' ? 'bg-gray-500 text-white' : item.status === 'LISTED' ? 'bg-green-600' : undefined}
+                          >
+                            {item.status}
+                          </Badge>
+                          {item.sold_date && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(item.sold_date)}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {isLinked ? (
                           <Badge variant="secondary" className="text-xs">

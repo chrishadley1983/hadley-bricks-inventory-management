@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "lastFullRun": "2026-01-18T12:00:00.000Z",
-  "lastIncrementalRun": "2026-01-18T19:00:00.000Z",
+  "lastIncrementalRun": "2026-01-21T16:00:00.000Z",
   "runInProgress": false,
   "lastRunStatus": "document-complete",
   "coverage": {
@@ -24,13 +24,17 @@
     "repricing": 100,
     "platform-stock": 100,
     "set-lookup": 100,
-    "settings": 100
+    "settings": 100,
+    "workflow": 100,
+    "cost-modelling": 100,
+    "negotiation": 100,
+    "partout-value": 100
   },
   "overallCoverage": 100,
   "queue": {
     "pending": [],
     "inProgress": null,
-    "completed": ["inventory", "purchases", "orders", "ebay", "amazon", "listing-assistant", "listing-optimiser", "purchase-evaluator", "reports", "transactions", "arbitrage", "bricklink", "brickowl", "dashboard", "sync", "authentication", "repricing", "platform-stock", "set-lookup", "settings"],
+    "completed": ["inventory", "purchases", "orders", "ebay", "amazon", "listing-assistant", "listing-optimiser", "purchase-evaluator", "reports", "transactions", "arbitrage", "bricklink", "brickowl", "dashboard", "sync", "authentication", "repricing", "platform-stock", "set-lookup", "settings", "workflow"],
     "failed": []
   },
   "documentedFiles": {
@@ -108,7 +112,9 @@
       "docs/functional/arbitrage/overview.md",
       "docs/functional/arbitrage/amazon-arbitrage.md",
       "docs/functional/arbitrage/ebay-arbitrage.md",
-      "docs/functional/arbitrage/seeded-asins.md"
+      "docs/functional/arbitrage/seeded-asins.md",
+      "docs/functional/arbitrage/vinted-arbitrage.md",
+      "docs/functional/arbitrage/vinted-automation.md"
     ],
     "bricklink": [
       "docs/functional/bricklink/overview.md",
@@ -153,6 +159,13 @@
       "docs/functional/settings/overview.md",
       "docs/functional/settings/managing-integrations.md",
       "docs/functional/settings/resolving-inventory.md"
+    ],
+    "workflow": [
+      "docs/functional/workflow/overview.md",
+      "docs/functional/workflow/task-management.md",
+      "docs/functional/workflow/time-tracking.md",
+      "docs/functional/workflow/pickup-scheduling.md",
+      "docs/functional/workflow/weekly-targets.md"
     ]
   },
   "userJourneys": {
@@ -219,7 +232,9 @@
     "arbitrage": [
       "amazon-arbitrage",
       "ebay-arbitrage",
-      "seeded-asins"
+      "seeded-asins",
+      "vinted-arbitrage",
+      "vinted-automation"
     ],
     "bricklink": [
       "bricklink-uploads",
@@ -257,6 +272,12 @@
     "settings": [
       "managing-integrations",
       "resolving-inventory"
+    ],
+    "workflow": [
+      "task-management",
+      "time-tracking",
+      "pickup-scheduling",
+      "weekly-targets"
     ]
   },
   "screenshots": {},
@@ -666,12 +687,18 @@
     "arbitrage": {
       "discovered": true,
       "documented": true,
-      "documentedAt": "2026-01-18T20:00:00.000Z",
+      "documentedAt": "2026-01-21T16:00:00.000Z",
       "files": {
         "pages": [
           "apps/web/src/app/(dashboard)/arbitrage/amazon/page.tsx",
           "apps/web/src/app/(dashboard)/arbitrage/ebay/page.tsx",
-          "apps/web/src/app/(dashboard)/arbitrage/seeded/page.tsx"
+          "apps/web/src/app/(dashboard)/arbitrage/seeded/page.tsx",
+          "apps/web/src/app/(dashboard)/arbitrage/vinted/page.tsx",
+          "apps/web/src/app/(dashboard)/arbitrage/vinted/automation/page.tsx"
+        ],
+        "apiRoutes": [
+          "apps/web/src/app/api/arbitrage/vinted/route.ts",
+          "apps/web/src/app/api/arbitrage/vinted/automation/route.ts"
         ],
         "components": [
           "apps/web/src/components/features/arbitrage/ArbitrageTable.tsx",
@@ -681,7 +708,14 @@
           "apps/web/src/components/features/arbitrage/EbayDetailModal.tsx",
           "apps/web/src/components/features/arbitrage/ExcludedAsinsModal.tsx",
           "apps/web/src/components/features/arbitrage/UnmappedAsinsTable.tsx",
-          "apps/web/src/components/features/arbitrage/SeededAsinManager.tsx"
+          "apps/web/src/components/features/arbitrage/SeededAsinManager.tsx",
+          "apps/web/src/components/features/vinted-automation/ScannerControlPanel.tsx",
+          "apps/web/src/components/features/vinted-automation/ConnectionStatusCard.tsx",
+          "apps/web/src/components/features/vinted-automation/OpportunitiesTable.tsx",
+          "apps/web/src/components/features/vinted-automation/ScheduleViewer.tsx",
+          "apps/web/src/components/features/vinted-automation/ScanHistoryTable.tsx",
+          "apps/web/src/components/features/vinted-automation/WatchlistPanel.tsx",
+          "apps/web/src/components/features/vinted-automation/ScannerConfigDialog.tsx"
         ],
         "services": [
           "apps/web/src/lib/arbitrage/arbitrage.service.ts",
@@ -690,10 +724,19 @@
           "apps/web/src/lib/arbitrage/calculations.ts",
           "apps/web/src/lib/arbitrage/amazon-sync.service.ts",
           "apps/web/src/lib/arbitrage/bricklink-sync.service.ts",
-          "apps/web/src/lib/arbitrage/ebay-sync.service.ts"
+          "apps/web/src/lib/arbitrage/ebay-sync.service.ts",
+          "apps/web/src/lib/services/vinted-schedule.service.ts"
         ],
         "hooks": [
-          "apps/web/src/hooks/use-arbitrage.ts"
+          "apps/web/src/hooks/use-arbitrage.ts",
+          "apps/web/src/hooks/use-vinted-automation.ts"
+        ],
+        "windowsApp": [
+          "apps/windows-scanner/HadleyBricksScanner/SchedulerEngine.cs",
+          "apps/windows-scanner/HadleyBricksScanner/ClaudeExecutor.cs",
+          "apps/windows-scanner/HadleyBricksScanner/ApiClient.cs",
+          "apps/windows-scanner/prompts/broad-sweep.md",
+          "apps/windows-scanner/prompts/watchlist.md"
         ]
       },
       "complexity": "high",
@@ -865,6 +908,56 @@
       },
       "complexity": "medium",
       "priority": 20
+    },
+    "workflow": {
+      "discovered": true,
+      "documented": true,
+      "documentedAt": "2026-01-21T11:30:00.000Z",
+      "files": {
+        "pages": [
+          "apps/web/src/app/(dashboard)/workflow/page.tsx",
+          "apps/web/src/app/(dashboard)/workflow/loading.tsx"
+        ],
+        "components": [
+          "apps/web/src/components/features/workflow/TaskQueue.tsx",
+          "apps/web/src/components/features/workflow/TaskCard.tsx",
+          "apps/web/src/components/features/workflow/AddTaskDropdown.tsx",
+          "apps/web/src/components/features/workflow/QuickAddTaskDialog.tsx",
+          "apps/web/src/components/features/workflow/CompletedTodaySection.tsx",
+          "apps/web/src/components/features/workflow/TimeTrackingPanel.tsx",
+          "apps/web/src/components/features/workflow/PomodoroPanel.tsx",
+          "apps/web/src/components/features/workflow/TimeBreakdownSection.tsx",
+          "apps/web/src/components/features/workflow/WeeklyTargetsPanel.tsx",
+          "apps/web/src/components/features/workflow/MetricCard.tsx",
+          "apps/web/src/components/features/workflow/PickupCalendarPanel.tsx",
+          "apps/web/src/components/features/workflow/SchedulePickupDialog.tsx",
+          "apps/web/src/components/features/workflow/CriticalActionsPanel.tsx",
+          "apps/web/src/components/features/workflow/InventoryResolutionCard.tsx",
+          "apps/web/src/components/features/workflow/WorkflowSettingsPanel.tsx",
+          "apps/web/src/components/features/workflow/TaskDefinitionsDialog.tsx",
+          "apps/web/src/components/features/workflow/WeeklyInsightsPanel.tsx"
+        ],
+        "services": [
+          "apps/web/src/lib/services/workflow.service.ts"
+        ],
+        "hooks": [
+          "apps/web/src/hooks/use-workflow.ts",
+          "apps/web/src/hooks/use-time-tracking.ts",
+          "apps/web/src/hooks/use-pickups.ts",
+          "apps/web/src/hooks/use-metrics.ts",
+          "apps/web/src/hooks/use-google-calendar.ts"
+        ],
+        "apiRoutes": [
+          "apps/web/src/app/api/workflow/tasks/route.ts",
+          "apps/web/src/app/api/workflow/tasks/[id]/route.ts",
+          "apps/web/src/app/api/workflow/tasks/future/route.ts",
+          "apps/web/src/app/api/workflow/metrics/route.ts",
+          "apps/web/src/app/api/pickups/route.ts",
+          "apps/web/src/app/api/pickups/[id]/route.ts"
+        ]
+      },
+      "complexity": "high",
+      "priority": 21
     }
   }
 }

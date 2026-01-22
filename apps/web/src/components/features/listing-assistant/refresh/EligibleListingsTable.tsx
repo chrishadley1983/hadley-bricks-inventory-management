@@ -2,7 +2,7 @@
 
 import { useMemo, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { ExternalLink, Calendar } from 'lucide-react';
+import { ExternalLink, Calendar, Clock, MessageSquare } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -67,11 +67,44 @@ export function EligibleListingsTable({
         cell: ({ row }) => (
           <div className="max-w-md">
             <p className="font-medium truncate">{row.original.title}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               {row.original.sku && (
                 <Badge variant="outline" className="text-xs">
                   SKU: {row.original.sku}
                 </Badge>
+              )}
+              {/* Revision restriction warnings */}
+              {row.original.pendingOfferCount > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="h-5 px-1.5 text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700">
+                        <MessageSquare className="h-3 w-3 mr-0.5" />
+                        {row.original.pendingOfferCount}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{row.original.pendingOfferCount} pending offer{row.original.pendingOfferCount > 1 ? 's' : ''}</p>
+                      <p className="text-xs text-muted-foreground">Title changes blocked</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {row.original.endsWithin12Hours && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="h-5 px-1.5 text-xs bg-red-50 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700">
+                        <Clock className="h-3 w-3 mr-0.5" />
+                        &lt;12h
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Ends within 12 hours</p>
+                      <p className="text-xs text-muted-foreground">Title changes blocked</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {row.original.categoryName && (
                 <span className="text-xs text-muted-foreground truncate">

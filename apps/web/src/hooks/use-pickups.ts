@@ -12,6 +12,7 @@ export interface StockPickup {
   description: string | null;
   scheduled_date: string;
   scheduled_time: string | null;
+  scheduled_end_time: string | null;
   address_line1: string;
   address_line2: string | null;
   city: string;
@@ -34,6 +35,7 @@ export interface StockPickup {
   reminder_day_before: boolean | null;
   purchase_id: string | null;
   task_instance_id: string | null;
+  google_calendar_event_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -43,6 +45,7 @@ export interface CreatePickupInput {
   description?: string | null;
   scheduled_date: string;
   scheduled_time?: string | null;
+  scheduled_end_time?: string | null;
   address_line1: string;
   address_line2?: string | null;
   city: string;

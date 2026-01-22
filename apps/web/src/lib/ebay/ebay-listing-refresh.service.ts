@@ -275,6 +275,11 @@ export class EbayListingRefreshService {
    */
   private parseToEligibleListing(listing: ParsedEbayListing): EligibleListing {
     const startDate = new Date(listing.ebayData.listingStartDate);
+    const endDate = listing.ebayData.listingEndDate ? new Date(listing.ebayData.listingEndDate) : null;
+    const now = new Date();
+    const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+    const endsWithin12Hours = endDate ? endDate <= twelveHoursFromNow : false;
+
     return {
       itemId: listing.platformItemId,
       title: listing.title,
@@ -288,6 +293,7 @@ export class EbayListingRefreshService {
       watchers: listing.ebayData.watchers,
       views: listing.ebayData.hitCount,
       listingStartDate: startDate,
+      listingEndDate: endDate,
       listingAge: calculateListingAge(startDate),
       galleryUrl: listing.ebayData.galleryUrl,
       viewItemUrl: listing.ebayData.viewItemUrl,
@@ -296,7 +302,44 @@ export class EbayListingRefreshService {
       categoryName: listing.ebayData.categoryName,
       listingType: listing.ebayData.listingType,
       bestOfferEnabled: listing.ebayData.bestOfferEnabled,
+      // Pending offers will be enriched by the API route
+      pendingOfferCount: 0,
+      endsWithin12Hours,
     };
+  }
+
+  /**
+   * Enrich listings with pending offer counts
+   */
+  async enrichWithPendingOffers(listings: EligibleListing[]): Promise<EligibleListing[]> {
+    if (listings.length === 0) return listings;
+
+    const itemIds = listings.map((l) => l.itemId);
+
+    // Get pending offers for all listings
+    const { data: pendingOffers } = await this.supabase
+      .from('negotiation_offers')
+      .select('ebay_listing_id')
+      .eq('user_id', this.userId)
+      .in('ebay_listing_id', itemIds)
+      .eq('status', 'PENDING');
+
+    if (!pendingOffers || pendingOffers.length === 0) {
+      return listings;
+    }
+
+    // Count offers per listing
+    const offerCounts: Record<string, number> = {};
+    for (const offer of pendingOffers) {
+      const listingId = offer.ebay_listing_id;
+      offerCounts[listingId] = (offerCounts[listingId] || 0) + 1;
+    }
+
+    // Update listings with counts
+    return listings.map((listing) => ({
+      ...listing,
+      pendingOfferCount: offerCounts[listing.itemId] || 0,
+    }));
   }
 
   // ============================================================================

@@ -1,0 +1,15 @@
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\bin\Debug\net8.0-windows\TestWinFormsLaunch.exe
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\bin\Debug\net8.0-windows\TestWinFormsLaunch.deps.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\bin\Debug\net8.0-windows\TestWinFormsLaunch.runtimeconfig.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\bin\Debug\net8.0-windows\TestWinFormsLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\bin\Debug\net8.0-windows\TestWinFormsLaunch.pdb
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.AssemblyInfoInputs.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.AssemblyInfo.cs
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.csproj.CoreCompileInputs.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.sourcelink.json
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\refint\TestWinFormsLaunch.dll
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.pdb
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\TestWinFormsLaunch.genruntimeconfig.cache
+C:\Users\Chris Hadley\hadley-bricks-inventory-management\apps\windows-scanner\TestWinFormsLaunch\obj\Debug\net8.0-windows\ref\TestWinFormsLaunch.dll

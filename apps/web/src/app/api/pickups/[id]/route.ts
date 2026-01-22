@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import {
+  googleCalendarApiService,
+  googleCalendarAuthService,
+  CalendarEventNotFoundError,
+} from '@/lib/google-calendar';
 
 const UpdatePickupSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   scheduled_time: z.string().nullable().optional(),
+  scheduled_end_time: z.string().nullable().optional(),
   address_line1: z.string().min(1).optional(),
   address_line2: z.string().nullable().optional(),
   city: z.string().min(1).optional(),
@@ -95,7 +101,7 @@ export async function PATCH(
     // Verify pickup exists and belongs to user
     const { data: existing } = await supabase
       .from('stock_pickups')
-      .select('id')
+      .select('id, google_calendar_event_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single();
@@ -117,6 +123,34 @@ export async function PATCH(
     if (error) {
       console.error('[PATCH /api/pickups/[id]] Error:', error);
       return NextResponse.json({ error: 'Failed to update pickup' }, { status: 500 });
+    }
+
+    // Auto-sync to Google Calendar if pickup is synced
+    if (existing.google_calendar_event_id && pickup) {
+      try {
+        const isConnected = await googleCalendarAuthService.isConnected(user.id);
+        if (isConnected) {
+          await googleCalendarApiService.updateEvent(
+            user.id,
+            existing.google_calendar_event_id,
+            pickup
+          );
+          console.log('[PATCH /api/pickups/[id]] Calendar event updated');
+        }
+      } catch (calendarError) {
+        // Handle case where event was deleted externally
+        if (calendarError instanceof CalendarEventNotFoundError) {
+          // Clear the calendar event ID since it no longer exists
+          await supabase
+            .from('stock_pickups')
+            .update({ google_calendar_event_id: null })
+            .eq('id', id);
+          console.log('[PATCH /api/pickups/[id]] Calendar event not found, cleared ID');
+        } else {
+          // Log error but don't fail the pickup update
+          console.error('[PATCH /api/pickups/[id]] Failed to sync calendar:', calendarError);
+        }
+      }
     }
 
     return NextResponse.json({ pickup });
@@ -150,13 +184,27 @@ export async function DELETE(
     // Verify pickup exists and belongs to user
     const { data: existing } = await supabase
       .from('stock_pickups')
-      .select('id')
+      .select('id, google_calendar_event_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single();
 
     if (!existing) {
       return NextResponse.json({ error: 'Pickup not found' }, { status: 404 });
+    }
+
+    // Delete calendar event if synced (do this before deleting pickup)
+    if (existing.google_calendar_event_id) {
+      try {
+        const isConnected = await googleCalendarAuthService.isConnected(user.id);
+        if (isConnected) {
+          await googleCalendarApiService.deleteEvent(user.id, existing.google_calendar_event_id);
+          console.log('[DELETE /api/pickups/[id]] Calendar event deleted');
+        }
+      } catch (calendarError) {
+        // Log error but don't fail the pickup delete
+        console.error('[DELETE /api/pickups/[id]] Failed to delete calendar event:', calendarError);
+      }
     }
 
     const { error } = await supabase.from('stock_pickups').delete().eq('id', id);

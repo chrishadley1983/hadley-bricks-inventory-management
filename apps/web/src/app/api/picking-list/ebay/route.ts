@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Check for format parameter (json or pdf)
     const format = request.nextUrl.searchParams.get('format') || 'json';
 
-    // Fetch unfulfilled orders with line items
+    // Fetch unfulfilled orders with line items (including linked inventory)
     // Filter at DB level to avoid 1000 row limit issues
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: orders, error } = await (supabase as any)
@@ -89,7 +89,15 @@ export async function GET(request: NextRequest) {
           sku,
           title,
           quantity,
-          fulfilment_status
+          fulfilment_status,
+          inventory_item_id,
+          inventory_items:inventory_item_id(
+            id,
+            sku,
+            set_number,
+            item_name,
+            storage_location
+          )
         )
       `
       )
@@ -190,8 +198,16 @@ export async function GET(request: NextRequest) {
         let location: string | null = null;
         let setNo: string | null = lineItem.sku;
 
-        // Check manual mapping first
-        if (lineItem.sku && mappingsMap.has(lineItem.sku)) {
+        // Priority 1: Check if line item is already linked to inventory (from resolution queue)
+        if (lineItem.inventory_item_id && lineItem.inventory_items) {
+          const linkedInventory = lineItem.inventory_items;
+          matchStatus = 'matched';
+          location = linkedInventory.storage_location;
+          setNo = linkedInventory.set_number || linkedInventory.sku || lineItem.sku;
+        }
+
+        // Priority 2: Check manual mapping (ebay_sku_mappings table)
+        if (matchStatus === 'unmatched' && lineItem.sku && mappingsMap.has(lineItem.sku)) {
           const inventoryId = mappingsMap.get(lineItem.sku);
           const inventory = inventoryByIdMap.get(inventoryId);
           if (inventory) {
@@ -201,7 +217,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Check direct SKU match
+        // Priority 3: Check direct SKU match
         if (matchStatus === 'unmatched' && lineItem.sku) {
           const inventory = inventoryBySkuMap.get(lineItem.sku);
           if (inventory) {

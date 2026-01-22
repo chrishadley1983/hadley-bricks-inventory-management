@@ -16,8 +16,13 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
+  Upload,
+  Link2,
+  ExternalLink,
+  Unlink,
 } from 'lucide-react';
 import { usePurchase, useDeletePurchase, useInventoryList, usePurchaseProfitability } from '@/hooks';
+import { useBrickLinkUploadsByPurchase, useUpdateBrickLinkUpload } from '@/hooks/use-bricklink-uploads';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +38,7 @@ import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { MileageSection } from './MileageSection';
 import { PurchaseImages } from './PurchaseImages';
 import { PurchaseProfitability } from './PurchaseProfitability';
+import { LinkUploadDialog } from './LinkUploadDialog';
 import {
   Collapsible,
   CollapsibleContent,
@@ -48,6 +54,8 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [showLinkUploadDialog, setShowLinkUploadDialog] = useState(false);
+  const [uploadToUnlink, setUploadToUnlink] = useState<string | null>(null);
 
   const { data: purchase, isLoading, error } = usePurchase(id);
   const deleteMutation = useDeletePurchase();
@@ -59,6 +67,10 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
     { page: 1, pageSize: 50 }
   );
 
+  // Fetch linked BrickLink uploads
+  const { data: uploadsData } = useBrickLinkUploadsByPurchase(id);
+  const updateUploadMutation = useUpdateBrickLinkUpload();
+
   // Create a map of item profitability data for quick lookup
   const itemProfitMap = new Map(
     profitabilityData?.items?.map((item) => [item.id, item]) ?? []
@@ -67,6 +79,16 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
   const handleDelete = async () => {
     await deleteMutation.mutateAsync(id);
     router.push('/purchases');
+  };
+
+  const handleUnlinkUpload = async (uploadId: string) => {
+    await updateUploadMutation.mutateAsync({ id: uploadId, data: { purchase_id: null } });
+    setUploadToUnlink(null);
+  };
+
+  const handleLinkUpload = async (uploadId: string) => {
+    await updateUploadMutation.mutateAsync({ id: uploadId, data: { purchase_id: id } });
+    setShowLinkUploadDialog(false);
   };
 
   if (isLoading) {
@@ -351,6 +373,136 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
             )}
           </CardContent>
         </Card>
+
+        {/* Linked BrickLink Uploads */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Linked BrickLink Uploads
+              </CardTitle>
+              <CardDescription>Parts uploaded to BrickLink from this purchase</CardDescription>
+            </div>
+            <Button variant="outline" onClick={() => setShowLinkUploadDialog(true)}>
+              <Link2 className="mr-2 h-4 w-4" />
+              Link Upload
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {uploadsData?.data && uploadsData.data.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  {uploadsData.data.map((upload) => {
+                    const profit = (upload.selling_price ?? 0) - (upload.cost ?? 0);
+                    const marginPercent = upload.selling_price > 0
+                      ? (profit / upload.selling_price) * 100
+                      : 0;
+
+                    return (
+                      <div
+                        key={upload.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/bricklink-uploads/${upload.id}`}
+                              className="font-medium hover:underline flex items-center gap-1"
+                            >
+                              {formatDate(upload.upload_date)}
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                            <Badge variant={upload.condition === 'N' ? 'default' : 'secondary'}>
+                              {upload.condition === 'N' ? 'New' : 'Used'}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {upload.total_quantity.toLocaleString()} parts
+                            {upload.lots ? ` \u00b7 ${upload.lots.toLocaleString()} lots` : ''}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          {/* Selling Price */}
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Value</p>
+                            <p className="font-medium text-green-600">
+                              {formatCurrency(upload.selling_price)}
+                            </p>
+                          </div>
+
+                          {/* Cost */}
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Cost</p>
+                            <p className="font-medium">
+                              {upload.cost ? formatCurrency(upload.cost) : '-'}
+                            </p>
+                          </div>
+
+                          {/* Profit */}
+                          {upload.cost && upload.cost > 0 && (
+                            <div className="text-right min-w-[80px]">
+                              <p className="text-xs text-muted-foreground">Profit</p>
+                              <div className="flex items-center justify-end gap-1">
+                                {profit >= 0 ? (
+                                  <TrendingUp className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3 text-red-600" />
+                                )}
+                                <span
+                                  className={cn(
+                                    'font-medium',
+                                    profit >= 0 ? 'text-green-600' : 'text-red-600'
+                                  )}
+                                >
+                                  {formatCurrency(profit)}
+                                </span>
+                              </div>
+                              <p
+                                className={cn(
+                                  'text-xs',
+                                  marginPercent >= 0 ? 'text-green-600' : 'text-red-600'
+                                )}
+                              >
+                                {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(0)}%
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Unlink Button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setUploadToUnlink(upload.id)}
+                            title="Unlink this upload"
+                          >
+                            <Unlink className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Summary */}
+                <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
+                  <span>
+                    {uploadsData.data.length} upload{uploadsData.data.length !== 1 ? 's' : ''} &middot;{' '}
+                    {uploadsData.data.reduce((sum, u) => sum + u.total_quantity, 0).toLocaleString()} parts
+                  </span>
+                  <span className="font-medium text-foreground">
+                    Total Value: {formatCurrency(uploadsData.data.reduce((sum, u) => sum + u.selling_price, 0))}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground py-4 text-center">
+                No BrickLink uploads linked to this purchase yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -376,6 +528,38 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unlink Upload Confirmation Dialog */}
+      <Dialog open={!!uploadToUnlink} onOpenChange={(open: boolean) => !open && setUploadToUnlink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unlink Upload</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to unlink this upload from the purchase? The upload will no longer contribute to this purchase&apos;s profitability calculations.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUploadToUnlink(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => uploadToUnlink && handleUnlinkUpload(uploadToUnlink)}
+              disabled={updateUploadMutation.isPending}
+            >
+              {updateUploadMutation.isPending ? 'Unlinking...' : 'Unlink'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Upload Dialog */}
+      <LinkUploadDialog
+        open={showLinkUploadDialog}
+        onOpenChange={setShowLinkUploadDialog}
+        onSelect={handleLinkUpload}
+        purchaseDate={purchase?.purchase_date}
+      />
     </>
   );
 }

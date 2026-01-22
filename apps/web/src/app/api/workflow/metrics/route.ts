@@ -39,32 +39,40 @@ export async function GET() {
       dailySoldValue: config?.target_daily_sold_value ?? 250,
     };
 
-    // Get active listing counts by platform using listing_platform field
+    // Get weekly listing counts by platform (items listed this week)
+    // Note: status values in DB are uppercase (LISTED, SOLD, BACKLOG)
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
     const [ebayResult, amazonResult, bricklinkResult, brickowlResult] = await Promise.all([
       supabase
         .from('inventory_items')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('listing_platform', 'ebay')
-        .eq('status', 'Listed'),
+        .gte('listing_date', weekStartStr)
+        .lte('listing_date', weekEndStr),
       supabase
         .from('inventory_items')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('listing_platform', 'amazon')
-        .eq('status', 'Listed'),
+        .gte('listing_date', weekStartStr)
+        .lte('listing_date', weekEndStr),
       supabase
         .from('inventory_items')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('listing_platform', 'bricklink')
-        .eq('status', 'Listed'),
+        .gte('listing_date', weekStartStr)
+        .lte('listing_date', weekEndStr),
       supabase
         .from('inventory_items')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('listing_platform', 'brickowl')
-        .eq('status', 'Listed'),
+        .gte('listing_date', weekStartStr)
+        .lte('listing_date', weekEndStr),
     ]);
 
     const listingCounts = {
@@ -72,6 +80,42 @@ export async function GET() {
       amazon: amazonResult.count ?? 0,
       bricklink: bricklinkResult.count ?? 0,
       brickowl: brickowlResult.count ?? 0,
+    };
+
+    // Get daily listing counts by platform (items listed today)
+    const [ebayDailyResult, amazonDailyResult, bricklinkDailyResult, brickowlDailyResult] =
+      await Promise.all([
+        supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('listing_platform', 'ebay')
+          .eq('listing_date', todayStr),
+        supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('listing_platform', 'amazon')
+          .eq('listing_date', todayStr),
+        supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('listing_platform', 'bricklink')
+          .eq('listing_date', todayStr),
+        supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('listing_platform', 'brickowl')
+          .eq('listing_date', todayStr),
+      ]);
+
+    const dailyListingCounts = {
+      ebay: ebayDailyResult.count ?? 0,
+      amazon: amazonDailyResult.count ?? 0,
+      bricklink: bricklinkDailyResult.count ?? 0,
+      brickowl: brickowlDailyResult.count ?? 0,
     };
 
     // Get week totals from platform_orders
@@ -178,6 +222,7 @@ export async function GET() {
 
     return NextResponse.json({
       listingCounts,
+      dailyListingCounts,
       bricklinkWeeklyValue: {
         current: bricklinkWeeklyValue,
         target: targets.bricklinkWeeklyValue,

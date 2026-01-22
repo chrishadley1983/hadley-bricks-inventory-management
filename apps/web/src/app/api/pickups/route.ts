@@ -7,6 +7,7 @@ const CreatePickupSchema = z.object({
   description: z.string().nullable().optional(),
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
   scheduled_time: z.string().nullable().optional(),
+  scheduled_end_time: z.string().nullable().optional(),
   address_line1: z.string().min(1, 'Address is required'),
   address_line2: z.string().nullable().optional(),
   city: z.string().min(1, 'City is required'),

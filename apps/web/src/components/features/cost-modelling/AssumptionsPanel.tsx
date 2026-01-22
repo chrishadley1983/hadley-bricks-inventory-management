@@ -271,9 +271,9 @@ export function AssumptionsPanel({ data, onChange, disabled, compact }: Assumpti
                     disabled={disabled}
                   />
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputWithLabel
-                    id="lego-parts"
+                    id="lego-parts-ebay"
                     label="Lego Parts % (eBay)"
                     value={(data.legoPartsPercent * 100).toFixed(1)}
                     onChange={handlePercentChange('legoPartsPercent')}
@@ -283,6 +283,19 @@ export function AssumptionsPanel({ data, onChange, disabled, compact }: Assumpti
                     step={0.1}
                     suffix="%"
                     tooltip="Percentage of eBay turnover spent on Lego parts"
+                    disabled={disabled}
+                  />
+                  <InputWithLabel
+                    id="lego-parts-bl"
+                    label="Lego Parts % (BrickLink)"
+                    value={(data.legoPartsPercentBl * 100).toFixed(1)}
+                    onChange={handlePercentChange('legoPartsPercentBl')}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    suffix="%"
+                    tooltip="Percentage of BrickLink turnover spent on Lego parts"
                     disabled={disabled}
                   />
                 </div>

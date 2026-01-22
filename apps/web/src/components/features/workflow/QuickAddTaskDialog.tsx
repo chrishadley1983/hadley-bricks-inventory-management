@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -19,9 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Loader2, CalendarIcon } from 'lucide-react';
 import { useCreateTask } from '@/hooks/use-workflow';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface QuickAddTaskDialogProps {
   open: boolean;
@@ -50,6 +58,7 @@ export function QuickAddTaskDialog({ open, onOpenChange }: QuickAddTaskDialogPro
   const [category, setCategory] = useState('Other');
   const [priority, setPriority] = useState('3');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
 
   const createTask = useCreateTask();
   const { toast } = useToast();
@@ -69,6 +78,7 @@ export function QuickAddTaskDialog({ open, onOpenChange }: QuickAddTaskDialogPro
         category,
         priority: parseInt(priority, 10),
         estimatedMinutes: estimatedMinutes ? parseInt(estimatedMinutes, 10) : undefined,
+        scheduledDate: dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
       });
 
       toast({ title: 'Task added' });
@@ -85,6 +95,7 @@ export function QuickAddTaskDialog({ open, onOpenChange }: QuickAddTaskDialogPro
     setCategory('Other');
     setPriority('3');
     setEstimatedMinutes('');
+    setDueDate(undefined);
   };
 
   return (
@@ -152,17 +163,46 @@ export function QuickAddTaskDialog({ open, onOpenChange }: QuickAddTaskDialogPro
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="estimatedMinutes">Estimated time (minutes)</Label>
-              <Input
-                id="estimatedMinutes"
-                type="number"
-                min="1"
-                max="480"
-                value={estimatedMinutes}
-                onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="30"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="estimatedMinutes">Estimated time (mins)</Label>
+                <Input
+                  id="estimatedMinutes"
+                  type="number"
+                  min="1"
+                  max="480"
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(e.target.value)}
+                  placeholder="30"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Due date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'justify-start text-left font-normal',
+                        !dueDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, 'dd MMM yyyy') : 'Today'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={setDueDate}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
           </div>
 

@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/negotiation",
       "schedule": "0 8,12,16,20 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-sync",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/vinted-cleanup",
+      "schedule": "0 0 * * *"
     }
   ]
 }

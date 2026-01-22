@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Clock,
   BarChart3,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -78,8 +79,9 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
     );
   }
 
-  // Handle case where no items are linked
-  if (data.totalItems === 0) {
+  // Handle case where no items or uploads are linked
+  const hasUploads = (data.uploadCount ?? 0) > 0;
+  if (data.totalItems === 0 && !hasUploads) {
     return (
       <Card>
         <CardHeader>
@@ -90,16 +92,21 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-center py-4">
-            No inventory items linked to this purchase yet.
+            No inventory items or uploads linked to this purchase yet.
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const soldPercent = (data.soldItems / data.totalItems) * 100;
-  const listedPercent = (data.listedItems / data.totalItems) * 100;
-  const isProfitable = data.totalProjectedProfit >= 0;
+  const soldPercent = data.totalItems > 0 ? (data.soldItems / data.totalItems) * 100 : 0;
+  const listedPercent = data.totalItems > 0 ? (data.listedItems / data.totalItems) * 100 : 0;
+
+  // Use combined profit if we have uploads, otherwise just inventory
+  const totalProfit = hasUploads
+    ? (data.combinedTotalProjectedProfit ?? data.totalProjectedProfit)
+    : data.totalProjectedProfit;
+  const isProfitable = totalProfit >= 0;
 
   return (
     <Card>
@@ -110,40 +117,43 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Progress Section */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">
-              {data.soldItems}/{data.totalItems} sold ({soldPercent.toFixed(0)}%)
-            </span>
-            <div className="flex items-center gap-3 text-muted-foreground text-xs">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                {data.soldItems} sold
+        {/* Progress Section - only show if we have inventory items */}
+        {data.totalItems > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">
+                {data.soldItems}/{data.totalItems} sold ({soldPercent.toFixed(0)}%)
               </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-blue-500" />
-                {data.listedItems} listed
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-gray-300" />
-                {data.unlistedItems} unlisted
-              </span>
+              <div className="flex items-center gap-3 text-muted-foreground text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  {data.soldItems} sold
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  {data.listedItems} listed
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-gray-300" />
+                  {data.unlistedItems} unlisted
+                </span>
+              </div>
+            </div>
+            <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="absolute h-full bg-green-500 transition-all"
+                style={{ width: `${soldPercent}%` }}
+              />
+              <div
+                className="absolute h-full bg-blue-500 transition-all"
+                style={{ left: `${soldPercent}%`, width: `${listedPercent}%` }}
+              />
             </div>
           </div>
-          <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-200">
-            <div
-              className="absolute h-full bg-green-500 transition-all"
-              style={{ width: `${soldPercent}%` }}
-            />
-            <div
-              className="absolute h-full bg-blue-500 transition-all"
-              style={{ left: `${soldPercent}%`, width: `${listedPercent}%` }}
-            />
-          </div>
-        </div>
+        )}
 
-        {/* Financial Breakdown Grid */}
+        {/* Financial Breakdown Grid - only show if we have inventory items */}
+        {data.totalItems > 0 && (
         <div className="grid grid-cols-2 gap-4">
           {/* Realised Column */}
           <div className="space-y-3 rounded-lg border p-4">
@@ -235,15 +245,91 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
             </div>
           </div>
         </div>
+        )}
+
+        {/* BrickLink Uploads Section */}
+        {hasUploads && (
+          <div className="space-y-3 rounded-lg border p-4 border-blue-200 bg-blue-50/50">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                BrickLink Uploads
+              </h4>
+              <Badge variant="outline" className="text-xs">
+                {data.uploadCount} upload{data.uploadCount !== 1 ? 's' : ''}
+              </Badge>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Selling Price</span>
+                <span className="font-medium">{formatCurrency(data.uploadTotalSellingPrice ?? 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fees (10%)</span>
+                <span className="font-medium text-red-600">
+                  {(data.uploadTotalFees ?? 0) > 0 ? `-${formatCurrency(data.uploadTotalFees ?? 0)}` : '-'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Cost</span>
+                <span className="font-medium text-red-600">
+                  {(data.uploadTotalCost ?? 0) > 0 ? `-${formatCurrency(data.uploadTotalCost ?? 0)}` : '-'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Realised ({((data.uploadRealisedRevenue ?? 0) / (data.uploadTotalSellingPrice || 1) * 100).toFixed(0)}%)</span>
+                  <span className="text-green-600">{formatCurrency(data.uploadRealisedRevenue ?? 0)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Unrealised</span>
+                  <span>{formatCurrency(data.uploadUnrealisedRevenue ?? 0)}</span>
+                </div>
+              </div>
+              <div className="border-t pt-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Profit</span>
+                  <span
+                    className={cn(
+                      'font-bold',
+                      (data.uploadTotalProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                    )}
+                  >
+                    {formatCurrency(data.uploadTotalProfit ?? 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Margin</span>
+                  <span>{formatPercent(data.uploadMarginPercent ?? null)}</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Revenue realises linearly over 365 days from upload date
+            </p>
+          </div>
+        )}
 
         {/* Total Projected */}
         <div className="rounded-lg bg-muted/50 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-semibold">Total Projected Profit</h4>
+              <h4 className="font-semibold">
+                {hasUploads ? 'Combined Total Profit' : 'Total Projected Profit'}
+              </h4>
               <p className="text-xs text-muted-foreground">
-                Revenue: {formatCurrency(data.totalProjectedRevenue)} | Fees:{' '}
-                {formatCurrency(data.totalProjectedFees)} | Cost: {formatCurrency(data.totalCost)}
+                {hasUploads ? (
+                  <>
+                    Items: {formatCurrency(data.totalProjectedRevenue)} | Uploads:{' '}
+                    {formatCurrency(data.uploadTotalSellingPrice ?? 0)} | Total Cost:{' '}
+                    {formatCurrency(data.totalCost + (data.uploadTotalCost ?? 0))}
+                  </>
+                ) : (
+                  <>
+                    Revenue: {formatCurrency(data.totalProjectedRevenue)} | Fees:{' '}
+                    {formatCurrency(data.totalProjectedFees)} | Cost: {formatCurrency(data.totalCost)}
+                  </>
+                )}
               </p>
             </div>
             <div className="text-right">
@@ -259,7 +345,7 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
                     isProfitable ? 'text-green-600' : 'text-red-600'
                   )}
                 >
-                  {formatCurrency(data.totalProjectedProfit)}
+                  {formatCurrency(totalProfit)}
                 </span>
               </div>
               <p
@@ -268,7 +354,7 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
                   isProfitable ? 'text-green-600' : 'text-red-600'
                 )}
               >
-                {formatPercent(data.blendedMarginPercent)} margin
+                {formatPercent(hasUploads ? (data.combinedMarginPercent ?? null) : data.blendedMarginPercent)} margin
               </p>
             </div>
           </div>

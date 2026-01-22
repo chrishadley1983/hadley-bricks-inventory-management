@@ -59,6 +59,7 @@ export interface EligibleListing {
   watchers: number;
   views: number | null;
   listingStartDate: Date;
+  listingEndDate: Date | null;
   listingAge: number; // Days since listing started
   galleryUrl: string | null;
   viewItemUrl: string | null;
@@ -67,6 +68,9 @@ export interface EligibleListing {
   categoryName: string | null;
   listingType: string;
   bestOfferEnabled: boolean;
+  // Revision restriction flags - these prevent title/subtitle changes on eBay
+  pendingOfferCount: number;
+  endsWithin12Hours: boolean;
 }
 
 /**

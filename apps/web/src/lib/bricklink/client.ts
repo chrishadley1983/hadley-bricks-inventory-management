@@ -17,6 +17,9 @@ import type {
   BrickLinkPriceGuideParams,
   BrickLinkCatalogItem,
   BrickLinkItemType,
+  BrickLinkSubsetEntry,
+  BrickLinkSubsetOptions,
+  BrickLinkColor,
   RateLimitInfo,
 } from './types';
 
@@ -469,5 +472,94 @@ export class BrickLinkClient {
       }
       throw error;
     }
+  }
+
+  // ============================================
+  // Subset Methods (for Partout Value)
+  // ============================================
+
+  /**
+   * Get subsets (parts) for an item
+   * @param type Item type (typically SET)
+   * @param no Item number (e.g., "75192-1")
+   * @param options Subset options
+   * @returns List of subset entries containing parts
+   */
+  async getSubsets(
+    type: BrickLinkItemType,
+    no: string,
+    options: BrickLinkSubsetOptions = {}
+  ): Promise<BrickLinkSubsetEntry[]> {
+    const queryParams: Record<string, string | undefined> = {};
+
+    if (options.breakMinifigs !== undefined) {
+      queryParams.break_minifigs = options.breakMinifigs ? 'true' : 'false';
+    }
+
+    if (options.breakSets !== undefined) {
+      queryParams.break_sets = options.breakSets ? 'true' : 'false';
+    }
+
+    const endpoint = `/items/${type}/${encodeURIComponent(no)}/subsets`;
+    console.log('[BrickLinkClient.getSubsets] Fetching subsets for:', type, no);
+    return this.request<BrickLinkSubsetEntry[]>('GET', endpoint, queryParams);
+  }
+
+  /**
+   * Get price guide for a part with specific color
+   * @param type Item type (PART, MINIFIG, etc.)
+   * @param no Item number
+   * @param colorId Color ID
+   * @param options Additional options
+   * @returns Price guide for the part
+   */
+  async getPartPriceGuide(
+    type: BrickLinkItemType,
+    no: string,
+    colorId: number,
+    options: {
+      condition?: 'N' | 'U';
+      countryCode?: string;
+      currencyCode?: string;
+      guideType?: 'stock' | 'sold';
+    } = {}
+  ): Promise<BrickLinkPriceGuide> {
+    const queryParams: Record<string, string | undefined> = {
+      color_id: colorId.toString(),
+      new_or_used: options.condition ?? 'N',
+      guide_type: options.guideType ?? 'stock',
+      // Use GBP by default to get UK pricing
+      // The API converts all prices to the specified currency
+      currency_code: options.currencyCode ?? 'GBP',
+    };
+
+    if (options.countryCode) {
+      queryParams.country_code = options.countryCode;
+    }
+
+    const endpoint = `/items/${type}/${encodeURIComponent(no)}/price`;
+    return this.request<BrickLinkPriceGuide>('GET', endpoint, queryParams);
+  }
+
+  // ============================================
+  // Color Methods
+  // ============================================
+
+  /**
+   * Get all colors from BrickLink
+   * @returns List of all BrickLink colors
+   */
+  async getColors(): Promise<BrickLinkColor[]> {
+    console.log('[BrickLinkClient.getColors] Fetching all colors');
+    return this.request<BrickLinkColor[]>('GET', '/colors');
+  }
+
+  /**
+   * Get a specific color by ID
+   * @param colorId Color ID
+   * @returns Color information
+   */
+  async getColor(colorId: number): Promise<BrickLinkColor> {
+    return this.request<BrickLinkColor>('GET', `/colors/${colorId}`);
   }
 }

@@ -28,6 +28,7 @@ const CreateRefreshJobSchema = z.object({
       watchers: z.number(),
       views: z.number().nullable(),
       listingStartDate: z.string(),
+      listingEndDate: z.string().nullable().optional(),
       listingAge: z.number(),
       galleryUrl: z.string().nullable(),
       viewItemUrl: z.string().nullable(),
@@ -36,6 +37,8 @@ const CreateRefreshJobSchema = z.object({
       categoryName: z.string().nullable(),
       listingType: z.string(),
       bestOfferEnabled: z.boolean(),
+      pendingOfferCount: z.number().default(0),
+      endsWithin12Hours: z.boolean().default(false),
     })
   ).min(1, 'At least one listing is required'),
   reviewMode: z.boolean().default(true),
@@ -76,6 +79,9 @@ export async function POST(request: NextRequest) {
     const eligibleListings: EligibleListing[] = parsed.data.listings.map((l) => ({
       ...l,
       listingStartDate: new Date(l.listingStartDate),
+      listingEndDate: l.listingEndDate ? new Date(l.listingEndDate) : null,
+      pendingOfferCount: l.pendingOfferCount ?? 0,
+      endsWithin12Hours: l.endsWithin12Hours ?? false,
     }));
 
     // Create refresh job

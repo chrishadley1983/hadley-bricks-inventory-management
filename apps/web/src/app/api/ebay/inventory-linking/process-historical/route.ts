@@ -9,6 +9,7 @@ import { EbayInventoryLinkingService } from '@/lib/ebay/ebay-inventory-linking.s
  *
  * Body params:
  * - includeSold: boolean - Include already-sold inventory items in matching (for legacy data)
+ * - includePaid: boolean - Also process PAID orders (not yet fulfilled) for pre-linking
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,9 +25,11 @@ export async function POST(request: NextRequest) {
 
     // Parse request body for options
     let includeSold = false;
+    let includePaid = false;
     try {
       const body = await request.json();
       includeSold = body.includeSold === true;
+      includePaid = body.includePaid === true;
     } catch {
       // No body or invalid JSON - use defaults
     }
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          const result = await linkingService.processHistoricalOrders({ includeSold, onProgress });
+          const result = await linkingService.processHistoricalOrders({ includeSold, includePaid, onProgress });
 
           // Send final result
           const finalResult = { type: 'complete', data: result };

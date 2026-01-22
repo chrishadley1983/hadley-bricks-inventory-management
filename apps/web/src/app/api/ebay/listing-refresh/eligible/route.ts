@@ -63,7 +63,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch eligible listings
     const service = new EbayListingRefreshService(supabase, user.id);
-    const listings = await service.getEligibleListings(filters);
+    let listings = await service.getEligibleListings(filters);
+
+    // Enrich with pending offer counts
+    listings = await service.enrichWithPendingOffers(listings);
 
     return NextResponse.json({
       data: listings,

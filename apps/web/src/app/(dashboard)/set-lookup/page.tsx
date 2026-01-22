@@ -10,7 +10,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SetLookupForm, SetDetailsCard, SetLookupEbayModal, SetStockCard, SetStockModal, AmazonOffersModal } from '@/components/features/brickset';
+import { PartoutTab } from '@/components/features/set-lookup';
 import type { SetPricingData } from '@/components/features/brickset';
 import type { BricksetSet } from '@/lib/brickset';
 import type { InventoryStockSummary } from '@/app/api/brickset/inventory-stock/route';
@@ -145,6 +147,7 @@ export default function SetLookupPage() {
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockModalTab, setStockModalTab] = useState<'current' | 'sold'>('current');
   const [amazonOffersModalOpen, setAmazonOffersModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('details');
 
   // Check if Brickset is configured
   const { data: bricksetStatus, isLoading: statusLoading } = useQuery({
@@ -269,27 +272,46 @@ export default function SetLookupPage() {
           </Alert>
         )}
 
-        {/* Results */}
+        {/* Results with Tabs */}
         {lookupMutation.isSuccess && lookupMutation.data && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Source: {lookupMutation.data.source === 'api' ? 'Brickset API' : 'Local Cache'}</span>
             </div>
-            <SetDetailsCard
-              set={lookupMutation.data.data}
-              pricing={pricingData}
-              pricingLoading={pricingLoading}
-              onEbayClick={() => setEbayModalOpen(true)}
-              onEbayUsedClick={() => setEbayUsedModalOpen(true)}
-              onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
-            />
-            {/* Inventory Stock Card */}
-            <SetStockCard
-              stock={stockData ?? null}
-              loading={stockLoading}
-              onCurrentStockClick={() => handleOpenStockModal('current')}
-              onSoldStockClick={() => handleOpenStockModal('sold')}
-            />
+
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList>
+                <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="partout" data-testid="partout-tab">
+                  Partout
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="details" className="mt-4 space-y-4">
+                <SetDetailsCard
+                  set={lookupMutation.data.data}
+                  pricing={pricingData}
+                  pricingLoading={pricingLoading}
+                  onEbayClick={() => setEbayModalOpen(true)}
+                  onEbayUsedClick={() => setEbayUsedModalOpen(true)}
+                  onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
+                />
+                {/* Inventory Stock Card */}
+                <SetStockCard
+                  stock={stockData ?? null}
+                  loading={stockLoading}
+                  onCurrentStockClick={() => handleOpenStockModal('current')}
+                  onSoldStockClick={() => handleOpenStockModal('sold')}
+                />
+              </TabsContent>
+
+              <TabsContent value="partout" className="mt-4">
+                <PartoutTab
+                  setNumber={currentSet?.setNumber ?? null}
+                  enabled={activeTab === 'partout'}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
 

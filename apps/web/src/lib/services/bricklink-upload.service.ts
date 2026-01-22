@@ -71,6 +71,8 @@ export interface BrickLinkUploadFilters {
   source?: string;
   searchTerm?: string;
   syncedFromBricqer?: boolean;
+  purchaseId?: string;
+  unlinked?: boolean;
 }
 
 export interface PaginationOptions {
@@ -163,6 +165,12 @@ export class BrickLinkUploadService {
       query = query.or(
         `source.ilike.%${filters.searchTerm}%,notes.ilike.%${filters.searchTerm}%,reference.ilike.%${filters.searchTerm}%`
       );
+    }
+    if (filters?.purchaseId) {
+      query = query.eq('purchase_id', filters.purchaseId);
+    }
+    if (filters?.unlinked) {
+      query = query.is('purchase_id', null);
     }
 
     // Order by date descending

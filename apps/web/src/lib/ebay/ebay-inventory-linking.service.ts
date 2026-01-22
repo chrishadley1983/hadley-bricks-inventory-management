@@ -82,6 +82,7 @@ export interface BulkLinkingResult {
 
 export interface ProcessingOptions {
   includeSold?: boolean; // Include already-sold items in matching (for legacy data)
+  includePaid?: boolean; // Also process PAID orders (not yet fulfilled) for pre-linking
   onProgress?: (current: number, total: number, autoLinked: number, queued: number) => void;
 }
 
@@ -155,6 +156,90 @@ export class EbayInventoryLinkingService {
   // --------------------------------------------------------------------------
   // Main Entry Points
   // --------------------------------------------------------------------------
+
+  /**
+   * Process a PAID order - attempt to pre-link line items to inventory for pick list display
+   * Unlike fulfilled orders, this does NOT mark inventory as SOLD
+   */
+  async processPaidOrder(orderId: string): Promise<LinkingResult> {
+    const result: LinkingResult = {
+      orderId,
+      status: 'pending',
+      lineItemsProcessed: 0,
+      autoLinked: 0,
+      queuedForResolution: 0,
+      errors: [],
+    };
+
+    try {
+      // Get order with line items
+      const { data: order, error: orderError } = await this.supabase
+        .from('ebay_orders')
+        .select('id, user_id, ebay_order_id, creation_date, order_fulfilment_status, order_payment_status')
+        .eq('id', orderId)
+        .eq('user_id', this.userId)
+        .single();
+
+      if (orderError || !order) {
+        result.errors.push(`Order not found: ${orderId}`);
+        return result;
+      }
+
+      // Get line items that haven't been linked yet
+      const { data: lineItems, error: lineItemsError } = await this.supabase
+        .from('ebay_order_line_items')
+        .select('id, order_id, sku, title, quantity, total_amount, inventory_item_id')
+        .eq('order_id', orderId)
+        .is('inventory_item_id', null);
+
+      if (lineItemsError) {
+        result.errors.push(`Failed to fetch line items: ${lineItemsError.message}`);
+        return result;
+      }
+
+      if (!lineItems || lineItems.length === 0) {
+        // All items already linked
+        result.status = 'complete';
+        return result;
+      }
+
+      // Process each line item
+      for (const lineItem of lineItems) {
+        result.lineItemsProcessed++;
+
+        const matchResult = await this.matchLineItemToInventory(lineItem);
+
+        if (matchResult.status === 'matched' && matchResult.inventoryId) {
+          // Pre-link successful - link line item to inventory but DON'T mark as sold
+          await this.linkLineItemToInventory(lineItem.id, matchResult.inventoryId, matchResult.method!);
+          result.autoLinked++;
+        } else {
+          // Add to resolution queue for manual pre-linking
+          await this.addToResolutionQueue(lineItem, order, matchResult);
+          result.queuedForResolution++;
+        }
+      }
+
+      // Update order linking status
+      const allLinked = result.queuedForResolution === 0;
+      const someLinked = result.autoLinked > 0;
+
+      result.status = allLinked ? 'complete' : someLinked ? 'partial' : 'pending';
+
+      await this.supabase
+        .from('ebay_orders')
+        .update({
+          inventory_link_status: result.status,
+          // Don't set inventory_linked_at for PAID orders - only when fulfilled
+        })
+        .eq('id', orderId);
+
+      return result;
+    } catch (error) {
+      result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      return result;
+    }
+  }
 
   /**
    * Process a fulfilled order - attempt to link all line items to inventory
@@ -244,6 +329,7 @@ export class EbayInventoryLinkingService {
   /**
    * Process all historical fulfilled orders that haven't been linked
    * @param options.includeSold - Include already-sold items in matching (for legacy data)
+   * @param options.includePaid - Also process PAID orders (not yet fulfilled) for pre-linking
    */
   async processHistoricalOrders(options: ProcessingOptions = {}): Promise<BulkLinkingResult> {
     // Set the includeSold flag for this processing run
@@ -263,7 +349,7 @@ export class EbayInventoryLinkingService {
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
-    const allOrders: Array<{ id: string; ebay_order_id: string; creation_date: string }> = [];
+    const allFulfilledOrders: Array<{ id: string; ebay_order_id: string; creation_date: string; type: 'fulfilled' }> = [];
 
     while (hasMore) {
       const { data: orders, error } = await this.supabase
@@ -276,21 +362,56 @@ export class EbayInventoryLinkingService {
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) {
-        result.errors.push(`Failed to fetch orders page ${page}: ${error.message}`);
+        result.errors.push(`Failed to fetch fulfilled orders page ${page}: ${error.message}`);
         break;
       }
 
-      allOrders.push(...(orders || []));
+      allFulfilledOrders.push(...(orders || []).map((o: { id: string; ebay_order_id: string; creation_date: string }) => ({ ...o, type: 'fulfilled' as const })));
       hasMore = (orders?.length || 0) === pageSize;
       page++;
     }
 
-    console.log(`[EbayInventoryLinking] Processing ${allOrders.length} historical orders`);
+    // Also get PAID orders if requested
+    const allPaidOrders: Array<{ id: string; ebay_order_id: string; creation_date: string; type: 'paid' }> = [];
+    if (options.includePaid) {
+      page = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        const { data: orders, error } = await this.supabase
+          .from('ebay_orders')
+          .select('id, ebay_order_id, creation_date')
+          .eq('user_id', this.userId)
+          .eq('order_payment_status', 'PAID')
+          .neq('order_fulfilment_status', 'FULFILLED') // Exclude already fulfilled
+          .is('inventory_link_status', null)
+          .order('creation_date', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          result.errors.push(`Failed to fetch paid orders page ${page}: ${error.message}`);
+          break;
+        }
+
+        allPaidOrders.push(...(orders || []).map((o: { id: string; ebay_order_id: string; creation_date: string }) => ({ ...o, type: 'paid' as const })));
+        hasMore = (orders?.length || 0) === pageSize;
+        page++;
+      }
+    }
+
+    // Combine and process all orders
+    const allOrders = [...allFulfilledOrders, ...allPaidOrders];
+
+    console.log(`[EbayInventoryLinking] Processing ${allFulfilledOrders.length} fulfilled + ${allPaidOrders.length} paid orders`);
 
     const totalOrders = allOrders.length;
 
     for (const order of allOrders) {
-      const linkingResult = await this.processFulfilledOrder(order.id);
+      // Use appropriate processor based on order type
+      const linkingResult = order.type === 'paid'
+        ? await this.processPaidOrder(order.id)
+        : await this.processFulfilledOrder(order.id);
+
       result.ordersProcessed++;
       result.totalAutoLinked += linkingResult.autoLinked;
       result.totalQueuedForResolution += linkingResult.queuedForResolution;

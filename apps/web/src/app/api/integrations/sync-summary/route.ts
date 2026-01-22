@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 
 interface SyncSummaryItem {
   platform: string;
-  type: 'order' | 'transaction';
+  type: 'order' | 'transaction' | 'stock';
   status: 'COMPLETED' | 'FAILED' | 'RUNNING';
   processed: number;
   created: number;
@@ -279,6 +279,42 @@ export async function GET() {
         syncedAt: log.completed_at ?? new Date().toISOString(),
         latestDataDate: latestPaypalTransaction?.transaction_date ?? undefined,
       });
+    }
+
+    // Stock imports (eBay and Amazon listing imports)
+    const { data: stockImportLogs } = await supabase
+      .from('platform_listing_imports')
+      .select('platform, status, processed_rows, total_rows, error_message, completed_at, started_at')
+      .eq('user_id', user.id)
+      .gte('started_at', tenMinutesAgo)
+      .order('started_at', { ascending: false });
+
+    if (stockImportLogs) {
+      // Group by platform and take the most recent
+      const stockByPlatform = new Map<string, (typeof stockImportLogs)[0]>();
+      for (const log of stockImportLogs) {
+        if (!stockByPlatform.has(log.platform)) {
+          stockByPlatform.set(log.platform, log);
+        }
+      }
+
+      for (const [platform, log] of stockByPlatform) {
+        // Map status: 'completed' -> 'COMPLETED', 'failed' -> 'FAILED', 'processing' -> 'RUNNING'
+        let status: 'COMPLETED' | 'FAILED' | 'RUNNING' = 'RUNNING';
+        if (log.status === 'completed') status = 'COMPLETED';
+        else if (log.status === 'failed') status = 'FAILED';
+
+        items.push({
+          platform: platform === 'ebay' ? 'eBay Stock' : platform === 'amazon' ? 'Amazon Stock' : `${platform} Stock`,
+          type: 'stock',
+          status,
+          processed: log.processed_rows ?? 0,
+          created: 0, // Stock imports track processed/total, not created/updated
+          updated: log.total_rows ?? 0, // Use total_rows as updated count
+          error: log.error_message ?? undefined,
+          syncedAt: log.completed_at ?? log.started_at ?? new Date().toISOString(),
+        });
+      }
     }
 
     // Determine overall status
