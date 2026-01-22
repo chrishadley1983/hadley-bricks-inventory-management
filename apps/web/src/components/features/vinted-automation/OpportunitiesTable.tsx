@@ -198,15 +198,26 @@ export function OpportunitiesTable() {
                     <div className="flex items-center justify-end gap-1">
                       {formatCurrency(opp.amazon_price)}
                       {opp.asin && (
-                        <a
-                          href={`https://www.amazon.co.uk/dp/${opp.asin}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800"
-                          title="View on Amazon"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <>
+                          <a
+                            href={`https://www.amazon.co.uk/dp/${opp.asin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800"
+                            title="View on Amazon"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                          <a
+                            href={`https://sas.selleramp.com/sas/lookup?SasLookup%5Bsearch_term%5D=${opp.asin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-orange-600 hover:text-orange-800"
+                            title="View in SellerAmp"
+                          >
+                            <span className="text-[10px] font-bold">SAS</span>
+                          </a>
+                        </>
                       )}
                     </div>
                   </TableCell>

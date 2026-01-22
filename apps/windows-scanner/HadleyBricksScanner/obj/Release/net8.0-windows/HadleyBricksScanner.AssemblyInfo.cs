@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Vinted LEGO Arbitrage Scanner for Hadley Bricks")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c17a96536c5dd38be4d5b52f6116c29a0ba76554")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e09d858a96310dbed9efda8a1db7c53f9331c11b")]
 [assembly: System.Reflection.AssemblyProductAttribute("HadleyBricksScanner")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HadleyBricksScanner")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

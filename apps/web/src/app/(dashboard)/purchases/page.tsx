@@ -31,6 +31,14 @@ const SyncControls = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-8 w-24" /> }
 );
 
+const VintedImportButton = dynamic(
+  () =>
+    import('@/components/features/purchases').then((mod) => ({
+      default: mod.VintedImportButton,
+    })),
+  { ssr: false, loading: () => <Skeleton className="h-9 w-40" /> }
+);
+
 export default function PurchasesPage() {
   return (
     <>
@@ -44,12 +52,15 @@ export default function PurchasesPage() {
             </div>
             <SyncControls compact table="purchases" />
           </div>
-          <Button asChild>
-            <Link href="/purchases/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Purchase
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <VintedImportButton />
+            <Button asChild>
+              <Link href="/purchases/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Purchase
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="list" className="space-y-4">

@@ -322,7 +322,8 @@ export class WorkflowService {
         .eq('status', 'pending'),
 
       // Unlinked order items since Jan 2026 (when app became primary data source)
-      this.supabase.rpc('count_unlinked_order_items_since', {
+      // Uses combined function that excludes cancelled/refunded orders and no_inventory items
+      this.supabase.rpc('count_all_unlinked_order_items_since', {
         p_user_id: userId,
         p_since_date: '2026-01-01',
       }),

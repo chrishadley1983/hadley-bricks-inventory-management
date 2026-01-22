@@ -115,7 +115,7 @@ export async function GET() {
     // Get last scan time
     const { data: lastScan } = await supabase
       .from('vinted_scan_log')
-      .select('created_at, scan_type')
+      .select('id, created_at, scan_type, status, listings_found, completed_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)

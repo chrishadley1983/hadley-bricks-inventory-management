@@ -44,3 +44,20 @@ export function formatRelativeTime(dateString: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return formatDate(dateString);
 }
+
+/**
+ * Vinted delivery status strings that indicate package has arrived
+ */
+const VINTED_DELIVERED_STATUSES = ['package delivered', 'delivered'] as const;
+
+/**
+ * Derive inventory status from Vinted delivery status.
+ * Returns 'BACKLOG' if delivered, 'NOT YET RECEIVED' otherwise.
+ */
+export function deriveInventoryStatusFromVinted(vintedStatus: string): string {
+  const normalized = vintedStatus.toLowerCase();
+  if (VINTED_DELIVERED_STATUSES.some((s) => normalized.includes(s))) {
+    return 'BACKLOG';
+  }
+  return 'NOT YET RECEIVED';
+}

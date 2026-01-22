@@ -4,11 +4,15 @@ You are scanning Vinted UK for LEGO sets. Your task is to extract listing inform
 
 ## Instructions
 
-1. Navigate to: https://www.vinted.co.uk/catalog?brand_ids[]=89162&order=newest_first
+1. Navigate to: https://www.vinted.co.uk/catalog?brand_ids[]=89162&search_text=lego&status_ids[]=6&status_ids[]=1&order=newest_first
 2. Wait for the page to fully load
 3. Check for CAPTCHA (see detection rules below)
-4. If no CAPTCHA, extract all listing cards from the current page
-5. Return results as JSON
+4. If no CAPTCHA, scroll down to load more listings:
+   - Vinted uses infinite scroll - more listings load as you scroll
+   - Scroll down 3-4 times, waiting 1-2 seconds between scrolls for content to load
+   - Aim to have at least 20-30 listings visible before extracting
+5. Extract all listing cards from the page
+6. Return results as JSON
 
 ## CAPTCHA Detection Rules
 

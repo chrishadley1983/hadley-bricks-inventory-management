@@ -56,12 +56,6 @@ export class PartPriceCacheService {
       return { cached: [], uncached: [] };
     }
 
-    // Build query for all part+colour combinations
-    const lookupPairs = parts.map((p) => ({
-      partNumber: p.partNumber,
-      colourId: p.colourId,
-    }));
-
     // Query cache table for all parts
     // Supabase doesn't support composite IN queries, so we'll fetch by part numbers
     // and filter in memory

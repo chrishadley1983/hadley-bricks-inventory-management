@@ -54,46 +54,64 @@ export class AsinMatchingService {
     // Convert to Brickset format for lookup
     const bricksetNumbers = setNumbers.map((s) => toBricksetFormat(s));
 
-    // Query seeded_asins with brickset_sets join
-    const { data: seededAsins, error } = await this.supabase
-      .from('seeded_asins')
-      .select(
-        `
-        asin,
-        brickset_sets!inner (
-          set_number,
-          set_name,
-          uk_retail_price
-        )
-      `
-      )
-      .in('brickset_sets.set_number', bricksetNumbers)
-      .eq('discovery_status', 'found');
+    // First, get all brickset_sets data (for set names even without ASINs)
+    const { data: bricksetSets, error: bricksetError } = await this.supabase
+      .from('brickset_sets')
+      .select('id, set_number, set_name, uk_retail_price')
+      .in('set_number', bricksetNumbers);
 
-    if (error) {
-      console.error('[AsinMatchingService] Query error:', error);
+    if (bricksetError) {
+      console.error('[AsinMatchingService] Brickset query error:', bricksetError);
       return results;
     }
 
-    // Build results map
-    interface SeededAsinRow {
-      asin: string | null;
-      brickset_sets: {
-        set_number: string;
-        set_name: string;
-        uk_retail_price: number | null;
-      };
-    }
+    // Build a map of brickset_set_id to brickset data
+    const bricksetById = new Map<string, { set_number: string; set_name: string; uk_retail_price: number | null }>();
+    const bricksetByNumber = new Map<string, { id: string; set_number: string; set_name: string; uk_retail_price: number | null }>();
 
-    (seededAsins as SeededAsinRow[] | null)?.forEach((sa) => {
-      const rawSetNumber = fromBricksetFormat(sa.brickset_sets.set_number);
+    bricksetSets?.forEach((bs) => {
+      bricksetById.set(bs.id, { set_number: bs.set_number, set_name: bs.set_name, uk_retail_price: bs.uk_retail_price });
+      bricksetByNumber.set(bs.set_number, bs);
+    });
+
+    // Initialize results with brickset data (no ASIN yet)
+    bricksetSets?.forEach((bs) => {
+      const rawSetNumber = fromBricksetFormat(bs.set_number);
       results.set(rawSetNumber, {
         setNumber: rawSetNumber,
-        asin: sa.asin,
-        ukRetailPrice: sa.brickset_sets.uk_retail_price,
-        setName: sa.brickset_sets.set_name,
+        asin: null,
+        ukRetailPrice: bs.uk_retail_price,
+        setName: bs.set_name,
       });
     });
+
+    // Now get ASINs for sets that have them discovered
+    const bricksetIds = bricksetSets?.map((bs) => bs.id) ?? [];
+    if (bricksetIds.length > 0) {
+      const { data: seededAsins, error: asinError } = await this.supabase
+        .from('seeded_asins')
+        .select('asin, brickset_set_id')
+        .in('brickset_set_id', bricksetIds)
+        .eq('discovery_status', 'found');
+
+      if (asinError) {
+        console.error('[AsinMatchingService] ASIN query error:', asinError);
+        // Return results with set names but no ASINs
+        return results;
+      }
+
+      // Update results with ASIN data
+      seededAsins?.forEach((sa) => {
+        const brickset = bricksetById.get(sa.brickset_set_id);
+        if (brickset) {
+          const rawSetNumber = fromBricksetFormat(brickset.set_number);
+          const existing = results.get(rawSetNumber);
+          if (existing) {
+            existing.asin = sa.asin;
+          }
+        }
+      });
+    }
 
     return results;
   }

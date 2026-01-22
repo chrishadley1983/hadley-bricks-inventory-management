@@ -74,3 +74,18 @@ export {
   type ChatMessage,
   type UseListingChatReturn,
 } from './use-listing-chat';
+export {
+  useParseVintedScreenshot,
+  useMatchMonzoTransactions,
+  useCheckDuplicates,
+  useImportVintedPurchases,
+  useProcessVintedScreenshot,
+  type ParseVintedScreenshotInput,
+  type MatchMonzoInput,
+  type MatchMonzoResponse,
+  type CheckDuplicatesInput,
+  type CheckDuplicatesResponse,
+  type ImportVintedInput,
+  type ImportVintedResponse,
+  type ProcessVintedScreenshotResult,
+} from './use-vinted-import';

@@ -6,6 +6,7 @@
 
 'use client';
 
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -38,8 +40,14 @@ import {
   Timer,
   Search,
   Target,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+type SortField = 'setNumber' | 'vintedPrice' | 'amazonPrice' | 'cogPercent' | 'profit';
+type SortDirection = 'asc' | 'desc';
 
 interface ProcessedListing {
   setNumber: string;
@@ -139,12 +147,113 @@ function getCogBadge(cogPercent: number | null, isViable: boolean, isNearMiss: b
   );
 }
 
-export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogProps) {
-  if (!scan) return null;
+function SortableHeader({
+  field,
+  currentSort,
+  currentDirection,
+  onSort,
+  children,
+  className,
+}: {
+  field: SortField;
+  currentSort: SortField | null;
+  currentDirection: SortDirection;
+  onSort: (field: SortField) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const isActive = currentSort === field;
 
-  const scanResults = scan.scan_results as ScanResults | null;
-  const listings = scanResults?.processedListings ?? [];
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={`h-8 px-2 -ml-2 font-medium hover:bg-muted ${className ?? ''}`}
+      onClick={() => onSort(field)}
+    >
+      {children}
+      {isActive ? (
+        currentDirection === 'asc' ? (
+          <ArrowUp className="ml-1 h-3 w-3" />
+        ) : (
+          <ArrowDown className="ml-1 h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+      )}
+    </Button>
+  );
+}
+
+export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogProps) {
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const scanResults = scan?.scan_results as ScanResults | null;
   const summary = scanResults?.summary;
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Memoize listings with processedListings as direct dependency to avoid
+  // creating a new rawListings array reference on every render
+  const listings = useMemo(() => {
+    const rawListings = scanResults?.processedListings ?? [];
+    if (!sortField) return rawListings;
+
+    return [...rawListings].sort((a, b) => {
+      let aVal: number | string | null;
+      let bVal: number | string | null;
+
+      switch (sortField) {
+        case 'setNumber':
+          aVal = a.setNumber;
+          bVal = b.setNumber;
+          break;
+        case 'vintedPrice':
+          aVal = a.vintedPrice;
+          bVal = b.vintedPrice;
+          break;
+        case 'amazonPrice':
+          aVal = a.amazonPrice;
+          bVal = b.amazonPrice;
+          break;
+        case 'cogPercent':
+          aVal = a.cogPercent;
+          bVal = b.cogPercent;
+          break;
+        case 'profit':
+          aVal = a.profit;
+          bVal = b.profit;
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle nulls - push them to the end
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        comparison = aVal.localeCompare(bVal);
+      } else {
+        comparison = (aVal as number) - (bVal as number);
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [scanResults?.processedListings, sortField, sortDirection]);
+
+  if (!scan) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -237,12 +346,61 @@ export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogP
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Set</TableHead>
+                  <TableHead>
+                    <SortableHeader
+                      field="setNumber"
+                      currentSort={sortField}
+                      currentDirection={sortDirection}
+                      onSort={handleSort}
+                    >
+                      Set
+                    </SortableHeader>
+                  </TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead className="text-right">Vinted</TableHead>
-                  <TableHead className="text-right">Amazon</TableHead>
-                  <TableHead className="text-right">COG%</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="vintedPrice"
+                      currentSort={sortField}
+                      currentDirection={sortDirection}
+                      onSort={handleSort}
+                      className="justify-end"
+                    >
+                      Vinted
+                    </SortableHeader>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="amazonPrice"
+                      currentSort={sortField}
+                      currentDirection={sortDirection}
+                      onSort={handleSort}
+                      className="justify-end"
+                    >
+                      Amazon
+                    </SortableHeader>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="cogPercent"
+                      currentSort={sortField}
+                      currentDirection={sortDirection}
+                      onSort={handleSort}
+                      className="justify-end"
+                    >
+                      COG%
+                    </SortableHeader>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="profit"
+                      currentSort={sortField}
+                      currentDirection={sortDirection}
+                      onSort={handleSort}
+                      className="justify-end"
+                    >
+                      Profit
+                    </SortableHeader>
+                  </TableHead>
                   <TableHead className="text-right">Target</TableHead>
                   <TableHead></TableHead>
                 </TableRow>

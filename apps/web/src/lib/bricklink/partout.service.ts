@@ -6,7 +6,7 @@
  */
 
 import { RateLimitError, type BrickLinkClient } from './client';
-import type { BrickLinkItemType, BrickLinkSubsetEntry, BrickLinkColor } from './types';
+import type { BrickLinkItemType, BrickLinkSubsetEntry } from './types';
 import type { PartPriceCacheService } from './part-price-cache.service';
 import type {
   PartoutData,
@@ -335,9 +335,14 @@ export class PartoutService {
           ? (timesSoldUsed / stockAvailableUsed) * 100
           : null;
 
-      // Parse prices - treat "0.0000" or 0 total_quantity as no data
-      const priceNew = stockNew && stockNew.total_quantity > 0 ? parseFloat(stockNew.avg_price) : null;
-      const priceUsed = stockUsed && stockUsed.total_quantity > 0 ? parseFloat(stockUsed.avg_price) : null;
+      // Parse prices from SOLD data (actual sale prices, not asking prices)
+      // Fall back to stock prices if no sold data available
+      const priceNew = soldNew && soldNew.total_quantity > 0
+        ? parseFloat(soldNew.avg_price)
+        : (stockNew && stockNew.total_quantity > 0 ? parseFloat(stockNew.avg_price) : null);
+      const priceUsed = soldUsed && soldUsed.total_quantity > 0
+        ? parseFloat(soldUsed.avg_price)
+        : (stockUsed && stockUsed.total_quantity > 0 ? parseFloat(stockUsed.avg_price) : null);
 
       return {
         partNumber: part.partNumber,

@@ -7,7 +7,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScannerControlPanel } from '@/components/features/vinted-automation/ScannerControlPanel';
 import { ConnectionStatusCard } from '@/components/features/vinted-automation/ConnectionStatusCard';
@@ -18,9 +19,35 @@ import { WatchlistPanel } from '@/components/features/vinted-automation/Watchlis
 import { ScannerConfigDialog } from '@/components/features/vinted-automation/ScannerConfigDialog';
 import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
+import { useScannerStatus, vintedAutomationKeys } from '@/hooks/use-vinted-automation';
 
 export default function VintedAutomationPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: statusData } = useScannerStatus();
+  const lastScanIdRef = useRef<string | null>(null);
+
+  // Refresh all tabs when a new scan completes
+  useEffect(() => {
+    const currentScanId = statusData?.lastScan?.id;
+
+    // Skip initial load
+    if (lastScanIdRef.current === null) {
+      lastScanIdRef.current = currentScanId ?? null;
+      return;
+    }
+
+    // If scan ID changed, a new scan completed - refresh all tabs
+    if (currentScanId && currentScanId !== lastScanIdRef.current) {
+      lastScanIdRef.current = currentScanId;
+
+      // Invalidate all tab queries to show latest data
+      queryClient.invalidateQueries({ queryKey: vintedAutomationKeys.opportunities() });
+      queryClient.invalidateQueries({ queryKey: vintedAutomationKeys.scanHistory() });
+      queryClient.invalidateQueries({ queryKey: vintedAutomationKeys.schedule() });
+      queryClient.invalidateQueries({ queryKey: vintedAutomationKeys.watchlist() });
+    }
+  }, [statusData?.lastScan?.id, queryClient]);
 
   return (
     <div className="container mx-auto py-6 space-y-6">

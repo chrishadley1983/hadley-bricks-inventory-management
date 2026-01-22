@@ -27,7 +27,7 @@ import { AmazonPricingClient } from '@/lib/amazon/amazon-pricing.client';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { pushoverService } from '@/lib/notifications/pushover.service';
 import { withApiKeyAuth } from '@/lib/middleware/vinted-api-auth';
-import { ProcessRequestSchema, type ProcessResponse } from '@/types/vinted-automation';
+import { ProcessRequestSchema } from '@/types/vinted-automation';
 import type { AmazonCredentials } from '@/lib/amazon/types';
 
 // =============================================================================
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
     }
 
     // Extract fields (PROC2: scanId, PROC3: scanType, PROC4: setNumber)
-    const { scanId, scanType, setNumber, result } = parsed.data;
+    const { scanType, setNumber, result } = parsed.data;
     const { listings, captchaDetected, timingDelayMs } = result;
 
   // Validate watchlist has setNumber
@@ -210,6 +210,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
         .eq('set_number', setNumber)
         .single();
 
+      // Always fetch set name from brickset_sets
+      const bricksetSetNumber = `${setNumber}-1`;
+      const { data: bricksetData } = await supabase
+        .from('brickset_sets')
+        .select('set_name')
+        .eq('set_number', bricksetSetNumber)
+        .single();
+
+      const setName = bricksetData?.set_name ?? null;
+
       if (watchlistItem?.asin) {
         // Get latest pricing from amazon_arbitrage_pricing
         const { data: pricing } = await supabase
@@ -225,8 +235,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
         amazonPricing.set(setNumber, {
           asin: watchlistItem.asin,
           ukRetailPrice: null,
-          setName: null,
+          setName,
           buyBoxPrice,
+        });
+      } else {
+        // Even without ASIN, store set name for display
+        amazonPricing.set(setNumber, {
+          asin: null,
+          ukRetailPrice: null,
+          setName,
+          buyBoxPrice: null,
         });
       }
     } else {

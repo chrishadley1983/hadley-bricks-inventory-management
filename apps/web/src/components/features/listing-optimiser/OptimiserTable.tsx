@@ -12,7 +12,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Package, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Clock, MessageSquare } from 'lucide-react';
+import { ExternalLink, Package, ArrowUpDown, ArrowUp, ArrowDown, Clock, MessageSquare } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,

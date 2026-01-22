@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { VintedScheduleService, type ScheduleResponse } from '../vinted-schedule.service';
+import { VintedScheduleService } from '../vinted-schedule.service';
 
 // Mock Supabase client
 const mockSupabase = {

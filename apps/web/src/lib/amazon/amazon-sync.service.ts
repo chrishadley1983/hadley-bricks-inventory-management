@@ -549,11 +549,12 @@ export class AmazonSyncService {
   async getAggregatedQueueItems(): Promise<AggregatedQueueItem[]> {
     const items = await this.getQueueItems();
 
-    // Group by ASIN
+    // Group by ASIN (trim to prevent whitespace issues)
     const asinMap = new Map<string, AggregatedQueueItem>();
 
     for (const item of items) {
-      const existing = asinMap.get(item.asin);
+      const trimmedAsin = item.asin.trim();
+      const existing = asinMap.get(trimmedAsin);
 
       if (existing) {
         // Add to existing aggregation
@@ -569,9 +570,9 @@ export class AmazonSyncService {
         const existingAmazonQty = item.amazon_quantity ?? 0;
         const queueQty = 1;
 
-        asinMap.set(item.asin, {
-          asin: item.asin,
-          amazonSku: item.amazon_sku || item.asin,
+        asinMap.set(trimmedAsin, {
+          asin: trimmedAsin,
+          amazonSku: (item.amazon_sku || item.asin).trim(),
           price: item.local_price,
           queueQuantity: queueQty,
           existingAmazonQuantity: existingAmazonQty,
@@ -1114,8 +1115,11 @@ export class AmazonSyncService {
       }));
     }
 
-    // Clear queue
-    await this.clearQueueForFeed(aggregatedItems);
+    // Clear any remaining queue items (successful items already cleared during feed processing)
+    if (aggregatedItems.length > 0 && aggregatedItems.some((a) => a.queueItemIds.length > 0)) {
+      console.log(`[AmazonSyncService] Clearing ${aggregatedItems.length} remaining queue items`);
+      await this.clearQueueForFeed(aggregatedItems);
+    }
 
     // Update feed status
     await this.updateFeedRecord(feedId, {
@@ -1608,19 +1612,17 @@ export class AmazonSyncService {
       }
 
       // Clear queue items for successful/accepted submissions
-      // IMPORTANT: Don't clear for two-phase sync feeds - completeTwoPhaseSync handles this
-      const isTwoPhaseFeed = feed.sync_mode === 'two_phase';
-      if (!isTwoPhaseFeed) {
-        const aggregated = await this.getAggregatedQueueItems();
-        const successfulAsins = items
-          .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
-          .map((i) => i.asin);
-        const successfulAggregated = aggregated.filter((a) =>
-          successfulAsins.includes(a.asin)
-        );
+      // For two-phase sync: still clear successful items immediately, don't wait until completion
+      const aggregated = await this.getAggregatedQueueItems();
+      const successfulAsins = items
+        .filter((i) => i.status === 'success' || i.status === 'warning' || i.status === 'accepted')
+        .map((i) => i.asin.trim()); // Trim to handle any whitespace issues
+      const successfulAggregated = aggregated.filter((a) =>
+        successfulAsins.includes(a.asin.trim())
+      );
+      if (successfulAggregated.length > 0) {
+        console.log(`[AmazonSyncService] Clearing ${successfulAggregated.length} successful items from queue`);
         await this.clearQueueForFeed(successfulAggregated);
-      } else {
-        console.log('[AmazonSyncService] Skipping queue clear for two-phase feed - completeTwoPhaseSync handles this');
       }
     } else if (status.processingStatus === 'IN_PROGRESS') {
       updates.status = 'processing';
@@ -2341,6 +2343,7 @@ export class AmazonSyncService {
    * Sets:
    * - status: 'LISTED'
    * - listing_date: current timestamp
+   * - listing_platform: 'amazon'
    */
   private async updateInventoryItemsAsListed(
     inventoryItemIds: string[]
@@ -2352,6 +2355,7 @@ export class AmazonSyncService {
       .update({
         status: 'LISTED',
         listing_date: new Date().toISOString(),
+        listing_platform: 'amazon',
       })
       .in('id', inventoryItemIds)
       .eq('user_id', this.userId);

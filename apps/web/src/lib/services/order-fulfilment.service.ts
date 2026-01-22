@@ -387,7 +387,6 @@ export class OrderFulfilmentService {
     };
 
     const now = new Date().toISOString();
-    const archiveLocation = request.archiveLocation || `SOLD-${new Date().toISOString().slice(0, 7)}`;
 
     for (const orderId of request.orderIds) {
       try {
@@ -424,6 +423,20 @@ export class OrderFulfilmentService {
           }
 
           if (inventoryId) {
+            // Fetch current inventory item to get storage_location for archive reference
+            const { data: currentItem } = await this.supabase
+              .from('inventory_items')
+              .select('storage_location')
+              .eq('id', inventoryId)
+              .eq('user_id', userId)
+              .single();
+
+            // Build archive location with original storage location reference
+            // Format: "SOLD-YYYYMMDD-{original_location}" e.g., "SOLD-20260122-Loft-S66"
+            const dateStr = now.slice(0, 10).replace(/-/g, '');
+            const originalLocation = currentItem?.storage_location || 'Unknown';
+            const itemArchiveLocation = `SOLD-${dateStr}-${originalLocation}`;
+
             // Calculate financial breakdown for this item
             // For single-item orders, we can use order-level fees/shipping
             // For multi-item orders, we prorate fees based on item value proportion
@@ -458,7 +471,7 @@ export class OrderFulfilmentService {
                 sold_postage_received: itemShipping,
                 sold_fees_amount: itemFees,
                 sold_net_amount: netAmount,
-                archive_location: archiveLocation,
+                archive_location: itemArchiveLocation,
                 storage_location: null, // Clear storage location
               })
               .eq('id', inventoryId)

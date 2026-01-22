@@ -3,7 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2, CloudUpload, Link2 } from 'lucide-react';
 import Link from 'next/link';
-import type { InventoryItem } from '@hadley-bricks/database';
+import type { InventoryItem, InventoryItemUpdate } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -20,6 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { EditableCell } from '@/components/ui/editable-cell';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
@@ -62,9 +63,22 @@ export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
 interface ColumnsProps {
   onDelete?: (id: string) => void;
   onAddToAmazonSync?: (item: InventoryItem) => void;
+  onUpdate?: (id: string, data: InventoryItemUpdate) => Promise<void>;
 }
 
-export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
+const STATUS_OPTIONS = [
+  { value: 'NOT YET RECEIVED', label: 'Pending' },
+  { value: 'BACKLOG', label: 'Backlog' },
+  { value: 'LISTED', label: 'Listed' },
+  { value: 'SOLD', label: 'Sold' },
+];
+
+const CONDITION_OPTIONS = [
+  { value: 'New', label: 'New' },
+  { value: 'Used', label: 'Used' },
+];
+
+export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
   return [
     {
       accessorKey: 'set_number',
@@ -105,6 +119,26 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
       header: 'Condition',
       cell: ({ row }) => {
         const condition = row.getValue('condition') as string | null;
+        const item = row.original;
+
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={condition}
+              displayValue={
+                condition ? (
+                  <Badge variant={condition === 'New' ? 'default' : 'secondary'}>{condition}</Badge>
+                ) : undefined
+              }
+              type="select"
+              options={CONDITION_OPTIONS}
+              onSave={async (value) => {
+                await onUpdate(item.id, { condition: value as string | null });
+              }}
+            />
+          );
+        }
+
         return condition ? (
           <Badge variant={condition === 'New' ? 'default' : 'secondary'}>{condition}</Badge>
         ) : (
@@ -281,7 +315,25 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
           );
         }
 
-        // Default badge for other statuses
+        // Default badge for other statuses - make editable
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={status}
+              displayValue={
+                <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
+                  {status.replace('NOT YET RECEIVED', 'Pending')}
+                </Badge>
+              }
+              type="select"
+              options={STATUS_OPTIONS}
+              onSave={async (value) => {
+                await onUpdate(item.id, { status: value as string | null });
+              }}
+            />
+          );
+        }
+
         return (
           <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
             {status.replace('NOT YET RECEIVED', 'Pending')}
@@ -321,7 +373,22 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
       },
       cell: ({ row }) => {
         const cost = row.getValue('cost') as number | null;
-        return cost ? formatCurrency(cost) : '-';
+        const item = row.original;
+
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={cost}
+              displayValue={cost != null ? formatCurrency(cost) : undefined}
+              type="currency"
+              onSave={async (value) => {
+                await onUpdate(item.id, { cost: value as number | null });
+              }}
+            />
+          );
+        }
+
+        return cost != null ? formatCurrency(cost) : '-';
       },
     },
     {
@@ -340,7 +407,22 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
       },
       cell: ({ row }) => {
         const value = row.getValue('listing_value') as number | null;
-        return value ? formatCurrency(value) : '-';
+        const item = row.original;
+
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={value}
+              displayValue={value != null ? formatCurrency(value) : undefined}
+              type="currency"
+              onSave={async (newValue) => {
+                await onUpdate(item.id, { listing_value: newValue as number | null });
+              }}
+            />
+          );
+        }
+
+        return value != null ? formatCurrency(value) : '-';
       },
     },
     {
@@ -381,6 +463,25 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
       header: 'Location',
       cell: ({ row }) => {
         const location = row.getValue('storage_location') as string | null;
+        const item = row.original;
+
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={location}
+              displayValue={
+                location ? (
+                  <span className="max-w-[100px] truncate">{location}</span>
+                ) : undefined
+              }
+              type="text"
+              onSave={async (value) => {
+                await onUpdate(item.id, { storage_location: value as string | null });
+              }}
+            />
+          );
+        }
+
         return <span className="max-w-[100px] truncate">{location || '-'}</span>;
       },
     },
@@ -400,6 +501,21 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync }: ColumnsProp
       },
       cell: ({ row }) => {
         const date = row.getValue('purchase_date') as string | null;
+        const item = row.original;
+
+        if (onUpdate) {
+          return (
+            <EditableCell
+              value={date}
+              displayValue={formatDate(date)}
+              type="date"
+              onSave={async (value) => {
+                await onUpdate(item.id, { purchase_date: value as string | null });
+              }}
+            />
+          );
+        }
+
         return formatDate(date);
       },
     },

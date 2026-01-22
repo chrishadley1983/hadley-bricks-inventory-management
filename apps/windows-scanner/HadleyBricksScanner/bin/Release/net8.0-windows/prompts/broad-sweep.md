@@ -1,14 +1,18 @@
-# Vinted LEGO Broad Sweep
+# Vinted LEGO Broad Sweep Scan
 
-You are scanning Vinted UK for LEGO listings. Extract listing information from the newest items.
+You are scanning Vinted UK for LEGO sets. Your task is to extract listing information from the search results page.
 
 ## Instructions
 
 1. Navigate to: https://www.vinted.co.uk/catalog?brand_ids[]=89162&search_text=lego&status_ids[]=6&status_ids[]=1&order=newest_first
 2. Wait for the page to fully load
 3. Check for CAPTCHA (see detection rules below)
-4. If no CAPTCHA, extract the first 15 listing cards visible
-5. Return results as JSON
+4. If no CAPTCHA, scroll down to load more listings:
+   - Vinted uses infinite scroll - more listings load as you scroll
+   - Scroll down 3-4 times, waiting 1-2 seconds between scrolls for content to load
+   - Aim to have at least 20-30 listings visible before extracting
+5. Extract all listing cards from the page
+6. Return results as JSON
 
 ## CAPTCHA Detection Rules
 
@@ -22,7 +26,7 @@ If CAPTCHA is detected, return immediately with `captchaDetected: true`.
 
 ## Data Extraction
 
-For each listing card on the page (up to 15), extract:
+For each listing card on the page, extract:
 - **title**: The listing title text
 - **price**: The price as a number (remove £ symbol)
 - **currency**: "GBP"
@@ -39,10 +43,10 @@ Output ONLY valid JSON matching the ScanResult schema. Do not include any other 
   "captchaDetected": false,
   "listings": [
     {
-      "title": "LEGO 75192 Millennium Falcon",
+      "title": "LEGO Star Wars 75192 Millennium Falcon",
       "price": 450.00,
       "currency": "GBP",
-      "url": "https://www.vinted.co.uk/items/123456-lego-set",
+      "url": "https://www.vinted.co.uk/items/123456-lego-star-wars",
       "vintedListingId": "123456"
     }
   ],
@@ -61,13 +65,14 @@ If CAPTCHA is detected:
 }
 ```
 
-If no listings found:
+If an error occurs:
 ```json
 {
-  "success": true,
+  "success": false,
   "captchaDetected": false,
   "listings": [],
-  "pagesScanned": 1
+  "pagesScanned": 0,
+  "error": "Description of the error"
 }
 ```
 

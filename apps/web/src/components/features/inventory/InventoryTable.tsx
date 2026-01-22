@@ -7,7 +7,7 @@ import { getInventoryColumns, COLUMN_DISPLAY_NAMES } from './InventoryColumns';
 import { InventoryFilters } from './InventoryFilters';
 import { BulkEditDialog } from './BulkEditDialog';
 import { PriceConflictDialog } from '../amazon-sync/PriceConflictDialog';
-import { useInventoryList, useDeleteInventory, useCreateInventory, useBulkUpdateInventory, useBulkDeleteInventory } from '@/hooks';
+import { useInventoryList, useDeleteInventory, useCreateInventory, useUpdateInventory, useBulkUpdateInventory, useBulkDeleteInventory } from '@/hooks';
 import { useAddToSyncQueue, type PriceConflict } from '@/hooks/use-amazon-sync';
 import { useToast } from '@/hooks/use-toast';
 import type { InventoryFilters as Filters } from '@/lib/api';
@@ -38,6 +38,7 @@ export function InventoryTable() {
   const { data, isLoading, error } = useInventoryList(filters, { page, pageSize });
   const deleteMutation = useDeleteInventory();
   const createMutation = useCreateInventory();
+  const updateMutation = useUpdateInventory();
   const bulkUpdateMutation = useBulkUpdateInventory();
   const bulkDeleteMutation = useBulkDeleteInventory();
   const addToSyncQueueMutation = useAddToSyncQueue();
@@ -97,6 +98,10 @@ export function InventoryTable() {
       router.push(`/inventory/${rows[0].id}/edit`);
     }
   }, [router]);
+
+  const handleInlineUpdate = useCallback(async (id: string, data: Partial<InventoryItem>) => {
+    await updateMutation.mutateAsync({ id, data });
+  }, [updateMutation]);
 
   const handleOpenBulkEdit = useCallback((rows: InventoryItem[]) => {
     setBulkEditItems(rows);
@@ -209,8 +214,9 @@ export function InventoryTable() {
     () => getInventoryColumns({
       onDelete: (id) => setDeleteId(id),
       onAddToAmazonSync: handleAddToAmazonSync,
+      onUpdate: handleInlineUpdate,
     }),
-    [handleAddToAmazonSync]
+    [handleAddToAmazonSync, handleInlineUpdate]
   );
 
   const handleConfirmBulkEdit = async (updates: Partial<Record<string, string | null>>) => {
