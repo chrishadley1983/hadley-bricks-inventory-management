@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign, ShoppingCart, Archive, Store, RotateCcw, Eye } from 'lucide-react';
-import { useInventoryItem, useDeleteInventory, useUpdateInventory, usePurchase } from '@/hooks';
+import { useInventoryItem, useDeleteInventory, useUpdateInventory, usePurchase, usePerf, usePerfQuery } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +41,10 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const [showResetEbayDialog, setShowResetEbayDialog] = useState(false);
   const [showCreateListingModal, setShowCreateListingModal] = useState(false);
   const [showListingDetailsDialog, setShowListingDetailsDialog] = useState(false);
+
+  // Performance logging
+  usePerf('InventoryDetail', isLoading);
+  usePerfQuery('inventory-item', isLoading);
 
   // Fetch linked purchase if purchase_id exists
   const { data: linkedPurchase } = usePurchase(item?.purchase_id ?? undefined);

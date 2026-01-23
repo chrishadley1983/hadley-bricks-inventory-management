@@ -62,8 +62,10 @@ public static class ChromeTabManager
                 // Claude MCP tabs show as "Claude (MCP)" when browsing Vinted
                 bool isVintedPage = title.Contains("vinted", StringComparison.OrdinalIgnoreCase);
                 bool isClaudeMcpWindow = title.Contains("Claude (MCP)", StringComparison.OrdinalIgnoreCase);
+                // MCP Playwright often shows localhost URLs in title when debugging
+                bool isLocalhostDebug = title.Contains("localhost:3000", StringComparison.OrdinalIgnoreCase);
 
-                if (isVintedPage || isClaudeMcpWindow)
+                if (isVintedPage || isClaudeMcpWindow || isLocalhostDebug)
                 {
                     // Match Chrome, Chromium, or any window with these titles
                     // Claude MCP windows may not have "Chrome" in title
@@ -71,7 +73,8 @@ public static class ChromeTabManager
                         title.Contains("Chromium", StringComparison.OrdinalIgnoreCase) ||
                         title.EndsWith(" - Vinted", StringComparison.OrdinalIgnoreCase) ||
                         title.StartsWith("Vinted", StringComparison.OrdinalIgnoreCase) ||
-                        isClaudeMcpWindow)
+                        isClaudeMcpWindow ||
+                        isLocalhostDebug)
                     {
                         vintedWindows.Add(hWnd);
                     }

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useBrickLinkUploadSyncStatus, useTriggerBatchSync } from '@/hooks/use-bricklink-uploads';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -23,6 +24,7 @@ const BrickLinkUploadTable = dynamic(
 );
 
 export default function BrickLinkUploadsPage() {
+  usePerfPage('BrickLinkUploadsPage');
   const [isSyncing, setIsSyncing] = useState(false);
   const { data: syncStatus } = useBrickLinkUploadSyncStatus();
   const syncMutation = useTriggerBatchSync();

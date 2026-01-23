@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Plus, FileSpreadsheet, Trash2, Eye } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
 import { Card, CardContent } from '@/components/ui/card';
@@ -184,6 +185,7 @@ function EvaluationsList() {
 }
 
 export default function PurchaseEvaluatorPage() {
+  usePerfPage('PurchaseEvaluatorPage');
   return (
     <>
       <Header title="Purchase Evaluator" />

@@ -51,3 +51,13 @@ next-env.d.ts
 
 # Playwright auth state (contains session tokens)
 .playwright-auth.json
+
+# Performance logs
+logs/
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Windows artifacts
+nul

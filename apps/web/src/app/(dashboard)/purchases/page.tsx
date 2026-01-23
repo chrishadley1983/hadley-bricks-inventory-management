@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HeaderSkeleton, TableSkeleton, WidgetCardSkeleton } from '@/components/ui/skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePerfPage } from '@/hooks';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -40,6 +41,8 @@ const VintedImportButton = dynamic(
 );
 
 export default function PurchasesPage() {
+  usePerfPage('PurchasesPage');
+
   return (
     <>
       <Header title="Purchases" />

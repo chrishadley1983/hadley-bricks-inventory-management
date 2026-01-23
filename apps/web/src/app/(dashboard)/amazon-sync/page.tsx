@@ -12,6 +12,7 @@ import {
   useSyncFeedHistory,
   useSyncFeed,
 } from '@/hooks/use-amazon-sync';
+import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic imports with loading skeletons
 const Header = dynamic(
@@ -81,6 +82,7 @@ const SyncFeedStatus = dynamic(
 // ============================================================================
 
 export default function AmazonSyncPage() {
+  usePerfPage('AmazonSyncPage');
   const [activeTab, setActiveTab] = useState('queue');
   const [activeFeedId, setActiveFeedId] = useState<string | null>(null);
 

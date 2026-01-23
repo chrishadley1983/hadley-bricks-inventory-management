@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       amazon_arbitrage_pricing: {
@@ -3465,6 +3490,75 @@ export type Database = {
           },
         ]
       }
+      home_costs: {
+        Row: {
+          annual_premium: number | null
+          business_percent: number | null
+          business_stock_value: number | null
+          cost_type: string
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          hours_per_month: string | null
+          id: string
+          monthly_cost: number | null
+          start_date: string
+          total_contents_value: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          annual_premium?: number | null
+          business_percent?: number | null
+          business_stock_value?: number | null
+          cost_type: string
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          hours_per_month?: string | null
+          id?: string
+          monthly_cost?: number | null
+          start_date: string
+          total_contents_value?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          annual_premium?: number | null
+          business_percent?: number | null
+          business_stock_value?: number | null
+          cost_type?: string
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          hours_per_month?: string | null
+          id?: string
+          monthly_cost?: number | null
+          start_date?: string
+          total_contents_value?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      home_costs_settings: {
+        Row: {
+          display_mode: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          display_mode?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          display_mode?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       inventory_items: {
         Row: {
           amazon_asin: string | null
@@ -4281,6 +4375,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mtd_export_history: {
+        Row: {
+          created_at: string | null
+          entries_count: number
+          export_type: string
+          id: string
+          month: string
+          quickfile_response: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          entries_count?: number
+          export_type: string
+          id?: string
+          month: string
+          quickfile_response?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          entries_count?: number
+          export_type?: string
+          id?: string
+          month?: string
+          quickfile_response?: Json | null
+          user_id?: string
+        }
+        Relationships: []
       }
       negotiation_config: {
         Row: {
@@ -7847,6 +7971,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

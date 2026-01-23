@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePerfPage } from '@/hooks/use-perf';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
@@ -156,6 +157,7 @@ export default function OrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  usePerfPage('OrderDetailPage');
   const { id } = use(params);
   const queryClient = useQueryClient();
   const [showShipDialog, setShowShipDialog] = useState(false);

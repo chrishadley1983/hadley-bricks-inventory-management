@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { RefreshCw, AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,7 @@ const Header = dynamic(
 type TabValue = 'opportunities' | 'unmapped' | 'settings';
 
 export default function AmazonArbitragePage() {
+  usePerfPage('AmazonArbitragePage');
   const [activeTab, setActiveTab] = useState<TabValue>('opportunities');
   const [filters, setFilters] = useState<ArbitrageFilterOptions>({});
   const [selectedAsin, setSelectedAsin] = useState<string | null>(null);

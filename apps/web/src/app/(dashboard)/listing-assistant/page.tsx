@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout/Header').then((m) => ({ default: m.Header })),
@@ -30,6 +31,7 @@ const ListingAssistantTabs = dynamic(
 );
 
 export default function ListingAssistantPage() {
+  usePerfPage('ListingAssistantPage');
   return (
     <>
       <Header

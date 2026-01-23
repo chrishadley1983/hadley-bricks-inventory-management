@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { SELLING_PLATFORMS, type SellingPlatform } from '@hadley-bricks/database';
 import { inventoryKeys } from './use-inventory';
 
 interface ImportItem {
@@ -158,7 +159,17 @@ export function parseCsvContent(content: string): {
     }
 
     if (colMap['listing_platform'] !== undefined && values[colMap['listing_platform']]) {
-      item.listing_platform = values[colMap['listing_platform']].trim();
+      const platform = values[colMap['listing_platform']].trim().toLowerCase();
+      // Validate against allowed selling platforms
+      if (SELLING_PLATFORMS.includes(platform as SellingPlatform)) {
+        item.listing_platform = platform;
+      } else if (platform) {
+        errors.push({
+          row: rowNum,
+          message: `Invalid listing_platform: "${platform}". Must be one of: ${SELLING_PLATFORMS.join(', ')}`,
+        });
+        continue;
+      }
     }
 
     if (colMap['listing_date'] !== undefined && values[colMap['listing_date']]) {

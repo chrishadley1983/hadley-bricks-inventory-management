@@ -17,7 +17,8 @@ import { useMtdExportPreview } from '@/hooks/use-mtd-export';
 interface ExportConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  month: string;
+  startMonth: string;
+  endMonth: string;
   onConfirm: () => Promise<void>;
   isExporting?: boolean;
 }
@@ -39,18 +40,37 @@ function formatDate(dateString: string): string {
   });
 }
 
+function formatPeriodLabel(startMonth: string, endMonth: string): string {
+  const startDate = new Date(startMonth + '-01');
+  const endDate = new Date(endMonth + '-01');
+
+  const startLabel = startDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const endLabel = endDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  if (startMonth === endMonth) {
+    return startLabel;
+  }
+  return `${startLabel} to ${endLabel}`;
+}
+
 export function ExportConfirmDialog({
   open,
   onOpenChange,
-  month,
+  startMonth,
+  endMonth,
   onConfirm,
   isExporting = false,
 }: ExportConfirmDialogProps) {
-  const { data: preview, isLoading } = useMtdExportPreview(open ? month : undefined);
+  const { data: preview, isLoading } = useMtdExportPreview(
+    open ? startMonth : undefined,
+    open ? endMonth : undefined
+  );
 
   const handleConfirm = async () => {
     await onConfirm();
   };
+
+  const periodLabel = formatPeriodLabel(startMonth, endMonth);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -66,7 +86,7 @@ export function ExportConfirmDialog({
               ) : preview ? (
                 <>
                   <p>
-                    Export <strong>{preview.monthLabel}</strong> to QuickFile?
+                    Export <strong>{periodLabel}</strong> to QuickFile?
                   </p>
 
                   <div className="rounded-md border p-3 space-y-2 text-sm">
@@ -90,7 +110,7 @@ export function ExportConfirmDialog({
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
-                        {preview.monthLabel} was already exported to QuickFile on{' '}
+                        This period was already exported to QuickFile on{' '}
                         {formatDate(preview.previousExport.exportedAt)}. Export again?
                       </AlertDescription>
                     </Alert>

@@ -908,39 +908,153 @@ export class NegotiationService {
   // ==========================================================================
 
   /**
-   * Sync offer statuses from eBay (placeholder for future implementation)
+   * Sync offer statuses by:
+   * 1. Detecting accepted offers by matching with eBay orders
+   * 2. Marking expired offers past their expiry date
+   *
    * Note: eBay doesn't provide a direct API to check offer status,
-   * so this would need to be done by checking order creation.
+   * so we detect acceptance by checking if an order was placed at the offer price.
    */
-  async syncOfferStatuses(userId: string): Promise<{ updated: number }> {
-    // TODO: Implement status sync by checking if offers resulted in orders
-    // This could be done by:
-    // 1. Getting all PENDING offers
-    // 2. Checking if there are orders for those listings from those buyers
-    // 3. Marking offers as ACCEPTED if order exists, EXPIRED if past expiry date
-
+  async syncOfferStatuses(userId: string): Promise<{
+    accepted: number;
+    expired: number;
+    total: number;
+  }> {
     const supabase = this.supabase || (await createClient());
+    const now = new Date().toISOString();
+    let acceptedCount = 0;
+    let expiredCount = 0;
 
-    // For now, just mark expired offers
-    const expiryDate = new Date().toISOString();
-
-    const { data, error } = await supabase
+    // Step 1: Get all PENDING offers
+    const { data: pendingOffers, error: fetchError } = await supabase
       .from('negotiation_offers')
-      .update({
-        status: 'EXPIRED',
-        status_updated_at: expiryDate,
-      })
+      .select('id, ebay_listing_id, offer_price, sent_at, expires_at')
       .eq('user_id', userId)
-      .eq('status', 'PENDING')
-      .lt('expires_at', expiryDate)
-      .select('id');
+      .eq('status', 'PENDING');
 
-    if (error) {
-      console.error('[NegotiationService] Error syncing statuses:', error);
-      throw error;
+    if (fetchError) {
+      console.error('[NegotiationService] Error fetching pending offers:', fetchError);
+      throw fetchError;
     }
 
-    return { updated: data?.length || 0 };
+    if (!pendingOffers || pendingOffers.length === 0) {
+      console.log('[NegotiationService] No pending offers to sync');
+      return { accepted: 0, expired: 0, total: 0 };
+    }
+
+    console.log(`[NegotiationService] Syncing ${pendingOffers.length} pending offers`);
+
+    // Step 2: Get listing IDs from pending offers
+    const listingIds = [...new Set(pendingOffers.map((o) => o.ebay_listing_id))];
+
+    // Step 3: Find eBay orders for these listings placed after offers were sent
+    // We match by: listing ID + order placed after offer sent + price matches offer price (within tolerance)
+    const { data: matchingOrders, error: ordersError } = await supabase
+      .from('ebay_order_line_items')
+      .select(`
+        legacy_item_id,
+        line_item_cost_amount,
+        order:ebay_orders!inner(
+          creation_date,
+          user_id
+        )
+      `)
+      .in('legacy_item_id', listingIds)
+      .eq('order.user_id', userId);
+
+    if (ordersError) {
+      console.error('[NegotiationService] Error fetching orders:', ordersError);
+      // Don't throw - continue with expiry marking
+    }
+
+    // Step 4: Match offers to orders
+    const acceptedOfferIds: string[] = [];
+
+    if (matchingOrders && matchingOrders.length > 0) {
+      for (const offer of pendingOffers) {
+        // Find orders for this listing
+        const ordersForListing = matchingOrders.filter(
+          (o) => o.legacy_item_id === offer.ebay_listing_id
+        );
+
+        for (const order of ordersForListing) {
+          // order.order is an array from the join, take first element
+          const orderData = Array.isArray(order.order) ? order.order[0] : order.order;
+          if (!orderData?.creation_date) continue;
+
+          const orderDate = new Date(orderData.creation_date);
+          const offerSentDate = new Date(offer.sent_at);
+          const orderPrice = parseFloat(String(order.line_item_cost_amount));
+          const offerPrice = offer.offer_price ? parseFloat(String(offer.offer_price)) : null;
+
+          // Check if order was placed after offer was sent
+          if (orderDate < offerSentDate) {
+            continue;
+          }
+
+          // Check if price matches (within 1p tolerance for rounding)
+          if (offerPrice !== null && Math.abs(orderPrice - offerPrice) <= 0.01) {
+            acceptedOfferIds.push(offer.id);
+            console.log(
+              `[NegotiationService] Offer ${offer.id} accepted: listing ${offer.ebay_listing_id}, ` +
+              `offer price £${offerPrice}, order price £${orderPrice}`
+            );
+            break; // One match is enough for this offer
+          }
+        }
+      }
+    }
+
+    // Step 5: Mark accepted offers
+    if (acceptedOfferIds.length > 0) {
+      const { error: acceptError } = await supabase
+        .from('negotiation_offers')
+        .update({
+          status: 'ACCEPTED',
+          status_updated_at: now,
+        })
+        .in('id', acceptedOfferIds);
+
+      if (acceptError) {
+        console.error('[NegotiationService] Error marking accepted offers:', acceptError);
+      } else {
+        acceptedCount = acceptedOfferIds.length;
+        console.log(`[NegotiationService] Marked ${acceptedCount} offers as ACCEPTED`);
+      }
+    }
+
+    // Step 6: Mark expired offers (excluding ones we just marked as accepted)
+    const expiredOfferIds = pendingOffers
+      .filter(
+        (o) =>
+          !acceptedOfferIds.includes(o.id) &&
+          o.expires_at &&
+          new Date(o.expires_at) < new Date()
+      )
+      .map((o) => o.id);
+
+    if (expiredOfferIds.length > 0) {
+      const { error: expireError } = await supabase
+        .from('negotiation_offers')
+        .update({
+          status: 'EXPIRED',
+          status_updated_at: now,
+        })
+        .in('id', expiredOfferIds);
+
+      if (expireError) {
+        console.error('[NegotiationService] Error marking expired offers:', expireError);
+      } else {
+        expiredCount = expiredOfferIds.length;
+        console.log(`[NegotiationService] Marked ${expiredCount} offers as EXPIRED`);
+      }
+    }
+
+    return {
+      accepted: acceptedCount,
+      expired: expiredCount,
+      total: acceptedCount + expiredCount,
+    };
   }
 
   // ==========================================================================

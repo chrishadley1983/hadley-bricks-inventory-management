@@ -37,8 +37,8 @@ export function HomeCostsModal({ open, onOpenChange }: HomeCostsModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        onInteractOutside={(e: Event) => e.preventDefault()}
+        onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Home Costs Configuration</DialogTitle>

@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { StatCard, PieChart } from '@/components/charts';
 import { useInventoryValuationReport, useExportReport } from '@/hooks/use-reports';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -36,6 +37,8 @@ function formatCurrency(amount: number): string {
 }
 
 export default function InventoryValuationReportPage() {
+  usePerfPage('InventoryValuationReportPage');
+
   const { data: report, isLoading, error } = useInventoryValuationReport();
   const exportMutation = useExportReport();
 

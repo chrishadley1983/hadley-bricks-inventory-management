@@ -30,6 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { StatCard, BarChart, PieChart } from '@/components/charts';
 import { useInventoryAgingReport, useExportReport } from '@/hooks/use-reports';
+import { usePerfPage } from '@/hooks/use-perf';
 import type { InventoryAgingReport } from '@/lib/services';
 
 const Header = dynamic(
@@ -142,6 +143,8 @@ function DrillDownSheet({ isOpen, onClose, bracket }: DrillDownSheetProps) {
 }
 
 export default function InventoryAgingReportPage() {
+  usePerfPage('InventoryAgingReportPage');
+
   const { data: report, isLoading, error } = useInventoryAgingReport();
   const exportMutation = useExportReport();
   const [selectedBracket, setSelectedBracket] = useState<InventoryAgingReport['brackets'][0] | null>(null);

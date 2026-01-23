@@ -89,3 +89,4 @@ export {
   type ImportVintedResponse,
   type ProcessVintedScreenshotResult,
 } from './use-vinted-import';
+export { usePerf, usePerfPage, usePerfQuery } from './use-perf';

@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePerfPage } from '@/hooks';
 
 // Dynamically import Header to prevent SSR issues with Supabase
 const Header = dynamic(
@@ -26,6 +27,8 @@ const SyncControls = dynamic(
 );
 
 export default function InventoryPage() {
+  usePerfPage('InventoryPage');
+
   return (
     <>
       <Header title="Inventory" />

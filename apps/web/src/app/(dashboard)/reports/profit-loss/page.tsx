@@ -33,6 +33,7 @@ import {
   ToggleGroupItem,
 } from '@/components/ui/toggle-group';
 import { useProfitLossReport, useExportReport } from '@/hooks/use-reports';
+import { usePerfPage } from '@/hooks/use-perf';
 import type { ProfitLossCategory } from '@/lib/services/profit-loss-report.service';
 import { cn } from '@/lib/utils';
 import { BarChart } from '@/components/charts/bar-chart';
@@ -131,6 +132,8 @@ const categoryConfig: Record<ProfitLossCategory, { order: number; color: string 
 };
 
 export default function ProfitLossReportPage() {
+  usePerfPage('ProfitLossReportPage');
+
   const [viewPreset, setViewPreset] = useState<ViewPreset>('last_12_months');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
@@ -652,10 +655,7 @@ export default function ProfitLossReportPage() {
                 <Home className="mr-2 h-4 w-4" />
                 Home Costs
               </Button>
-              <MtdExportDropdown
-                selectedMonth={selectedMonth}
-                disabled={isLoading}
-              />
+              <MtdExportDropdown disabled={isLoading} />
               <Button
                 variant="outline"
                 onClick={handleExportPdf}

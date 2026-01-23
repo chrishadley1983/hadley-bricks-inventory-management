@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/hooks/use-toast';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Link2Off } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -32,6 +33,7 @@ const Header = dynamic(
 );
 
 export default function ListingOptimiserPage() {
+  usePerfPage('ListingOptimiserPage');
   const { toast } = useToast();
 
   // Filters state

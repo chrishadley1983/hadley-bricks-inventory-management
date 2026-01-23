@@ -7,7 +7,7 @@ import { getInventoryColumns, COLUMN_DISPLAY_NAMES } from './InventoryColumns';
 import { InventoryFilters } from './InventoryFilters';
 import { BulkEditDialog } from './BulkEditDialog';
 import { PriceConflictDialog } from '../amazon-sync/PriceConflictDialog';
-import { useInventoryList, useDeleteInventory, useCreateInventory, useUpdateInventory, useBulkUpdateInventory, useBulkDeleteInventory } from '@/hooks';
+import { useInventoryList, useDeleteInventory, useCreateInventory, useUpdateInventory, useBulkUpdateInventory, useBulkDeleteInventory, usePerf, usePerfQuery } from '@/hooks';
 import { useAddToSyncQueue, type PriceConflict } from '@/hooks/use-amazon-sync';
 import { useToast } from '@/hooks/use-toast';
 import type { InventoryFilters as Filters } from '@/lib/api';
@@ -36,6 +36,10 @@ export function InventoryTable() {
   const currentConflict = pendingConflicts[0] ?? null;
 
   const { data, isLoading, error } = useInventoryList(filters, { page, pageSize });
+
+  // Performance logging
+  usePerf('InventoryTable', isLoading);
+  usePerfQuery('inventory-list', isLoading, data?.data?.length);
   const deleteMutation = useDeleteInventory();
   const createMutation = useCreateInventory();
   const updateMutation = useUpdateInventory();

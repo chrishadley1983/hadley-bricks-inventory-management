@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Play, Copy, Check, ExternalLink } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 
 interface TestEndpoint {
   name: string;
@@ -220,6 +221,7 @@ function EndpointCard({ endpoint }: { endpoint: TestEndpoint }) {
 }
 
 export default function DevTestPage() {
+  usePerfPage('DevTestPage');
   return (
     <div className="container py-6 max-w-6xl">
       <div className="mb-6">

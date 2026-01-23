@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useReportSettings, useUpdateReportSettings } from '@/hooks/use-reports';
 import { useHomeAddress, useUpdateHomeAddress } from '@/hooks/use-mileage';
 import { useToast } from '@/hooks/use-toast';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -31,6 +32,8 @@ const Header = dynamic(
 );
 
 export default function ReportSettingsPage() {
+  usePerfPage('ReportSettingsPage');
+
   const { data: settings, isLoading } = useReportSettings();
   const updateMutation = useUpdateReportSettings();
   const { data: homeAddress, isLoading: isLoadingHomeAddress } = useHomeAddress();

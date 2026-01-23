@@ -8,7 +8,7 @@
  */
 
 // Tier 1: All platforms (integration sources)
-export const ALL_PLATFORMS = ['amazon', 'ebay', 'bricklink', 'brickowl', 'bricqer'] as const;
+export const ALL_PLATFORMS = ['amazon', 'ebay', 'bricklink', 'brickowl', 'bricqer', 'quickfile'] as const;
 export type AllPlatform = (typeof ALL_PLATFORMS)[number];
 
 // Tier 2: Selling platforms (where user lists inventory)
@@ -28,6 +28,7 @@ export const PLATFORM_LABELS: Record<AllPlatform, string> = {
   bricklink: 'BrickLink',
   brickowl: 'Brick Owl',
   bricqer: 'Bricqer',
+  quickfile: 'QuickFile',
 };
 
 /**

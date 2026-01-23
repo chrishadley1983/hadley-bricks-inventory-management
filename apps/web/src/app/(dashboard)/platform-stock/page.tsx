@@ -15,6 +15,7 @@ import {
   usePlatformListings,
   useTriggerImport,
 } from '@/hooks/use-platform-stock';
+import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic import for Header to avoid SSR issues
 const Header = dynamic(
@@ -25,6 +26,7 @@ const Header = dynamic(
 type TabValue = 'listings' | 'comparison' | 'repricing';
 
 export default function PlatformStockPage() {
+  usePerfPage('PlatformStockPage');
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabValue>('listings');
   const platform = 'amazon'; // Currently only Amazon is supported

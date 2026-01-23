@@ -6,6 +6,7 @@
  * THB1-THB3: Heartbeat every 5 minutes
  * TERR1-TERR4: Error handling, retry logic, cached schedule fallback
  * MISS1-MISS3: Missed scans - skip policy, no catch-up
+ * DATE1-DATE3: Date change detection - reset counters and reload schedule at midnight
  */
 
 using HadleyBricksScanner.Models;
@@ -34,6 +35,7 @@ public class SchedulerEngine : IDisposable
     private int _opportunitiesToday;
     private int _currentConfigVersion;
     private int _currentScheduleVersion;
+    private DateTime _currentScheduleDate; // DATE1: Track current schedule date for midnight reset
 
     // Timing constants
     private const int MainLoopIntervalMs = 30_000;      // LOOP1: 30 seconds
@@ -46,6 +48,7 @@ public class SchedulerEngine : IDisposable
         _configManager = configManager;
         _trayContext = trayContext;
         _claudeExecutor = new ClaudeExecutor();
+        _currentScheduleDate = DateTime.Today; // DATE1: Initialize to today
     }
 
     /// <summary>
@@ -105,6 +108,9 @@ public class SchedulerEngine : IDisposable
             {
                 // LOOP2: 30 second interval
                 await Task.Delay(MainLoopIntervalMs, ct);
+
+                // DATE2: Check for date change (midnight rollover)
+                await CheckForDateChangeAsync();
 
                 // Check operating hours
                 if (!IsWithinOperatingHours())
@@ -286,14 +292,17 @@ public class SchedulerEngine : IDisposable
             {
                 await Task.Delay(2000); // Wait for Claude to finish with browser
 
-                // First try to close Vinted tabs by window title (graceful)
+                // Close Vinted/localhost tabs by window title (graceful)
                 var closedByTitle = ChromeTabManager.CloseVintedTabs();
 
-                // If no tabs were closed by title, try to close Playwright browser processes
-                // This catches MCP browser instances that might not have recognizable titles
-                if (closedByTitle == 0)
+                // Always also try to close Playwright browser processes
+                // This catches MCP browser instances that might remain open
+                var closedProcesses = ChromeTabManager.ClosePlaywrightBrowsers();
+
+                if (closedByTitle > 0 || closedProcesses > 0)
                 {
-                    ChromeTabManager.ClosePlaywrightBrowsers();
+                    Log.Debug("Browser cleanup: {TitleClosed} windows, {ProcessClosed} processes",
+                        closedByTitle, closedProcesses);
                 }
             }
             catch (Exception cleanupEx)
@@ -362,6 +371,42 @@ public class SchedulerEngine : IDisposable
         }
 
         return now >= start && now <= end;
+    }
+
+    /// <summary>
+    /// Check for date change and reset counters/schedule (DATE2-DATE3)
+    /// This handles the case where the app runs overnight and needs to reset at midnight
+    /// </summary>
+    private async Task CheckForDateChangeAsync()
+    {
+        var today = DateTime.Today;
+
+        if (today != _currentScheduleDate)
+        {
+            Log.Information("DATE2: Date changed from {OldDate} to {NewDate} - resetting for new day",
+                _currentScheduleDate.ToString("yyyy-MM-dd"), today.ToString("yyyy-MM-dd"));
+
+            // DATE3: Reset counters for new day
+            _scansToday = 0;
+            _opportunitiesToday = 0;
+            _lastScanAt = null;
+            _consecutiveFailures = 0;
+
+            // Update tracked date
+            _currentScheduleDate = today;
+
+            // Reload config (to get fresh scansToday count from server, should be 0)
+            await LoadConfigAsync(restoreCounts: true);
+
+            // Reload schedule for new day (this gets a fresh schedule with all Executed=false)
+            await LoadScheduleAsync();
+
+            Log.Information("DATE3: Reset complete - loaded {ScanCount} scans for new day",
+                _schedule?.Scans.Count ?? 0);
+
+            _trayContext.ShowBalloon("New Day Started",
+                $"Loaded {_schedule?.Scans.Count ?? 0} scans for today.", ToolTipIcon.Info);
+        }
     }
 
     /// <summary>
@@ -476,13 +521,23 @@ public class SchedulerEngine : IDisposable
     }
 
     /// <summary>
-    /// Refresh schedule from server
+    /// Refresh schedule from server (full reset including counters)
     /// </summary>
     public async Task RefreshScheduleAsync()
     {
+        Log.Information("Manual refresh requested - resetting counters and reloading schedule");
+
+        // Reset counters to sync with server
+        await LoadConfigAsync(restoreCounts: true);
+
+        // Reload fresh schedule (all Executed flags will be false)
         await LoadScheduleAsync();
+
+        // Update tracked date to today
+        _currentScheduleDate = DateTime.Today;
+
         _trayContext.ShowBalloon("Schedule Refreshed",
-            $"Loaded {_schedule?.Scans.Count ?? 0} scans for today.", ToolTipIcon.Info);
+            $"Loaded {_schedule?.Scans.Count ?? 0} scans. Counters reset to {_scansToday}.", ToolTipIcon.Info);
     }
 
     /// <summary>

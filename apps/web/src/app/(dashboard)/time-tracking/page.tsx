@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Calendar, Clock, Edit2, Trash2, Plus, Filter, Copy } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -46,6 +47,7 @@ import {
 const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
 
 export default function TimeTrackingPage() {
+  usePerfPage('TimeTrackingPage');
   const [page, setPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState<TimeCategory | 'all'>('all');
   const [dateFromFilter, setDateFromFilter] = useState('');

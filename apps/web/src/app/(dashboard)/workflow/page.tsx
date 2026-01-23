@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePerfPage } from '@/hooks/use-perf';
 import {
   TaskQueue,
   AddTaskDropdown,
@@ -116,6 +117,7 @@ function PickupCalendarSkeleton() {
 }
 
 export default function WorkflowPage() {
+  usePerfPage('WorkflowPage');
   return (
     <div className="space-y-8">
       {/* Page header */}

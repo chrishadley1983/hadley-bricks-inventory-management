@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, AlertCircle, RefreshCw, Database, FileSpreadsheet } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 
 interface ConnectionStatus {
   sheets: { connected: boolean; title?: string; error?: string };
@@ -24,6 +25,7 @@ interface MigrationStats {
 }
 
 export default function MigrationPage() {
+  usePerfPage('MigrationPage');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [migrationStats, setMigrationStats] = useState<MigrationStats | null>(null);
   const [isTestingConnection, setIsTestingConnection] = useState(false);

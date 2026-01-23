@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { usePurchase } from '@/hooks';
 import { Button } from '@/components/ui/button';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -25,6 +26,7 @@ interface PageProps {
 }
 
 export default function EditPurchasePage({ params }: PageProps) {
+  usePerfPage('EditPurchasePage');
   const { id } = use(params);
   const { data: purchase, isLoading, error } = usePurchase(id);
 

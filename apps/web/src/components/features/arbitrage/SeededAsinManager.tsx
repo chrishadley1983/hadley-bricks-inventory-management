@@ -13,6 +13,9 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
+  XCircle,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +45,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -74,6 +78,9 @@ export function SeededAsinManager() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [discoveryDialogOpen, setDiscoveryDialogOpen] = useState(false);
   const [discoveryLimit, setDiscoveryLimit] = useState<string>('0');
+  const [resolutionDialogOpen, setResolutionDialogOpen] = useState(false);
+  const [itemToResolve, setItemToResolve] = useState<SeededAsinWithBrickset | null>(null);
+  const [selectedAsinOption, setSelectedAsinOption] = useState<string>('');
 
   // Debounced search
   const debouncedSearch = useDebouncedCallback((value: string) => {
@@ -217,6 +224,73 @@ export function SeededAsinManager() {
     },
   });
 
+  // Select ASIN mutation (for resolving multiple matches)
+  const selectAsinMutation = useMutation({
+    mutationFn: async ({ id, selectedAsin }: { id: string; selectedAsin: string }) => {
+      const response = await fetch(`/api/arbitrage/seeded/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'select_asin', selectedAsin }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to select ASIN');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'ASIN selected',
+        description: 'The ASIN has been confirmed for this set.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['seeded-asins'] });
+      queryClient.invalidateQueries({ queryKey: ['seeded-discovery-status'] });
+      setResolutionDialogOpen(false);
+      setItemToResolve(null);
+      setSelectedAsinOption('');
+    },
+    onError: (error) => {
+      toast({
+        title: 'Selection failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Mark as not found mutation
+  const markNotFoundMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/arbitrage/seeded/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_not_found' }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to mark as not found');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Marked as not found',
+        description: 'This set has been marked as not found on Amazon.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['seeded-asins'] });
+      queryClient.invalidateQueries({ queryKey: ['seeded-discovery-status'] });
+      setResolutionDialogOpen(false);
+      setItemToResolve(null);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Update failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Handlers
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -256,6 +330,70 @@ export function SeededAsinManager() {
     });
   };
 
+  const handleOpenResolutionDialog = (item: SeededAsinWithBrickset) => {
+    setItemToResolve(item);
+    // Pre-select the current ASIN if exists
+    setSelectedAsinOption(item.asin ?? '');
+    setResolutionDialogOpen(true);
+  };
+
+  const handleConfirmAsinSelection = () => {
+    if (!itemToResolve || !selectedAsinOption) return;
+    selectAsinMutation.mutate({
+      id: itemToResolve.id,
+      selectedAsin: selectedAsinOption,
+    });
+  };
+
+  const handleMarkNotFound = () => {
+    if (!itemToResolve) return;
+    markNotFoundMutation.mutate(itemToResolve.id);
+  };
+
+  const handleExportCsv = async (type: 'multiples' | 'not-found') => {
+    try {
+      const endpoint = type === 'multiples'
+        ? '/api/arbitrage/seeded/export-multiples'
+        : '/api/arbitrage/seeded/export-not-found';
+
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Export failed');
+      }
+
+      // Get the filename from the response header or generate one
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+      const defaultFilename = type === 'multiples'
+        ? `seeded-multiples-${new Date().toISOString().split('T')[0]}.csv`
+        : `seeded-not-found-${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = filenameMatch?.[1] || defaultFilename;
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: 'Export complete',
+        description: `${type === 'multiples' ? 'Multiple matches' : 'Not found items'} CSV has been downloaded.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Export failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const summary = discoveryStatus?.summary;
   const syncStatus = discoveryStatus?.syncStatus;
   const isRunning = syncStatus?.status === 'running';
@@ -288,18 +426,50 @@ export function SeededAsinManager() {
               icon={<CheckCircle2 className="h-4 w-4" />}
               className="text-green-600"
             />
-            <StatusCard
-              label="Not Found"
-              value={summary?.notFound ?? 0}
-              icon={<AlertCircle className="h-4 w-4" />}
-              className="text-red-600"
-            />
-            <StatusCard
-              label="Multiple"
-              value={summary?.multiple ?? 0}
-              icon={<AlertCircle className="h-4 w-4" />}
-              className="text-purple-600"
-            />
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-red-600"><AlertCircle className="h-4 w-4" /></span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Not Found
+                  </span>
+                  {(summary?.notFound ?? 0) > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 ml-auto"
+                      onClick={() => handleExportCsv('not-found')}
+                      title="Export not found to CSV"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                <div className="text-2xl font-bold text-red-600">{summary?.notFound ?? 0}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-purple-600"><AlertCircle className="h-4 w-4" /></span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Multiple
+                  </span>
+                  {(summary?.multiple ?? 0) > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 ml-auto"
+                      onClick={() => handleExportCsv('multiples')}
+                      title="Export multiples to CSV"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                <div className="text-2xl font-bold text-purple-600">{summary?.multiple ?? 0}</div>
+              </CardContent>
+            </Card>
             <StatusCard
               label="Avg Confidence"
               value={summary?.avgConfidence ? `${summary.avgConfidence}%` : '—'}
@@ -579,7 +749,22 @@ export function SeededAsinManager() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={item.discoveryStatus} />
+                        {(item.discoveryStatus === 'multiple' || item.discoveryStatus === 'found') ? (
+                          <button
+                            onClick={() => handleOpenResolutionDialog(item)}
+                            className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                            title={item.discoveryStatus === 'multiple' ? 'Click to resolve multiple matches' : 'Click to change or mark as not found'}
+                          >
+                            <StatusBadge status={item.discoveryStatus} />
+                            {item.discoveryStatus === 'multiple' && (
+                              <span className="text-xs text-purple-600">
+                                ({(item.alternativeAsins?.length ?? 0) + (item.asin ? 1 : 0)})
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <StatusBadge status={item.discoveryStatus} />
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {item.matchConfidence != null ? (
@@ -722,6 +907,172 @@ export function SeededAsinManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ASIN Resolution Dialog */}
+      <Dialog
+        open={resolutionDialogOpen}
+        onOpenChange={(open: boolean) => {
+          setResolutionDialogOpen(open);
+          if (!open) {
+            setItemToResolve(null);
+            setSelectedAsinOption('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              {itemToResolve?.discoveryStatus === 'multiple' ? 'Resolve Multiple Matches' : 'Manage ASIN'}
+            </DialogTitle>
+            <DialogDescription>
+              {itemToResolve && (
+                <span className="block mt-1">
+                  <span className="font-medium">{itemToResolve.bricksetSet.setNumber}</span> - {itemToResolve.bricksetSet.setName}
+                  {itemToResolve.bricksetSet.theme && (
+                    <span className="text-muted-foreground"> ({itemToResolve.bricksetSet.theme}, {itemToResolve.bricksetSet.yearFrom})</span>
+                  )}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {itemToResolve && (
+            <div className="space-y-4 py-2">
+              {/* ASIN Options */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Available ASINs</Label>
+                <RadioGroup
+                  value={selectedAsinOption}
+                  onValueChange={setSelectedAsinOption}
+                  className="space-y-2"
+                >
+                  {/* Current ASIN (if exists) */}
+                  {itemToResolve.asin && (
+                    <AsinOptionItem
+                      asin={itemToResolve.asin}
+                      title={itemToResolve.amazonTitle ?? undefined}
+                      confidence={itemToResolve.matchConfidence ?? undefined}
+                      isCurrent
+                      selected={selectedAsinOption === itemToResolve.asin}
+                    />
+                  )}
+
+                  {/* Alternative ASINs */}
+                  {itemToResolve.alternativeAsins?.map((alt) => (
+                    <AsinOptionItem
+                      key={alt.asin}
+                      asin={alt.asin}
+                      title={alt.title}
+                      confidence={alt.confidence}
+                      selected={selectedAsinOption === alt.asin}
+                    />
+                  ))}
+
+                  {/* No alternatives available message */}
+                  {!itemToResolve.asin && (!itemToResolve.alternativeAsins || itemToResolve.alternativeAsins.length === 0) && (
+                    <p className="text-sm text-muted-foreground italic">
+                      No ASIN options available for this set.
+                    </p>
+                  )}
+                </RadioGroup>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleMarkNotFound}
+                  disabled={markNotFoundMutation.isPending || selectAsinMutation.isPending}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Mark as Not Found
+                </Button>
+                <span className="text-xs text-muted-foreground flex-1">
+                  This removes the current ASIN and marks the set as not found on Amazon.
+                </span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResolutionDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmAsinSelection}
+              disabled={
+                !selectedAsinOption ||
+                selectAsinMutation.isPending ||
+                markNotFoundMutation.isPending
+              }
+            >
+              {selectAsinMutation.isPending ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Confirm Selection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ASIN Option Item Component for the resolution dialog
+interface AsinOptionItemProps {
+  asin: string;
+  title?: string;
+  confidence?: number;
+  isCurrent?: boolean;
+  selected: boolean;
+}
+
+function AsinOptionItem({ asin, title, confidence, isCurrent, selected }: AsinOptionItemProps) {
+  const amazonUrl = `https://www.amazon.co.uk/dp/${asin}`;
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 p-3 rounded-lg border transition-colors',
+        selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+      )}
+    >
+      <RadioGroupItem value={asin} id={asin} className="mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={asin} className="font-mono text-sm cursor-pointer">
+            {asin}
+          </Label>
+          {isCurrent && (
+            <Badge variant="secondary" className="text-xs">
+              Current
+            </Badge>
+          )}
+          {confidence !== undefined && (
+            <ConfidenceBadge confidence={confidence} />
+          )}
+          <a
+            href={amazonUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-primary"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
+        {title && (
+          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+            {title}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

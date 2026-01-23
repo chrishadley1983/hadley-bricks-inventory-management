@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, AlertTriangle, Copy } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import {
   Table,
   TableBody,
@@ -26,6 +27,7 @@ const Header = dynamic(
 );
 
 export default function SkuIssuesPage() {
+  usePerfPage('SkuIssuesPage');
   const { toast } = useToast();
   const { data, isLoading, error } = useEbaySkuIssues();
 

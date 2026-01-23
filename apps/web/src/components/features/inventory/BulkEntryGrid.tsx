@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Grid3X3, Plus, Trash2, Check, Loader2, AlertCircle } from 'lucide-react';
+import { SELLING_PLATFORMS, PLATFORM_LABELS, type SellingPlatform } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -414,12 +415,22 @@ export function BulkEntryGrid() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            value={row.listing_platform}
-                            onChange={(e) => updateCell(row.id, 'listing_platform', e.target.value)}
-                            placeholder="Platform"
-                            className="h-8"
-                          />
+                          <Select
+                            value={row.listing_platform || '_none'}
+                            onValueChange={(value: string) => updateCell(row.id, 'listing_platform', value === '_none' ? '' : value)}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_none">-</SelectItem>
+                              {SELLING_PLATFORMS.map((platform) => (
+                                <SelectItem key={platform} value={platform}>
+                                  {PLATFORM_LABELS[platform as SellingPlatform]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <Input

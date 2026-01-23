@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Pencil, Trash2, ShoppingCart, CheckCircle, Calculator } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -114,6 +115,7 @@ function getStatusBadge(item: EvaluationItem) {
 }
 
 export default function EvaluationDetailPage() {
+  usePerfPage('EvaluationDetailPage');
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;

@@ -12,6 +12,7 @@ import {
 } from '@/components/features/ebay-stock';
 import { ImportStatusBanner } from '@/components/features/platform-stock/ImportStatusBanner';
 import { useEbayListings, useTriggerEbayImport } from '@/hooks/use-ebay-stock';
+import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic import for Header to avoid SSR issues
 const Header = dynamic(
@@ -22,6 +23,7 @@ const Header = dynamic(
 type TabValue = 'listings' | 'comparison';
 
 export default function EbayStockPage() {
+  usePerfPage('EbayStockPage');
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabValue>('listings');
 

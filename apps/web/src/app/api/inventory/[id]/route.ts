@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { InventoryService } from '@/lib/services';
+import { createPerfLogger } from '@/lib/perf';
 
 // Transform empty strings to null for optional fields
 const emptyToNull = z.string().transform((val) => (val === '' ? null : val));
@@ -31,25 +32,33 @@ const UpdateInventorySchema = z.object({
  * Get a single inventory item
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const perf = createPerfLogger('GET /api/inventory/[id]');
+
   try {
     const { id } = await params;
+
+    const endAuth = perf.start('auth');
     const supabase = await createClient();
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
+    endAuth();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const service = new InventoryService(supabase, user.id);
+    const endQuery = perf.start('query');
     const item = await service.getById(id);
+    endQuery();
 
     if (!item) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
+    perf.end();
     return NextResponse.json({ data: item });
   } catch (error) {
     console.error('[GET /api/inventory/[id]] Error:', error);

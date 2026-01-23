@@ -209,7 +209,8 @@ export async function POST(request: NextRequest) {
 
     const { data: created, error: insertError } = await supabase
       .from('home_costs')
-      .insert(insertData)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .insert(insertData as unknown as Record<string, unknown>)
       .select()
       .single();
 

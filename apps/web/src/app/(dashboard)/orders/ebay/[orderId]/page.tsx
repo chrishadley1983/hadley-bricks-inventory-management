@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { use } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePerfPage } from '@/hooks/use-perf';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
@@ -179,6 +180,7 @@ export default function EbayOrderDetailPage({
 }: {
   params: Promise<{ orderId: string }>;
 }) {
+  usePerfPage('EbayOrderDetailPage');
   const { orderId } = use(params);
   const queryClient = useQueryClient();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);

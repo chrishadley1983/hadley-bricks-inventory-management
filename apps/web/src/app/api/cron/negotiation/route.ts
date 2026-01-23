@@ -5,6 +5,11 @@
  * Runs every 4 hours between 8am-8pm UK time (8:00, 12:00, 16:00, 20:00).
  *
  * This endpoint is called by Vercel Cron Jobs.
+ *
+ * Flow:
+ * 1. Sync offer statuses (detect accepted offers from orders, mark expired)
+ * 2. Process and send new offers to eligible listings
+ * 3. Send notifications
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,8 +25,10 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron Negotiation] Unauthorized request');
+    if (!cronSecret) {
+      console.warn('[Cron Negotiation] CRON_SECRET not configured - running without auth check');
+    } else if (authHeader !== `Bearer ${cronSecret}`) {
+      console.warn('[Cron Negotiation] Unauthorized request - invalid or missing Authorization header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -54,8 +61,10 @@ export async function POST(request: NextRequest) {
 
     let totalOffersSent = 0;
     let totalOffersFailed = 0;
+    let totalStatusSynced = 0;
     const userResults: Array<{
       userId: string;
+      statusSync: { accepted: number; expired: number };
       offersSent: number;
       offersFailed: number;
       error?: string;
@@ -72,6 +81,7 @@ export async function POST(request: NextRequest) {
           );
           userResults.push({
             userId: config.user_id,
+            statusSync: { accepted: 0, expired: 0 },
             offersSent: 0,
             offersFailed: 0,
             error: 'Failed to connect to eBay',
@@ -79,7 +89,17 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Process offers for this user
+        // Step 1: Sync offer statuses (detect accepted, mark expired)
+        console.log(`[Cron Negotiation] Syncing offer statuses for user ${config.user_id}`);
+        const syncResult = await service.syncOfferStatuses(config.user_id);
+        totalStatusSynced += syncResult.total;
+
+        console.log(
+          `[Cron Negotiation] User ${config.user_id} status sync: ` +
+          `${syncResult.accepted} accepted, ${syncResult.expired} expired`
+        );
+
+        // Step 2: Process and send new offers
         const result = await service.processOffers(config.user_id, 'automated');
 
         totalOffersSent += result.offersSent;
@@ -87,11 +107,12 @@ export async function POST(request: NextRequest) {
 
         userResults.push({
           userId: config.user_id,
+          statusSync: { accepted: syncResult.accepted, expired: syncResult.expired },
           offersSent: result.offersSent,
           offersFailed: result.offersFailed,
         });
 
-        // Send notification for this user
+        // Step 3: Send notification for this user
         if (result.offersSent > 0 || result.offersFailed > 0) {
           await service.sendAutomatedRunNotification(result);
         }
@@ -108,6 +129,7 @@ export async function POST(request: NextRequest) {
         );
         userResults.push({
           userId: config.user_id,
+          statusSync: { accepted: 0, expired: 0 },
           offersSent: 0,
           offersFailed: 0,
           error: errorMsg,
@@ -116,12 +138,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      `[Cron Negotiation] Complete: ${totalOffersSent} offers sent, ${totalOffersFailed} failed`
+      `[Cron Negotiation] Complete: ${totalStatusSynced} statuses synced, ` +
+      `${totalOffersSent} offers sent, ${totalOffersFailed} failed`
     );
 
     return NextResponse.json({
       success: true,
       usersProcessed: configs.length,
+      totalStatusSynced,
       totalOffersSent,
       totalOffersFailed,
       userResults,

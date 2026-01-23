@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePerfPage } from '@/hooks';
 import { format } from 'date-fns';
 import {
   RefreshCw,
@@ -425,6 +426,8 @@ function formatCurrency(amount: number | null, currency?: string | null): string
 type TimeframeOption = 'all' | '7' | '30' | '90';
 
 export default function OrdersPage() {
+  usePerfPage('OrdersPage');
+
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [platform, setPlatform] = useState('all');

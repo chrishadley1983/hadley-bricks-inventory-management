@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { use } from 'react';
+import { usePerfPage } from '@/hooks';
 
 // Dynamically import Header to prevent SSR issues with Supabase
 const Header = dynamic(
@@ -24,6 +25,7 @@ interface PageProps {
 
 export default function InventoryDetailPage({ params }: PageProps) {
   const { id } = use(params);
+  usePerfPage('InventoryDetailPage');
 
   return (
     <>

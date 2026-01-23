@@ -321,7 +321,7 @@ export function PhoneBroadbandTab({ existingCosts, isLoading }: PhoneBroadbandTa
               <Label>Type</Label>
               <Select
                 value={editing.description}
-                onValueChange={(value) =>
+                onValueChange={(value: string) =>
                   setEditing({ ...editing, description: value as PhoneBroadbandPreset })
                 }
               >
@@ -400,7 +400,7 @@ export function PhoneBroadbandTab({ existingCosts, isLoading }: PhoneBroadbandTa
                     <Checkbox
                       id="pb-ongoing"
                       checked={editing.isOngoing}
-                      onCheckedChange={(checked) => {
+                      onCheckedChange={(checked: boolean) => {
                         setEditing({
                           ...editing,
                           isOngoing: checked === true,

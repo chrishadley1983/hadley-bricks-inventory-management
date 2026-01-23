@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -19,6 +20,7 @@ const BrickLinkUploadForm = dynamic(
 );
 
 export default function NewBrickLinkUploadPage() {
+  usePerfPage('NewBrickLinkUploadPage');
   return (
     <>
       <Header title="New Upload" />

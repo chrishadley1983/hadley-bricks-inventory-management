@@ -163,7 +163,7 @@ export function UseOfHomeTab({ existingCost, isLoading }: UseOfHomeTabProps) {
         <Label>Hours worked from home per month</Label>
         <RadioGroup
           value={hoursPerMonth ?? ''}
-          onValueChange={(value) => setHoursPerMonth(value as HoursPerMonth)}
+          onValueChange={(value: string) => setHoursPerMonth(value as HoursPerMonth)}
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="25-50" id="hours-25-50" />
@@ -199,7 +199,7 @@ export function UseOfHomeTab({ existingCost, isLoading }: UseOfHomeTabProps) {
               <Checkbox
                 id="ongoing"
                 checked={isOngoing}
-                onCheckedChange={(checked) => {
+                onCheckedChange={(checked: boolean) => {
                   setIsOngoing(checked === true);
                   if (checked) setEndDate(null);
                 }}

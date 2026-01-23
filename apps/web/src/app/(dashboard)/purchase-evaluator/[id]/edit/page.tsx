@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import { HeaderSkeleton, TableSkeleton } from '@/components/ui/skeletons';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +17,7 @@ const Header = dynamic(
 );
 
 export default function EditEvaluationPage() {
+  usePerfPage('EditEvaluationPage');
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;

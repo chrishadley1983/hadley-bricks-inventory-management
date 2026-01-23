@@ -9,6 +9,7 @@ import type {
 } from '@hadley-bricks/database';
 import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repository';
 import { getDualWriteService, isDualWriteEnabled } from '@/lib/migration';
+import { createPerfLogger } from '@/lib/perf';
 
 /**
  * Numeric range filter
@@ -569,12 +570,16 @@ export class InventoryRepository extends BaseRepository<
    * Uses pagination to handle >1000 records
    */
   async getCountByStatus(options?: { platform?: string }): Promise<Record<string, number>> {
+    const perf = createPerfLogger('InventoryRepo.getCountByStatus');
+
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
     const counts: Record<string, number> = {};
+    let totalRows = 0;
 
     while (hasMore) {
+      const endPage = perf.start(`page ${page + 1}`);
       let query = this.supabase
         .from(this.tableName)
         .select('status')
@@ -585,12 +590,14 @@ export class InventoryRepository extends BaseRepository<
       }
 
       const { data, error } = await query;
+      endPage();
 
       if (error) {
         throw new Error(`Failed to get inventory count by status: ${error.message}`);
       }
 
       const items = data ?? [];
+      totalRows += items.length;
       items.forEach((item) => {
         const status = item.status || 'unknown';
         counts[status] = (counts[status] || 0) + 1;
@@ -600,6 +607,8 @@ export class InventoryRepository extends BaseRepository<
       page++;
     }
 
+    perf.log('complete', { pages: page, rows: totalRows });
+    perf.end();
     return counts;
   }
 
@@ -612,13 +621,17 @@ export class InventoryRepository extends BaseRepository<
     excludeStatuses?: InventoryStatus[];
     platform?: string;
   }): Promise<{ cost: number; listingValue: number }> {
+    const perf = createPerfLogger('InventoryRepo.getTotalValue');
+
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
     let cost = 0;
     let listingValue = 0;
+    let totalRows = 0;
 
     while (hasMore) {
+      const endPage = perf.start(`page ${page + 1}`);
       let query = this.supabase
         .from(this.tableName)
         .select('cost, listing_value, status')
@@ -629,12 +642,14 @@ export class InventoryRepository extends BaseRepository<
       }
 
       const { data, error } = await query;
+      endPage();
 
       if (error) {
         throw new Error(`Failed to get inventory value: ${error.message}`);
       }
 
       const items = data ?? [];
+      totalRows += items.length;
       items.forEach((item) => {
         // Skip excluded statuses
         if (options?.excludeStatuses?.includes(item.status as InventoryStatus)) {
@@ -648,6 +663,8 @@ export class InventoryRepository extends BaseRepository<
       page++;
     }
 
+    perf.log('complete', { pages: page, rows: totalRows });
+    perf.end();
     return { cost, listingValue };
   }
 
@@ -658,12 +675,16 @@ export class InventoryRepository extends BaseRepository<
   async getValueByStatus(options?: { platform?: string }): Promise<
     Record<string, { cost: number; listingValue: number; count: number }>
   > {
+    const perf = createPerfLogger('InventoryRepo.getValueByStatus');
+
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
     const byStatus: Record<string, { cost: number; listingValue: number; count: number }> = {};
+    let totalRows = 0;
 
     while (hasMore) {
+      const endPage = perf.start(`page ${page + 1}`);
       let query = this.supabase
         .from(this.tableName)
         .select('cost, listing_value, status')
@@ -674,12 +695,14 @@ export class InventoryRepository extends BaseRepository<
       }
 
       const { data, error } = await query;
+      endPage();
 
       if (error) {
         throw new Error(`Failed to get inventory value by status: ${error.message}`);
       }
 
       const items = data ?? [];
+      totalRows += items.length;
       items.forEach((item) => {
         let status = item.status || 'unknown';
 
@@ -701,6 +724,8 @@ export class InventoryRepository extends BaseRepository<
       page++;
     }
 
+    perf.log('complete', { pages: page, rows: totalRows });
+    perf.end();
     return byStatus;
   }
 

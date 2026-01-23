@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useDashboardStore } from '@/stores';
-import { usePlatforms } from '@/hooks';
+import { usePlatforms, usePerfPage } from '@/hooks';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
@@ -77,6 +77,8 @@ const DashboardSummaryWidget = dynamic(
 );
 
 export default function DashboardPage() {
+  usePerfPage('DashboardPage');
+
   const excludeSold = useDashboardStore((state) => state.excludeSold);
   const toggleExcludeSold = useDashboardStore((state) => state.toggleExcludeSold);
   const platform = useDashboardStore((state) => state.platform);

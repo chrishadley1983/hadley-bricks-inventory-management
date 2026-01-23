@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useBrickLinkUpload } from '@/hooks/use-bricklink-uploads';
 import { Button } from '@/components/ui/button';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -25,6 +26,7 @@ interface PageProps {
 }
 
 export default function EditBrickLinkUploadPage({ params }: PageProps) {
+  usePerfPage('EditBrickLinkUploadPage');
   const { id } = use(params);
   const { data: upload, isLoading, error } = useBrickLinkUpload(id);
 

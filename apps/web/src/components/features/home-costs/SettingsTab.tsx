@@ -65,7 +65,7 @@ export function SettingsTab({ settings, isLoading }: SettingsTabProps) {
         <Label>P&L Display Mode</Label>
         <RadioGroup
           value={displayMode}
-          onValueChange={(value) => setDisplayMode(value as DisplayMode)}
+          onValueChange={(value: string) => setDisplayMode(value as DisplayMode)}
         >
           <div className="flex items-start space-x-2">
             <RadioGroupItem value="separate" id="display-separate" className="mt-1" />

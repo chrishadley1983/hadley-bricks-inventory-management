@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HeaderSkeleton } from '@/components/ui/skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -29,6 +30,7 @@ const PurchaseEvaluatorWizard = dynamic(
 );
 
 export default function NewPurchaseEvaluatorPage() {
+  usePerfPage('NewPurchaseEvaluatorPage');
   return (
     <>
       <Header title="New Evaluation" />

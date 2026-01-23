@@ -38,6 +38,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { DateRangePicker, StatCard } from '@/components/charts';
 import { useDailyActivityReport, useUpdateStoreStatus, useExportReport } from '@/hooks/use-reports';
+import { usePerfPage } from '@/hooks/use-perf';
 import type {
   DateRangePreset,
   StoreStatus,
@@ -141,6 +142,8 @@ function StoreStatusSelector({
 }
 
 export default function DailyActivityReportPage() {
+  usePerfPage('DailyActivityReportPage');
+
   const [dateRange, setDateRange] = useState<{
     startDate: Date;
     endDate: Date;

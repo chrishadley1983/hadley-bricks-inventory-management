@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScannerControlPanel } from '@/components/features/vinted-automation/ScannerControlPanel';
 import { ConnectionStatusCard } from '@/components/features/vinted-automation/ConnectionStatusCard';
@@ -22,6 +23,7 @@ import { Settings } from 'lucide-react';
 import { useScannerStatus, vintedAutomationKeys } from '@/hooks/use-vinted-automation';
 
 export default function VintedAutomationPage() {
+  usePerfPage('VintedAutomationPage');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const { data: statusData } = useScannerStatus();

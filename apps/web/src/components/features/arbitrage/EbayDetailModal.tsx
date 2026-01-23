@@ -326,7 +326,12 @@ export function EbayDetailModal({
                   <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
                     <span>Listings</span>
                     <span className="font-mono font-medium text-foreground">
-                      {ebayStats.totalListings} available
+                      {item.ebayTotalListings ?? ebayStats.totalListings} available
+                      {(item.ebayTotalListings ?? 0) > activeListings.length && (
+                        <span className="font-normal text-muted-foreground ml-1">
+                          ({activeListings.length} cheapest shown)
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>

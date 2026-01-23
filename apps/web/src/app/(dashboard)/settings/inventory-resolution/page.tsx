@@ -16,6 +16,7 @@ import {
   MapPin,
   ShoppingCart,
 } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -379,6 +380,7 @@ function formatDate(dateString: string): string {
 // ============================================================================
 
 export default function InventoryResolutionPage() {
+  usePerfPage('InventoryResolutionPage');
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'ebay' | 'amazon'>('ebay');
 

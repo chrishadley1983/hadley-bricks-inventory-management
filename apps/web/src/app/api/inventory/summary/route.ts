@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { InventoryService } from '@/lib/services';
+import { createPerfLogger } from '@/lib/perf';
 
 /**
  * GET /api/inventory/summary
@@ -11,12 +12,16 @@ import { InventoryService } from '@/lib/services';
  * - platform: Filter by listing platform (e.g., 'AMAZON', 'EBAY')
  */
 export async function GET(request: NextRequest) {
+  const perf = createPerfLogger('GET /api/inventory/summary');
+
   try {
+    const endAuth = perf.start('auth');
     const supabase = await createClient();
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
+    endAuth();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,7 +31,12 @@ export async function GET(request: NextRequest) {
     const platform = request.nextUrl.searchParams.get('platform') || undefined;
 
     const service = new InventoryService(supabase, user.id);
+    const endQuery = perf.start('getSummary');
     const summary = await service.getSummary({ excludeSold, platform });
+    endQuery();
+
+    perf.log('result', { totalItems: summary.totalItems });
+    perf.end();
 
     return NextResponse.json(
       { data: summary },

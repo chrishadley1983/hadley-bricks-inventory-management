@@ -14,25 +14,56 @@ import { useQuickFileCredentials } from '@/hooks/use-quickfile-credentials';
 import { useMtdExportCsv, useMtdExportQuickFile } from '@/hooks/use-mtd-export';
 import { QuickFileCredentialsModal } from './QuickFileCredentialsModal';
 import { ExportConfirmDialog } from './ExportConfirmDialog';
+import { PeriodSelectDialog } from './PeriodSelectDialog';
 
 interface MtdExportDropdownProps {
-  selectedMonth: string; // YYYY-MM
   disabled?: boolean;
 }
 
-export function MtdExportDropdown({ selectedMonth, disabled }: MtdExportDropdownProps) {
+export function MtdExportDropdown({ disabled }: MtdExportDropdownProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showPeriodDialog, setShowPeriodDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'csv' | 'quickfile' | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<{
+    startMonth: string;
+    endMonth: string;
+  } | null>(null);
 
   const { data: credentials } = useQuickFileCredentials();
   const exportCsv = useMtdExportCsv();
   const pushToQuickFile = useMtdExportQuickFile();
 
-  const handleCsvDownload = async () => {
+  const handleCsvClick = () => {
+    setPendingAction('csv');
+    setShowPeriodDialog(true);
+  };
+
+  const handleQuickFileClick = () => {
+    setPendingAction('quickfile');
+    setShowPeriodDialog(true);
+  };
+
+  const handlePeriodConfirm = (startMonth: string, endMonth: string) => {
+    setSelectedPeriod({ startMonth, endMonth });
+    setShowPeriodDialog(false);
+
+    if (pendingAction === 'csv') {
+      handleCsvDownload(startMonth, endMonth);
+    } else if (pendingAction === 'quickfile') {
+      if (!credentials?.configured) {
+        setShowCredentialsModal(true);
+      } else {
+        setShowConfirmDialog(true);
+      }
+    }
+  };
+
+  const handleCsvDownload = async (startMonth: string, endMonth: string) => {
     setIsExporting(true);
     try {
-      await exportCsv.mutateAsync({ month: selectedMonth });
+      await exportCsv.mutateAsync({ startMonth, endMonth });
       toast.success('CSV downloaded successfully');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to download CSV';
@@ -43,21 +74,19 @@ export function MtdExportDropdown({ selectedMonth, disabled }: MtdExportDropdown
       }
     } finally {
       setIsExporting(false);
+      setPendingAction(null);
     }
-  };
-
-  const handleQuickFilePush = async () => {
-    if (!credentials?.configured) {
-      setShowCredentialsModal(true);
-      return;
-    }
-    setShowConfirmDialog(true);
   };
 
   const handleConfirmExport = async () => {
+    if (!selectedPeriod) return;
+
     setIsExporting(true);
     try {
-      const result = await pushToQuickFile.mutateAsync({ month: selectedMonth });
+      const result = await pushToQuickFile.mutateAsync({
+        startMonth: selectedPeriod.startMonth,
+        endMonth: selectedPeriod.endMonth,
+      });
       toast.success(
         `Exported ${result.invoicesCreated} invoices and ${result.purchasesCreated} purchases to QuickFile`
       );
@@ -76,6 +105,7 @@ export function MtdExportDropdown({ selectedMonth, disabled }: MtdExportDropdown
       }
     } finally {
       setIsExporting(false);
+      setPendingAction(null);
     }
   };
 
@@ -103,16 +133,31 @@ export function MtdExportDropdown({ selectedMonth, disabled }: MtdExportDropdown
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleCsvDownload} disabled={isExporting}>
+          <DropdownMenuItem onClick={handleCsvClick} disabled={isExporting}>
             <Download className="h-4 w-4 mr-2" />
             Download CSV
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleQuickFilePush} disabled={isExporting}>
+          <DropdownMenuItem onClick={handleQuickFileClick} disabled={isExporting}>
             <Upload className="h-4 w-4 mr-2" />
             Push to QuickFile
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <PeriodSelectDialog
+        open={showPeriodDialog}
+        onOpenChange={(open) => {
+          setShowPeriodDialog(open);
+          if (!open) setPendingAction(null);
+        }}
+        onConfirm={handlePeriodConfirm}
+        title={pendingAction === 'csv' ? 'Select Export Period' : 'Select Period for QuickFile'}
+        description={
+          pendingAction === 'csv'
+            ? 'Choose the date range for your MTD CSV export.'
+            : 'Choose the date range to export to QuickFile.'
+        }
+      />
 
       <QuickFileCredentialsModal
         open={showCredentialsModal}
@@ -123,7 +168,8 @@ export function MtdExportDropdown({ selectedMonth, disabled }: MtdExportDropdown
       <ExportConfirmDialog
         open={showConfirmDialog}
         onOpenChange={setShowConfirmDialog}
-        month={selectedMonth}
+        startMonth={selectedPeriod?.startMonth || ''}
+        endMonth={selectedPeriod?.endMonth || ''}
         onConfirm={handleConfirmExport}
         isExporting={isExporting}
       />

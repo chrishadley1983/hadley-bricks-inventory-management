@@ -468,8 +468,8 @@ export interface PollFeedResponse {
 /** UK Marketplace ID */
 export const UK_MARKETPLACE_ID = 'A1F83G8C2ARO7P';
 
-/** Default product type for Lego items (TOY is the valid Amazon category) */
-export const DEFAULT_PRODUCT_TYPE = 'TOY';
+/** Default product type for Lego items */
+export const DEFAULT_PRODUCT_TYPE = 'TOY_BUILDING_BLOCK';
 
 /** Feed polling interval in milliseconds (30 seconds) */
 export const POLL_INTERVAL_MS = 30000;

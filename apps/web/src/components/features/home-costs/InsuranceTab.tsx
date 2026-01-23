@@ -277,7 +277,7 @@ export function InsuranceTab({ existingCost, isLoading }: InsuranceTabProps) {
               <Checkbox
                 id="ins-ongoing"
                 checked={isOngoing}
-                onCheckedChange={(checked) => {
+                onCheckedChange={(checked: boolean) => {
                   setIsOngoing(checked === true);
                   if (checked) setEndDate(null);
                 }}

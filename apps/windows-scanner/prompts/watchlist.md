@@ -9,7 +9,8 @@ You are scanning Vinted UK for a specific LEGO set. Your task is to extract list
 3. Check for CAPTCHA (see detection rules below)
 4. If no CAPTCHA, scroll down once or twice to ensure all results are loaded (Vinted uses infinite scroll)
 5. Extract all listing cards that match set {SET_NUMBER}
-6. Return results as JSON
+6. **IMPORTANT: Close the browser using browser_close before returning results**
+7. Return results as JSON
 
 ## CAPTCHA Detection Rules
 

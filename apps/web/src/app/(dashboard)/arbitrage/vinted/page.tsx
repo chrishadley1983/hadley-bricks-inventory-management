@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +82,7 @@ function formatCurrency(value: number | null): string {
 }
 
 export default function VintedArbitragePage() {
+  usePerfPage('VintedArbitragePage');
   const [vintedUrl, setVintedUrl] = useState(DEFAULT_VINTED_URL);
   const [cogThreshold, setCogThreshold] = useState(40);
 

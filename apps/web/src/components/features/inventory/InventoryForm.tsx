@@ -701,21 +701,39 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
                         )}
                       </Button>
                       {field.value && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          asChild
-                          title="View on Amazon"
-                        >
-                          <a
-                            href={`https://www.amazon.co.uk/dp/${field.value}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            asChild
+                            title="View on Amazon"
                           >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
+                            <a
+                              href={`https://www.amazon.co.uk/dp/${field.value}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            asChild
+                            title="View on SellerAmp SAS"
+                            className="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                          >
+                            <a
+                              href={`https://sas.selleramp.com/sas/lookup?SasLookup%5Bsearch_term%5D=${field.value}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <span className="text-xs font-bold">SAS</span>
+                            </a>
+                          </Button>
+                        </>
                       )}
                     </div>
                     <FormDescription>

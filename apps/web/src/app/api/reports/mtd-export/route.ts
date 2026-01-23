@@ -8,16 +8,31 @@ import { CredentialsRepository } from '@/lib/repositories';
 import type { QuickFileCredentials } from '@/types/mtd-export';
 
 const ExportSchema = z.object({
-  month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
   action: z.enum(['csv', 'quickfile']),
 });
 
 const PreviewSchema = z.object({
-  month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
 });
 
+function formatPeriodLabel(startMonth: string, endMonth: string): string {
+  const startDate = new Date(startMonth + '-01');
+  const endDate = new Date(endMonth + '-01');
+
+  const startLabel = startDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const endLabel = endDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  if (startMonth === endMonth) {
+    return startLabel;
+  }
+  return `${startLabel} to ${endLabel}`;
+}
+
 /**
- * GET /api/reports/mtd-export?month=YYYY-MM
+ * GET /api/reports/mtd-export?startMonth=YYYY-MM&endMonth=YYYY-MM
  * Get export preview for confirmation dialog
  */
 export async function GET(request: NextRequest) {
@@ -33,9 +48,10 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const month = searchParams.get('month');
+    const startMonth = searchParams.get('startMonth');
+    const endMonth = searchParams.get('endMonth');
 
-    const parsed = PreviewSchema.safeParse({ month });
+    const parsed = PreviewSchema.safeParse({ startMonth, endMonth });
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
@@ -44,7 +60,11 @@ export async function GET(request: NextRequest) {
     }
 
     const mtdService = new MtdExportService(supabase);
-    const preview = await mtdService.generateExportPreview(user.id, parsed.data.month);
+    const preview = await mtdService.generateExportPreview(
+      user.id,
+      parsed.data.startMonth,
+      parsed.data.endMonth
+    );
 
     return NextResponse.json(preview);
   } catch (error) {
@@ -79,20 +99,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { month, action } = parsed.data;
+    const { startMonth, endMonth, action } = parsed.data;
     const mtdService = new MtdExportService(supabase);
 
-    // Generate CSV data
-    const csvData = await mtdService.generateCsvData(user.id, month);
+    // Generate CSV data for the period
+    const csvData = await mtdService.generateCsvData(user.id, startMonth, endMonth);
 
     // Check for empty data
     if (csvData.sales.length === 0 && csvData.expenses.length === 0) {
-      const monthLabel = new Date(month + '-01').toLocaleDateString('en-GB', {
-        month: 'long',
-        year: 'numeric',
-      });
+      const periodLabel = formatPeriodLabel(startMonth, endMonth);
       return NextResponse.json(
-        { error: `No data to export for ${monthLabel}`, isEmpty: true },
+        { error: `No data to export for ${periodLabel}`, isEmpty: true },
         { status: 400 }
       );
     }
@@ -104,20 +121,23 @@ export async function POST(request: NextRequest) {
 
       // Create ZIP with both files
       const zip = new JSZip();
-      zip.file(`quickfile-${month}-sales.csv`, salesCsv);
-      zip.file(`quickfile-${month}-expenses.csv`, expensesCsv);
+      const filePrefix =
+        startMonth === endMonth ? `quickfile-${startMonth}` : `quickfile-${startMonth}-to-${endMonth}`;
+
+      zip.file(`${filePrefix}-sales.csv`, salesCsv);
+      zip.file(`${filePrefix}-expenses.csv`, expensesCsv);
 
       const zipBlob = await zip.generateAsync({ type: 'arraybuffer' });
 
       // Log the export
       const entriesCount = csvData.sales.length + csvData.expenses.length;
-      await mtdService.logExport(user.id, month, 'csv', entriesCount);
+      await mtdService.logExport(user.id, startMonth, 'csv', entriesCount, { endMonth });
 
       // Return ZIP file
       return new NextResponse(zipBlob, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="quickfile-${month}.zip"`,
+          'Content-Disposition': `attachment; filename="${filePrefix}.zip"`,
         },
       });
     }
@@ -164,7 +184,8 @@ export async function POST(request: NextRequest) {
 
         // Log successful export
         const entriesCount = result.invoicesCreated + result.purchasesCreated;
-        await mtdService.logExport(user.id, month, 'quickfile', entriesCount, {
+        await mtdService.logExport(user.id, startMonth, 'quickfile', entriesCount, {
+          endMonth,
           invoicesCreated: result.invoicesCreated,
           purchasesCreated: result.purchasesCreated,
         });

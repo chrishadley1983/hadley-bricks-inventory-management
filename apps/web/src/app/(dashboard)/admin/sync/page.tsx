@@ -10,6 +10,7 @@ import {
   Database,
   FileSpreadsheet,
 } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -60,6 +61,7 @@ async function fetchMigrationStats(): Promise<{
 }
 
 export default function AdminSyncPage() {
+  usePerfPage('AdminSyncPage');
   const { status, lastSync, isSyncing, lastError } = useGlobalSyncStatus();
   const { syncAll } = useSyncAll();
   const [isRefreshing, setIsRefreshing] = useState(false);

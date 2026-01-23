@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { RefreshCw, AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock, ExternalLink } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +25,10 @@ import {
   useTriggerSync,
   useExcludeAsin,
   useEbaySyncWithProgress,
-  type EbaySyncProgress,
+  useAmazonInventorySyncWithProgress,
+  useAmazonPricingSyncWithProgress,
+  useBrickLinkSyncWithProgress,
+  type SyncProgress,
 } from '@/hooks/use-arbitrage';
 import type { ArbitrageFilterOptions, ArbitrageItem, SyncJobType } from '@/lib/arbitrage/types';
 import { EBAY_SHOW_FILTER_OPTIONS, EBAY_SORT_OPTIONS } from '@/lib/arbitrage/types';
@@ -41,6 +45,7 @@ const Header = dynamic(
 type TabValue = 'opportunities' | 'unmapped' | 'settings';
 
 export default function EbayArbitragePage() {
+  usePerfPage('EbayArbitragePage');
   const [activeTab, setActiveTab] = useState<TabValue>('opportunities');
   const [filters, setFilters] = useState<ArbitrageFilterOptions>({
     sortField: 'ebay_margin',
@@ -49,7 +54,10 @@ export default function EbayArbitragePage() {
   });
   const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
-  const [ebaySyncProgress, setEbaySyncProgress] = useState<EbaySyncProgress | null>(null);
+  const [amazonInventorySyncProgress, setAmazonInventorySyncProgress] = useState<SyncProgress | null>(null);
+  const [amazonPricingSyncProgress, setAmazonPricingSyncProgress] = useState<SyncProgress | null>(null);
+  const [brickLinkSyncProgress, setBrickLinkSyncProgress] = useState<SyncProgress | null>(null);
+  const [ebaySyncProgress, setEbaySyncProgress] = useState<SyncProgress | null>(null);
   const { toast } = useToast();
 
   // Data hooks
@@ -61,6 +69,9 @@ export default function EbayArbitragePage() {
   // Mutations
   const syncMutation = useTriggerSync();
   const excludeMutation = useExcludeAsin();
+  const amazonInventorySyncMutation = useAmazonInventorySyncWithProgress();
+  const amazonPricingSyncMutation = useAmazonPricingSyncWithProgress();
+  const brickLinkSyncMutation = useBrickLinkSyncWithProgress();
   const ebaySyncMutation = useEbaySyncWithProgress();
 
   const handleFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
@@ -91,7 +102,55 @@ export default function EbayArbitragePage() {
   }, [excludeMutation, toast]);
 
   const handleSync = async (type: SyncJobType | 'all') => {
-    // Use streaming sync for eBay to show progress
+    // Use streaming sync with progress for individual sync types
+    if (type === 'inventory_asins') {
+      try {
+        setAmazonInventorySyncProgress({ type: 'start', message: 'Starting Amazon inventory sync...' });
+        await amazonInventorySyncMutation.mutateAsync((progress) => {
+          setAmazonInventorySyncProgress(progress);
+        });
+        toast({ title: 'Amazon inventory sync completed successfully' });
+        refetchSyncStatus();
+      } catch {
+        toast({ title: 'Amazon inventory sync failed', variant: 'destructive' });
+      } finally {
+        setTimeout(() => setAmazonInventorySyncProgress(null), 2000);
+      }
+      return;
+    }
+
+    if (type === 'amazon_pricing') {
+      try {
+        setAmazonPricingSyncProgress({ type: 'start', message: 'Starting Amazon pricing sync...' });
+        await amazonPricingSyncMutation.mutateAsync((progress) => {
+          setAmazonPricingSyncProgress(progress);
+        });
+        toast({ title: 'Amazon pricing sync completed successfully' });
+        refetchSyncStatus();
+      } catch {
+        toast({ title: 'Amazon pricing sync failed', variant: 'destructive' });
+      } finally {
+        setTimeout(() => setAmazonPricingSyncProgress(null), 2000);
+      }
+      return;
+    }
+
+    if (type === 'bricklink_pricing') {
+      try {
+        setBrickLinkSyncProgress({ type: 'start', message: 'Starting BrickLink pricing sync...' });
+        await brickLinkSyncMutation.mutateAsync((progress) => {
+          setBrickLinkSyncProgress(progress);
+        });
+        toast({ title: 'BrickLink pricing sync completed successfully' });
+        refetchSyncStatus();
+      } catch {
+        toast({ title: 'BrickLink pricing sync failed', variant: 'destructive' });
+      } finally {
+        setTimeout(() => setBrickLinkSyncProgress(null), 2000);
+      }
+      return;
+    }
+
     if (type === 'ebay_pricing') {
       try {
         setEbaySyncProgress({ type: 'start', message: 'Starting eBay sync...' });
@@ -103,15 +162,15 @@ export default function EbayArbitragePage() {
       } catch {
         toast({ title: 'eBay sync failed', variant: 'destructive' });
       } finally {
-        // Clear progress after a short delay to show completion
         setTimeout(() => setEbaySyncProgress(null), 2000);
       }
       return;
     }
 
+    // Full sync uses the non-streaming endpoint
     try {
       await syncMutation.mutateAsync(type);
-      toast({ title: `${type === 'all' ? 'Full sync' : 'Sync'} completed successfully` });
+      toast({ title: 'Full sync completed successfully' });
     } catch {
       toast({ title: 'Sync failed', variant: 'destructive' });
     }
@@ -225,28 +284,32 @@ export default function EbayArbitragePage() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-4">
-                <SyncStatusBadge
+                <SyncStatusBadgeWithProgress
                   label="Amazon Inventory"
                   lastSync={syncStatus?.syncStatus?.inventory_asins?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.inventory_asins?.status}
                   onSync={() => handleSync('inventory_asins')}
-                  isSyncing={syncMutation.isPending}
+                  isSyncing={amazonInventorySyncMutation.isPending}
+                  progress={amazonInventorySyncProgress}
                 />
-                <SyncStatusBadge
+                <SyncStatusBadgeWithProgress
                   label="Amazon Pricing"
                   lastSync={syncStatus?.syncStatus?.amazon_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.amazon_pricing?.status}
                   onSync={() => handleSync('amazon_pricing')}
-                  isSyncing={syncMutation.isPending}
+                  isSyncing={amazonPricingSyncMutation.isPending}
+                  progress={amazonPricingSyncProgress}
                 />
-                <SyncStatusBadge
+                <SyncStatusBadgeWithProgress
                   label="BrickLink Pricing"
                   lastSync={syncStatus?.syncStatus?.bricklink_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.bricklink_pricing?.status}
                   onSync={() => handleSync('bricklink_pricing')}
-                  isSyncing={syncMutation.isPending}
+                  isSyncing={brickLinkSyncMutation.isPending}
+                  progress={brickLinkSyncProgress}
                 />
-                <EbaySyncStatusBadge
+                <SyncStatusBadgeWithProgress
+                  label="eBay Pricing"
                   lastSync={syncStatus?.syncStatus?.ebay_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.ebay_pricing?.status}
                   onSync={() => handleSync('ebay_pricing')}
@@ -629,74 +692,21 @@ function EbayArbitrageTable({
   );
 }
 
-// Sync Status Badge Component
-function SyncStatusBadge({
+// Sync Status Badge with Progress
+function SyncStatusBadgeWithProgress({
   label,
-  lastSync,
-  status,
-  onSync,
-  isSyncing,
-}: {
-  label: string;
-  lastSync: string | null | undefined;
-  status: string | null | undefined;
-  onSync: () => void;
-  isSyncing: boolean;
-}) {
-  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 24 * 60 * 60 * 1000;
-  const isError = status === 'failed';
-
-  const formatDate = (date: string | null | undefined) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  return (
-    <div className="flex items-center gap-2 border rounded-lg px-3 py-2">
-      {isError ? (
-        <AlertCircle className="h-4 w-4 text-destructive" />
-      ) : isStale ? (
-        <Clock className="h-4 w-4 text-amber-500" />
-      ) : (
-        <CheckCircle2 className="h-4 w-4 text-green-500" />
-      )}
-      <div className="flex flex-col">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="text-xs text-muted-foreground">
-          {formatDate(lastSync)}
-        </span>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="ml-2 h-7 w-7 p-0"
-        onClick={onSync}
-        disabled={isSyncing}
-      >
-        <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-      </Button>
-    </div>
-  );
-}
-
-// eBay Sync Status Badge with Progress
-function EbaySyncStatusBadge({
   lastSync,
   status,
   onSync,
   isSyncing,
   progress,
 }: {
+  label: string;
   lastSync: string | null | undefined;
   status: string | null | undefined;
   onSync: () => void;
   isSyncing: boolean;
-  progress: EbaySyncProgress | null;
+  progress: SyncProgress | null;
 }) {
   const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 24 * 60 * 60 * 1000;
   const isError = status === 'failed';
@@ -717,7 +727,7 @@ function EbaySyncStatusBadge({
       <div className="flex flex-col gap-2 border rounded-lg px-3 py-2 min-w-[200px]">
         <div className="flex items-center gap-2">
           <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-          <span className="text-sm font-medium">eBay Pricing</span>
+          <span className="text-sm font-medium">{label}</span>
         </div>
         <div className="space-y-1">
           <Progress value={progress.percent ?? 0} className="h-2" />
@@ -746,7 +756,7 @@ function EbaySyncStatusBadge({
         <CheckCircle2 className="h-4 w-4 text-green-500" />
       )}
       <div className="flex flex-col">
-        <span className="text-sm font-medium">eBay Pricing</span>
+        <span className="text-sm font-medium">{label}</span>
         <span className="text-xs text-muted-foreground">
           {formatDate(lastSync)}
         </span>

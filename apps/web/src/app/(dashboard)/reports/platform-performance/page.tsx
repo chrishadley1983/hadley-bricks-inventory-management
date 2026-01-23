@@ -23,6 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { DateRangePicker, StatCard, BarChart, PieChart } from '@/components/charts';
 import { usePlatformPerformanceReport, useExportReport } from '@/hooks/use-reports';
+import { usePerfPage } from '@/hooks/use-perf';
 import type { DateRangePreset } from '@/lib/services';
 
 const Header = dynamic(
@@ -61,6 +62,8 @@ function getPlatformBadgeColor(platform: string): string {
 }
 
 export default function PlatformPerformanceReportPage() {
+  usePerfPage('PlatformPerformanceReportPage');
+
   const [dateRange, setDateRange] = useState<{
     startDate: Date;
     endDate: Date;

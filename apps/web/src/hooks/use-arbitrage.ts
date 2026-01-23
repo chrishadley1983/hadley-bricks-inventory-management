@@ -392,73 +392,136 @@ export function useTriggerSync() {
 }
 
 // ============================================================================
-// STREAMING SYNC HOOK
+// STREAMING SYNC HOOKS
 // ============================================================================
 
-export interface EbaySyncProgress {
+export interface SyncProgress {
   type: 'start' | 'progress' | 'complete' | 'error';
   message?: string;
   processed?: number;
   total?: number;
   percent?: number;
-  result?: { updated: number; failed: number; total: number };
+  result?: { updated?: number; failed?: number; total?: number; added?: number };
+}
+
+// Keep EbaySyncProgress as alias for backward compatibility
+export type EbaySyncProgress = SyncProgress;
+
+/**
+ * Helper to create a streaming sync mutation
+ */
+function createStreamingSyncMutation(
+  endpoint: string,
+  _queryClient: ReturnType<typeof useQueryClient>
+) {
+  return async (onProgress: (progress: SyncProgress) => void): Promise<SyncProgress> => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to start sync');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let lastProgress: SyncProgress = { type: 'start' };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6)) as SyncProgress;
+              lastProgress = data;
+              onProgress(data);
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } finally {
+      // Always release the reader lock to prevent memory leaks
+      reader.releaseLock();
+    }
+
+    return lastProgress;
+  };
 }
 
 /**
  * Trigger eBay sync with streaming progress updates
- * Properly releases the reader lock to prevent memory leaks
  */
 export function useEbaySyncWithProgress() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (onProgress: (progress: EbaySyncProgress) => void): Promise<EbaySyncProgress> => {
-      const response = await fetch('/api/arbitrage/sync/ebay', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to start eBay sync');
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let lastProgress: EbaySyncProgress = { type: 'start' };
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6)) as EbaySyncProgress;
-                lastProgress = data;
-                onProgress(data);
-              } catch {
-                // Ignore parse errors
-              }
-            }
-          }
-        }
-      } finally {
-        // Always release the reader lock to prevent memory leaks
-        reader.releaseLock();
-      }
-
-      return lastProgress;
-    },
+    mutationFn: (onProgress: (progress: SyncProgress) => void) =>
+      createStreamingSyncMutation('/api/arbitrage/sync/ebay', queryClient)(onProgress),
     onSuccess: () => {
-      // Surgical invalidation - eBay sync affects lists, summary, and sync status
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });
+    },
+  });
+}
+
+/**
+ * Trigger Amazon Inventory sync with streaming progress updates
+ */
+export function useAmazonInventorySyncWithProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (onProgress: (progress: SyncProgress) => void) =>
+      createStreamingSyncMutation('/api/arbitrage/sync/amazon-inventory', queryClient)(onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });
+    },
+  });
+}
+
+/**
+ * Trigger Amazon Pricing sync with streaming progress updates
+ */
+export function useAmazonPricingSyncWithProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (onProgress: (progress: SyncProgress) => void) =>
+      createStreamingSyncMutation('/api/arbitrage/sync/amazon-pricing', queryClient)(onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });
+    },
+  });
+}
+
+/**
+ * Trigger BrickLink Pricing sync with streaming progress updates
+ */
+export function useBrickLinkSyncWithProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (onProgress: (progress: SyncProgress) => void) =>
+      createStreamingSyncMutation('/api/arbitrage/sync/bricklink', queryClient)(onProgress),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.syncStatus() });

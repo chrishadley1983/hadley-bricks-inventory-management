@@ -79,7 +79,7 @@ export interface MtdExportHistoryEntry {
   exportType: 'csv' | 'quickfile';
   entriesCount: number;
   quickfileResponse?: Record<string, unknown>;
-  createdAt: string;
+  createdAt?: string;
 }
 
 /**

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Settings, Clock } from 'lucide-react';
+import { usePerfPage } from '@/hooks/use-perf';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -140,6 +141,7 @@ function RecentLookupCard({ set, onClick }: { set: BricksetSet; onClick: () => v
 }
 
 export default function SetLookupPage() {
+  usePerfPage('SetLookupPage');
   const queryClient = useQueryClient();
   const [currentSetNumber, setCurrentSetNumber] = useState<string | null>(null);
   const [ebayModalOpen, setEbayModalOpen] = useState(false);

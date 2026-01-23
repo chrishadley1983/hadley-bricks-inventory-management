@@ -756,9 +756,39 @@ export class AmazonSyncService {
       throw new Error('No items in the sync queue');
     }
 
-    // Submit price-only feed
-    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed');
-    const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
+    // Split items: new SKUs need single-phase (UPDATE), existing SKUs use two-phase (PATCH)
+    // New SKUs send price+quantity together atomically, so two-phase doesn't make sense for them
+    const newSkuItems = aggregatedItems.filter((item) => item.isNewSku);
+    const existingSkuItems = aggregatedItems.filter((item) => !item.isNewSku);
+
+    console.log(`[AmazonSyncService] Queue split: ${newSkuItems.length} new SKUs (single-phase), ${existingSkuItems.length} existing SKUs (two-phase)`);
+
+    // Submit new SKUs as single-phase (full UPDATE with price+quantity)
+    // These don't need verification because price and quantity are sent atomically
+    if (newSkuItems.length > 0) {
+      console.log('[AmazonSyncService] Submitting new SKUs as single-phase feed');
+      const newSkuFeed = await this.submitNewSkuFeed(newSkuItems, credentials, dryRun);
+      console.log(`[AmazonSyncService] New SKU feed submitted: ${newSkuFeed.id}`);
+
+      // Clear new SKU items from queue immediately (they're fully submitted)
+      if (!dryRun) {
+        await this.clearQueueForFeed(newSkuItems);
+      }
+    }
+
+    // If no existing SKUs, we're done (only had new SKUs)
+    if (existingSkuItems.length === 0) {
+      console.log('[AmazonSyncService] No existing SKUs - two-phase not needed');
+      // Return a synthetic result since we only had new SKUs
+      return {
+        priceFeed: newSkuItems.length > 0 ? await this.getLatestFeed() : null as unknown as SyncFeed,
+        status: 'price_verified', // Effectively complete
+      };
+    }
+
+    // Submit existing SKUs as two-phase (price-only PATCH first)
+    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed for existing SKUs');
+    const priceFeed = await this.submitPriceOnlyFeed(existingSkuItems, credentials, dryRun);
 
     if (dryRun) {
       return {
@@ -898,8 +928,10 @@ export class AmazonSyncService {
       return this.failTwoPhaseSync(feedId, userEmail, feed.error_message || 'Price feed rejected by Amazon', 'price');
     }
 
-    if (feed.status === 'done') {
+    if (feed.status === 'done' || feed.status === 'done_verifying') {
       // Price feed accepted - move to verification
+      // Note: 'done_verifying' means new SKUs need price verification, which this two-phase
+      // flow handles anyway via the 'price_verifying' step
       await this.updateFeedRecord(feedId, {
         two_phase_step: 'price_verifying',
       } as Parameters<typeof this.updateFeedRecord>[1]);
@@ -1378,6 +1410,91 @@ export class AmazonSyncService {
     }
 
     return this.getFeed(feed.id);
+  }
+
+  /**
+   * Submit new SKU feed (single-phase with full UPDATE operation)
+   *
+   * New SKUs require UPDATE operation which sends price+quantity atomically.
+   * This means two-phase sync doesn't apply - they're submitted as single-phase.
+   */
+  private async submitNewSkuFeed(
+    items: AggregatedQueueItem[],
+    credentials: AmazonCredentials,
+    dryRun: boolean
+  ): Promise<SyncFeed> {
+    // Create feed record
+    const feed = await this.createFeedRecord(items.length, dryRun);
+
+    // Mark as single-phase since new SKUs are atomic
+    await this.updateFeedRecord(feed.id, {
+      sync_mode: 'single',
+    } as Parameters<typeof this.updateFeedRecord>[1]);
+
+    // Build full payload using UPDATE operation (includes price+quantity)
+    const payload = this.buildFeedPayload(items, credentials.sellerId);
+
+    // Update feed with payload
+    await this.updateFeedRecord(feed.id, {
+      request_payload:
+        payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+    });
+
+    // Create feed items
+    await this.createFeedItems(feed.id, items);
+
+    if (dryRun) {
+      // Validate via Listings API
+      const listingsClient = new AmazonListingsClient(credentials);
+      const validationResults = await this.validateItems(listingsClient, items);
+      await this.updateFeedItemsWithValidation(feed.id, validationResults);
+
+      const successCount = validationResults.filter((r) => r.status === 'VALID').length;
+      await this.updateFeedRecord(feed.id, {
+        status: 'done',
+        success_count: successCount,
+        error_count: validationResults.length - successCount,
+        completed_at: new Date().toISOString(),
+      });
+    } else {
+      // Submit to Amazon
+      const feedsClient = new AmazonFeedsClient(credentials);
+      const { feedId, feedDocumentId } = await feedsClient.submitFeed(
+        payload,
+        'JSON_LISTINGS_FEED',
+        ['A1F83G8C2ARO7P']
+      );
+
+      await this.updateFeedRecord(feed.id, {
+        amazon_feed_id: feedId,
+        amazon_feed_document_id: feedDocumentId,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+      });
+    }
+
+    return this.getFeed(feed.id);
+  }
+
+  /**
+   * Get the most recently created feed
+   */
+  private async getLatestFeed(): Promise<SyncFeed> {
+    const { data, error } = await this.supabase
+      .from('amazon_sync_feeds')
+      .select(
+        'id, user_id, feed_type, is_dry_run, marketplace_id, status, total_items, success_count, warning_count, error_count, error_message, amazon_feed_id, amazon_feed_document_id, amazon_result_document_id, submitted_at, completed_at, last_poll_at, poll_count, created_at, updated_at, sync_mode, phase, parent_feed_id, price_verified_at, quantity_feed_id, verification_started_at, two_phase_step, two_phase_started_at, two_phase_user_email, two_phase_poll_count, two_phase_last_poll_at'
+      )
+      .eq('user_id', this.userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      throw new Error('Failed to get latest feed');
+    }
+
+    return data as SyncFeed;
   }
 
   /**

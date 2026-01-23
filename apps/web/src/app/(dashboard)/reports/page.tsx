@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -102,6 +103,8 @@ const reportCategories = [
 ];
 
 export default function ReportsPage() {
+  usePerfPage('ReportsPage');
+
   return (
     <>
       <Header title="Reports" />

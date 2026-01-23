@@ -3,8 +3,10 @@
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout';
 import { InventoryAddTabs } from '@/components/features/inventory/InventoryAddTabs';
+import { usePerfPage } from '@/hooks/use-perf';
 
 export default function NewInventoryPage() {
+  usePerfPage('NewInventoryPage');
   const searchParams = useSearchParams();
   const purchaseId = searchParams.get('purchaseId');
 

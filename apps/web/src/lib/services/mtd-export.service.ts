@@ -37,6 +37,39 @@ function formatMonthLabel(month: string): string {
 }
 
 /**
+ * Format period label for display
+ */
+function formatPeriodLabel(startMonth: string, endMonth: string): string {
+  if (startMonth === endMonth) {
+    return formatMonthLabel(startMonth);
+  }
+  return `${formatMonthLabel(startMonth)} to ${formatMonthLabel(endMonth)}`;
+}
+
+/**
+ * Generate all months between start and end (inclusive)
+ */
+function getMonthsInRange(startMonth: string, endMonth: string): string[] {
+  const months: string[] = [];
+  const [startYear, startMonthNum] = startMonth.split('-').map(Number);
+  const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+
+  let year = startYear;
+  let monthNum = startMonthNum;
+
+  while (year < endYear || (year === endYear && monthNum <= endMonthNum)) {
+    months.push(`${year}-${String(monthNum).padStart(2, '0')}`);
+    monthNum++;
+    if (monthNum > 12) {
+      monthNum = 1;
+      year++;
+    }
+  }
+
+  return months;
+}
+
+/**
  * Service for MTD (Making Tax Digital) exports
  */
 export class MtdExportService {
@@ -47,29 +80,40 @@ export class MtdExportService {
   }
 
   /**
-   * Generate CSV data for a single month
+   * Generate CSV data for a period (start to end month inclusive)
    */
-  async generateCsvData(userId: string, month: string): Promise<MtdCsvData> {
-    // Get P&L data for the single month
+  async generateCsvData(userId: string, startMonth: string, endMonth?: string): Promise<MtdCsvData> {
+    const effectiveEndMonth = endMonth || startMonth;
+
+    // Get P&L data for the period
     const report = await this.profitLossService.generateReport(userId, {
-      startMonth: month,
-      endMonth: month,
+      startMonth,
+      endMonth: effectiveEndMonth,
     });
 
-    const lastDayOfMonth = getLastDayOfMonth(month);
-    const monthLabel = formatMonthLabel(month);
+    const allSales: MtdSalesRow[] = [];
+    const allExpenses: MtdExpenseRow[] = [];
 
-    // Build sales rows from Income category rows
-    const sales = this.buildSalesRows(report, month, lastDayOfMonth, monthLabel);
+    // Get all months in the range
+    const months = getMonthsInRange(startMonth, effectiveEndMonth);
 
-    // Build expense rows from other categories
-    const expenses = this.buildExpenseRows(report, month, lastDayOfMonth, monthLabel);
+    // Build sales and expense rows for each month in the range
+    for (const month of months) {
+      const lastDayOfMonth = getLastDayOfMonth(month);
+      const monthLabel = formatMonthLabel(month);
+
+      const monthSales = this.buildSalesRows(report, month, lastDayOfMonth, monthLabel);
+      const monthExpenses = this.buildExpenseRows(report, month, lastDayOfMonth, monthLabel);
+
+      allSales.push(...monthSales);
+      allExpenses.push(...monthExpenses);
+    }
 
     return {
-      sales,
-      expenses,
-      month,
-      lastDayOfMonth,
+      sales: allSales,
+      expenses: allExpenses,
+      month: startMonth,
+      lastDayOfMonth: getLastDayOfMonth(effectiveEndMonth),
     };
   }
 
@@ -307,18 +351,23 @@ export class MtdExportService {
   /**
    * Generate export preview for confirmation dialog
    */
-  async generateExportPreview(userId: string, month: string): Promise<MtdExportPreview> {
-    const csvData = await this.generateCsvData(userId, month);
+  async generateExportPreview(
+    userId: string,
+    startMonth: string,
+    endMonth?: string
+  ): Promise<MtdExportPreview> {
+    const effectiveEndMonth = endMonth || startMonth;
+    const csvData = await this.generateCsvData(userId, startMonth, effectiveEndMonth);
 
-    // Check for previous QuickFile export
-    const previousExport = await this.getQuickFileExportHistory(userId, month);
+    // Check for previous QuickFile export (check start month as the key)
+    const previousExport = await this.getQuickFileExportHistory(userId, startMonth);
 
     const salesTotal = csvData.sales.reduce((sum, row) => sum + row.netAmount, 0);
     const expensesTotal = csvData.expenses.reduce((sum, row) => sum + row.netAmount, 0);
 
     return {
-      month,
-      monthLabel: formatMonthLabel(month),
+      month: startMonth,
+      monthLabel: formatPeriodLabel(startMonth, effectiveEndMonth),
       salesCount: csvData.sales.length,
       salesTotal: Math.round(salesTotal * 100) / 100,
       expensesCount: csvData.expenses.length,
@@ -347,7 +396,7 @@ export class MtdExportService {
       month,
       export_type: exportType,
       entries_count: entriesCount,
-      quickfile_response: quickfileResponse || null,
+      quickfile_response: quickfileResponse as unknown as Record<string, never> | null,
     });
 
     if (error) {
@@ -380,7 +429,7 @@ export class MtdExportService {
     if (data && data.length > 0) {
       return {
         exported: true,
-        exportedAt: data[0].created_at,
+        exportedAt: data[0].created_at ?? undefined,
       };
     }
 
@@ -410,7 +459,7 @@ export class MtdExportService {
       exportType: row.export_type as 'csv' | 'quickfile',
       entriesCount: row.entries_count,
       quickfileResponse: row.quickfile_response as Record<string, unknown> | undefined,
-      createdAt: row.created_at,
+      createdAt: row.created_at ?? undefined,
     }));
   }
 }

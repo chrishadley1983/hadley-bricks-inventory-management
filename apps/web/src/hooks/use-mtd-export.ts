@@ -10,15 +10,18 @@ import type { MtdExportPreview, MtdExportResponse } from '@/types/mtd-export';
  */
 export const mtdExportKeys = {
   all: ['mtd-export'] as const,
-  preview: (month: string) => [...mtdExportKeys.all, 'preview', month] as const,
+  preview: (startMonth: string, endMonth: string) =>
+    [...mtdExportKeys.all, 'preview', startMonth, endMonth] as const,
   history: () => [...mtdExportKeys.all, 'history'] as const,
 };
 
 /**
- * Fetch export preview for a month
+ * Fetch export preview for a period
  */
-async function fetchExportPreview(month: string): Promise<MtdExportPreview> {
-  const response = await fetch(`/api/reports/mtd-export?month=${month}`);
+async function fetchExportPreview(startMonth: string, endMonth: string): Promise<MtdExportPreview> {
+  const response = await fetch(
+    `/api/reports/mtd-export?startMonth=${startMonth}&endMonth=${endMonth}`
+  );
 
   if (!response.ok) {
     const data = await response.json();
@@ -29,15 +32,15 @@ async function fetchExportPreview(month: string): Promise<MtdExportPreview> {
 }
 
 /**
- * Export CSV for a month
+ * Export CSV for a period
  */
-async function exportCsv(month: string): Promise<void> {
+async function exportCsv(startMonth: string, endMonth: string): Promise<void> {
   const response = await fetch('/api/reports/mtd-export', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ month, action: 'csv' }),
+    body: JSON.stringify({ startMonth, endMonth, action: 'csv' }),
   });
 
   if (!response.ok) {
@@ -50,7 +53,14 @@ async function exportCsv(month: string): Promise<void> {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `quickfile-${month}.zip`;
+
+  // Generate filename based on period
+  const filename =
+    startMonth === endMonth
+      ? `quickfile-${startMonth}.zip`
+      : `quickfile-${startMonth}-to-${endMonth}.zip`;
+
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -60,13 +70,13 @@ async function exportCsv(month: string): Promise<void> {
 /**
  * Push data to QuickFile
  */
-async function pushToQuickFile(month: string): Promise<MtdExportResponse> {
+async function pushToQuickFile(startMonth: string, endMonth: string): Promise<MtdExportResponse> {
   const response = await fetch('/api/reports/mtd-export', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ month, action: 'quickfile' }),
+    body: JSON.stringify({ startMonth, endMonth, action: 'quickfile' }),
   });
 
   const data = await response.json();
@@ -88,11 +98,11 @@ async function pushToQuickFile(month: string): Promise<MtdExportResponse> {
 /**
  * Hook to fetch export preview
  */
-export function useMtdExportPreview(month: string | undefined) {
+export function useMtdExportPreview(startMonth: string | undefined, endMonth: string | undefined) {
   return useQuery({
-    queryKey: mtdExportKeys.preview(month || ''),
-    queryFn: () => fetchExportPreview(month!),
-    enabled: !!month,
+    queryKey: mtdExportKeys.preview(startMonth || '', endMonth || ''),
+    queryFn: () => fetchExportPreview(startMonth!, endMonth!),
+    enabled: !!startMonth && !!endMonth,
     staleTime: 30 * 1000, // 30 seconds
   });
 }
@@ -104,7 +114,8 @@ export function useMtdExportCsv() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ month }: { month: string }) => exportCsv(month),
+    mutationFn: ({ startMonth, endMonth }: { startMonth: string; endMonth: string }) =>
+      exportCsv(startMonth, endMonth),
     onSuccess: () => {
       // Invalidate history queries
       queryClient.invalidateQueries({ queryKey: mtdExportKeys.history() });
@@ -119,11 +130,14 @@ export function useMtdExportQuickFile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ month }: { month: string }) => pushToQuickFile(month),
+    mutationFn: ({ startMonth, endMonth }: { startMonth: string; endMonth: string }) =>
+      pushToQuickFile(startMonth, endMonth),
     onSuccess: (_, variables) => {
-      // Invalidate history queries and preview for this month
+      // Invalidate history queries and preview for this period
       queryClient.invalidateQueries({ queryKey: mtdExportKeys.history() });
-      queryClient.invalidateQueries({ queryKey: mtdExportKeys.preview(variables.month) });
+      queryClient.invalidateQueries({
+        queryKey: mtdExportKeys.preview(variables.startMonth, variables.endMonth),
+      });
     },
   });
 }

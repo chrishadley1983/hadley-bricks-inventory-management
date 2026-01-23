@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic import for Header to avoid SSR issues
 const Header = dynamic(
@@ -32,6 +33,7 @@ const SeededAsinManager = dynamic(
 );
 
 export default function SeededAsinsPage() {
+  usePerfPage('SeededAsinsPage');
   return (
     <div className="flex flex-col h-full">
       <Header

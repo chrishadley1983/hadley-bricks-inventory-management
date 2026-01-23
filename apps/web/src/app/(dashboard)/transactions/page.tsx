@@ -58,6 +58,7 @@ import { useAmazonTransactionSync } from '@/hooks/use-amazon-transaction-sync';
 import { BRICKLINK_STATUS_LABELS } from '@/lib/bricklink';
 import { BRICKOWL_STATUS_LABELS } from '@/lib/brickowl';
 import { AMAZON_TRANSACTION_TYPE_LABELS, AMAZON_MARKETPLACE_LABELS } from '@/lib/amazon/types';
+import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -675,6 +676,7 @@ const EBAY_TRANSACTION_TYPES = Object.keys(EBAY_TRANSACTION_TYPE_LABELS);
 // ============================================================================
 
 export default function TransactionsPage() {
+  usePerfPage('TransactionsPage');
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'monzo' | 'ebay' | 'paypal' | 'bricklink' | 'brickowl' | 'amazon'>('monzo');
 

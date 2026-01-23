@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePerfPage } from '@/hooks/use-perf';
 import { format } from 'date-fns';
 import {
   RefreshCw,
@@ -182,6 +183,7 @@ function formatCurrency(amount: number | null, currency = 'GBP'): string {
 }
 
 export default function AmazonOrdersPage() {
+  usePerfPage('AmazonOrdersPage');
   const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);

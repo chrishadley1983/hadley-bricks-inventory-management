@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { SELLING_PLATFORMS } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { InventoryService } from '@/lib/services';
+import { createPerfLogger } from '@/lib/perf';
 
 // Transform empty strings to null for optional fields
 const emptyToNull = z.string().transform((val) => (val === '' ? null : val));
 const emptyToNullOptional = emptyToNull.nullable().optional();
+
+// Valid listing platforms (must match DB constraint)
+const listingPlatformSchema = z
+  .string()
+  .transform((val) => (val === '' ? null : val.toLowerCase()))
+  .nullable()
+  .optional()
+  .refine(
+    (val) => val === null || val === undefined || SELLING_PLATFORMS.includes(val as typeof SELLING_PLATFORMS[number]),
+    { message: `listing_platform must be one of: ${SELLING_PLATFORMS.join(', ')}` }
+  );
 
 const CreateInventorySchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
@@ -22,7 +35,7 @@ const CreateInventorySchema = z.object({
   sku: emptyToNullOptional,
   linked_lot: emptyToNullOptional,
   amazon_asin: emptyToNullOptional,
-  listing_platform: emptyToNullOptional,
+  listing_platform: listingPlatformSchema,
   notes: emptyToNullOptional,
 });
 
@@ -78,12 +91,16 @@ const QuerySchema = z.object({
  * List inventory items with optional filtering and pagination
  */
 export async function GET(request: NextRequest) {
+  const perf = createPerfLogger('GET /api/inventory');
+
   try {
+    const endAuth = perf.start('auth');
     const supabase = await createClient();
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
+    endAuth();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -122,6 +139,7 @@ export async function GET(request: NextRequest) {
     }
 
     const service = new InventoryService(supabase, user.id);
+    const endQuery = perf.start('query');
     const result = await service.getAll(
       {
         status: statusFilter,
@@ -155,6 +173,10 @@ export async function GET(request: NextRequest) {
       },
       { page, pageSize }
     );
+    endQuery();
+
+    perf.log('result', { rows: result.data.length, total: result.total });
+    perf.end();
 
     return NextResponse.json(
       { data: result },
