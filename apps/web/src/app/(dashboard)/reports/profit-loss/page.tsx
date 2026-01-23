@@ -4,7 +4,7 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, FileText, Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Calendar, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -38,6 +38,8 @@ import { cn } from '@/lib/utils';
 import { BarChart } from '@/components/charts/bar-chart';
 import { ComboChart } from '@/components/charts/combo-chart';
 import { useToast } from '@/hooks/use-toast';
+import { HomeCostsModal } from '@/components/features/home-costs';
+import { MtdExportDropdown } from '@/components/features/mtd-export';
 
 // View preset types
 type ViewPreset = 'last_12_months' | 'this_year' | 'last_year' | 'this_quarter' | 'last_quarter' | 'custom';
@@ -125,6 +127,7 @@ const categoryConfig: Record<ProfitLossCategory, { order: number; color: string 
   'Stock Purchase': { order: 3, color: 'bg-orange-50' },
   'Packing & Postage': { order: 4, color: 'bg-blue-50' },
   'Bills': { order: 5, color: 'bg-purple-50' },
+  'Home Costs': { order: 6, color: 'bg-teal-50' },
 };
 
 export default function ProfitLossReportPage() {
@@ -135,7 +138,7 @@ export default function ProfitLossReportPage() {
   });
 
   const [expandedCategories, setExpandedCategories] = useState<Set<ProfitLossCategory>>(
-    new Set(['Income', 'Selling Fees', 'Stock Purchase', 'Packing & Postage', 'Bills'])
+    new Set(['Income', 'Selling Fees', 'Stock Purchase', 'Packing & Postage', 'Bills', 'Home Costs'])
   );
 
   // Fixed date range - always fetch last 24 months from today
@@ -166,6 +169,7 @@ export default function ProfitLossReportPage() {
   const exportMutation = useExportReport();
   const { toast } = useToast();
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [homeCostsModalOpen, setHomeCostsModalOpen] = useState(false);
 
   const handleExport = (format: 'csv' | 'json') => {
     exportMutation.mutate({
@@ -643,6 +647,17 @@ export default function ProfitLossReportPage() {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
+                onClick={() => setHomeCostsModalOpen(true)}
+              >
+                <Home className="mr-2 h-4 w-4" />
+                Home Costs
+              </Button>
+              <MtdExportDropdown
+                selectedMonth={selectedMonth}
+                disabled={isLoading}
+              />
+              <Button
+                variant="outline"
                 onClick={handleExportPdf}
                 disabled={exportingPdf || isLoading}
               >
@@ -1117,6 +1132,12 @@ export default function ProfitLossReportPage() {
           </>
         )}
       </div>
+
+      {/* Home Costs Modal */}
+      <HomeCostsModal
+        open={homeCostsModalOpen}
+        onOpenChange={setHomeCostsModalOpen}
+      />
     </>
   );
 }

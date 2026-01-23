@@ -20,7 +20,8 @@ export type ProfitLossCategory =
   | 'Selling Fees'
   | 'Stock Purchase'
   | 'Packing & Postage'
-  | 'Bills';
+  | 'Bills'
+  | 'Home Costs';
 
 /**
  * Individual row in the P&L report
@@ -982,6 +983,183 @@ async function queryMileage(
   }));
 }
 
+/**
+ * HMRC flat rates for Use of Home
+ */
+const HMRC_RATES: Record<string, number> = {
+  '25-50': 10,
+  '51-100': 18,
+  '101+': 26,
+};
+
+/**
+ * Check if a home cost entry is active in a given month
+ */
+function isHomeCostActiveInMonth(
+  startDate: string,
+  endDate: string | null,
+  targetMonth: string
+): boolean {
+  const start = startDate.substring(0, 7);
+  const end = endDate ? endDate.substring(0, 7) : null;
+
+  if (targetMonth < start) return false;
+  if (end && targetMonth > end) return false;
+  return true;
+}
+
+/**
+ * Query Home Costs - Use of Home
+ * Returns monthly HMRC flat rate based on hours per month
+ */
+async function queryHomeCostsUseOfHome(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const { data, error } = await supabase
+    .from('home_costs')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('cost_type', 'use_of_home');
+
+  if (error) {
+    console.error('[P&L] Error querying Use of Home:', error);
+    return [];
+  }
+
+  const months = generateMonthRange(
+    startDate.substring(0, 7),
+    endDate.substring(0, 7)
+  );
+
+  const monthMap = new Map<string, number>();
+
+  for (const month of months) {
+    let total = 0;
+
+    for (const cost of data || []) {
+      if (!isHomeCostActiveInMonth(cost.start_date, cost.end_date, month)) continue;
+      const rate = cost.hours_per_month ? HMRC_RATES[cost.hours_per_month] || 0 : 0;
+      total += rate;
+    }
+
+    if (total > 0) {
+      monthMap.set(month, total);
+    }
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({
+    month,
+    total,
+  }));
+}
+
+/**
+ * Query Home Costs - Phone & Broadband
+ * Returns monthly claimable amount (monthlyCost * businessPercent / 100)
+ */
+async function queryHomeCostsPhoneBroadband(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const { data, error } = await supabase
+    .from('home_costs')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('cost_type', 'phone_broadband');
+
+  if (error) {
+    console.error('[P&L] Error querying Phone & Broadband:', error);
+    return [];
+  }
+
+  const months = generateMonthRange(
+    startDate.substring(0, 7),
+    endDate.substring(0, 7)
+  );
+
+  const monthMap = new Map<string, number>();
+
+  for (const month of months) {
+    let total = 0;
+
+    for (const cost of data || []) {
+      if (!isHomeCostActiveInMonth(cost.start_date, cost.end_date, month)) continue;
+      const claimable = (cost.monthly_cost || 0) * ((cost.business_percent || 0) / 100);
+      total += claimable;
+    }
+
+    if (total > 0) {
+      monthMap.set(month, total);
+    }
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({
+    month,
+    total,
+  }));
+}
+
+/**
+ * Query Home Costs - Insurance
+ * Returns monthly claimable (annualPremium * proportion / 12)
+ */
+async function queryHomeCostsInsurance(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const { data, error } = await supabase
+    .from('home_costs')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('cost_type', 'insurance');
+
+  if (error) {
+    console.error('[P&L] Error querying Insurance:', error);
+    return [];
+  }
+
+  const months = generateMonthRange(
+    startDate.substring(0, 7),
+    endDate.substring(0, 7)
+  );
+
+  const monthMap = new Map<string, number>();
+
+  for (const month of months) {
+    let total = 0;
+
+    for (const cost of data || []) {
+      if (!isHomeCostActiveInMonth(cost.start_date, cost.end_date, month)) continue;
+
+      const annualPremium = cost.annual_premium || 0;
+      const businessStockValue = cost.business_stock_value || 0;
+      const totalContentsValue = cost.total_contents_value || 1; // Prevent divide by zero
+
+      const proportion = businessStockValue / totalContentsValue;
+      const annualClaimable = annualPremium * proportion;
+      const monthlyClaimable = annualClaimable / 12;
+
+      total += monthlyClaimable;
+    }
+
+    if (total > 0) {
+      monthMap.set(month, total);
+    }
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({
+    month,
+    total,
+  }));
+}
+
 // =============================================================================
 // ROW DEFINITIONS
 // =============================================================================
@@ -1157,6 +1335,26 @@ function getRowDefinitions(): RowDefinition[] {
       queryFn: queryMileage,
       signMultiplier: -1,
     },
+
+    // HOME COSTS
+    {
+      category: 'Home Costs',
+      transactionType: 'Use of Home',
+      queryFn: queryHomeCostsUseOfHome,
+      signMultiplier: -1,
+    },
+    {
+      category: 'Home Costs',
+      transactionType: 'Phone & Broadband',
+      queryFn: queryHomeCostsPhoneBroadband,
+      signMultiplier: -1,
+    },
+    {
+      category: 'Home Costs',
+      transactionType: 'Insurance',
+      queryFn: queryHomeCostsInsurance,
+      signMultiplier: -1,
+    },
   ];
 }
 
@@ -1303,6 +1501,7 @@ export class ProfitLossReportService {
       'Stock Purchase': {},
       'Packing & Postage': {},
       Bills: {},
+      'Home Costs': {},
     };
 
     // Initialize category totals for all months
