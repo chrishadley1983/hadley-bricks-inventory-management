@@ -1,0 +1,18 @@
+name: Vinted Cleanup
+
+on:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  cleanup-vinted:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vinted Cleanup
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.APP_URL }}/api/cron/vinted-cleanup"

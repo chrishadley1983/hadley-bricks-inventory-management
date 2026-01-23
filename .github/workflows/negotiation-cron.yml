@@ -1,0 +1,18 @@
+name: eBay Negotiation Sync
+
+on:
+  schedule:
+    # Run 4x daily at 8am, 12pm, 4pm, 8pm UTC
+    - cron: '0 8,12,16,20 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync-negotiation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Negotiation Sync
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.APP_URL }}/api/cron/negotiation"
