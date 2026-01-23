@@ -13,14 +13,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { pushoverService } from '@/lib/notifications/pushover.service';
 
-// Use service role for cron jobs
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy initialization to avoid build-time errors
+let supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
 
 // Verify cron secret
 function verifyCronSecret(request: NextRequest): boolean {
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const { data: expiredOpps, error: expireError } = await supabase
+    const { data: expiredOpps, error: expireError } = await getSupabase()
       .from('vinted_opportunities')
       .update({ status: 'expired' })
       .eq('status', 'active')
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: deletedLogs, error: logError } = await supabase
+    const { data: deletedLogs, error: logError } = await getSupabase()
       .from('vinted_scan_log')
       .delete()
       .lt('created_at', thirtyDaysAgo.toISOString())
@@ -97,7 +104,7 @@ export async function POST(request: NextRequest) {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    const { data: deletedOpps, error: deleteOppError } = await supabase
+    const { data: deletedOpps, error: deleteOppError } = await getSupabase()
       .from('vinted_opportunities')
       .delete()
       .in('status', ['dismissed', 'expired'])
@@ -124,7 +131,7 @@ export async function POST(request: NextRequest) {
     today.setHours(0, 0, 0, 0);
 
     // Get yesterday's stats (aggregate across all users for single-user system)
-    const { data: dailyStats } = await supabase
+    const { data: dailyStats } = await getSupabase()
       .from('vinted_scan_log')
       .select('scan_type, status, opportunities_found')
       .gte('created_at', yesterday.toISOString())
@@ -143,7 +150,7 @@ export async function POST(request: NextRequest) {
       );
 
       // Get near misses count from yesterday
-      const { data: nearMisses } = await supabase
+      const { data: nearMisses } = await getSupabase()
         .from('vinted_watchlist_stats')
         .select('near_miss_found')
         .gte('updated_at', yesterday.toISOString())
