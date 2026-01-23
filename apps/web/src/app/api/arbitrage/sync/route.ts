@@ -116,7 +116,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (jobType === 'all' || jobType === 'amazon_pricing') {
+    // NOTE: amazon_pricing is NOT included in 'all' sync due to strict rate limits (30 sec/request)
+    // It runs via scheduled cron job at 4am instead. Can still be triggered individually.
+    if (jobType === 'amazon_pricing') {
       await arbitrageService.updateSyncStatus(user.id, 'amazon_pricing', { status: 'running' });
       try {
         const amazonSyncService = new AmazonArbitrageSyncService(supabase);

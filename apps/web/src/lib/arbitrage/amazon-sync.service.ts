@@ -16,7 +16,12 @@ import { CredentialsRepository } from '../repositories';
 
 const UK_MARKETPLACE_ID = 'A1F83G8C2ARO7P';
 const BATCH_SIZE = 20; // Amazon allows up to 20 ASINs per batch for pricing
-const RATE_LIMIT_DELAY = 500; // ms between API calls
+
+// Rate limits per Amazon SP-API documentation:
+// - getCompetitivePricing (v0): 0.5 req/sec = 2000ms between calls
+// - getCompetitiveSummary (v2022-05-01): 0.033 req/sec = ~30000ms between calls
+const COMPETITIVE_PRICING_DELAY = 2000; // 2 seconds for v0 API
+const COMPETITIVE_SUMMARY_DELAY = 30000; // 30 seconds for v2022-05-01 API
 
 /**
  * Parsed inventory item from merchant listings report
@@ -249,13 +254,19 @@ export class AmazonArbitrageSyncService {
       const asins = batch.map((item) => item.asin);
 
       try {
-        // Fetch competitive pricing for batch (v0 API - faster, basic pricing)
+        // Fetch competitive pricing for batch (v0 API - 0.5 req/sec limit)
         const pricingData = await pricingClient.getCompetitivePricing(asins, UK_MARKETPLACE_ID);
 
-        // Fetch competitive summary for batch (v2022-05-01 API - WasPrice, offers)
+        // Wait for competitive pricing rate limit before next API call
+        await this.delay(COMPETITIVE_PRICING_DELAY);
+
+        // Fetch competitive summary for batch (v2022-05-01 API - 0.033 req/sec limit)
+        // This API provides WasPrice and detailed offer data
         let summaryData: AsinCompetitiveSummaryData[] = [];
         try {
           summaryData = await pricingClient.getCompetitiveSummary(asins, UK_MARKETPLACE_ID);
+          // Wait for competitive summary rate limit (30 sec) before next batch
+          await this.delay(COMPETITIVE_SUMMARY_DELAY);
         } catch (summaryErr) {
           console.warn(`[AmazonArbitrageSyncService.syncPricing] Could not fetch competitive summary:`, summaryErr);
           // Continue without summary data - we'll use basic pricing only
@@ -311,10 +322,9 @@ export class AmazonArbitrageSyncService {
       } catch (err) {
         console.error(`[AmazonArbitrageSyncService.syncPricing] Error processing batch ${batchIndex}:`, err);
         failed += batch.length;
+        // Still respect rate limits on error
+        await this.delay(COMPETITIVE_PRICING_DELAY);
       }
-
-      // Rate limit (longer delay because we're calling 2 APIs)
-      await this.delay(RATE_LIMIT_DELAY * 2);
 
       // Report progress
       const processed = Math.min((batchIndex + 1) * BATCH_SIZE, total);

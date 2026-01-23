@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/vinted-cleanup",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-pricing",
+      "schedule": "0 4 * * *"
     }
   ]
 }
