@@ -9,10 +9,48 @@ on:
 jobs:
   sync-pricing:
     runs-on: ubuntu-latest
+    timeout-minutes: 180 # 3 hours max
     steps:
-      - name: Trigger Amazon Pricing Sync
+      - name: Trigger Amazon Pricing Sync (with retry loop)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
         run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            "${{ secrets.APP_URL }}/api/cron/amazon-pricing"
+          MAX_ITERATIONS=40  # 40 * 5 min = ~3.3 hours max
+          ITERATION=0
+
+          while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+            ITERATION=$((ITERATION + 1))
+            echo "=== Iteration $ITERATION of $MAX_ITERATIONS ==="
+
+            # Call the API and capture response
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json" \
+              "$APP_URL/api/cron/amazon-pricing")
+
+            # Extract HTTP status code (last line)
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            echo "HTTP Status: $HTTP_CODE"
+            echo "Response: $BODY"
+
+            # Check if job is complete (look for "complete":true in response)
+            if echo "$BODY" | grep -q '"complete":true'; then
+              echo "✅ Sync complete!"
+              exit 0
+            fi
+
+            # Check for errors
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ Error response, retrying after delay..."
+            fi
+
+            # Wait before next iteration (Vercel function will timeout at ~5 min)
+            echo "Waiting 30 seconds before next iteration..."
+            sleep 30
+          done
+
+          echo "⚠️ Max iterations reached"
+          exit 1

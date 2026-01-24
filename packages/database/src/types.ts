@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       amazon_arbitrage_pricing: {
@@ -930,6 +905,7 @@ export type Database = {
       arbitrage_sync_status: {
         Row: {
           created_at: string
+          cursor_position: number | null
           error_details: Json | null
           error_message: string | null
           id: string
@@ -941,12 +917,14 @@ export type Database = {
           last_success_at: string | null
           next_scheduled_at: string | null
           status: string
+          sync_date: string | null
           total_items: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          cursor_position?: number | null
           error_details?: Json | null
           error_message?: string | null
           id?: string
@@ -958,12 +936,14 @@ export type Database = {
           last_success_at?: string | null
           next_scheduled_at?: string | null
           status?: string
+          sync_date?: string | null
           total_items?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          cursor_position?: number | null
           error_details?: Json | null
           error_message?: string | null
           id?: string
@@ -975,6 +955,7 @@ export type Database = {
           last_success_at?: string | null
           next_scheduled_at?: string | null
           status?: string
+          sync_date?: string | null
           total_items?: number | null
           updated_at?: string
           user_id?: string
@@ -7971,9 +7952,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

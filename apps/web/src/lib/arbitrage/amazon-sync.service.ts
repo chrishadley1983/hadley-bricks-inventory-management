@@ -467,4 +467,172 @@ export class AmazonArbitrageSyncService {
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  /**
+   * Sync pricing for a batch of ASINs (resumable version)
+   * Used by the cron job to process ASINs in chunks across multiple invocations
+   *
+   * @param userId - User ID
+   * @param options.includeSeeded - Include seeded ASINs
+   * @param options.offset - Starting position in the ASIN list
+   * @param options.limit - Maximum number of ASINs to process in this batch
+   * @returns { processed, failed, updated } counts
+   */
+  async syncPricingBatch(
+    userId: string,
+    options: {
+      includeSeeded?: boolean;
+      offset: number;
+      limit: number;
+    }
+  ): Promise<{ processed: number; failed: number; updated: number }> {
+    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`);
+    const startTime = Date.now();
+
+    const credentials = await this.getCredentials(userId);
+    const pricingClient = createAmazonPricingClient(credentials);
+
+    // Get all active tracked ASINs (including quantity for your_qty)
+    const { data: trackedAsins, error } = await this.supabase
+      .from('tracked_asins')
+      .select('asin, sku, quantity')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (error) {
+      throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
+    }
+
+    // Get seeded ASINs if enabled
+    let seededAsins: { asin: string }[] = [];
+    if (options.includeSeeded !== false) {
+      const { data: seededData, error: seededError } = await this.supabase
+        .from('user_seeded_asin_preferences')
+        .select(`
+          seeded_asins!inner(asin),
+          manual_asin_override
+        `)
+        .eq('user_id', userId)
+        .eq('include_in_sync', true)
+        .eq('user_status', 'active');
+
+      if (!seededError && seededData) {
+        seededAsins = seededData
+          .map((p) => {
+            const sa = p.seeded_asins as unknown as { asin: string | null };
+            return { asin: p.manual_asin_override ?? sa?.asin };
+          })
+          .filter((a): a is { asin: string } => a.asin !== null && a.asin !== undefined);
+      }
+    }
+
+    // Create quantity lookup map from tracked ASINs
+    const quantityMap = new Map<string, number>();
+    for (const ta of trackedAsins ?? []) {
+      quantityMap.set(ta.asin, ta.quantity ?? 0);
+    }
+
+    // Combine and deduplicate ASINs
+    const allAsins = [
+      ...(trackedAsins ?? []).map((a) => a.asin),
+      ...seededAsins.map((a) => a.asin),
+    ];
+    const uniqueAsins = [...new Set(allAsins)];
+
+    // Apply offset and limit to get the batch we need to process
+    const batchAsins = uniqueAsins.slice(options.offset, options.offset + options.limit);
+
+    if (batchAsins.length === 0) {
+      console.log('[AmazonArbitrageSyncService.syncPricingBatch] No ASINs to process in this batch');
+      return { processed: 0, failed: 0, updated: 0 };
+    }
+
+    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${uniqueAsins.length})`);
+
+    let updated = 0;
+    let failed = 0;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Process in batches (max 20 ASINs per request)
+    const batches = this.chunkArray(batchAsins.map(asin => ({ asin })), BATCH_SIZE);
+
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      const asins = batch.map((item) => item.asin);
+
+      try {
+        // Fetch competitive pricing for batch (v0 API - 0.5 req/sec limit)
+        const pricingData = await pricingClient.getCompetitivePricing(asins, UK_MARKETPLACE_ID);
+
+        // Wait for competitive pricing rate limit before next API call
+        await this.delay(COMPETITIVE_PRICING_DELAY);
+
+        // Fetch competitive summary for batch (v2022-05-01 API - 0.033 req/sec limit)
+        let summaryData: AsinCompetitiveSummaryData[] = [];
+        try {
+          summaryData = await pricingClient.getCompetitiveSummary(asins, UK_MARKETPLACE_ID);
+          // Wait for competitive summary rate limit (30 sec) before next batch
+          await this.delay(COMPETITIVE_SUMMARY_DELAY);
+        } catch (summaryErr) {
+          console.warn(`[AmazonArbitrageSyncService.syncPricingBatch] Could not fetch competitive summary:`, summaryErr);
+        }
+
+        // Create lookup map for summary data
+        const summaryMap = new Map<string, AsinCompetitiveSummaryData>();
+        for (const summary of summaryData) {
+          summaryMap.set(summary.asin, summary);
+        }
+
+        // Store pricing snapshots with extended data
+        const upsertData = pricingData.map((pricing) => {
+          const summary = summaryMap.get(pricing.asin);
+          const lowestOffer = summary?.lowestOffer;
+
+          return {
+            user_id: userId,
+            asin: pricing.asin,
+            snapshot_date: today,
+            your_price: pricing.yourPrice,
+            your_qty: quantityMap.get(pricing.asin) ?? 0,
+            buy_box_price: pricing.buyBoxPrice,
+            buy_box_is_yours: pricing.buyBoxIsYours,
+            offer_count: (pricing.newOfferCount ?? 0) + (pricing.usedOfferCount ?? 0),
+            sales_rank: pricing.salesRank,
+            sales_rank_category: pricing.salesRankCategory,
+            was_price_90d: summary?.wasPrice ?? null,
+            lowest_offer_price: lowestOffer?.totalPrice ?? null,
+            price_is_lowest_offer: pricing.buyBoxPrice === null && lowestOffer !== null,
+            lowest_offer_seller_id: lowestOffer?.sellerId ?? null,
+            lowest_offer_is_fba: lowestOffer ? lowestOffer.fulfillmentType === 'AFN' : null,
+            lowest_offer_is_prime: lowestOffer?.isPrime ?? null,
+            offers_json: summary?.offers ? JSON.stringify(summary.offers) : null,
+            total_offer_count: summary?.totalOfferCount ?? null,
+            competitive_price: summary?.competitivePrice ?? null,
+          };
+        });
+
+        const { error: insertError } = await this.supabase
+          .from('amazon_arbitrage_pricing')
+          .upsert(upsertData, {
+            onConflict: 'asin,snapshot_date',
+          });
+
+        if (insertError) {
+          console.error(`[AmazonArbitrageSyncService.syncPricingBatch] Error storing pricing:`, insertError);
+          failed += batch.length;
+        } else {
+          updated += pricingData.length;
+        }
+      } catch (err) {
+        console.error(`[AmazonArbitrageSyncService.syncPricingBatch] Error processing batch ${batchIndex}:`, err);
+        failed += batch.length;
+        await this.delay(COMPETITIVE_PRICING_DELAY);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`);
+
+    return { processed: batchAsins.length, failed, updated };
+  }
 }

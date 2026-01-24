@@ -4,14 +4,15 @@
  * Cron endpoint for daily Amazon pricing sync (seeded ASINs).
  * This runs the slow getCompetitiveSummary API with 30-second rate limits.
  *
+ * RESUMABLE: This endpoint tracks progress and can be called repeatedly.
+ * It will resume from where it left off until all ASINs are processed.
+ * Returns { complete: true } when finished.
+ *
  * Syncs pricing data for:
  * - All tracked ASINs (from Amazon inventory)
  * - All seeded ASINs with include_in_sync = true
  *
- * Recommended schedule: Daily at 4am
- * Vercel cron expression: "0 4 * * *"
- *
- * Expected duration: ~2.6 hours for 6,296 ASINs (at 30 sec/batch of 20)
+ * Recommended schedule: Daily at 4am (GitHub Actions calls repeatedly until complete)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,20 +21,19 @@ import { AmazonArbitrageSyncService } from '@/lib/arbitrage';
 import { pushoverService } from '@/lib/notifications';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes - Vercel limit
-
-// Note: This job will take much longer than 5 minutes for large datasets.
-// It will be interrupted by Vercel's timeout, but progress is saved incrementally.
-// The job should be called repeatedly (e.g., every 5 min) until complete.
+export const maxDuration = 300; // 5 minutes - Vercel Pro limit
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
+const JOB_TYPE = 'pricing_sync';
+const BATCH_SIZE = 20; // ASINs per API call
+const BATCHES_PER_INVOCATION = 8; // Process ~8 batches per invocation (~4 min with 30s delays)
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  const jobId = `amz-pricing-${Date.now()}`;
+  const today = new Date().toISOString().split('T')[0];
 
   try {
-    // Verify cron secret (Vercel adds Authorization header for cron jobs)
+    // Verify cron secret
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
@@ -42,19 +42,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`[Cron AmazonPricing] Starting pricing sync (job: ${jobId})`);
-
-    // Send start notification
-    await pushoverService.send({
-      title: '🔄 Amazon Pricing Sync Started',
-      message: `Daily pricing sync started at ${new Date().toLocaleTimeString('en-GB')}`,
-      priority: -1, // Low priority - silent
-    });
-
-    // Use service role client
     const supabase = createServiceRoleClient();
 
-    // Get count of ASINs to sync for progress tracking
+    // Get or create sync status for this job
+    const { data: syncStatus } = await supabase
+      .from('arbitrage_sync_status')
+      .select('*')
+      .eq('user_id', DEFAULT_USER_ID)
+      .eq('job_type', JOB_TYPE)
+      .single();
+
+    // Check if this is a new day - reset cursor if so
+    const currentSyncDate = syncStatus?.sync_date;
+    const isNewDay = currentSyncDate !== today;
+    let cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
+
+    console.log(`[Cron AmazonPricing] Starting sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`);
+
+    // Get count of ASINs to sync
     const { count: seededCount } = await supabase
       .from('user_seeded_asin_preferences')
       .select('*', { count: 'exact', head: true })
@@ -69,59 +74,110 @@ export async function POST(request: NextRequest) {
       .eq('status', 'active');
 
     const totalAsins = (seededCount ?? 0) + (trackedCount ?? 0);
-    console.log(`[Cron AmazonPricing] Total ASINs to sync: ${totalAsins} (${seededCount} seeded, ${trackedCount} tracked)`);
 
-    // Run the sync service
+    // If cursor is 0 and it's a new sync, send start notification
+    if (cursorPosition === 0) {
+      console.log(`[Cron AmazonPricing] Starting new sync - ${totalAsins} ASINs to process`);
+      await pushoverService.send({
+        title: '🔄 Amazon Pricing Sync Started',
+        message: `Daily pricing sync started\n${totalAsins} ASINs to process`,
+        priority: -1,
+      });
+
+      // Update status to running
+      await supabase
+        .from('arbitrage_sync_status')
+        .upsert({
+          user_id: DEFAULT_USER_ID,
+          job_type: JOB_TYPE,
+          status: 'running',
+          sync_date: today,
+          cursor_position: 0,
+          total_items: totalAsins,
+          items_processed: 0,
+          items_failed: 0,
+          last_run_at: new Date().toISOString(),
+          error_message: null,
+        }, { onConflict: 'user_id,job_type' });
+    }
+
+    // If cursor position >= totalAsins, sync is already complete for today
+    if (cursorPosition >= totalAsins) {
+      console.log(`[Cron AmazonPricing] Sync already complete for ${today}`);
+      return NextResponse.json({
+        success: true,
+        complete: true,
+        message: `Sync already complete for ${today}`,
+        processed: totalAsins,
+        total: totalAsins,
+      });
+    }
+
+    // Run the sync service with cursor
     const syncService = new AmazonArbitrageSyncService(supabase);
 
-    let lastProgress = 0;
-    const result = await syncService.syncPricing(
+    const result = await syncService.syncPricingBatch(
       DEFAULT_USER_ID,
-      { includeSeeded: true },
-      (processed, total) => {
-        // Log progress every 100 ASINs
-        if (processed - lastProgress >= 100) {
-          const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
-          console.log(`[Cron AmazonPricing] Progress: ${processed}/${total} (${percent}%)`);
-          lastProgress = processed;
-        }
+      {
+        includeSeeded: true,
+        offset: cursorPosition,
+        limit: BATCHES_PER_INVOCATION * BATCH_SIZE,
       }
     );
+
+    const newCursorPosition = cursorPosition + result.processed;
+    const isComplete = newCursorPosition >= totalAsins;
+
+    // Update sync status
+    await supabase
+      .from('arbitrage_sync_status')
+      .upsert({
+        user_id: DEFAULT_USER_ID,
+        job_type: JOB_TYPE,
+        status: isComplete ? 'completed' : 'running',
+        sync_date: today,
+        cursor_position: newCursorPosition,
+        total_items: totalAsins,
+        items_processed: newCursorPosition,
+        items_failed: (syncStatus?.items_failed ?? 0) + result.failed,
+        last_run_at: new Date().toISOString(),
+        last_success_at: isComplete ? new Date().toISOString() : syncStatus?.last_success_at,
+        last_run_duration_ms: Date.now() - startTime,
+      }, { onConflict: 'user_id,job_type' });
 
     const duration = Date.now() - startTime;
     const durationStr = duration > 60000
       ? `${Math.round(duration / 60000)} min`
       : `${Math.round(duration / 1000)} sec`;
 
-    console.log(`[Cron AmazonPricing] Complete: ${result.updated} updated, ${result.failed} failed (${durationStr})`);
+    console.log(`[Cron AmazonPricing] Batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${totalAsins} (${durationStr})`);
 
-    // Send completion notification
-    if (result.failed > 0) {
-      await pushoverService.send({
-        title: '⚠️ Amazon Pricing Sync Complete (with errors)',
-        message:
-          `Updated: ${result.updated} ASINs\n` +
-          `Failed: ${result.failed} ASINs\n` +
-          `Duration: ${durationStr}`,
-        priority: 0,
-        sound: 'falling',
-      });
-    } else {
-      await pushoverService.send({
-        title: '✅ Amazon Pricing Sync Complete',
-        message:
-          `Updated: ${result.updated} ASINs\n` +
-          `Duration: ${durationStr}`,
-        priority: -1, // Low priority - silent
-      });
+    // Send completion notification if done
+    if (isComplete) {
+      const totalFailed = (syncStatus?.items_failed ?? 0) + result.failed;
+      if (totalFailed > 0) {
+        await pushoverService.send({
+          title: '⚠️ Amazon Pricing Sync Complete (with errors)',
+          message: `Updated: ${newCursorPosition} ASINs\nFailed: ${totalFailed} ASINs`,
+          priority: 0,
+          sound: 'falling',
+        });
+      } else {
+        await pushoverService.send({
+          title: '✅ Amazon Pricing Sync Complete',
+          message: `Updated: ${newCursorPosition} ASINs`,
+          priority: -1,
+        });
+      }
     }
 
     return NextResponse.json({
       success: true,
-      jobId,
-      updated: result.updated,
+      complete: isComplete,
+      processed: result.processed,
       failed: result.failed,
-      total: result.total,
+      cursorPosition: newCursorPosition,
+      total: totalAsins,
       duration,
       durationStr,
     });
@@ -131,18 +187,31 @@ export async function POST(request: NextRequest) {
 
     console.error('[Cron AmazonPricing] Error:', error);
 
+    // Update status with error
+    const supabase = createServiceRoleClient();
+    await supabase
+      .from('arbitrage_sync_status')
+      .upsert({
+        user_id: DEFAULT_USER_ID,
+        job_type: JOB_TYPE,
+        status: 'error',
+        error_message: errorMsg,
+        last_run_at: new Date().toISOString(),
+        last_run_duration_ms: duration,
+      }, { onConflict: 'user_id,job_type' });
+
     // Send failure notification
     await pushoverService.send({
       title: '🔴 Amazon Pricing Sync Failed',
       message: `Error: ${errorMsg}\nDuration: ${Math.round(duration / 1000)}s`,
-      priority: 1, // High priority
+      priority: 1,
       sound: 'siren',
     });
 
     return NextResponse.json(
       {
         error: errorMsg,
-        jobId,
+        complete: false,
         duration,
       },
       { status: 500 }
