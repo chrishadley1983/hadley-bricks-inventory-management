@@ -492,49 +492,78 @@ export class AmazonArbitrageSyncService {
     const credentials = await this.getCredentials(userId);
     const pricingClient = createAmazonPricingClient(credentials);
 
-    // Get all active tracked ASINs (including quantity for your_qty)
-    const { data: trackedAsins, error } = await this.supabase
-      .from('tracked_asins')
-      .select('asin, sku, quantity')
-      .eq('user_id', userId)
-      .eq('status', 'active');
+    // Get all active tracked ASINs with pagination (Supabase returns max 1000 rows)
+    const trackedAsins: { asin: string; sku: string | null; quantity: number | null }[] = [];
+    const PAGE_SIZE = 1000;
+    let page = 0;
+    let hasMore = true;
 
-    if (error) {
-      throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
+    while (hasMore) {
+      const { data, error } = await this.supabase
+        .from('tracked_asins')
+        .select('asin, sku, quantity')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (error) {
+        throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
+      }
+
+      trackedAsins.push(...(data ?? []));
+      hasMore = (data?.length ?? 0) === PAGE_SIZE;
+      page++;
     }
 
-    // Get seeded ASINs if enabled
+    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${trackedAsins.length} tracked ASINs`);
+
+    // Get seeded ASINs if enabled (with pagination)
     let seededAsins: { asin: string }[] = [];
     if (options.includeSeeded !== false) {
-      const { data: seededData, error: seededError } = await this.supabase
-        .from('user_seeded_asin_preferences')
-        .select(`
-          seeded_asins!inner(asin),
-          manual_asin_override
-        `)
-        .eq('user_id', userId)
-        .eq('include_in_sync', true)
-        .eq('user_status', 'active');
+      page = 0;
+      hasMore = true;
 
-      if (!seededError && seededData) {
-        seededAsins = seededData
+      while (hasMore) {
+        const { data: seededData, error: seededError } = await this.supabase
+          .from('user_seeded_asin_preferences')
+          .select(`
+            seeded_asins!inner(asin),
+            manual_asin_override
+          `)
+          .eq('user_id', userId)
+          .eq('include_in_sync', true)
+          .eq('user_status', 'active')
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+        if (seededError) {
+          console.error('[AmazonArbitrageSyncService.syncPricingBatch] Error fetching seeded ASINs:', seededError);
+          break;
+        }
+
+        const pageAsins = (seededData ?? [])
           .map((p) => {
             const sa = p.seeded_asins as unknown as { asin: string | null };
             return { asin: p.manual_asin_override ?? sa?.asin };
           })
           .filter((a): a is { asin: string } => a.asin !== null && a.asin !== undefined);
+
+        seededAsins.push(...pageAsins);
+        hasMore = (seededData?.length ?? 0) === PAGE_SIZE;
+        page++;
       }
+
+      console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${seededAsins.length} seeded ASINs`);
     }
 
     // Create quantity lookup map from tracked ASINs
     const quantityMap = new Map<string, number>();
-    for (const ta of trackedAsins ?? []) {
+    for (const ta of trackedAsins) {
       quantityMap.set(ta.asin, ta.quantity ?? 0);
     }
 
     // Combine and deduplicate ASINs
     const allAsins = [
-      ...(trackedAsins ?? []).map((a) => a.asin),
+      ...trackedAsins.map((a) => a.asin),
       ...seededAsins.map((a) => a.asin),
     ];
     const uniqueAsins = [...new Set(allAsins)];
