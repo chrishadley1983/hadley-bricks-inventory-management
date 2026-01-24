@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Check if this is a new day - reset cursor if so
     const currentSyncDate = syncStatus?.sync_date;
     const isNewDay = currentSyncDate !== today;
-    let cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
+    const cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
 
     console.log(`[Cron AmazonPricing] Starting sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`);
 
