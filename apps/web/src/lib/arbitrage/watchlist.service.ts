@@ -12,6 +12,37 @@ import type { Database } from '@hadley-bricks/database';
 
 const PAGE_SIZE = 1000; // Supabase returns max 1000 rows
 
+/**
+ * Normalize a set number to BrickLink format.
+ * BrickLink requires the variant suffix (e.g., "75301-1" not "75301").
+ *
+ * Rules:
+ * - If already has a suffix like "-1", "-2", etc., leave it alone
+ * - If it's a standard set number (numeric only), append "-1"
+ * - Promotional/gear items starting with 5xxxxxx are left as-is (they need manual mapping)
+ */
+function normalizeToBricklinkFormat(setNumber: string): string {
+  if (!setNumber) return setNumber;
+
+  // Already has a suffix (e.g., "-1", "-2")
+  if (/-\d+$/.test(setNumber)) {
+    return setNumber;
+  }
+
+  // Skip 7-digit gear/accessory items (5xxxxxx) - these need manual mapping
+  if (/^5\d{6}$/.test(setNumber)) {
+    return setNumber;
+  }
+
+  // Standard set numbers (4-6 digits) get "-1" suffix
+  if (/^\d{4,6}$/.test(setNumber)) {
+    return `${setNumber}-1`;
+  }
+
+  // Return as-is for anything else
+  return setNumber;
+}
+
 export type WatchlistSource = 'sold_inventory' | 'retired_with_pricing';
 
 export interface WatchlistItem {
@@ -75,7 +106,8 @@ export class ArbitrageWatchlistService {
     // Add sold inventory items (priority over seeded)
     for (const item of soldAsins) {
       if (item.bricklinkSetNumber) {
-        watchlistMap.set(item.bricklinkSetNumber, {
+        const normalizedSetNumber = normalizeToBricklinkFormat(item.bricklinkSetNumber);
+        watchlistMap.set(normalizedSetNumber, {
           asin: item.asin,
           source: 'sold_inventory',
         });
@@ -84,8 +116,9 @@ export class ArbitrageWatchlistService {
 
     // Add retired seeded items (only if not already from sold inventory)
     for (const item of retiredSeeded) {
-      if (!watchlistMap.has(item.bricklinkSetNumber)) {
-        watchlistMap.set(item.bricklinkSetNumber, {
+      const normalizedSetNumber = normalizeToBricklinkFormat(item.bricklinkSetNumber);
+      if (!watchlistMap.has(normalizedSetNumber)) {
+        watchlistMap.set(normalizedSetNumber, {
           asin: item.asin,
           source: 'retired_with_pricing',
         });
