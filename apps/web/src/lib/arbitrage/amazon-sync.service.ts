@@ -518,7 +518,7 @@ export class AmazonArbitrageSyncService {
     console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${trackedAsins.length} tracked ASINs`);
 
     // Get seeded ASINs if enabled (with pagination)
-    let seededAsins: { asin: string }[] = [];
+    const seededAsins: { asin: string }[] = [];
     if (options.includeSeeded !== false) {
       page = 0;
       hasMore = true;

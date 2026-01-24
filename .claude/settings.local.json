@@ -4,7 +4,10 @@
       "Read(//c/Users/Chris Hadley/hadley-bricks-inventory-management/**)",
       "Bash(Copy-Item:*)",
       "Bash(Copy-Item \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\windows-scanner\\\\HadleyBricksScanner\\\\prompts\\\\broad-sweep.md\" -Destination \"c:\\\\Users\\\\Chris Hadley\\\\hadley-bricks-inventory-management\\\\apps\\\\windows-scanner\\\\HadleyBricksScanner\\\\bin\\\\Release\\\\net8.0-windows\\\\prompts\\\\broad-sweep.md\" -Force)",
-      "Bash(copy:*)"
+      "Bash(copy:*)",
+      "Bash(printf:*)",
+      "Bash(gh.exe run list:*)",
+      "Bash(where:*)"
     ]
   },
   "hooks": {
