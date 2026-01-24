@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Update status to running
-      await supabase
+      const { error: upsertError } = await supabase
         .from('arbitrage_sync_status')
         .upsert({
           user_id: DEFAULT_USER_ID,
@@ -99,6 +99,11 @@ export async function POST(request: NextRequest) {
           last_run_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: 'user_id,job_type' });
+
+      if (upsertError) {
+        console.error('[Cron AmazonPricing] Failed to create sync status:', upsertError);
+        throw new Error(`Failed to create sync status: ${upsertError.message}`);
+      }
     }
 
     // If cursor position >= totalAsins, sync is already complete for today
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
     const isComplete = newCursorPosition >= totalAsins;
 
     // Update sync status
-    await supabase
+    const { error: updateError } = await supabase
       .from('arbitrage_sync_status')
       .upsert({
         user_id: DEFAULT_USER_ID,
@@ -144,6 +149,10 @@ export async function POST(request: NextRequest) {
         last_success_at: isComplete ? new Date().toISOString() : syncStatus?.last_success_at,
         last_run_duration_ms: Date.now() - startTime,
       }, { onConflict: 'user_id,job_type' });
+
+    if (updateError) {
+      console.error('[Cron AmazonPricing] Failed to update sync status:', updateError);
+    }
 
     const duration = Date.now() - startTime;
     const durationStr = duration > 60000
