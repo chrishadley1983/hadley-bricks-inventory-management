@@ -403,11 +403,24 @@ For this project, the Merge Feature Agent has these permissions:
 
 | Permission | Status | Notes |
 |------------|--------|-------|
-| Push directly to main | ✅ Yes | No PR required |
+| Push directly to main | ❌ No | GitHub branch protection requires PR |
+| Create pull requests | ✅ Yes | Use `gh pr create` |
+| Merge PRs via GitHub | ✅ Yes | After checks pass |
 | Delete local branches | ✅ Yes | After successful merge |
 | Delete remote branches | ✅ Yes | After successful merge |
 | Force delete branches | ✅ Yes | Use `-D` after merge confirmed |
 | Force push to main | ❌ No | Never force push to main |
+
+### PR-Based Workflow
+
+Since GitHub branch protection is enabled, all merges must go through pull requests:
+
+1. **Create feature branch** (if not already on one)
+2. **Push branch to origin** with `-u` flag
+3. **Create PR** using `gh pr create`
+4. **Wait for checks** to pass
+5. **Merge PR** via GitHub (or `gh pr merge`)
+6. **Clean up** local and remote branches
 
 ---
 

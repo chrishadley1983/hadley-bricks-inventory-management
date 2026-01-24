@@ -52,7 +52,9 @@ The agent detects the track from branch name:
 ### Permissions
 
 For this project:
-- ✅ Can push directly to main (no PR required)
+- ❌ Cannot push directly to main (GitHub branch protection)
+- ✅ Can create pull requests via `gh pr create`
+- ✅ Can merge PRs via GitHub after checks pass
 - ✅ Can delete local and remote branches
 - ✅ Can force delete branches after merge confirmed
 - ❌ Never force push to main

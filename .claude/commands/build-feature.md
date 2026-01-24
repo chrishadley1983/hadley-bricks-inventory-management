@@ -60,6 +60,20 @@ Before running:
 
 **Note:** The agent will attempt to start the app automatically if not running (unless `--cautious`).
 
+## Feature Branch Workflow
+
+The agent automatically creates a feature branch if on main:
+
+```powershell
+# If on main, creates:
+git checkout -b feature/<feature-name>
+```
+
+**Why feature branches are mandatory:**
+- GitHub branch protection prevents direct push to main
+- All changes must go through pull requests
+- Feature branches enable code review before merge
+
 ## Autonomous Recovery
 
 The agent attempts to fix common blockers before escalating to human:
@@ -151,8 +165,8 @@ To manage context window, summarize previous iterations rather than retain full 
 
 1. Review HUMAN_VERIFY criteria (screenshots in `evidence/`)
 2. `/test-plan <feature>` - Generate test coverage
-3. `/code-review` - Review all changes
-4. `/merge-feature <branch>` - Merge to main
+3. `/code-review branch` - Review all changes
+4. `/merge-feature feature/<feature>` - Create PR and merge to main
 
 ## Handoff to Human (on ESCALATED)
 
