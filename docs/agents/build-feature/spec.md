@@ -212,6 +212,7 @@ Before running:
 - `docs/features/<feature-name>/done-criteria.md` must exist
 - App must be running (for verification)
 - Git working directory should be clean
+- **Will create feature branch** if currently on main (see 4.6)
 
 ---
 
@@ -284,11 +285,29 @@ curl localhost:3000 responds?
 
 See [Section 5: Autonomous Recovery Actions](#5-autonomous-recovery-actions) for full recovery capabilities.
 
-### 4.6 Check Git Status
+### 4.6 Check Git Status and Create Feature Branch
+
 ```powershell
+# Check current branch
+git branch --show-current
+
+# Check for uncommitted changes
 git status --porcelain
 ```
-If dirty: WARN but continue (changes will be part of feature).
+
+**Branch handling:**
+- If on `main`: Create and switch to feature branch
+  ```powershell
+  git checkout -b feature/<feature-name>
+  ```
+- If on existing feature branch: Continue on that branch
+- If dirty: WARN but continue (changes will be part of feature)
+
+**Why feature branches are mandatory:**
+- GitHub branch protection prevents direct push to main
+- All changes must go through pull requests
+- Feature branches enable code review before merge
+- Enables `/merge-feature` workflow with PR creation
 
 ### 4.7 Report Boot Status
 
@@ -304,6 +323,7 @@ If dirty: WARN but continue (changes will be part of feature).
 - HUMAN_VERIFY: 1
 
 **App status:** ✅ Running on localhost:3000
+**Git branch:** feature/inventory-export (created from main)
 **Git status:** ✅ Clean
 
 **Starting autonomous build loop...**
@@ -1563,8 +1583,8 @@ Please review criterion U1 (Button placement):
 ### Next Steps
 After confirming U1:
 1. `/test-plan inventory-export` - Generate test coverage
-2. `/code-review` - Review all changes
-3. `/merge-feature` - Merge to main
+2. `/code-review branch` - Review all changes
+3. `/merge-feature feature/inventory-export` - Create PR and merge
 ```
 
 ---
@@ -1619,6 +1639,9 @@ After resolving:
 
 Feature inventory-export has CONVERGED and been approved.
 
+**Branch:** feature/inventory-export
+**Status:** Ready for PR
+
 Files changed:
 - apps/web/app/api/inventory/export/route.ts (new)
 - apps/web/app/(dashboard)/inventory/page.tsx (modified)
@@ -1632,6 +1655,8 @@ Criteria that need test coverage:
 - P1: Performance → Performance test
 
 Run: /test-plan inventory-export
+Then: /code-review branch
+Then: /merge-feature feature/inventory-export (creates PR)
 ```
 
 ---
