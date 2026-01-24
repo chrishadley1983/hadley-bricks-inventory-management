@@ -1,10 +1,36 @@
 {
   "agent": "feature-spec",
-  "lastRun": "2026-01-18T15:00:00Z",
+  "lastRun": "2026-01-24T10:30:00Z",
   "lastCommit": null,
   "status": "completed",
-  "specsGenerated": 4,
+  "specsGenerated": 5,
   "recentSpecs": [
+    {
+      "feature": "merge-feature-extended",
+      "generatedAt": "2026-01-24T10:30:00Z",
+      "criteriaCount": 24,
+      "filesPlanned": 5,
+      "linesEstimated": 600,
+      "feasibilityIssues": 0,
+      "status": "READY_FOR_BUILD",
+      "complexity": "medium",
+      "phases": ["Config Files", "Critical Path Tests", "Track Detection", "New Modes", "Extended Merge Flow", "Error Handling", "Command Update", "Verification"],
+      "buildOrder": [
+        "Create config.json with Vercel URLs and timeouts",
+        "Create critical-paths.ts with path definitions",
+        "Create critical-paths.spec.ts Playwright tests",
+        "Add track detection section to agent spec",
+        "Add check mode section",
+        "Add preview mode section",
+        "Add verify-production mode section",
+        "Add rollback mode section",
+        "Update extended merge process section",
+        "Add error handling sections",
+        "Update command file quick reference",
+        "Verification and testing"
+      ],
+      "notes": "Documentation-first feature. Primary output is markdown specs and Playwright tests. No application TypeScript code needed."
+    },
     {
       "feature": "cost-modelling",
       "generatedAt": "2026-01-18T15:00:00Z",
@@ -137,6 +163,12 @@
       "files": ["lib/services/cost-calculations.ts", "api/cost-modelling/scenarios/route.ts", "components/features/cost-modelling/"],
       "components": ["AssumptionsPanel (Accordion)", "PLBreakdown", "PackageCostMatrix", "CompareMode", "ExportButtons"],
       "patterns": ["useMemo for calculations", "Controlled form state", "Draft auto-save", "jsPDF for PDF export"]
+    },
+    "agentExtensionFeature": {
+      "description": "Documentation-first agent enhancements",
+      "files": ["docs/agents/<agent>/<agent>.md", "docs/agents/<agent>/config.json", ".claude/commands/<command>.md"],
+      "components": ["Agent spec sections", "Config JSON", "Command quick reference"],
+      "patterns": ["Markdown-defined behavior", "JSON configuration", "Playwright for verification"]
     }
   },
   "feasibilityChecks": {
@@ -147,6 +179,7 @@
     "integrationPoints": "What existing code does this connect to?",
     "browserAPIs": "Does this use browser-specific APIs (notifications, audio)?",
     "timezoneHandling": "Are there date/time calculations that need timezone awareness?",
-    "clientSideCalculations": "Are there complex calculations that should run client-side for performance?"
+    "clientSideCalculations": "Are there complex calculations that should run client-side for performance?",
+    "externalCLIs": "Does this require external CLI tools (Vercel, etc.)?"
   }
 }
