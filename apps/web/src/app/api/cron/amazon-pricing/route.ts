@@ -26,7 +26,7 @@ export const maxDuration = 300; // 5 minutes - Vercel Pro limit
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const JOB_TYPE = 'pricing_sync';
 const BATCH_SIZE = 20; // ASINs per API call
-const BATCHES_PER_INVOCATION = 8; // Process ~8 batches per invocation (~4 min with 30s delays)
+const BATCHES_PER_INVOCATION = 4; // Process ~4 batches per invocation (~2 min with 30s delays)
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
