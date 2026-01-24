@@ -365,9 +365,34 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
       console.error('[process] Failed to create scan log:', scanLogError);
     }
 
-    // Store viable opportunities (upsert to handle duplicates)
+    // Check for previously dismissed listings - we should NOT re-add or notify for these
+    let dismissedIds = new Set<string>();
     if (viableListings.length > 0) {
-      const opportunities = viableListings.map((listing) => ({
+      const listingIds = viableListings.map((l) => l.vintedListingId);
+      const { data: dismissedListings } = await supabase
+        .from('vinted_opportunities')
+        .select('vinted_listing_id')
+        .eq('user_id', userId)
+        .eq('status', 'dismissed')
+        .in('vinted_listing_id', listingIds);
+
+      dismissedIds = new Set(
+        (dismissedListings ?? []).map((d) => d.vinted_listing_id)
+      );
+
+      if (dismissedIds.size > 0) {
+        console.log(`[process] Found ${dismissedIds.size} dismissed listings - will skip`);
+      }
+    }
+
+    // Filter viable listings to exclude dismissed ones
+    const newViableListings = viableListings.filter(
+      (listing) => !dismissedIds.has(listing.vintedListingId)
+    );
+
+    // Store viable opportunities (upsert to handle duplicates)
+    if (newViableListings.length > 0) {
+      const opportunities = newViableListings.map((listing) => ({
         user_id: userId,
         scan_log_id: scanLog?.id || null,
         vinted_listing_id: listing.vintedListingId,
@@ -389,7 +414,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
         .from('vinted_opportunities')
         .upsert(opportunities, {
           onConflict: 'user_id,vinted_listing_id',
-          ignoreDuplicates: false, // Update if exists
+          ignoreDuplicates: false, // Update if exists (for active items only)
         });
 
       if (oppError) {
@@ -466,11 +491,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
     }
 
     // =========================================================================
-    // Send notifications for excellent opportunities
+    // Send notifications for excellent opportunities (excluding dismissed)
     // =========================================================================
 
     let alertsSent = 0;
-    for (const listing of viableListings) {
+    for (const listing of newViableListings) {
       if (listing.cogPercent !== null && listing.profit !== null) {
         // Priority 1 (high) for excellent (<30%), priority 0 (normal) for good
         const priority = listing.cogPercent < 30 ? 1 : 0;
@@ -501,11 +526,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
       summary: {
         listingsProcessed: processedListings.length,
         setsIdentified: uniqueSetNumbers.length,
-        opportunitiesFound: viableListings.length,
+        opportunitiesFound: newViableListings.length,
+        dismissedSkipped: dismissedIds.size,
         nearMissesFound: nearMissListings.length,
         alertsSent,
       },
-      opportunities: viableListings.map((l) => ({
+      opportunities: newViableListings.map((l) => ({
         id: l.vintedListingId,
         setNumber: l.setNumber,
         setName: l.setName,
