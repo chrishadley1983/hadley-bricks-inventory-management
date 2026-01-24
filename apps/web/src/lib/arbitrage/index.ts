@@ -19,3 +19,5 @@ export { MappingService } from './mapping.service';
 export { AmazonArbitrageSyncService } from './amazon-sync.service';
 export { BrickLinkArbitrageSyncService } from './bricklink-sync.service';
 export { EbayArbitrageSyncService } from './ebay-sync.service';
+export { ArbitrageWatchlistService } from './watchlist.service';
+export type { WatchlistItem, WatchlistRefreshResult, WatchlistStats, WatchlistSource } from './watchlist.service';

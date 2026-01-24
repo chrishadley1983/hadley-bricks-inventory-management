@@ -140,8 +140,11 @@ export class PartoutService {
     // 4. Check cache for each part+colour (will be empty if force refreshed)
     const { cached, uncached } = await this.cacheService.getCachedPrices(parts);
 
+    // Report initial progress with cache stats (fetched=0, total=uncached, cached=cached)
+    onProgress?.(0, uncached.length, cached.length);
+
     // 5. Fetch uncached parts in batches
-    const freshPrices = await this.fetchUncachedPrices(uncached, onProgress);
+    const freshPrices = await this.fetchUncachedPrices(uncached, cached.length, onProgress);
 
     // 5. Upsert fresh prices to cache
     if (freshPrices.length > 0) {
@@ -227,6 +230,7 @@ export class PartoutService {
    */
   private async fetchUncachedPrices(
     parts: PartIdentifier[],
+    cachedCount: number,
     onProgress?: PartoutProgressCallback
   ): Promise<PartPriceData[]> {
     if (parts.length === 0) {
@@ -273,7 +277,7 @@ export class PartoutService {
 
       // Report progress after each batch
       const fetched = Math.min(i + BATCH_SIZE, parts.length);
-      onProgress?.(fetched, parts.length);
+      onProgress?.(fetched, parts.length, cachedCount);
 
       // Longer delay between batches (except after the last batch or if rate limited)
       if (i + BATCH_SIZE < parts.length && !rateLimitHit) {

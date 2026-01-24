@@ -970,6 +970,53 @@ export type Database = {
           },
         ]
       }
+      arbitrage_watchlist: {
+        Row: {
+          asin: string | null
+          bricklink_last_synced_at: string | null
+          bricklink_set_number: string
+          created_at: string
+          ebay_last_synced_at: string | null
+          id: string
+          is_active: boolean
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asin?: string | null
+          bricklink_last_synced_at?: string | null
+          bricklink_set_number: string
+          created_at?: string
+          ebay_last_synced_at?: string | null
+          id?: string
+          is_active?: boolean
+          source: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asin?: string | null
+          bricklink_last_synced_at?: string | null
+          bricklink_set_number?: string
+          created_at?: string
+          ebay_last_synced_at?: string | null
+          id?: string
+          is_active?: boolean
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asin_bricklink_mapping: {
         Row: {
           asin: string
@@ -7398,6 +7445,31 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tracked_asins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arbitrage_watchlist_stats: {
+        Row: {
+          bricklink_never_synced: number | null
+          bricklink_stale: number | null
+          ebay_never_synced: number | null
+          ebay_stale: number | null
+          newest_bricklink_sync: string | null
+          newest_ebay_sync: string | null
+          oldest_bricklink_sync: string | null
+          oldest_ebay_sync: string | null
+          retired_with_pricing_count: number | null
+          sold_inventory_count: number | null
+          total_active: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_watchlist_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

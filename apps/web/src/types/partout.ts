@@ -112,7 +112,7 @@ export interface PartPriceData {
 }
 
 /** Progress callback for batch fetching */
-export type PartoutProgressCallback = (fetched: number, total: number) => void;
+export type PartoutProgressCallback = (fetched: number, total: number, cached: number) => void;
 
 /** Partout API response */
 export interface PartoutApiResponse {
@@ -123,4 +123,26 @@ export interface PartoutApiResponse {
 export interface PartoutApiError {
   error: string;
   details?: unknown;
+}
+
+/** Phase of the partout streaming fetch */
+export type PartoutStreamPhase = 'fetching-colors' | 'fetching-subsets' | 'fetching-parts';
+
+/** Server-Sent Event types for partout streaming */
+export interface PartoutStreamEvent {
+  type: 'start' | 'phase' | 'progress' | 'complete' | 'error';
+  message?: string;
+  phase?: PartoutStreamPhase;
+  fetched?: number;
+  total?: number;
+  cached?: number;
+  data?: PartoutData;
+  error?: string;
+}
+
+/** Progress state for streaming fetch in UI */
+export interface StreamProgress {
+  fetched: number;
+  total: number;
+  cached: number;
 }

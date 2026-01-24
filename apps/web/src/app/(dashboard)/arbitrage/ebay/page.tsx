@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock, ExternalLink, CalendarClock } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import {
   ArbitrageFilters,
   ExcludedAsinsModal,
@@ -22,15 +21,9 @@ import {
   useArbitrageItem,
   useSyncStatus,
   useArbitrageSummary,
-  useTriggerSync,
   useExcludeAsin,
-  useEbaySyncWithProgress,
-  useAmazonInventorySyncWithProgress,
-  useAmazonPricingSyncWithProgress,
-  useBrickLinkSyncWithProgress,
-  type SyncProgress,
 } from '@/hooks/use-arbitrage';
-import type { ArbitrageFilterOptions, ArbitrageItem, SyncJobType } from '@/lib/arbitrage/types';
+import type { ArbitrageFilterOptions, ArbitrageItem } from '@/lib/arbitrage/types';
 import { EBAY_SHOW_FILTER_OPTIONS, EBAY_SORT_OPTIONS } from '@/lib/arbitrage/types';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -54,25 +47,16 @@ export default function EbayArbitragePage() {
   });
   const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
-  const [amazonInventorySyncProgress, setAmazonInventorySyncProgress] = useState<SyncProgress | null>(null);
-  const [amazonPricingSyncProgress, setAmazonPricingSyncProgress] = useState<SyncProgress | null>(null);
-  const [brickLinkSyncProgress, setBrickLinkSyncProgress] = useState<SyncProgress | null>(null);
-  const [ebaySyncProgress, setEbaySyncProgress] = useState<SyncProgress | null>(null);
   const { toast } = useToast();
 
   // Data hooks
   const { data: arbitrageData, isLoading: dataLoading, error: dataError } = useArbitrageData(filters);
   const { data: selectedItem } = useArbitrageItem(selectedAsin);
-  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSyncStatus } = useSyncStatus();
+  const { data: syncStatus, isLoading: syncLoading } = useSyncStatus();
   const { data: summary, isLoading: summaryLoading } = useArbitrageSummary();
 
   // Mutations
-  const syncMutation = useTriggerSync();
   const excludeMutation = useExcludeAsin();
-  const amazonInventorySyncMutation = useAmazonInventorySyncWithProgress();
-  const amazonPricingSyncMutation = useAmazonPricingSyncWithProgress();
-  const brickLinkSyncMutation = useBrickLinkSyncWithProgress();
-  const ebaySyncMutation = useEbaySyncWithProgress();
 
   const handleFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
     // Reset to page 1 when filters change (unless page is explicitly being changed)
@@ -100,81 +84,6 @@ export default function EbayArbitragePage() {
       toast({ title: 'Failed to exclude ASIN', variant: 'destructive' });
     }
   }, [excludeMutation, toast]);
-
-  const handleSync = async (type: SyncJobType | 'all') => {
-    // Use streaming sync with progress for individual sync types
-    if (type === 'inventory_asins') {
-      try {
-        setAmazonInventorySyncProgress({ type: 'start', message: 'Starting Amazon inventory sync...' });
-        await amazonInventorySyncMutation.mutateAsync((progress) => {
-          setAmazonInventorySyncProgress(progress);
-        });
-        toast({ title: 'Amazon inventory sync completed successfully' });
-        refetchSyncStatus();
-      } catch {
-        toast({ title: 'Amazon inventory sync failed', variant: 'destructive' });
-      } finally {
-        setTimeout(() => setAmazonInventorySyncProgress(null), 2000);
-      }
-      return;
-    }
-
-    if (type === 'amazon_pricing') {
-      try {
-        setAmazonPricingSyncProgress({ type: 'start', message: 'Starting Amazon pricing sync...' });
-        await amazonPricingSyncMutation.mutateAsync((progress) => {
-          setAmazonPricingSyncProgress(progress);
-        });
-        toast({ title: 'Amazon pricing sync completed successfully' });
-        refetchSyncStatus();
-      } catch {
-        toast({ title: 'Amazon pricing sync failed', variant: 'destructive' });
-      } finally {
-        setTimeout(() => setAmazonPricingSyncProgress(null), 2000);
-      }
-      return;
-    }
-
-    if (type === 'bricklink_pricing') {
-      try {
-        setBrickLinkSyncProgress({ type: 'start', message: 'Starting BrickLink pricing sync...' });
-        await brickLinkSyncMutation.mutateAsync((progress) => {
-          setBrickLinkSyncProgress(progress);
-        });
-        toast({ title: 'BrickLink pricing sync completed successfully' });
-        refetchSyncStatus();
-      } catch {
-        toast({ title: 'BrickLink pricing sync failed', variant: 'destructive' });
-      } finally {
-        setTimeout(() => setBrickLinkSyncProgress(null), 2000);
-      }
-      return;
-    }
-
-    if (type === 'ebay_pricing') {
-      try {
-        setEbaySyncProgress({ type: 'start', message: 'Starting eBay sync...' });
-        await ebaySyncMutation.mutateAsync((progress) => {
-          setEbaySyncProgress(progress);
-        });
-        toast({ title: 'eBay sync completed successfully' });
-        refetchSyncStatus();
-      } catch {
-        toast({ title: 'eBay sync failed', variant: 'destructive' });
-      } finally {
-        setTimeout(() => setEbaySyncProgress(null), 2000);
-      }
-      return;
-    }
-
-    // Full sync uses the non-streaming endpoint
-    try {
-      await syncMutation.mutateAsync(type);
-      toast({ title: 'Full sync completed successfully' });
-    } catch {
-      toast({ title: 'Sync failed', variant: 'destructive' });
-    }
-  };
 
   // Extract items and filter for eBay opportunities
   const items = arbitrageData?.items ?? [];
@@ -262,16 +171,12 @@ export default function EbayArbitragePage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Sync Status</CardTitle>
-                <CardDescription>Data freshness indicators</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" />
+                  Sync Status
+                </CardTitle>
+                <CardDescription>Data is automatically synced daily. 1,000 items per platform per day.</CardDescription>
               </div>
-              <Button
-                onClick={() => handleSync('all')}
-                disabled={syncMutation.isPending}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-                Full Sync
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -284,37 +189,27 @@ export default function EbayArbitragePage() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-4">
-                <SyncStatusBadgeWithProgress
+                <SyncStatusBadge
                   label="Amazon Inventory"
                   lastSync={syncStatus?.syncStatus?.inventory_asins?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.inventory_asins?.status}
-                  onSync={() => handleSync('inventory_asins')}
-                  isSyncing={amazonInventorySyncMutation.isPending}
-                  progress={amazonInventorySyncProgress}
                 />
-                <SyncStatusBadgeWithProgress
+                <SyncStatusBadge
                   label="Amazon Pricing"
                   lastSync={syncStatus?.syncStatus?.amazon_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.amazon_pricing?.status}
-                  onSync={() => handleSync('amazon_pricing')}
-                  isSyncing={amazonPricingSyncMutation.isPending}
-                  progress={amazonPricingSyncProgress}
                 />
-                <SyncStatusBadgeWithProgress
-                  label="BrickLink Pricing"
+                <SyncStatusBadge
+                  label="BrickLink"
                   lastSync={syncStatus?.syncStatus?.bricklink_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.bricklink_pricing?.status}
-                  onSync={() => handleSync('bricklink_pricing')}
-                  isSyncing={brickLinkSyncMutation.isPending}
-                  progress={brickLinkSyncProgress}
+                  schedule="2:30am"
                 />
-                <SyncStatusBadgeWithProgress
-                  label="eBay Pricing"
+                <SyncStatusBadge
+                  label="eBay"
                   lastSync={syncStatus?.syncStatus?.ebay_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.ebay_pricing?.status}
-                  onSync={() => handleSync('ebay_pricing')}
-                  isSyncing={ebaySyncMutation.isPending}
-                  progress={ebaySyncProgress}
+                  schedule="2:00am"
                 />
               </div>
             )}
@@ -469,29 +364,41 @@ export default function EbayArbitragePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Sync Schedule
+                  <CalendarClock className="h-5 w-5" />
+                  Automated Sync Schedule
                 </CardTitle>
                 <CardDescription>
-                  Pricing data is synced periodically to keep comparisons up-to-date.
+                  Pricing data is automatically synced on a daily schedule. Each sync processes up to 1,000 items, completing a full cycle of all watchlist items in ~3 days.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm">Amazon Inventory</span>
-                  <span className="text-sm text-muted-foreground">Every 24 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">eBay Pricing</span>
+                    <p className="text-xs text-muted-foreground">1,000 items/day</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 2:00am UTC</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm">Amazon Pricing</span>
-                  <span className="text-sm text-muted-foreground">Every 6 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">BrickLink Pricing</span>
+                    <p className="text-xs text-muted-foreground">1,000 items/day</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 2:30am UTC</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm">BrickLink Pricing</span>
-                  <span className="text-sm text-muted-foreground">Every 12 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">Amazon Pricing</span>
+                    <p className="text-xs text-muted-foreground">Seeded ASINs</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 4:00am UTC</span>
                 </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">eBay Pricing</span>
-                  <span className="text-sm text-muted-foreground">Every 24 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">Full Sync Cycle</span>
+                    <p className="text-xs text-muted-foreground">All watchlist items</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">~3 days</span>
                 </div>
               </CardContent>
             </Card>
@@ -692,62 +599,43 @@ function EbayArbitrageTable({
   );
 }
 
-// Sync Status Badge with Progress
-function SyncStatusBadgeWithProgress({
+// Read-only Sync Status Badge (scheduled syncs - no manual trigger)
+function SyncStatusBadge({
   label,
   lastSync,
   status,
-  onSync,
-  isSyncing,
-  progress,
+  schedule,
 }: {
   label: string;
   lastSync: string | null | undefined;
   status: string | null | undefined;
-  onSync: () => void;
-  isSyncing: boolean;
-  progress: SyncProgress | null;
+  schedule?: string;
 }) {
-  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 24 * 60 * 60 * 1000;
+  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 3 * 24 * 60 * 60 * 1000; // 3 days
+  const isRecent = lastSync && (Date.now() - new Date(lastSync).getTime()) < 24 * 60 * 60 * 1000; // < 1 day
   const isError = status === 'failed';
 
-  const formatDate = (date: string | null | undefined) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatRelativeTime = (date: string | null | undefined) => {
+    if (!date) return 'Never synced';
+    const diff = Date.now() - new Date(date).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (hours < 1) return 'Just now';
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return 'Yesterday';
+    return `${days} days ago`;
   };
 
-  // Show progress bar when syncing
-  if (isSyncing && progress) {
-    return (
-      <div className="flex flex-col gap-2 border rounded-lg px-3 py-2 min-w-[200px]">
-        <div className="flex items-center gap-2">
-          <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-          <span className="text-sm font-medium">{label}</span>
-        </div>
-        <div className="space-y-1">
-          <Progress value={progress.percent ?? 0} className="h-2" />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>
-              {progress.type === 'start'
-                ? 'Starting...'
-                : progress.type === 'complete'
-                ? 'Complete!'
-                : `${progress.processed ?? 0} / ${progress.total ?? 0}`}
-            </span>
-            <span>{progress.percent ?? 0}%</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getStalenessColor = () => {
+    if (isError) return 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20';
+    if (isStale) return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20';
+    if (isRecent) return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20';
+    return '';
+  };
 
   return (
-    <div className="flex items-center gap-2 border rounded-lg px-3 py-2">
+    <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 ${getStalenessColor()}`}>
       {isError ? (
         <AlertCircle className="h-4 w-4 text-destructive" />
       ) : isStale ? (
@@ -758,18 +646,10 @@ function SyncStatusBadgeWithProgress({
       <div className="flex flex-col">
         <span className="text-sm font-medium">{label}</span>
         <span className="text-xs text-muted-foreground">
-          {formatDate(lastSync)}
+          {formatRelativeTime(lastSync)}
+          {schedule && <span className="ml-1">• {schedule}</span>}
         </span>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="ml-2 h-7 w-7 p-0"
-        onClick={onSync}
-        disabled={isSyncing}
-      >
-        <RefreshCw className="h-3 w-3" />
-      </Button>
     </div>
   );
 }

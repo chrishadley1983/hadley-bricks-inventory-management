@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@hadley-bricks/database';
 import { getEbayBrowseClient, type EbayItemSummary } from '../ebay/ebay-browse.client';
 import { isValidLegoListing } from './ebay-listing-validator';
+import { ArbitrageWatchlistService } from './watchlist.service';
 
 const BATCH_SIZE = 5; // Number of parallel requests per batch
 const BATCH_DELAY = 200; // ms between batches
@@ -227,6 +228,131 @@ export class EbayArbitrageSyncService {
     });
 
     return { updated, failed, total };
+  }
+
+  /**
+   * Sync eBay pricing for a batch of items from the watchlist
+   * Used by scheduled cron jobs for cursor-based processing.
+   *
+   * @param userId - User ID
+   * @param options - Batch options
+   * @param options.offset - Starting offset in the watchlist
+   * @param options.limit - Maximum items to process
+   * @returns { processed, failed, updated, setNumbers } - The set numbers that were processed
+   */
+  async syncPricingBatch(
+    userId: string,
+    options: { offset: number; limit: number }
+  ): Promise<{ processed: number; failed: number; updated: number; setNumbers: string[] }> {
+    console.log(`[EbayArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`);
+    const startTime = Date.now();
+
+    // Get batch from watchlist (ordered by oldest sync time first)
+    const watchlistService = new ArbitrageWatchlistService(this.supabase);
+    const watchlistBatch = await watchlistService.getWatchlistBatch(userId, 'ebay', options.offset, options.limit);
+
+    if (watchlistBatch.length === 0) {
+      console.log('[EbayArbitrageSyncService.syncPricingBatch] No items to process in this batch');
+      return { processed: 0, failed: 0, updated: 0, setNumbers: [] };
+    }
+
+    const setNumbers = watchlistBatch.map((item) => item.bricklinkSetNumber);
+    console.log(`[EbayArbitrageSyncService.syncPricingBatch] Processing ${setNumbers.length} set numbers`);
+
+    let updated = 0;
+    let failed = 0;
+    let processed = 0;
+    const today = new Date().toISOString().split('T')[0];
+    const successfulSetNumbers: string[] = [];
+
+    const client = getEbayBrowseClient();
+
+    // Process in parallel batches for speed
+    for (let batchStart = 0; batchStart < setNumbers.length; batchStart += BATCH_SIZE) {
+      const batch = setNumbers.slice(batchStart, batchStart + BATCH_SIZE);
+
+      const batchResults = await Promise.allSettled(
+        batch.map(async (setNumber) => {
+          try {
+            // Search eBay for this set
+            const searchResult = await client.searchLegoSet(setNumber, 50);
+
+            // Process and filter results
+            const processedListings = this.processListings(
+              searchResult.itemSummaries ?? [],
+              setNumber
+            );
+
+            // Calculate aggregates
+            const snapshot = this.calculateSnapshot(setNumber, processedListings);
+
+            // Store in database
+            const { error: insertError } = await this.supabase
+              .from('ebay_pricing')
+              .upsert(
+                {
+                  set_number: setNumber,
+                  snapshot_date: today,
+                  country_code: 'GB',
+                  condition: 'NEW',
+                  min_price: snapshot.minPrice,
+                  avg_price: snapshot.avgPrice,
+                  max_price: snapshot.maxPrice,
+                  total_listings: snapshot.totalListings,
+                  listings_json: snapshot.listings as unknown as Json,
+                },
+                {
+                  onConflict: 'set_number,snapshot_date,country_code,condition',
+                }
+              );
+
+            if (insertError) {
+              console.error(
+                `[EbayArbitrageSyncService.syncPricingBatch] Error storing ${setNumber}:`,
+                insertError.message
+              );
+              return { success: false, setNumber };
+            }
+
+            return { success: true, setNumber, snapshot };
+          } catch (err) {
+            console.error(
+              `[EbayArbitrageSyncService.syncPricingBatch] Error fetching ${setNumber}:`,
+              err instanceof Error ? err.message : 'Unknown error'
+            );
+            return { success: false, setNumber };
+          }
+        })
+      );
+
+      // Count results
+      for (const result of batchResults) {
+        processed++;
+        if (result.status === 'fulfilled' && result.value.success) {
+          updated++;
+          successfulSetNumbers.push(result.value.setNumber);
+        } else {
+          failed++;
+        }
+      }
+
+      // Delay between batches to avoid rate limits
+      if (batchStart + BATCH_SIZE < setNumbers.length) {
+        await this.delay(BATCH_DELAY);
+      }
+    }
+
+    // Update watchlist timestamps for successfully synced items
+    if (successfulSetNumbers.length > 0) {
+      await watchlistService.updateSyncTimestamp(userId, successfulSetNumbers, 'ebay');
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(
+      `[EbayArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`
+    );
+
+    return { processed, failed, updated, setNumbers };
   }
 
   /**
