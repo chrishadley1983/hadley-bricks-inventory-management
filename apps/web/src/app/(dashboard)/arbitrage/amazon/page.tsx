@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock } from 'lucide-react';
+import { AlertCircle, CheckCircle2, EyeOff, Link2Off, Clock, CalendarClock } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -22,10 +22,9 @@ import {
   useArbitrageItem,
   useSyncStatus,
   useArbitrageSummary,
-  useTriggerSync,
   useExcludeAsin,
 } from '@/hooks/use-arbitrage';
-import type { ArbitrageFilterOptions, ArbitrageItem, SyncJobType } from '@/lib/arbitrage/types';
+import type { ArbitrageFilterOptions, ArbitrageItem } from '@/lib/arbitrage/types';
 import { useToast } from '@/hooks/use-toast';
 
 // Dynamic import for Header to avoid SSR issues
@@ -51,7 +50,6 @@ export default function AmazonArbitragePage() {
   const { data: summary, isLoading: summaryLoading } = useArbitrageSummary();
 
   // Mutations
-  const syncMutation = useTriggerSync();
   const excludeMutation = useExcludeAsin();
 
   const handleFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
@@ -75,15 +73,6 @@ export default function AmazonArbitragePage() {
       toast({ title: 'Failed to exclude ASIN', variant: 'destructive' });
     }
   }, [excludeMutation, toast]);
-
-  const handleSync = async (type: SyncJobType | 'all') => {
-    try {
-      await syncMutation.mutateAsync(type);
-      toast({ title: `${type === 'all' ? 'Full sync' : 'Sync'} completed successfully` });
-    } catch {
-      toast({ title: 'Sync failed', variant: 'destructive' });
-    }
-  };
 
   // Extract items from response
   const items = arbitrageData?.items ?? [];
@@ -169,16 +158,12 @@ export default function AmazonArbitragePage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Sync Status</CardTitle>
-                <CardDescription>Data freshness indicators</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" />
+                  Sync Status
+                </CardTitle>
+                <CardDescription>Data is automatically synced daily. 1,000 items per platform per day.</CardDescription>
               </div>
-              <Button
-                onClick={() => handleSync('all')}
-                disabled={syncMutation.isPending}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-                Full Sync
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -194,22 +179,18 @@ export default function AmazonArbitragePage() {
                   label="Amazon Inventory"
                   lastSync={syncStatus?.syncStatus?.inventory_asins?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.inventory_asins?.status}
-                  onSync={() => handleSync('inventory_asins')}
-                  isSyncing={syncMutation.isPending}
                 />
                 <SyncStatusBadge
                   label="Amazon Pricing"
                   lastSync={syncStatus?.syncStatus?.amazon_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.amazon_pricing?.status}
-                  onSync={() => handleSync('amazon_pricing')}
-                  isSyncing={syncMutation.isPending}
+                  schedule="4:00am"
                 />
                 <SyncStatusBadge
-                  label="BrickLink Pricing"
+                  label="BrickLink"
                   lastSync={syncStatus?.syncStatus?.bricklink_pricing?.lastSuccessAt}
                   status={syncStatus?.syncStatus?.bricklink_pricing?.status}
-                  onSync={() => handleSync('bricklink_pricing')}
-                  isSyncing={syncMutation.isPending}
+                  schedule="2:30am"
                 />
               </div>
             )}
@@ -308,25 +289,41 @@ export default function AmazonArbitragePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Sync Schedule
+                  <CalendarClock className="h-5 w-5" />
+                  Automated Sync Schedule
                 </CardTitle>
                 <CardDescription>
-                  Pricing data is synced periodically to keep comparisons up-to-date.
+                  Pricing data is automatically synced on a daily schedule. Each sync processes up to 1,000 items, completing a full cycle of all watchlist items in ~3 days.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm">Amazon Inventory</span>
-                  <span className="text-sm text-muted-foreground">Every 24 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">eBay Pricing</span>
+                    <p className="text-xs text-muted-foreground">1,000 items/day</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 2:00am UTC</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm">Amazon Pricing</span>
-                  <span className="text-sm text-muted-foreground">Every 6 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">BrickLink Pricing</span>
+                    <p className="text-xs text-muted-foreground">1,000 items/day</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 2:30am UTC</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <span className="text-sm font-medium">Amazon Pricing</span>
+                    <p className="text-xs text-muted-foreground">Seeded ASINs</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Daily at 4:00am UTC</span>
                 </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">BrickLink Pricing</span>
-                  <span className="text-sm text-muted-foreground">Every 12 hours</span>
+                  <div>
+                    <span className="text-sm font-medium">Full Sync Cycle</span>
+                    <p className="text-xs text-muted-foreground">All watchlist items</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">~3 days</span>
                 </div>
               </CardContent>
             </Card>
@@ -351,35 +348,43 @@ export default function AmazonArbitragePage() {
   );
 }
 
-// Sync Status Badge Component
+// Read-only Sync Status Badge (scheduled syncs - no manual trigger)
 function SyncStatusBadge({
   label,
   lastSync,
   status,
-  onSync,
-  isSyncing,
+  schedule,
 }: {
   label: string;
   lastSync: string | null | undefined;
   status: string | null | undefined;
-  onSync: () => void;
-  isSyncing: boolean;
+  schedule?: string;
 }) {
-  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 24 * 60 * 60 * 1000;
+  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 3 * 24 * 60 * 60 * 1000; // 3 days
+  const isRecent = lastSync && (Date.now() - new Date(lastSync).getTime()) < 24 * 60 * 60 * 1000; // < 1 day
   const isError = status === 'failed';
 
-  const formatDate = (date: string | null | undefined) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatRelativeTime = (date: string | null | undefined) => {
+    if (!date) return 'Never synced';
+    const diff = Date.now() - new Date(date).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (hours < 1) return 'Just now';
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return 'Yesterday';
+    return `${days} days ago`;
+  };
+
+  const getStalenessColor = () => {
+    if (isError) return 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20';
+    if (isStale) return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20';
+    if (isRecent) return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20';
+    return '';
   };
 
   return (
-    <div className="flex items-center gap-2 border rounded-lg px-3 py-2">
+    <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 ${getStalenessColor()}`}>
       {isError ? (
         <AlertCircle className="h-4 w-4 text-destructive" />
       ) : isStale ? (
@@ -390,18 +395,10 @@ function SyncStatusBadge({
       <div className="flex flex-col">
         <span className="text-sm font-medium">{label}</span>
         <span className="text-xs text-muted-foreground">
-          {formatDate(lastSync)}
+          {formatRelativeTime(lastSync)}
+          {schedule && <span className="ml-1">• {schedule}</span>}
         </span>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="ml-2 h-7 w-7 p-0"
-        onClick={onSync}
-        disabled={isSyncing}
-      >
-        <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-      </Button>
     </div>
   );
 }

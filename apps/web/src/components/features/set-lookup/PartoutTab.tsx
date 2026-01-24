@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePartout } from '@/hooks/usePartout';
 import { PartoutSummary } from './PartoutSummary';
 import { PartoutTable, type PartoutCondition } from './PartoutTable';
+import { PartoutProgress } from './PartoutProgress';
 
 interface PartoutTabProps {
   setNumber: string | null;
@@ -88,9 +89,11 @@ function NoPartsState() {
  *
  * Container for the partout value analysis. Handles loading, error states,
  * and orchestrates the summary and table components.
+ * Uses streaming for initial load and force refresh to show progress.
  */
 export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
   const [condition, setCondition] = useState<PartoutCondition>('new');
+  const [hasTriggeredInitialLoad, setHasTriggeredInitialLoad] = useState(false);
   const { toast } = useToast();
   const {
     data,
@@ -100,7 +103,33 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     refetch,
     forceRefresh,
     isForceRefreshing,
+    isStreaming,
+    streamProgress,
+    streamError,
+    fetchWithProgress,
   } = usePartout(setNumber, enabled);
+
+  // Trigger streaming fetch for initial load when no cached data
+  useEffect(() => {
+    if (
+      enabled &&
+      setNumber &&
+      !data &&
+      !isLoading &&
+      !isFetching &&
+      !isStreaming &&
+      !hasTriggeredInitialLoad &&
+      !error
+    ) {
+      setHasTriggeredInitialLoad(true);
+      fetchWithProgress(false);
+    }
+  }, [enabled, setNumber, data, isLoading, isFetching, isStreaming, hasTriggeredInitialLoad, error, fetchWithProgress]);
+
+  // Reset initial load flag when set number changes
+  useEffect(() => {
+    setHasTriggeredInitialLoad(false);
+  }, [setNumber]);
 
   const handleForceRefresh = async () => {
     const result = await forceRefresh();
@@ -118,17 +147,49 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     }
   };
 
+  const handleRetry = () => {
+    fetchWithProgress(false);
+  };
+
   // Not enabled or no set selected
   if (!enabled || !setNumber) {
     return <EmptyState />;
   }
 
-  // Loading state
+  // Show streaming progress during initial load or force refresh
+  if (isStreaming && streamProgress) {
+    return (
+      <PartoutProgress
+        fetched={streamProgress.fetched}
+        total={streamProgress.total}
+        cached={streamProgress.cached}
+      />
+    );
+  }
+
+  // Error state from streaming
+  if (streamError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Failed to load partout data</AlertTitle>
+        <AlertDescription className="flex items-center justify-between">
+          <span>{streamError}</span>
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Loading state (React Query initial load - fallback)
   if (isLoading) {
     return <PartoutSkeleton />;
   }
 
-  // Error state
+  // Error state (React Query)
   if (error) {
     return (
       <Alert variant="destructive">
@@ -164,7 +225,7 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     <div className="space-y-6" data-testid="partout-tab">
       {/* Refresh indicator and force refresh button */}
       <div className="flex items-center justify-between">
-        {(isFetching || isForceRefreshing) ? (
+        {isFetching || isForceRefreshing ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <RefreshCw className="h-4 w-4 animate-spin" />
             {isForceRefreshing ? 'Refreshing all prices from BrickLink...' : 'Refreshing...'}
@@ -172,7 +233,9 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
         ) : (
           <div className="text-sm text-muted-foreground">
             {data.cacheStats.fromCache > 0 && (
-              <span>{data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache</span>
+              <span>
+                {data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache
+              </span>
             )}
           </div>
         )}
