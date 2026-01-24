@@ -224,6 +224,103 @@ The Build Feature Agent runs autonomously until all AUTO_VERIFY criteria pass (C
 - Merge Feature Agent: `docs/agents/merge-feature-agent.md`
 - Performance Agent: `docs/agents/performance/spec.md`
 - Functional Docs Agent: `docs/agents/functional-docs/spec.md`
+- Fix Agent: `docs/agents/fix-agent/spec.md`
+
+---
+
+## Branch Policy
+
+### Golden Rules
+
+1. **All code changes require a branch** - Main is protected, direct commits blocked
+2. **No code changes without approval** - Always present a plan and wait for explicit approval
+3. **Branch naming determines workflow** - Different tracks for features vs fixes
+
+### Branch Naming Convention
+
+| Pattern | Track | Workflow |
+|---------|-------|----------|
+| `feature/*` | Feature | Full DBT cycle: Define Done → Build → Verify Done → Tests → Code Review → Merge |
+| `fix/*` | Fix | Quick cycle: `/fix` agent → Code Review → Merge |
+| `hotfix/*` | Fix | Same as fix/* |
+| `bugfix/*` | Fix | Same as fix/* |
+| `chore/*` | Feature | Full cycle (housekeeping can break things) |
+| `refactor/*` | Feature | Full cycle (refactors can break things) |
+
+### Approval Gates
+
+**Before writing ANY code, you must:**
+
+1. Present a clear plan of what you intend to change
+2. Wait for explicit approval (e.g., "yes", "approved", "go ahead")
+3. Only then create a branch and begin implementation
+
+**Approval applies to:**
+- New features
+- Bug fixes
+- Refactors
+- Dependency updates
+- Any file modification
+
+**What counts as approval:**
+- "Yes"
+- "Approved"
+- "Go ahead"
+- "Do it"
+- "Looks good, proceed"
+
+**What does NOT count as approval:**
+- Silence
+- "What do you think?"
+- "Can you..." (this is a question, not approval)
+- "Maybe we should..."
+
+### Workflow Selection
+
+**Use Feature Track (`/define-done` → `/build-feature` → etc.) when:**
+- Adding new functionality
+- Significant refactoring
+- Changes touching multiple systems
+- Unclear scope or requirements
+
+**Use Fix Track (`/fix`) when:**
+- Clear, isolated bug fix
+- Small UI tweak
+- Copy/text change
+- Performance fix with obvious solution
+- Single file or tightly scoped change
+
+---
+
+## Agent Quick Reference
+
+### Feature Track
+```powershell
+/define-done <feature>     # Establish success criteria
+/feature-spec <feature>    # Plan implementation (optional)
+/build-feature <feature>   # Autonomous build loop
+/verify-done <feature>     # Verify against done criteria
+/test-plan analyze         # Check test coverage
+/test-build                # Generate missing tests
+/test-execute pre-merge    # Run full test suite
+/code-review branch        # Review changes
+/merge-feature <branch>    # Merge + deploy + verify
+```
+
+### Fix Track
+```powershell
+/fix <description>         # Plan → Approve → Build → Test
+/code-review branch        # Review changes
+/merge-feature <branch>    # Merge + deploy + verify
+```
+
+### Standalone
+```powershell
+/merge-feature check           # Pre-merge readiness
+/merge-feature preview         # Test Vercel preview
+/merge-feature verify-production  # Check production health
+/merge-feature rollback        # Revert last deploy
+```
 
 ---
 

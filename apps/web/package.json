@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:smoke": "vitest run src/__tests__/smoke --reporter=verbose",
     "test:batched": "node scripts/run-tests-batched.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

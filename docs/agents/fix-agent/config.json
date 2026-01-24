@@ -1,0 +1,12 @@
+{
+  "branchPrefix": "fix/",
+  "maxFilesWarning": 5,
+  "maxFilesBlock": 10,
+  "maxLinesWarning": 100,
+  "requireApproval": true,
+  "runAffectedTests": true,
+  "runSmokeTests": true,
+  "smokeTestCommand": "npm run test:smoke",
+  "affectedTestPattern": "find tests related to modified files",
+  "reportLocation": "docs/fixes/"
+}

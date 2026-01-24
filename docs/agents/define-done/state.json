@@ -1,11 +1,27 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-01-21T14:30:00Z",
+  "lastRun": "2026-01-24T11:30:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 8,
-  "averageCriteriaPerFeature": 82,
+  "featuresDefinedCount": 10,
+  "averageCriteriaPerFeature": 70,
   "recentFeatures": [
+    {
+      "name": "fix-agent",
+      "criteriaCount": 28,
+      "autoVerifyCount": 28,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-24T11:30:00Z",
+      "note": "Lightweight Fix Agent for fix/hotfix track: 6-phase workflow (Analyse→Plan→Approve→Branch→Build→Verify→Handoff), CLAUDE.md branch policy, smoke test infrastructure"
+    },
+    {
+      "name": "merge-feature-extended",
+      "criteriaCount": 24,
+      "autoVerifyCount": 24,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-01-24T10:00:00Z",
+      "note": "Extend Merge Feature Agent with deployment verification: preview, verify-production, rollback modes; track detection; Playwright critical path tests"
+    },
     {
       "name": "updated-vinted-automation",
       "criteriaCount": 214,
@@ -95,7 +111,13 @@
       "Server-side schedule generation with seeded random",
       "Heartbeat polling with version synchronization",
       "Windows tray app with NotifyIcon integration",
-      "Config polling with schedule version detection"
+      "Config polling with schedule version detection",
+      "CLI mode exists with expected output format",
+      "Config file created with required JSON schema",
+      "Track detection from branch naming convention",
+      "Vercel CLI integration for preview URL retrieval",
+      "Playwright tests run authenticated against URLs",
+      "Last deploy tracking with JSON state file"
     ],
     "error": [
       "Toast on error condition (toast component check)",
@@ -119,7 +141,12 @@
       "Chrome not responding retries 3x then pauses",
       "API unreachable uses cached schedule",
       "Claude CLI failure skips to next scan",
-      "Disconnection warning after 10 minutes no heartbeat"
+      "Disconnection warning after 10 minutes no heartbeat",
+      "CLI not available shows install instructions",
+      "Timeout shows manual check instructions",
+      "Test failure reports specific path with error details",
+      "Confirmation required before destructive action",
+      "Post-deploy failure includes recovery command"
     ],
     "performance": [
       "Operation completes under X seconds (timed execution)",
@@ -141,7 +168,10 @@
       "Opportunity processing under 5 seconds",
       "Main loop runs every 30 seconds",
       "Config polling every 5 minutes",
-      "Heartbeat every 5 minutes"
+      "Heartbeat every 5 minutes",
+      "Deploy wait timeout configurable (default 120s)",
+      "Page load timeout configurable (default 15s)",
+      "Polling interval for deploy readiness (5 seconds)"
     ],
     "ui": [
       "Component uses shadcn/ui (class inspection)",
@@ -186,6 +216,11 @@
       "Seeded random for reproducible schedules",
       "Machine ID for heartbeat identification",
       "Cached schedule fallback on API failure"
+    ],
+    "integration": [
+      "Agent spec updated with new modes",
+      "Existing modes preserved and functional",
+      "Uses existing test infrastructure"
     ]
   },
   "antiVagueTransformations": [
@@ -308,6 +343,10 @@
     {
       "vague": "handles missed scans",
       "specific": "Skip entirely, do NOT catch-up; resume from next scheduled scan; log warning if gap > 2 hours"
+    },
+    {
+      "vague": "verifies deployment",
+      "specific": "Playwright tests against preview/production URLs; critical paths checked with configurable timeout; rollback on failure"
     }
   ]
 }
