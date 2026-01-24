@@ -1,0 +1,30 @@
+{
+  "vercel": {
+    "productionUrl": "https://hadley-bricks-inventory-management.vercel.app",
+    "previewUrlPattern": "https://hadley-bricks-inventory-management-git-{branch}.vercel.app",
+    "deployTimeout": 120000,
+    "pollingInterval": 5000,
+    "teamScope": null
+  },
+  "verification": {
+    "criticalPathsFile": "docs/agents/merge-feature/critical-paths.spec.ts",
+    "pageLoadTimeout": 15000,
+    "checkConsoleErrors": true
+  },
+  "tracks": {
+    "feature": {
+      "patterns": ["feature/*", "chore/*", "refactor/*"],
+      "requireDoneCriteria": true,
+      "requireVerifyDone": true,
+      "requireFullTestSuite": true,
+      "requireCodeReview": true
+    },
+    "fix": {
+      "patterns": ["fix/*", "hotfix/*", "bugfix/*"],
+      "requireDoneCriteria": false,
+      "requireVerifyDone": false,
+      "requireFullTestSuite": false,
+      "requireCodeReview": true
+    }
+  }
+}
