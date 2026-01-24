@@ -132,16 +132,35 @@ export class MonzoSheetsSyncService {
       }
 
       // Get existing transaction IDs to check for updates vs inserts
-      const { data: existingTransactions } = await supabase
-        .from('monzo_transactions')
-        .select('monzo_transaction_id, local_category, user_notes')
-        .eq('user_id', userId);
+      // Use pagination to handle >1000 transactions (Supabase row limit)
+      const existingTransactions: Array<{
+        monzo_transaction_id: string;
+        local_category: string | null;
+        user_notes: string | null;
+      }> = [];
+      const PAGE_SIZE = 1000;
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data } = await supabase
+          .from('monzo_transactions')
+          .select('monzo_transaction_id, local_category, user_notes')
+          .eq('user_id', userId)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+        existingTransactions.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === PAGE_SIZE;
+        page++;
+      }
+
+      console.log(`[MonzoSheetsSyncService] Found ${existingTransactions.length} existing transactions`);
 
       const existingMap = new Map(
-        existingTransactions?.map((t) => [
+        existingTransactions.map((t) => [
           t.monzo_transaction_id,
           { local_category: t.local_category, user_notes: t.user_notes },
-        ]) || []
+        ])
       );
 
       // Transform and filter transactions
