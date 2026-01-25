@@ -1,10 +1,10 @@
 name: BrickLink Pricing Sync
 
 on:
-  schedule:
-    # Run daily at 2:30am UTC (staggered 30 min after eBay)
-    - cron: '30 2 * * *'
-  workflow_dispatch: # Allow manual trigger
+  # Schedule disabled - moved to Google Cloud Scheduler
+  # schedule:
+  #   - cron: '30 2 * * *'
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   sync-pricing:

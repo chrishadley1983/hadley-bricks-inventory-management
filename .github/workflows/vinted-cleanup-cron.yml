@@ -1,10 +1,10 @@
 name: Vinted Cleanup
 
 on:
-  schedule:
-    # Run daily at midnight UTC
-    - cron: '0 0 * * *'
-  workflow_dispatch: # Allow manual trigger
+  # Schedule disabled - moved to Google Cloud Scheduler
+  # schedule:
+  #   - cron: '0 0 * * *'
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   cleanup-vinted:
