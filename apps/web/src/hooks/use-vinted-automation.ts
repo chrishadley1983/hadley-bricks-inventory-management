@@ -379,8 +379,9 @@ export function useUpdateOpportunityStatus() {
     mutationFn: ({ id, status }: { id: string; status: Opportunity['status'] }) =>
       updateOpportunityStatus(id, status),
     onSuccess: () => {
+      // Invalidate ALL opportunity queries regardless of filters
       queryClient.invalidateQueries({
-        queryKey: vintedAutomationKeys.opportunities(),
+        queryKey: ['vinted-automation', 'opportunities'],
       });
     },
   });
