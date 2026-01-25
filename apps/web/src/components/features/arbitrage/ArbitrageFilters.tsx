@@ -63,11 +63,11 @@ export function ArbitrageFilters({
     [debouncedSearch]
   );
 
-  const handleMinMarginChange = useCallback(
+  const handleMaxCogChange = useCallback(
     (value: string) => {
-      const margin = parseInt(value, 10);
-      if (!isNaN(margin) && margin >= 0 && margin <= 100) {
-        onFiltersChange({ ...filters, minMargin: margin });
+      const cog = parseInt(value, 10);
+      if (!isNaN(cog) && cog >= 0 && cog <= 100) {
+        onFiltersChange({ ...filters, maxCog: cog });
       }
     },
     [filters, onFiltersChange]
@@ -101,14 +101,14 @@ export function ArbitrageFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-4">
-      {/* Min Margin */}
+      {/* Max COG */}
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-muted-foreground">Min Margin</label>
+        <label className="text-sm font-medium text-muted-foreground">Max COG</label>
         <div className="flex items-center rounded-md border bg-background">
           <Input
             type="number"
-            value={filters.minMargin ?? 30}
-            onChange={(e) => handleMinMarginChange(e.target.value)}
+            value={filters.maxCog ?? 50}
+            onChange={(e) => handleMaxCogChange(e.target.value)}
             className="w-16 border-0 text-right font-mono focus-visible:ring-0"
             min={0}
             max={100}

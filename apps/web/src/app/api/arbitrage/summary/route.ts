@@ -15,6 +15,7 @@ import { ArbitrageService } from '@/lib/arbitrage';
 
 const QuerySchema = z.object({
   minMargin: z.coerce.number().min(0).max(100).optional().default(30),
+  maxCog: z.coerce.number().min(0).max(100).optional().default(50),
 });
 
 // ============================================================================
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const parsed = QuerySchema.safeParse({
       minMargin: searchParams.get('minMargin'),
+      maxCog: searchParams.get('maxCog'),
     });
 
     if (!parsed.success) {
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     const service = new ArbitrageService(supabase);
-    const stats = await service.getSummaryStats(user.id, parsed.data.minMargin);
+    const stats = await service.getSummaryStats(user.id, parsed.data.minMargin, parsed.data.maxCog);
 
     return NextResponse.json({ data: stats });
   } catch (error) {

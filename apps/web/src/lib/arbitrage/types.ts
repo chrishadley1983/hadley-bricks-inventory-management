@@ -221,6 +221,7 @@ export interface ArbitrageItem {
   // Calculated margins (eBay)
   ebayMarginPercent: number | null;
   ebayMarginAbsolute: number | null;
+  ebayCogPercent: number | null;
 
   // Convenience URLs
   amazonUrl: string | null;
@@ -286,6 +287,7 @@ export type SortDirection = 'asc' | 'desc';
 
 export interface ArbitrageFilters {
   minMargin: number;
+  maxCog: number;
   show: ArbitrageShowFilter;
   sortField: ArbitrageSortField;
   sortDirection: SortDirection;
@@ -294,6 +296,7 @@ export interface ArbitrageFilters {
 
 export interface ArbitrageFilterOptions {
   minMargin?: number;
+  maxCog?: number;
   show?: ArbitrageShowFilter;
   sortField?: ArbitrageSortField;
   sortDirection?: SortDirection;
@@ -448,7 +451,7 @@ export const SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] = [
 ];
 
 export const EBAY_SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] = [
-  { value: 'ebay_margin', label: 'Margin (eBay)' },
+  { value: 'ebay_margin', label: 'COG (eBay)' },
   { value: 'ebay_price', label: 'eBay Price' },
   { value: 'sales_rank', label: 'Sales Rank' },
   { value: 'name', label: 'Name' },

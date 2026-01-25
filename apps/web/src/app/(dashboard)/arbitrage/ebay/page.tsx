@@ -53,7 +53,7 @@ export default function EbayArbitragePage() {
   const { data: arbitrageData, isLoading: dataLoading, error: dataError } = useArbitrageData(filters);
   const { data: selectedItem } = useArbitrageItem(selectedAsin);
   const { data: syncStatus, isLoading: syncLoading } = useSyncStatus();
-  const { data: summary, isLoading: summaryLoading } = useArbitrageSummary();
+  const { data: summary, isLoading: summaryLoading } = useArbitrageSummary(undefined, filters.maxCog ?? 50);
 
   // Mutations
   const excludeMutation = useExcludeAsin();
@@ -128,7 +128,7 @@ export default function EbayArbitragePage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">
-                    &ge;{filters.minMargin ?? 30}% margin potential
+                    &le;{filters.maxCog ?? 50}% COG
                   </p>
                 </CardContent>
               </Card>
@@ -267,7 +267,7 @@ export default function EbayArbitragePage() {
             <EbayArbitrageTable
               items={items}
               isLoading={dataLoading}
-              minMargin={filters.minMargin ?? 30}
+              maxCog={filters.maxCog ?? 50}
               onRowClick={handleRowClick}
             />
             {/* Pagination */}
@@ -427,12 +427,12 @@ export default function EbayArbitragePage() {
 function EbayArbitrageTable({
   items,
   isLoading,
-  minMargin,
+  maxCog,
   onRowClick,
 }: {
   items: ArbitrageItem[];
   isLoading: boolean;
-  minMargin: number;
+  maxCog: number;
   onRowClick: (item: ArbitrageItem) => void;
 }) {
   if (isLoading) {
@@ -470,14 +470,15 @@ function EbayArbitrageTable({
                 <th className="px-4 py-3 text-right font-medium w-[100px]">Your Price</th>
                 <th className="px-4 py-3 text-right font-medium w-[80px]">Buy Box</th>
                 <th className="px-4 py-3 text-right font-medium w-[80px]">eBay Min</th>
-                <th className="px-4 py-3 text-right font-medium w-[90px]">eBay Margin</th>
+                <th className="px-4 py-3 text-right font-medium w-[90px]">COG %</th>
                 <th className="px-4 py-3 text-right font-medium w-[70px]">Listings</th>
                 <th className="px-4 py-3 text-center font-medium w-[60px]">Action</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => {
-                const isOpportunity = item.ebayMarginPercent !== null && item.ebayMarginPercent >= minMargin;
+                const cogPercent = item.ebayCogPercent;
+                const isOpportunity = cogPercent !== null && cogPercent <= maxCog;
                 return (
                   <tr
                     key={item.asin}
@@ -558,12 +559,18 @@ function EbayArbitrageTable({
                       {item.ebayMinPrice ? formatCurrency(item.ebayMinPrice, 'GBP') : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {item.ebayMarginPercent !== null ? (
+                      {cogPercent !== null ? (
                         <Badge
-                          variant={item.ebayMarginPercent >= minMargin ? 'default' : 'secondary'}
-                          className={item.ebayMarginPercent >= minMargin ? 'bg-green-500' : ''}
+                          variant={cogPercent <= maxCog ? 'default' : 'secondary'}
+                          className={
+                            cogPercent <= 40
+                              ? 'bg-green-500'
+                              : cogPercent <= 50
+                              ? 'bg-amber-500'
+                              : ''
+                          }
                         >
-                          {item.ebayMarginPercent.toFixed(1)}%
+                          {cogPercent.toFixed(1)}%
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>

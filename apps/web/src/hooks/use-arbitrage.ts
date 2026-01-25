@@ -64,7 +64,7 @@ export const arbitrageKeys = {
   excluded: () => [...arbitrageKeys.all, 'excluded'] as const,
   unmapped: () => [...arbitrageKeys.all, 'unmapped'] as const,
   syncStatus: () => [...arbitrageKeys.all, 'sync-status'] as const,
-  summary: (minMargin?: number) => [...arbitrageKeys.all, 'summary', minMargin] as const,
+  summary: (minMargin?: number, maxCog?: number) => [...arbitrageKeys.all, 'summary', minMargin, maxCog] as const,
   ebayExclusions: (setNumber?: string) => [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
 };
 
@@ -76,6 +76,7 @@ async function fetchArbitrageData(filters?: ArbitrageFilterOptions): Promise<Arb
   const params = new URLSearchParams();
 
   if (filters?.minMargin !== undefined) params.set('minMargin', String(filters.minMargin));
+  if (filters?.maxCog !== undefined) params.set('maxCog', String(filters.maxCog));
   if (filters?.show) params.set('show', filters.show);
   if (filters?.sortField) params.set('sortField', filters.sortField);
   if (filters?.sortDirection) params.set('sortDirection', filters.sortDirection);
@@ -142,9 +143,12 @@ async function fetchSyncStatus(): Promise<SyncStatusResponse> {
   return json.data;
 }
 
-async function fetchSummary(minMargin?: number): Promise<SummaryStats> {
-  const params = minMargin !== undefined ? `?minMargin=${minMargin}` : '';
-  const response = await fetch(`/api/arbitrage/summary${params}`);
+async function fetchSummary(minMargin?: number, maxCog?: number): Promise<SummaryStats> {
+  const params = new URLSearchParams();
+  if (minMargin !== undefined) params.set('minMargin', String(minMargin));
+  if (maxCog !== undefined) params.set('maxCog', String(maxCog));
+  const queryString = params.toString();
+  const response = await fetch(`/api/arbitrage/summary${queryString ? `?${queryString}` : ''}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -297,10 +301,10 @@ export function useSyncStatus() {
 /**
  * Fetch summary statistics
  */
-export function useArbitrageSummary(minMargin?: number) {
+export function useArbitrageSummary(minMargin?: number, maxCog?: number) {
   return useQuery({
-    queryKey: arbitrageKeys.summary(minMargin),
-    queryFn: () => fetchSummary(minMargin),
+    queryKey: arbitrageKeys.summary(minMargin, maxCog),
+    queryFn: () => fetchSummary(minMargin, maxCog),
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -15,6 +15,7 @@ import { ArbitrageService } from '@/lib/arbitrage';
 
 const FilterParamsSchema = z.object({
   minMargin: z.coerce.number().min(0).max(100).optional().default(30),
+  maxCog: z.coerce.number().min(0).max(100).optional().default(50),
   show: z.enum(['all', 'opportunities', 'ebay_opportunities', 'with_ebay_data', 'no_ebay_data', 'in_stock', 'zero_qty', 'pending_review']).optional().default('all'),
   sortField: z.enum(['margin', 'bl_price', 'sales_rank', 'name', 'ebay_margin', 'ebay_price']).optional().default('margin'),
   sortDirection: z.enum(['asc', 'desc']).optional().default('desc'),
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const params: Record<string, string> = {};
     const minMargin = searchParams.get('minMargin');
+    const maxCog = searchParams.get('maxCog');
     const show = searchParams.get('show');
     const sortField = searchParams.get('sortField');
     const sortDirection = searchParams.get('sortDirection');
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest) {
     const pageSize = searchParams.get('pageSize');
 
     if (minMargin) params.minMargin = minMargin;
+    if (maxCog) params.maxCog = maxCog;
     if (show) params.show = show;
     if (sortField) params.sortField = sortField;
     if (sortDirection) params.sortDirection = sortDirection;
