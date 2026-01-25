@@ -1,10 +1,10 @@
 name: eBay Pricing Sync
 
 on:
-  schedule:
-    # Run daily at 2am UTC
-    - cron: '0 2 * * *'
-  workflow_dispatch: # Allow manual trigger
+  # Schedule disabled - moved to Google Cloud Scheduler
+  # schedule:
+  #   - cron: '0 2 * * *'
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   sync-pricing:

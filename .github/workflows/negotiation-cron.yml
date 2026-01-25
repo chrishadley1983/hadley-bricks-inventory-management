@@ -1,10 +1,10 @@
 name: eBay Negotiation Sync
 
 on:
-  schedule:
-    # Run 4x daily at 8am, 12pm, 4pm, 8pm UTC
-    - cron: '0 8,12,16,20 * * *'
-  workflow_dispatch: # Allow manual trigger
+  # Schedule disabled - moved to Google Cloud Scheduler
+  # schedule:
+  #   - cron: '0 8,12,16,20 * * *'
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   sync-negotiation:
