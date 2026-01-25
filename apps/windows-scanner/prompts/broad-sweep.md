@@ -12,7 +12,8 @@ You are scanning Vinted UK for LEGO sets. Your task is to extract listing inform
    - Scroll down 3-4 times, waiting 1-2 seconds between scrolls for content to load
    - Aim to have at least 20-30 listings visible before extracting
 5. Extract all listing cards from the page
-6. Return results as JSON
+6. **IMPORTANT: Close the browser using browser_close before returning results**
+7. Return results as JSON
 
 ## CAPTCHA Detection Rules
 

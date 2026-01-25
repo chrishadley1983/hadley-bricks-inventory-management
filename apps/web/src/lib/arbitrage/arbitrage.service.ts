@@ -38,6 +38,7 @@ export class ArbitrageService {
   ): Promise<ArbitrageDataResponse> {
     const {
       minMargin = 30,
+      maxCog = 50,
       show = 'all',
       sortField = 'margin',
       sortDirection = 'desc',
@@ -68,12 +69,15 @@ export class ArbitrageService {
       .eq('user_id', userId);
 
     // Apply show filter
+    // Note: COG% = 100 - margin%, so maxCog filter uses gte on margin: margin >= (100 - maxCog)
+    const minMarginFromCog = 100 - maxCog;
     switch (show) {
       case 'opportunities':
         query = query.gte('margin_percent', minMargin);
         break;
       case 'ebay_opportunities':
-        query = query.gte('ebay_margin_percent', minMargin);
+        // Filter by COG%: items with COG <= maxCog have margin >= (100 - maxCog)
+        query = query.gte('ebay_margin_percent', minMarginFromCog);
         break;
       case 'with_ebay_data':
         query = query.not('ebay_min_price', 'is', null);
@@ -99,8 +103,15 @@ export class ArbitrageService {
     }
 
     // Apply sorting
+    // For eBay margin sort, we're now sorting by COG% which is the inverse of margin%
+    // So descending COG sort (best first = lowest COG) needs ascending margin sort
     const sortColumn = this.getSortColumn(sortField);
-    query = query.order(sortColumn, { ascending: sortDirection === 'asc', nullsFirst: false });
+    let actualSortDirection = sortDirection;
+    if (sortField === 'ebay_margin') {
+      // Invert direction: COG desc (show worst first) = margin asc, COG asc (show best first) = margin desc
+      actualSortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    }
+    query = query.order(sortColumn, { ascending: actualSortDirection === 'asc', nullsFirst: false });
 
     // Apply pagination
     const from = (page - 1) * pageSize;
@@ -448,13 +459,16 @@ export class ArbitrageService {
   /**
    * Get summary statistics
    */
-  async getSummaryStats(userId: string, minMargin: number = 30): Promise<{
+  async getSummaryStats(userId: string, minMargin: number = 30, maxCog: number = 50): Promise<{
     totalItems: number;
     opportunities: number;
     ebayOpportunities: number;
     unmapped: number;
     excluded: number;
   }> {
+    // Convert maxCog to equivalent minMargin for eBay: COG% = 100 - margin%
+    const ebayMinMarginFromCog = 100 - maxCog;
+
     const [
       { count: totalItems },
       { count: opportunities },
@@ -471,11 +485,12 @@ export class ArbitrageService {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('margin_percent', minMargin),
+      // eBay opportunities: use COG% (maxCog) converted to margin threshold
       this.supabase
         .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .gte('ebay_margin_percent', minMargin),
+        .gte('ebay_margin_percent', ebayMinMarginFromCog),
       this.supabase
         .from('tracked_asins')
         .select('*', { count: 'exact', head: true })
@@ -524,7 +539,8 @@ export class ArbitrageService {
     const getValue = (item: ArbitrageItem): number | null => {
       switch (sortField) {
         case 'ebay_margin':
-          return item.ebayMarginPercent;
+          // Use COG% for sorting (lower is better)
+          return item.ebayCogPercent;
         case 'ebay_price':
           return item.ebayMinPrice;
         case 'margin':
@@ -617,14 +633,16 @@ export class ArbitrageService {
     const maxPrice = Math.max(...prices);
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
 
-    // Recalculate margin based on your_price or buy_box_price
+    // Recalculate margin and COG% based on your_price or buy_box_price
     const sellPrice = item.yourPrice ?? item.buyBoxPrice ?? 0;
     let marginPercent: number | null = null;
     let marginAbsolute: number | null = null;
+    let cogPercent: number | null = null;
 
     if (sellPrice > 0 && minPrice > 0) {
       marginAbsolute = sellPrice - minPrice;
       marginPercent = (marginAbsolute / sellPrice) * 100;
+      cogPercent = (minPrice / sellPrice) * 100;
     }
 
     return {
@@ -635,6 +653,7 @@ export class ArbitrageService {
       ebayTotalListings: activeListings.length,
       ebayMarginPercent: marginPercent,
       ebayMarginAbsolute: marginAbsolute,
+      ebayCogPercent: cogPercent,
       ebayListings: activeListings as EbayListing[],
     };
   }
@@ -691,6 +710,10 @@ export class ArbitrageService {
       ebaySnapshotDate: row.ebay_snapshot_date as string | null,
       ebayMarginPercent: row.ebay_margin_percent as number | null,
       ebayMarginAbsolute: row.ebay_margin_absolute as number | null,
+      // Calculate COG% from margin%: COG% = 100 - margin%
+      ebayCogPercent: row.ebay_margin_percent != null
+        ? 100 - (row.ebay_margin_percent as number)
+        : null,
       // Seeded ASIN fields
       itemType: (row.item_type as ArbitrageItem['itemType']) ?? 'inventory',
       seededAsinId: row.seeded_asin_id as string | null,

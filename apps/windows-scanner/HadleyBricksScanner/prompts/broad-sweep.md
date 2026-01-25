@@ -8,7 +8,8 @@ You are scanning Vinted UK for LEGO listings. Extract listing information from t
 2. Wait for the page to fully load
 3. Check for CAPTCHA (see detection rules below)
 4. If no CAPTCHA, extract the first 15 listing cards visible
-5. Return results as JSON
+5. **IMPORTANT: Close the browser using browser_close before returning results**
+6. Return results as JSON
 
 ## CAPTCHA Detection Rules
 
