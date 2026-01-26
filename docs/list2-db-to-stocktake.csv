@@ -1,0 +1,180 @@
+DB Set,DB Location,DB Item Name,Stock Take Set,Stock Take Location,Match Type,Analysis Notes
+6527,Garage - E1,Tipper Truck,6527,Garage - E1,EXACT,Perfect match
+42084,Garage - E1,Hook Loader,42084,Garage - E1,EXACT,Perfect match
+6603,Garage - E1,Shovel Truck,6603,Garage - E1,EXACT,Perfect match
+6502,Garage - E1,Turbo Racer,6502,Garage - E5,LOCATION DIFF,DB says E1 but stock take found in E5
+21167,Garage - E1,The Trading Post,,,,NO MATCH - Not found in stock take
+4711,Garage - E1,Flying Lesson,,,,NO MATCH - Not found in stock take
+70753,Garage - E1,Lava Falls,,,,NO MATCH - Not found in stock take
+8491,Garage - E1,Ram Rod,,,,NO MATCH - Not found in stock take
+70599,Garage - E2,Cole's Dragon,70599,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1
+6923,Garage - E2,Particle Ionizer,6923,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1
+6155,Garage - E2,Deep Sea Predator,6155,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1
+6555,Garage - E2,Sea Hunter,6555,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1
+8204,Garage - E2,Sky Flyer 1,8204,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1
+70611,Garage - E2,Water Strider,70611,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1 (Qty: 2)
+70592,Garage - E2,Salvage M.E.C.,70592,Garage - E1,LOCATION DIFF,DB says E2 but stock take found in E1 (Qty: 2)
+42065,Garage - E2,RC Tracked Racer,,,,NO MATCH - E2 not covered in stock take
+42123,Garage - E2,McLaren Senna GTR,,,,NO MATCH - E2 not covered in stock take
+4574,Garage - E2,Rip,,,,NO MATCH - E2 not covered in stock take
+60053,Garage - E2,Race Car,,,,NO MATCH - E2 not covered in stock take
+6646,Garage - E2,Screaming Patriot,,,,NO MATCH - E2 not covered in stock take
+71220,Garage - E2,Gimli Fun Pack,,,,NO MATCH - E2 not covered in stock take
+75979,Garage - E2,Hedwig,,,,NO MATCH - E2 not covered in stock take
+76394,Garage - E2,Fawkes Dumbledore's Phoenix,,,,NO MATCH - E2 not covered in stock take
+8205,Garage - E2,Elacstatic Turbo,,,,NO MATCH - E2 not covered in stock take
+6378,Garage - E3,Shell Service Station,6378,Garage - E3,EXACT,Perfect match
+6245,Garage - E3,Harbour Sentry,6245,Garage - E3,EXACT,Perfect match
+30087,Garage - E3,Ninjago Car,30087,Garage - E3,EXACT,Perfect match
+41360,Garage - E3,Emma's Mobile Veterinary Clinic,41360,Garage - E3,EXACT,Perfect match
+6257,Garage - E3,Castaway's Raft,6257,Garage - E3,EXACT,Perfect match
+8740,Garage - E3,Toa Hordika Matau,8740,Garage - E4,LOCATION DIFF,DB says E3 but stock take found in E4
+8728,Garage - E3,Toa Hahli,8728,Garage - E6,LOCATION DIFF,DB says E3 but stock take has 8728 in E6 (duplicate set#?)
+30108,Garage - E3,Summer Picnic,,,,NO MATCH - Not found in stock take
+30222,Garage - E3,Police Helicopter,,,,NO MATCH - Not found in stock take
+30311,Garage - E3,Swamp Police Helicopter,,,,NO MATCH - Not found in stock take
+30346,Garage - E3,Prison Island Floatplane,,,,NO MATCH - Not found in stock take
+6928,Garage - E3,Uranium Search Vehicle,,,,NO MATCH - Not found in stock take
+21178,Garage - E4,The Fox Lodge,21178,Garage - E4,EXACT,Perfect match
+21179,Garage - E4,The Mushroom House,21179,Garage - E4,EXACT,Perfect match
+21259,Garage - E4,The Pirate Ship Voyage,21259,Garage - E4,EXACT,Perfect match
+41100,Garage - E4,Heartlake Private Jet,41100,Garage - E4,EXACT,Perfect match
+6384,Garage - E4,Police Station,6384,Garage - E4,EXACT,Perfect match
+6508,Garage - E4,Wave Racer,6508,Garage - E4,EXACT,Perfect match
+5521,Garage - E5,Sea Jet,5521,Garage - E5,EXACT,Perfect match
+6697,Garage - E5,Rescue-I Helicopter,6697,Garage - E5,EXACT,Perfect match
+8231,Garage - E5,Vicious Viper,8231,Garage - E5,EXACT,Perfect match
+8576,Garage - E5,Lehvak-Kal,8576,Garage - E5,EXACT,Perfect match
+8587,Garage - E5,Rahkshi Panrahk,8587,Garage - E5,EXACT,Perfect match
+6203,Garage - E5,BLACK PHANTOM,,,,NO MATCH - Not found in stock take
+6504,Garage - E5,Turbo Racer,,,,NO MATCH - Not found in stock take
+8233,Garage - E5,Blue Thunder vs. The Stinger,,,,NO MATCH - Not found in stock take
+8574,Garage - E5,Tahnok-Kal,,,,NO MATCH - Not found in stock take
+8566,Garage - E6,Onua Nuva,8566,Garage - E6,EXACT,Perfect match
+8603,Garage - E6,Toa Whenua,8603,Garage - E6,EXACT,Perfect match
+8728,Garage - E6,Toa Hahli,8728,Garage - E6,EXACT,Perfect match (duplicate of E3 entry)
+8589,Garage - E6,Rahkshi Lerahk,8589,Garage - E6,EXACT,Perfect match
+8617,Garage - E6,Zadakh,8617,Garage - E6,EXACT,Perfect match
+8976,Garage - E6,Metus,8976,Garage - E6,EXACT,Perfect match
+2067,Garage - E6,Evo 2.0,2067,Garage - E6,EXACT,Perfect match
+6835,Garage - E6,Saucer Scout,6835,Garage - E6,EXACT,Perfect match
+5811,Garage - E6,Prince Justin,,,,NO MATCH - Not found in stock take
+6804,Garage - E6,Surface Rover,,,,NO MATCH - Not found in stock take
+8695,Garage - E6,Gorast,,,,NO MATCH - Not found in stock take
+4776,Garage - E7,Dragon Tower,,,,NO MATCH - E7 not covered in stock take
+4779,Garage - E7,Defense Tower,4779,Garage - E8,LOCATION DIFF,DB says E7 but stock take found in E8
+10839,Garage - E8,Shooting Gallery,10839,Garage - E8,EXACT,Perfect match
+10847,Garage - E8,My First Number Train,10847,Garage - E8,EXACT,Perfect match
+10879,Garage - E8,Gentle Giants Petting Zoo,10879,Garage - E8,EXACT,Perfect match
+10849,Garage - E8,My First Plane,,,,NO MATCH - Not found in stock take
+10871,Garage - E8,Airport,,,,NO MATCH - Not found in stock take
+733,Garage - E9,Universal Building Set 7+,,,,NO MATCH - Not found in stock take (set 133 in E9 is different)
+NA,Garage - E9,R2D2 Watch,,,,NO MATCH - Not found in stock take
+NA,Garage - E9,Duplo Train Stop/Start/Reverse,Duplo Signal Crossing,Garage - E9,LIKELY,Possibly same Duplo track item
+NA,Garage - E9,Tigger Winnie the Pooh Bundle,8292,Garage - E9,LIKELY,Winnie the Pooh Bundle may be same
+NA,Garage - E9,Chief Brown Bear + Canoe,Duplo Indian Boat,Garage - E9,LIKELY,Native American themed Duplo - likely same
+253,Garage - 201,Helicopter and Pilot,253,Garage - 201,EXACT,Perfect match
+5014,Garage - 201,Hockey,5014,Garage - 201,EXACT,Perfect match
+60006,Garage - 201,Police ATV,60006,Garage - 201,EXACT,Perfect match (x2 in DB)
+612,Garage - 201,Tipper Truck,612,Garage - 201,EXACT,Perfect match
+6471,Garage - 201,4WD Police Patrol,6471,Garage - 201,EXACT,Perfect match
+7694,Garage - 201,MT-31 Trike,7694,Garage - 201,EXACT,Perfect match
+HP107,Garage - 201,Marcus Flint,HP107,Garage - 201,EXACT,Perfect match
+HP241,Garage - 201,Mechanical Death Eater,HP241,Garage - 201,EXACT,Perfect match
+HP261,Garage - 201,Parvati Patil,HP261,Garage - 201,EXACT,Perfect match
+NJO208,Garage - 201,Wu Sensei - Skybound,NJO208,Garage - 201,EXACT,Perfect match
+NJO630,Garage - 201,Kai - Legacy Rebooted Robe,NJO630,Garage - 201,EXACT,Perfect match
+SH034,Garage - 201,Hawkeye,SH034,Garage - 201,EXACT,Perfect match (x2 in stock take)
+SH228,Garage - 201,Space Captain America,SH228,Garage - 201,EXACT,Perfect match
+SW0092,Garage - 201,Super Battle Droid,SW092,Garage - 201,EXACT,Format diff SW0092 vs SW092
+SW871,Garage - 201,First Order Shuttle Pilot,SW871,Garage - 201,EXACT,Perfect match
+NA,Garage - 201,Jack Stone Bundle 4,Jack Stone Bundle 4,Garage - 201,EXACT,Bundle match
+NA,Garage - 201,HP Minifigure Bundle,HP Bundle 4,Garage - 201,EXACT,Bundle match
+NA,Garage - 201,Jack Stone Bundle 3,,,,NO MATCH - Only Bundle 4 in stock take
+SH0018,Garage - 301,Thor with Cape,SH0018,Garage - 301-1,LOCATION DIFF,DB says 301 but stock take says 301-1
+HP075,Garage - 301-1,Harry Potter Tournament Uniform,,,,NO MATCH - Not found in stock take
+NJO621,Garage - 301-10,Ginkle,NJO621,Garage - 301-12,LOCATION DIFF,DB says 301-10 but stock take says 301-12
+COL060,Garage - 301-3,Werewolf,,,,NO MATCH - Not found in stock take
+HOL125,Garage - 301-3,Santa Fur Lined Jacket,HOL125,Garage - 301-2,LOCATION DIFF,DB says 301-3 but stock take says 301-2
+SW0810,Garage - 301-4,Qui-Gon Jinn,SW810,Garage - 301-4,EXACT,Format diff SW0810 vs SW810
+HOL110,Garage - 301-5,Santa,HOL110,Garage - 301-5,EXACT,Perfect match
+HS019,Garage - 301-7,Parker L. Jackson,HS019,Garage - 301-7,EXACT,Perfect match
+PHA006,Garage - 301-7,Mac McCloud,PHA006,Garage - 301-7,EXACT,Perfect match
+COLTLBM13,Garage - 301-8,Nurse Harley Quinn,COL TLM13,Garage - 301-8,EXACT,Format diff COLTLBM13 vs COL TLM13
+HP134,Garage - 301-8,Professor Severus Snape,HP134,Garage - 301-7,LOCATION DIFF,DB says 301-8 but stock take says 301-7
+IAJ014,Garage - 301-8,Irina Spalko,IAJ014,Garage - 301-7,LOCATION DIFF,DB says 301-8 but stock take says 301-7
+ATL004,Garage - 301-9,Atlantis Shark Warrior,Shark Fig,Garage - 301-9,EXACT,Stock take listed as Shark Fig
+41422,Garage - Ebay Used,Panda Jungle Tree House,41422,Garage - Ebay Used,EXACT,Perfect match
+41708,Garage - Ebay Used,Roller Disco Arcade,41708,Garage - Ebay Used,EXACT,Perfect match
+4726,Garage - Ebay Used,Quidditch Practice,4726,Garage - Ebay Used,EXACT,Perfect match
+4731,Garage - Ebay Used,Dobby's Release,4731,Garage - Ebay Used,EXACT,Perfect match
+4892,Garage - Ebay Used,Prehistoric Power,4892,Garage - Ebay Used,EXACT,Perfect match
+60138,Garage - Ebay Used,High-speed Chase,60138,Garage - Ebay Used,EXACT,Perfect match
+60190,Garage - Ebay Used,Arctic Ice Glider,60190,Garage - Ebay Used,EXACT,Perfect match
+6270,Garage - Ebay Used,Forbidden Island,6270,Garage - Ebay Used,EXACT,Perfect match
+6800,Garage - Ebay Used,Cyber Blaster,6800,Garage - Ebay Used,EXACT,Perfect match
+70638,Garage - Ebay Used,Katana V11,70638,Garage - Ebay Used,EXACT,Perfect match
+8015,Garage - Ebay Used,Assassin Droids Battle Pack,8015,Garage - Ebay Used,EXACT,Perfect match
+4721,Garage - Ebay Used,Hogwarts Classrooms,,,,NO MATCH - Not found in stock take
+8786,Garage - Ebay Used,Vladek,,,,NO MATCH - Not found in stock take
+8790,Garage - Ebay Used,King Mathias,,,,NO MATCH - Not found in stock take
+271,Garage - Own Box,Baby's Cot and Cabinet,270,Garage - Ebay Used,LIKELY,Stock take 270 vs DB 271 - Own Box maps to Ebay Used
+31028,Garage - Own Box,Sea Plane,31028,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+31079,Garage - Own Box,Sunshine Surfer Van,31079,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+620,Garage - Own Box,Fire Truck,620,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+7915,Garage - Own Box,Imperial V-wing Starfighter,7915,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+8729,Garage - Own Box,Toa Nuparu,8729,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+8771,Garage - Own Box,Jayko,8771,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+8792,Garage - Own Box,Sir Jayko,8792,Garage - Ebay Used,LOCATION DIFF,DB says Own Box stock take says Ebay Used - same area
+60001,Garage - Own Box,Fire Chief Car,,,,NO MATCH - Not found in stock take
+6394,Garage - Own Box,International Jetport,,,,NO MATCH - Not found in stock take
+76061,Garage - Own Box,Mighty Micros Batman vs Catwoman,,,,NO MATCH - Not found in stock take
+76090,Garage - Own Box,Mighty Micros Star-Lord vs Nebula,,,,NO MATCH - Not found in stock take
+8642,Garage - Own Box,Monster Crusher,,,,NO MATCH - Not found in stock take
+8501,Garage - Box Slizers,Slizer Bundle x 8,8501,Garage - Ebay Used,LOCATION DIFF,DB says Box Slizers stock take says Ebay Used
+75125,Garage,Resistance X-wing Fighter,75125,Garage - Ebay Used,LOCATION DIFF,DB says Garage (generic) stock take says Ebay Used
+71760,Garage,Jay's Thunder Dragon EVO,71760,Garage - New Shelf,LOCATION DIFF,DB says Garage (generic) stock take says New Shelf
+40784,Garage,African Diorama,40784,Garage - New Shelf,LOCATION DIFF,DB says Garage (generic) stock take says New Shelf
+60085,Garage,4x4 with Powerboat,60085,Garage - New Shelf,LOCATION DIFF,DB says Garage (generic) stock take says New Shelf
+75299,Garage,Trouble on Tatooine,75299,Garage - New Shelf,LOCATION DIFF,DB says Garage (generic) stock take says New Shelf (Qty: 2)
+10706,Garage,Blue Creativity Box,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+21033,Garage,Chicago,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+31058,Garage,Mighty Dinosaurs,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+31069,Garage,Modular Family Villa,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+40431,Garage,BB-8,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+40449,Garage,Easter Bunny's Carrot House,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+40506,Garage,Fabuland Tribute,,,,NO MATCH - Not found in stock take (GARAGE generic location x2)
+40705,Garage,Micro NINJAGO City Gardens,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+40706,Garage,Micro NINJAGO City Markets,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+41143,Garage,Berry's Kitchen,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+42149,Garage,Monster Jam Dragon,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+44014,Garage,JET ROCKA,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+4436,Garage,Patrol Car,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+5004390,Garage,King's Guard,,,,NO MATCH - Not found in stock take (GARAGE generic location x2)
+6567,Garage,Speed Splasher,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+6829,Garage,Radon Rover,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+7288,Garage,Mobile Police Unit,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+75001,Garage,Republic Troopers vs Sith Troopers,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+75317,Garage,The Mandalorian & The Child,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+75321,Garage,The Razor Crest Microfighter,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+76145,Garage,Eternals Aerial Assault,,,,NO MATCH - Not found in stock take (GARAGE generic location x2)
+8213,Garage,Spy Runner,,,,NO MATCH - Not found in stock take (GARAGE generic location)
+853865,Garage,TLM2 Accessory Set 2019,,,,NO MATCH - Not found in stock take (GARAGE generic location x2)
+8688,Garage,Toa Gali (New),,,,NO MATCH - Not found in stock take (GARAGE generic location)
+40491,Loft - S20,Year of the Tiger,40491,Garage - New Shelf,LOCATION DIFF,DB says Loft - S20 stock take says New Shelf (Qty: 2)
+75344,Loft - S57,Boba Fett's Starship Microfighter,75344,Garage - New Shelf,LOCATION DIFF,DB says Loft - S57 stock take says New Shelf
+75299,Loft - S22,Trouble on Tatooine,75299,Garage - New Shelf,LOCATION DIFF,DB says Loft - S22 stock take says New Shelf (2nd unit)
+21030,Loft - S22,United States Capitol Building,,,,NO MATCH - Loft location not in stock take
+42150,Loft - S32,Monster Jam Monster Mutt Dalmatian,,,,NO MATCH - Loft location not in stock take
+NA,Garage - Box,Strictly Briks Letter Tiles x98,,,,NO MATCH - Not in stock take (98 items)
+NA,Garage - Figures,Various Action Figures x17,,,,NO MATCH - Not in stock take (17 items)
+NA,Garage - Filing Cabinet,Vintage Lego Book + Brochures,,,,NO MATCH - Not in stock take
+NA,Garage - Filing Cabinet,Bionicle Magazine,,,,NO MATCH - Not in stock take
+NA,Garage - Ebay New,31140 Magical Unicorn,,,,NO MATCH - Not in stock take (different from New Shelf?)
+NA,Garage - Ebay New,Lego Movie Bluray,,,,NO MATCH - Not in stock take
+NA,Garage - Ebay New,Insiders Blue Purse,,,,NO MATCH - Not in stock take
+NA,Garage - Poly Creator,Various polybags x14,,,,NO MATCH - Poly locations not in stock take
+NA,Garage - Poly Ninjago,Various polybags x10,,,,NO MATCH - Poly locations not in stock take
+NA,Garage - Poly SW,Various polybags x11,,,,NO MATCH - Poly locations not in stock take
+NA,Garage - Poly Themed,Various polybags x8,,,,NO MATCH - Poly locations not in stock take
+6340,Garage - T9,Hook & Ladder,,,,NO MATCH - T9 not in stock take (not remapped)
