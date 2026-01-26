@@ -126,15 +126,14 @@ export class ArbitrageService {
     }
 
     // Transform to ArbitrageItem type and recalculate eBay stats excluding user's excluded listings
-    let items = (data ?? []).map((row) => {
+    // Note: We intentionally do NOT re-sort after exclusion recalculation. While exclusions may
+    // slightly change margin values for some items, re-sorting only the current page would break
+    // pagination order (each page would be sorted independently). The database sort order is
+    // the source of truth for pagination consistency.
+    const items = (data ?? []).map((row) => {
       const item = this.transformToArbitrageItem(row);
       return this.recalculateEbayStats(item, excludedBySet);
     });
-
-    // Re-sort if sorting by eBay fields since exclusion recalculation may have changed values
-    if (sortField === 'ebay_margin' || sortField === 'ebay_price') {
-      items = this.sortItems(items, sortField, sortDirection);
-    }
 
     // Count opportunities
     const { count: opportunityCount } = await this.supabase
@@ -526,46 +525,6 @@ export class ArbitrageService {
       ebay_price: 'ebay_min_price',
     };
     return mapping[sortField] ?? 'margin_percent';
-  }
-
-  /**
-   * Sort items by field (used after eBay stat recalculation)
-   */
-  private sortItems(
-    items: ArbitrageItem[],
-    sortField: string,
-    sortDirection: 'asc' | 'desc'
-  ): ArbitrageItem[] {
-    const getValue = (item: ArbitrageItem): number | null => {
-      switch (sortField) {
-        case 'ebay_margin':
-          // Use COG% for sorting (lower is better)
-          return item.ebayCogPercent;
-        case 'ebay_price':
-          return item.ebayMinPrice;
-        case 'margin':
-          return item.marginPercent;
-        case 'bl_price':
-          return item.blMinPrice;
-        case 'sales_rank':
-          return item.salesRank;
-        default:
-          return null;
-      }
-    };
-
-    return [...items].sort((a, b) => {
-      const aVal = getValue(a);
-      const bVal = getValue(b);
-
-      // Handle nulls - push them to the end
-      if (aVal === null && bVal === null) return 0;
-      if (aVal === null) return 1;
-      if (bVal === null) return -1;
-
-      const diff = aVal - bVal;
-      return sortDirection === 'asc' ? diff : -diff;
-    });
   }
 
   /**
