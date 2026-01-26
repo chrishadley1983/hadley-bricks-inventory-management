@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getNegotiationService } from '@/lib/ebay/negotiation.service';
 
 export const runtime = 'nodejs';
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     console.log('[Cron Negotiation] Starting automated offer processing');
 
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
 
     // Get all users with automation enabled
     const { data: configs, error: configError } = await supabase
