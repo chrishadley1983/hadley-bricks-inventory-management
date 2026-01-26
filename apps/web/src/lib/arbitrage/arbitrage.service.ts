@@ -204,10 +204,33 @@ export class ArbitrageService {
 
     const totalCount = countData ?? 0;
 
-    // Transform and apply client-side exclusion recalculation for display values
-    // (The RPC already sorted by adjusted values, but we still need to update the item's displayed stats)
+    // Transform RPC results and use the adjusted values from the RPC directly
+    // The RPC already calculated exclusion-adjusted eBay stats - use those instead of recalculating
     const items = (data ?? []).map((row: Record<string, unknown>) => {
       const item = this.transformToArbitrageItem(row);
+
+      // Use the RPC's pre-calculated adjusted values if available
+      const adjustedMinPrice = row.adjusted_ebay_min_price as number | null;
+      const adjustedCogPercent = row.adjusted_cog_percent as number | null;
+
+      if (adjustedMinPrice !== null || adjustedCogPercent !== null) {
+        // Get excluded listings count to update ebayTotalListings
+        const excludedIds = excludedBySet.get(item.bricklinkSetNumber ?? '');
+        const originalListings = item.ebayListings as EbayListing[] | null;
+        const activeListings = originalListings?.filter(
+          (l) => !excludedIds?.has(l.itemId)
+        ) ?? originalListings;
+
+        return {
+          ...item,
+          ebayMinPrice: adjustedMinPrice ?? item.ebayMinPrice,
+          ebayCogPercent: adjustedCogPercent,
+          ebayTotalListings: activeListings?.length ?? item.ebayTotalListings,
+          ebayListings: activeListings,
+        };
+      }
+
+      // Fallback to client-side recalculation if RPC didn't return adjusted values
       return this.recalculateEbayStats(item, excludedBySet);
     });
 
