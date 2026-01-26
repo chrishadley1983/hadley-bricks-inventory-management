@@ -41,7 +41,9 @@ export default function EbayArbitragePage() {
   usePerfPage('EbayArbitragePage');
   const [activeTab, setActiveTab] = useState<TabValue>('opportunities');
   const [filters, setFilters] = useState<ArbitrageFilterOptions>({
+    show: 'ebay_opportunities',
     sortField: 'ebay_margin',
+    sortDirection: 'asc',
     pageSize: 50,
     page: 1,
   });

@@ -4133,6 +4133,45 @@ export type Database = {
           },
         ]
       }
+      meal_presets: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          created_at: string | null
+          description: string | null
+          fat_g: number | null
+          fiber_g: number | null
+          id: string
+          items: Json | null
+          name: string
+          protein_g: number | null
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          description?: string | null
+          fat_g?: number | null
+          fiber_g?: number | null
+          id?: string
+          items?: Json | null
+          name: string
+          protein_g?: number | null
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          description?: string | null
+          fat_g?: number | null
+          fiber_g?: number | null
+          id?: string
+          items?: Json | null
+          name?: string
+          protein_g?: number | null
+        }
+        Relationships: []
+      }
       mileage_tracking: {
         Row: {
           amount_claimed: number
@@ -4617,6 +4656,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nutrition_logs: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          created_at: string | null
+          description: string
+          fat_g: number | null
+          fiber_g: number | null
+          id: string
+          items: Json | null
+          logged_at: string | null
+          meal_type: string | null
+          notes: string | null
+          protein_g: number | null
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          description: string
+          fat_g?: number | null
+          fiber_g?: number | null
+          id?: string
+          items?: Json | null
+          logged_at?: string | null
+          meal_type?: string | null
+          notes?: string | null
+          protein_g?: number | null
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          description?: string
+          fat_g?: number | null
+          fiber_g?: number | null
+          id?: string
+          items?: Json | null
+          logged_at?: string | null
+          meal_type?: string | null
+          notes?: string | null
+          protein_g?: number | null
+        }
+        Relationships: []
       }
       off_system_task_presets: {
         Row: {
@@ -7810,6 +7894,87 @@ export type Database = {
       create_recurring_pickups: {
         Args: { p_count?: number; p_pickup_id: string }
         Returns: undefined
+      }
+      get_adjusted_ebay_stats: {
+        Args: { p_set_number: string; p_user_id: string }
+        Returns: {
+          adjusted_avg_price: number
+          adjusted_max_price: number
+          adjusted_min_price: number
+          adjusted_total_listings: number
+        }[]
+      }
+      get_arbitrage_adjusted_count: {
+        Args: {
+          p_max_cog?: number
+          p_min_margin?: number
+          p_search?: string
+          p_show?: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      get_arbitrage_with_adjusted_ebay: {
+        Args: {
+          p_max_cog?: number
+          p_min_margin?: number
+          p_offset?: number
+          p_page_size?: number
+          p_search?: string
+          p_show?: string
+          p_sort_direction?: string
+          p_sort_field?: string
+          p_user_id: string
+        }
+        Returns: {
+          adjusted_cog_percent: number
+          adjusted_ebay_min_price: number
+          amazon_snapshot_date: string
+          amazon_url: string
+          asin: string
+          bl_avg_price: number
+          bl_max_price: number
+          bl_min_price: number
+          bl_price_detail: Json
+          bl_snapshot_date: string
+          bl_total_lots: number
+          bl_total_qty: number
+          bricklink_set_number: string
+          buy_box_is_yours: boolean
+          buy_box_price: number
+          competitive_price: number
+          ebay_avg_price: number
+          ebay_listings: Json
+          ebay_margin_absolute: number
+          ebay_margin_percent: number
+          ebay_max_price: number
+          ebay_min_price: number
+          ebay_snapshot_date: string
+          ebay_total_listings: number
+          effective_amazon_price: number
+          image_url: string
+          lowest_offer_is_fba: boolean
+          lowest_offer_is_prime: boolean
+          lowest_offer_price: number
+          lowest_offer_seller_id: string
+          margin_absolute: number
+          margin_percent: number
+          match_confidence: string
+          name: string
+          offer_count: number
+          offers_json: Json
+          price_is_lowest_offer: boolean
+          sales_rank: number
+          sales_rank_category: string
+          sku: string
+          source: string
+          status: string
+          total_offer_count: number
+          user_id: string
+          was_price_90d: number
+          your_price: number
+          your_qty: number
+        }[]
       }
       get_latest_listing_review: {
         Args: { p_listing_id: string; p_user_id: string }

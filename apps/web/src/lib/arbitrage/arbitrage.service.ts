@@ -62,7 +62,17 @@ export class ArbitrageService {
       excludedBySet.get(row.set_number)!.add(row.ebay_item_id);
     }
 
-    // Use the view for denormalized data
+    // For eBay sorting, use raw SQL to sort by exclusion-adjusted values
+    // This ensures consistent sorting across pagination
+    if (sortField === 'ebay_margin' || sortField === 'ebay_price') {
+      return this.getArbitrageDataWithAdjustedEbaySort(
+        userId,
+        excludedBySet,
+        options
+      );
+    }
+
+    // Use the view for denormalized data (non-eBay sorting)
     let query = this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact' })
@@ -103,15 +113,8 @@ export class ArbitrageService {
     }
 
     // Apply sorting
-    // For eBay margin sort, we're now sorting by COG% which is the inverse of margin%
-    // So descending COG sort (best first = lowest COG) needs ascending margin sort
     const sortColumn = this.getSortColumn(sortField);
-    let actualSortDirection = sortDirection;
-    if (sortField === 'ebay_margin') {
-      // Invert direction: COG desc (show worst first) = margin asc, COG asc (show best first) = margin desc
-      actualSortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    }
-    query = query.order(sortColumn, { ascending: actualSortDirection === 'asc', nullsFirst: false });
+    query = query.order(sortColumn, { ascending: sortDirection === 'asc', nullsFirst: false });
 
     // Apply pagination
     const from = (page - 1) * pageSize;
@@ -126,10 +129,6 @@ export class ArbitrageService {
     }
 
     // Transform to ArbitrageItem type and recalculate eBay stats excluding user's excluded listings
-    // Note: We intentionally do NOT re-sort after exclusion recalculation. While exclusions may
-    // slightly change margin values for some items, re-sorting only the current page would break
-    // pagination order (each page would be sorted independently). The database sort order is
-    // the source of truth for pagination consistency.
     const items = (data ?? []).map((row) => {
       const item = this.transformToArbitrageItem(row);
       return this.recalculateEbayStats(item, excludedBySet);
@@ -147,6 +146,83 @@ export class ArbitrageService {
       totalCount: count ?? 0,
       opportunityCount: opportunityCount ?? 0,
       hasMore: (count ?? 0) > from + items.length,
+    };
+  }
+
+  /**
+   * Get arbitrage data with eBay sorting using exclusion-adjusted values
+   * Uses RPC function to calculate adjusted eBay min price considering user exclusions
+   */
+  private async getArbitrageDataWithAdjustedEbaySort(
+    userId: string,
+    excludedBySet: Map<string, Set<string>>,
+    options: ArbitrageFilterOptions
+  ): Promise<ArbitrageDataResponse> {
+    const {
+      minMargin = 30,
+      maxCog = 50,
+      show = 'all',
+      sortField = 'ebay_margin',
+      sortDirection = 'asc',
+      search,
+      page = 1,
+      pageSize = 50,
+    } = options;
+
+    const offset = (page - 1) * pageSize;
+
+    // Call the RPC function that handles adjusted eBay sorting
+    const { data, error } = await this.supabase.rpc('get_arbitrage_with_adjusted_ebay', {
+      p_user_id: userId,
+      p_show: show,
+      p_max_cog: maxCog,
+      p_min_margin: minMargin,
+      p_search: search ?? undefined,
+      p_sort_field: sortField,
+      p_sort_direction: sortDirection,
+      p_page_size: pageSize,
+      p_offset: offset,
+    });
+
+    if (error) {
+      console.error('[ArbitrageService.getArbitrageDataWithAdjustedEbaySort] Error:', error);
+      throw new Error(`Failed to fetch arbitrage data: ${error.message}`);
+    }
+
+    // Get the count using the count RPC
+    const { data: countData, error: countError } = await this.supabase.rpc('get_arbitrage_adjusted_count', {
+      p_user_id: userId,
+      p_show: show,
+      p_max_cog: maxCog,
+      p_min_margin: minMargin,
+      p_search: search ?? undefined,
+    });
+
+    if (countError) {
+      console.error('[ArbitrageService.getArbitrageDataWithAdjustedEbaySort] Count error:', countError);
+    }
+
+    const totalCount = countData ?? 0;
+
+    // Transform and apply client-side exclusion recalculation for display values
+    // (The RPC already sorted by adjusted values, but we still need to update the item's displayed stats)
+    const items = (data ?? []).map((row: Record<string, unknown>) => {
+      const item = this.transformToArbitrageItem(row);
+      return this.recalculateEbayStats(item, excludedBySet);
+    });
+
+    // Count opportunities (BrickLink-based)
+    const { count: opportunityCount } = await this.supabase
+      .from('arbitrage_current_view')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('margin_percent', minMargin);
+
+    return {
+      items,
+      totalCount,
+      opportunityCount: opportunityCount ?? 0,
+      hasMore: totalCount > offset + items.length,
     };
   }
 
