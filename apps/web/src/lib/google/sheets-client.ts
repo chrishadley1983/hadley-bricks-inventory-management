@@ -1,6 +1,35 @@
 import { google, sheets_v4 } from 'googleapis';
 
 /**
+ * Resolve the Google private key from environment variables.
+ * Supports multiple formats for flexibility across environments:
+ * 1. GOOGLE_PRIVATE_KEY_BASE64 - Base64 encoded key (recommended for Vercel/cloud)
+ * 2. GOOGLE_PRIVATE_KEY - Raw key with escaped newlines (\n)
+ */
+function resolvePrivateKey(): string {
+  // Option 1: Base64 encoded key (most reliable for cloud deployments)
+  const base64Key = process.env.GOOGLE_PRIVATE_KEY_BASE64;
+  if (base64Key) {
+    try {
+      const decoded = Buffer.from(base64Key, 'base64').toString('utf-8');
+      console.log('[GoogleSheetsClient] Using base64-encoded private key');
+      return decoded;
+    } catch (e) {
+      console.error('[GoogleSheetsClient] Failed to decode base64 key:', e);
+    }
+  }
+
+  // Option 2: Raw key with escaped newlines
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (rawKey) {
+    console.log('[GoogleSheetsClient] Using raw private key with newline replacement');
+    return rawKey.replace(/\\n/g, '\n');
+  }
+
+  return '';
+}
+
+/**
  * Represents a single sheet (tab) within a Google Spreadsheet
  */
 export interface SheetInfo {
@@ -60,7 +89,7 @@ export class GoogleSheetsClient {
     this.config = {
       serviceAccountEmail:
         config?.serviceAccountEmail || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
-      privateKey: config?.privateKey || process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
+      privateKey: config?.privateKey || resolvePrivateKey(),
       spreadsheetId: config?.spreadsheetId || process.env.GOOGLE_SHEETS_ID || '',
     };
   }
