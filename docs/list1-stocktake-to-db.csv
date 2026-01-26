@@ -1,0 +1,225 @@
+Stock Take Set,Stock Take Location,Uncertain,DB Match Set,DB Match Location,Match Type,Analysis Notes
+6527,Garage - E1,,6527,Garage - E1,EXACT,Perfect match
+6602,Garage - E1,,,,,NO MATCH - Not found as eBay LISTED in DB
+80453,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+84531,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+21163,Garage - E1,,,,,NO MATCH - Not found as eBay LISTED in DB
+42084,Garage - E1,,42084,Garage - E1,EXACT,Perfect match
+42111,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+6603,Garage - E1,,6603,Garage - E1,EXACT,Perfect match
+70599,Garage - E1,,70599,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 (was 103 mapped to E2) - physical move?
+6946,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+21220,Garage - E1,,,,,NO MATCH - Not found as eBay LISTED in DB
+6923,Garage - E1,,6923,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 - physical move?
+6155,Garage - E1,,6155,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 - physical move?
+85979,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+40053,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+26394,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain - Duplo figures)
+41205,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+41426,Garage - E1,,,,,NO MATCH - Not found as eBay LISTED in DB
+8204,Garage - E1,Y,8204,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 (uncertain entry)
+6555,Garage - E1,,6555,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 - physical move?
+4936,Garage - E1,Y,,,,NO MATCH - Set number not found (uncertain entry)
+71004,Garage - E1,,,,,NO MATCH - Not found as eBay LISTED in DB
+70611,Garage - E1,,70611,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 (Qty: 2)
+70592,Garage - E1,,70592,Garage - E2,LOCATION DIFF,Stock take E1 but DB says E2 (Qty: 2)
+6378,Garage - E3,,6378,Garage - E3,EXACT,Perfect match
+6011,Garage - E3,,,,,NO MATCH - Not found as eBay LISTED in DB
+6245,Garage - E3,,6245,Garage - E3,EXACT,Perfect match
+30087,Garage - E3,Y,30087,Garage - E3,EXACT,Match (uncertain flag in stock take)
+Microfighter Bundle,Garage - E3,,,,,NO MATCH - Bundle item needs different lookup
+41367,Garage - E3,,,,,NO MATCH - Not found as eBay LISTED in DB
+41360,Garage - E3,,41360,Garage - E3,EXACT,Perfect match
+Microfighter Bundle 2,Garage - E3,,,,,NO MATCH - Bundle item needs different lookup
+6257,Garage - E3,,6257,Garage - E3,EXACT,Perfect match
+41100,Garage - E4,Y,41100,Garage - E4,EXACT,Match (uncertain flag in stock take)
+30017,Garage - E4,,,,,NO MATCH - Not found as eBay LISTED (Denmark army figures)
+21178,Garage - E4,,21178,Garage - E4,EXACT,Perfect match
+8794,Garage - E4,Y,,,,NO MATCH - Set number not found (uncertain entry)
+6508,Garage - E4,,6508,Garage - E4,EXACT,Perfect match
+30017,Garage - E4,,,,,NO MATCH - Not found as eBay LISTED (No instructions)
+Vintage Characters 1,Garage - E4,,,,,NO MATCH - Bundle item needs different lookup
+21179,Garage - E4,,21179,Garage - E4,EXACT,Perfect match
+21259,Garage - E4,,21259,Garage - E4,EXACT,Perfect match
+6344,Garage - E4,,,,,NO MATCH - Not found as eBay LISTED in DB
+6384,Garage - E4,,6384,Garage - E4,EXACT,Perfect match
+8928,Garage - E4,,,,,NO MATCH - Not found as eBay LISTED in DB
+8740,Garage - E4,,8740,Garage - E3,LOCATION DIFF,Stock take E4 but DB says E3 (was BIO1 mapped to E3)
+25238,Garage - E4,Y,,,,NO MATCH - Set number not found (uncertain entry)
+6140,Garage - E4,,,,,NO MATCH - Not found as eBay LISTED in DB
+133,Garage - E9,Y,,,,NO MATCH - Set number not found (uncertain entry)
+Duplo Brick Direction Clips,Garage - E9,,,,,NO MATCH - Generic Duplo item
+Duplo Indian Boat,Garage - E9,,NA,Garage - E9,LIKELY,Chief Brown Bear + Canoe may be same item
+8292,Garage - E9,,,,,NO MATCH - Not found as eBay LISTED (Winnie The Pooh Bundle)
+Duplo Signal Crossing,Garage - E9,,NA,Garage - E9,LIKELY,Duplo Train Stop/Start/Reverse may be related
+Pink Duplo Box,Garage - E9,,,,,NO MATCH - Generic Duplo item
+10925,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB
+10815,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED (Qty: 2)
+10858,Garage - E5,Y,,,,NO MATCH - Not found (uncertain entry)
+10543,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB
+8232,Garage - E5,Y,,,,NO MATCH - Set number not found (uncertain entry)
+6502,Garage - E5,Y,6502,Garage - E1,LOCATION DIFF,Stock take E5 but DB says E1 (was 104)
+41125,Garage - E5,Y,,,,NO MATCH - Set number not found (uncertain entry)
+9461,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB
+8374,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED (Mini fig)
+8742,Garage - E5,Y,,,,NO MATCH - Set number not found (uncertain entry)
+5203,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB
+5521,Garage - E5,,5521,Garage - E5,EXACT,Perfect match
+6998,Garage - E5,Y,,,,NO MATCH - Set number not found (uncertain entry)
+6697,Garage - E5,,6697,Garage - E5,EXACT,Perfect match
+8604,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB
+8606,Garage - E5,,,,,NO MATCH - Not found as eBay LISTED in DB (also in E6?)
+8231,Garage - E5,,8231,Garage - E5,EXACT,Perfect match
+8576,Garage - E5,,8576,Garage - E5,EXACT,Perfect match
+8587,Garage - E5,,8587,Garage - E5,EXACT,Perfect match
+8566,Garage - E6,,8566,Garage - E6,EXACT,Perfect match
+8606,Garage - E6,,,,,NO MATCH - Not found as eBay LISTED (duplicate of E5 entry?)
+60011,Garage - E6,,,,,NO MATCH - Not found as eBay LISTED in DB
+8837,Garage - E6,Y,,,,NO MATCH - Set number not found (uncertain entry)
+8603,Garage - E6,,8603,Garage - E6,EXACT,Perfect match
+8740,Garage - E6,Y,8740,Garage - E3,LOCATION DIFF,Stock take E6 but DB says E3 - duplicate set# at different location?
+8728,Garage - E6,,8728,Garage - E6,EXACT,Perfect match (also one at E3)
+6695,Garage - E6,Y,,,,NO MATCH - Set number not found (uncertain entry)
+4200,Garage - E6,Y,,,,NO MATCH - Set number not found (uncertain entry)
+4528,Garage - E6,,,,,NO MATCH - Not found as eBay LISTED in DB
+2067,Garage - E6,,2067,Garage - E6,EXACT,Perfect match
+8581,Garage - E6,Y,,,,NO MATCH - Set number not found (uncertain entry)
+60174,Garage - E6,Y,,,,NO MATCH - Set number not found (uncertain entry)
+8589,Garage - E6,,8589,Garage - E6,EXACT,Perfect match
+8617,Garage - E6,,8617,Garage - E6,EXACT,Perfect match
+8976,Garage - E6,Y,8976,Garage - E6,EXACT,Match (uncertain flag in stock take)
+8409,Garage - E6,,,,,NO MATCH - Not found as eBay LISTED in DB
+6835,Garage - E6,,6835,Garage - E6,EXACT,Perfect match
+10847,Garage - E8,,10847,Garage - E8,EXACT,Perfect match (Qty: 2)
+10891,Garage - E8,,,,,NO MATCH - Not found as eBay LISTED in DB
+10879,Garage - E8,,10879,Garage - E8,EXACT,Perfect match
+4779,Garage - E8,,4779,Garage - E7,LOCATION DIFF,Stock take E8 but DB says E7 - may have been moved
+10839,Garage - E8,,10839,Garage - E8,EXACT,Perfect match
+Duplo Junction,Garage - E8,,,,,NO MATCH - Generic Duplo track item
+Vintage Duplo Track (Straight),Garage - E8,,,,,NO MATCH - Generic Duplo track item
+Vintage Duplo Track (Curved),Garage - E8,,,,,NO MATCH - Generic Duplo track item (Qty: 7)
+Da Vinci,Garage - E8,Y,,,,NO MATCH - Set number not found (uncertain entry)
+Mixed Vintage Duplo Brick Bundle,Garage - E10,,,,,NO MATCH - Bundle item needs different lookup
+NJO288,Garage - 301-1,,,,,NO MATCH - Not found as eBay LISTED (Minifigure Qty: 2)
+COL106,Garage - 301-1,,,,,NO MATCH - Not found as eBay LISTED (Minifigure Qty: 2)
+HOL060,Garage - 301-1,,,,,NO MATCH - Not found as eBay LISTED (Minifigure Qty: 2)
+HP082,Garage - 301-1,,,,,NO MATCH - Not found as eBay LISTED (Minifigure Qty: 2)
+SW005B,Garage - 301-1,,,,,NO MATCH - Not found as eBay LISTED (Minifigure)
+SH0018,Garage - 301-1,,SH0018,Garage - 301,LOCATION DIFF,Close match - DB says 301 vs 301-1
+COL TLNM 19,Garage - 301-2,Y,,,,NO MATCH - Set number format issue (uncertain)
+HOL125,Garage - 301-2,,HOL125,Garage - 301-3,LOCATION DIFF,Stock take 301-2 but DB says 301-3
+SW810,Garage - 301-4,Y,SW0810,Garage - 301-4,EXACT,Match - format difference SW810 vs SW0810
+NJO523,Garage - 301-4,Y,,,,NO MATCH - Not found as eBay LISTED (uncertain)
+SW1191,Garage - 301-5,,,,,NO MATCH - Not found as eBay LISTED (Minifigure)
+HP135,Garage - 301-5,,,,,NO MATCH - Not found as eBay LISTED (Minifigure)
+HOL110,Garage - 301-5,,HOL110,Garage - 301-5,EXACT,Perfect match
+HS019,Garage - 301-7,,HS019,Garage - 301-7,EXACT,Perfect match
+PHA006,Garage - 301-7,,PHA006,Garage - 301-7,EXACT,Perfect match
+IAJ014,Garage - 301-7,,IAJ014,Garage - 301-8,LOCATION DIFF,Stock take 301-7 but DB says 301-8
+HP04,Garage - 301-7,Y,,,,NO MATCH - Set number not found (uncertain - maybe HP134?)
+HP134,Garage - 301-7,,HP134,Garage - 301-8,LOCATION DIFF,Stock take 301-7 but DB says 301-8
+COL 7LBM 13,Garage - 301-7,Y,,,,NO MATCH - Set number format issue (uncertain Qty: 2)
+COL TLM13,Garage - 301-8,Y,COLTLBM13,Garage - 301-8,EXACT,Match - format difference (uncertain Qty: 2)
+Shark Fig,Garage - 301-9,Y,ATL004,Garage - 301-9,LIKELY,Atlantis Shark Warrior is likely same item
+NJO621,Garage - 301-12,,NJO621,Garage - 301-10,LOCATION DIFF,Stock take 301-12 but DB says 301-10
+COL241,Garage - 301-13,,,,,NO MATCH - Not found as eBay LISTED (Minifigure New Qty: 2)
+6270,Garage - Ebay Used,,6270,Garage - Ebay Used,EXACT,Perfect match
+6296,Garage - Ebay Used,Y,,,,NO MATCH - Not found as eBay LISTED (uncertain)
+60138,Garage - Ebay Used,,60138,Garage - Ebay Used,EXACT,Perfect match
+4892,Garage - Ebay Used,Y,4892,Garage - Ebay Used,EXACT,Match (uncertain flag)
+4730,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+41422,Garage - Ebay Used,Y,41422,Garage - Ebay Used,EXACT,Match (uncertain flag)
+41708,Garage - Ebay Used,,41708,Garage - Ebay Used,EXACT,Perfect match (Qty: 2)
+9617,Garage - Ebay Used,Y,,,,NO MATCH - Not found as eBay LISTED (uncertain)
+60190,Garage - Ebay Used,,60190,Garage - Ebay Used,EXACT,Perfect match
+6800,Garage - Ebay Used,,6800,Garage - Ebay Used,EXACT,Perfect match
+76091,Garage - Ebay Used,Y,,,,NO MATCH - Not found as eBay LISTED (uncertain)
+270,Garage - Ebay Used,Y,271,Garage - Own Box,LIKELY,May be 271 Baby's Cot - Own Box maps to Ebay Used
+620,Garage - Ebay Used,,620,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+31071,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+75125,Garage - Ebay Used,,75125,Garage,LOCATION DIFF,Stock take Ebay Used but DB says Garage (generic)
+8729,Garage - Ebay Used,,8729,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+1370,Garage - Ebay Used,Y,,,,NO MATCH - Not found as eBay LISTED (uncertain)
+31028,Garage - Ebay Used,,31028,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+8792,Garage - Ebay Used,Y,8792,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+8644,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+8501,Garage - Ebay Used,,8501,Garage - Box Slizers,LOCATION DIFF,Stock take Ebay Used but DB says Box Slizers
+8771,Garage - Ebay Used,Y,8771,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+4786,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+4731,Garage - Ebay Used,,4731,Garage - Ebay Used,EXACT,Perfect match
+4726,Garage - Ebay Used,,4726,Garage - Ebay Used,EXACT,Perfect match
+M756,Garage - Ebay Used,Y,,,,NO MATCH - Set number not found (uncertain - was @M756)
+6001,Garage - Ebay Used,Y,,,,NO MATCH - Set number not found (uncertain)
+5126,Garage - Ebay Used,Y,,,,NO MATCH - Set number not found (uncertain)
+8015,Garage - Ebay Used,,8015,Garage - Ebay Used,EXACT,Perfect match
+MJ5529,Garage - Ebay Used,Y,,,,NO MATCH - Set number not found (uncertain)
+70638,Garage - Ebay Used,,70638,Garage - Ebay Used,EXACT,Perfect match
+5866,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+7915,Garage - Ebay Used,,7915,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+31048,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+60084,Garage - Ebay Used,,,,,NO MATCH - Not found as eBay LISTED in DB
+31079,Garage - Ebay Used,,31079,Garage - Own Box,LOCATION DIFF,Stock take Ebay Used but DB says Own Box - same shelf area
+201,Garage - 201,Y,,,,NO MATCH - Set number too short (uncertain - old set?)
+7694,Garage - 201,,7694,Garage - 201,EXACT,Perfect match
+213,Garage - 201,Y,,,,NO MATCH - Set number too short (uncertain - old set?)
+253,Garage - 201,,253,Garage - 201,EXACT,Perfect match
+41003,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED in DB
+SH034,Garage - 201,,SH034,Garage - 201,EXACT,Perfect match
+75099,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED in DB
+8745,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED in DB
+612,Garage - 201,Y,612,Garage - 201,EXACT,Match (uncertain flag)
+HP241,Garage - 201,,HP241,Garage - 201,EXACT,Perfect match
+644,Garage - 201,Y,,,,NO MATCH - Set number too short (uncertain - old set?)
+6471,Garage - 201,,6471,Garage - 201,EXACT,Perfect match
+NJO208,Garage - 201,,NJO208,Garage - 201,EXACT,Perfect match
+Jack Stone Bundle 4,Garage - 201,,NA,Garage - 201,LIKELY,Jack Stone Bundle matches DB bundle entry
+10780,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED in DB
+SW1305,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED (Minifigure)
+NJO630,Garage - 201,,NJO630,Garage - 201,EXACT,Perfect match
+5014,Garage - 201,,5014,Garage - 201,EXACT,Perfect match
+60006,Garage - 201,,60006,Garage - 201,EXACT,Perfect match (x2 in DB)
+6228,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED in DB
+HP Bundle 4,Garage - 201,,NA,Garage - 201,LIKELY,HP Bundle matches DB HP Minifigure Bundle
+SW514,Garage - 201,,,,,NO MATCH - Not found as eBay LISTED (Minifigure)
+SH228,Garage - 201,,SH228,Garage - 201,EXACT,Perfect match
+SH034,Garage - 201,,SH034,Garage - 201,EXACT,Duplicate - already matched above
+SW871,Garage - 201,,SW871,Garage - 201,EXACT,Perfect match
+SW092,Garage - 201,Y,SW0092,Garage - 201,EXACT,Match - format difference SW092 vs SW0092
+HP107,Garage - 201,,HP107,Garage - 201,EXACT,Perfect match
+HP261,Garage - 201,,HP261,Garage - 201,EXACT,Perfect match
+71760,Garage - New Shelf,,71760,Garage,LOCATION DIFF,Stock take New Shelf but DB says Garage (generic) - update DB
+40784,Garage - New Shelf,,40784,Garage,LOCATION DIFF,Stock take New Shelf but DB says Garage (generic) - update DB
+60085,Garage - New Shelf,,60085,Garage,LOCATION DIFF,Stock take New Shelf but DB says Garage (generic) - update DB
+7741,Garage - New Shelf,,,,,NO MATCH - Listed on Amazon not eBay
+40685,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40567,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40659,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40371,Garage - New Shelf,,,,,NO MATCH - Listed on Amazon not eBay
+40686,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+40581,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+60283,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40651,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+40530,Garage - New Shelf,,,,,NO MATCH - Listed on Amazon not eBay (1 listed at Loft)
+9496,Garage - New Shelf,,,,,NO MATCH - Listed but no platform assigned in DB
+40609,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40675,Garage - New Shelf,,,,,NO MATCH - BACKLOG status not LISTED
+40680,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40689,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40684,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+40346,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+40683,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40687,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40682,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+40676,Garage - New Shelf,,,,,NO MATCH - BACKLOG status not LISTED
+40568,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+40650,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB
+311420,Garage - New Shelf,,,,,NO MATCH - Listed but no platform assigned in DB
+42169,Garage - New Shelf,,,,,NO MATCH - SOLD on eBay in DB
+75388,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+75361,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+76293,Garage - New Shelf,,,,,NO MATCH - Not found in DB at all
+853946,Garage - New Shelf,,,,,NO MATCH - All SOLD in DB (Qty: 2 in stock take)
+MAGNET STAND,Garage - New Shelf,,,,,NO MATCH - Could be 5008907/08/09 but all SOLD
+40491,Garage - New Shelf,,40491,Loft - S20,LOCATION DIFF,Stock take New Shelf but DB says Loft - S20 (Qty: 2)
+75344,Garage - New Shelf,,75344,Loft - S57,LOCATION DIFF,Stock take New Shelf but DB says Loft - S57
+75299,Garage - New Shelf,,75299,Garage,LOCATION DIFF,Stock take New Shelf but DB has one at Garage and one at Loft (Qty: 2)

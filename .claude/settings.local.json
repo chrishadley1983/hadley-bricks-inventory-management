@@ -7,7 +7,16 @@
       "Bash(copy:*)",
       "Bash(printf:*)",
       "Bash(gh.exe run list:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(gcloud scheduler jobs create http:*)",
+      "Bash(gcloud scheduler jobs list:*)",
+      "Bash(gcloud scheduler jobs run:*)",
+      "Bash(gcloud scheduler jobs describe:*)",
+      "Bash(gcloud functions logs read:*)",
+      "Bash(gcloud scheduler jobs update:*)",
+      "Bash(automation enabled\" even when automation was enabled.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(du:*)",
+      "Bash(vercel ls:*)"
     ]
   },
   "hooks": {

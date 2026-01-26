@@ -668,8 +668,8 @@ export class ArbitrageService {
     const maxPrice = Math.max(...prices);
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
 
-    // Recalculate margin and COG% based on your_price or buy_box_price
-    const sellPrice = item.yourPrice ?? item.buyBoxPrice ?? 0;
+    // Recalculate margin and COG% based on buy_box_price first (matching DB logic)
+    const sellPrice = item.buyBoxPrice ?? item.yourPrice ?? 0;
     let marginPercent: number | null = null;
     let marginAbsolute: number | null = null;
     let cogPercent: number | null = null;
