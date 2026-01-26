@@ -59,8 +59,8 @@ export function ArbitrageDetailModal({
   // Parse the editable buy price
   const buyPrice = parseFloat(buyPriceInput) || 0;
 
-  // Use your_price if available, otherwise buy_box_price
-  const sellPrice = item.yourPrice ?? item.buyBoxPrice ?? 0;
+  // Use buy_box_price if available, otherwise your_price (consistent with COG% calculations)
+  const sellPrice = item.buyBoxPrice ?? item.yourPrice ?? 0;
 
   // Calculate Amazon FBM profit breakdown with current buy price
   const profitBreakdown = calculateAmazonFBMProfit(sellPrice, buyPrice);
