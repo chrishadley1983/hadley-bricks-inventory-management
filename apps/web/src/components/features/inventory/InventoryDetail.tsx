@@ -220,7 +220,18 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
                 />
               )}
               <DetailRow label="Listing Platform" value={item.listing_platform} />
-              <DetailRow label="Amazon ASIN" value={item.amazon_asin} />
+              {item.listing_platform?.toLowerCase() === 'amazon' && (
+                <DetailRow
+                  label="Amazon ASIN"
+                  value={
+                    item.amazon_asin ? (
+                      item.amazon_asin
+                    ) : (
+                      <span className="text-red-600 italic">Missing</span>
+                    )
+                  }
+                />
+              )}
             </CardContent>
           </Card>
 
