@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -61,15 +62,14 @@ export interface AmazonPickingListResponse {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const supabase = await createClient();
+    const userId = auth.userId;
 
     // Check for format parameter (json or pdf)
     const format = request.nextUrl.searchParams.get('format') || 'json';
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('platform', 'amazon')
       .is('fulfilled_at', null)
       .in('status', ['Paid', 'Partially Shipped', 'Pending'])
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
       const { data } = await supabase
         .from('inventory_items')
         .select('id, amazon_asin, set_number, item_name, storage_location, status, listing_platform, created_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('amazon_asin', Array.from(allAsins))
         .ilike('listing_platform', '%amazon%')
         .in('status', ['BACKLOG', 'LISTED'])
