@@ -263,7 +263,7 @@ async function fetchSyncSummary(userId: string): Promise<SyncResult[]> {
  * 
  * Runs all platform syncs and returns consolidated results with weekly stats.
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // Validate auth via API key or session cookie
     const auth = await validateAuth(request);
