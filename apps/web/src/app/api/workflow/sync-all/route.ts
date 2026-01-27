@@ -262,7 +262,7 @@ async function fetchSyncSummary(userId: string): Promise<SyncResult[]> {
  * 
  * Runs all platform syncs and returns consolidated results with weekly stats.
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
