@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayArbitrageSyncService, ArbitrageWatchlistService } from '@/lib/arbitrage';
-import { pushoverService } from '@/lib/notifications';
+import { discordService } from '@/lib/notifications';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - Vercel Pro limit
@@ -78,10 +78,9 @@ export async function POST(request: NextRequest) {
     // If cursor is 0 and it's a new sync, send start notification
     if (cursorPosition === 0) {
       console.log(`[Cron EbayPricing] Starting new daily sync - ${totalWatchlist} items in watchlist, limit ${DAILY_LIMIT}`);
-      await pushoverService.send({
+      await discordService.sendSyncStatus({
         title: '🔄 eBay Pricing Sync Started',
         message: `Daily pricing sync started\n${Math.min(totalWatchlist, DAILY_LIMIT)} items to process`,
-        priority: -1,
       });
 
       // Update status to running
@@ -159,17 +158,16 @@ export async function POST(request: NextRequest) {
     if (isComplete) {
       const totalFailed = (syncStatus?.items_failed ?? 0) + result.failed;
       if (totalFailed > 0) {
-        await pushoverService.send({
+        await discordService.sendSyncStatus({
           title: '⚠️ eBay Pricing Sync Complete (with errors)',
           message: `Updated: ${newCursorPosition} sets\nFailed: ${totalFailed} sets`,
-          priority: 0,
-          sound: 'falling',
+          success: false,
         });
       } else {
-        await pushoverService.send({
+        await discordService.sendSyncStatus({
           title: '✅ eBay Pricing Sync Complete',
           message: `Updated: ${newCursorPosition} sets`,
-          priority: -1,
+          success: true,
         });
       }
     }
@@ -206,11 +204,10 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'user_id,job_type' });
 
     // Send failure notification
-    await pushoverService.send({
+    await discordService.sendAlert({
       title: '🔴 eBay Pricing Sync Failed',
       message: `Error: ${errorMsg}\nDuration: ${Math.round(duration / 1000)}s`,
-      priority: 1,
-      sound: 'siren',
+      priority: 'high',
     });
 
     return NextResponse.json(

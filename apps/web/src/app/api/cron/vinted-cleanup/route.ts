@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { pushoverService } from '@/lib/notifications/pushover.service';
+import { discordService } from '@/lib/notifications';
 
 // Lazy initialization to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -161,8 +161,8 @@ export async function POST(request: NextRequest) {
         0
       ) || 0;
 
-      // Send daily summary via Pushover
-      await pushoverService.sendVintedDailySummary({
+      // Send daily summary via Discord
+      await discordService.sendVintedDailySummary({
         broadSweeps,
         watchlistScans,
         opportunitiesFound,
