@@ -142,6 +142,9 @@ export interface ListingCreationRequest {
 
   /** Optional condition description override (bypasses AI generation) */
   conditionDescriptionOverride?: string;
+
+  /** Storage location for the item (updates inventory_items.storage_location) */
+  storageLocation?: string;
 }
 
 // ============================================
@@ -498,17 +501,19 @@ export const DEFAULT_BEST_OFFER_CONFIG: BestOfferConfig = {
 
 /**
  * Listing creation step definitions
+ * 10-step flow with pre-publish quality review
  */
 export const LISTING_CREATION_STEPS: Array<{ id: string; name: string }> = [
   { id: 'validate', name: 'Validating inventory data' },
   { id: 'research', name: 'Researching product details' },
   { id: 'policies', name: 'Retrieving eBay policies' },
   { id: 'generate', name: 'Generating listing content' },
+  { id: 'review', name: 'Quality review' },
+  { id: 'preview', name: 'Preparing preview' },
   { id: 'images', name: 'Processing and uploading images' },
   { id: 'create', name: 'Creating eBay listing' },
   { id: 'update', name: 'Updating inventory' },
   { id: 'audit', name: 'Recording audit trail' },
-  { id: 'review', name: 'Quality review' },
 ];
 
 /**

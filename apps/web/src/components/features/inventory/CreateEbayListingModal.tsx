@@ -38,6 +38,7 @@ import { formatCurrency } from '@/lib/utils';
 import { useCreateListing } from '@/hooks/use-create-listing';
 import { useBusinessPolicies } from '@/hooks/use-business-policies';
 import { useTemplates } from '@/hooks/listing-assistant/use-templates';
+import { useStorageLocations } from '@/hooks/use-storage-locations';
 import { QualityReviewPopup } from './QualityReviewPopup';
 import { compressImage, formatBytes } from '@/lib/utils/image-compression';
 import type {
@@ -145,6 +146,9 @@ export function CreateEbayListingModal({
   // Quality review popup state
   const [showQualityReview, setShowQualityReview] = useState(false);
 
+  // Storage location state
+  const [storageLocation, setStorageLocation] = useState('');
+
   // Hooks
   const {
     progress,
@@ -165,6 +169,9 @@ export function CreateEbayListingModal({
 
   // Templates hook
   const { data: templates, isLoading: templatesLoading } = useTemplates();
+
+  // Storage locations hook for autocomplete
+  const { data: storageLocations = [] } = useStorageLocations();
 
   // Get fulfillment policies for the dropdown (postage policies)
   const fulfillmentPolicies = policies?.fulfillment ?? [];
@@ -378,6 +385,8 @@ export function CreateEbayListingModal({
         : undefined,
       // Condition description override (if not using AI)
       conditionDescriptionOverride: useAIConditionDescription ? undefined : conditionDescription,
+      // Storage location to update on the inventory item
+      storageLocation: storageLocation.trim() || undefined,
     };
 
     create(request);
@@ -394,6 +403,7 @@ export function CreateEbayListingModal({
     effectiveFulfillmentPolicyId,
     useAIConditionDescription,
     conditionDescription,
+    storageLocation,
     create,
     uploadPhotosToStorage,
   ]);
@@ -865,6 +875,27 @@ export function CreateEbayListingModal({
 
         {/* Publish Tab */}
         <TabsContent value="publish" className="space-y-4">
+          {/* Storage Location */}
+          <div className="space-y-2">
+            <Label htmlFor="storageLocation">Storage Location</Label>
+            <Input
+              id="storageLocation"
+              type="text"
+              value={storageLocation}
+              onChange={(e) => setStorageLocation(e.target.value)}
+              placeholder="e.g., Shelf A1, Box 3"
+              list="storage-locations-list"
+            />
+            <datalist id="storage-locations-list">
+              {storageLocations.map((location) => (
+                <option key={location} value={location} />
+              ))}
+            </datalist>
+            <p className="text-xs text-muted-foreground">
+              Where the item is stored. Start typing to see suggestions from existing locations.
+            </p>
+          </div>
+
           {/* Postage Policy Selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">

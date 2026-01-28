@@ -64,6 +64,7 @@ const ListingCreationSchema = z.object({
     returnPolicyId: z.string().optional(),
   }).optional(),
   conditionDescriptionOverride: z.string().optional(),
+  storageLocation: z.string().optional(), // Storage location to update on inventory item
 });
 
 /**
@@ -71,9 +72,21 @@ const ListingCreationSchema = z.object({
  *
  * Create an eBay listing with SSE streaming for progress updates.
  *
+ * 10-step flow with pre-publish quality review:
+ * 1. Validate inventory data
+ * 2. Research product details (Brickset API)
+ * 3. Retrieve eBay policies
+ * 4. Generate listing content (Claude AI)
+ * 5. Quality review with auto-improvement loop (Gemini AI)
+ * 6. Prepare preview (auto-confirms in current version)
+ * 7. Process and upload images
+ * 8. Create eBay listing
+ * 9. Update inventory
+ * 10. Record audit trail
+ *
  * SSE events:
  * - `progress` - Step updates with percentage
- * - `complete` - Success with listing details
+ * - `complete` - Success with listing details and quality review
  * - `error` - Failure with error context
  */
 export async function POST(request: NextRequest) {

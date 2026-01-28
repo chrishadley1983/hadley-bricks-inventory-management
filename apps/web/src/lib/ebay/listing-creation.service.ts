@@ -1,16 +1,17 @@
 /**
  * eBay Listing Creation Orchestration Service
  *
- * Coordinates the 9-step listing creation process:
+ * Coordinates the 10-step listing creation process with pre-publish quality review:
  * 1. Validate - Check inventory item and status
  * 2. Research - Query Brickset API for product details
  * 3. Policies - Get eBay business policies
  * 4. Generate - AI content generation (Claude Opus 4.5)
- * 5. Images - Upload images to storage
- * 6. Create - eBay Inventory API calls
- * 7. Update - Mark inventory as Listed
- * 8. Audit - Record audit trail
- * 9. Review - Quality review (Gemini 3 Pro)
+ * 5. Review - Pre-publish quality review (Gemini 3 Pro) with auto-improvement loop
+ * 6. Preview - Send listing preview to client for confirmation (SSE event)
+ * 7. Images - Upload images to storage
+ * 8. Create - eBay Inventory API calls
+ * 9. Update - Mark inventory as Listed + storage location
+ * 10. Audit - Record audit trail with quality review data
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -118,6 +119,8 @@ export class ListingCreationService {
     let imageUrls: string[] = [];
     let ebayOfferId: string | undefined;
     let ebayListingId: string | undefined;
+    let qualityReview: QualityReviewResult | undefined;
+    let qualityLoopIterations = 0;
 
     try {
       // Step 1: Validate
@@ -161,7 +164,44 @@ export class ListingCreationService {
         return listing;
       });
 
-      // Step 5: Upload images (or use pre-uploaded URLs)
+      // Step 5: Pre-publish quality review with auto-improvement loop
+      // Reviews listing, applies suggestions, and loops until score >= 90 or max iterations
+      const reviewResult = await this.executeStep('review', onProgress, async () => {
+        const result = await this.qualityService.runQualityLoop(
+          generatedListing!,
+          item.condition ?? 'Used',
+          {
+            targetScore: 90,
+            maxIterations: 3,
+            timeoutPerReviewMs: 30000, // 30 second timeout per review
+            onProgress: (step) => {
+              console.log(`[ListingCreationService] Quality loop: ${step}`);
+            },
+          }
+        );
+
+        // Update generatedListing with improved version
+        generatedListing = result.listing;
+        qualityLoopIterations = result.iterations;
+
+        console.log(
+          `[ListingCreationService] Quality review complete: Score ${result.review.score}/100 (${result.review.grade}), ${result.iterations} iteration(s), improved: ${result.improved}`
+        );
+
+        return result.review;
+      });
+
+      qualityReview = reviewResult;
+
+      // Step 6: Preview (placeholder for Phase 3 - currently just marks as complete)
+      // In Phase 3, this will send preview data to client and wait for confirmation
+      await this.executeStep('preview', onProgress, async () => {
+        // Preview step - currently auto-confirms
+        // Phase 3 will add SSE event for editable preview
+        return { confirmed: true };
+      });
+
+      // Step 7: Upload images (or use pre-uploaded URLs)
       if (request.photos.length > 0) {
         imageUrls = await this.executeStep('images', onProgress, async () => {
           // Check if images are already uploaded (URL-based) or need uploading (base64)
@@ -199,7 +239,7 @@ export class ListingCreationService {
         throw new Error('Photos are required for listings');
       }
 
-      // Step 6: Create eBay listing (creates inventory item + offer, publishes)
+      // Step 8: Create eBay listing (creates inventory item + offer, publishes)
       const listingResult = await this.executeStep('create', onProgress, async () => {
         return this.createEbayListing(
           item,
@@ -213,16 +253,17 @@ export class ListingCreationService {
       ebayOfferId = listingResult.offerId;
       ebayListingId = listingResult.listingId;
 
-      // Step 7: Update inventory item
+      // Step 9: Update inventory item
       await this.executeStep('update', onProgress, async () => {
         return this.updateInventoryItem(
           request.inventoryItemId,
           ebayListingId!,
-          `https://www.ebay.co.uk/itm/${ebayListingId}`
+          `https://www.ebay.co.uk/itm/${ebayListingId}`,
+          request.storageLocation
         );
       });
 
-      // Step 8: Create audit record
+      // Step 10: Create audit record with quality review data
       auditId = await this.executeStep('audit', onProgress, async () => {
         return this.createAuditRecord(
           request,
@@ -230,39 +271,15 @@ export class ListingCreationService {
           generatedListing!,
           ebayListingId ?? undefined,
           ebayOfferId ?? undefined,
-          'completed'
+          'completed',
+          undefined,
+          undefined,
+          qualityReview,
+          qualityLoopIterations
         );
       });
 
-      // Step 9: Quality review (async, non-blocking)
-      // This runs in the background AFTER we return the response
-      // So we use a no-op progress callback to avoid writing to closed stream
-      let qualityReview: QualityReviewResult | undefined;
-      const qualityPending = true;
-
-      // Start quality review but don't block on it
-      // Use no-op callback since the SSE stream will be closed by the time this completes
-      const noOpProgress: ProgressCallback = () => {};
-      const reviewStartTime = Date.now();
-      this.executeStep('review', noOpProgress, async () => {
-        const review = await this.qualityService.reviewListing(
-          generatedListing!,
-          item.condition ?? 'Used'
-        );
-        qualityReview = review;
-
-        // Update audit record with quality review results
-        const reviewDuration = Date.now() - reviewStartTime;
-        await this.updateAuditWithQualityReview(auditId!, review, reviewDuration);
-
-        return review;
-      }).catch((error) => {
-        console.error('[ListingCreationService] Quality review failed:', error);
-        // Update audit record with failure
-        this.updateAuditWithQualityReviewFailure(auditId!, error).catch(() => {});
-      });
-
-      // Return success immediately, quality review continues in background
+      // Return success with quality review included
       const totalTime = Date.now() - this.startTime;
 
       return {
@@ -276,7 +293,7 @@ export class ListingCreationService {
         scheduledDate: request.scheduledDate,
         generatedContent: generatedListing!,
         qualityReview,
-        qualityReviewPending: qualityPending,
+        qualityReviewPending: false, // Review is now done before publishing
         auditId: auditId!,
         totalTimeMs: totalTime,
       };
@@ -331,6 +348,7 @@ export class ListingCreationService {
 
   /**
    * Initialize step tracking
+   * 10-step flow with pre-publish quality review
    */
   private initializeSteps(): void {
     const stepDefs: Array<{ id: string; name: string }> = [
@@ -338,11 +356,12 @@ export class ListingCreationService {
       { id: 'research', name: 'Researching product details' },
       { id: 'policies', name: 'Retrieving eBay policies' },
       { id: 'generate', name: 'Generating listing content' },
+      { id: 'review', name: 'Quality review' },
+      { id: 'preview', name: 'Preparing preview' },
       { id: 'images', name: 'Processing and uploading images' },
       { id: 'create', name: 'Creating eBay listing' },
       { id: 'update', name: 'Updating inventory' },
       { id: 'audit', name: 'Recording audit trail' },
-      { id: 'review', name: 'Quality review' },
     ];
 
     this.steps = stepDefs.map((s) => ({
@@ -1008,21 +1027,29 @@ Return JSON with these fields (omit any you're not confident about):
   }
 
   /**
-   * Update inventory item with eBay listing info
+   * Update inventory item with eBay listing info and optional storage location
    */
   private async updateInventoryItem(
     itemId: string,
     listingId: string,
-    listingUrl: string
+    listingUrl: string,
+    storageLocation?: string
   ): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      ebay_listing_id: listingId,
+      ebay_listing_url: listingUrl,
+      status: 'LISTED',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Only update storage_location if a value was provided
+    if (storageLocation !== undefined && storageLocation.trim() !== '') {
+      updateData.storage_location = storageLocation.trim();
+    }
+
     const { error } = await this.supabase
       .from('inventory_items')
-      .update({
-        ebay_listing_id: listingId,
-        ebay_listing_url: listingUrl,
-        status: 'LISTED',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', itemId)
       .eq('user_id', this.userId);
 
@@ -1032,7 +1059,7 @@ Return JSON with these fields (omit any you're not confident about):
   }
 
   /**
-   * Create audit record
+   * Create audit record with quality review data
    */
   private async createAuditRecord(
     request: ListingCreationRequest,
@@ -1042,7 +1069,9 @@ Return JSON with these fields (omit any you're not confident about):
     offerId: string | undefined,
     status: 'completed' | 'failed',
     errorMessage?: string,
-    errorStep?: string
+    errorStep?: string,
+    qualityReview?: QualityReviewResult,
+    qualityLoopIterations?: number
   ): Promise<string> {
     const { data, error } = await this.supabase
       .from('listing_creation_audit')
@@ -1065,6 +1094,10 @@ Return JSON with these fields (omit any you're not confident about):
         ai_model_used: 'claude-opus-4-5-20251101',
         ai_confidence_score: listing?.confidence,
         ai_recommendations: listing?.recommendations,
+        // Quality review data (pre-publish review)
+        quality_score: qualityReview?.score,
+        quality_feedback: qualityReview as unknown as Json,
+        quality_review_time_ms: qualityLoopIterations ? qualityLoopIterations * 30000 : undefined, // Estimate
         error_message: errorMessage,
         error_step: errorStep,
         completed_at: status === 'completed' ? new Date().toISOString() : undefined,
