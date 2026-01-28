@@ -98,6 +98,23 @@ Unlike traditional "build and hope" approaches:
 
 **This is non-negotiable.** The Build Feature Agent MUST execute verification after every implementation iteration. Claiming completion without a CONVERGED verdict is a failure mode.
 
+### 1.7 Critical Branch Requirement
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  NEVER WRITE CODE ON MAIN BRANCH  ⚠️                        │
+│                                                                 │
+│  Before ANY code changes:                                       │
+│  1. Check current branch with `git branch --show-current`       │
+│  2. If on `main` → CREATE feature branch FIRST                  │
+│  3. VERIFY you are on `feature/<name>` before writing code      │
+│                                                                 │
+│  Writing code on main = BLOCKED (undo changes, create branch)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**This is non-negotiable.** The Build Feature Agent MUST be on a properly named feature branch before writing ANY code. If you find yourself having written code on main, you MUST stop, stash/undo the changes, create the branch, and re-apply. This situation should NEVER happen if following this spec correctly.
+
 ---
 
 ## 2. Design Principles
@@ -285,7 +302,16 @@ curl localhost:3000 responds?
 
 See [Section 5: Autonomous Recovery Actions](#5-autonomous-recovery-actions) for full recovery capabilities.
 
-### 4.6 Check Git Status and Create Feature Branch
+### 4.6 Check Git Status and Create Feature Branch (BLOCKING)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  THIS STEP IS BLOCKING - DO NOT PROCEED WITHOUT BRANCH  ⚠️  │
+│                                                                 │
+│  You MUST be on a feature/* branch before Phase 3 (Build)      │
+│  If branch creation fails → BLOCKED (do not write code)        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ```powershell
 # Check current branch
@@ -295,19 +321,45 @@ git branch --show-current
 git status --porcelain
 ```
 
-**Branch handling:**
-- If on `main`: Create and switch to feature branch
-  ```powershell
-  git checkout -b feature/<feature-name>
-  ```
-- If on existing feature branch: Continue on that branch
-- If dirty: WARN but continue (changes will be part of feature)
+**Branch handling decision table:**
+
+| Current State | Action | Result |
+|---------------|--------|--------|
+| On `main`, clean | Create `feature/<name>` | Continue |
+| On `main`, dirty | BLOCKED - stash first, then create branch | Wait |
+| On `feature/*` matching feature name | Continue on that branch | Continue |
+| On `feature/*` different feature | BLOCKED - wrong branch | Stop |
+| Branch creation fails | BLOCKED - resolve issue | Stop |
+
+**If on main:**
+```powershell
+# MUST create and switch to feature branch
+git checkout -b feature/<feature-name>
+
+# VERIFY branch was created
+git branch --show-current
+# Must show: feature/<feature-name>
+```
+
+**If branch creation fails:**
+1. DO NOT proceed to Phase 3
+2. Report BLOCKED status with the error
+3. Wait for human to resolve
 
 **Why feature branches are mandatory:**
 - GitHub branch protection prevents direct push to main
 - All changes must go through pull requests
 - Feature branches enable code review before merge
 - Enables `/merge-feature` workflow with PR creation
+
+**Recovery if code was accidentally written on main:**
+1. STOP immediately
+2. Stash changes: `git stash`
+3. Create branch: `git checkout -b feature/<feature-name>`
+4. Apply stash: `git stash pop`
+5. Continue from Phase 3
+
+This recovery should NEVER be needed if following the spec correctly.
 
 ### 4.7 Report Boot Status
 
@@ -724,6 +776,34 @@ Do NOT modify:
 ---
 
 ## 9. Phase 3: Execute Build
+
+### 9.0 Pre-Build Branch Verification (MANDATORY)
+
+**Before writing ANY code, verify branch state:**
+
+```powershell
+# MUST run this check before any code changes
+$branch = git branch --show-current
+if ($branch -eq "main") {
+    # STOP - DO NOT PROCEED
+    Write-Error "BLOCKED: Cannot write code on main branch"
+    # Must create feature branch before continuing
+}
+```
+
+**Verification checklist before writing code:**
+- [ ] `git branch --show-current` shows `feature/<feature-name>`
+- [ ] NOT on `main` branch
+- [ ] Branch name matches the feature being built
+
+**If on main branch:**
+1. **STOP** - Do not write any code
+2. Go back to Section 4.6
+3. Create the feature branch
+4. Verify branch creation succeeded
+5. Return here and continue
+
+**This check is MANDATORY.** Writing code on main branch violates the branch protection policy and will cause merge failures.
 
 ### 9.1 Implementation Execution
 
@@ -1402,6 +1482,7 @@ async function resumeBuild(feature: string) {
 | Max iterations reached | ESCALATED | No | Review, decide approach |
 | Same failure 2x | ESCALATED | No | Investigate root cause |
 | Regression detected | ESCALATED | No | Review what broke |
+| **On main branch** | **BLOCKED** | **No** | **Create feature branch first** |
 | App not running | RECOVERED | Yes | Auto: start server (see Section 5) |
 | Port conflict | RECOVERED | Yes | Auto: kill-port + restart |
 | Build error | RECOVERED | Yes | Auto: attempt fix, restart |
