@@ -947,9 +947,9 @@ export class ListingOptimiserService {
 
     // Construct the final minimal inventory item
     // Match exactly what listing-creation.service.ts sends
-    // Note: Include locale to help eBay identify the language context
+    // Note: Do NOT include locale - it's not a valid request body field
+    // Language is controlled via Content-Language header in createOrReplaceInventoryItem
     const cleanItem: EbayInventoryItem = {
-      locale: 'en_GB', // Required for UK marketplace updates
       product: cleanProduct,
       condition: rawItem.condition,
       conditionDescription: rawItem.conditionDescription,
