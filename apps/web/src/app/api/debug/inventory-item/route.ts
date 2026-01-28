@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     // First get SKU from Trading API
-    const tradingClient = new EbayTradingClient(accessToken);
+    const tradingClient = new EbayTradingClient({ accessToken });
     const listing = await tradingClient.getItem(itemId);
 
     if (!listing.sku) {
