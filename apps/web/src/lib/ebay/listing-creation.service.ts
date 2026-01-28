@@ -313,7 +313,6 @@ export class ListingCreationService {
       ebayListingId = listingResult.listingId;
 
       // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
-      let storageLocationWarning: string | undefined;
       const updateResult = await this.executeStep('update', onProgress, async () => {
         return this.updateInventoryItem(
           request.inventoryItemId,
@@ -322,7 +321,7 @@ export class ListingCreationService {
           request.storageLocation
         );
       });
-      storageLocationWarning = updateResult?.storageLocationWarning;
+      const storageLocationWarning = updateResult?.storageLocationWarning;
 
       // Step 10: Create audit record with quality review data
       auditId = await this.executeStep('audit', onProgress, async () => {
@@ -1547,7 +1546,6 @@ Return JSON with these fields (omit any you're not confident about):
       ebayListingId = listingResult.listingId;
 
       // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
-      let storageLocationWarning: string | undefined;
       const updateResult = await this.executeStep('update', onProgress, async () => {
         return this.updateInventoryItem(
           request.inventoryItemId,
@@ -1556,7 +1554,7 @@ Return JSON with these fields (omit any you're not confident about):
           request.storageLocation
         );
       });
-      storageLocationWarning = updateResult?.storageLocationWarning;
+      const storageLocationWarning = updateResult?.storageLocationWarning;
 
       // Step 10: Create audit record with quality review data
       auditId = await this.executeStep('audit', onProgress, async () => {
@@ -1618,7 +1616,6 @@ Return JSON with these fields (omit any you're not confident about):
    */
   private initializeStepsForPhase2(): void {
     const phase1Steps = ['validate', 'research', 'policies', 'generate', 'review', 'preview'];
-    const phase2Steps = ['images', 'create', 'update', 'audit'];
 
     const allStepDefs: Array<{ id: string; name: string }> = [
       { id: 'validate', name: 'Validating inventory data' },
