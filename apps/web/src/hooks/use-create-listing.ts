@@ -11,17 +11,19 @@ import type {
   ListingCreationProgress,
   ListingCreationResult,
   ListingCreationError,
+  ListingPreviewData,
+  AIGeneratedListing,
 } from '@/lib/ebay/listing-creation.types';
 import { inventoryKeys } from './use-inventory';
 
 /**
  * SSE event types
  */
-type SSEEventType = 'progress' | 'complete' | 'error';
+type SSEEventType = 'progress' | 'complete' | 'error' | 'preview';
 
 interface SSEEvent {
   type: SSEEventType;
-  data: ListingCreationProgress | ListingCreationResult | ListingCreationError | string;
+  data: ListingCreationProgress | ListingCreationResult | ListingCreationError | ListingPreviewData | string;
 }
 
 /**
@@ -36,6 +38,10 @@ export interface UseCreateListingState {
   error: ListingCreationError | string | null;
   /** Whether creation is in progress */
   isCreating: boolean;
+  /** Preview data awaiting user confirmation */
+  previewData: ListingPreviewData | null;
+  /** Whether we're waiting for user to confirm preview */
+  isAwaitingPreviewConfirmation: boolean;
 }
 
 /**
@@ -48,6 +54,10 @@ export interface UseCreateListingReturn extends UseCreateListingState {
   reset: () => void;
   /** Cancel in-progress creation */
   cancel: () => void;
+  /** Confirm the preview and continue with listing creation */
+  confirmPreview: (editedListing: AIGeneratedListing) => void;
+  /** Cancel the preview and abort listing creation */
+  cancelPreview: () => void;
 }
 
 /**
@@ -56,12 +66,15 @@ export interface UseCreateListingReturn extends UseCreateListingState {
 export function useCreateListing(): UseCreateListingReturn {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const previewResolverRef = useRef<((confirmed: boolean, editedListing?: AIGeneratedListing) => void) | null>(null);
 
   const [state, setState] = useState<UseCreateListingState>({
     progress: null,
     result: null,
     error: null,
     isCreating: false,
+    previewData: null,
+    isAwaitingPreviewConfirmation: false,
   });
 
   /**
@@ -74,6 +87,8 @@ export function useCreateListing(): UseCreateListingReturn {
       result: null,
       error: null,
       isCreating: true,
+      previewData: null,
+      isAwaitingPreviewConfirmation: false,
     });
 
     // Create abort controller for cancellation
@@ -178,11 +193,24 @@ export function useCreateListing(): UseCreateListingReturn {
           }));
           break;
 
+        case 'preview':
+          // Server is waiting for user confirmation
+          const previewData = event.data as ListingPreviewData;
+          setState((prev) => ({
+            ...prev,
+            progress: null, // Hide progress while showing preview
+            previewData,
+            isAwaitingPreviewConfirmation: true,
+          }));
+          break;
+
         case 'complete':
           const result = event.data as ListingCreationResult;
           setState((prev) => ({
             ...prev,
             progress: null,
+            previewData: null,
+            isAwaitingPreviewConfirmation: false,
             result,
             isCreating: false,
           }));
@@ -194,6 +222,8 @@ export function useCreateListing(): UseCreateListingReturn {
         case 'error':
           setState((prev) => ({
             ...prev,
+            previewData: null,
+            isAwaitingPreviewConfirmation: false,
             error: event.data as ListingCreationError | string,
             isCreating: false,
           }));
@@ -212,7 +242,10 @@ export function useCreateListing(): UseCreateListingReturn {
       result: null,
       error: null,
       isCreating: false,
+      previewData: null,
+      isAwaitingPreviewConfirmation: false,
     });
+    previewResolverRef.current = null;
   }, []);
 
   /**
@@ -223,12 +256,127 @@ export function useCreateListing(): UseCreateListingReturn {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    previewResolverRef.current = null;
   }, []);
+
+  /**
+   * Confirm the preview and continue with listing creation
+   */
+  const confirmPreview = useCallback(async (editedListing: AIGeneratedListing) => {
+    if (!state.previewData) return;
+
+    setState((prev) => ({
+      ...prev,
+      isAwaitingPreviewConfirmation: false,
+      previewData: null,
+      isCreating: true,
+    }));
+
+    try {
+      // Send confirmation to the server
+      const response = await fetch('/api/ebay/listing/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: state.previewData.sessionId,
+          editedListing,
+          confirmed: true,
+        }),
+        signal: abortControllerRef.current?.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setState((prev) => ({
+          ...prev,
+          error: errorData.error || 'Failed to confirm listing',
+          isCreating: false,
+        }));
+        return;
+      }
+
+      // Continue processing SSE stream from the response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setState((prev) => ({
+          ...prev,
+          error: 'Failed to establish connection',
+          isCreating: false,
+        }));
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete events from buffer
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6)) as SSEEvent;
+              handleEvent(event);
+            } catch {
+              console.error('[useCreateListing] Failed to parse SSE event:', line);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isCreating: false,
+      }));
+    }
+  }, [state.previewData, handleEvent]);
+
+  /**
+   * Cancel the preview and abort listing creation
+   */
+  const cancelPreview = useCallback(async () => {
+    if (!state.previewData) return;
+
+    // Send cancellation to server
+    try {
+      await fetch('/api/ebay/listing/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: state.previewData.sessionId,
+          confirmed: false,
+        }),
+      });
+    } catch {
+      // Ignore errors on cancel
+    }
+
+    setState((prev) => ({
+      ...prev,
+      previewData: null,
+      isAwaitingPreviewConfirmation: false,
+      isCreating: false,
+      error: 'Listing creation cancelled',
+    }));
+  }, [state.previewData]);
 
   return {
     ...state,
     create,
     reset,
     cancel,
+    confirmPreview,
+    cancelPreview,
   };
 }

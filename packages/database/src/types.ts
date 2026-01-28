@@ -4056,6 +4056,78 @@ export type Database = {
           },
         ]
       }
+      listing_preview_sessions: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          expires_at: string
+          generated_listing: Json
+          id: string
+          inventory_item_id: string
+          photo_urls: string[]
+          policies_data: Json
+          quality_loop_iterations: number
+          quality_review: Json | null
+          quality_review_error: string | null
+          quality_review_failed: boolean
+          request_data: Json
+          research_data: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          generated_listing: Json
+          id?: string
+          inventory_item_id: string
+          photo_urls?: string[]
+          policies_data: Json
+          quality_loop_iterations?: number
+          quality_review?: Json | null
+          quality_review_error?: string | null
+          quality_review_failed?: boolean
+          request_data: Json
+          research_data?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          generated_listing?: Json
+          id?: string
+          inventory_item_id?: string
+          photo_urls?: string[]
+          policies_data?: Json
+          quality_loop_iterations?: number
+          quality_review?: Json | null
+          quality_review_error?: string | null
+          quality_review_failed?: boolean
+          request_data?: Json
+          research_data?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_preview_sessions_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_preview_sessions_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_quality_reviews: {
         Row: {
           breakdown: Json

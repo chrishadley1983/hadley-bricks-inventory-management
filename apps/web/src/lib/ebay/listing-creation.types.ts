@@ -142,6 +142,9 @@ export interface ListingCreationRequest {
 
   /** Optional condition description override (bypasses AI generation) */
   conditionDescriptionOverride?: string;
+
+  /** Storage location for the item (updates inventory_items.storage_location) */
+  storageLocation?: string;
 }
 
 // ============================================
@@ -304,6 +307,42 @@ export interface QualityReviewResult {
   reviewedAt: string;
   /** AI model used for review */
   reviewerModel: string;
+}
+
+// ============================================
+// Preview Types
+// ============================================
+
+/**
+ * Preview data sent to client for user confirmation
+ */
+export interface ListingPreviewData {
+  /** Session ID for this listing creation */
+  sessionId: string;
+  /** AI-generated listing (may be improved by quality loop) */
+  listing: AIGeneratedListing;
+  /** Quality review result */
+  qualityReview: QualityReviewResult | null;
+  /** Whether the quality review failed */
+  qualityReviewFailed: boolean;
+  /** Quality review error message if failed */
+  qualityReviewError?: string;
+  /** Listing price */
+  price: number;
+  /** Photo URLs for preview */
+  photoUrls: string[];
+}
+
+/**
+ * User's confirmation of the preview with any edits
+ */
+export interface ListingPreviewConfirmation {
+  /** Session ID for this listing creation */
+  sessionId: string;
+  /** Edited listing (may have user changes to title, description, etc.) */
+  editedListing: AIGeneratedListing;
+  /** Whether the user confirmed (true) or cancelled (false) */
+  confirmed: boolean;
 }
 
 // ============================================
@@ -498,17 +537,19 @@ export const DEFAULT_BEST_OFFER_CONFIG: BestOfferConfig = {
 
 /**
  * Listing creation step definitions
+ * 10-step flow with pre-publish quality review
  */
 export const LISTING_CREATION_STEPS: Array<{ id: string; name: string }> = [
   { id: 'validate', name: 'Validating inventory data' },
   { id: 'research', name: 'Researching product details' },
   { id: 'policies', name: 'Retrieving eBay policies' },
   { id: 'generate', name: 'Generating listing content' },
+  { id: 'review', name: 'Quality review' },
+  { id: 'preview', name: 'Preparing preview' },
   { id: 'images', name: 'Processing and uploading images' },
   { id: 'create', name: 'Creating eBay listing' },
   { id: 'update', name: 'Updating inventory' },
   { id: 'audit', name: 'Recording audit trail' },
-  { id: 'review', name: 'Quality review' },
 ];
 
 /**
