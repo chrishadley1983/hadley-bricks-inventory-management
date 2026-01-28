@@ -9,6 +9,8 @@ import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@/lib/supabase/server';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
+import type { EbayInventoryItem } from '@/lib/ebay/types';
 import {
   getExtendedFindingClient,
   type PricingAnalysisResult,
@@ -698,8 +700,15 @@ export class ListingOptimiserService {
 
     console.log(`[ListingOptimiserService] Applying change to ${itemId}:`, request);
 
-    // Call ReviseItem API
-    const result = await this.tradingClient!.reviseFixedPriceItem(request);
+    // Call ReviseItem API (Trading API)
+    // If listing was created via Inventory API, this will fail with a specific error
+    let result = await this.tradingClient!.reviseFixedPriceItem(request);
+
+    // Check if the listing is inventory-based and requires Inventory API
+    if (!result.success && result.errorMessage?.toLowerCase().includes('inventory-based')) {
+      console.log(`[ListingOptimiserService] Listing ${itemId} is inventory-based, falling back to Inventory API`);
+      result = await this.applyChangeViaInventoryApi(userId, itemId, suggestion);
+    }
 
     // Check for product catalog override warning
     // eBay returns success but with a warning when product catalog data overrides custom values
@@ -754,6 +763,142 @@ export class ListingOptimiserService {
     }
 
     return result;
+  }
+
+  /**
+   * Apply changes to an inventory-based listing via the Inventory API
+   *
+   * Listings created via the Inventory API cannot be modified using the Trading API's
+   * ReviseFixedPriceItem. Instead, we must:
+   * - For title/itemSpecifics/conditionDescription: Update the inventory item
+   * - For description: Update the offer
+   */
+  private async applyChangeViaInventoryApi(
+    userId: string,
+    itemId: string,
+    suggestion: ListingSuggestion
+  ): Promise<ReviseItemResult> {
+    console.log(`[ListingOptimiserService] Applying change via Inventory API for ${itemId}`);
+
+    // Get access token for Inventory API
+    const accessToken = await this.ebayAuth.getAccessToken(userId);
+    if (!accessToken) {
+      return {
+        success: false,
+        itemId,
+        errorMessage: 'Failed to get eBay access token',
+      };
+    }
+
+    const adapter = new EbayApiAdapter({
+      accessToken,
+      marketplaceId: 'EBAY_GB',
+      userId,
+    });
+
+    // Get the listing details to find the SKU
+    const listing = await this.tradingClient!.getItem(itemId);
+    const sku = listing.sku;
+
+    if (!sku) {
+      return {
+        success: false,
+        itemId,
+        errorMessage: 'Cannot update inventory-based listing: SKU not found. Please update this listing directly on eBay.',
+      };
+    }
+
+    console.log(`[ListingOptimiserService] Found SKU: ${sku} for listing ${itemId}`);
+
+    try {
+      // For description updates, update the inventory item's product description
+      // Note: The Inventory API stores description on the inventory item, not the offer
+      if (suggestion.category === 'description' || suggestion.category === 'seo') {
+        console.log(`[ListingOptimiserService] Updating inventory item description for SKU: ${sku}`);
+
+        // Get current inventory item
+        const currentItem = await adapter.getInventoryItem(sku);
+
+        // Update with new description
+        const updatedItem: EbayInventoryItem = {
+          ...currentItem,
+          product: {
+            ...currentItem.product,
+            description: suggestion.suggestedValue,
+          },
+        };
+
+        await adapter.createOrReplaceInventoryItem(sku, updatedItem);
+
+        return {
+          success: true,
+          itemId,
+          warnings: ['Updated via Inventory API. Changes may take a few minutes to appear on eBay.'],
+        };
+      }
+
+      // For title, item specifics, and condition updates, update the inventory item
+      const currentItem = await adapter.getInventoryItem(sku);
+
+      switch (suggestion.category) {
+        case 'title':
+          currentItem.product.title = suggestion.suggestedValue;
+          break;
+
+        case 'itemSpecifics': {
+          // Update aspects (item specifics)
+          const aspects = currentItem.product.aspects || {};
+          aspects[suggestion.field] = [suggestion.suggestedValue];
+          currentItem.product.aspects = aspects;
+          break;
+        }
+
+        case 'condition': {
+          const fieldLower = suggestion.field.toLowerCase();
+          if (fieldLower.includes('description') || fieldLower === 'conditiondescription') {
+            currentItem.conditionDescription = suggestion.suggestedValue;
+          } else {
+            // Condition ID changes via Inventory API require mapping to enum values
+            const lowerValue = suggestion.suggestedValue.toLowerCase();
+            if (lowerValue.includes('new') && !lowerValue.includes('other')) {
+              currentItem.condition = 'NEW';
+            } else if (lowerValue.includes('new') && lowerValue.includes('other')) {
+              currentItem.condition = 'NEW_OTHER';
+            } else if (lowerValue.includes('used')) {
+              currentItem.condition = 'USED_GOOD';
+            }
+          }
+          break;
+        }
+
+        default:
+          return {
+            success: false,
+            itemId,
+            errorMessage: `Unsupported suggestion category for Inventory API: ${suggestion.category}`,
+          };
+      }
+
+      // Apply the update
+      await adapter.createOrReplaceInventoryItem(sku, currentItem);
+
+      console.log(`[ListingOptimiserService] Successfully updated inventory item via Inventory API`);
+
+      return {
+        success: true,
+        itemId,
+        warnings: ['Updated via Inventory API. Changes may take a few minutes to appear on eBay.'],
+      };
+    } catch (error) {
+      console.error(`[ListingOptimiserService] Inventory API update failed:`, error);
+      return {
+        success: false,
+        itemId,
+        errorMessage: error instanceof Error
+          ? `Inventory API error: ${error.message}`
+          : 'Failed to update listing via Inventory API',
+      };
+    }
   }
 
   /**
