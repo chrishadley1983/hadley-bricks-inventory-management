@@ -66,20 +66,42 @@ export async function GET(request: NextRequest) {
 
     result.sku = sku;
 
-    // Step 2: Get inventory item from Inventory API
+    // Step 2: Get inventory item from Inventory API using raw fetch
     try {
-      const adapter = new EbayApiAdapter({
-        accessToken,
-        marketplaceId: 'EBAY_GB',
-        userId: user.id,
+      const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+      result.inventoryUrl = inventoryUrl;
+
+      const fetchHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+      };
+
+      result.requestHeaders = Object.keys(fetchHeaders);
+
+      const response = await fetch(inventoryUrl, {
+        method: 'GET',
+        headers: fetchHeaders,
       });
 
-      const inventoryItem = await adapter.getInventoryItem(sku);
-      result.inventoryApiSuccess = true;
-      result.inventoryItem = inventoryItem;
+      result.responseStatus = response.status;
+      result.responseStatusText = response.statusText;
+      result.responseHeaders = Object.fromEntries(response.headers.entries());
+
+      const responseBody = await response.text();
+
+      if (response.ok) {
+        result.inventoryApiSuccess = true;
+        result.inventoryItem = JSON.parse(responseBody);
+      } else {
+        result.inventoryApiSuccess = false;
+        result.inventoryApiError = responseBody;
+      }
     } catch (inventoryError) {
       result.inventoryApiSuccess = false;
       result.inventoryApiError = inventoryError instanceof Error ? inventoryError.message : 'Unknown error';
+      result.inventoryApiStack = inventoryError instanceof Error ? inventoryError.stack : undefined;
     }
 
     return NextResponse.json(result);
