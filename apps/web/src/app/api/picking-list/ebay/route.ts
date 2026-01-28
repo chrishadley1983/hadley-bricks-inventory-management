@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -58,15 +59,14 @@ export interface PickingListResponse {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const supabase = await createClient();
+    const userId = auth.userId;
 
     // Check for format parameter (json or pdf)
     const format = request.nextUrl.searchParams.get('format') || 'json';
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .neq('order_payment_status', 'FULLY_REFUNDED')
       .neq('order_fulfilment_status', 'FULFILLED')
       .order('creation_date', { ascending: true });
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
     const { data: skuMappings } = await (supabase as any)
       .from('ebay_sku_mappings')
       .select('ebay_sku, inventory_item_id')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     const mappingsMap = new Map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
       const { data } = await (supabase as any)
         .from('inventory_items')
         .select('id, sku, set_number, item_name, storage_location')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('sku', Array.from(allSkus));
       inventoryBySku = data || [];
     }
@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
       const { data } = await (supabase as any)
         .from('inventory_items')
         .select('id, sku, set_number, item_name, storage_location')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('id', mappingIds);
       inventoryById = data || [];
     }

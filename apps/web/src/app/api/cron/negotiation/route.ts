@@ -72,7 +72,8 @@ export async function POST(request: NextRequest) {
 
     for (const config of configs) {
       try {
-        const service = getNegotiationService();
+        // Pass service role client to allow access to ebay_credentials without user session
+        const service = getNegotiationService(supabase);
         const initialized = await service.init(config.user_id);
 
         if (!initialized) {

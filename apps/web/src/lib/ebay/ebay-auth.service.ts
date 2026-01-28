@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EbayTokenResponse } from './types';
 import type { EbayCredentials, EbayCredentialsUpdate, EbayCredentialsInsert, EbayMarketplaceId } from '@hadley-bricks/database';
 
@@ -85,8 +86,15 @@ const REQUIRED_SCOPES = [...BASE_SCOPES, ...LISTING_MANAGEMENT_SCOPES, ...ANALYT
 
 export class EbayAuthService {
   private config: EbayAuthConfig;
+  private injectedSupabase: SupabaseClient | null = null;
 
-  constructor(config?: Partial<EbayAuthConfig>) {
+  /**
+   * Create a new EbayAuthService
+   * @param config Optional OAuth configuration overrides
+   * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
+   */
+  constructor(config?: Partial<EbayAuthConfig>, supabase?: SupabaseClient) {
+    this.injectedSupabase = supabase || null;
     this.config = {
       clientId: config?.clientId || process.env.EBAY_CLIENT_ID || '',
       clientSecret: config?.clientSecret || process.env.EBAY_CLIENT_SECRET || '',
@@ -97,6 +105,16 @@ export class EbayAuthService {
     if (!this.config.clientId || !this.config.clientSecret || !this.config.redirectUri) {
       console.warn('[EbayAuthService] Missing eBay OAuth configuration');
     }
+  }
+
+  /**
+   * Get the Supabase client - uses injected client if available, otherwise creates cookie-based client
+   */
+  private async getSupabase(): Promise<SupabaseClient> {
+    if (this.injectedSupabase) {
+      return this.injectedSupabase;
+    }
+    return createClient();
   }
 
   // ============================================================================
@@ -259,7 +277,7 @@ export class EbayAuthService {
       const tokens: EbayTokenResponse = await response.json();
 
       // Update stored credentials
-      const supabase = await createClient();
+      const supabase = await this.getSupabase();
       const now = new Date();
 
       const updateData: EbayCredentialsUpdate = {
@@ -439,7 +457,7 @@ export class EbayAuthService {
    * Disconnect eBay by removing stored credentials
    */
   async disconnect(userId: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Note: Type assertion needed until migration is pushed and types regenerated
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -459,7 +477,7 @@ export class EbayAuthService {
    * Get stored credentials for a user
    */
   private async getCredentials(userId: string): Promise<EbayCredentials | null> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Note: Type assertion needed until migration is pushed and types regenerated
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -488,7 +506,7 @@ export class EbayAuthService {
     tokens: EbayTokenResponse,
     marketplaceId: EbayMarketplaceId
   ): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const now = new Date();
 
     const credentialsData: EbayCredentialsInsert = {
