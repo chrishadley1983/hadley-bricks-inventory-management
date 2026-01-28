@@ -311,7 +311,6 @@ export class EbayApiAdapter {
         body: item,
         headers: {
           'Content-Language': 'en-GB',
-          'Accept-Language': 'en-GB',
         },
       }
     );
