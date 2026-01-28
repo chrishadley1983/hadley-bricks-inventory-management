@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { ebayOrderSyncService, ebayAutoSyncService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
@@ -264,17 +265,16 @@ async function fetchSyncSummary(userId: string): Promise<SyncResult[]> {
  */
 export async function POST(_request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('[sync-all] Starting sync for user:', user.id);
+    const supabase = await createClient();
+    const userId = auth.userId;
+
+    console.log('[sync-all] Starting sync for user:', userId);
 
     // Instantiate services that need supabase
     const amazonSyncService = new AmazonSyncService(supabase);
@@ -284,29 +284,29 @@ export async function POST(_request: NextRequest) {
     // Run all syncs in parallel
     const syncPromises = [
       // eBay syncs (uses singleton services)
-      ebayOrderSyncService.syncOrders(user.id).catch((e: Error) => {
+      ebayOrderSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] eBay orders error:', e.message);
         return null;
       }),
-      ebayAutoSyncService.performIncrementalSync(user.id).catch((e: Error) => {
+      ebayAutoSyncService.performIncrementalSync(userId).catch((e: Error) => {
         console.error('[sync-all] eBay auto sync error:', e.message);
         return null;
       }),
       
       // Amazon sync
-      amazonSyncService.syncOrders(user.id).catch((e: Error) => {
+      amazonSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] Amazon orders error:', e.message);
         return null;
       }),
       
       // BrickLink sync
-      bricklinkSyncService.syncOrders(user.id).catch((e: Error) => {
+      bricklinkSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] BrickLink orders error:', e.message);
         return null;
       }),
       
       // BrickOwl sync
-      brickowlSyncService.syncOrders(user.id).catch((e: Error) => {
+      brickowlSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] BrickOwl orders error:', e.message);
         return null;
       }),
@@ -321,7 +321,7 @@ export async function POST(_request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Fetch sync summary from database
-    const syncResults = await fetchSyncSummary(user.id);
+    const syncResults = await fetchSyncSummary(userId);
 
     // Organize results by type
     const orders: Record<string, SyncResult> = {};
@@ -344,7 +344,7 @@ export async function POST(_request: NextRequest) {
     }
 
     // Get weekly stats
-    const weeklyStats = await getWeeklyStats(user.id);
+    const weeklyStats = await getWeeklyStats(userId);
 
     const response: SyncAllResponse = {
       success: true,
