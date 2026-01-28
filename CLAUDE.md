@@ -911,8 +911,14 @@ EBAY_SANDBOX=false           # Set to 'true' for sandbox testing
 
 # Notifications (optional - for two-phase Amazon sync)
 RESEND_API_KEY=              # Resend API key for email notifications
-PUSHOVER_USER_KEY=           # Pushover user key for push notifications
-PUSHOVER_API_TOKEN=          # Pushover application token
+PUSHOVER_USER_KEY=           # Pushover user key (legacy - use Discord instead)
+PUSHOVER_API_TOKEN=          # Pushover application token (legacy)
+
+# Discord Webhooks (recommended for notifications)
+DISCORD_WEBHOOK_ALERTS=      # #alerts channel - errors, failures, warnings
+DISCORD_WEBHOOK_OPPORTUNITIES= # #opportunities channel - Vinted arbitrage finds
+DISCORD_WEBHOOK_SYNC_STATUS= # #sync-status channel - sync progress updates
+DISCORD_WEBHOOK_DAILY_SUMMARY= # #daily-summary channel - end-of-day reports
 
 # Platform credentials stored encrypted in platform_credentials table
 ```

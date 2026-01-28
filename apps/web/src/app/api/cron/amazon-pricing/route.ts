@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AmazonArbitrageSyncService } from '@/lib/arbitrage';
-import { pushoverService } from '@/lib/notifications';
+import { discordService } from '@/lib/notifications';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - Vercel Pro limit
@@ -78,10 +78,9 @@ export async function POST(request: NextRequest) {
     // If cursor is 0 and it's a new sync, send start notification
     if (cursorPosition === 0) {
       console.log(`[Cron AmazonPricing] Starting new sync - ${totalAsins} ASINs to process`);
-      await pushoverService.send({
+      await discordService.sendSyncStatus({
         title: '🔄 Amazon Pricing Sync Started',
         message: `Daily pricing sync started\n${totalAsins} ASINs to process`,
-        priority: -1,
       });
 
       // Update status to running
@@ -165,17 +164,16 @@ export async function POST(request: NextRequest) {
     if (isComplete) {
       const totalFailed = (syncStatus?.items_failed ?? 0) + result.failed;
       if (totalFailed > 0) {
-        await pushoverService.send({
+        await discordService.sendSyncStatus({
           title: '⚠️ Amazon Pricing Sync Complete (with errors)',
           message: `Updated: ${newCursorPosition} ASINs\nFailed: ${totalFailed} ASINs`,
-          priority: 0,
-          sound: 'falling',
+          success: false,
         });
       } else {
-        await pushoverService.send({
+        await discordService.sendSyncStatus({
           title: '✅ Amazon Pricing Sync Complete',
           message: `Updated: ${newCursorPosition} ASINs`,
-          priority: -1,
+          success: true,
         });
       }
     }
@@ -210,11 +208,10 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'user_id,job_type' });
 
     // Send failure notification
-    await pushoverService.send({
+    await discordService.sendAlert({
       title: '🔴 Amazon Pricing Sync Failed',
       message: `Error: ${errorMsg}\nDuration: ${Math.round(duration / 1000)}s`,
-      priority: 1,
-      sound: 'siren',
+      priority: 'high',
     });
 
     return NextResponse.json(

@@ -25,7 +25,7 @@ import {
 import { AsinMatchingService } from '@/lib/services/asin-matching.service';
 import { AmazonPricingClient } from '@/lib/amazon/amazon-pricing.client';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
-import { pushoverService } from '@/lib/notifications/pushover.service';
+import { discordService } from '@/lib/notifications';
 import { withApiKeyAuth } from '@/lib/middleware/vinted-api-auth';
 import { ProcessRequestSchema } from '@/types/vinted-automation';
 import type { AmazonCredentials } from '@/lib/amazon/types';
@@ -145,17 +145,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
       });
 
       // Send CAPTCHA warning notification with recovery mode info
-      await pushoverService.send({
-        title: '⚠️ CAPTCHA Detected - Scanner Paused',
-        message:
-          'Vinted CAPTCHA detected. Scanner has been automatically paused.\n' +
-          'Recovery mode enabled: will resume at 25% rate.\n' +
-          'Recommended: Wait 24-48 hours before resuming.',
-        priority: 1,
-        url: `${process.env.NEXT_PUBLIC_APP_URL}/arbitrage/vinted/automation`,
-        urlTitle: 'View Scanner Status',
-        sound: 'siren',
-      });
+      await discordService.sendVintedCaptchaWarning();
 
       return NextResponse.json({
         success: false,
@@ -496,21 +486,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
 
     let alertsSent = 0;
     for (const listing of newViableListings) {
-      if (listing.cogPercent !== null && listing.profit !== null) {
-        // Priority 1 (high) for excellent (<30%), priority 0 (normal) for good
-        const priority = listing.cogPercent < 30 ? 1 : 0;
-
-        await pushoverService.send({
-          title: `🎯 ${listing.setNumber}: ${listing.cogPercent.toFixed(0)}% COG`,
-          message:
-            `${listing.setName || listing.title}\n` +
-            `Vinted: £${listing.vintedPrice.toFixed(2)}\n` +
-            `Amazon: £${listing.amazonPrice?.toFixed(2) || 'N/A'}\n` +
-            `Profit: £${listing.profit.toFixed(2)}`,
-          priority: priority as 0 | 1,
-          url: listing.vintedUrl,
-          urlTitle: 'View on Vinted',
-          sound: priority === 1 ? 'cashregister' : 'pushover',
+      if (listing.cogPercent !== null && listing.profit !== null && listing.amazonPrice !== null) {
+        await discordService.sendOpportunity({
+          setNumber: listing.setNumber,
+          setName: listing.setName || listing.title,
+          vintedPrice: listing.vintedPrice,
+          amazonPrice: listing.amazonPrice,
+          cogPercent: listing.cogPercent,
+          profit: listing.profit,
+          vintedUrl: listing.vintedUrl,
         });
         alertsSent++;
       }

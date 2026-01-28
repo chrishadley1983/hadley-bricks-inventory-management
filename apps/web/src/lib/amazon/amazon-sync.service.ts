@@ -33,7 +33,7 @@ import type {
 } from './amazon-sync.types';
 import { TWO_PHASE_DEFAULTS } from './amazon-sync.types';
 import { emailService } from '@/lib/email';
-import { pushoverService } from '@/lib/notifications';
+import { discordService } from '@/lib/notifications';
 
 // Re-export constants
 export { UK_MARKETPLACE_ID, DEFAULT_PRODUCT_TYPE, PRODUCT_TYPE_CACHE_TTL_DAYS } from './amazon-sync.types';
@@ -1203,7 +1203,7 @@ export class AmazonSyncService {
       itemDetails,
     });
 
-    await pushoverService.sendSyncSuccess({
+    await discordService.sendSyncSuccess({
       feedId,
       itemCount: aggregatedItems.length,
       verificationTime: verificationDuration,
@@ -1250,7 +1250,7 @@ export class AmazonSyncService {
       });
     }
 
-    await pushoverService.sendSyncFailure({
+    await discordService.sendSyncFailure({
       feedId,
       itemCount: aggregatedItems.length,
       reason,
@@ -1298,7 +1298,7 @@ export class AmazonSyncService {
       itemDetails,
     });
 
-    await pushoverService.sendSyncFailure({
+    await discordService.sendSyncFailure({
       feedId,
       itemCount: failedSkus.length,
       reason: `Price not visible after ${TWO_PHASE_DEFAULTS.priceVerificationTimeout / 60000} mins`,

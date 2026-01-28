@@ -15,7 +15,7 @@ import {
   NegotiationScoringService,
   MIN_DISCOUNT_PERCENTAGE,
 } from './negotiation-scoring.service';
-import { pushoverService } from '@/lib/notifications/pushover.service';
+import { discordService } from '@/lib/notifications';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   NegotiationConfig,
@@ -1094,10 +1094,10 @@ export class NegotiationService {
       ? `${result.offersSent} offer(s) sent, ${result.offersFailed} failed`
       : `${result.offersSent} offer(s) sent to interested buyers`;
 
-    await pushoverService.send({
-      title: 'eBay Offers Sent',
+    await discordService.sendSyncStatus({
+      title: '📤 eBay Offers Sent',
       message,
-      priority: result.offersFailed > 0 ? 1 : 0,
+      success: result.offersFailed === 0,
     });
   }
 
