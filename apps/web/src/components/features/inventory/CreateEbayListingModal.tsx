@@ -224,13 +224,17 @@ export function CreateEbayListingModal({
 
   /**
    * Upload photos to storage in batches
-   * Returns true if all uploads succeeded, false otherwise
+   * Returns array of uploaded photos with URLs, or null if upload failed
    */
-  const uploadPhotosToStorage = useCallback(async (): Promise<boolean> => {
-    const pendingPhotos = photos.filter((p) => p.uploadStatus === 'pending' || p.uploadStatus === 'error');
+  const uploadPhotosToStorage = useCallback(async (): Promise<LocalPhoto[] | null> => {
+    // Work with a local copy of photos to track updates
+    let workingPhotos = [...photos];
+
+    const pendingPhotos = workingPhotos.filter((p) => p.uploadStatus === 'pending' || p.uploadStatus === 'error');
     if (pendingPhotos.length === 0) {
-      // All photos already uploaded
-      return photos.every((p) => p.uploadStatus === 'uploaded');
+      // All photos already uploaded - return them directly
+      const allUploaded = workingPhotos.every((p) => p.uploadStatus === 'uploaded');
+      return allUploaded ? workingPhotos : null;
     }
 
     setIsUploading(true);
@@ -245,7 +249,7 @@ export function CreateEbayListingModal({
       for (let i = 0; i < pendingPhotos.length; i += BATCH_SIZE) {
         const batch = pendingPhotos.slice(i, i + BATCH_SIZE);
 
-        // Mark batch as uploading
+        // Mark batch as uploading (for UI)
         setPhotos((prev) =>
           prev.map((p) =>
             batch.find((b) => b.id === p.id)
@@ -273,40 +277,40 @@ export function CreateEbayListingModal({
           const errorData = await response.json();
           console.error('[uploadPhotosToStorage] Upload failed:', errorData);
           // Mark all batch photos as error
-          setPhotos((prev) =>
-            prev.map((p) =>
-              batch.find((b) => b.id === p.id)
-                ? { ...p, uploadStatus: 'error' as const, uploadError: errorData.error || 'Upload failed' }
-                : p
-            )
+          workingPhotos = workingPhotos.map((p) =>
+            batch.find((b) => b.id === p.id)
+              ? { ...p, uploadStatus: 'error' as const, uploadError: errorData.error || 'Upload failed' }
+              : p
           );
+          setPhotos(workingPhotos);
           allSucceeded = false;
           continue;
         }
 
         const data = await response.json();
 
-        // Update photos with URLs
-        setPhotos((prev) =>
-          prev.map((p) => {
-            const result = data.results?.find((r: { id: string; success: boolean; url?: string; error?: string }) => r.id === p.id);
-            if (result) {
-              if (result.success && result.url) {
-                return { ...p, url: result.url, uploadStatus: 'uploaded' as const };
-              } else {
-                allSucceeded = false;
-                return { ...p, uploadStatus: 'error' as const, uploadError: result.error || 'Upload failed' };
-              }
+        // Update working photos with URLs
+        workingPhotos = workingPhotos.map((p) => {
+          const result = data.results?.find((r: { id: string; success: boolean; url?: string; error?: string }) => r.id === p.id);
+          if (result) {
+            if (result.success && result.url) {
+              return { ...p, url: result.url, uploadStatus: 'uploaded' as const };
+            } else {
+              allSucceeded = false;
+              return { ...p, uploadStatus: 'error' as const, uploadError: result.error || 'Upload failed' };
             }
-            return p;
-          })
-        );
+          }
+          return p;
+        });
+
+        // Update state for UI
+        setPhotos(workingPhotos);
 
         uploadedCount += batch.length;
         setUploadProgress(Math.round((uploadedCount / pendingPhotos.length) * 100));
       }
 
-      return allSucceeded;
+      return allSucceeded ? workingPhotos : null;
     } finally {
       setIsUploading(false);
     }
@@ -333,16 +337,15 @@ export function CreateEbayListingModal({
       return;
     }
 
-    // Step 1: Upload photos to storage (if not already uploaded)
-    const uploadSuccess = await uploadPhotosToStorage();
-    if (!uploadSuccess) {
+    // Step 1: Upload photos to storage and get back the photos with URLs
+    const uploadedPhotosResult = await uploadPhotosToStorage();
+    if (!uploadedPhotosResult) {
       console.error('[handleSubmit] Photo upload failed');
       return;
     }
 
-    // Step 2: Get the latest photos with URLs (state may have updated)
-    // We need to read from state after upload
-    const uploadedPhotos: ListingImageUrl[] = photos
+    // Step 2: Convert to ListingImageUrl format (using returned data, not state)
+    const uploadedPhotos: ListingImageUrl[] = uploadedPhotosResult
       .filter((p) => p.uploadStatus === 'uploaded' && p.url)
       .map((p) => ({
         id: p.id,
