@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink, ShoppingCart } from 'lucide-react';
+import { ExternalLink, ShoppingCart, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -20,9 +20,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { ArbitrageItem } from '@/lib/arbitrage/types';
+import type { ArbitrageItem, ArbitrageSortField, SortDirection } from '@/lib/arbitrage/types';
 import {
-  formatMarginPercent,
   formatCurrencyGBP,
   formatSalesRank,
   isOpportunity,
@@ -33,14 +32,65 @@ interface ArbitrageTableProps {
   items: ArbitrageItem[];
   isLoading: boolean;
   minMargin: number;
+  maxCog?: number;
   onRowClick: (item: ArbitrageItem) => void;
+  sortField?: ArbitrageSortField;
+  sortDirection?: SortDirection;
+  onSort?: (field: ArbitrageSortField) => void;
+}
+
+// Sortable header component
+interface SortableHeaderProps {
+  field: ArbitrageSortField;
+  label: string;
+  currentField?: ArbitrageSortField;
+  direction?: SortDirection;
+  onSort?: (field: ArbitrageSortField) => void;
+  className?: string;
+}
+
+function SortableHeader({
+  field,
+  label,
+  currentField,
+  direction,
+  onSort,
+  className,
+}: SortableHeaderProps) {
+  const isActive = field === currentField;
+  const isSortable = !!onSort;
+
+  return (
+    <TableHead
+      className={cn(
+        className,
+        isSortable && 'cursor-pointer select-none hover:bg-muted/70 transition-colors'
+      )}
+      onClick={() => onSort?.(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {isActive && direction && (
+          direction === 'asc' ? (
+            <ChevronUp className="h-4 w-4 text-primary" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-primary" />
+          )
+        )}
+      </div>
+    </TableHead>
+  );
 }
 
 export function ArbitrageTable({
   items,
   isLoading,
   minMargin,
+  maxCog = 100,
   onRowClick,
+  sortField,
+  sortDirection,
+  onSort,
 }: ArbitrageTableProps) {
   const [offersModalItem, setOffersModalItem] = useState<ArbitrageItem | null>(null);
 
@@ -66,15 +116,71 @@ export function ArbitrageTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-[22%]">Item</TableHead>
-              <TableHead className="w-[10%]">Your Price</TableHead>
-              <TableHead className="w-[10%]">Buy Box</TableHead>
+              <SortableHeader
+                field="name"
+                label="Item"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[22%]"
+              />
+              <SortableHeader
+                field="your_price"
+                label="Your Price"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[10%]"
+              />
+              <SortableHeader
+                field="buy_box"
+                label="Buy Box"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[10%]"
+              />
               <TableHead className="w-[8%]">Offers</TableHead>
-              <TableHead className="w-[10%]">Was Price</TableHead>
-              <TableHead className="w-[8%]">Rank</TableHead>
-              <TableHead className="w-[10%]">BL Min</TableHead>
-              <TableHead className="w-[9%]">Margin</TableHead>
-              <TableHead className="w-[6%]">BL Lots</TableHead>
+              <SortableHeader
+                field="was_price"
+                label="Was Price"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[10%]"
+              />
+              <SortableHeader
+                field="sales_rank"
+                label="Rank"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[8%]"
+              />
+              <SortableHeader
+                field="bl_price"
+                label="BL Min"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[10%]"
+              />
+              <SortableHeader
+                field="cog"
+                label="COG %"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[9%]"
+              />
+              <SortableHeader
+                field="bl_lots"
+                label="BL Lots"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+                className="w-[6%]"
+              />
               <TableHead className="w-[5%]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -84,6 +190,7 @@ export function ArbitrageTable({
                 key={item.asin}
                 item={item}
                 minMargin={minMargin}
+                maxCog={maxCog}
                 onClick={() => onRowClick(item)}
                 onOffersClick={() => setOffersModalItem(item)}
               />
@@ -105,12 +212,15 @@ export function ArbitrageTable({
 interface ArbitrageTableRowProps {
   item: ArbitrageItem;
   minMargin: number;
+  maxCog: number;
   onClick: () => void;
   onOffersClick: () => void;
 }
 
-function ArbitrageTableRow({ item, minMargin, onClick, onOffersClick }: ArbitrageTableRowProps) {
-  const isOpp = isOpportunity(item.marginPercent, minMargin);
+function ArbitrageTableRow({ item, minMargin, maxCog, onClick, onOffersClick }: ArbitrageTableRowProps) {
+  // Use COG % for opportunity detection (lower is better)
+  const cogIsGood = item.cogPercent !== null && item.cogPercent <= maxCog;
+  const isOpp = cogIsGood || isOpportunity(item.marginPercent, minMargin);
 
   // Determine effective price (buy box or lowest offer fallback)
   const hasBuyBox = item.buyBoxPrice !== null;
@@ -280,20 +390,25 @@ function ArbitrageTableRow({ item, minMargin, onClick, onOffersClick }: Arbitrag
         </div>
       </TableCell>
 
-      {/* Margin */}
+      {/* COG % */}
       <TableCell>
         <div
           className={cn(
             'font-mono font-bold',
-            (item.marginPercent ?? 0) >= minMargin
+            item.cogPercent !== null && item.cogPercent <= maxCog
               ? 'text-green-600'
-              : (item.marginPercent ?? 0) < 0
+              : item.cogPercent !== null && item.cogPercent > 70
               ? 'text-red-600'
               : 'text-muted-foreground'
           )}
         >
-          {formatMarginPercent(item.marginPercent)}
+          {item.cogPercent !== null ? `${item.cogPercent.toFixed(1)}%` : '—'}
         </div>
+        {item.minBlPriceOverride !== null && (
+          <div className="text-xs text-amber-600" title="Override active">
+            ⚠️ Override
+          </div>
+        )}
       </TableCell>
 
       {/* BL Lots */}

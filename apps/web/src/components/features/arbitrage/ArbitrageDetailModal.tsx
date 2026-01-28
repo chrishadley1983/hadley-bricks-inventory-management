@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLink, Ban, RotateCcw } from 'lucide-react';
+import { ExternalLink, Ban, RotateCcw, Save, Info, X } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem } from '@/lib/arbitrage/types';
 import {
@@ -23,6 +29,7 @@ import {
   formatMarginPercent,
 } from '@/lib/arbitrage/calculations';
 import { buildBricklinkUrl } from '@/lib/arbitrage/bricklink-url';
+import { useSetBlPriceOverride } from '@/hooks/use-arbitrage';
 
 interface ArbitrageDetailModalProps {
   item: ArbitrageItem | null;
@@ -37,6 +44,9 @@ export function ArbitrageDetailModal({
   onClose,
   onExclude,
 }: ArbitrageDetailModalProps) {
+  // Mutation for setting BL price override
+  const setOverrideMutation = useSetBlPriceOverride();
+
   // Default buy price from BrickLink min
   const defaultBuyPrice = item?.blMinPrice ?? 0;
 
@@ -45,14 +55,53 @@ export function ArbitrageDetailModal({
     defaultBuyPrice > 0 ? defaultBuyPrice.toFixed(2) : ''
   );
 
-  // Reset buy price when item changes (only when asin or blMinPrice changes, not on every render)
+  // BL price override input state
+  const [overrideInput, setOverrideInput] = useState<string>(
+    item?.minBlPriceOverride != null ? item.minBlPriceOverride.toFixed(2) : ''
+  );
+
+  // Reset buy price and override when item changes
   useEffect(() => {
     if (item) {
       const newDefault = item.blMinPrice ?? 0;
       setBuyPriceInput(newDefault > 0 ? newDefault.toFixed(2) : '');
+      setOverrideInput(item.minBlPriceOverride != null ? item.minBlPriceOverride.toFixed(2) : '');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only reset on asin/blMinPrice change
-  }, [item?.asin, item?.blMinPrice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only reset on asin/blMinPrice/override change
+  }, [item?.asin, item?.blMinPrice, item?.minBlPriceOverride]);
+
+  // Parse override value
+  const overrideValue = overrideInput ? parseFloat(overrideInput) : null;
+  const hasOverrideChanged = (overrideValue ?? null) !== (item?.minBlPriceOverride ?? null);
+
+  // Handle saving override
+  const handleSaveOverride = async () => {
+    if (!item) return;
+    try {
+      await setOverrideMutation.mutateAsync({
+        asin: item.asin,
+        override: overrideValue,
+      });
+      toast.success(overrideValue ? `Override set to £${overrideValue.toFixed(2)}` : 'Override removed');
+    } catch {
+      toast.error('Failed to save override');
+    }
+  };
+
+  // Handle clearing override
+  const handleClearOverride = async () => {
+    if (!item) return;
+    setOverrideInput('');
+    try {
+      await setOverrideMutation.mutateAsync({
+        asin: item.asin,
+        override: null,
+      });
+      toast.success('Override removed');
+    } catch {
+      toast.error('Failed to clear override');
+    }
+  };
 
   if (!item) return null;
 
@@ -231,6 +280,68 @@ export function ArbitrageDetailModal({
                     <span className="font-mono font-medium text-foreground">
                       {item.blTotalLots ?? 0} lots ({item.blTotalQty ?? 0} items)
                     </span>
+                  </div>
+                  <Separator />
+                  {/* Min BL Price Override */}
+                  <div className="px-3 py-2 bg-amber-50/50 dark:bg-amber-950/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium">Min Price Override</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p className="text-xs">
+                              Set a minimum BL price to override low prices from sellers with high minimum spend requirements.
+                              COG% will use MAX(actual BL min, override).
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-xs">£</span>
+                        <Input
+                          type="number"
+                          step="0.50"
+                          min="0"
+                          value={overrideInput}
+                          onChange={(e) => setOverrideInput(e.target.value)}
+                          className={cn(
+                            'w-16 h-6 font-mono text-right text-xs',
+                            overrideInput && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30'
+                          )}
+                          placeholder="—"
+                        />
+                        {hasOverrideChanged && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={handleSaveOverride}
+                            disabled={setOverrideMutation.isPending}
+                          >
+                            <Save className="h-3 w-3 text-green-600" />
+                          </Button>
+                        )}
+                        {item.minBlPriceOverride != null && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={handleClearOverride}
+                            disabled={setOverrideMutation.isPending}
+                          >
+                            <X className="h-3 w-3 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {item.minBlPriceOverride != null && (
+                      <div className="text-[10px] text-amber-600 mt-1">
+                        Effective price: {formatCurrencyGBP(item.effectiveBlPrice)} (override active)
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

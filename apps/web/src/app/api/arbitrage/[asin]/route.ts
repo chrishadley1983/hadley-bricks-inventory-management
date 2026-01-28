@@ -15,8 +15,9 @@ import { ArbitrageService } from '@/lib/arbitrage';
 // ============================================================================
 
 const UpdateSchema = z.object({
-  action: z.enum(['exclude', 'restore']),
+  action: z.enum(['exclude', 'restore', 'setOverride']),
   reason: z.string().max(500).optional(),
+  minBlPriceOverride: z.number().positive().nullable().optional(),
 });
 
 // ============================================================================
@@ -103,6 +104,16 @@ export async function PATCH(
       return NextResponse.json({
         data: { success: true },
         message: 'ASIN excluded successfully',
+      });
+    } else if (parsed.data.action === 'setOverride') {
+      // Set or clear the minimum BL price override
+      const override = parsed.data.minBlPriceOverride ?? null;
+      await service.setBlPriceOverride(user.id, asin, override);
+      return NextResponse.json({
+        data: { success: true, minBlPriceOverride: override },
+        message: override !== null
+          ? `BL price override set to £${override.toFixed(2)}`
+          : 'BL price override cleared',
       });
     } else {
       await service.restoreAsin(user.id, asin);

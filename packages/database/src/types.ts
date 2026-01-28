@@ -1024,6 +1024,7 @@ export type Database = {
           created_at: string
           match_confidence: string
           match_method: string | null
+          min_bl_price_override: number | null
           updated_at: string
           user_id: string
           verified_at: string | null
@@ -1034,6 +1035,7 @@ export type Database = {
           created_at?: string
           match_confidence: string
           match_method?: string | null
+          min_bl_price_override?: number | null
           updated_at?: string
           user_id: string
           verified_at?: string | null
@@ -1044,6 +1046,7 @@ export type Database = {
           created_at?: string
           match_confidence?: string
           match_method?: string | null
+          min_bl_price_override?: number | null
           updated_at?: string
           user_id?: string
           verified_at?: string | null
@@ -7493,8 +7496,10 @@ export type Database = {
           bricklink_set_number: string | null
           buy_box_is_yours: boolean | null
           buy_box_price: number | null
+          cog_percent: number | null
           competitive_price: number | null
           ebay_avg_price: number | null
+          ebay_cog_percent: number | null
           ebay_listings: Json | null
           ebay_margin_absolute: number | null
           ebay_margin_percent: number | null
@@ -7503,6 +7508,7 @@ export type Database = {
           ebay_snapshot_date: string | null
           ebay_total_listings: number | null
           effective_amazon_price: number | null
+          effective_bl_price: number | null
           image_url: string | null
           lowest_offer_is_fba: boolean | null
           lowest_offer_is_prime: boolean | null
@@ -7511,6 +7517,7 @@ export type Database = {
           margin_absolute: number | null
           margin_percent: number | null
           match_confidence: string | null
+          min_bl_price_override: number | null
           name: string | null
           offer_count: number | null
           offers_json: Json | null

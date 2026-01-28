@@ -335,6 +335,23 @@ export class ArbitrageService {
   }
 
   /**
+   * Set or clear the minimum BrickLink price override for an ASIN
+   * When set, COG% will use MAX(actual_bl_min, override) for calculations
+   */
+  async setBlPriceOverride(userId: string, asin: string, override: number | null): Promise<void> {
+    const { error } = await this.supabase
+      .from('asin_bricklink_mapping')
+      .update({ min_bl_price_override: override })
+      .eq('user_id', userId)
+      .eq('asin', asin);
+
+    if (error) {
+      console.error('[ArbitrageService.setBlPriceOverride] Error:', error);
+      throw new Error(`Failed to set BL price override: ${error.message}`);
+    }
+  }
+
+  /**
    * Get all excluded ASINs
    */
   async getExcludedAsins(userId: string): Promise<ExcludedAsin[]> {
@@ -617,13 +634,18 @@ export class ArbitrageService {
   private getSortColumn(sortField: string): string {
     const mapping: Record<string, string> = {
       margin: 'margin_percent',
+      cog: 'cog_percent',
       bl_price: 'bl_min_price',
+      your_price: 'your_price',
+      buy_box: 'buy_box_price',
+      was_price: 'was_price_90d',
       sales_rank: 'sales_rank',
+      bl_lots: 'bl_total_lots',
       name: 'name',
       ebay_margin: 'ebay_margin_percent',
       ebay_price: 'ebay_min_price',
     };
-    return mapping[sortField] ?? 'margin_percent';
+    return mapping[sortField] ?? 'cog_percent';
   }
 
   /**
@@ -756,6 +778,10 @@ export class ArbitrageService {
       blTotalQty: row.bl_total_qty as number | null,
       blPriceDetail: row.bl_price_detail as ArbitrageItem['blPriceDetail'],
       blSnapshotDate: row.bl_snapshot_date as string | null,
+      // BrickLink price override
+      minBlPriceOverride: row.min_bl_price_override as number | null,
+      effectiveBlPrice: row.effective_bl_price as number | null,
+      cogPercent: row.cog_percent as number | null,
       marginPercent: row.margin_percent as number | null,
       marginAbsolute: row.margin_absolute as number | null,
       amazonUrl: row.amazon_url as string | null,
