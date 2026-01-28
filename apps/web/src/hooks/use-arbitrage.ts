@@ -189,6 +189,22 @@ async function restoreAsin(asin: string): Promise<void> {
   }
 }
 
+async function setBlPriceOverride(input: { asin: string; override: number | null }): Promise<{ minBlPriceOverride: number | null }> {
+  const response = await fetch(`/api/arbitrage/${input.asin}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'setOverride', minBlPriceOverride: input.override }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to set BL price override');
+  }
+
+  const json = await response.json();
+  return json.data;
+}
+
 async function createMapping(input: { asin: string; bricklinkSetNumber: string }): Promise<{
   asin: string;
   bricklinkSetNumber: string;
@@ -342,6 +358,24 @@ export function useRestoreAsin() {
       // Surgical invalidation - only invalidate lists, excluded, and summary
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.excluded() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
+    },
+  });
+}
+
+/**
+ * Set or clear the minimum BrickLink price override for an ASIN
+ * When set, COG% uses MAX(actual_bl_min, override) for calculations
+ */
+export function useSetBlPriceOverride() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: setBlPriceOverride,
+    onSuccess: (_, variables) => {
+      // Invalidate lists and the specific item
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.item(variables.asin) });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.summary() });
     },
   });

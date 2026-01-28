@@ -206,6 +206,11 @@ export interface ArbitrageItem {
   blPriceDetail: BricklinkPriceDetail[] | null;
   blSnapshotDate: string | null;
 
+  // BrickLink price override
+  minBlPriceOverride: number | null;
+  effectiveBlPrice: number | null; // MAX(blMinPrice, minBlPriceOverride)
+  cogPercent: number | null; // (effectiveBlPrice / effectiveAmazonPrice) * 100
+
   // eBay latest (New, GB)
   ebayMinPrice: number | null;
   ebayAvgPrice: number | null;
@@ -277,11 +282,16 @@ export type ArbitrageShowFilter =
 
 export type ArbitrageSortField =
   | 'margin'
+  | 'cog'
   | 'bl_price'
   | 'ebay_price'
   | 'ebay_margin'
   | 'sales_rank'
-  | 'name';
+  | 'name'
+  | 'your_price'
+  | 'buy_box'
+  | 'was_price'
+  | 'bl_lots';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -444,9 +454,14 @@ export const EBAY_SHOW_FILTER_OPTIONS: { value: ArbitrageShowFilter; label: stri
 ];
 
 export const SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] = [
+  { value: 'cog', label: 'COG %' },
   { value: 'margin', label: 'Margin (BL)' },
   { value: 'bl_price', label: 'BL Price' },
+  { value: 'your_price', label: 'Your Price' },
+  { value: 'buy_box', label: 'Buy Box' },
+  { value: 'was_price', label: 'Was Price' },
   { value: 'sales_rank', label: 'Sales Rank' },
+  { value: 'bl_lots', label: 'BL Lots' },
   { value: 'name', label: 'Name' },
 ];
 
