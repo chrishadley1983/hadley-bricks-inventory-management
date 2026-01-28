@@ -5,7 +5,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 
