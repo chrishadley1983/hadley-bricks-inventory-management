@@ -150,7 +150,24 @@ The fix track trades off heavy upfront specification for runtime approval gates.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Scope Discipline
+### 2.3 Branch Requirement
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  NEVER WRITE CODE ON MAIN BRANCH  ⚠️                        │
+│                                                                 │
+│  After approval, before ANY code changes:                       │
+│  1. Create fix branch: `git checkout -b fix/<slug>`             │
+│  2. VERIFY branch with `git branch --show-current`              │
+│  3. Must show `fix/<slug>` - NOT `main`                         │
+│                                                                 │
+│  Writing code on main = BLOCKED (undo changes, create branch)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**This is non-negotiable.** The Fix Agent MUST be on a properly named fix branch before writing ANY code.
+
+### 2.4 Scope Discipline
 
 The Fix Agent must stay disciplined:
 
@@ -161,7 +178,7 @@ The Fix Agent must stay disciplined:
 | Add test for the fix | Rewriting existing tests |
 | Update related comment | Updating unrelated docs |
 
-### 2.4 Fast Feedback
+### 2.5 Fast Feedback
 
 By running only affected tests and smoke tests (not the full suite), fixes can be verified quickly while still catching regressions.
 
@@ -347,7 +364,16 @@ I'll wait for guidance. Please let me know:
 
 ---
 
-## 7. Phase 3: Branch
+## 7. Phase 3: Branch (BLOCKING)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  THIS PHASE IS BLOCKING - DO NOT PROCEED TO BUILD ON MAIN  │
+│                                                                 │
+│  You MUST be on a fix/* branch before Phase 4 (Build)          │
+│  If branch creation fails → BLOCKED (do not write code)        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ### 7.1 Create Fix Branch
 
@@ -360,17 +386,54 @@ Only after approval, create the branch:
 git checkout -b fix/<slugified-description>
 ```
 
-### 7.2 Confirm Branch
+### 7.2 Confirm Branch (MANDATORY)
 
 ```powershell
 git branch --show-current
 ```
 
-Output: `Now on branch: fix/<slug>`
+**MUST show:** `fix/<slug>` - NOT `main`
+
+**If branch creation fails:**
+1. DO NOT proceed to Phase 4
+2. Report the error
+3. Wait for resolution
+
+**If still on main after attempting branch creation:**
+1. STOP immediately
+2. Investigate why branch creation failed
+3. Do NOT write any code until on correct branch
 
 ---
 
 ## 8. Phase 4: Build
+
+### 8.0 Pre-Build Branch Verification (MANDATORY)
+
+**Before writing ANY code, verify branch state:**
+
+```powershell
+# MUST run this check before any code changes
+$branch = git branch --show-current
+if ($branch -eq "main") {
+    # STOP - DO NOT PROCEED
+    Write-Error "BLOCKED: Cannot write code on main branch"
+    # Must create fix branch before continuing
+}
+```
+
+**Verification checklist before writing code:**
+- [ ] `git branch --show-current` shows `fix/<slug>`
+- [ ] NOT on `main` branch
+
+**If on main branch:**
+1. **STOP** - Do not write any code
+2. Go back to Phase 3 (Section 7)
+3. Create the fix branch
+4. Verify branch creation succeeded
+5. Return here and continue
+
+**This check is MANDATORY.** Writing code on main branch violates the branch protection policy.
 
 ### 8.1 Implement the Fix
 
