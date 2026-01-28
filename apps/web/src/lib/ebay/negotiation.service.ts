@@ -100,9 +100,16 @@ export class NegotiationService {
   private scoringService: NegotiationScoringService | null = null;
   private supabase: SupabaseClient | null = null;
   private userId: string | null = null;
+  private injectedSupabase: SupabaseClient | null = null;
 
-  constructor() {
-    this.ebayAuth = new EbayAuthService();
+  /**
+   * Create a new NegotiationService
+   * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
+   */
+  constructor(supabase?: SupabaseClient) {
+    this.injectedSupabase = supabase || null;
+    // Pass the Supabase client to EbayAuthService so it can access credentials in cron context
+    this.ebayAuth = new EbayAuthService(undefined, supabase);
   }
 
   /**
@@ -110,7 +117,8 @@ export class NegotiationService {
    */
   async init(userId: string): Promise<boolean> {
     this.userId = userId;
-    this.supabase = await createClient();
+    // Use injected client if available (cron context), otherwise create cookie-based client
+    this.supabase = this.injectedSupabase || (await createClient());
 
     // Get access token
     const accessToken = await this.ebayAuth.getAccessToken(userId);
@@ -1113,7 +1121,8 @@ export class NegotiationService {
 /**
  * Factory function to create a new NegotiationService instance.
  * Creates a fresh instance per request to avoid shared state between users.
+ * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
  */
-export function getNegotiationService(): NegotiationService {
-  return new NegotiationService();
+export function getNegotiationService(supabase?: SupabaseClient): NegotiationService {
+  return new NegotiationService(supabase);
 }
