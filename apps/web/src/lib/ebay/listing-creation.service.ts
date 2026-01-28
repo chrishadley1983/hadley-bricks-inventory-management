@@ -30,6 +30,7 @@ import type {
   AIGeneratedListing,
   QualityReviewResult,
 } from './listing-creation.types';
+import { isListingImageUrl, isListingImageBase64 } from './listing-creation.types';
 import type { ListingInventoryInput, ListingResearchData } from '@/lib/ai/prompts/generate-listing';
 import { LEGO_CATEGORIES } from '@/lib/ai/prompts/generate-listing';
 import type { EbayConditionEnum } from './types';
@@ -160,24 +161,39 @@ export class ListingCreationService {
         return listing;
       });
 
-      // Step 5: Upload images
+      // Step 5: Upload images (or use pre-uploaded URLs)
       if (request.photos.length > 0) {
         imageUrls = await this.executeStep('images', onProgress, async () => {
-          const imagesToUpload: ImageUploadData[] = request.photos.map((p) => ({
-            id: p.id,
-            base64: p.base64,
-            mimeType: p.mimeType,
-            filename: p.filename,
-          }));
+          // Check if images are already uploaded (URL-based) or need uploading (base64)
+          const urlImages = request.photos.filter(isListingImageUrl);
+          const base64Images = request.photos.filter(isListingImageBase64);
 
-          const results = await this.imageService.uploadImages(imagesToUpload);
-          const urls = results.filter((r) => r.success && r.url).map((r) => r.url!);
+          // Collect URLs from pre-uploaded images
+          const preUploadedUrls = urlImages.map((img) => img.url);
 
-          if (urls.length === 0) {
-            throw new Error('No images uploaded successfully');
+          // Upload any remaining base64 images (legacy fallback)
+          let uploadedUrls: string[] = [];
+          if (base64Images.length > 0) {
+            console.log(`[ListingCreationService] Uploading ${base64Images.length} base64 images (legacy mode)`);
+            const imagesToUpload: ImageUploadData[] = base64Images.map((p) => ({
+              id: p.id,
+              base64: p.base64,
+              mimeType: p.mimeType,
+              filename: p.filename,
+            }));
+
+            const results = await this.imageService.uploadImages(imagesToUpload);
+            uploadedUrls = results.filter((r) => r.success && r.url).map((r) => r.url!);
           }
 
-          return urls;
+          const allUrls = [...preUploadedUrls, ...uploadedUrls];
+
+          if (allUrls.length === 0) {
+            throw new Error('No images available for listing');
+          }
+
+          console.log(`[ListingCreationService] Total images: ${allUrls.length} (${preUploadedUrls.length} pre-uploaded, ${uploadedUrls.length} just uploaded)`);
+          return allUrls;
         });
       } else {
         throw new Error('Photos are required for listings');
