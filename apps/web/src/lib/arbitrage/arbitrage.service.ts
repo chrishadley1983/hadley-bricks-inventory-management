@@ -528,9 +528,21 @@ export class ArbitrageService {
       seeded_discovery: null,
     };
 
+    // Map database job types to UI-expected job types
+    const jobTypeMapping: Record<string, SyncJobType> = {
+      'bricklink_scheduled_pricing': 'bricklink_pricing',
+      'ebay_scheduled_pricing': 'ebay_pricing',
+      'pricing_sync': 'amazon_pricing',
+    };
+
     for (const row of data ?? []) {
-      const jobType = row.job_type as SyncJobType;
-      statusMap[jobType] = this.transformToSyncStatus(row);
+      const dbJobType = row.job_type as string;
+      // Map to UI job type if mapping exists, otherwise use as-is
+      const jobType = (jobTypeMapping[dbJobType] ?? dbJobType) as SyncJobType;
+      // Only set if it's a valid SyncJobType and not already set (prefer first match)
+      if (jobType in statusMap && statusMap[jobType] === null) {
+        statusMap[jobType] = this.transformToSyncStatus(row);
+      }
     }
 
     return statusMap;

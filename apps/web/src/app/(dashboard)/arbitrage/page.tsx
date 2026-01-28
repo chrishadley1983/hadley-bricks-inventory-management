@@ -3,12 +3,13 @@
 import { useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { AlertCircle, CheckCircle2, Clock, CalendarClock } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, CalendarClock, RefreshCw } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArbitrageFilters,
@@ -23,7 +24,9 @@ import {
   useSyncStatus,
   useArbitrageSummary,
   useExcludeAsin,
+  useAmazonInventorySyncWithProgress,
 } from '@/hooks/use-arbitrage';
+import type { SyncProgress } from '@/hooks/use-arbitrage';
 import type { ArbitrageFilterOptions, ArbitrageItem, ArbitrageSortField } from '@/lib/arbitrage/types';
 import {
   SHOW_FILTER_OPTIONS,
@@ -495,6 +498,41 @@ function SyncStatusCard({
   isLoading: boolean;
   tab: 'bricklink' | 'ebay';
 }) {
+  const { toast } = useToast();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const amazonInventorySync = useAmazonInventorySyncWithProgress();
+
+  const handleSyncAmazonInventory = useCallback(() => {
+    setIsSyncing(true);
+    setSyncProgress(null);
+
+    amazonInventorySync.mutate(
+      (progress: SyncProgress) => {
+        setSyncProgress(progress);
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Sync complete',
+            description: 'Amazon inventory has been synced successfully.',
+          });
+          setIsSyncing(false);
+          setSyncProgress(null);
+        },
+        onError: (error) => {
+          toast({
+            title: 'Sync failed',
+            description: error instanceof Error ? error.message : 'Failed to sync Amazon inventory',
+            variant: 'destructive',
+          });
+          setIsSyncing(false);
+          setSyncProgress(null);
+        },
+      }
+    );
+  }, [amazonInventorySync, toast]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -516,10 +554,14 @@ function SyncStatusCard({
             <Skeleton className="h-10 w-48" />
           </div>
         ) : (
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-4 items-center">
             <SyncStatusBadge
               label="Amazon Inventory"
               syncData={syncStatus?.inventory_asins}
+              showSyncButton
+              isSyncing={isSyncing}
+              syncProgress={syncProgress}
+              onSync={handleSyncAmazonInventory}
             />
             <SyncStatusBadge
               label="Amazon Pricing"
@@ -546,9 +588,17 @@ function SyncStatusCard({
 function SyncStatusBadge({
   label,
   syncData,
+  showSyncButton,
+  isSyncing,
+  syncProgress,
+  onSync,
 }: {
   label: string;
   syncData: { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null } | null | undefined;
+  showSyncButton?: boolean;
+  isSyncing?: boolean;
+  syncProgress?: SyncProgress | null;
+  onSync?: () => void;
 }) {
   const lastSync = syncData?.lastRunAt ?? syncData?.lastSuccessAt;
   const status = syncData?.status;
@@ -576,9 +626,18 @@ function SyncStatusBadge({
     return '';
   };
 
+  const getStatusText = () => {
+    if (isSyncing && syncProgress) {
+      return `${syncProgress.percent}%`;
+    }
+    return formatRelativeTime(lastSync);
+  };
+
   return (
     <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 ${getStalenessColor()}`}>
-      {isError ? (
+      {isSyncing ? (
+        <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+      ) : isError ? (
         <AlertCircle className="h-4 w-4 text-destructive" />
       ) : isStale ? (
         <Clock className="h-4 w-4 text-amber-500" />
@@ -588,9 +647,20 @@ function SyncStatusBadge({
       <div className="flex flex-col">
         <span className="text-sm font-medium">{label}</span>
         <span className="text-xs text-muted-foreground">
-          {formatRelativeTime(lastSync)}
+          {getStatusText()}
         </span>
       </div>
+      {showSyncButton && onSync && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 ml-1"
+          onClick={onSync}
+          disabled={isSyncing}
+        >
+          <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
+        </Button>
+      )}
     </div>
   );
 }
