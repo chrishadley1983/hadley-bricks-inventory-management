@@ -304,6 +304,7 @@ export interface ReOfferEligibility {
   canSend: boolean;
   lastOfferDate?: Date;
   lastDiscount?: number;
+  lastScore?: number;
   daysSinceLast?: number;
 }
 

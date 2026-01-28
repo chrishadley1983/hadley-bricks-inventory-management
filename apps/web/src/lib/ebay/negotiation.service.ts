@@ -476,13 +476,24 @@ export class NegotiationService {
         // This is a potential re-offer
         if (reOfferCheck.canSend) {
           isReOffer = true;
-          finalDiscount = Math.min(
-            MAX_DISCOUNT_PERCENTAGE,
-            Math.max(
-              MIN_DISCOUNT_PERCENTAGE,
-              reOfferCheck.lastDiscount + config.reOfferEscalationPercent
-            )
-          );
+          // Only escalate if current score is at least as high as the previous score
+          // This prevents over-discounting when a listing's situation has improved
+          // (e.g., gained watchers, sold some stock)
+          const lastScore = reOfferCheck.lastScore ?? 0;
+          if (scoreResult.score >= lastScore) {
+            // Score still warrants escalation - apply escalated discount
+            finalDiscount = Math.min(
+              MAX_DISCOUNT_PERCENTAGE,
+              Math.max(
+                MIN_DISCOUNT_PERCENTAGE,
+                reOfferCheck.lastDiscount + config.reOfferEscalationPercent
+              )
+            );
+          } else {
+            // Score has improved (lower = less urgency), use current score's discount
+            // but ensure we don't offer less than the minimum
+            finalDiscount = Math.max(MIN_DISCOUNT_PERCENTAGE, discountPercentage);
+          }
         } else {
           // Can't re-offer yet, skip this item
           filterStats.inReOfferCooldown++;
@@ -757,7 +768,7 @@ export class NegotiationService {
     // Get the last offer for this listing
     const { data: lastOffer, error } = await supabase
       .from('negotiation_offers')
-      .select('id, sent_at, discount_percentage, status')
+      .select('id, sent_at, discount_percentage, score, status')
       .eq('user_id', userId)
       .eq('ebay_listing_id', ebayListingId)
       .in('status', ['EXPIRED', 'DECLINED'])
@@ -784,6 +795,7 @@ export class NegotiationService {
       canSend: daysSinceLast >= cooldownDays,
       lastOfferDate,
       lastDiscount: lastOffer.discount_percentage,
+      lastScore: lastOffer.score,
       daysSinceLast,
     };
   }
