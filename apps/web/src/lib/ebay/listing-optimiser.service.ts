@@ -906,92 +906,60 @@ export class ListingOptimiserService {
   }
 
   /**
-   * Clean an inventory item for update by constructing a fresh object
+   * Clean an inventory item for update by constructing a minimal fresh object
    *
    * eBay's getInventoryItem returns read-only fields that cause errors when sent back.
-   * Instead of trying to strip fields, we construct a completely fresh object with
-   * only the known writable fields - mirroring how listing creation works.
+   * The key insight is that listing-creation.service.ts works because it only sends
+   * the MINIMUM required fields: product.title, product.description, product.aspects,
+   * product.imageUrls, condition, conditionDescription, and availability.
+   *
+   * This function mirrors that minimal approach exactly.
    *
    * @see https://developer.ebay.com/api-docs/sell/inventory/types/slr:InventoryItem
-   * @see https://developer.ebay.com/api-docs/sell/inventory/types/slr:Product
    */
   private cleanInventoryItemForUpdate(item: EbayInventoryItem): EbayInventoryItem {
-    // Cast to access any fields eBay might return (including undocumented ones)
+    // Cast to access any fields eBay might return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawItem = item as any;
 
-    // Construct a fresh Product object with only documented writable fields
-    // This mirrors the approach in listing-creation.service.ts that works reliably
+    // Construct a MINIMAL Product object - only the core fields that listing creation uses
+    // DO NOT include brand, mpn, ean, upc, isbn, epid - these may cause issues when sent back
     const cleanProduct: EbayInventoryItem['product'] = {
       title: rawItem.product?.title,
       description: rawItem.product?.description,
       aspects: rawItem.product?.aspects,
       imageUrls: rawItem.product?.imageUrls,
-      // Optional product identifiers
-      brand: rawItem.product?.brand,
-      mpn: rawItem.product?.mpn,
-      ean: rawItem.product?.ean,
-      upc: rawItem.product?.upc,
-      isbn: rawItem.product?.isbn,
-      epid: rawItem.product?.epid,
     };
 
-    // Remove undefined fields to keep the payload clean
+    // Remove undefined fields
     Object.keys(cleanProduct).forEach((key) => {
       if (cleanProduct[key as keyof typeof cleanProduct] === undefined) {
         delete cleanProduct[key as keyof typeof cleanProduct];
       }
     });
 
-    // Construct a fresh availability object if it exists
-    let cleanAvailability: EbayInventoryItem['availability'] | undefined;
-    if (rawItem.availability) {
-      cleanAvailability = {
-        shipToLocationAvailability: rawItem.availability.shipToLocationAvailability
-          ? {
-              quantity: rawItem.availability.shipToLocationAvailability.quantity,
-              allocationByFormat: rawItem.availability.shipToLocationAvailability.allocationByFormat,
-            }
-          : undefined,
-        pickupAtLocationAvailability: rawItem.availability.pickupAtLocationAvailability,
-      };
-      // Clean undefined fields
-      if (!cleanAvailability.shipToLocationAvailability) {
-        delete cleanAvailability.shipToLocationAvailability;
-      }
-      if (!cleanAvailability.pickupAtLocationAvailability) {
-        delete cleanAvailability.pickupAtLocationAvailability;
-      }
-    }
+    // Construct minimal availability - just quantity like listing creation does
+    const cleanAvailability: EbayInventoryItem['availability'] = {
+      shipToLocationAvailability: {
+        quantity: rawItem.availability?.shipToLocationAvailability?.quantity ?? 1,
+      },
+    };
 
-    // Construct a fresh packageWeightAndSize object if it exists
-    let cleanPackage: EbayInventoryItem['packageWeightAndSize'] | undefined;
-    if (rawItem.packageWeightAndSize) {
-      cleanPackage = {
-        dimensions: rawItem.packageWeightAndSize.dimensions,
-        packageType: rawItem.packageWeightAndSize.packageType,
-        weight: rawItem.packageWeightAndSize.weight,
-      };
-    }
-
-    // Construct the final clean inventory item
+    // Construct the final minimal inventory item
+    // Match exactly what listing-creation.service.ts sends
     const cleanItem: EbayInventoryItem = {
       product: cleanProduct,
       condition: rawItem.condition,
       conditionDescription: rawItem.conditionDescription,
-      conditionDescriptors: rawItem.conditionDescriptors,
       availability: cleanAvailability,
-      packageWeightAndSize: cleanPackage,
     };
 
-    // Remove top-level undefined fields
-    Object.keys(cleanItem).forEach((key) => {
-      if (cleanItem[key as keyof typeof cleanItem] === undefined) {
-        delete cleanItem[key as keyof typeof cleanItem];
-      }
-    });
+    // Remove undefined top-level fields (but keep empty objects)
+    if (cleanItem.conditionDescription === undefined) {
+      delete cleanItem.conditionDescription;
+    }
 
-    console.log('[ListingOptimiserService] Cleaned inventory item:', JSON.stringify(cleanItem, null, 2));
+    console.log('[ListingOptimiserService] Cleaned inventory item (minimal):', JSON.stringify(cleanItem, null, 2));
 
     return cleanItem;
   }
