@@ -30,6 +30,7 @@ import type {
   ListingCreationStep,
   AIGeneratedListing,
   QualityReviewResult,
+  ListingPreviewData,
 } from './listing-creation.types';
 import { isListingImageUrl, isListingImageBase64 } from './listing-creation.types';
 import type { ListingInventoryInput, ListingResearchData } from '@/lib/ai/prompts/generate-listing';
@@ -101,16 +102,33 @@ export class ListingCreationService {
   }
 
   /**
+   * Callback for sending preview event to client
+   */
+  private onPreviewCallback?: (preview: ListingPreviewData) => void;
+
+  /**
    * Create an eBay listing from an inventory item
+   *
+   * Two-phase flow with preview:
+   * Phase 1 (steps 1-5): Validate → Research → Policies → Generate → Review
+   *   - Sends preview event via onPreview callback
+   *   - Saves session to database
+   *   - Returns null to indicate waiting for confirmation
+   *
+   * Phase 2 (steps 6-10): Preview → Images → Create → Update → Audit
+   *   - Called via continueFromPreview() after user confirms
    *
    * @param request - Listing creation request
    * @param onProgress - Callback for progress updates
-   * @returns Listing creation result or error
+   * @param onPreview - Callback for sending preview event (if provided, enables two-phase flow)
+   * @returns Listing creation result or error, or null if waiting for preview confirmation
    */
   async createListing(
     request: ListingCreationRequest,
-    onProgress: ProgressCallback
-  ): Promise<ListingCreationResult | ListingCreationError> {
+    onProgress: ProgressCallback,
+    onPreview?: (preview: ListingPreviewData) => void
+  ): Promise<ListingCreationResult | ListingCreationError | null> {
+    this.onPreviewCallback = onPreview;
     this.startTime = Date.now();
     this.initializeSteps();
 
@@ -193,13 +211,54 @@ export class ListingCreationService {
 
       qualityReview = reviewResult;
 
-      // Step 6: Preview (placeholder for Phase 3 - currently just marks as complete)
-      // In Phase 3, this will send preview data to client and wait for confirmation
-      await this.executeStep('preview', onProgress, async () => {
-        // Preview step - currently auto-confirms
-        // Phase 3 will add SSE event for editable preview
+      // Step 6: Preview - Send preview to client and wait for confirmation
+      // If onPreview callback is provided, we save session and return null
+      // The client will call continueFromPreview() after user confirms
+      const previewResult = await this.executeStep('preview', onProgress, async () => {
+        // Get photo URLs for preview (images are already uploaded at this point)
+        const photoUrls = request.photos
+          .filter(isListingImageUrl)
+          .map((img) => img.url);
+
+        // If we have a preview callback, send preview and save session
+        if (this.onPreviewCallback) {
+          const sessionId = await this.savePreviewSession(
+            request,
+            generatedListing!,
+            qualityReview ?? null,
+            false, // qualityReviewFailed
+            undefined, // qualityReviewError
+            qualityLoopIterations,
+            research,
+            policies,
+            photoUrls
+          );
+
+          // Send preview event to client
+          const previewData: ListingPreviewData = {
+            sessionId,
+            listing: generatedListing!,
+            qualityReview: qualityReview ?? null,
+            qualityReviewFailed: false,
+            price: request.price,
+            photoUrls,
+          };
+
+          this.onPreviewCallback(previewData);
+
+          // Return special marker to indicate we're pausing for preview
+          return { confirmed: false, sessionId };
+        }
+
+        // No preview callback - auto-confirm (legacy behavior)
         return { confirmed: true };
       });
+
+      // If preview was sent and waiting for confirmation, return null
+      if (!previewResult.confirmed) {
+        console.log(`[ListingCreationService] Preview sent, waiting for confirmation. Session: ${previewResult.sessionId}`);
+        return null;
+      }
 
       // Step 7: Upload images (or use pre-uploaded URLs)
       if (request.photos.length > 0) {
@@ -1249,5 +1308,332 @@ Return JSON with these fields (omit any you're not confident about):
     if (updateError) {
       console.error('[ListingCreationService] Failed to update audit with quality review failure:', updateError);
     }
+  }
+
+  // ============================================
+  // Preview Session Methods (Two-Phase Flow)
+  // ============================================
+
+  /**
+   * Save preview session for two-phase listing creation
+   */
+  private async savePreviewSession(
+    request: ListingCreationRequest,
+    listing: AIGeneratedListing,
+    qualityReview: QualityReviewResult | null,
+    qualityReviewFailed: boolean,
+    qualityReviewError: string | undefined,
+    qualityLoopIterations: number,
+    research: ListingResearchData | null,
+    policies: { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] },
+    photoUrls: string[]
+  ): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('listing_preview_sessions')
+      .insert({
+        user_id: this.userId,
+        inventory_item_id: request.inventoryItemId,
+        request_data: request as unknown as Json,
+        generated_listing: listing as unknown as Json,
+        quality_review: qualityReview as unknown as Json,
+        quality_review_failed: qualityReviewFailed,
+        quality_review_error: qualityReviewError,
+        quality_loop_iterations: qualityLoopIterations,
+        research_data: research as unknown as Json,
+        policies_data: policies as unknown as Json,
+        photo_urls: photoUrls,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to save preview session: ${error.message}`);
+    }
+
+    console.log(`[ListingCreationService] Saved preview session: ${data.id}`);
+    return data.id;
+  }
+
+  /**
+   * Get preview session by ID
+   */
+  async getPreviewSession(sessionId: string): Promise<{
+    request: ListingCreationRequest;
+    listing: AIGeneratedListing;
+    qualityReview: QualityReviewResult | null;
+    qualityLoopIterations: number;
+    research: ListingResearchData | null;
+    policies: { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] };
+    photoUrls: string[];
+  } | null> {
+    const { data, error } = await this.supabase
+      .from('listing_preview_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .eq('user_id', this.userId)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (error || !data) {
+      console.error('[ListingCreationService] Preview session not found or expired:', error?.message);
+      return null;
+    }
+
+    return {
+      request: data.request_data as unknown as ListingCreationRequest,
+      listing: data.generated_listing as unknown as AIGeneratedListing,
+      qualityReview: data.quality_review as unknown as QualityReviewResult | null,
+      qualityLoopIterations: data.quality_loop_iterations,
+      research: data.research_data as unknown as ListingResearchData | null,
+      policies: data.policies_data as unknown as { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] },
+      photoUrls: data.photo_urls,
+    };
+  }
+
+  /**
+   * Mark session as confirmed and update with edited listing
+   */
+  async markSessionConfirmed(sessionId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('listing_preview_sessions')
+      .update({
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId)
+      .eq('user_id', this.userId);
+
+    if (error) {
+      console.error('[ListingCreationService] Failed to mark session confirmed:', error);
+    }
+  }
+
+  /**
+   * Mark session as cancelled
+   */
+  async markSessionCancelled(sessionId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('listing_preview_sessions')
+      .update({
+        status: 'cancelled',
+      })
+      .eq('id', sessionId)
+      .eq('user_id', this.userId);
+
+    if (error) {
+      console.error('[ListingCreationService] Failed to mark session cancelled:', error);
+    }
+  }
+
+  /**
+   * Continue listing creation from preview (Phase 2)
+   *
+   * Called after user confirms the preview. Completes steps 7-10:
+   * - Images (upload if needed)
+   * - Create eBay listing
+   * - Update inventory
+   * - Record audit
+   *
+   * @param sessionId - Preview session ID
+   * @param editedListing - The listing with any user edits applied
+   * @param onProgress - Callback for progress updates
+   * @returns Listing creation result or error
+   */
+  async continueFromPreview(
+    sessionId: string,
+    editedListing: AIGeneratedListing,
+    onProgress: ProgressCallback
+  ): Promise<ListingCreationResult | ListingCreationError> {
+    this.startTime = Date.now();
+
+    // Initialize steps for phase 2 (skip completed steps)
+    this.initializeStepsForPhase2();
+
+    // Retrieve session data
+    const session = await this.getPreviewSession(sessionId);
+    if (!session) {
+      return {
+        success: false,
+        error: 'Preview session not found or expired',
+        failedStep: 'preview',
+        draftSaved: false,
+      };
+    }
+
+    const { request, qualityReview, qualityLoopIterations, policies, photoUrls } = session;
+    let imageUrls = photoUrls;
+    let auditId: string | undefined;
+    let ebayOfferId: string | undefined;
+    let ebayListingId: string | undefined;
+
+    try {
+      // Mark session as confirmed
+      await this.markSessionConfirmed(sessionId);
+
+      // Get inventory item for later steps
+      const item = await this.validateInventoryItem(request.inventoryItemId);
+
+      // Step 7: Process images (may need to handle any remaining uploads)
+      if (imageUrls.length === 0 && request.photos.length > 0) {
+        imageUrls = await this.executeStep('images', onProgress, async () => {
+          const urlImages = request.photos.filter(isListingImageUrl);
+          const base64Images = request.photos.filter(isListingImageBase64);
+          const preUploadedUrls = urlImages.map((img) => img.url);
+
+          let uploadedUrls: string[] = [];
+          if (base64Images.length > 0) {
+            const imagesToUpload: ImageUploadData[] = base64Images.map((p) => ({
+              id: p.id,
+              base64: p.base64,
+              mimeType: p.mimeType,
+              filename: p.filename,
+            }));
+            const results = await this.imageService.uploadImages(imagesToUpload);
+            uploadedUrls = results.filter((r) => r.success && r.url).map((r) => r.url!);
+          }
+
+          const allUrls = [...preUploadedUrls, ...uploadedUrls];
+          if (allUrls.length === 0) {
+            throw new Error('No images available for listing');
+          }
+          return allUrls;
+        });
+      } else {
+        // Mark images step as complete (already done)
+        this.markStepComplete('images');
+        this.sendProgress(onProgress, 'Images already uploaded');
+      }
+
+      // Step 8: Create eBay listing with the edited listing content
+      const listingResult = await this.executeStep('create', onProgress, async () => {
+        return this.createEbayListing(
+          item,
+          editedListing, // Use the edited version from user
+          imageUrls,
+          request,
+          policies.defaults
+        );
+      });
+
+      ebayOfferId = listingResult.offerId;
+      ebayListingId = listingResult.listingId;
+
+      // Step 9: Update inventory item
+      await this.executeStep('update', onProgress, async () => {
+        return this.updateInventoryItem(
+          request.inventoryItemId,
+          ebayListingId!,
+          `https://www.ebay.co.uk/itm/${ebayListingId}`,
+          request.storageLocation
+        );
+      });
+
+      // Step 10: Create audit record with quality review data
+      auditId = await this.executeStep('audit', onProgress, async () => {
+        return this.createAuditRecord(
+          request,
+          item,
+          editedListing,
+          ebayListingId ?? undefined,
+          ebayOfferId ?? undefined,
+          'completed',
+          undefined,
+          undefined,
+          qualityReview ?? undefined,
+          qualityLoopIterations
+        );
+      });
+
+      const totalTime = Date.now() - this.startTime;
+
+      return {
+        success: true,
+        listingId: ebayListingId!,
+        offerId: ebayOfferId!,
+        listingUrl: `https://www.ebay.co.uk/itm/${ebayListingId}`,
+        title: editedListing.title,
+        price: request.price,
+        listingType: request.listingType,
+        scheduledDate: request.scheduledDate,
+        generatedContent: editedListing,
+        qualityReview: qualityReview ?? undefined,
+        qualityReviewPending: false,
+        auditId: auditId!,
+        totalTimeMs: totalTime,
+      };
+    } catch (error) {
+      const failedStep = this.steps.find((s) => s.status === 'failed')?.id ?? 'unknown';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      console.error(`[ListingCreationService] continueFromPreview failed at step ${failedStep}:`, error);
+
+      return {
+        success: false,
+        error: errorMessage,
+        failedStep,
+        auditId,
+        draftSaved: false,
+      };
+    }
+  }
+
+  /**
+   * Initialize steps for phase 2 (continuing from preview)
+   * Steps 1-6 are marked as complete, 7-10 are pending
+   */
+  private initializeStepsForPhase2(): void {
+    const phase1Steps = ['validate', 'research', 'policies', 'generate', 'review', 'preview'];
+    const phase2Steps = ['images', 'create', 'update', 'audit'];
+
+    const allStepDefs: Array<{ id: string; name: string }> = [
+      { id: 'validate', name: 'Validating inventory data' },
+      { id: 'research', name: 'Researching product details' },
+      { id: 'policies', name: 'Retrieving eBay policies' },
+      { id: 'generate', name: 'Generating listing content' },
+      { id: 'review', name: 'Quality review' },
+      { id: 'preview', name: 'Preview & confirm' },
+      { id: 'images', name: 'Processing and uploading images' },
+      { id: 'create', name: 'Creating eBay listing' },
+      { id: 'update', name: 'Updating inventory' },
+      { id: 'audit', name: 'Recording audit trail' },
+    ];
+
+    this.steps = allStepDefs.map((s) => ({
+      ...s,
+      status: phase1Steps.includes(s.id) ? 'completed' : 'pending',
+    }));
+
+    // Set current step to first phase 2 step
+    this.currentStepIndex = phase1Steps.length - 1;
+  }
+
+  /**
+   * Mark a step as complete without executing it
+   */
+  private markStepComplete(stepId: string): void {
+    const step = this.steps.find((s) => s.id === stepId);
+    if (step) {
+      step.status = 'completed';
+    }
+  }
+
+  /**
+   * Send progress update without executing a step
+   */
+  private sendProgress(onProgress: ProgressCallback, message: string): void {
+    const totalSteps = this.steps.length;
+    const completedSteps = this.steps.filter((s) => s.status === 'completed').length;
+    const percentage = Math.round((completedSteps / totalSteps) * 100);
+
+    onProgress({
+      currentStep: completedSteps,
+      totalSteps,
+      percentage,
+      stepName: message,
+      message,
+      steps: [...this.steps],
+    });
   }
 }

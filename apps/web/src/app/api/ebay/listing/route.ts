@@ -12,6 +12,7 @@ import type {
   ListingCreationProgress,
   ListingCreationResult,
   ListingCreationError,
+  ListingPreviewData,
 } from '@/lib/ebay/listing-creation.types';
 
 /**
@@ -72,13 +73,17 @@ const ListingCreationSchema = z.object({
  *
  * Create an eBay listing with SSE streaming for progress updates.
  *
- * 10-step flow with pre-publish quality review:
+ * Two-phase flow with pre-publish quality review:
+ *
+ * Phase 1 (this endpoint):
  * 1. Validate inventory data
  * 2. Research product details (Brickset API)
  * 3. Retrieve eBay policies
  * 4. Generate listing content (Claude AI)
  * 5. Quality review with auto-improvement loop (Gemini AI)
- * 6. Prepare preview (auto-confirms in current version)
+ * 6. Preview - sends preview event and pauses
+ *
+ * Phase 2 (via /api/ebay/listing/confirm after user confirms):
  * 7. Process and upload images
  * 8. Create eBay listing
  * 9. Update inventory
@@ -86,6 +91,7 @@ const ListingCreationSchema = z.object({
  *
  * SSE events:
  * - `progress` - Step updates with percentage
+ * - `preview` - Preview data for user confirmation (pauses flow)
  * - `complete` - Success with listing details and quality review
  * - `error` - Failure with error context
  */
@@ -155,8 +161,8 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const sendEvent = (
-          type: 'progress' | 'complete' | 'error',
-          data: ListingCreationProgress | ListingCreationResult | ListingCreationError | string
+          type: 'progress' | 'complete' | 'error' | 'preview',
+          data: ListingCreationProgress | ListingCreationResult | ListingCreationError | ListingPreviewData | string
         ) => {
           const event = JSON.stringify({ type, data });
           controller.enqueue(encoder.encode(`data: ${event}\n\n`));
@@ -166,10 +172,20 @@ export async function POST(request: NextRequest) {
           sendEvent('progress', progress);
         };
 
-        try {
-          const result = await service.createListing(parsed.data, onProgress);
+        const onPreview = (preview: ListingPreviewData) => {
+          sendEvent('preview', preview);
+        };
 
-          if (result.success) {
+        try {
+          // Pass onPreview callback to enable two-phase flow
+          const result = await service.createListing(parsed.data, onProgress, onPreview);
+
+          // If result is null, we're waiting for preview confirmation
+          // The stream will be closed and client will call /api/ebay/listing/confirm
+          if (result === null) {
+            // Preview sent, session saved - client will continue via confirm endpoint
+            console.log('[POST /api/ebay/listing] Preview sent, waiting for confirmation');
+          } else if (result.success) {
             sendEvent('complete', result);
           } else {
             sendEvent('error', result);

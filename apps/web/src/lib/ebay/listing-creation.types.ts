@@ -310,6 +310,42 @@ export interface QualityReviewResult {
 }
 
 // ============================================
+// Preview Types
+// ============================================
+
+/**
+ * Preview data sent to client for user confirmation
+ */
+export interface ListingPreviewData {
+  /** Session ID for this listing creation */
+  sessionId: string;
+  /** AI-generated listing (may be improved by quality loop) */
+  listing: AIGeneratedListing;
+  /** Quality review result */
+  qualityReview: QualityReviewResult | null;
+  /** Whether the quality review failed */
+  qualityReviewFailed: boolean;
+  /** Quality review error message if failed */
+  qualityReviewError?: string;
+  /** Listing price */
+  price: number;
+  /** Photo URLs for preview */
+  photoUrls: string[];
+}
+
+/**
+ * User's confirmation of the preview with any edits
+ */
+export interface ListingPreviewConfirmation {
+  /** Session ID for this listing creation */
+  sessionId: string;
+  /** Edited listing (may have user changes to title, description, etc.) */
+  editedListing: AIGeneratedListing;
+  /** Whether the user confirmed (true) or cancelled (false) */
+  confirmed: boolean;
+}
+
+// ============================================
 // Result Types
 // ============================================
 

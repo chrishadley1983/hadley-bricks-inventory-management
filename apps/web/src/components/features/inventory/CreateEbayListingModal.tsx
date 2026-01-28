@@ -40,6 +40,7 @@ import { useBusinessPolicies } from '@/hooks/use-business-policies';
 import { useTemplates } from '@/hooks/listing-assistant/use-templates';
 import { useStorageLocations } from '@/hooks/use-storage-locations';
 import { QualityReviewPopup } from './QualityReviewPopup';
+import { ListingPreviewScreen } from './ListingPreviewScreen';
 import { compressImage, formatBytes } from '@/lib/utils/image-compression';
 import type {
   ListingCreationRequest,
@@ -155,8 +156,12 @@ export function CreateEbayListingModal({
     result,
     error,
     isCreating,
+    previewData,
+    isAwaitingPreviewConfirmation,
     create,
     reset,
+    confirmPreview,
+    cancelPreview,
   } = useCreateListing();
 
   // Business policies hook with refresh capability
@@ -500,6 +505,23 @@ export function CreateEbayListingModal({
             <Button onClick={reset}>Try Again</Button>
           </div>
         </div>
+      );
+    }
+
+    // Preview state - show ListingPreviewScreen for user confirmation
+    if (isAwaitingPreviewConfirmation && previewData) {
+      return (
+        <ListingPreviewScreen
+          listing={previewData.listing}
+          qualityReview={previewData.qualityReview}
+          price={previewData.price}
+          photoUrls={previewData.photoUrls}
+          isReviewLoading={false}
+          reviewError={previewData.qualityReviewFailed ? previewData.qualityReviewError : null}
+          onConfirm={confirmPreview}
+          onCancel={cancelPreview}
+          isConfirming={isCreating && !isAwaitingPreviewConfirmation}
+        />
       );
     }
 
