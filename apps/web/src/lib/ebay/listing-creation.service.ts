@@ -312,8 +312,9 @@ export class ListingCreationService {
       ebayOfferId = listingResult.offerId;
       ebayListingId = listingResult.listingId;
 
-      // Step 9: Update inventory item
-      await this.executeStep('update', onProgress, async () => {
+      // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
+      let storageLocationWarning: string | undefined;
+      const updateResult = await this.executeStep('update', onProgress, async () => {
         return this.updateInventoryItem(
           request.inventoryItemId,
           ebayListingId!,
@@ -321,6 +322,7 @@ export class ListingCreationService {
           request.storageLocation
         );
       });
+      storageLocationWarning = updateResult?.storageLocationWarning;
 
       // Step 10: Create audit record with quality review data
       auditId = await this.executeStep('audit', onProgress, async () => {
@@ -340,6 +342,11 @@ export class ListingCreationService {
 
       // Return success with quality review included
       const totalTime = Date.now() - this.startTime;
+
+      // Log storage location warning if present
+      if (storageLocationWarning) {
+        console.warn(`[ListingCreationService] ${storageLocationWarning}`);
+      }
 
       return {
         success: true,
@@ -1087,34 +1094,53 @@ Return JSON with these fields (omit any you're not confident about):
 
   /**
    * Update inventory item with eBay listing info and optional storage location
+   * Storage location update failure will not block the listing (E2 criteria)
+   *
+   * @returns Warning message if storage location update failed, undefined otherwise
    */
   private async updateInventoryItem(
     itemId: string,
     listingId: string,
     listingUrl: string,
     storageLocation?: string
-  ): Promise<void> {
-    const updateData: Record<string, unknown> = {
+  ): Promise<{ storageLocationWarning?: string }> {
+    // First, update the core listing info (required - will throw on failure)
+    const coreUpdateData = {
       ebay_listing_id: listingId,
       ebay_listing_url: listingUrl,
       status: 'LISTED',
       updated_at: new Date().toISOString(),
     };
 
-    // Only update storage_location if a value was provided
-    if (storageLocation !== undefined && storageLocation.trim() !== '') {
-      updateData.storage_location = storageLocation.trim();
-    }
-
-    const { error } = await this.supabase
+    const { error: coreError } = await this.supabase
       .from('inventory_items')
-      .update(updateData)
+      .update(coreUpdateData)
       .eq('id', itemId)
       .eq('user_id', this.userId);
 
-    if (error) {
-      throw new Error(`Failed to update inventory: ${error.message}`);
+    if (coreError) {
+      throw new Error(`Failed to update inventory: ${coreError.message}`);
     }
+
+    // Storage location update - if provided, update separately (E2: failure should not block listing)
+    if (storageLocation !== undefined && storageLocation.trim() !== '') {
+      const { error: storageError } = await this.supabase
+        .from('inventory_items')
+        .update({ storage_location: storageLocation.trim() })
+        .eq('id', itemId)
+        .eq('user_id', this.userId);
+
+      if (storageError) {
+        console.error(
+          `[ListingCreationService] Storage location update failed for item ${itemId}: ${storageError.message}`
+        );
+        return {
+          storageLocationWarning: `Listing created but storage location update failed: ${storageError.message}`,
+        };
+      }
+    }
+
+    return {};
   }
 
   /**
@@ -1520,8 +1546,9 @@ Return JSON with these fields (omit any you're not confident about):
       ebayOfferId = listingResult.offerId;
       ebayListingId = listingResult.listingId;
 
-      // Step 9: Update inventory item
-      await this.executeStep('update', onProgress, async () => {
+      // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
+      let storageLocationWarning: string | undefined;
+      const updateResult = await this.executeStep('update', onProgress, async () => {
         return this.updateInventoryItem(
           request.inventoryItemId,
           ebayListingId!,
@@ -1529,6 +1556,7 @@ Return JSON with these fields (omit any you're not confident about):
           request.storageLocation
         );
       });
+      storageLocationWarning = updateResult?.storageLocationWarning;
 
       // Step 10: Create audit record with quality review data
       auditId = await this.executeStep('audit', onProgress, async () => {
@@ -1547,6 +1575,11 @@ Return JSON with these fields (omit any you're not confident about):
       });
 
       const totalTime = Date.now() - this.startTime;
+
+      // Log storage location warning if present
+      if (storageLocationWarning) {
+        console.warn(`[ListingCreationService] ${storageLocationWarning}`);
+      }
 
       return {
         success: true,
