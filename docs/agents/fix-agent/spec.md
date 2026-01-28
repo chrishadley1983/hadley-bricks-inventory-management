@@ -150,22 +150,26 @@ The fix track trades off heavy upfront specification for runtime approval gates.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Branch Requirement
+### 2.3 Worktree Requirement
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ⚠️  NEVER WRITE CODE ON MAIN BRANCH  ⚠️                        │
+│  ⚠️  NEVER WRITE CODE IN MAIN REPO DIRECTORY  ⚠️                │
 │                                                                 │
 │  After approval, before ANY code changes:                       │
-│  1. Create fix branch: `git checkout -b fix/<slug>`             │
-│  2. VERIFY branch with `git branch --show-current`              │
-│  3. Must show `fix/<slug>` - NOT `main`                         │
+│  1. Create fix worktree (see Phase 3)                          │
+│  2. VERIFY you are in the worktree directory                   │
+│  3. Must be in `hadley-bricks-fix-<slug>/` - NOT main repo     │
 │                                                                 │
-│  Writing code on main = BLOCKED (undo changes, create branch)   │
+│  Why worktrees: Multiple Claude sessions can run concurrently.  │
+│  Regular branch switching affects ALL sessions sharing the      │
+│  same directory. Worktrees provide complete isolation.          │
+│                                                                 │
+│  Writing code in main repo = BLOCKED (create worktree first)    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**This is non-negotiable.** The Fix Agent MUST be on a properly named fix branch before writing ANY code.
+**This is non-negotiable.** The Fix Agent MUST be in an isolated fix worktree before writing ANY code. This prevents one Claude session's branch switch from affecting another concurrent session.
 
 ### 2.4 Scope Discipline
 
@@ -364,76 +368,141 @@ I'll wait for guidance. Please let me know:
 
 ---
 
-## 7. Phase 3: Branch (BLOCKING)
+## 7. Phase 3: Worktree (BLOCKING)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ⚠️  THIS PHASE IS BLOCKING - DO NOT PROCEED TO BUILD ON MAIN  │
+│  ⚠️  THIS PHASE IS BLOCKING - DO NOT PROCEED WITHOUT WORKTREE  │
 │                                                                 │
-│  You MUST be on a fix/* branch before Phase 4 (Build)          │
-│  If branch creation fails → BLOCKED (do not write code)        │
+│  You MUST be in an isolated worktree before Phase 4 (Build)    │
+│  If worktree creation fails → BLOCKED (do not write code)      │
+│                                                                 │
+│  WHY WORKTREES: Multiple Claude Code sessions can run          │
+│  concurrently. Regular git checkout affects ALL sessions       │
+│  sharing the same working directory. Worktrees provide         │
+│  complete isolation - each session has its own directory.      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.1 Create Fix Branch
+### 7.1 Create Fix Worktree
 
-Only after approval, create the branch:
+Only after approval, create the worktree:
 
 ```powershell
 # Slugify the description
 # Example: "orders page showing wrong date format" → "orders-date-format"
+$slug = "orders-date-format"
 
-git checkout -b fix/<slugified-description>
+# Define paths
+$mainRepo = "$env:USERPROFILE\hadley-bricks-inventory-management"
+$worktreePath = "$env:USERPROFILE\hadley-bricks-fix-$slug"
+
+# Create the branch and worktree in one command
+git worktree add $worktreePath -b "fix/$slug"
+
+# Verify worktree was created
+git worktree list
 ```
 
-### 7.2 Confirm Branch (MANDATORY)
+**Expected output:**
+```
+C:/Users/.../hadley-bricks-inventory-management  abc1234 [main]
+C:/Users/.../hadley-bricks-fix-orders-date-format  def5678 [fix/orders-date-format]
+```
+
+### 7.2 Switch to Worktree Directory (MANDATORY)
 
 ```powershell
+# Change to worktree directory
+cd $worktreePath
+
+# Verify you're in the worktree
 git branch --show-current
+# Must show: fix/<slug>
+
+# Verify working directory
+Get-Location
+# Must show: $env:USERPROFILE\hadley-bricks-fix-<slug>
 ```
 
-**MUST show:** `fix/<slug>` - NOT `main`
+**MUST be in:** worktree directory - NOT main repo
 
-**If branch creation fails:**
+### 7.3 Install Dependencies
+
+Worktrees share `.git` but need their own `node_modules`:
+
+```powershell
+npm install
+```
+
+### 7.4 Handling Errors
+
+**If worktree creation fails:**
 1. DO NOT proceed to Phase 4
-2. Report the error
-3. Wait for resolution
+2. Check if branch exists: `git branch -a | Select-String "fix/$slug"`
+3. Check if path exists: `Test-Path $worktreePath`
+4. Report the error
+5. Wait for resolution
 
-**If still on main after attempting branch creation:**
-1. STOP immediately
-2. Investigate why branch creation failed
-3. Do NOT write any code until on correct branch
+**Common issues:**
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| "already checked out" | Branch is active elsewhere | Use that worktree or remove it first |
+| "path already exists" | Directory exists | Remove or choose different path |
+| "branch already exists" | Branch exists, no worktree | Use `git worktree add $path fix/$slug` (no `-b`) |
+
+### 7.5 If Worktree Already Exists
+
+```powershell
+# Check existing worktrees
+git worktree list
+
+# If worktree exists, just switch to it
+cd "C:\Users\Chris Hadley\hadley-bricks-fix-$slug"
+
+# Verify branch
+git branch --show-current
+```
 
 ---
 
 ## 8. Phase 4: Build
 
-### 8.0 Pre-Build Branch Verification (MANDATORY)
+### 8.0 Pre-Build Worktree Verification (MANDATORY)
 
-**Before writing ANY code, verify branch state:**
+**Before writing ANY code, verify worktree state:**
 
 ```powershell
 # MUST run this check before any code changes
+$currentDir = Get-Location
+$mainRepo = "C:\Users\Chris Hadley\hadley-bricks-inventory-management"
+
+if ($currentDir -eq $mainRepo) {
+    # STOP - DO NOT PROCEED
+    Write-Error "BLOCKED: Cannot write code in main repo directory"
+    # Must create and switch to worktree before continuing
+}
+
+# Also verify branch
 $branch = git branch --show-current
 if ($branch -eq "main") {
-    # STOP - DO NOT PROCEED
-    Write-Error "BLOCKED: Cannot write code on main branch"
-    # Must create fix branch before continuing
+    Write-Error "BLOCKED: On main branch - something is wrong"
 }
 ```
 
 **Verification checklist before writing code:**
+- [ ] `Get-Location` shows worktree path (NOT main repo)
 - [ ] `git branch --show-current` shows `fix/<slug>`
 - [ ] NOT on `main` branch
 
-**If on main branch:**
+**If in main repo directory:**
 1. **STOP** - Do not write any code
 2. Go back to Phase 3 (Section 7)
-3. Create the fix branch
-4. Verify branch creation succeeded
+3. Create the worktree
+4. Switch to worktree directory
 5. Return here and continue
 
-**This check is MANDATORY.** Writing code on main branch violates the branch protection policy.
+**This check is MANDATORY.** Writing code in main repo affects other concurrent sessions.
 
 ### 8.1 Implement the Fix
 

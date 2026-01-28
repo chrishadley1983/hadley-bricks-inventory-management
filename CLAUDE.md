@@ -391,10 +391,47 @@ npm run dev
 # 3. Verify the app connects to cloud Supabase before making changes
 ```
 
+### Git Worktrees (Required for Concurrent Sessions)
+
+**IMPORTANT:** When running multiple Claude Code sessions concurrently (e.g., one for a feature, one for a fix), you MUST use git worktrees for isolation. Regular branch switching affects all sessions sharing the same directory.
+
+```powershell
+# Create a worktree for a new feature
+git worktree add "$env:USERPROFILE\hadley-bricks-feature-my-feature" -b feature/my-feature
+
+# Create a worktree for a fix
+git worktree add "$env:USERPROFILE\hadley-bricks-fix-my-fix" -b fix/my-fix
+
+# List all worktrees
+git worktree list
+
+# After merge, clean up the worktree (frees ~500MB disk)
+git worktree remove "$env:USERPROFILE\hadley-bricks-feature-my-feature"
+```
+
+**Worktree Naming Convention:**
+| Branch Type | Worktree Directory |
+|-------------|-------------------|
+| `feature/discord-alerts` | `hadley-bricks-feature-discord-alerts` |
+| `fix/sync-status-bug` | `hadley-bricks-fix-sync-status-bug` |
+
+**Each worktree needs:**
+- Its own VS Code window
+- One-time `npm install` (~1-2 min)
+- Its own dev server port if running simultaneously
+
+**Why worktrees:**
+- Session A in `hadley-bricks-feature-A/` on `feature/A`
+- Session B in `hadley-bricks-fix-B/` on `fix/B`
+- Complete isolation - branch switches in one don't affect the other
+
 ### Git Workflow
 
 ```powershell
-# Feature branches
+# Feature branches (via worktree - see above)
+git worktree add "../hadley-bricks-feature-[name]" -b feature/[name]
+
+# Or if working on single feature (no concurrent sessions):
 git checkout -b feature/[feature-name]
 
 # Commit messages - use conventional commits

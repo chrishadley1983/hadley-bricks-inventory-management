@@ -98,22 +98,26 @@ Unlike traditional "build and hope" approaches:
 
 **This is non-negotiable.** The Build Feature Agent MUST execute verification after every implementation iteration. Claiming completion without a CONVERGED verdict is a failure mode.
 
-### 1.7 Critical Branch Requirement
+### 1.7 Critical Worktree Requirement
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ⚠️  NEVER WRITE CODE ON MAIN BRANCH  ⚠️                        │
+│  ⚠️  NEVER WRITE CODE IN MAIN REPO DIRECTORY  ⚠️                │
 │                                                                 │
 │  Before ANY code changes:                                       │
-│  1. Check current branch with `git branch --show-current`       │
-│  2. If on `main` → CREATE feature branch FIRST                  │
-│  3. VERIFY you are on `feature/<name>` before writing code      │
+│  1. Check working directory - must be a feature worktree        │
+│  2. If in main repo → CREATE worktree FIRST (see 4.6)          │
+│  3. VERIFY you are in correct worktree before writing code      │
 │                                                                 │
-│  Writing code on main = BLOCKED (undo changes, create branch)   │
+│  Why worktrees: Multiple Claude sessions can run concurrently.  │
+│  Regular branch switching affects ALL sessions sharing the      │
+│  same directory. Worktrees provide complete isolation.          │
+│                                                                 │
+│  Writing code in main repo = BLOCKED (create worktree first)    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**This is non-negotiable.** The Build Feature Agent MUST be on a properly named feature branch before writing ANY code. If you find yourself having written code on main, you MUST stop, stash/undo the changes, create the branch, and re-apply. This situation should NEVER happen if following this spec correctly.
+**This is non-negotiable.** The Build Feature Agent MUST be in an isolated feature worktree before writing ANY code. This prevents one Claude session's branch switch from affecting another concurrent session. If you find yourself having written code in the main repo, you MUST stop, create a worktree, move the changes, and continue there.
 
 ---
 
@@ -302,64 +306,149 @@ curl localhost:3000 responds?
 
 See [Section 5: Autonomous Recovery Actions](#5-autonomous-recovery-actions) for full recovery capabilities.
 
-### 4.6 Check Git Status and Create Feature Branch (BLOCKING)
+### 4.6 Check Git Status and Create Feature Worktree (BLOCKING)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ⚠️  THIS STEP IS BLOCKING - DO NOT PROCEED WITHOUT BRANCH  ⚠️  │
+│  ⚠️  THIS STEP IS BLOCKING - DO NOT PROCEED WITHOUT WORKTREE ⚠️ │
 │                                                                 │
-│  You MUST be on a feature/* branch before Phase 3 (Build)      │
-│  If branch creation fails → BLOCKED (do not write code)        │
+│  You MUST be in an isolated worktree before Phase 3 (Build)    │
+│  If worktree creation fails → BLOCKED (do not write code)      │
+│                                                                 │
+│  WHY WORKTREES: Multiple Claude Code sessions can run          │
+│  concurrently. Regular git checkout affects ALL sessions       │
+│  sharing the same working directory. Worktrees provide         │
+│  complete isolation - each session has its own directory.      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-```powershell
-# Check current branch
-git branch --show-current
+#### 4.6.1 Determine Current Working Directory
 
-# Check for uncommitted changes
-git status --porcelain
+```powershell
+# Get current working directory
+$currentDir = Get-Location
+
+# Check if we're already in a worktree
+git worktree list
 ```
 
-**Branch handling decision table:**
+**Expected output formats:**
+- Main repo: `C:/Users/.../hadley-bricks-inventory-management  abc1234 [main]`
+- Worktree: `C:/Users/.../hadley-bricks-feature-xyz  def5678 [feature/xyz]`
 
-| Current State | Action | Result |
-|---------------|--------|--------|
-| On `main`, clean | Create `feature/<name>` | Continue |
-| On `main`, dirty | BLOCKED - stash first, then create branch | Wait |
-| On `feature/*` matching feature name | Continue on that branch | Continue |
-| On `feature/*` different feature | BLOCKED - wrong branch | Stop |
-| Branch creation fails | BLOCKED - resolve issue | Stop |
+#### 4.6.2 Worktree Decision Table
 
-**If on main:**
+| Current Location | Current Branch | Action | Result |
+|-----------------|----------------|--------|--------|
+| Main repo | `main` | Create worktree for feature | Continue in new worktree |
+| Main repo | `feature/*` (different) | BLOCKED - another feature active | Stop |
+| Existing worktree | `feature/<this-feature>` | Continue in this worktree | Continue |
+| Existing worktree | Different branch | BLOCKED - wrong worktree | Stop |
+
+#### 4.6.3 Create Feature Worktree (If Needed)
+
+If in main repo and on `main` branch:
+
 ```powershell
-# MUST create and switch to feature branch
-git checkout -b feature/<feature-name>
+# Define paths
+$mainRepo = "$env:USERPROFILE\hadley-bricks-inventory-management"
+$featureName = "<feature-name>"  # e.g., "discord-for-alerts"
+$worktreePath = "$env:USERPROFILE\hadley-bricks-feature-$featureName"
 
-# VERIFY branch was created
+# Create the branch and worktree in one command
+git worktree add $worktreePath -b "feature/$featureName"
+
+# Verify worktree was created
+git worktree list
+```
+
+**Expected output:**
+```
+C:/Users/.../hadley-bricks-inventory-management     abc1234 [main]
+C:/Users/.../hadley-bricks-feature-discord-for-alerts  def5678 [feature/discord-for-alerts]
+```
+
+#### 4.6.4 Switch to Worktree Directory
+
+**CRITICAL:** After creating the worktree, you MUST work in the worktree directory:
+
+```powershell
+# Change to worktree directory
+cd $worktreePath
+
+# Verify you're in the worktree
 git branch --show-current
 # Must show: feature/<feature-name>
+
+# Verify working directory
+Get-Location
+# Must show: $env:USERPROFILE\hadley-bricks-feature-<feature-name>
 ```
 
-**If branch creation fails:**
+#### 4.6.5 Install Dependencies in Worktree
+
+Worktrees share the `.git` folder but need their own `node_modules`:
+
+```powershell
+# Install dependencies (one-time per worktree)
+npm install
+```
+
+**Note:** This takes ~1-2 minutes but only needs to be done once per worktree.
+
+#### 4.6.6 If Worktree Already Exists
+
+If a worktree for this feature already exists:
+
+```powershell
+# Check existing worktrees
+git worktree list
+
+# If worktree exists, just switch to it
+cd "$env:USERPROFILE\hadley-bricks-feature-$featureName"
+
+# Verify branch
+git branch --show-current
+```
+
+#### 4.6.7 Handling Errors
+
+**If worktree creation fails:**
 1. DO NOT proceed to Phase 3
-2. Report BLOCKED status with the error
-3. Wait for human to resolve
+2. Check if branch already exists: `git branch -a | Select-String "feature/$featureName"`
+3. Check if worktree path already exists: `Test-Path $worktreePath`
+4. Report BLOCKED status with the specific error
+5. Wait for human to resolve
 
-**Why feature branches are mandatory:**
-- GitHub branch protection prevents direct push to main
-- All changes must go through pull requests
-- Feature branches enable code review before merge
-- Enables `/merge-feature` workflow with PR creation
+**Common issues:**
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| "already checked out" | Branch is active in another worktree | Use that worktree or remove it first |
+| "path already exists" | Directory exists but isn't a worktree | Remove directory or choose different path |
+| "branch already exists" | Branch exists but no worktree | Create worktree with existing branch: `git worktree add $path feature/$name` (no `-b`) |
 
-**Recovery if code was accidentally written on main:**
-1. STOP immediately
-2. Stash changes: `git stash`
-3. Create branch: `git checkout -b feature/<feature-name>`
-4. Apply stash: `git stash pop`
-5. Continue from Phase 3
+#### 4.6.8 Why Worktrees (Not Branch Switching)
 
-This recovery should NEVER be needed if following the spec correctly.
+**The problem with `git checkout`:**
+- Multiple Claude Code sessions share the same filesystem
+- Session A does `git checkout feature/A`
+- Session B does `git checkout feature/B`
+- Session A is now unknowingly on `feature/B`
+- Session A's changes go to wrong branch
+
+**The worktree solution:**
+- Session A works in `hadley-bricks-feature-A/` on `feature/A`
+- Session B works in `hadley-bricks-feature-B/` on `feature/B`
+- Each session is completely isolated
+- Branch switches in one don't affect the other
+
+**Cost-benefit:**
+| Cost | Benefit |
+|------|---------|
+| ~500MB disk per worktree (node_modules) | Complete session isolation |
+| One-time `npm install` | No accidental cross-contamination |
+| Separate VS Code window | Clear visual separation of features |
+| Cleanup needed after merge | Worktrees are deleted with disk reclaimed |
 
 ### 4.7 Report Boot Status
 
@@ -375,8 +464,10 @@ This recovery should NEVER be needed if following the spec correctly.
 - HUMAN_VERIFY: 1
 
 **App status:** ✅ Running on localhost:3000
-**Git branch:** feature/inventory-export (created from main)
+**Worktree:** C:\Users\Chris Hadley\hadley-bricks-feature-inventory-export
+**Git branch:** feature/inventory-export
 **Git status:** ✅ Clean
+**Session isolation:** ✅ Worktree (safe for concurrent sessions)
 
 **Starting autonomous build loop...**
 ```
