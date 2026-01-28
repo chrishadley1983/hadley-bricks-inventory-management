@@ -29,7 +29,6 @@ import type {
   ExclusionRecord,
   FpCleanupResult,
   FpDetectorConfig,
-  ListingScoreResult,
 } from './ebay-fp-detector.types';
 import { DEFAULT_THRESHOLD, DEFAULT_USER_ID, SIGNAL_WEIGHTS } from './ebay-fp-detector.types';
 
