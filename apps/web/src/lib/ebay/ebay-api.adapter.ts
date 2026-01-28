@@ -304,6 +304,11 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/inventory_item/methods/createOrReplaceInventoryItem
    */
   async createOrReplaceInventoryItem(sku: string, item: EbayInventoryItem): Promise<void> {
+    // Log the request body for debugging - helps identify problematic fields
+    console.log('[EbayApiAdapter] createOrReplaceInventoryItem - SKU:', sku);
+    console.log('[EbayApiAdapter] createOrReplaceInventoryItem - Request body keys:', Object.keys(item));
+    console.log('[EbayApiAdapter] createOrReplaceInventoryItem - Full body:', JSON.stringify(item, null, 2));
+
     await this.request<void>(
       `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`,
       {

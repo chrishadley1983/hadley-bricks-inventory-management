@@ -906,30 +906,94 @@ export class ListingOptimiserService {
   }
 
   /**
-   * Clean an inventory item for update by removing read-only fields
+   * Clean an inventory item for update by constructing a fresh object
    *
-   * eBay's getInventoryItem returns fields like 'locale', 'sku', 'groupIds' etc.
-   * that cause errors when sent back in createOrReplaceInventoryItem.
-   * The 'locale' field in particular triggers "Invalid value for header Accept-Language" error.
+   * eBay's getInventoryItem returns read-only fields that cause errors when sent back.
+   * Instead of trying to strip fields, we construct a completely fresh object with
+   * only the known writable fields - mirroring how listing creation works.
+   *
+   * @see https://developer.ebay.com/api-docs/sell/inventory/types/slr:InventoryItem
+   * @see https://developer.ebay.com/api-docs/sell/inventory/types/slr:Product
    */
   private cleanInventoryItemForUpdate(item: EbayInventoryItem): EbayInventoryItem {
-    // Cast to extended type that includes read-only fields eBay returns
-    const extendedItem = item as EbayInventoryItem & {
-      sku?: string;
-      locale?: string;
-      groupIds?: string[];
-      inventoryItemGroupKeys?: string[];
+    // Cast to access any fields eBay might return (including undocumented ones)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawItem = item as any;
+
+    // Construct a fresh Product object with only documented writable fields
+    // This mirrors the approach in listing-creation.service.ts that works reliably
+    const cleanProduct: EbayInventoryItem['product'] = {
+      title: rawItem.product?.title,
+      description: rawItem.product?.description,
+      aspects: rawItem.product?.aspects,
+      imageUrls: rawItem.product?.imageUrls,
+      // Optional product identifiers
+      brand: rawItem.product?.brand,
+      mpn: rawItem.product?.mpn,
+      ean: rawItem.product?.ean,
+      upc: rawItem.product?.upc,
+      isbn: rawItem.product?.isbn,
+      epid: rawItem.product?.epid,
     };
 
-    // Return only the fields that can be updated
-    return {
-      product: extendedItem.product,
-      condition: extendedItem.condition,
-      conditionDescription: extendedItem.conditionDescription,
-      conditionDescriptors: extendedItem.conditionDescriptors,
-      availability: extendedItem.availability,
-      packageWeightAndSize: extendedItem.packageWeightAndSize,
+    // Remove undefined fields to keep the payload clean
+    Object.keys(cleanProduct).forEach((key) => {
+      if (cleanProduct[key as keyof typeof cleanProduct] === undefined) {
+        delete cleanProduct[key as keyof typeof cleanProduct];
+      }
+    });
+
+    // Construct a fresh availability object if it exists
+    let cleanAvailability: EbayInventoryItem['availability'] | undefined;
+    if (rawItem.availability) {
+      cleanAvailability = {
+        shipToLocationAvailability: rawItem.availability.shipToLocationAvailability
+          ? {
+              quantity: rawItem.availability.shipToLocationAvailability.quantity,
+              allocationByFormat: rawItem.availability.shipToLocationAvailability.allocationByFormat,
+            }
+          : undefined,
+        pickupAtLocationAvailability: rawItem.availability.pickupAtLocationAvailability,
+      };
+      // Clean undefined fields
+      if (!cleanAvailability.shipToLocationAvailability) {
+        delete cleanAvailability.shipToLocationAvailability;
+      }
+      if (!cleanAvailability.pickupAtLocationAvailability) {
+        delete cleanAvailability.pickupAtLocationAvailability;
+      }
+    }
+
+    // Construct a fresh packageWeightAndSize object if it exists
+    let cleanPackage: EbayInventoryItem['packageWeightAndSize'] | undefined;
+    if (rawItem.packageWeightAndSize) {
+      cleanPackage = {
+        dimensions: rawItem.packageWeightAndSize.dimensions,
+        packageType: rawItem.packageWeightAndSize.packageType,
+        weight: rawItem.packageWeightAndSize.weight,
+      };
+    }
+
+    // Construct the final clean inventory item
+    const cleanItem: EbayInventoryItem = {
+      product: cleanProduct,
+      condition: rawItem.condition,
+      conditionDescription: rawItem.conditionDescription,
+      conditionDescriptors: rawItem.conditionDescriptors,
+      availability: cleanAvailability,
+      packageWeightAndSize: cleanPackage,
     };
+
+    // Remove top-level undefined fields
+    Object.keys(cleanItem).forEach((key) => {
+      if (cleanItem[key as keyof typeof cleanItem] === undefined) {
+        delete cleanItem[key as keyof typeof cleanItem];
+      }
+    });
+
+    console.log('[ListingOptimiserService] Cleaned inventory item:', JSON.stringify(cleanItem, null, 2));
+
+    return cleanItem;
   }
 
   /**
