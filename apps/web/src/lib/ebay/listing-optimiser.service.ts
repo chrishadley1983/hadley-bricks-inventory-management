@@ -819,11 +819,14 @@ export class ListingOptimiserService {
         // Get current inventory item
         const currentItem = await adapter.getInventoryItem(sku);
 
+        // Strip read-only fields that eBay returns but rejects on update
+        const cleanedItem = this.cleanInventoryItemForUpdate(currentItem);
+
         // Update with new description
         const updatedItem: EbayInventoryItem = {
-          ...currentItem,
+          ...cleanedItem,
           product: {
-            ...currentItem.product,
+            ...cleanedItem.product,
             description: suggestion.suggestedValue,
           },
         };
@@ -838,7 +841,8 @@ export class ListingOptimiserService {
       }
 
       // For title, item specifics, and condition updates, update the inventory item
-      const currentItem = await adapter.getInventoryItem(sku);
+      const rawItem = await adapter.getInventoryItem(sku);
+      const currentItem = this.cleanInventoryItemForUpdate(rawItem);
 
       switch (suggestion.category) {
         case 'title':
@@ -899,6 +903,33 @@ export class ListingOptimiserService {
           : 'Failed to update listing via Inventory API',
       };
     }
+  }
+
+  /**
+   * Clean an inventory item for update by removing read-only fields
+   *
+   * eBay's getInventoryItem returns fields like 'locale', 'sku', 'groupIds' etc.
+   * that cause errors when sent back in createOrReplaceInventoryItem.
+   * The 'locale' field in particular triggers "Invalid value for header Accept-Language" error.
+   */
+  private cleanInventoryItemForUpdate(item: EbayInventoryItem): EbayInventoryItem {
+    // Cast to extended type that includes read-only fields eBay returns
+    const extendedItem = item as EbayInventoryItem & {
+      sku?: string;
+      locale?: string;
+      groupIds?: string[];
+      inventoryItemGroupKeys?: string[];
+    };
+
+    // Return only the fields that can be updated
+    return {
+      product: extendedItem.product,
+      condition: extendedItem.condition,
+      conditionDescription: extendedItem.conditionDescription,
+      conditionDescriptors: extendedItem.conditionDescriptors,
+      availability: extendedItem.availability,
+      packageWeightAndSize: extendedItem.packageWeightAndSize,
+    };
   }
 
   /**
