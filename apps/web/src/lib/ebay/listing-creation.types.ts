@@ -51,9 +51,9 @@ export interface BestOfferConfig {
 }
 
 /**
- * Image data for listing creation
+ * Image data for listing creation (base64 variant - legacy)
  */
-export interface ListingImage {
+export interface ListingImageBase64 {
   /** Unique identifier for the image */
   id: string;
   /** Original filename */
@@ -64,6 +64,42 @@ export interface ListingImage {
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
   /** Whether this image has been enhanced */
   enhanced: boolean;
+}
+
+/**
+ * Image data for listing creation (URL variant - preferred)
+ */
+export interface ListingImageUrl {
+  /** Unique identifier for the image */
+  id: string;
+  /** Original filename */
+  filename: string;
+  /** URL to the uploaded image (Supabase Storage) */
+  url: string;
+  /** MIME type */
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  /** Whether this image has been enhanced */
+  enhanced: boolean;
+}
+
+/**
+ * Image data for listing creation
+ * Supports both base64 (legacy) and URL (preferred) formats
+ */
+export type ListingImage = ListingImageBase64 | ListingImageUrl;
+
+/**
+ * Type guard to check if image has URL
+ */
+export function isListingImageUrl(image: ListingImage): image is ListingImageUrl {
+  return 'url' in image && typeof image.url === 'string';
+}
+
+/**
+ * Type guard to check if image has base64
+ */
+export function isListingImageBase64(image: ListingImage): image is ListingImageBase64 {
+  return 'base64' in image && typeof image.base64 === 'string';
 }
 
 /**

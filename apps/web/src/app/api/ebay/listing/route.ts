@@ -15,6 +15,33 @@ import type {
 } from '@/lib/ebay/listing-creation.types';
 
 /**
+ * Schema for base64-encoded images (legacy)
+ */
+const Base64ImageSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  base64: z.string(),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  enhanced: z.boolean(),
+});
+
+/**
+ * Schema for URL-based images (preferred - pre-uploaded to storage)
+ */
+const UrlImageSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  url: z.string().url(),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  enhanced: z.boolean(),
+});
+
+/**
+ * Combined image schema - accepts either base64 or URL
+ */
+const ImageSchema = z.union([Base64ImageSchema, UrlImageSchema]);
+
+/**
  * Validation schema for listing creation request
  */
 const ListingCreationSchema = z.object({
@@ -25,17 +52,7 @@ const ListingCreationSchema = z.object({
     autoAcceptPercent: z.number().min(0).max(100),
     autoDeclinePercent: z.number().min(0).max(100),
   }),
-  photos: z
-    .array(
-      z.object({
-        id: z.string(),
-        filename: z.string(),
-        base64: z.string(),
-        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-        enhanced: z.boolean(),
-      })
-    )
-    .min(1, 'At least one photo is required'),
+  photos: z.array(ImageSchema).min(1, 'At least one photo is required'),
   enhancePhotos: z.boolean(),
   descriptionStyle: z.enum(['Minimalist', 'Standard', 'Professional', 'Friendly', 'Enthusiastic']),
   templateId: z.string().uuid().optional(),

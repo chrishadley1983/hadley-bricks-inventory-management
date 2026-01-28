@@ -39,13 +39,36 @@ import { useCreateListing } from '@/hooks/use-create-listing';
 import { useBusinessPolicies } from '@/hooks/use-business-policies';
 import { useTemplates } from '@/hooks/listing-assistant/use-templates';
 import { QualityReviewPopup } from './QualityReviewPopup';
+import { compressImage, formatBytes } from '@/lib/utils/image-compression';
 import type {
   ListingCreationRequest,
-  ListingImage,
   DescriptionStyle,
   ListingType,
   BestOfferConfig,
+  ListingImageUrl,
 } from '@/lib/ebay/listing-creation.types';
+
+/**
+ * Local photo state - tracks compressed base64 before upload and URL after upload
+ */
+interface LocalPhoto {
+  id: string;
+  filename: string;
+  /** Compressed base64 for preview (before upload) */
+  base64: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  enhanced: boolean;
+  /** URL from storage (after upload) */
+  url?: string;
+  /** Upload status */
+  uploadStatus: 'pending' | 'uploading' | 'uploaded' | 'error';
+  /** Error message if upload failed */
+  uploadError?: string;
+  /** Original size before compression */
+  originalSize?: number;
+  /** Compressed size */
+  compressedSize?: number;
+}
 
 /**
  * Generate default condition description template
@@ -98,7 +121,10 @@ export function CreateEbayListingModal({
   // Form state
   const [price, setPrice] = useState(inventoryItem.listing_value?.toString() ?? '');
   const [bestOffer, setBestOffer] = useState<BestOfferConfig>(defaultBestOffer);
-  const [photos, setPhotos] = useState<ListingImage[]>([]);
+  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [enhancePhotos, setEnhancePhotos] = useState(true);
   const [descriptionStyle, setDescriptionStyle] = useState<DescriptionStyle>('Standard');
   const [listingType, setListingType] = useState<ListingType>('live');
@@ -154,35 +180,141 @@ export function CreateEbayListingModal({
     ?? policies?.defaults.fulfillmentPolicyId;
 
   /**
-   * Handle photo upload
+   * Handle photo upload - compresses images before adding to state
    */
   const handlePhotoUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
       if (!files) return;
 
-      const newPhotos: ListingImage[] = [];
+      setIsCompressing(true);
+      const newPhotos: LocalPhoto[] = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) continue;
+      try {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file.type.startsWith('image/')) continue;
 
-        // Convert to base64
-        const base64 = await fileToBase64(file);
+          // Compress image to reduce payload size
+          const compressed = await compressImage(file, {
+            maxDimension: 1600,
+            quality: 0.8,
+            outputType: 'image/jpeg',
+          });
 
-        newPhotos.push({
-          id: `${Date.now()}-${i}`,
-          filename: file.name,
-          base64,
-          mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
-          enhanced: false,
-        });
+          newPhotos.push({
+            id: `${Date.now()}-${i}`,
+            filename: file.name,
+            base64: compressed.base64,
+            mimeType: compressed.mimeType,
+            enhanced: false,
+            uploadStatus: 'pending',
+            originalSize: compressed.originalSize,
+            compressedSize: compressed.compressedSize,
+          });
+        }
+
+        setPhotos((prev) => [...prev, ...newPhotos].slice(0, 24)); // Max 24 photos
+      } finally {
+        setIsCompressing(false);
       }
-
-      setPhotos((prev) => [...prev, ...newPhotos].slice(0, 24)); // Max 24 photos
     },
     []
   );
+
+  /**
+   * Upload photos to storage in batches
+   * Returns array of uploaded photos with URLs, or null if upload failed
+   */
+  const uploadPhotosToStorage = useCallback(async (): Promise<LocalPhoto[] | null> => {
+    // Work with a local copy of photos to track updates
+    let workingPhotos = [...photos];
+
+    const pendingPhotos = workingPhotos.filter((p) => p.uploadStatus === 'pending' || p.uploadStatus === 'error');
+    if (pendingPhotos.length === 0) {
+      // All photos already uploaded - return them directly
+      const allUploaded = workingPhotos.every((p) => p.uploadStatus === 'uploaded');
+      return allUploaded ? workingPhotos : null;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const BATCH_SIZE = 5;
+    let uploadedCount = 0;
+    let allSucceeded = true;
+
+    try {
+      // Process in batches
+      for (let i = 0; i < pendingPhotos.length; i += BATCH_SIZE) {
+        const batch = pendingPhotos.slice(i, i + BATCH_SIZE);
+
+        // Mark batch as uploading (for UI)
+        setPhotos((prev) =>
+          prev.map((p) =>
+            batch.find((b) => b.id === p.id)
+              ? { ...p, uploadStatus: 'uploading' as const }
+              : p
+          )
+        );
+
+        // Upload batch
+        const response = await fetch('/api/ebay/upload-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            images: batch.map((p) => ({
+              id: p.id,
+              filename: p.filename,
+              base64: p.base64,
+              mimeType: p.mimeType,
+            })),
+            inventoryItemId: inventoryItem.id,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('[uploadPhotosToStorage] Upload failed:', errorData);
+          // Mark all batch photos as error
+          workingPhotos = workingPhotos.map((p) =>
+            batch.find((b) => b.id === p.id)
+              ? { ...p, uploadStatus: 'error' as const, uploadError: errorData.error || 'Upload failed' }
+              : p
+          );
+          setPhotos(workingPhotos);
+          allSucceeded = false;
+          continue;
+        }
+
+        const data = await response.json();
+
+        // Update working photos with URLs
+        workingPhotos = workingPhotos.map((p) => {
+          const result = data.results?.find((r: { id: string; success: boolean; url?: string; error?: string }) => r.id === p.id);
+          if (result) {
+            if (result.success && result.url) {
+              return { ...p, url: result.url, uploadStatus: 'uploaded' as const };
+            } else {
+              allSucceeded = false;
+              return { ...p, uploadStatus: 'error' as const, uploadError: result.error || 'Upload failed' };
+            }
+          }
+          return p;
+        });
+
+        // Update state for UI
+        setPhotos(workingPhotos);
+
+        uploadedCount += batch.length;
+        setUploadProgress(Math.round((uploadedCount / pendingPhotos.length) * 100));
+      }
+
+      return allSucceeded ? workingPhotos : null;
+    } finally {
+      setIsUploading(false);
+    }
+  }, [photos, inventoryItem.id]);
 
   /**
    * Remove a photo
@@ -192,9 +324,9 @@ export function CreateEbayListingModal({
   }, []);
 
   /**
-   * Handle form submission
+   * Handle form submission - uploads photos first, then creates listing
    */
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const priceValue = parseFloat(price);
     if (isNaN(priceValue) || priceValue <= 0) {
       return;
@@ -205,11 +337,35 @@ export function CreateEbayListingModal({
       return;
     }
 
+    // Step 1: Upload photos to storage and get back the photos with URLs
+    const uploadedPhotosResult = await uploadPhotosToStorage();
+    if (!uploadedPhotosResult) {
+      console.error('[handleSubmit] Photo upload failed');
+      return;
+    }
+
+    // Step 2: Convert to ListingImageUrl format (using returned data, not state)
+    const uploadedPhotos: ListingImageUrl[] = uploadedPhotosResult
+      .filter((p) => p.uploadStatus === 'uploaded' && p.url)
+      .map((p) => ({
+        id: p.id,
+        filename: p.filename,
+        url: p.url!,
+        mimeType: p.mimeType,
+        enhanced: p.enhanced,
+      }));
+
+    if (uploadedPhotos.length === 0) {
+      console.error('[handleSubmit] No photos uploaded successfully');
+      return;
+    }
+
+    // Step 3: Create listing with URLs (not base64)
     const request: ListingCreationRequest = {
       inventoryItemId: inventoryItem.id,
       price: priceValue,
       bestOffer,
-      photos,
+      photos: uploadedPhotos,
       enhancePhotos,
       descriptionStyle,
       listingType,
@@ -239,6 +395,7 @@ export function CreateEbayListingModal({
     useAIConditionDescription,
     conditionDescription,
     create,
+    uploadPhotosToStorage,
   ]);
 
   /**
@@ -475,58 +632,116 @@ export function CreateEbayListingModal({
           <div className="space-y-2">
             <Label>Photos ({photos.length}/24)</Label>
             <div className="flex items-center justify-center rounded-lg border-2 border-dashed p-8">
-              <label className="cursor-pointer text-center">
-                <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Click to upload or drag and drop
-                </p>
+              <label className={`cursor-pointer text-center ${isCompressing ? 'pointer-events-none opacity-50' : ''}`}>
+                {isCompressing ? (
+                  <>
+                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Compressing images...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Images are automatically compressed to reduce upload size
+                    </p>
+                  </>
+                )}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
                   className="hidden"
                   onChange={handlePhotoUpload}
+                  disabled={isCompressing}
                 />
               </label>
             </div>
           </div>
 
-          {photos.length > 0 && (
-            <div className="grid grid-cols-4 gap-2">
-              {photos.map((photo, index) => (
-                <div key={photo.id} className="relative">
-                  <img
-                    src={photo.base64}
-                    alt={`Photo ${index + 1}`}
-                    className="aspect-square rounded-md object-cover"
-                  />
-                  <button
-                    type="button"
-                    className="absolute -right-1 -top-1 rounded-full bg-destructive p-1 text-destructive-foreground"
-                    onClick={() => removePhoto(photo.id)}
-                  >
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                  {index === 0 && (
-                    <Badge className="absolute bottom-1 left-1" variant="secondary">
-                      Primary
-                    </Badge>
-                  )}
-                </div>
-              ))}
+          {/* Upload progress indicator */}
+          {isUploading && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Uploading photos...</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
             </div>
+          )}
+
+          {photos.length > 0 && (
+            <>
+              {/* Photo size summary */}
+              <div className="text-xs text-muted-foreground">
+                Total compressed size:{' '}
+                {formatBytes(photos.reduce((sum, p) => sum + (p.compressedSize || 0), 0))}
+                {' (saved '}
+                {formatBytes(
+                  photos.reduce((sum, p) => sum + ((p.originalSize || 0) - (p.compressedSize || 0)), 0)
+                )}
+                {')'}
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {photos.map((photo, index) => (
+                  <div key={photo.id} className="relative">
+                    <img
+                      src={photo.base64}
+                      alt={`Photo ${index + 1}`}
+                      className={`aspect-square rounded-md object-cover ${
+                        photo.uploadStatus === 'error' ? 'opacity-50 ring-2 ring-destructive' : ''
+                      }`}
+                    />
+                    {/* Upload status indicator */}
+                    {photo.uploadStatus === 'uploading' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+                        <Loader2 className="h-6 w-6 animate-spin text-white" />
+                      </div>
+                    )}
+                    {photo.uploadStatus === 'uploaded' && (
+                      <div className="absolute top-1 right-1">
+                        <CheckCircle2 className="h-4 w-4 text-green-500 bg-white rounded-full" />
+                      </div>
+                    )}
+                    {photo.uploadStatus === 'error' && (
+                      <div className="absolute top-1 right-1">
+                        <AlertCircle className="h-4 w-4 text-destructive bg-white rounded-full" />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 rounded-full bg-destructive p-1 text-destructive-foreground"
+                      onClick={() => removePhoto(photo.id)}
+                      disabled={photo.uploadStatus === 'uploading'}
+                    >
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                    {index === 0 && (
+                      <Badge className="absolute bottom-1 left-1" variant="secondary">
+                        Primary
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           <div className="flex items-center space-x-2">
@@ -730,10 +945,21 @@ export function CreateEbayListingModal({
                 parseFloat(price) <= 0 ||
                 photos.length === 0 ||
                 (listingType === 'scheduled' && !scheduledDate) ||
-                policiesLoading
+                policiesLoading ||
+                isCompressing ||
+                isUploading
               }
             >
-              {listingType === 'scheduled' ? 'Schedule Listing' : 'Create Listing'}
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading Photos...
+                </>
+              ) : listingType === 'scheduled' ? (
+                'Schedule Listing'
+              ) : (
+                'Create Listing'
+              )}
             </Button>
           </div>
         </TabsContent>
@@ -774,14 +1000,3 @@ export function CreateEbayListingModal({
   );
 }
 
-/**
- * Convert file to base64
- */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-}
