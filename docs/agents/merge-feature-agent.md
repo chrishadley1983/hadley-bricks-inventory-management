@@ -16,7 +16,7 @@ You are the **Merge Feature Agent** - a senior developer responsible for safely 
 8. **Wait for Vercel Deploy** - Poll until production deployment is ready
 9. **Run Production Verification** - Execute Playwright critical path tests
 10. **Track Deployment** - Update last-deploy.json with merge details
-11. **Clean Up Branches** - Delete merged branches (local and remote)
+11. **Clean Up Worktrees and Branches** - Remove worktrees, delete merged branches (local and remote)
 12. **Generate Merge Report** - Document what was merged, deployment status, and verification results
 
 ---
@@ -759,7 +759,51 @@ Run `/merge-feature rollback` to revert to the previous deployment.
 
 ## Phase 6: Cleanup
 
-### 6.1 Delete Local Branch
+### 6.1 Remove Worktree (If Exists)
+
+Check if the branch was developed in a worktree and clean it up:
+
+```powershell
+# List all worktrees
+git worktree list
+
+# Look for worktree matching the merged branch
+# Example output:
+# C:/Users/.../hadley-bricks-inventory-management     abc1234 [main]
+# C:/Users/.../hadley-bricks-feature-discord-alerts   def5678 [feature/discord-alerts]
+```
+
+**If worktree exists for this branch:**
+
+```powershell
+# Determine worktree path from branch name
+$branchName = "<feature-branch-name>"  # e.g., "feature/discord-alerts"
+$slug = $branchName -replace "feature/", "" -replace "fix/", ""
+$worktreePath = "C:\Users\Chris Hadley\hadley-bricks-feature-$slug"
+# Or for fixes:
+# $worktreePath = "C:\Users\Chris Hadley\hadley-bricks-fix-$slug"
+
+# Remove the worktree (deletes directory and all contents including node_modules)
+git worktree remove $worktreePath
+
+# Verify removal
+git worktree list
+```
+
+**Note:** `git worktree remove` deletes the entire worktree directory, freeing up disk space (~500MB-1GB if node_modules was installed).
+
+**If worktree removal fails:**
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| "contains modified or untracked files" | Uncommitted changes | Use `--force` after verifying changes aren't needed |
+| "not a valid worktree" | Already removed or never existed | Safe to continue |
+
+```powershell
+# Force remove if needed (after verifying no important uncommitted changes)
+git worktree remove $worktreePath --force
+```
+
+### 6.2 Delete Local Branch
 
 ```powershell
 git branch -D <feature-branch-name>
@@ -767,19 +811,19 @@ git branch -D <feature-branch-name>
 
 **Note:** Use `-D` (force delete), not `-d`. Git may warn "not fully merged" because it's comparing to the remote tracking branch (which we're about to delete), not to main. This is safe after confirming the merge to main succeeded.
 
-### 6.2 Delete Remote Branch
+### 6.3 Delete Remote Branch
 
 ```powershell
 git push origin --delete <feature-branch-name>
 ```
 
-### 6.3 Prune Stale References
+### 6.4 Prune Stale References
 
 ```powershell
 git fetch --prune
 ```
 
-### 6.4 Check for Untracked Files
+### 6.5 Check for Untracked Files
 
 ```powershell
 git status
@@ -794,16 +838,21 @@ git commit -m "chore: Update .gitignore"
 git push origin main
 ```
 
-### 6.5 Final Verification
+### 6.6 Final Verification
 
 ```powershell
+# Check branches
 git branch -a
+
+# Check worktrees
+git worktree list
 ```
 
 **Should show:**
 - `* main` locally
 - `remotes/origin/main`
 - No deleted feature branches
+- Only main repo in worktree list (no feature/fix worktrees)
 
 ---
 
