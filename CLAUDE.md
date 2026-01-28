@@ -397,16 +397,16 @@ npm run dev
 
 ```powershell
 # Create a worktree for a new feature
-git worktree add "C:\Users\Chris Hadley\hadley-bricks-feature-my-feature" -b feature/my-feature
+git worktree add "$env:USERPROFILE\hadley-bricks-feature-my-feature" -b feature/my-feature
 
 # Create a worktree for a fix
-git worktree add "C:\Users\Chris Hadley\hadley-bricks-fix-my-fix" -b fix/my-fix
+git worktree add "$env:USERPROFILE\hadley-bricks-fix-my-fix" -b fix/my-fix
 
 # List all worktrees
 git worktree list
 
 # After merge, clean up the worktree (frees ~500MB disk)
-git worktree remove "C:\Users\Chris Hadley\hadley-bricks-feature-my-feature"
+git worktree remove "$env:USERPROFILE\hadley-bricks-feature-my-feature"
 ```
 
 **Worktree Naming Convention:**

@@ -351,9 +351,9 @@ If in main repo and on `main` branch:
 
 ```powershell
 # Define paths
-$mainRepo = "C:\Users\Chris Hadley\hadley-bricks-inventory-management"
+$mainRepo = "$env:USERPROFILE\hadley-bricks-inventory-management"
 $featureName = "<feature-name>"  # e.g., "discord-for-alerts"
-$worktreePath = "C:\Users\Chris Hadley\hadley-bricks-feature-$featureName"
+$worktreePath = "$env:USERPROFILE\hadley-bricks-feature-$featureName"
 
 # Create the branch and worktree in one command
 git worktree add $worktreePath -b "feature/$featureName"
@@ -382,7 +382,7 @@ git branch --show-current
 
 # Verify working directory
 Get-Location
-# Must show: C:\Users\Chris Hadley\hadley-bricks-feature-<feature-name>
+# Must show: $env:USERPROFILE\hadley-bricks-feature-<feature-name>
 ```
 
 #### 4.6.5 Install Dependencies in Worktree
@@ -405,7 +405,7 @@ If a worktree for this feature already exists:
 git worktree list
 
 # If worktree exists, just switch to it
-cd "C:\Users\Chris Hadley\hadley-bricks-feature-$featureName"
+cd "$env:USERPROFILE\hadley-bricks-feature-$featureName"
 
 # Verify branch
 git branch --show-current

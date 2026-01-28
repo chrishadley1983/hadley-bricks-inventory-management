@@ -779,9 +779,9 @@ git worktree list
 # Determine worktree path from branch name
 $branchName = "<feature-branch-name>"  # e.g., "feature/discord-alerts"
 $slug = $branchName -replace "feature/", "" -replace "fix/", ""
-$worktreePath = "C:\Users\Chris Hadley\hadley-bricks-feature-$slug"
+$worktreePath = "$env:USERPROFILE\hadley-bricks-feature-$slug"
 # Or for fixes:
-# $worktreePath = "C:\Users\Chris Hadley\hadley-bricks-fix-$slug"
+# $worktreePath = "$env:USERPROFILE\hadley-bricks-fix-$slug"
 
 # Remove the worktree (deletes directory and all contents including node_modules)
 git worktree remove $worktreePath

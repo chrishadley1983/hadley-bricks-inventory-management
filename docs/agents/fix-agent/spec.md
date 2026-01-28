@@ -394,8 +394,8 @@ Only after approval, create the worktree:
 $slug = "orders-date-format"
 
 # Define paths
-$mainRepo = "C:\Users\Chris Hadley\hadley-bricks-inventory-management"
-$worktreePath = "C:\Users\Chris Hadley\hadley-bricks-fix-$slug"
+$mainRepo = "$env:USERPROFILE\hadley-bricks-inventory-management"
+$worktreePath = "$env:USERPROFILE\hadley-bricks-fix-$slug"
 
 # Create the branch and worktree in one command
 git worktree add $worktreePath -b "fix/$slug"
@@ -422,7 +422,7 @@ git branch --show-current
 
 # Verify working directory
 Get-Location
-# Must show: C:\Users\Chris Hadley\hadley-bricks-fix-<slug>
+# Must show: $env:USERPROFILE\hadley-bricks-fix-<slug>
 ```
 
 **MUST be in:** worktree directory - NOT main repo
