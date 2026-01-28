@@ -10,7 +10,7 @@
  * 6. Create - eBay Inventory API calls
  * 7. Update - Mark inventory as Listed
  * 8. Audit - Record audit trail
- * 9. Review - Quality review (Gemini 3 Pro)
+ * 9. Review - Quality review (Gemini 2.5 Pro)
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
