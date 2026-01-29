@@ -52,6 +52,7 @@ interface BrickLinkUploadFormProps {
 const SOURCES = [
   { value: 'Auction', label: 'Auction' },
   { value: 'FB Marketplace', label: 'FB Marketplace' },
+  { value: 'Vinted', label: 'Vinted' },
   { value: 'Car Boot', label: 'Car Boot' },
   { value: 'eBay', label: 'eBay' },
   { value: 'Various', label: 'Various' },

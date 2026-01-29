@@ -12,7 +12,7 @@ Status & Condition (Basic Filters):
 - condition: "New" | "Used"
 - platform: listing platform like "Amazon", "eBay", "BrickLink", "Brick Owl"
 - salePlatform: platform where item was sold - "Amazon", "eBay", "BrickLink", "Brick Owl"
-- source: purchase source - "eBay", "FB Marketplace", "BrickLink", "Amazon", "Car Boot", "Gumtree", "Retail", "Private"
+- source: purchase source - "eBay", "FB Marketplace", "BrickLink", "Amazon", "Vinted", "Car Boot", "Gumtree", "Retail", "Private"
 - search: text to search in set number, name, or SKU
 
 Money/Value Filters (Numeric Ranges):
