@@ -146,13 +146,15 @@ Examples where helpful, wait for response before next question.
 Questions to ask if missing:
 - **Cost**: "What was the total cost in GBP? (e.g., £450 or 450)"
 - **Source**: "Where did you purchase this? (eBay, BrickLink, Facebook Marketplace, Amazon, Car Boot, Charity Shop, Retail, Vinted, Other)"
-- **Payment Method**: "How did you pay? (Cash, Card, PayPal, Bank Transfer, HSBC - Cash, Monzo - Card)"
+- **Payment Method**: Only ask if source doesn't have a default (see Source-Based Defaults section). "How did you pay? (Cash, Card, PayPal, Bank Transfer, HSBC - Cash, Monzo - Card)"
 - **Purchase Date**: "When did you purchase this? (YYYY-MM-DD or natural language like 'yesterday', 'last week')"
 - **Condition**: "What condition? (New or Used)"
 - **Set Numbers**: "Which LEGO set numbers? (e.g., 75192, 10294)"
 - **Listing Platform**: "Where will you list these for sale? (amazon, ebay, bricklink, brickowl)"
 - **Quantity per set**: "How many of each set? (e.g., 3x 75192, 2x 10294)"
 - **Location**: "Where will you store these items? (e.g., Loft- S1, Garage- B2)"
+
+**IMPORTANT**: Do NOT ask for payment method if the source has a default. Apply the default silently.
 
 **Collection/Mileage** (for in-person collection sources):
 If source is Facebook Marketplace, Car Boot, Charity Shop, or Other:
@@ -389,39 +391,66 @@ The items are now in your inventory and ready for listing.
 
 ### Phase 9: Photo Attachment
 
-If user provided photos during input, attach them to the purchase record:
+If user provided photos during input, attach them to the purchase record using the images API.
 
+**API Endpoint:**
+```
+POST /api/purchases/{purchaseId}/images
+Content-Type: application/json
+
+{
+  "images": [
+    {
+      "id": "unique-id-1",
+      "base64": "data:image/jpeg;base64,/9j/4AAQ...",
+      "mimeType": "image/jpeg",
+      "filename": "receipt.jpg"
+    }
+  ]
+}
+```
+
+**Implementation via Playwright:**
+
+Since Claude Code receives images as part of the conversation, you need to:
+
+1. **For 1:1 mode** - Each purchase gets the relevant photo(s)
+2. **For 1:X mode** - All photos go to the single purchase record
+
+**Photo upload is currently manual** because Claude Code cannot programmatically extract base64 from conversation images. After creating records, inform the user:
+
+```
+**Records Created Successfully**
+
+[...summary...]
+
+**Photos**: {N} photo(s) were provided but must be attached manually.
+Please upload them at: http://localhost:3000/purchases/{purchase_id}
+```
+
+**Future Enhancement**: When photo upload automation is available, use:
 ```javascript
-// Via Playwright - upload each photo
-async () => {
-  const formData = new FormData();
-  formData.append('file', photoBlob, 'photo.jpg');
-
-  const response = await fetch(`http://localhost:3000/api/purchases/${purchaseId}/photos`, {
+// Via Playwright browser_evaluate
+async (purchaseId, images) => {
+  const response = await fetch(`/api/purchases/${purchaseId}/images`, {
     method: 'POST',
-    body: formData
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      images: images.map((img, i) => ({
+        id: `img-${Date.now()}-${i}`,
+        base64: img.base64,
+        mimeType: img.mimeType,
+        filename: img.filename
+      }))
+    })
   });
   return response.json();
 }
 ```
 
-After attachment:
-```
-**Photos Attached**
-
-- {N} photo(s) attached to purchase record
-- View at: /purchases/{purchase_id}
-```
-
 **Photo types to attach:**
 - Receipt images → attach to purchase
 - Stock/set photos → attach to purchase (for reference)
-
-**Note**: Photo attachment via Claude Code may have limitations. If attachment fails, inform the user:
-```
-Could not automatically attach photos. Please manually upload them at:
-/purchases/{purchase_id}
-```
 
 ### Error Handling & Rollback
 
@@ -498,17 +527,33 @@ Your choice:
 
 If user selects proportional allocation and listing_platform is "amazon":
 
-1. Fetch buy box price for each ASIN via Amazon Competitive Summary API:
+1. **Use batch API** to fetch buy box prices for ALL ASINs in one call (up to 20):
 ```
-GET http://localhost:3000/api/test/amazon-competitive-summary?asin={ASIN}
+GET http://localhost:3000/api/test/amazon-competitive-summary?asins={ASIN1},{ASIN2},{ASIN3}
 ```
 
-2. Extract `lowestOffers[0].totalPrice.amount` as the buy box price
+Response shape for batch:
+```json
+{
+  "batch": true,
+  "count": 3,
+  "results": [
+    {
+      "asin": "B085YVQ8TF",
+      "lowestOffers": [{ "totalPrice": { "amount": 34.99 } }]
+    },
+    ...
+  ]
+}
+```
+
+2. Extract `lowestOffers[0].totalPrice.amount` as the buy box price for each ASIN
 
 3. Round each price DOWN to nearest .99 or .49:
    - £38.98 → £38.49
    - £27.50 → £27.49
    - £23.10 → £22.99
+   - £17.00 → £16.99
 
 4. Calculate proportion: `item_list_value / total_list_value`
 
@@ -523,10 +568,7 @@ GET http://localhost:3000/api/test/amazon-competitive-summary?asin={ASIN}
 
 7. **Store rounded price as `listing_value`** - When creating inventory items, use the rounded buy box price (e.g., £38.49) as the `listing_value` field
 
-**Note**: Amazon API has rate limits (~35 seconds between calls). Inform user:
-```
-Fetching Amazon prices for {N} items. This will take approximately {N × 35} seconds due to API rate limits.
-```
+**Note**: The batch API fetches up to 20 ASINs in a single request. No need for delays between calls.
 
 ## Timestamp Rules
 
@@ -579,6 +621,17 @@ Common purchase sources:
 - Do NOT use "Monzo" alone → use "Monzo - Card"
 - Do NOT use "HSBC" alone → use "HSBC - Cash"
 
+## Source-Based Defaults
+
+Automatically apply these defaults based on source (do NOT ask the user):
+
+| Source | Default Payment Method |
+|--------|----------------------|
+| Vinted | Monzo - Card |
+| eBay | PayPal |
+
+For other sources, ask the user for payment method.
+
 ## Collection & Mileage
 
 For in-person collection purchases (Facebook Marketplace, Car Boot, Charity Shop, Other):
@@ -608,16 +661,13 @@ User: /purchase-inventory
 
 Claude: I can see from the images:
 - Source: Vinted (identified from receipt format)
+- Payment Method: Monzo - Card (default for Vinted)
 - Sets: 40756, 40491, 40575
 - Cost: £31.85
 
 **Missing Information**
 
-Payment Method: How did you pay? (Cash, Card, PayPal, Bank Transfer, HSBC - Cash, Monzo - Card)
-
-User: Card
-
-Claude: Condition: What condition are the sets? (New or Used)
+Condition: What condition are the sets? (New or Used)
 
 User: New
 
@@ -654,9 +704,7 @@ Your choice:
 
 User: 3
 
-Claude: Fetching Amazon prices for 3 items. This will take approximately 105 seconds due to API rate limits.
-
-[Fetches prices...]
+Claude: Fetching Amazon prices for 3 ASINs in batch...
 
 | Set | Buy Box | Rounded | Proportion | Allocated Cost |
 |-----|---------|---------|------------|----------------|
@@ -710,3 +758,26 @@ If Playwright fails with browser lock errors:
 ### API returns "Unauthorized"
 
 The APIs require an authenticated browser session. Do NOT use curl or direct fetch from CLI. Always use Playwright `browser_evaluate` to make API calls through the authenticated browser.
+
+---
+
+## Changelog
+
+### 2026-01-29 - v1.1
+
+**Improvements:**
+1. **Source-based payment defaults** - Vinted now defaults to "Monzo - Card", eBay defaults to "PayPal". No longer asks for payment method when source has a default.
+
+2. **Batch Amazon pricing API** - Now fetches up to 20 ASINs in a single API call instead of sequential calls with 35-second delays. Dramatically faster for multi-item purchases.
+
+3. **Fixed ASIN lookup API** - Now handles null EAN values correctly (was failing validation when EAN was not provided).
+
+4. **Photo upload documentation** - Clarified that photos must be manually attached via the UI. Added API documentation for future automation.
+
+**Bug Fixes:**
+- Fixed `lookup-asin` API returning 400 error when EAN parameter was null
+- Fixed Amazon competitive summary API not supporting batch requests
+
+**Known Limitations:**
+- Photo attachment is manual (Claude Code cannot extract base64 from conversation images)
+- 1:1 mode with many items creates many separate API calls (could be optimized with batch endpoints)
