@@ -46,6 +46,15 @@ ${listing.description}
 - Inventory Condition: ${inventoryCondition}
 - Listing Price: £${price.toFixed(2)}
 
+## IMPORTANT: TRUST THE PROVIDED DATA
+The item specifics (piece count, minifigure count, year, theme, etc.) come from verified Brickset database records.
+**DO NOT flag these as inaccurate even if they differ from your knowledge.** The Brickset data is authoritative.
+Only flag issues with:
+- Title optimization and keyword usage
+- Description formatting and completeness
+- Condition mapping accuracy
+- Missing recommended fields
+
 ## SCORING CRITERIA (100 points total)
 
 ### Title (25 points)
@@ -56,7 +65,7 @@ ${listing.description}
 ### Item Specifics (20 points)
 - Required fields complete (Brand, Theme, Set Number, MPN): 0-10 points
 - Recommended fields populated: 0-5 points
-- Accuracy of values: 0-5 points
+- Values present and properly formatted: 0-5 points (DO NOT verify factual accuracy - trust the data)
 
 ### Description (25 points)
 - Completeness (what's included, condition): 0-10 points

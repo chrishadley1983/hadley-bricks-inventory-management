@@ -9,7 +9,7 @@
  * Part of the pre-publish quality loop feature.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,6 +128,24 @@ export function ListingPreviewScreen({
     setIsEditing(false);
   }, [listing]);
 
+  // Ref for contentEditable div
+  const descriptionRef = useRef<HTMLDivElement>(null);
+
+  // Sync contentEditable changes to state
+  const handleDescriptionInput = useCallback(() => {
+    if (descriptionRef.current) {
+      setEditedDescription(descriptionRef.current.innerHTML);
+    }
+  }, []);
+
+  // Update contentEditable when entering edit mode (not on content changes to preserve cursor)
+  useEffect(() => {
+    if (isEditing && descriptionRef.current) {
+      descriptionRef.current.innerHTML = editedDescription;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only sync on mode change, not content changes (would reset cursor)
+  }, [isEditing]);
+
   return (
     <div className="space-y-4">
       {/* Quality Score Banner */}
@@ -172,16 +190,22 @@ export function ListingPreviewScreen({
             <div className="space-y-3">
               {/* Score breakdown */}
               <div className="grid grid-cols-5 gap-2 text-xs">
-                {Object.entries(qualityReview.breakdown).map(([key, value]) => (
-                  <div key={key} className="text-center">
-                    <div className="font-medium capitalize">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}
+                {Object.entries(qualityReview.breakdown).map(([key, value]) => {
+                  // Get max score for each category
+                  const maxScore = key === 'title' || key === 'description' ? 25 : key === 'itemSpecifics' ? 20 : 15;
+                  // Use percentage threshold (75%) for consistent coloring across categories
+                  const isGood = value.score >= maxScore * 0.75;
+                  return (
+                    <div key={key} className="text-center">
+                      <div className="font-medium capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </div>
+                      <div className={isGood ? 'text-green-600' : 'text-orange-600'}>
+                        {value.score}/{maxScore}
+                      </div>
                     </div>
-                    <div className={value.score >= 15 ? 'text-green-600' : 'text-orange-600'}>
-                      {value.score}/{key === 'title' || key === 'description' ? 25 : key === 'itemSpecifics' ? 20 : 15}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Issues and Suggestions */}
@@ -303,12 +327,12 @@ export function ListingPreviewScreen({
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 {isEditing ? (
-                  <Textarea
-                    id="description"
-                    value={editedDescription}
-                    onChange={(e) => setEditedDescription(e.target.value)}
-                    rows={8}
-                    className="font-mono text-xs"
+                  <div
+                    ref={descriptionRef}
+                    contentEditable
+                    onInput={handleDescriptionInput}
+                    className="p-2 bg-background border rounded-md text-sm min-h-[200px] max-h-[400px] overflow-y-auto prose prose-sm dark:prose-invert focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    suppressContentEditableWarning
                   />
                 ) : (
                   <div

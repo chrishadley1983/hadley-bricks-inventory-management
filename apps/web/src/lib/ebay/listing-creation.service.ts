@@ -1,17 +1,18 @@
 /**
  * eBay Listing Creation Orchestration Service
  *
- * Coordinates the 10-step listing creation process with pre-publish quality review:
+ * Coordinates the 11-step listing creation process with pre-publish quality review:
  * 1. Validate - Check inventory item and status
  * 2. Research - Query Brickset API for product details
- * 3. Policies - Get eBay business policies
- * 4. Generate - AI content generation (Claude Opus 4.5)
- * 5. Review - Pre-publish quality review (Gemini 3 Pro) with auto-improvement loop
- * 6. Preview - Send listing preview to client for confirmation (SSE event)
- * 7. Images - Upload images to storage
- * 8. Create - eBay Inventory API calls
- * 9. Update - Mark inventory as Listed + storage location
- * 10. Audit - Record audit trail with quality review data
+ * 3. Photos - Analyze photos to detect box/instructions
+ * 4. Policies - Get eBay business policies
+ * 5. Generate - AI content generation (Claude Opus 4.5)
+ * 6. Review - Pre-publish quality review (Gemini 3 Pro) with auto-improvement loop
+ * 7. Preview - Send listing preview to client for confirmation (SSE event)
+ * 8. Images - Upload images to storage
+ * 9. Create - eBay Inventory API calls
+ * 10. Update - Mark inventory as Listed + storage location
+ * 11. Audit - Record audit trail with quality review data
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -40,6 +41,7 @@ import { BricksetCredentialsService } from '@/lib/services/brickset-credentials.
 import { BricksetApiClient } from '@/lib/brickset/brickset-api';
 import type { BricksetApiSet } from '@/lib/brickset/types';
 import { sendMessageForJSON } from '@/lib/ai/claude-client';
+import { analyzeListingPhotos } from './listing-photo-analysis.service';
 
 /**
  * Progress callback type
@@ -151,19 +153,55 @@ export class ListingCreationService {
         return this.fetchResearchData(item.set_number);
       });
 
-      // Step 3: Get business policies
+      // Step 3: Analyze photos to detect box and instructions
+      const photoAnalysis = await this.executeStep('photos', onProgress, async () => {
+        // Get photo URLs from request (already uploaded at this point)
+        const photoUrls = request.photos
+          .filter(isListingImageUrl)
+          .map((img) => img.url);
+
+        if (photoUrls.length === 0) {
+          console.log('[ListingCreationService] No photos to analyze for box/instructions');
+          return null;
+        }
+
+        console.log(`[ListingCreationService] Analyzing ${photoUrls.length} photos for box/instructions...`);
+        return analyzeListingPhotos(photoUrls);
+      });
+
+      // Log photo analysis results
+      if (photoAnalysis) {
+        console.log(
+          `[ListingCreationService] Photo analysis: hasBox=${photoAnalysis.hasBox} (${Math.round(photoAnalysis.boxConfidence * 100)}%), hasInstructions=${photoAnalysis.hasInstructions} (${Math.round(photoAnalysis.instructionsConfidence * 100)}%)`
+        );
+      }
+
+      // Step 4: Get business policies
       const policies = await this.executeStep('policies', onProgress, async () => {
         return this.policiesService.getPolicies();
       });
 
-      // Step 4: Generate listing content with AI
+      // Step 5: Generate listing content with AI
       generatedListing = await this.executeStep('generate', onProgress, async () => {
         const template = request.templateId
           ? await this.getTemplate(request.templateId)
           : undefined;
 
+        // Build inventory input with box/instructions from photo analysis
+        const inventoryInput = this.mapInventoryToInput(item);
+
+        // Override hasBox/hasInstructions from photo analysis (high confidence only)
+        if (photoAnalysis) {
+          if (photoAnalysis.boxConfidence >= 0.7) {
+            inventoryInput.hasBox = photoAnalysis.hasBox;
+          }
+          if (photoAnalysis.instructionsConfidence >= 0.7) {
+            inventoryInput.hasInstructions = photoAnalysis.hasInstructions;
+          }
+        }
+
         const listing = await this.generationService.generateListing(
-          this.mapInventoryToInput(item),
+          inventoryInput,
           {
             style: request.descriptionStyle,
             template: template
@@ -182,36 +220,72 @@ export class ListingCreationService {
         return listing;
       });
 
-      // Step 5: Pre-publish quality review with auto-improvement loop
-      // Reviews listing, applies suggestions, and loops until score >= 90 or max iterations
+      // Step 6: Pre-publish quality review with single improvement pass
+      // Flow: Review → Apply suggestions → Re-review → Display final score
       const reviewResult = await this.executeStep('review', onProgress, async () => {
-        const result = await this.qualityService.runQualityLoop(
+        // Initial review
+        console.log('[ListingCreationService] Starting initial quality review...');
+        const initialReview = await this.qualityService.reviewListingWithTimeout(
           generatedListing!,
           item.condition ?? 'Used',
-          {
-            targetScore: 90,
-            maxIterations: 3,
-            timeoutPerReviewMs: 30000, // 30 second timeout per review
-            onProgress: (step) => {
-              console.log(`[ListingCreationService] Quality loop: ${step}`);
-            },
+          60000, // 60 second timeout - Gemini 3 Pro with HIGH thinking takes ~40s
+          (step) => {
+            console.log(`[ListingCreationService] Quality review: ${step}`);
           }
         );
 
-        // Update generatedListing with improved version
-        generatedListing = result.listing;
-        qualityLoopIterations = result.iterations;
-
         console.log(
-          `[ListingCreationService] Quality review complete: Score ${result.review.score}/100 (${result.review.grade}), ${result.iterations} iteration(s), improved: ${result.improved}`
+          `[ListingCreationService] Initial review: Score ${initialReview.score}/100 (${initialReview.grade})`
         );
 
-        return result.review;
+        // Skip improvement loop if score is already excellent (>= 90)
+        // This saves time and avoids potential score regression from re-review
+        if (initialReview.score >= 90) {
+          console.log('[ListingCreationService] Score >= 90, skipping improvement loop');
+          qualityLoopIterations = 1;
+          return initialReview;
+        }
+
+        // Apply suggestions if there are any issues or suggestions to improve
+        const hasImprovements = initialReview.issues.length > 0 || initialReview.suggestions.length > 0;
+
+        if (hasImprovements) {
+          console.log('[ListingCreationService] Applying suggestions to improve listing...');
+          const improvedListing = await this.qualityService.applySuggestions(
+            generatedListing!,
+            initialReview
+          );
+
+          // Update the generated listing with improvements
+          generatedListing = improvedListing;
+
+          // Re-review to get final score
+          console.log('[ListingCreationService] Re-reviewing improved listing...');
+          const finalReview = await this.qualityService.reviewListingWithTimeout(
+            improvedListing,
+            item.condition ?? 'Used',
+            60000, // 60 second timeout - Gemini 3 Pro with HIGH thinking takes ~40s
+            (step) => {
+              console.log(`[ListingCreationService] Final quality review: ${step}`);
+            }
+          );
+
+          console.log(
+            `[ListingCreationService] Final review: Score ${finalReview.score}/100 (${finalReview.grade}) [was ${initialReview.score}]`
+          );
+
+          qualityLoopIterations = 2;
+          return finalReview;
+        }
+
+        // No improvements needed - use initial review
+        qualityLoopIterations = 1;
+        return initialReview;
       });
 
       qualityReview = reviewResult;
 
-      // Step 6: Preview - Send preview to client and wait for confirmation
+      // Step 7: Preview - Send preview to client and wait for confirmation
       // If onPreview callback is provided, we save session and return null
       // The client will call continueFromPreview() after user confirms
       const previewResult = await this.executeStep('preview', onProgress, async () => {
@@ -244,6 +318,7 @@ export class ListingCreationService {
             photoUrls,
           };
 
+          console.log(`[ListingCreationService] Sending preview with quality score: ${qualityReview?.score ?? 'null'}/100 (${qualityReview?.grade ?? 'N/A'})`);
           this.onPreviewCallback(previewData);
 
           // Return special marker to indicate we're pausing for preview
@@ -413,12 +488,13 @@ export class ListingCreationService {
 
   /**
    * Initialize step tracking
-   * 10-step flow with pre-publish quality review
+   * 11-step flow with pre-publish quality review and photo analysis
    */
   private initializeSteps(): void {
     const stepDefs: Array<{ id: string; name: string }> = [
       { id: 'validate', name: 'Validating inventory data' },
       { id: 'research', name: 'Researching product details' },
+      { id: 'photos', name: 'Analyzing photos' },
       { id: 'policies', name: 'Retrieving eBay policies' },
       { id: 'generate', name: 'Generating listing content' },
       { id: 'review', name: 'Quality review' },
@@ -1353,6 +1429,14 @@ Return JSON with these fields (omit any you're not confident about):
     policies: { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] },
     photoUrls: string[]
   ): Promise<string> {
+    // First, delete any existing preview session for this user+inventory_item
+    // This handles abandoned sessions from previous attempts
+    await this.supabase
+      .from('listing_preview_sessions')
+      .delete()
+      .eq('user_id', this.userId)
+      .eq('inventory_item_id', request.inventoryItemId);
+
     const { data, error } = await this.supabase
       .from('listing_preview_sessions')
       .insert({
@@ -1612,14 +1696,15 @@ Return JSON with these fields (omit any you're not confident about):
 
   /**
    * Initialize steps for phase 2 (continuing from preview)
-   * Steps 1-6 are marked as complete, 7-10 are pending
+   * Steps 1-7 are marked as complete, 8-11 are pending
    */
   private initializeStepsForPhase2(): void {
-    const phase1Steps = ['validate', 'research', 'policies', 'generate', 'review', 'preview'];
+    const phase1Steps = ['validate', 'research', 'photos', 'policies', 'generate', 'review', 'preview'];
 
     const allStepDefs: Array<{ id: string; name: string }> = [
       { id: 'validate', name: 'Validating inventory data' },
       { id: 'research', name: 'Researching product details' },
+      { id: 'photos', name: 'Analyzing photos' },
       { id: 'policies', name: 'Retrieving eBay policies' },
       { id: 'generate', name: 'Generating listing content' },
       { id: 'review', name: 'Quality review' },

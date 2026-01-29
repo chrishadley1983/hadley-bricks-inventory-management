@@ -236,19 +236,22 @@ export class ListingQualityReviewService {
   }
 
   /**
-   * Review listing with a timeout (default 30 seconds)
+   * Review listing with a timeout (default 60 seconds)
    * Used for pre-publish review to prevent blocking the flow
+   *
+   * Note: Gemini 3 Pro with HIGH thinking level typically takes 30-45 seconds,
+   * so 60 seconds provides adequate buffer.
    *
    * @param listing - The AI-generated listing to review
    * @param inventoryCondition - Original condition from inventory
-   * @param timeoutMs - Timeout in milliseconds (default: 30000)
+   * @param timeoutMs - Timeout in milliseconds (default: 60000)
    * @param onProgress - Optional callback for progress updates
    * @returns Quality review result or timeout result
    */
   async reviewListingWithTimeout(
     listing: AIGeneratedListing,
     inventoryCondition: string,
-    timeoutMs: number = 30000,
+    timeoutMs: number = 60000,
     onProgress?: ReviewProgressCallback
   ): Promise<QualityReviewResult> {
     const timeoutPromise = new Promise<QualityReviewResult>((resolve) => {
@@ -264,7 +267,7 @@ export class ListingQualityReviewService {
             seoOptimization: { score: 11, feedback: 'Review timed out - using default score' },
           },
           issues: [],
-          suggestions: ['Quality review timed out after 30 seconds. Listing published with default quality check.'],
+          suggestions: ['Quality review timed out after 60 seconds. Listing published with default quality check.'],
           highlights: ['Listing met basic validation requirements.'],
           reviewedAt: new Date().toISOString(),
           reviewerModel: `${GEMINI_MODEL} (timeout)`,
@@ -288,6 +291,10 @@ export class ListingQualityReviewService {
    *
    * Takes the review feedback and applies it to generate an improved listing.
    * This is used in the pre-publish quality loop to auto-improve listings.
+   *
+   * IMPORTANT: The boilerplate section (marked by <!-- BOILERPLATE_START -->)
+   * is extracted before improvement and re-appended after. This ensures seller
+   * policies and disclaimers are always preserved exactly as written.
    *
    * @param listing - The current listing to improve
    * @param review - The quality review with suggestions
@@ -316,6 +323,19 @@ export class ListingQualityReviewService {
 
     console.log(`[ListingQualityReviewService] Applying ${improvements.length} improvements`);
 
+    // Extract boilerplate from description BEFORE sending to AI
+    // This ensures seller policies are preserved exactly (not rewritten by AI)
+    const boilerplateMarker = '<!-- BOILERPLATE_START -->';
+    let boilerplate: string | null = null;
+    let descriptionWithoutBoilerplate = listing.description;
+
+    const boilerplateIndex = listing.description.indexOf(boilerplateMarker);
+    if (boilerplateIndex !== -1) {
+      boilerplate = listing.description.substring(boilerplateIndex);
+      descriptionWithoutBoilerplate = listing.description.substring(0, boilerplateIndex).trim();
+      console.log(`[ListingQualityReviewService] Extracted boilerplate (${boilerplate.length} chars) before improvement`);
+    }
+
     const systemPrompt = `You are an eBay listing improvement assistant. Your task is to apply specific feedback to improve a LEGO listing.
 
 IMPORTANT RULES:
@@ -331,7 +351,7 @@ IMPORTANT RULES:
 
 **Title:** ${listing.title}
 **Subtitle:** ${listing.subtitle || '(none)'}
-**Description:** ${listing.description}
+**Description:** ${descriptionWithoutBoilerplate}
 **Condition Description:** ${listing.conditionDescription || '(none)'}
 
 **Item Specifics:**
@@ -383,12 +403,49 @@ Only include fields that need changes. Omit fields that are already optimal.`;
         }
       );
 
+      // Get improved description, defaulting to the version without boilerplate
+      let improvedDescription = improved.description || descriptionWithoutBoilerplate;
+
+      // Strip any boilerplate the AI may have included in its response
+      // (prevents duplication when we re-append)
+      // Check for the marker first
+      if (improvedDescription.includes(boilerplateMarker)) {
+        improvedDescription = improvedDescription.substring(0, improvedDescription.indexOf(boilerplateMarker)).trim();
+        console.log(`[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via marker)`);
+      }
+      // Also check for common boilerplate text patterns (AI may copy without marker)
+      const boilerplatePatterns = [
+        '<p><b>About Our Used LEGO:</b></p>',
+        '<p><b>About Our New LEGO:</b></p>',
+        '<p><b>About This Item:</b></p>',
+        'About Our Used LEGO:',
+        'About Our New LEGO:',
+        'About This Item:',
+      ];
+      for (const pattern of boilerplatePatterns) {
+        if (improvedDescription.includes(pattern)) {
+          improvedDescription = improvedDescription.substring(0, improvedDescription.indexOf(pattern)).trim();
+          console.log(`[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via pattern: "${pattern}")`);
+          break;
+        }
+      }
+
+      // Re-append boilerplate if it was extracted from original
+      if (boilerplate) {
+        // Ensure there's a newline before the boilerplate
+        if (!improvedDescription.endsWith('\n')) {
+          improvedDescription += '\n';
+        }
+        improvedDescription += boilerplate;
+        console.log(`[ListingQualityReviewService] Re-appended boilerplate to improved description`);
+      }
+
       // Merge improvements with original listing
       return {
         ...listing,
         title: improved.title && improved.title.length <= 80 ? improved.title : listing.title,
         subtitle: improved.subtitle !== undefined ? improved.subtitle : listing.subtitle,
-        description: improved.description || listing.description,
+        description: improvedDescription,
         conditionDescription: improved.conditionDescription !== undefined
           ? improved.conditionDescription
           : listing.conditionDescription,
@@ -434,7 +491,7 @@ Only include fields that need changes. Omit fields that are already optimal.`;
     const {
       targetScore = 90,
       maxIterations = 3,
-      timeoutPerReviewMs = 30000,
+      timeoutPerReviewMs = 60000, // 60s - Gemini 3 Pro with HIGH thinking takes ~40s
       onProgress,
     } = options;
 
