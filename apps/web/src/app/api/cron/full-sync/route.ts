@@ -274,14 +274,25 @@ async function getWeeklyStats(supabase: ReturnType<typeof createServiceRoleClien
   const listedCount = listedItems?.length ?? 0;
   const listedValue = listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) ?? 0;
 
-  // Sold this week (from platform_orders ordered this week)
-  const { data: soldOrders } = await supabase
+  // Sold this week - combine platform_orders and ebay_orders
+  const { data: platformOrders } = await supabase
     .from('platform_orders')
     .select('id, total')
     .gte('order_date', weekStartIso);
 
-  const soldCount = soldOrders?.length ?? 0;
-  const soldValue = soldOrders?.reduce((sum, order) => sum + (Number(order.total) || 0), 0) ?? 0;
+  const { data: ebayOrders } = await supabase
+    .from('ebay_orders')
+    .select('id, total_fee_basis_amount')
+    .gte('creation_date', weekStartIso);
+
+  const platformSoldCount = platformOrders?.length ?? 0;
+  const platformSoldValue = platformOrders?.reduce((sum, order) => sum + (Number(order.total) || 0), 0) ?? 0;
+
+  const ebaySoldCount = ebayOrders?.length ?? 0;
+  const ebaySoldValue = ebayOrders?.reduce((sum, order) => sum + (Number(order.total_fee_basis_amount) || 0), 0) ?? 0;
+
+  const soldCount = platformSoldCount + ebaySoldCount;
+  const soldValue = platformSoldValue + ebaySoldValue;
 
   // Backlog (items with status BACKLOG)
   const { count: backlogCount } = await supabase
