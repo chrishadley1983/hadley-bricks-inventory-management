@@ -10,21 +10,89 @@ This skill creates purchase records and linked inventory items in the Hadley Bri
 3. Enriches data with Brickset (set names) and ASIN lookup (for Amazon)
 4. Shows a markdown review table for approval
 5. Creates records on confirmation with full rollback on failure
+6. Attaches provided photos to the purchase record
 
-## API Base URL
+## API Access
 
-All API calls use: `http://localhost:3000`
+**IMPORTANT**: All API calls MUST be made via Playwright browser automation, not direct HTTP requests (curl/fetch from CLI).
+
+The APIs require authenticated Supabase sessions. Use this pattern:
+
+```javascript
+// Via Playwright browser_evaluate
+await mcp__playwright__browser_evaluate({
+  function: `async () => {
+    const response = await fetch('http://localhost:3000/api/endpoint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  }`
+});
+```
+
+If Playwright shows "Browser already in use" errors, try `mcp__playwright__browser_close` first.
 
 ## Required Fields
 
 The following fields are REQUIRED and must be collected:
 - **cost** - Total purchase cost in GBP (£)
-- **source** - Where purchased (eBay, BrickLink, Facebook Marketplace, Amazon, Car Boot, Charity Shop, Retail, Vinted, Other)
-- **payment_method** - How paid (PayPal, Bank Transfer, Cash, Credit Card, Debit Card)
+- **source** - Where purchased (see Platform Visual Recognition section)
+- **payment_method** - How paid (see Payment Methods section for exact values)
 - **purchase_date** - When purchased (YYYY-MM-DD format)
 - **condition** - Item condition (New or Used)
 - **set_numbers** - At least one LEGO set number (e.g., 75192, 10294)
 - **listing_platform** - Where to list for sale (amazon, ebay, bricklink, brickowl)
+- **location** - Storage location (e.g., "Loft- S1", "Garage- B2")
+
+## Auto-Populated Fields
+
+The following fields are auto-populated and should NOT be asked:
+- **notes** - Always set to: `Created by Purchase Inventory Skill on {YYYY-MM-DD HH:MM}`
+  - Capture the actual timestamp when user approves the insert (says "yes")
+  - Do NOT fabricate or estimate timestamps
+  - Format: 24-hour time, e.g., "2026-01-29 14:45"
+
+## Platform Visual Recognition
+
+When analysing receipt/purchase images, identify the platform by these visual patterns:
+
+### Vinted
+- Red/coral circle icon with item thumbnail
+- Format: "Bundle X items" or single item name
+- Price format: "£XX.XX"
+- Status text: "Package delivered" or shipping status
+- App-style receipt layout with rounded corners
+
+### eBay
+- Blue/multi-color eBay logo
+- "Order details" or "Purchase history" header
+- Seller name prominently displayed
+- Item number: 12-digit format
+- "Paid" status or payment confirmation
+
+### Facebook Marketplace
+- Blue Facebook header or "Marketplace" text
+- Seller profile picture visible
+- "Marked as sold" or similar status
+- Chat-style interface elements
+- Location/collection point shown
+
+### Amazon
+- Orange/black Amazon logo or smile arrow
+- "Order placed" with date
+- Order number format: XXX-XXXXXXX-XXXXXXX
+- "Arriving" or delivery status
+- Product images in grid
+
+### BrickLink
+- Blue BrickLink header
+- Order number format: numeric
+- Store name displayed
+- Item thumbnails with part/set numbers
+
+**IMPORTANT**: Do not guess the source. If unsure, ask the user to confirm.
 
 ## Workflow
 
@@ -34,6 +102,8 @@ When invoked, first check what input the user provided:
 - **Photos**: Analyse using vision capability - look for receipt details, LEGO set boxes, set numbers
 - **Text**: Parse for set numbers, costs, sources, dates
 - **Mixed**: Combine information from both
+
+**Track provided photos** for later attachment to the purchase record.
 
 If NO photos and NO text provided:
 ```
@@ -76,12 +146,17 @@ Examples where helpful, wait for response before next question.
 Questions to ask if missing:
 - **Cost**: "What was the total cost in GBP? (e.g., £450 or 450)"
 - **Source**: "Where did you purchase this? (eBay, BrickLink, Facebook Marketplace, Amazon, Car Boot, Charity Shop, Retail, Vinted, Other)"
-- **Payment Method**: "How did you pay? (PayPal, Bank Transfer, Cash, Credit Card, Debit Card)"
+- **Payment Method**: "How did you pay? (Cash, Card, PayPal, Bank Transfer, HSBC - Cash, Monzo - Card)"
 - **Purchase Date**: "When did you purchase this? (YYYY-MM-DD or natural language like 'yesterday', 'last week')"
 - **Condition**: "What condition? (New or Used)"
 - **Set Numbers**: "Which LEGO set numbers? (e.g., 75192, 10294)"
 - **Listing Platform**: "Where will you list these for sale? (amazon, ebay, bricklink, brickowl)"
 - **Quantity per set**: "How many of each set? (e.g., 3x 75192, 2x 10294)"
+- **Location**: "Where will you store these items? (e.g., Loft- S1, Garage- B2)"
+
+**Collection/Mileage** (for in-person collection sources):
+If source is Facebook Marketplace, Car Boot, Charity Shop, or Other:
+- "Did you collect this in person? If yes, what was the round-trip mileage? (Enter 0 if posted/delivered)"
 
 DO NOT re-ask fields already extracted from photos/text.
 
@@ -152,37 +227,71 @@ Let me confirm what I understood:
 - **Items**: {count} inventory items ({condition})
 - **Sets**: {set_list_with_quantities}
 - **Listing Platform**: {platform}
+- **Location**: {location}
 - **Mode**: {1:X or 1:1}
+- **Photos to attach**: {N} photo(s)
 
 Is this correct? (yes/edit)
 ```
 
-### Phase 6: Review Table
+### Phase 6: Review Table (Full Field View)
 
-Display the data in markdown tables:
+Display ALL fields for both record types, showing blanks explicitly:
 
-**Purchase(s):**
+**Purchase Record:**
 ```markdown
-## Purchase Record(s)
+## Purchase Record
 
 | Field | Value |
 |-------|-------|
-| Description | {short_description} |
-| Cost | £{cost} |
-| Source | {source} |
-| Payment Method | {payment_method} |
-| Date | {purchase_date} |
+| **purchase_date** | 2026-01-29 |
+| **short_description** | Vinted - 75192, 10294 |
+| **cost** | £450.00 |
+| **source** | Vinted |
+| **payment_method** | Card |
+| notes | Created by Purchase Inventory Skill on {timestamp on approval} |
+| supplier_name | *blank* |
+| supplier_contact | *blank* |
+| invoice_number | *blank* |
+| shipping_cost | *blank* |
+| tax_amount | *blank* |
+| mileage | *blank* or {miles} |
 ```
 
 **Inventory Items:**
 ```markdown
 ## Inventory Items
 
-| Set Number | Name | Condition | Qty | Cost/Item | Platform | ASIN | Status |
-|------------|------|-----------|-----|-----------|----------|------|--------|
-| 75192 | Millennium Falcon | New | 2 | £225.00 | amazon | B075SDMMMV | BACKLOG |
-| 10294 | Titanic | New | 1 | £0.00 | amazon | B09BG3N63L | BACKLOG |
+| Field | Item 1 | Item 2 | ... |
+|-------|--------|--------|-----|
+| **set_number** | 75192 | 10294 | |
+| **item_name** | Millennium Falcon | Titanic | |
+| **condition** | New | New | |
+| **status** | BACKLOG | BACKLOG | |
+| **source** | Vinted | Vinted | |
+| **purchase_date** | 2026-01-29 | 2026-01-29 | |
+| **cost** | £225.00 | £225.00 | |
+| **listing_platform** | amazon | amazon | |
+| **amazon_asin** | B075SDMMMV | B09BG3N63L | |
+| **location** | Loft- S1 | Loft- S1 | |
+| **notes** | Created by... | Created by... | |
+| purchase_id | *auto-linked* | *auto-linked* | |
+| sku | *auto-generated* | *auto-generated* | |
+| quantity | *blank* | *blank* | |
+| ebay_listing_id | *blank* | *blank* | |
+| bricklink_lot_id | *blank* | *blank* | |
+| brickowl_lot_id | *blank* | *blank* | |
+| amazon_sku | *blank* | *blank* | |
+| listed_price | *blank* | *blank* | |
+| listed_date | *blank* | *blank* | |
+| sold_price | *blank* | *blank* | |
+| sold_date | *blank* | *blank* | |
+| buyer_name | *blank* | *blank* | |
+| shipping_cost | *blank* | *blank* | |
+| platform_fees | *blank* | *blank* | |
 ```
+
+**Legend**: Bold = populated, *blank* = not set, *auto-X* = system-generated
 
 Then prompt:
 ```
@@ -203,6 +312,8 @@ What would you like to change?
 Examples:
 - "Change cost to £500"
 - "Change condition to Used"
+- "Change source to eBay"
+- "Change location to Garage- B2"
 - "Remove set 10294"
 - "Add 2x 75375"
 ```
@@ -211,9 +322,11 @@ After edit, re-show the review table.
 
 ### Phase 8: Record Creation
 
-On "yes" approval, create records in this order:
+On "yes" approval:
 
-**Step 1: Create Purchase(s)**
+1. **Capture the current timestamp** for notes field (e.g., "2026-01-29 14:45")
+
+2. **Create Purchase record:**
 
 For 1:X mode (single purchase):
 ```
@@ -222,16 +335,17 @@ Content-Type: application/json
 
 {
   "purchase_date": "2026-01-28",
-  "short_description": "eBay - 75192, 10294",
+  "short_description": "Vinted - 75192, 10294",
   "cost": 450,
-  "source": "eBay",
-  "payment_method": "PayPal"
+  "source": "Vinted",
+  "payment_method": "Card",
+  "notes": "Created by Purchase Inventory Skill on 2026-01-29 14:45"
 }
 ```
 
 For 1:1 mode (separate purchases), repeat for each item.
 
-**Step 2: Create Inventory Items**
+3. **Create Inventory Items:**
 
 ```
 POST http://localhost:3000/api/inventory
@@ -243,31 +357,21 @@ Content-Type: application/json
     "item_name": "Millennium Falcon",
     "condition": "New",
     "status": "BACKLOG",
-    "source": "eBay",
+    "source": "Vinted",
     "purchase_date": "2026-01-28",
     "cost": 225,
     "purchase_id": "{purchase_id_from_step_1}",
     "listing_platform": "amazon",
-    "amazon_asin": "B075SDMMMV"
-  },
-  {
-    "set_number": "75192",
-    "item_name": "Millennium Falcon",
-    "condition": "New",
-    "status": "BACKLOG",
-    "source": "eBay",
-    "purchase_date": "2026-01-28",
-    "cost": 225,
-    "purchase_id": "{purchase_id_from_step_1}",
-    "listing_platform": "amazon",
-    "amazon_asin": "B075SDMMMV"
+    "amazon_asin": "B075SDMMMV",
+    "location": "Loft- S1",
+    "notes": "Created by Purchase Inventory Skill on 2026-01-29 14:45"
   }
 ]
 ```
 
 Note: Quantity expansion - if "2x 75192", create 2 separate inventory item records.
 
-**Step 3: Confirm Success**
+4. **Confirm Success:**
 
 ```
 **Records Created Successfully**
@@ -275,9 +379,46 @@ Note: Quantity expansion - if "2x 75192", create 2 separate inventory item recor
 - Purchase ID: {id}
 - Inventory Items: {count} items created
 - Total Cost: £{cost}
+- Location: {location}
 - Status: All items set to BACKLOG
 
 The items are now in your inventory and ready for listing.
+```
+
+### Phase 9: Photo Attachment
+
+If user provided photos during input, attach them to the purchase record:
+
+```javascript
+// Via Playwright - upload each photo
+async () => {
+  const formData = new FormData();
+  formData.append('file', photoBlob, 'photo.jpg');
+
+  const response = await fetch(`http://localhost:3000/api/purchases/${purchaseId}/photos`, {
+    method: 'POST',
+    body: formData
+  });
+  return response.json();
+}
+```
+
+After attachment:
+```
+**Photos Attached**
+
+- {N} photo(s) attached to purchase record
+- View at: /purchases/{purchase_id}
+```
+
+**Photo types to attach:**
+- Receipt images → attach to purchase
+- Stock/set photos → attach to purchase (for reference)
+
+**Note**: Photo attachment via Claude Code may have limitations. If attachment fails, inform the user:
+```
+Could not automatically attach photos. Please manually upload them at:
+/purchases/{purchase_id}
 ```
 
 ### Error Handling & Rollback
@@ -346,9 +487,50 @@ Items: {count}
 How should I allocate costs?
 1. **Equal split** - £{total/count} per item
 2. **Custom** - Specify cost for each item
+3. **Proportional by listing value** - Based on Amazon buy box prices (Amazon platform only)
 
 Your choice:
 ```
+
+### Proportional by Listing Value (Amazon only)
+
+If user selects proportional allocation and listing_platform is "amazon":
+
+1. Fetch buy box price for each ASIN via Amazon Competitive Summary API:
+```
+GET http://localhost:3000/api/test/amazon-competitive-summary?asin={ASIN}
+```
+
+2. Extract `lowestOffers[0].totalPrice.amount` as the buy box price
+
+3. Round each price DOWN to nearest .99 or .49:
+   - £38.98 → £38.49
+   - £27.50 → £27.49
+   - £23.10 → £22.99
+
+4. Calculate proportion: `item_list_value / total_list_value`
+
+5. Allocate: `proportion × total_purchase_cost`
+
+6. Show allocation table for approval:
+```
+| Set | ASIN | Buy Box | Rounded | Proportion | Allocated Cost |
+|-----|------|---------|---------|------------|----------------|
+| 40756 | B0DTV6K5HC | £38.98 | £38.49 | 34.69% | £11.04 |
+```
+
+**Note**: Amazon API has rate limits (~35 seconds between calls). Inform user:
+```
+Fetching Amazon prices for {N} items. This will take approximately {N × 35} seconds due to API rate limits.
+```
+
+## Timestamp Rules
+
+1. **Never fabricate timestamps** - Do not guess or estimate times
+2. **Capture on approval** - Record the actual time when user says "yes" to create
+3. **Format**: 24-hour format: `YYYY-MM-DD HH:MM`
+4. **In review table**: Show `{timestamp on approval}` as placeholder until user confirms
+5. **On creation**: Capture current time and use for notes field
 
 ## Status Values
 
@@ -380,29 +562,56 @@ Common purchase sources:
 
 ## Payment Methods
 
-Common payment methods:
+**Use ONLY these exact values from the system dropdown:**
+- Cash
+- Card
 - PayPal
 - Bank Transfer
-- Cash
-- Credit Card
-- Debit Card
+- HSBC - Cash
+- Monzo - Card
+
+**IMPORTANT**:
+- Do NOT use "Debit Card" or "Credit Card" → use "Card"
+- Do NOT use "Monzo" alone → use "Monzo - Card"
+- Do NOT use "HSBC" alone → use "HSBC - Cash"
+
+## Collection & Mileage
+
+For in-person collection purchases (Facebook Marketplace, Car Boot, Charity Shop, Other):
+
+1. Ask if collected in person and round-trip mileage
+2. If mileage > 0, record as mileage expense on purchase
+3. HMRC mileage rate: 45p/mile (first 10,000 miles/year)
+
+API to add mileage:
+```
+POST http://localhost:3000/api/purchases/{purchase_id}/mileage
+Content-Type: application/json
+
+{
+  "miles": 25,
+  "rate": 0.45,
+  "description": "Collection from {location}"
+}
+```
 
 ## Example Session
 
 ```
 User: /purchase-inventory
-[Attaches photo of receipt showing "eBay - 2x LEGO 75192 - £450"]
+[Attaches photo of Vinted receipt showing "Bundle 3 items - £31.85"]
+[Attaches photo of 3 LEGO set boxes]
 
-Claude: I can see from the receipt:
-- Source: eBay
-- Sets: 2x 75192
-- Cost: £450
+Claude: I can see from the images:
+- Source: Vinted (identified from receipt format)
+- Sets: 40756, 40491, 40575
+- Cost: £31.85
 
 **Missing Information**
 
-Payment Method: How did you pay? (PayPal, Bank Transfer, Cash, Credit Card, Debit Card)
+Payment Method: How did you pay? (Cash, Card, PayPal, Bank Transfer, HSBC - Cash, Monzo - Card)
 
-User: PayPal
+User: Card
 
 Claude: Condition: What condition are the sets? (New or Used)
 
@@ -412,37 +621,68 @@ Claude: Listing Platform: Where will you list these for sale? (amazon, ebay, bri
 
 User: amazon
 
+Claude: Location: Where will you store these items? (e.g., Loft- S1, Garage- B2)
+
+User: Loft- S1
+
 Claude: **Creation Mode**
 
-I see 2 identical sets. How should I create the records?
+I see 3 different sets. How should I create the records?
 
-1. **1:X (Single Purchase)** - One purchase record (£450), 2 items linked to it
-2. **1:1 (Separate Purchases)** - Two purchase records (£225 each)
+1. **1:X (Single Purchase)** - One purchase record (£31.85), 3 items linked to it
+2. **1:1 (Separate Purchases)** - Three purchase records
 
 Which mode? (1 or 2)
 
 User: 1
 
-Claude: **Summary**
+Claude: **Cost Allocation**
 
-- **Purchase**: £450 from eBay via PayPal on 2026-01-28
-- **Items**: 2 inventory items (New)
-- **Sets**: 2x 75192 Millennium Falcon
-- **Listing Platform**: amazon
-- **Mode**: 1:X (Single Purchase)
+Total cost: £31.85
+Items: 3
 
-Is this correct? (yes/edit)
+How should I allocate costs?
+1. **Equal split** - £10.62 per item
+2. **Custom** - Specify cost for each item
+3. **Proportional by listing value** - Based on Amazon buy box prices
+
+Your choice:
+
+User: 3
+
+Claude: Fetching Amazon prices for 3 items. This will take approximately 105 seconds due to API rate limits.
+
+[Fetches prices...]
+
+| Set | Buy Box | Rounded | Proportion | Allocated Cost |
+|-----|---------|---------|------------|----------------|
+| 40756 | £38.98 | £38.49 | 43.2% | £13.76 |
+| 40491 | £27.99 | £27.49 | 30.9% | £9.84 |
+| 40575 | £23.99 | £23.49 | 26.4% | £8.41 |
+
+Does this allocation look right? (yes/adjust)
 
 User: yes
 
-Claude: [Shows review tables, then creates records]
+Claude: [Shows full review table with all fields]
+
+**Create these records?**
+
+User: yes
+
+Claude: [Creates records at 2026-01-29 14:45]
 
 **Records Created Successfully**
 
 - Purchase ID: abc-123-def
-- Inventory Items: 2 items created
-- Total Cost: £450
+- Inventory Items: 3 items created
+- Total Cost: £31.85
+- Location: Loft- S1
 - Status: All items set to BACKLOG
+
+**Photos Attached**
+- 2 photo(s) attached to purchase record
+- View at: /purchases/abc-123-def
 ```
 
 ## Notes
@@ -451,3 +691,18 @@ Claude: [Shows review tables, then creates records]
 - SKUs are auto-generated by the API (pattern: HB-{CONDITION}-{SET}-{TIMESTAMP}-{INDEX})
 - Google Sheets dual-write happens automatically via the API
 - ASIN lookup only happens when listing_platform is "amazon"
+- Always attach provided photos to the purchase record after creation
+
+## Troubleshooting
+
+### Playwright "Browser already in use" error
+
+If Playwright fails with browser lock errors:
+
+1. Try `mcp__playwright__browser_close` first
+2. If that fails, inform user to close Chrome manually
+3. As last resort: `powershell "Stop-Process -Name chrome -Force -EA 0"`
+
+### API returns "Unauthorized"
+
+The APIs require an authenticated browser session. Do NOT use curl or direct fetch from CLI. Always use Playwright `browser_evaluate` to make API calls through the authenticated browser.
