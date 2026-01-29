@@ -9,7 +9,7 @@ IMPORTANT RULES:
 1. Always return valid JSON, nothing else
 2. Extract monetary values as numbers (not strings)
 3. Recognize common UK currency formats (£, GBP)
-4. Identify sources like: eBay, FB Marketplace, BrickLink, Amazon, Car Boot, Gumtree, Retail, Private, Auction
+4. Identify sources like: eBay, FB Marketplace, BrickLink, Amazon, Vinted, Car Boot, Gumtree, Retail, Private, Auction
 5. Identify payment methods like: Cash, Card, PayPal, Bank Transfer
 6. Extract LEGO set numbers (typically 4-6 digit numbers like 75192, 10294)
 7. If a date is mentioned, extract it in YYYY-MM-DD format
