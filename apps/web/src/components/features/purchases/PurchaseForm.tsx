@@ -57,6 +57,7 @@ const SOURCES = [
   { value: 'FB Marketplace', label: 'FB Marketplace' },
   { value: 'BrickLink', label: 'BrickLink' },
   { value: 'Amazon', label: 'Amazon' },
+  { value: 'Vinted', label: 'Vinted' },
   { value: 'Car Boot', label: 'Car Boot' },
   { value: 'Gumtree', label: 'Gumtree' },
   { value: 'Retail', label: 'Retail' },
