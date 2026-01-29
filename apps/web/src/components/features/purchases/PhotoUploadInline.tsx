@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Camera, Upload, X, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { compressImage } from '@/lib/utils/image-compression';
 
 /**
  * Pending image to be uploaded after purchase creation
@@ -59,26 +60,41 @@ export function PhotoUploadInline({
           continue;
         }
 
-        // Validate file size (10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          continue;
-        }
+        const id = `pending-${Date.now()}-${i}`;
+        const preview = URL.createObjectURL(file);
 
         try {
-          const id = `pending-${Date.now()}-${i}`;
-          const preview = URL.createObjectURL(file);
-          const base64 = await fileToBase64(file);
+          // Compress image before storing (max 1600px, 80% quality)
+          const compressed = await compressImage(file, {
+            maxDimension: 1600,
+            quality: 0.8,
+            outputType: 'image/jpeg',
+          });
 
           newImages.push({
             id,
             file,
             preview,
-            base64,
-            mimeType: file.type as PendingImage['mimeType'],
+            base64: compressed.base64,
+            mimeType: compressed.mimeType,
             filename: file.name,
           });
-        } catch (error) {
-          console.error('Failed to process image:', error);
+        } catch {
+          // Fallback to original if compression fails
+          try {
+            const base64 = await fileToBase64(file);
+            newImages.push({
+              id,
+              file,
+              preview,
+              base64,
+              mimeType: file.type as PendingImage['mimeType'],
+              filename: file.name,
+            });
+          } catch {
+            // Clean up preview if both fail
+            URL.revokeObjectURL(preview);
+          }
         }
       }
 
@@ -233,7 +249,7 @@ export function PhotoUploadInline({
               Drag and drop photos here, or click to browse
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              JPEG, PNG, WebP, GIF (max 10MB each, up to {maxImages} images)
+              JPEG, PNG, WebP, GIF (auto-compressed, up to {maxImages} images)
             </p>
           </div>
         )}
