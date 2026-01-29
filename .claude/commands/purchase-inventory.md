@@ -389,9 +389,76 @@ Note: Quantity expansion - if "2x 75192", create 2 separate inventory item recor
 The items are now in your inventory and ready for listing.
 ```
 
-### Phase 9: Photo Attachment
+### Phase 9: Photo Attachment (Drop Zone)
 
-If user provided photos during input, attach them to the purchase record using the images API.
+After creating records, use the **drop zone workflow** to attach photos:
+
+**Drop Zone Location:**
+```
+{project_root}/purchase-photos/
+```
+
+**Workflow:**
+
+1. **Prompt user to add photos to drop zone:**
+```
+**Photo Upload**
+
+Please copy your receipt/set photos to the drop zone folder:
+📁 `purchase-photos/`
+
+Supported formats: .jpg, .jpeg, .png, .webp, .gif
+
+Once you've added the photos, type **done** to upload them, or **skip** to continue without photos.
+```
+
+2. **When user says "done", scan the drop zone:**
+```javascript
+// Use Glob to find images in drop zone
+const images = await glob('purchase-photos/*.{jpg,jpeg,png,webp,gif}');
+```
+
+3. **Navigate to purchase page and use file upload UI:**
+```javascript
+// Navigate to purchase detail page
+await mcp__playwright__browser_navigate({ url: `http://localhost:3000/purchases/${purchaseId}` });
+
+// Click on the drop zone area to trigger file chooser
+await mcp__playwright__browser_click({ ref: 'drop-zone-ref', element: 'Drag and drop photos area' });
+
+// Upload files via Playwright file upload
+await mcp__playwright__browser_file_upload({
+  paths: ['c:/path/to/purchase-photos/image1.jpg', 'c:/path/to/purchase-photos/image2.jpg']
+});
+```
+
+**Why UI upload instead of API:**
+- The image upload API requires an authenticated browser session
+- The UI provides client-side compression (handles large images automatically)
+- Direct API calls from CLI return 401 Unauthorized
+
+4. **Wait for upload to complete:**
+```javascript
+// Wait for upload confirmation
+await mcp__playwright__browser_wait_for({ time: 2 });
+// Check snapshot to verify image appeared
+await mcp__playwright__browser_snapshot();
+```
+
+5. **Clean up drop zone after successful upload:**
+```bash
+# Delete uploaded images from drop zone
+rm purchase-photos/*
+```
+
+6. **Confirm upload:**
+```
+**Photos Uploaded Successfully**
+
+- {N} photo(s) attached to purchase record
+- Drop zone cleared
+- View at: http://localhost:3000/purchases/{purchase_id}
+```
 
 **API Endpoint:**
 ```
@@ -410,47 +477,15 @@ Content-Type: application/json
 }
 ```
 
-**Implementation via Playwright:**
-
-Since Claude Code receives images as part of the conversation, you need to:
-
-1. **For 1:1 mode** - Each purchase gets the relevant photo(s)
-2. **For 1:X mode** - All photos go to the single purchase record
-
-**Photo upload is currently manual** because Claude Code cannot programmatically extract base64 from conversation images. After creating records, inform the user:
-
-```
-**Records Created Successfully**
-
-[...summary...]
-
-**Photos**: {N} photo(s) were provided but must be attached manually.
-Please upload them at: http://localhost:3000/purchases/{purchase_id}
-```
-
-**Future Enhancement**: When photo upload automation is available, use:
-```javascript
-// Via Playwright browser_evaluate
-async (purchaseId, images) => {
-  const response = await fetch(`/api/purchases/${purchaseId}/images`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      images: images.map((img, i) => ({
-        id: `img-${Date.now()}-${i}`,
-        base64: img.base64,
-        mimeType: img.mimeType,
-        filename: img.filename
-      }))
-    })
-  });
-  return response.json();
-}
-```
-
 **Photo types to attach:**
 - Receipt images → attach to purchase
 - Stock/set photos → attach to purchase (for reference)
+
+**If user says "skip":**
+```
+Skipping photo upload. You can add photos later at:
+http://localhost:3000/purchases/{purchase_id}
+```
 
 ### Error Handling & Rollback
 
@@ -759,6 +794,14 @@ If Playwright fails with browser lock errors:
 
 The APIs require an authenticated browser session. Do NOT use curl or direct fetch from CLI. Always use Playwright `browser_evaluate` to make API calls through the authenticated browser.
 
+### Dev server on different port
+
+If port 3000 is in use, the dev server may start on a different port (e.g., 3003). Check the server output for the actual port:
+```
+- Local: http://localhost:3003
+```
+Update all API and navigation URLs accordingly.
+
 ---
 
 ## Changelog
@@ -779,5 +822,20 @@ The APIs require an authenticated browser session. Do NOT use curl or direct fet
 - Fixed Amazon competitive summary API not supporting batch requests
 
 **Known Limitations:**
-- Photo attachment is manual (Claude Code cannot extract base64 from conversation images)
 - 1:1 mode with many items creates many separate API calls (could be optimized with batch endpoints)
+
+### 2026-01-29 - v1.2
+
+**Improvements:**
+1. **Drop zone photo upload** - Photos are now uploaded automatically via a drop zone folder workflow:
+   - User copies photos to `purchase-photos/` folder
+   - Skill uploads via Playwright file upload (not API - requires auth session)
+   - Client-side compression handles large images automatically
+   - Drop zone cleaned up after successful upload
+
+**Drop Zone Location:** `{project_root}/purchase-photos/`
+
+**Technical Note:** Photo upload uses the browser UI file chooser rather than direct API calls because:
+- The `/api/purchases/{id}/images` endpoint requires an authenticated Supabase session
+- Direct CLI API calls return 401 Unauthorized
+- The UI provides automatic client-side compression for large images (tested with 4.9MB → compressed JPEG)
