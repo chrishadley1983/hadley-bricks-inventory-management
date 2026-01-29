@@ -91,59 +91,63 @@ export const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
     name: 'Used LEGO',
     type: 'lego_used',
     is_default: true,
-    content: `<p><b>Set Number:</b> [Set Number]</p>
-<p><b>Set Name:</b> [Set Name]</p>
-<p><b>Year:</b> [Year]</p>
-<p><b>Condition:</b> Used</p>
-<p><b>Box:</b> [Yes/No/See Photos]</p>
-<p><b>Instructions:</b> [Yes/No/Available Online]</p>
+    content: `<b>Set Number:</b> [Set Number]<br>
+<b>Set Name:</b> [Set Name]<br>
+<b>Year:</b> [Year]<br>
+<b>Condition:</b> Used<br>
+<b>Box:</b> [Yes/No/See Photos]<br>
+<b>Instructions:</b> [Yes/No/Available Online]<br>
 <br>
-<p><b>Description:</b></p>
-<p>[Insert generated description based on key points]</p>
+<b>Description:</b> [AI_DESCRIPTION]
+<!-- BOILERPLATE_START -->
 <br>
-<p>Items are shipped within 2 working days, often sooner.</p>
-<p>Any questions with our listing please do not hesitate to contact us. We are adding new stock daily so take a look at our store for other new and used sets.</p>
-<p>If you have any issues with purchased products please contact us so that we can resolve prior to providing us with feedback.</p>
-<hr>
-<p>Used Lego sets are checked for completeness prior to listing and listed as complete unless described in the listing - we build and inventory check all sets. However the manual nature of checking Lego means that a small number of pieces may be missing from all used Lego listings.</p>
-<p>Used Lego may show signs of playwear, marks and slight discolouration, particularly with some of the vintage sets we sell. Refer to the condition description for anything explicitly called out. Broken or missing pieces are replaced as part of the sorting process.</p>
-<p>Used Lego sets are sent dismantled unless otherwise stated. Please check listing carefully to see whether box and instructions are included - where instructions are not included we can provide a link to online instructions if available.</p>`,
+<b>About Our Used LEGO:</b>
+<ul>
+<li>Every set built and checked before listing</li>
+<li>Thoroughly checked - if anything's missing, just let us know and we'll sort it</li>
+<li>May show normal play wear on vintage sets - see condition notes</li>
+<li>Sent dismantled unless stated</li>
+<li>Box/instructions only if listed</li>
+</ul>
+Questions or concerns? Just message us via eBay. New sets added daily!`,
   },
   {
     name: 'New LEGO',
     type: 'lego_new',
     is_default: true,
-    content: `<p><b>Set Number:</b> [Set Number]</p>
-<p><b>Set Name:</b> [Set Name]</p>
-<p><b>Year:</b> [Year]</p>
-<p><b>Retired:</b> [Yes/No]</p>
-<p><b>Condition:</b> New</p>
-<p><b>Box Condition:</b> Good - please refer to photos</p>
+    content: `<b>Set Number:</b> [Set Number]<br>
+<b>Set Name:</b> [Set Name]<br>
+<b>Year:</b> [Year]<br>
+<b>Retired:</b> [Yes/No]<br>
+<b>Condition:</b> New<br>
+<b>Box Condition:</b> Good - please refer to photos<br>
 <br>
-<p><b>Description:</b></p>
-<p>[Insert generated description based on key points]</p>
+<b>Description:</b> [AI_DESCRIPTION]
+<!-- BOILERPLATE_START -->
 <br>
-<p>Items are shipped within 2 working days, often sooner.</p>
-<p>Any questions with our listing please do not hesitate to contact us. We are adding new stock daily so take a look at our store for other new and used sets.</p>
-<p>If you have any issues with purchased products please contact us so that we can resolve prior to providing us with feedback.</p>
-<hr>
-<p>Returns are only available if the box is returned in the same condition as sent, and is carefully sent back to us given the fragile nature of Lego boxes.</p>`,
+<b>About Our New LEGO:</b>
+<ul>
+<li>Factory sealed - never opened</li>
+<li>Box condition shown in photos</li>
+</ul>
+Questions or concerns? Just message us via eBay. New sets added daily!`,
   },
   {
     name: 'Other Items',
     type: 'general',
     is_default: true,
-    content: `<p><b>Brand:</b> [Brand]</p>
-<p><b>Model / Type:</b> [Model or Type]</p>
+    content: `<b>Brand:</b> [Brand]<br>
+<b>Model / Type:</b> [Model or Type]<br>
 <br>
-<p><b>Description:</b></p>
-<p>[Insert generated description based on key points]</p>
+<b>Description:</b> [AI_DESCRIPTION]
+<!-- BOILERPLATE_START -->
 <br>
-<p>Items are shipped within 2 working days, often sooner.</p>
-<p>Any questions with our listing please do not hesitate to contact us. We are adding new stock daily so take a look at our store for other items.</p>
-<p>If you have any issues with purchased products please contact us so that we can resolve prior to providing us with feedback.</p>
-<hr>
-<p>Returns are available within 30 days of purchase as long as the item is in the condition it was sold, for new items this includes any product packaging and labels that were sent as part of the sale - buyer to cover cost of return postage (unless there is an issue with the item).</p>`,
+<b>About This Item:</b>
+<ul>
+<li>Checked and photographed before listing</li>
+<li>Condition accurately described</li>
+</ul>
+Questions or concerns? Just message us via eBay. New items added daily!`,
   },
 ];
 
