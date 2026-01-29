@@ -75,6 +75,7 @@ export function PurchaseEvaluatorWizard() {
   const [useImageChunking, setUseImageChunking] = React.useState<boolean>(true);
   const [listingDescription, setListingDescription] = React.useState<string>('');
   const [photoAnalysisItems, setPhotoAnalysisItems] = React.useState<PhotoAnalysisItem[]>([]);
+  const [isAnalysisInProgress, setIsAnalysisInProgress] = React.useState<boolean>(false);
 
   // Auction mode state
   const [auctionSettings, setAuctionSettings] = React.useState<AuctionSettings>(DEFAULT_AUCTION_SETTINGS);
@@ -280,6 +281,13 @@ export function PurchaseEvaluatorWizard() {
 
   // Handle photo analysis trigger
   const handleAnalyzePhotos = async () => {
+    // Guard against multiple concurrent calls
+    if (isAnalysisInProgress) {
+      console.log('[handleAnalyzePhotos] Analysis already in progress, ignoring call');
+      return;
+    }
+
+    setIsAnalysisInProgress(true);
     try {
       const result = await photoAnalysis.analyzePhotos({
         primaryModel,
@@ -295,6 +303,8 @@ export function PurchaseEvaluatorWizard() {
       }
     } catch (error) {
       console.error('Photo analysis failed:', error);
+    } finally {
+      setIsAnalysisInProgress(false);
     }
   };
 
@@ -372,6 +382,7 @@ export function PurchaseEvaluatorWizard() {
     setUseBrickognize(true);
     setListingDescription('');
     setPhotoAnalysisItems([]);
+    setIsAnalysisInProgress(false);
 
     // Reset auction mode state
     setAuctionSettings(DEFAULT_AUCTION_SETTINGS);
@@ -430,9 +441,9 @@ export function PurchaseEvaluatorWizard() {
           auctionSettings={auctionSettings}
           onAuctionSettingsChange={setAuctionSettings}
           onAnalyze={handleAnalyzePhotos}
-          isAnalyzing={photoAnalysis.isAnalyzing}
+          isAnalyzing={isAnalysisInProgress || photoAnalysis.isAnalyzing}
           progressMessage={photoAnalysis.progressMessage}
-          canAnalyze={photoAnalysis.images.length > 0 && !photoAnalysis.isAnalyzing}
+          canAnalyze={photoAnalysis.images.length > 0 && !isAnalysisInProgress && !photoAnalysis.isAnalyzing}
         />
       )}
 
