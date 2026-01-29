@@ -175,9 +175,23 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const asin = searchParams.get('asin');
+    const asins = searchParams.get('asins'); // Comma-separated list for batch
 
-    if (!asin) {
-      return NextResponse.json({ error: 'Missing asin parameter' }, { status: 400 });
+    // Support both single asin and batch asins params
+    const asinList = asins ? asins.split(',').map((a) => a.trim()) : asin ? [asin] : [];
+
+    if (asinList.length === 0) {
+      return NextResponse.json(
+        { error: 'Missing asin or asins parameter. Use asins=ASIN1,ASIN2 for batch.' },
+        { status: 400 }
+      );
+    }
+
+    if (asinList.length > 20) {
+      return NextResponse.json(
+        { error: 'Maximum 20 ASINs per batch request' },
+        { status: 400 }
+      );
     }
 
     // Get Amazon credentials from platform_credentials (encrypted)
@@ -191,111 +205,116 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Call getCompetitiveSummary (v2022-05-01)
-    const summaryResponse = await getCompetitiveSummary([asin], credentials);
+    // Call getCompetitiveSummary (v2022-05-01) - batch API
+    const summaryResponse = await getCompetitiveSummary(asinList, credentials);
 
-    // Extract the response for our ASIN
+    // Helper to extract pricing data from a single ASIN response
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const extractPricingData = (asinResponse: any) => {
+      if (!asinResponse || asinResponse.status?.statusCode !== 200) {
+        return {
+          asin: asinResponse?.asin,
+          error: `API returned status ${asinResponse?.status?.statusCode}: ${asinResponse?.status?.reasonPhrase}`,
+          details: asinResponse?.errors,
+        };
+      }
+
+      const body = asinResponse.body;
+
+      // Extract WasPrice from referencePrices
+      const referencePrices = body?.referencePrices ?? [];
+      const wasPrice = referencePrices.find(
+        (rp: { name?: string; referencePriceId?: string }) =>
+          rp.name === 'WasPrice' || rp.referencePriceId === 'WAS_PRICE'
+      );
+      const competitivePrice = referencePrices.find(
+        (rp: { name?: string; referencePriceId?: string }) =>
+          rp.name === 'CompetitivePrice' || rp.referencePriceId === 'COMPETITIVE_PRICE'
+      );
+
+      // Extract featured offer (Buy Box)
+      const featuredOffer =
+        body?.featuredBuyingOptions?.[0]?.segmentedFeaturedOffers?.[0]?.featuredOffer;
+
+      // Extract lowest priced offers
+      const lowestPricedOffersData = body?.lowestPricedOffers ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lowestOffers = lowestPricedOffersData.flatMap((lpo: any) => {
+        if (lpo.offers && Array.isArray(lpo.offers)) {
+          return lpo.offers;
+        }
+        return [lpo];
+      });
+
+      return {
+        asin: asinResponse.asin,
+        marketplaceId: UK_MARKETPLACE_ID,
+        status: asinResponse.status,
+        wasPrice: wasPrice?.price ?? null,
+        competitivePrice: competitivePrice?.price ?? null,
+        featuredOffer: featuredOffer
+          ? {
+              listingPrice: featuredOffer.listingPrice,
+              shippingPrice: featuredOffer.shippingPrice,
+              totalPrice: featuredOffer.listingPrice
+                ? {
+                    currencyCode: featuredOffer.listingPrice.currencyCode,
+                    amount:
+                      featuredOffer.listingPrice.amount +
+                      (featuredOffer.shippingPrice?.amount ?? 0),
+                  }
+                : null,
+              condition: featuredOffer.condition,
+              offerType: featuredOffer.offerType,
+            }
+          : null,
+        referencePrices: body?.referencePrices ?? [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        lowestOffers: lowestOffers.map((offer: any) => {
+          const shippingPrice = offer.shippingOptions?.[0]?.price ?? offer.shippingPrice;
+          const listingPrice = offer.listingPrice;
+          return {
+            condition: offer.condition,
+            subCondition: offer.subCondition,
+            fulfillmentType: offer.fulfillmentType,
+            sellerId: offer.sellerId,
+            listingPrice: listingPrice,
+            shippingPrice: shippingPrice,
+            totalPrice: listingPrice
+              ? {
+                  currencyCode: listingPrice.currencyCode,
+                  amount: listingPrice.amount + (shippingPrice?.amount ?? 0),
+                }
+              : null,
+          };
+        }),
+      };
+    };
+
+    // For batch requests, return array of results
+    if (asinList.length > 1) {
+      const results = summaryResponse.responses?.map(extractPricingData) ?? [];
+      return NextResponse.json({
+        batch: true,
+        count: results.length,
+        results,
+      });
+    }
+
+    // For single ASIN, return flat response (backward compatible)
     const asinResponse = summaryResponse.responses?.[0];
 
     if (!asinResponse) {
       return NextResponse.json({ error: 'No response for ASIN' }, { status: 404 });
     }
 
-    if (asinResponse.status.statusCode !== 200) {
-      return NextResponse.json(
-        {
-          error: `API returned status ${asinResponse.status.statusCode}: ${asinResponse.status.reasonPhrase}`,
-          details: asinResponse.errors,
-          bodyErrors: asinResponse.body?.errors,
-          fullResponse: asinResponse,
-        },
-        { status: 400 }
-      );
+    const result = extractPricingData(asinResponse);
+    if (result.error) {
+      return NextResponse.json(result, { status: 400 });
     }
 
-    const body = asinResponse.body;
-
-    // Extract WasPrice from referencePrices
-    // Note: The API returns "name" not "referencePriceId"
-    const referencePrices = body?.referencePrices ?? [];
-    const wasPrice = referencePrices.find(
-      (rp: { name?: string; referencePriceId?: string }) =>
-        rp.name === 'WasPrice' || rp.referencePriceId === 'WAS_PRICE'
-    );
-    const competitivePrice = referencePrices.find(
-      (rp: { name?: string; referencePriceId?: string }) =>
-        rp.name === 'CompetitivePrice' || rp.referencePriceId === 'COMPETITIVE_PRICE'
-    );
-
-    // Extract featured offer (Buy Box)
-    const featuredOffer = body?.featuredBuyingOptions?.[0]?.segmentedFeaturedOffers?.[0]?.featuredOffer;
-
-    // Extract lowest priced offers
-    // The structure can vary - handle both flat array and nested offers array
-    const lowestPricedOffersData = body?.lowestPricedOffers ?? [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lowestOffers = lowestPricedOffersData.flatMap((lpo: any) => {
-      // Handle nested structure: { offers: [...] }
-      if (lpo.offers && Array.isArray(lpo.offers)) {
-        return lpo.offers;
-      }
-      // Handle flat structure: the item itself is an offer
-      return [lpo];
-    });
-
     return NextResponse.json({
-      asin,
-      marketplaceId: UK_MARKETPLACE_ID,
-      status: asinResponse.status,
-
-      // Key pricing data
-      wasPrice: wasPrice?.price ?? null,
-      competitivePrice: competitivePrice?.price ?? null,
-
-      // Featured offer (Buy Box)
-      featuredOffer: featuredOffer
-        ? {
-            listingPrice: featuredOffer.listingPrice,
-            shippingPrice: featuredOffer.shippingPrice,
-            totalPrice: featuredOffer.listingPrice
-              ? {
-                  currencyCode: featuredOffer.listingPrice.currencyCode,
-                  amount:
-                    featuredOffer.listingPrice.amount +
-                    (featuredOffer.shippingPrice?.amount ?? 0),
-                }
-              : null,
-            condition: featuredOffer.condition,
-            offerType: featuredOffer.offerType,
-          }
-        : null,
-
-      // All reference prices
-      referencePrices: body?.referencePrices ?? [],
-
-      // Lowest prices by condition/fulfillment
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      lowestOffers: lowestOffers.map((offer: any) => {
-        // Handle both shippingOptions (nested) and shippingPrice (flat)
-        const shippingPrice = offer.shippingOptions?.[0]?.price ?? offer.shippingPrice;
-        const listingPrice = offer.listingPrice;
-        return {
-          condition: offer.condition,
-          subCondition: offer.subCondition,
-          fulfillmentType: offer.fulfillmentType,
-          sellerId: offer.sellerId,
-          listingPrice: listingPrice,
-          shippingPrice: shippingPrice,
-          totalPrice: listingPrice
-            ? {
-                currencyCode: listingPrice.currencyCode,
-                amount: listingPrice.amount + (shippingPrice?.amount ?? 0),
-              }
-            : null,
-        };
-      }),
-
-      // Raw response for debugging
+      ...result,
       rawResponse: summaryResponse,
     });
   } catch (error) {
