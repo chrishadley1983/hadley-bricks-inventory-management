@@ -274,11 +274,11 @@ async function getWeeklyStats(supabase: ReturnType<typeof createServiceRoleClien
   const listedCount = listedItems?.length ?? 0;
   const listedValue = listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) ?? 0;
 
-  // Sold this week (from platform_orders fulfilled this week)
+  // Sold this week (from platform_orders ordered this week)
   const { data: soldOrders } = await supabase
     .from('platform_orders')
     .select('id, total')
-    .gte('fulfilled_at', weekStartIso);
+    .gte('order_date', weekStartIso);
 
   const soldCount = soldOrders?.length ?? 0;
   const soldValue = soldOrders?.reduce((sum, order) => sum + (Number(order.total) || 0), 0) ?? 0;
