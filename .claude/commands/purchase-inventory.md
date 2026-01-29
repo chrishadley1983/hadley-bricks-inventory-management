@@ -273,7 +273,8 @@ Display ALL fields for both record types, showing blanks explicitly:
 | **cost** | £225.00 | £225.00 | |
 | **listing_platform** | amazon | amazon | |
 | **amazon_asin** | B075SDMMMV | B09BG3N63L | |
-| **location** | Loft- S1 | Loft- S1 | |
+| **listing_value** | £38.49 | £27.49 | |
+| **storage_location** | Loft- S1 | Loft- S1 | |
 | **notes** | Created by... | Created by... | |
 | purchase_id | *auto-linked* | *auto-linked* | |
 | sku | *auto-generated* | *auto-generated* | |
@@ -363,7 +364,8 @@ Content-Type: application/json
     "purchase_id": "{purchase_id_from_step_1}",
     "listing_platform": "amazon",
     "amazon_asin": "B075SDMMMV",
-    "location": "Loft- S1",
+    "listing_value": 38.49,
+    "storage_location": "Loft- S1",
     "notes": "Created by Purchase Inventory Skill on 2026-01-29 14:45"
   }
 ]
@@ -518,6 +520,8 @@ GET http://localhost:3000/api/test/amazon-competitive-summary?asin={ASIN}
 |-----|------|---------|---------|------------|----------------|
 | 40756 | B0DTV6K5HC | £38.98 | £38.49 | 34.69% | £11.04 |
 ```
+
+7. **Store rounded price as `listing_value`** - When creating inventory items, use the rounded buy box price (e.g., £38.49) as the `listing_value` field
 
 **Note**: Amazon API has rate limits (~35 seconds between calls). Inform user:
 ```
