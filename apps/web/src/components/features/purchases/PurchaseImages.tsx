@@ -27,6 +27,7 @@ import {
   useDeletePurchaseImage,
 } from '@/hooks/use-purchase-images';
 import type { PurchaseImage } from '@/lib/services/purchase-image.service';
+import { compressImage } from '@/lib/utils/image-compression';
 
 interface PurchaseImagesProps {
   purchaseId: string;
@@ -83,14 +84,30 @@ export function PurchaseImages({ purchaseId, readOnly = false }: PurchaseImagesP
       const preview = URL.createObjectURL(file);
       previews.push({ id, preview, filename: file.name });
 
-      // Convert to base64
-      const base64 = await fileToBase64(file);
-      filesToUpload.push({
-        id,
-        base64,
-        mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-        filename: file.name,
-      });
+      try {
+        // Compress image before upload (max 1600px, 80% quality)
+        const compressed = await compressImage(file, {
+          maxDimension: 1600,
+          quality: 0.8,
+          outputType: 'image/jpeg',
+        });
+
+        filesToUpload.push({
+          id,
+          base64: compressed.base64,
+          mimeType: compressed.mimeType,
+          filename: file.name,
+        });
+      } catch {
+        // Fallback to original file if compression fails
+        const base64 = await fileToBase64(file);
+        filesToUpload.push({
+          id,
+          base64,
+          mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+          filename: file.name,
+        });
+      }
     }
 
     if (filesToUpload.length === 0) return;
@@ -279,7 +296,7 @@ export function PurchaseImages({ purchaseId, readOnly = false }: PurchaseImagesP
                 Drag and drop photos here, or click to browse
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                Supports JPEG, PNG, WebP, GIF (max 10MB each)
+                Supports JPEG, PNG, WebP, GIF (auto-compressed)
               </p>
             </div>
           ) : (
