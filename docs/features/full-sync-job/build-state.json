@@ -1,0 +1,58 @@
+{
+  "feature": "full-sync-job",
+  "status": "CONVERGED",
+  "iteration": 1,
+  "maxIterations": 5,
+  "startedAt": "2026-01-29T16:20:00Z",
+  "completedAt": "2026-01-29T16:35:00Z",
+  "branch": "feature/full-sync-job",
+  "worktree": "C:\\Users\\Chris Hadley\\hadley-bricks-feature-full-sync-job",
+  "commits": [
+    {
+      "sha": "c206c45",
+      "message": "feat: add full-sync scheduled cron job",
+      "iteration": 1
+    }
+  ],
+  "criteria": {
+    "total": 26,
+    "passing": 26,
+    "failing": 0,
+    "autoVerify": 26,
+    "humanVerify": 0
+  },
+  "filesCreated": [
+    "apps/web/src/app/api/cron/full-sync/route.ts"
+  ],
+  "filesModified": [
+    "vercel.json"
+  ],
+  "verificationResults": {
+    "F1": { "status": "pass", "evidence": "File exists at apps/web/src/app/api/cron/full-sync/route.ts" },
+    "F2": { "status": "pass", "evidence": "CRON_SECRET auth logic matches existing pattern" },
+    "F3": { "status": "pass", "evidence": "vercel.json contains schedule '45 7,13 * * *'" },
+    "F4": { "status": "pass", "evidence": "All 5 platform syncs called: ebayOrderSyncService, ebayAutoSyncService, AmazonSyncService, BrickLinkSyncService, BrickOwlSyncService" },
+    "F5": { "status": "pass", "evidence": "Promise.allSettled used on line 585" },
+    "F6": { "status": "pass", "evidence": "AmazonArbitrageSyncService.syncInventoryAsins called" },
+    "F7": { "status": "pass", "evidence": "detectStuckJobs checks status=IN_PROGRESS, started_at < 30min, completed_at=null" },
+    "F8": { "status": "pass", "evidence": "resetStuckJobs updates status to FAILED/processing_timeout with error message" },
+    "F9": { "status": "pass", "evidence": "Promise.allSettled ensures all syncs complete regardless of individual failures" },
+    "F10": { "status": "pass", "evidence": "SyncResult interface captures processed, created, updated, failed, error" },
+    "F11": { "status": "pass", "evidence": "getWeeklyStats calculates listedCount, listedValue, soldCount, soldValue, backlogCount" },
+    "D1": { "status": "pass", "evidence": "discordService.send('sync-status', ...) called" },
+    "D2": { "status": "pass", "evidence": "Title format: 'Hadley Bricks Full Sync - {date} ({time} UTC)'" },
+    "D3": { "status": "pass", "evidence": "Stuck jobs section included with emoji indicators" },
+    "D4": { "status": "pass", "evidence": "Platform sync results with status, counts, errors" },
+    "D5": { "status": "pass", "evidence": "Inventory ASIN section with added/updated counts" },
+    "D6": { "status": "pass", "evidence": "Weekly stats section with Listed, Sold, Backlog" },
+    "D7": { "status": "pass", "evidence": "Cleanup summary shows jobs reset count" },
+    "D8": { "status": "pass", "evidence": "Footer includes 'Next sync: {getNextRunTime()}'" },
+    "D9": { "status": "pass", "evidence": "Color coding: GREEN for success, ORANGE for partial, RED for all failed" },
+    "E1": { "status": "pass", "evidence": "Credential errors caught and marked as 'skipped'" },
+    "E2": { "status": "pass", "evidence": "Discord webhook in try-catch, job continues on failure" },
+    "E3": { "status": "pass", "evidence": "maxDuration = 300 exported" },
+    "E4": { "status": "pass", "evidence": "withTimeout wrapper with 60000ms per sync" },
+    "P1": { "status": "pass", "evidence": "maxDuration = 300 prevents Vercel timeout" },
+    "P2": { "status": "pass", "evidence": "Promise.allSettled enables parallel execution" }
+  }
+}
