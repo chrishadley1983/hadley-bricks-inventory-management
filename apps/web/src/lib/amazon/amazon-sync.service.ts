@@ -788,6 +788,13 @@ export class AmazonSyncService {
 
     // Submit existing SKUs as two-phase (price-only PATCH first)
     console.log('[AmazonSyncService] Phase 1: Submitting price-only feed for existing SKUs');
+
+    // Send sync started notification (fire-and-forget to not block sync)
+    discordService.sendSyncStatus({
+      title: '🔄 Amazon Sync Started',
+      message: `Two-phase sync started\n${existingSkuItems.length} item(s) to process`,
+    }).catch(() => {}); // Ignore notification failures
+
     const priceFeed = await this.submitPriceOnlyFeed(existingSkuItems, credentials, dryRun);
 
     if (dryRun) {

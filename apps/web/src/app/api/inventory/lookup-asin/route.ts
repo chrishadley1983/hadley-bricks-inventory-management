@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const params = {
       setNumber: url.searchParams.get('setNumber'),
-      ean: url.searchParams.get('ean'),
+      ean: url.searchParams.get('ean') || undefined,
     };
 
     const parsed = QuerySchema.safeParse(params);
