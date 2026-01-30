@@ -6,9 +6,10 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { ebayAuthService } from './ebay-auth.service';
-import { ebayTransactionSyncService, type EbaySyncResult } from './ebay-transaction-sync.service';
-import { ebayOrderSyncService, type EbayOrderSyncResult } from './ebay-order-sync.service';
+import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
+import { EbayTransactionSyncService, ebayTransactionSyncService, type EbaySyncResult } from './ebay-transaction-sync.service';
+import { EbayOrderSyncService, ebayOrderSyncService, type EbayOrderSyncResult } from './ebay-order-sync.service';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================================================
 // Types
@@ -51,6 +52,39 @@ export interface EbaySyncStatusSummary {
 // ============================================================================
 
 export class EbayAutoSyncService {
+  private injectedSupabase: SupabaseClient | null = null;
+  private authService: EbayAuthService;
+  private transactionSyncService: EbayTransactionSyncService;
+  private orderSyncService: EbayOrderSyncService;
+
+  /**
+   * Create a new EbayAutoSyncService
+   * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
+   */
+  constructor(supabase?: SupabaseClient) {
+    this.injectedSupabase = supabase || null;
+    // Create services with same Supabase client for consistency
+    if (supabase) {
+      this.authService = new EbayAuthService(undefined, supabase);
+      this.transactionSyncService = new EbayTransactionSyncService(supabase);
+      this.orderSyncService = new EbayOrderSyncService(supabase);
+    } else {
+      this.authService = ebayAuthService;
+      this.transactionSyncService = ebayTransactionSyncService;
+      this.orderSyncService = ebayOrderSyncService;
+    }
+  }
+
+  /**
+   * Get the Supabase client - uses injected client if available, otherwise creates cookie-based client
+   */
+  private async getSupabase(): Promise<SupabaseClient> {
+    if (this.injectedSupabase) {
+      return this.injectedSupabase;
+    }
+    return createClient();
+  }
+
   // ============================================================================
   // Sync Operations
   // ============================================================================
@@ -62,18 +96,18 @@ export class EbayAutoSyncService {
     const startTime = Date.now();
 
     // Sync transactions first (fastest, provides financial data)
-    const transactions = await ebayTransactionSyncService.syncTransactions(userId, { fullSync: true });
+    const transactions = await this.transactionSyncService.syncTransactions(userId, { fullSync: true });
 
     // Sync payouts
-    const payouts = await ebayTransactionSyncService.syncPayouts(userId, { fullSync: true });
+    const payouts = await this.transactionSyncService.syncPayouts(userId, { fullSync: true });
 
     // Sync orders last (enriches transactions with item data)
-    const orders = await ebayOrderSyncService.syncOrders(userId, { fullSync: true, enrichTransactions: true });
+    const orders = await this.orderSyncService.syncOrders(userId, { fullSync: true, enrichTransactions: true });
 
     const totalDuration = Date.now() - startTime;
 
     // Update last auto sync timestamp
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     await supabase
       .from('ebay_sync_config')
       .upsert({
@@ -95,15 +129,15 @@ export class EbayAutoSyncService {
 
     // Sync in parallel for speed
     const [transactions, payouts, orders] = await Promise.all([
-      ebayTransactionSyncService.syncTransactions(userId),
-      ebayTransactionSyncService.syncPayouts(userId),
-      ebayOrderSyncService.syncOrders(userId, { enrichTransactions: true }),
+      this.transactionSyncService.syncTransactions(userId),
+      this.transactionSyncService.syncPayouts(userId),
+      this.orderSyncService.syncOrders(userId, { enrichTransactions: true }),
     ]);
 
     const totalDuration = Date.now() - startTime;
 
     // Update last auto sync timestamp
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const config = await this.getConfig(userId);
     const intervalHours = config?.autoSyncIntervalHours || 24;
 
@@ -129,7 +163,7 @@ export class EbayAutoSyncService {
     const startTime = Date.now();
     const toDate = new Date().toISOString();
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Mark historical import as started
     await supabase
@@ -142,11 +176,11 @@ export class EbayAutoSyncService {
       }, { onConflict: 'user_id' });
 
     // Sync transactions and payouts first (5-year history available)
-    const transactions = await ebayTransactionSyncService.syncTransactions(userId, { fromDate, toDate });
-    const payouts = await ebayTransactionSyncService.syncPayouts(userId, { fromDate, toDate });
+    const transactions = await this.transactionSyncService.syncTransactions(userId, { fromDate, toDate });
+    const payouts = await this.transactionSyncService.syncPayouts(userId, { fromDate, toDate });
 
     // Sync orders with chunking (90-day limit per request)
-    const orders = await ebayOrderSyncService.syncOrders(userId, {
+    const orders = await this.orderSyncService.syncOrders(userId, {
       fromDate,
       toDate,
       enrichTransactions: true,
@@ -189,7 +223,7 @@ export class EbayAutoSyncService {
     }
 
     // Check if eBay is connected
-    const isConnected = await ebayAuthService.isConnected(userId);
+    const isConnected = await this.authService.isConnected(userId);
     if (!isConnected) {
       console.log('[EbayAutoSyncService] eBay not connected, skipping auto sync');
       return null;
@@ -216,7 +250,7 @@ export class EbayAutoSyncService {
    * Get sync configuration for a user
    */
   async getConfig(userId: string): Promise<EbaySyncConfig | null> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     const { data } = await supabase
       .from('ebay_sync_config')
@@ -247,7 +281,7 @@ export class EbayAutoSyncService {
     userId: string,
     updates: Partial<Pick<EbaySyncConfig, 'autoSyncEnabled' | 'autoSyncIntervalHours'>>
   ): Promise<EbaySyncConfig> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     const updateData: {
       user_id: string;
@@ -307,10 +341,10 @@ export class EbayAutoSyncService {
    * Get comprehensive sync status summary
    */
   async getSyncStatusSummary(userId: string): Promise<EbaySyncStatusSummary> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Check connection
-    const isConnected = await ebayAuthService.isConnected(userId);
+    const isConnected = await this.authService.isConnected(userId);
 
     if (!isConnected) {
       return { isConnected: false, isRunning: false, runningSyncTypes: [] };
