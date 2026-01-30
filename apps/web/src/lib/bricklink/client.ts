@@ -28,8 +28,8 @@ const BASE_URL = 'https://api.bricklink.com/api/store/v1';
 /** Default rate limit (BrickLink allows 5000 requests/day) */
 const DAILY_LIMIT = 5000;
 
-/** Request timeout in milliseconds */
-const REQUEST_TIMEOUT = 30000;
+/** Request timeout in milliseconds (90s to allow for slow API responses) */
+const REQUEST_TIMEOUT = 90000;
 
 /**
  * Error class for BrickLink API errors
