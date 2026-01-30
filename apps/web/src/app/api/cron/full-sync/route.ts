@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { ebayOrderSyncService, ebayAutoSyncService } from '@/lib/ebay';
+import { EbayOrderSyncService, EbayAutoSyncService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
 import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
@@ -495,6 +495,11 @@ export async function POST(request: NextRequest) {
 
       // Step 3: Run platform syncs in parallel with individual timeouts
       const SYNC_TIMEOUT = 60000; // 60 seconds per sync
+      const BRICKLINK_TIMEOUT = 90000; // 90 seconds for BrickLink (slower API)
+
+      // Create eBay services with service role client for cron context
+      const ebayOrderSyncService = new EbayOrderSyncService(supabase);
+      const ebayAutoSyncService = new EbayAutoSyncService(supabase);
 
       const syncPromises = [
         // eBay Orders
@@ -556,7 +561,7 @@ export async function POST(request: NextRequest) {
         // BrickLink Orders
         withTimeout(
           new BrickLinkSyncService(supabase).syncOrders(userId),
-          SYNC_TIMEOUT,
+          BRICKLINK_TIMEOUT,
           'BrickLink Orders'
         )
           .then((result) => ({

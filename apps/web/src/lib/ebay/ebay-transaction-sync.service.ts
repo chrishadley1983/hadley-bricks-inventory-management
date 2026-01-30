@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { ebayAuthService } from './ebay-auth.service';
+import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import type {
   EbayTransactionResponse,
@@ -17,6 +17,7 @@ import type {
   EbayPayoutsResponse,
 } from './types';
 import type { Json } from '@hadley-bricks/database';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================================================
 // Constants
@@ -109,6 +110,29 @@ interface PayoutRow {
 // ============================================================================
 
 export class EbayTransactionSyncService {
+  private injectedSupabase: SupabaseClient | null = null;
+  private authService: EbayAuthService;
+
+  /**
+   * Create a new EbayTransactionSyncService
+   * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
+   */
+  constructor(supabase?: SupabaseClient) {
+    this.injectedSupabase = supabase || null;
+    // Create auth service with same Supabase client for consistency
+    this.authService = supabase ? new EbayAuthService(undefined, supabase) : ebayAuthService;
+  }
+
+  /**
+   * Get the Supabase client - uses injected client if available, otherwise creates cookie-based client
+   */
+  private async getSupabase(): Promise<SupabaseClient> {
+    if (this.injectedSupabase) {
+      return this.injectedSupabase;
+    }
+    return createClient();
+  }
+
   // ============================================================================
   // Transaction Sync
   // ============================================================================
@@ -119,7 +143,7 @@ export class EbayTransactionSyncService {
   async syncTransactions(userId: string, options?: EbaySyncOptions): Promise<EbaySyncResult> {
     console.log('[EbayTransactionSyncService] Starting transaction sync for user:', userId, 'options:', options);
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[EbayTransactionSyncService] Sync mode:', syncMode);
 
@@ -171,7 +195,7 @@ export class EbayTransactionSyncService {
     try {
       // Get access token and create API adapter
       console.log('[EbayTransactionSyncService] Getting access token...');
-      const accessToken = await ebayAuthService.getAccessToken(userId);
+      const accessToken = await this.authService.getAccessToken(userId);
       if (!accessToken) {
         console.error('[EbayTransactionSyncService] No valid access token found');
         throw new Error('No valid eBay access token. Please reconnect to eBay.');
@@ -324,7 +348,7 @@ export class EbayTransactionSyncService {
   async syncPayouts(userId: string, options?: EbaySyncOptions): Promise<EbaySyncResult> {
     console.log('[EbayTransactionSyncService] Starting payout sync for user:', userId, 'options:', options);
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[EbayTransactionSyncService] Payout sync mode:', syncMode);
 
@@ -376,7 +400,7 @@ export class EbayTransactionSyncService {
     try {
       // Get access token and create API adapter
       console.log('[EbayTransactionSyncService] Getting access token for payouts...');
-      const accessToken = await ebayAuthService.getAccessToken(userId);
+      const accessToken = await this.authService.getAccessToken(userId);
       if (!accessToken) {
         console.error('[EbayTransactionSyncService] No valid access token found for payouts');
         throw new Error('No valid eBay access token. Please reconnect to eBay.');
@@ -528,7 +552,7 @@ export class EbayTransactionSyncService {
     userId: string,
     fromDate: string
   ): Promise<{ transactions: EbaySyncResult; payouts: EbaySyncResult }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
@@ -574,7 +598,7 @@ export class EbayTransactionSyncService {
     payouts: { isRunning: boolean; lastSync?: { status: string; completedAt?: Date; recordsProcessed?: number } };
     config?: { autoSyncEnabled: boolean; nextSyncAt?: Date; historicalImportCompleted: boolean };
   }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Get running syncs
     const { data: runningSyncs } = await supabase
@@ -652,7 +676,7 @@ export class EbayTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Deduplicate transactions by transactionId (eBay API can return duplicates across pages)
     const uniqueTransactions = Array.from(
@@ -770,7 +794,7 @@ export class EbayTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Deduplicate payouts by payoutId (eBay API can return duplicates across pages)
     const uniquePayouts = Array.from(

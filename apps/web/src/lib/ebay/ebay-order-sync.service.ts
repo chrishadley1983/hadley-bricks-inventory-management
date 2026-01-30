@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { ebayAuthService } from './ebay-auth.service';
+import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import { EbayInventoryLinkingService } from './ebay-inventory-linking.service';
 import type {
@@ -18,6 +18,7 @@ import type {
   EbayShippingFulfilmentResponse,
 } from './types';
 import type { Json } from '@hadley-bricks/database';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================================================
 // Constants
@@ -156,6 +157,29 @@ function extractDispatchByDate(order: EbayOrderResponse): string | null {
 // ============================================================================
 
 export class EbayOrderSyncService {
+  private injectedSupabase: SupabaseClient | null = null;
+  private authService: EbayAuthService;
+
+  /**
+   * Create a new EbayOrderSyncService
+   * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
+   */
+  constructor(supabase?: SupabaseClient) {
+    this.injectedSupabase = supabase || null;
+    // Create auth service with same Supabase client for consistency
+    this.authService = supabase ? new EbayAuthService(undefined, supabase) : ebayAuthService;
+  }
+
+  /**
+   * Get the Supabase client - uses injected client if available, otherwise creates cookie-based client
+   */
+  private async getSupabase(): Promise<SupabaseClient> {
+    if (this.injectedSupabase) {
+      return this.injectedSupabase;
+    }
+    return createClient();
+  }
+
   // ============================================================================
   // Order Sync
   // ============================================================================
@@ -166,7 +190,7 @@ export class EbayOrderSyncService {
   async syncOrders(userId: string, options?: EbayOrderSyncOptions): Promise<EbayOrderSyncResult> {
     console.log('[EbayOrderSyncService] Starting order sync for user:', userId, 'options:', options);
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[EbayOrderSyncService] Order sync mode:', syncMode);
 
@@ -223,7 +247,7 @@ export class EbayOrderSyncService {
     try {
       // Get access token and create API adapter
       console.log('[EbayOrderSyncService] Getting access token for orders...');
-      const accessToken = await ebayAuthService.getAccessToken(userId);
+      const accessToken = await this.authService.getAccessToken(userId);
       if (!accessToken) {
         console.error('[EbayOrderSyncService] No valid access token found for orders');
         throw new Error('No valid eBay access token. Please reconnect to eBay.');
@@ -577,7 +601,7 @@ export class EbayOrderSyncService {
       return { ordersCreated: 0, ordersUpdated: 0, orderIdMap: new Map() };
     }
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Get existing order IDs
     const { data: existingOrders } = await supabase
@@ -652,7 +676,7 @@ export class EbayOrderSyncService {
     orders: EbayOrderResponse[],
     orderIdMap: Map<string, string>
   ): Promise<{ lineItemsCreated: number; lineItemsUpdated: number }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Collect all line items from all orders
     const allLineItems: { orderId: string; dbOrderId: string; lineItem: EbayLineItem }[] = [];
@@ -739,7 +763,7 @@ export class EbayOrderSyncService {
   ): Promise<void> {
     if (fulfilments.length === 0) return;
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     const fulfilmentRows: FulfilmentRow[] = fulfilments.map(f => ({
       order_id: dbOrderId,
@@ -778,7 +802,7 @@ export class EbayOrderSyncService {
   ): Promise<number> {
     if (orders.length === 0) return 0;
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     let enriched = 0;
 
     // Build a map of orderId -> order data for quick lookup
