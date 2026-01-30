@@ -43,9 +43,10 @@ export async function POST(request: NextRequest) {
       await discordService.send('sync-status', {
         title: '✅ Watchlist Refresh Complete',
         description: [
-          `**Added:** ${result.added ?? 0} items`,
-          `**Skipped:** ${result.skipped ?? 0} items (already in watchlist)`,
-          `**Total in watchlist:** ${result.total ?? 0}`,
+          `**Added:** ${result.added} items`,
+          `**Removed:** ${result.removed} items (no longer relevant)`,
+          `**Total in watchlist:** ${result.total}`,
+          `**Sources:** ${result.soldInventoryCount} sold inventory, ${result.retiredWithPricingCount} retired sets`,
         ].join('\n'),
         color: DiscordColors.GREEN,
         footer: { text: `Duration: ${Math.round(duration / 1000)}s | Weekly refresh` },
