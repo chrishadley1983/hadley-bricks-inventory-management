@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { ArbitrageWatchlistService } from '@/lib/arbitrage';
+import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes
@@ -37,6 +38,22 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log(`[Cron RefreshWatchlist] Completed in ${duration}ms:`, result);
 
+    // Send Discord notification
+    try {
+      await discordService.send('sync-status', {
+        title: '✅ Watchlist Refresh Complete',
+        description: [
+          `**Added:** ${result.added ?? 0} items`,
+          `**Skipped:** ${result.skipped ?? 0} items (already in watchlist)`,
+          `**Total in watchlist:** ${result.total ?? 0}`,
+        ].join('\n'),
+        color: DiscordColors.GREEN,
+        footer: { text: `Duration: ${Math.round(duration / 1000)}s | Weekly refresh` },
+      });
+    } catch (discordError) {
+      console.error('[Cron RefreshWatchlist] Discord notification failed:', discordError);
+    }
+
     return NextResponse.json({
       success: true,
       ...result,
@@ -47,6 +64,17 @@ export async function POST(request: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
     console.error('[Cron RefreshWatchlist] Error:', error);
+
+    // Send error notification to Discord
+    try {
+      await discordService.sendAlert({
+        title: '❌ Watchlist Refresh Failed',
+        message: errorMsg,
+        priority: 'high',
+      });
+    } catch {
+      // Ignore Discord errors
+    }
 
     return NextResponse.json(
       {
