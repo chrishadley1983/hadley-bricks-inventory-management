@@ -306,7 +306,23 @@ export class AmazonSyncService {
     // These need item details for the dispatch workflow UI
     const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
     const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
-    const shouldFetchItems = includeItems || needsItemsForDispatch;
+
+    // Check if existing order is missing items and needs them for dispatch
+    // This handles backfilling items for orders synced before the dispatch-items fix
+    let needsItemsBackfill = false;
+    if (needsItemsForDispatch) {
+      const existing = await this.orderRepo.findByPlatformOrderId(
+        userId,
+        'amazon',
+        orderSummary.AmazonOrderId
+      );
+      if (existing && existing.items_count === 0) {
+        needsItemsBackfill = true;
+        console.log(`[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`);
+      }
+    }
+
+    const shouldFetchItems = includeItems || needsItemsForDispatch || needsItemsBackfill;
 
     if (shouldFetchItems) {
       // Fetch full order with items
