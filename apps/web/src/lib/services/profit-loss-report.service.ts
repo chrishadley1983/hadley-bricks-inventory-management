@@ -360,7 +360,9 @@ async function queryBrickOwlGrossSales(
 }
 
 /**
- * Query Amazon Sales (from platform_orders by order_date, shipped only)
+ * Query Amazon Sales (from platform_orders by order_date)
+ * Includes both Shipped and Paid orders to match Amazon Seller Central's
+ * "Ordered product sales" metric
  */
 async function queryAmazonSales(
   supabase: SupabaseClient<Database>,
@@ -380,7 +382,7 @@ async function queryAmazonSales(
       .select('order_date, total')
       .eq('user_id', userId)
       .eq('platform', 'amazon')
-      .eq('status', 'Shipped')
+      .in('status', ['Shipped', 'Paid'])
       .gte('order_date', startDate)
       .lte('order_date', endDate)
       .range(page * pageSize, (page + 1) * pageSize - 1);
