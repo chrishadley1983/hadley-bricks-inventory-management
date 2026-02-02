@@ -302,11 +302,20 @@ export class AmazonSyncService {
   ): Promise<void> {
     let normalized: NormalizedAmazonOrder;
 
-    if (includeItems) {
+    // Always fetch items for orders awaiting dispatch (Unshipped, PartiallyShipped)
+    // These need item details for the dispatch workflow UI
+    const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
+    const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
+    const shouldFetchItems = includeItems || needsItemsForDispatch;
+
+    if (shouldFetchItems) {
       // Fetch full order with items
       const orderId = orderSummary.AmazonOrderId;
       const items = await client.getOrderItems(orderId);
       normalized = normalizeOrder(orderSummary, items);
+      if (needsItemsForDispatch && !includeItems) {
+        console.log(`[AmazonSyncService] Fetched items for dispatch order ${orderId} (status: ${orderSummary.OrderStatus})`);
+      }
     } else {
       // Just use summary data
       normalized = normalizeOrder(orderSummary, []);
@@ -354,7 +363,7 @@ export class AmazonSyncService {
     const savedOrder = await this.orderRepo.upsert(orderInsert);
 
     // If we have items, save them
-    if (includeItems && normalized.items.length > 0) {
+    if (shouldFetchItems && normalized.items.length > 0) {
       const itemInserts: Omit<OrderItemInsert, 'order_id'>[] = normalized.items.map((item) => ({
         item_number: item.asin,
         item_name: item.title,
@@ -369,7 +378,7 @@ export class AmazonSyncService {
       console.log(`[AmazonSyncService] Saving ${itemInserts.length} items for order ${normalized.platformOrderId}:`,
         itemInserts.map(i => ({ asin: i.item_number, title: i.item_name?.substring(0, 50) })));
       await this.orderRepo.replaceOrderItems(savedOrder.id, itemInserts);
-    } else if (includeItems) {
+    } else if (shouldFetchItems) {
       console.log(`[AmazonSyncService] Order ${normalized.platformOrderId} has no items to save`);
     }
   }
