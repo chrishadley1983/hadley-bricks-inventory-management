@@ -152,7 +152,9 @@ function toMonthlyValues(
 // =============================================================================
 
 /**
- * Query eBay Gross Sales (from ebay_orders by creation_date, fulfilled orders only)
+ * Query eBay Gross Sales (from ebay_transactions by transaction_date)
+ * Uses SALE transactions and excludes fully refunded orders to match eBay Seller Hub's
+ * "Total sales" metric
  */
 async function queryEbayGrossSales(
   supabase: SupabaseClient<Database>,
@@ -160,21 +162,31 @@ async function queryEbayGrossSales(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
+  // First, get all fully refunded order IDs to exclude their sales
+  const { data: refundedOrders, error: refundedError } = await supabase
+    .from('ebay_orders')
+    .select('ebay_order_id')
+    .eq('user_id', userId)
+    .eq('order_payment_status', 'FULLY_REFUNDED');
+
+  if (refundedError) throw refundedError;
+
+  const refundedOrderIds = new Set((refundedOrders || []).map((o) => o.ebay_order_id));
+
   // Paginate to handle Supabase's 1000 row limit
   const pageSize = 1000;
   let page = 0;
   let hasMore = true;
-  const allData: { creation_date: string | null; total_fee_basis_amount: number | null }[] = [];
+  const allData: { transaction_date: string; gross_transaction_amount: number | null; ebay_order_id: string | null }[] = [];
 
   while (hasMore) {
     const { data, error } = await supabase
-      .from('ebay_orders')
-      .select('creation_date, total_fee_basis_amount')
+      .from('ebay_transactions')
+      .select('transaction_date, gross_transaction_amount, ebay_order_id')
       .eq('user_id', userId)
-      .eq('order_fulfilment_status', 'FULFILLED')
-      .in('order_payment_status', ['PAID', 'PARTIALLY_REFUNDED'])
-      .gte('creation_date', startDate)
-      .lte('creation_date', endDate)
+      .eq('transaction_type', 'SALE')
+      .gte('transaction_date', startDate)
+      .lte('transaction_date', endDate)
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) throw error;
@@ -184,20 +196,22 @@ async function queryEbayGrossSales(
     page++;
   }
 
-  console.log(`[P&L] eBay Gross Sales: found ${allData.length} orders (${page} pages)`);
-
-  // Aggregate in memory
+  // Filter out sales for fully refunded orders and aggregate by month
   const monthMap = new Map<string, number>();
+  let excludedCount = 0;
+
   for (const row of allData) {
-    if (!row.creation_date) continue;
-    const month = row.creation_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.total_fee_basis_amount || 0));
+    if (!row.transaction_date) continue;
+    // Exclude sales for fully refunded orders
+    if (row.ebay_order_id && refundedOrderIds.has(row.ebay_order_id)) {
+      excludedCount++;
+      continue;
+    }
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_transaction_amount || 0));
   }
 
-  // Debug: Log Oct 2025 specifically
-  if (monthMap.has('2025-10')) {
-    console.log(`[P&L] eBay Gross Sales Oct 2025: £${monthMap.get('2025-10')?.toFixed(2)}`);
-  }
+  console.log(`[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded (${page} pages)`);
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
     month,
