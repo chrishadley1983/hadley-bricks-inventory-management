@@ -6063,6 +6063,75 @@ export type Database = {
           },
         ]
       }
+      processed_purchase_emails: {
+        Row: {
+          id: string
+          email_id: string
+          source: string
+          order_reference: string | null
+          purchase_id: string | null
+          inventory_id: string | null
+          status: string
+          skip_reason: string | null
+          error_message: string | null
+          email_subject: string | null
+          email_date: string | null
+          item_name: string | null
+          cost: number | null
+          processed_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email_id: string
+          source: string
+          order_reference?: string | null
+          purchase_id?: string | null
+          inventory_id?: string | null
+          status: string
+          skip_reason?: string | null
+          error_message?: string | null
+          email_subject?: string | null
+          email_date?: string | null
+          item_name?: string | null
+          cost?: number | null
+          processed_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          email_id?: string
+          source?: string
+          order_reference?: string | null
+          purchase_id?: string | null
+          inventory_id?: string | null
+          status?: string
+          skip_reason?: string | null
+          error_message?: string | null
+          email_subject?: string | null
+          email_date?: string | null
+          item_name?: string | null
+          cost?: number | null
+          processed_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_purchase_emails_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processed_purchase_emails_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       repricing_pricing_cache: {
         Row: {
           asin: string
