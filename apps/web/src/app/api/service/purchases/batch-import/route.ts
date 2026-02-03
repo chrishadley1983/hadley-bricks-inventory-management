@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
               listing_platform: 'amazon', // Always Amazon for email imports
               storage_location: storageLocation,
               amazon_asin: item.amazon_asin,
-              list_price: item.list_price,
+              listing_value: item.list_price, // listing_value is the column name in DB
               status: 'In Stock',
             })
             .select('id')
