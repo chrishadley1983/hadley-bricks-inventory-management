@@ -6346,6 +6346,53 @@ export type Database = {
           },
         ]
       }
+      service_api_keys: {
+        Row: {
+          id: string
+          name: string
+          key_hash: string
+          key_prefix: string
+          permissions: Json
+          created_at: string
+          last_used_at: string | null
+          expires_at: string | null
+          revoked_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          key_hash: string
+          key_prefix: string
+          permissions?: Json
+          created_at?: string
+          last_used_at?: string | null
+          expires_at?: string | null
+          revoked_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          key_hash?: string
+          key_prefix?: string
+          permissions?: Json
+          created_at?: string
+          last_used_at?: string | null
+          expires_at?: string | null
+          revoked_at?: string | null
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_api_keys_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seeded_asin_rankings: {
         Row: {
           asin: string
