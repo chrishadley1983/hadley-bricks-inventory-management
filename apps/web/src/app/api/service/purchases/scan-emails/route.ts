@@ -36,6 +36,28 @@ interface PurchaseCandidate {
 const HADLEY_API_BASE = 'http://172.19.64.1:8100';
 
 /**
+ * Fetch full email details including body from Hadley API
+ */
+async function fetchEmailBody(emailId: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${HADLEY_API_BASE}/gmail/get?id=${encodeURIComponent(emailId)}`
+    );
+
+    if (!response.ok) {
+      console.error(`[scan-emails] Gmail get failed for ${emailId}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.body || null;
+  } catch (error) {
+    console.error(`[scan-emails] Failed to fetch email ${emailId}:`, error);
+    return null;
+  }
+}
+
+/**
  * Fetch emails from Hadley API Gmail endpoint
  */
 async function fetchEmails(query: string): Promise<Array<{
@@ -58,10 +80,30 @@ async function fetchEmails(query: string): Promise<Array<{
     }
 
     const data = await response.json();
-    // Ensure we return an array
-    if (Array.isArray(data.messages)) return data.messages;
-    if (Array.isArray(data)) return data;
-    return [];
+    // Ensure we return an array - Hadley API uses 'emails', fallback to 'messages'
+    let emails: Array<{
+      id: string;
+      threadId: string;
+      subject: string;
+      from: string;
+      date: string;
+      snippet: string;
+      body?: string;
+    }> = [];
+
+    if (Array.isArray(data.emails)) emails = data.emails;
+    else if (Array.isArray(data.messages)) emails = data.messages;
+    else if (Array.isArray(data)) emails = data;
+
+    // Fetch full body for each email (needed for price extraction)
+    const enrichedEmails = await Promise.all(
+      emails.map(async (email) => {
+        const body = await fetchEmailBody(email.id);
+        return { ...email, body: body || email.snippet };
+      })
+    );
+
+    return enrichedEmails;
   } catch (error) {
     console.error('[scan-emails] Failed to fetch emails:', error);
     return [];
@@ -70,6 +112,7 @@ async function fetchEmails(query: string): Promise<Array<{
 
 /**
  * Parse Vinted purchase confirmation email
+ * Subject format: Your receipt for „{item name}"
  */
 function parseVintedEmail(email: {
   id: string;
@@ -79,24 +122,25 @@ function parseVintedEmail(email: {
   snippet: string;
   body?: string;
 }): Partial<PurchaseCandidate> | null {
-  // Subject pattern: "You bought [Item Name]"
-  const subjectMatch = email.subject.match(/You bought (.+)/i);
+  // Subject pattern: "Your receipt for „Item Name"" (note special quotes „ ")
+  const subjectMatch = email.subject.match(/Your receipt for [„"](.+)[""]/i);
   if (!subjectMatch) return null;
 
   const itemName = subjectMatch[1];
   const content = email.body || email.snippet;
+  const normalizedContent = content.replace(/[\r\n\s]+/g, ' ');
 
-  // Extract price: "for £XX.XX"
-  const priceMatch = content.match(/for £([\d.]+)/);
-  const cost = priceMatch ? parseFloat(priceMatch[1]) : 0;
+  // Extract total paid: "Paid £XX.XX" or "Paid    £XX.XX"
+  const paidMatch = normalizedContent.match(/Paid\s*£([\d.]+)/i);
+  const cost = paidMatch ? parseFloat(paidMatch[1]) : 0;
 
-  // Extract seller: "from @username" or "from username"
-  const sellerMatch = content.match(/from @?([^\s]+) for/i);
+  // Extract seller: "Seller m1ck3ymcq" or "Seller    username"
+  const sellerMatch = normalizedContent.match(/Seller\s+(\w+)/i);
   const seller = sellerMatch ? sellerMatch[1] : 'unknown';
 
-  // Extract order reference: various patterns
-  const orderMatch = content.match(/(?:Order|Transaction|order number)[:\s]*(\d+)/i);
-  const orderRef = orderMatch ? orderMatch[1] : `vinted-${email.id}`;
+  // Extract Transaction ID
+  const transactionMatch = normalizedContent.match(/Transaction ID\s*(\d+)/i);
+  const orderRef = transactionMatch ? transactionMatch[1] : `vinted-${email.id}`;
 
   // Try to extract set number from item name
   const setNumberMatch = itemName.match(/\b(\d{4,5})(?:-\d)?\b/);
@@ -134,27 +178,41 @@ function parseEbayEmail(email: {
   const subjectMatch = email.subject.match(/(?:Order confirmed|You won)[:\s]*(.+)/i);
   if (!subjectMatch) return null;
 
-  const itemName = subjectMatch[1];
+  const itemName = subjectMatch[1].replace(/\.{3}$/, '').trim(); // Remove trailing ...
   const content = email.body || email.snippet;
 
-  // Extract price: "Item price: £XX.XX" or "Total: £XX.XX"
-  const priceMatch = content.match(/(?:Item price|Total|Price)[:\s]*£([\d.]+)/i);
-  const cost = priceMatch ? parseFloat(priceMatch[1]) : 0;
+  // Normalize content - replace multiple whitespace/newlines with single space for matching
+  const normalizedContent = content.replace(/[\r\n\s]+/g, ' ');
 
-  // Extract seller
-  const sellerMatch = content.match(/(?:Seller|Sold by)[:\s]*([^\n<]+)/i);
+  // Extract total price: "Total charged to ... £XX.XX" (what was actually paid)
+  // Fallback to item price if total not found
+  let cost = 0;
+  const totalMatch = normalizedContent.match(/Total charged to[^£]*£([\d.]+)/i);
+  if (totalMatch) {
+    cost = parseFloat(totalMatch[1]);
+  } else {
+    // Fallback: "Price: £XX.XX" with possible whitespace
+    const priceMatch = normalizedContent.match(/Price:\s*£([\d.]+)/i);
+    if (priceMatch) {
+      cost = parseFloat(priceMatch[1]);
+    }
+  }
+
+  // Extract seller: "Seller: username" with possible whitespace
+  const sellerMatch = normalizedContent.match(/Seller:\s*(\w+)/i);
   const seller = sellerMatch ? sellerMatch[1].trim() : 'unknown';
 
-  // Extract order reference: eBay uses format like "12-34567-89012"
-  const orderMatch = content.match(/(?:Order number|Order #|Item #)[:\s]*([\d-]+)/i);
+  // Extract order reference: "Order number: XX-XXXXX-XXXXX"
+  const orderMatch = normalizedContent.match(/Order number:\s*([\d-]+)/i);
   const orderRef = orderMatch ? orderMatch[1] : `ebay-${email.id}`;
 
-  // Try to extract set number from item name
-  const setNumberMatch = itemName.match(/\b(\d{4,5})(?:-\d)?\b/);
-  const setNumber = setNumberMatch ? setNumberMatch[1] : null;
+  // Try to extract set number from item name - look for 4-5 digit numbers
+  // Pattern handles formats like: (40254), 40254, 75192-1
+  const setNumberMatch = itemName.match(/\((\d{4,5})\)|(?:^|\s)(\d{4,5})(?:-\d)?(?:\s|$)/);
+  const setNumber = setNumberMatch ? (setNumberMatch[1] || setNumberMatch[2]) : null;
 
-  // Infer condition from item name
-  const isSealed = /sealed|bnib|new|unopened|misb/i.test(itemName);
+  // Infer condition from item name - default to New, mark Used only if explicit keywords
+  const isUsed = /\bused\b|opened|built|incomplete|no box|played/i.test(itemName);
 
   return {
     source: 'eBay',
@@ -168,7 +226,7 @@ function parseEbayEmail(email: {
     email_subject: email.subject,
     email_date: email.date,
     payment_method: 'PayPal',
-    suggested_condition: isSealed ? 'New' : 'Used',
+    suggested_condition: isUsed ? 'Used' : 'New',
     skip_reason: setNumber ? undefined : 'no_set_number',
   };
 }
@@ -210,9 +268,9 @@ export async function GET(request: NextRequest) {
 
       const allCandidates: PurchaseCandidate[] = [];
 
-      // Search Vinted emails
+      // Search Vinted emails - subject is "Your receipt for „Item Name""
       const vintedEmails = await fetchEmails(
-        `from:noreply@vinted.co.uk subject:"You bought" newer_than:${days}d`
+        `from:noreply@vinted.co.uk subject:"Your receipt for" newer_than:${days}d`
       );
 
       for (const email of vintedEmails) {

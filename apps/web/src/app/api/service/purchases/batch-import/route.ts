@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
               payment_method: item.payment_method,
               purchase_date: item.purchase_date,
               short_description: `${item.set_number} ${item.set_name}`,
+              description: `${item.set_name} from ${item.seller_username || item.source}`,
               reference: item.order_reference,
             })
             .select('id')
@@ -163,7 +164,28 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // 2. Create inventory item
+          // 2. Generate SKU (format: N{number} for New, U{number} for Used)
+          const skuPrefix = item.condition === 'New' ? 'N' : 'U';
+          const { data: skuRows } = await supabase
+            .from('inventory_items')
+            .select('sku')
+            .not('sku', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(200);
+
+          let maxNum = 0;
+          if (skuRows) {
+            for (const row of skuRows) {
+              const match = row.sku?.match(/^[NU](\d+)$/);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+              }
+            }
+          }
+          const newSku = `${skuPrefix}${maxNum + 1}`;
+
+          // 3. Create inventory item
           const storageLocation = item.storage_location || storage_location || 'TBC';
           const { data: inventory, error: inventoryError } = await supabase
             .from('inventory_items')
@@ -174,11 +196,16 @@ export async function POST(request: NextRequest) {
               condition: item.condition,
               cost: item.cost,
               purchase_id: purchase.id,
+              linked_lot: item.order_reference, // Links back to purchase reference
+              source: item.source, // eBay or Vinted
+              purchase_date: item.purchase_date,
               listing_platform: 'amazon', // Always Amazon for email imports
               storage_location: storageLocation,
               amazon_asin: item.amazon_asin,
-              list_price: item.list_price,
-              status: 'In Stock',
+              listing_value: item.list_price, // listing_value is the column name in DB
+              sku: newSku,
+              status: 'Not Yet Received',
+              notes: `Auto-imported. Seller: ${item.seller_username || 'unknown'}. https://mail.google.com/mail/u/0/#all/${item.email_id}`,
             })
             .select('id')
             .single();
