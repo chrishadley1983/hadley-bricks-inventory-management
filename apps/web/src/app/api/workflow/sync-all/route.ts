@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { ebayOrderSyncService, ebayAutoSyncService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
@@ -35,8 +36,7 @@ interface SyncAllResponse {
 /**
  * Get weekly stats from database
  */
-async function getWeeklyStats(userId: string): Promise<WeeklyStats> {
-  const supabase = await createClient();
+async function getWeeklyStats(userId: string, supabase: SupabaseClient): Promise<WeeklyStats> {
   
   // Get start of current week (Monday)
   const now = new Date();
@@ -86,8 +86,7 @@ async function getWeeklyStats(userId: string): Promise<WeeklyStats> {
 /**
  * Fetch sync summary from database (last 10 minutes)
  */
-async function fetchSyncSummary(userId: string): Promise<SyncResult[]> {
-  const supabase = await createClient();
+async function fetchSyncSummary(userId: string, supabase: SupabaseClient): Promise<SyncResult[]> {
   const items: SyncResult[] = [];
 
   // eBay sync logs - get latest of each type
@@ -271,7 +270,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS)
+    // Use regular client for cookie auth (respects RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
     const userId = auth.userId;
 
     console.log('[sync-all] Starting sync for user:', userId);
@@ -321,7 +323,7 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Fetch sync summary from database
-    const syncResults = await fetchSyncSummary(userId);
+    const syncResults = await fetchSyncSummary(userId, supabase);
 
     // Organize results by type
     const orders: Record<string, SyncResult> = {};
@@ -344,7 +346,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get weekly stats
-    const weeklyStats = await getWeeklyStats(userId);
+    const weeklyStats = await getWeeklyStats(userId, supabase);
 
     const response: SyncAllResponse = {
       success: true,
