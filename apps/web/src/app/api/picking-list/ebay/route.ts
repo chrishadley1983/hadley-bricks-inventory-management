@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -65,7 +65,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS)
+    // Use regular client for cookie auth (respects RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
     const userId = auth.userId;
 
     // Check for format parameter (json or pdf)
