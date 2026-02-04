@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { OrderRepository } from '@/lib/repositories';
 
 const QuerySchema = z.object({
@@ -18,15 +19,16 @@ const QuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     // Parse query params
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const orderRepo = new OrderRepository(supabase);
     const result = await orderRepo.findByUser(
-      user.id,
+      userId,
       {
         platform,
         status,

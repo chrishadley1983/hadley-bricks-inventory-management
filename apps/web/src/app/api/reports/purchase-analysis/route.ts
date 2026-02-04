@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { ReportingService } from '@/lib/services';
 
 const QueryParamsSchema = z.object({
@@ -27,15 +28,16 @@ const QueryParamsSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const parsed = QueryParamsSchema.safeParse(searchParams);
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
         : undefined
     );
 
-    const report = await reportingService.getPurchaseAnalysisReport(user.id, dateRange);
+    const report = await reportingService.getPurchaseAnalysisReport(userId, dateRange);
 
     return NextResponse.json({ data: report });
   } catch (error) {
