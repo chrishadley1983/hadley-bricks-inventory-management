@@ -1,22 +1,23 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 
 /**
  * GET /api/pickups/upcoming
  * Get upcoming pickups for the next 7 days
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     const today = new Date();
     const startDate = today.toISOString().split('T')[0];
@@ -28,7 +29,7 @@ export async function GET() {
     const { data: pickups, error } = await supabase
       .from('stock_pickups')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('status', 'scheduled')
       .gte('scheduled_date', startDate)
       .lte('scheduled_date', endDate)

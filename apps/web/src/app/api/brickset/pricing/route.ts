@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { getEbayBrowseClient } from '@/lib/ebay';
 import type { EbayItemSummary } from '@/lib/ebay';
 import { BrickLinkClient } from '@/lib/bricklink';
@@ -81,15 +82,16 @@ interface PricingData {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     // Parse query parameters
     const url = new URL(request.url);
@@ -121,7 +123,7 @@ export async function GET(request: NextRequest) {
 
       // Try to get Brickset API key and refresh the set data
       const bricksetCredService = new BricksetCredentialsService(supabase);
-      const apiKey = await bricksetCredService.getApiKey(user.id);
+      const apiKey = await bricksetCredService.getApiKey(userId);
 
       if (apiKey) {
         try {
@@ -173,11 +175,11 @@ export async function GET(request: NextRequest) {
       // eBay pricing (Used)
       fetchEbayPricing(baseSetNumber, 'used'),
       // BrickLink pricing (New)
-      fetchBricklinkPricing(credentialsRepo, user.id, setNumber, 'N'),
+      fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'N'),
       // BrickLink pricing (Used)
-      fetchBricklinkPricing(credentialsRepo, user.id, setNumber, 'U'),
+      fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'U'),
       // Amazon pricing (requires EAN/UPC to find ASIN)
-      fetchAmazonPricing(credentialsRepo, user.id, ean || upc || null),
+      fetchAmazonPricing(credentialsRepo, userId, ean || upc || null),
     ]);
 
     if (ebayResult.status === 'fulfilled') {

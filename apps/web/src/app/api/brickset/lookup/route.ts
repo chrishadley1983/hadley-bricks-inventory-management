@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { BricksetCredentialsService } from '@/lib/services';
 import { BricksetCacheService } from '@/lib/brickset';
 
@@ -19,15 +20,16 @@ const QuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     // Parse query parameters
     const url = new URL(request.url);
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     // Get API key if available
     const credentialsService = new BricksetCredentialsService(supabase);
-    const apiKey = await credentialsService.getApiKey(user.id);
+    const apiKey = await credentialsService.getApiKey(userId);
 
     // Use cache service to get set
     const cacheService = new BricksetCacheService(supabase);
@@ -69,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     // Update last used timestamp if we used the API
     if (apiKey) {
-      await credentialsService.updateLastUsed(user.id);
+      await credentialsService.updateLastUsed(userId);
     }
 
     return NextResponse.json({
