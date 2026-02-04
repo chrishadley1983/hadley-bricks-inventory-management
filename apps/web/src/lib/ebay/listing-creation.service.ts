@@ -386,6 +386,7 @@ export class ListingCreationService {
 
       ebayOfferId = listingResult.offerId;
       ebayListingId = listingResult.listingId;
+      const ebaySku = listingResult.sku;
 
       // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
       const updateResult = await this.executeStep('update', onProgress, async () => {
@@ -393,6 +394,7 @@ export class ListingCreationService {
           request.inventoryItemId,
           ebayListingId!,
           `https://www.ebay.co.uk/itm/${ebayListingId}`,
+          ebaySku,
           request.storageLocation
         );
       });
@@ -917,7 +919,7 @@ Return JSON with these fields (omit any you're not confident about):
     imageUrls: string[],
     request: ListingCreationRequest,
     defaultPolicies: { fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string }
-  ): Promise<{ offerId: string; listingId: string }> {
+  ): Promise<{ offerId: string; listingId: string; sku: string }> {
     // Get access token
     const accessToken = await this.authService.getAccessToken(this.userId);
     if (!accessToken) {
@@ -931,8 +933,9 @@ Return JSON with these fields (omit any you're not confident about):
       userId: this.userId,
     });
 
-    // Generate SKU
-    const sku = `HADLEY-${item.set_number}-${Date.now()}`;
+    // Generate SKU using storage location prefix (or 'HADLEY' as fallback)
+    const skuPrefix = request.storageLocation?.trim() || 'HADLEY';
+    const sku = `${skuPrefix}-${item.set_number}-${Date.now()}`;
 
     // Get or create merchant location
     const merchantLocationKey = await this.getOrCreateMerchantLocation(adapter);
@@ -1032,6 +1035,7 @@ Return JSON with these fields (omit any you're not confident about):
     return {
       offerId: offerResponse.offerId,
       listingId: publishResponse.listingId,
+      sku,
     };
   }
 
@@ -1168,7 +1172,7 @@ Return JSON with these fields (omit any you're not confident about):
   }
 
   /**
-   * Update inventory item with eBay listing info and optional storage location
+   * Update inventory item with eBay listing info, SKU, and optional storage location
    * Storage location update failure will not block the listing (E2 criteria)
    *
    * @returns Warning message if storage location update failed, undefined otherwise
@@ -1177,14 +1181,18 @@ Return JSON with these fields (omit any you're not confident about):
     itemId: string,
     listingId: string,
     listingUrl: string,
+    sku: string,
     storageLocation?: string
   ): Promise<{ storageLocationWarning?: string }> {
-    // First, update the core listing info (required - will throw on failure)
+    // First, update the core listing info including SKU (required - will throw on failure)
+    const now = new Date().toISOString();
     const coreUpdateData = {
       ebay_listing_id: listingId,
       ebay_listing_url: listingUrl,
+      sku,
       status: 'LISTED',
-      updated_at: new Date().toISOString(),
+      listing_date: now,
+      updated_at: now,
     };
 
     const { error: coreError } = await this.supabase
@@ -1628,6 +1636,7 @@ Return JSON with these fields (omit any you're not confident about):
 
       ebayOfferId = listingResult.offerId;
       ebayListingId = listingResult.listingId;
+      const ebaySku = listingResult.sku;
 
       // Step 9: Update inventory item (storage location failure won't block listing - E2 criteria)
       const updateResult = await this.executeStep('update', onProgress, async () => {
@@ -1635,6 +1644,7 @@ Return JSON with these fields (omit any you're not confident about):
           request.inventoryItemId,
           ebayListingId!,
           `https://www.ebay.co.uk/itm/${ebayListingId}`,
+          ebaySku,
           request.storageLocation
         );
       });
