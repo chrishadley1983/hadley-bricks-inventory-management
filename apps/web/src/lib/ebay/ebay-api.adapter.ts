@@ -316,8 +316,7 @@ export class EbayApiAdapter {
         body: item,
         headers: {
           'Content-Language': 'en-GB',
-          // Note: Do NOT set Accept-Language here - eBay returns "Invalid value for header Accept-Language"
-          // when this header is present on inventory item updates. The Content-Language header is sufficient.
+          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
         },
       }
     );
