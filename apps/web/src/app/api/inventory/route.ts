@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { SELLING_PLATFORMS } from '@hadley-bricks/database';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { InventoryService } from '@/lib/services';
 import { createPerfLogger } from '@/lib/perf';
+import { validateAuth } from '@/lib/api/validate-auth';
 
 // Transform empty strings to null for optional fields
 const emptyToNull = z.string().transform((val) => (val === '' ? null : val));
@@ -198,15 +199,16 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Validate auth via API key or session cookie
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Use service role client for API key auth (bypasses RLS)
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     const body = await request.json();
 
@@ -227,7 +229,7 @@ export async function POST(request: NextRequest) {
       validatedItems.push(parsed.data);
     }
 
-    const service = new InventoryService(supabase, user.id);
+    const service = new InventoryService(supabase, userId);
 
     if (isBulk) {
       const result = await service.createMany(validatedItems);
