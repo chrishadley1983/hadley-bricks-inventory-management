@@ -149,11 +149,13 @@ export function ListingPreviewScreen({
   // We use a callback ref pattern to handle the tab unmount/remount
   const setDescriptionRef = useCallback((node: HTMLDivElement | null) => {
     descriptionRef.current = node;
-    // When the node becomes available (including after tab switch), set its content
-    if (node && isEditing) {
+    // Only set content on initial mount (empty node), not on re-renders from typing
+    // This prevents cursor jumping to start on every keystroke
+    if (node && isEditing && node.innerHTML === '') {
       node.innerHTML = editedDescription;
     }
-  }, [isEditing, editedDescription]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only set initial content, not on every edit
+  }, [isEditing]);
 
   return (
     <div className="space-y-4">
