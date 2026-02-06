@@ -479,6 +479,8 @@ export function CreateEbayListingModal({
     // Error state
     if (error) {
       const errorMessage = typeof error === 'string' ? error : error.error;
+      // Log full error for debugging
+      console.error('[CreateEbayListingModal] Full error:', error);
       return (
         <div className="space-y-4 py-4">
           <div className="flex items-center justify-center">
@@ -486,7 +488,7 @@ export function CreateEbayListingModal({
           </div>
           <div className="text-center">
             <h3 className="text-lg font-semibold">Listing Creation Failed</h3>
-            <p className="text-muted-foreground">{errorMessage}</p>
+            <p className="text-muted-foreground break-words">{errorMessage}</p>
             {typeof error !== 'string' && error.failedStep && (
               <p className="mt-1 text-sm text-muted-foreground">Failed at: {error.failedStep}</p>
             )}
@@ -1022,7 +1024,7 @@ export function CreateEbayListingModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {result?.success

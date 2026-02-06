@@ -100,6 +100,13 @@ export function ListingPreviewScreen({
     listing.conditionDescription ?? ''
   );
 
+  // Sync state when listing prop changes (e.g., after quality review updates the listing)
+  useEffect(() => {
+    setEditedTitle(listing.title);
+    setEditedDescription(listing.description);
+    setEditedConditionDescription(listing.conditionDescription ?? '');
+  }, [listing.title, listing.description, listing.conditionDescription]);
+
   // Character count helpers
   const titleLength = editedTitle.length;
   const titleMaxLength = 80;
@@ -138,13 +145,15 @@ export function ListingPreviewScreen({
     }
   }, []);
 
-  // Update contentEditable when entering edit mode (not on content changes to preserve cursor)
-  useEffect(() => {
-    if (isEditing && descriptionRef.current) {
-      descriptionRef.current.innerHTML = editedDescription;
+  // Update contentEditable when entering edit mode OR when the ref becomes available (tab switch)
+  // We use a callback ref pattern to handle the tab unmount/remount
+  const setDescriptionRef = useCallback((node: HTMLDivElement | null) => {
+    descriptionRef.current = node;
+    // When the node becomes available (including after tab switch), set its content
+    if (node && isEditing) {
+      node.innerHTML = editedDescription;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only sync on mode change, not content changes (would reset cursor)
-  }, [isEditing]);
+  }, [isEditing, editedDescription]);
 
   return (
     <div className="space-y-4">
@@ -328,7 +337,7 @@ export function ListingPreviewScreen({
                 <Label htmlFor="description">Description</Label>
                 {isEditing ? (
                   <div
-                    ref={descriptionRef}
+                    ref={setDescriptionRef}
                     contentEditable
                     onInput={handleDescriptionInput}
                     className="p-2 bg-background border rounded-md text-sm min-h-[200px] max-h-[400px] overflow-y-auto prose prose-sm dark:prose-invert focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
