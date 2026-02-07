@@ -43,6 +43,7 @@ export function InvestmentTable() {
         data={data?.data || []}
         isLoading={isLoading}
         getRowId={(row) => row.id}
+
         enableColumnVisibility
         columnDisplayNames={COLUMN_DISPLAY_NAMES}
         columnVisibilityStorageKey="investment-table-columns"
@@ -51,6 +52,8 @@ export function InvestmentTable() {
           exclusivity_tier: false,
           is_licensed: false,
           retirement_confidence: false,
+          sales_rank: false,
+          offer_count: false,
         }}
         pagination={{
           page: data?.page || 1,

@@ -21,6 +21,49 @@ export interface InvestmentSet {
   is_modular: boolean | null;
   image_url: string | null;
   availability: string | null;
+  amazon_asin: string | null;
+  has_amazon_listing: boolean | null;
+  // Amazon pricing (enriched from amazon_arbitrage_pricing)
+  buy_box_price: number | null;
+  was_price: number | null;
+  sales_rank: number | null;
+  offer_count: number | null;
+  latest_snapshot_date: string | null;
+}
+
+export interface InvestmentSetDetail extends InvestmentSet {
+  pricing: {
+    buy_box_price: number | null;
+    was_price: number | null;
+    sales_rank: number | null;
+    offer_count: number | null;
+    lowest_offer_price: number | null;
+    total_offer_count: number | null;
+    latest_snapshot_date: string | null;
+  } | null;
+  retirement_sources: {
+    source: string;
+    expected_retirement_date: string | null;
+    status: string | null;
+    confidence: string;
+    updated_at: string;
+  }[];
+}
+
+export interface PriceHistoryPoint {
+  snapshot_date: string;
+  buy_box_price: number | null;
+  was_price_90d: number | null;
+  lowest_offer_price: number | null;
+  sales_rank: number | null;
+  offer_count: number | null;
+}
+
+export interface PriceHistoryResponse {
+  data: PriceHistoryPoint[];
+  rrp: number | null;
+  asin?: string;
+  message?: string;
 }
 
 export interface InvestmentFilters {
@@ -69,6 +112,32 @@ export async function fetchInvestmentSets(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `Failed to fetch investment sets (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function fetchInvestmentSetDetail(
+  setNumber: string
+): Promise<InvestmentSetDetail> {
+  const response = await fetch(`/api/investment/${encodeURIComponent(setNumber)}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch set detail (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function fetchPriceHistory(
+  setNumber: string
+): Promise<PriceHistoryResponse> {
+  const response = await fetch(`/api/investment/${encodeURIComponent(setNumber)}/price-history`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch price history (${response.status})`);
   }
 
   return response.json();

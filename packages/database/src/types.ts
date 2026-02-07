@@ -1858,24 +1858,32 @@ export type Database = {
           additional_image_count: number | null
           age_max: number | null
           age_min: number | null
+          amazon_asin: string | null
           availability: string | null
           bricklink_sold_price_new: number | null
           bricklink_sold_price_used: number | null
           brickset_id: number | null
           ca_retail_price: number | null
           category: string | null
+          classification_override: Json | null
           created_at: string
           de_retail_price: number | null
           depth: number | null
           designers: string[] | null
           ean: string | null
           eu_item_number: string | null
+          exclusivity_tier: string | null
           exit_date: string | null
+          expected_retirement_date: string | null
+          has_amazon_listing: boolean | null
           height: number | null
           id: string
           image_filename: string | null
           image_url: string | null
           instructions_count: number | null
+          is_licensed: boolean | null
+          is_modular: boolean | null
+          is_ucs: boolean | null
           last_fetched_at: string | null
           launch_date: string | null
           minifigs: number | null
@@ -1884,7 +1892,11 @@ export type Database = {
           pieces: number | null
           rating: number | null
           raw_response: Json | null
+          rebrickable_last_synced_at: string | null
+          rebrickable_set_num: string | null
           released: boolean | null
+          retirement_confidence: string | null
+          retirement_status: string | null
           set_name: string
           set_number: string
           subtheme: string | null
@@ -1907,24 +1919,32 @@ export type Database = {
           additional_image_count?: number | null
           age_max?: number | null
           age_min?: number | null
+          amazon_asin?: string | null
           availability?: string | null
           bricklink_sold_price_new?: number | null
           bricklink_sold_price_used?: number | null
           brickset_id?: number | null
           ca_retail_price?: number | null
           category?: string | null
+          classification_override?: Json | null
           created_at?: string
           de_retail_price?: number | null
           depth?: number | null
           designers?: string[] | null
           ean?: string | null
           eu_item_number?: string | null
+          exclusivity_tier?: string | null
           exit_date?: string | null
+          expected_retirement_date?: string | null
+          has_amazon_listing?: boolean | null
           height?: number | null
           id?: string
           image_filename?: string | null
           image_url?: string | null
           instructions_count?: number | null
+          is_licensed?: boolean | null
+          is_modular?: boolean | null
+          is_ucs?: boolean | null
           last_fetched_at?: string | null
           launch_date?: string | null
           minifigs?: number | null
@@ -1933,7 +1953,11 @@ export type Database = {
           pieces?: number | null
           rating?: number | null
           raw_response?: Json | null
+          rebrickable_last_synced_at?: string | null
+          rebrickable_set_num?: string | null
           released?: boolean | null
+          retirement_confidence?: string | null
+          retirement_status?: string | null
           set_name: string
           set_number: string
           subtheme?: string | null
@@ -1956,24 +1980,32 @@ export type Database = {
           additional_image_count?: number | null
           age_max?: number | null
           age_min?: number | null
+          amazon_asin?: string | null
           availability?: string | null
           bricklink_sold_price_new?: number | null
           bricklink_sold_price_used?: number | null
           brickset_id?: number | null
           ca_retail_price?: number | null
           category?: string | null
+          classification_override?: Json | null
           created_at?: string
           de_retail_price?: number | null
           depth?: number | null
           designers?: string[] | null
           ean?: string | null
           eu_item_number?: string | null
+          exclusivity_tier?: string | null
           exit_date?: string | null
+          expected_retirement_date?: string | null
+          has_amazon_listing?: boolean | null
           height?: number | null
           id?: string
           image_filename?: string | null
           image_url?: string | null
           instructions_count?: number | null
+          is_licensed?: boolean | null
+          is_modular?: boolean | null
+          is_ucs?: boolean | null
           last_fetched_at?: string | null
           launch_date?: string | null
           minifigs?: number | null
@@ -1982,7 +2014,11 @@ export type Database = {
           pieces?: number | null
           rating?: number | null
           raw_response?: Json | null
+          rebrickable_last_synced_at?: string | null
+          rebrickable_set_num?: string | null
           released?: boolean | null
+          retirement_confidence?: string | null
+          retirement_status?: string | null
           set_name?: string
           set_number?: string
           subtheme?: string | null
@@ -2033,6 +2069,107 @@ export type Database = {
           piece_count?: number
           storage_locations?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      browser_action_log: {
+        Row: {
+          action_data: Json | null
+          action_type: string
+          created_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          id: string
+          page_title: string | null
+          page_url: string | null
+          purchase_id: string | null
+          screenshot_after: string | null
+          screenshot_before: string | null
+          session_id: string
+          success: boolean | null
+        }
+        Insert: {
+          action_data?: Json | null
+          action_type: string
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          page_title?: string | null
+          page_url?: string | null
+          purchase_id?: string | null
+          screenshot_after?: string | null
+          screenshot_before?: string | null
+          session_id: string
+          success?: boolean | null
+        }
+        Update: {
+          action_data?: Json | null
+          action_type?: string
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          page_title?: string | null
+          page_url?: string | null
+          purchase_id?: string | null
+          screenshot_after?: string | null
+          screenshot_before?: string | null
+          session_id?: string
+          success?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "browser_action_log_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      browser_sessions: {
+        Row: {
+          action_count: number | null
+          channel_id: number
+          domain: string
+          ended_at: string | null
+          error_message: string | null
+          id: string
+          last_action_at: string | null
+          metadata: Json | null
+          session_id: string
+          started_at: string | null
+          status: string
+          user_id: number
+        }
+        Insert: {
+          action_count?: number | null
+          channel_id: number
+          domain: string
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_action_at?: string | null
+          metadata?: Json | null
+          session_id: string
+          started_at?: string | null
+          status?: string
+          user_id: number
+        }
+        Update: {
+          action_count?: number | null
+          channel_id?: number
+          domain?: string
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_action_at?: string | null
+          metadata?: Json | null
+          session_id?: string
+          started_at?: string | null
+          status?: string
+          user_id?: number
         }
         Relationships: []
       }
@@ -3305,6 +3442,48 @@ export type Database = {
           },
         ]
       }
+      evening_clubs: {
+        Row: {
+          child_name: string
+          club_name: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          pickup_location: string | null
+          pickup_time: string | null
+          time_category: string | null
+          updated_at: string | null
+          weekday: number
+        }
+        Insert: {
+          child_name: string
+          club_name: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          pickup_location?: string | null
+          pickup_time?: string | null
+          time_category?: string | null
+          updated_at?: string | null
+          weekday: number
+        }
+        Update: {
+          child_name?: string
+          club_name?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          pickup_location?: string | null
+          pickup_time?: string | null
+          time_category?: string | null
+          updated_at?: string | null
+          weekday?: number
+        }
+        Relationships: []
+      }
       excluded_ebay_listings: {
         Row: {
           ebay_item_id: string
@@ -3396,6 +3575,105 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      garmin_daily_summary: {
+        Row: {
+          active_calories: number | null
+          avg_hr: number | null
+          avg_stress: number | null
+          created_at: string | null
+          date: string
+          id: string
+          max_hr: number | null
+          min_hr: number | null
+          resting_hr: number | null
+          sleep_hours: number | null
+          sleep_score: number | null
+          source: string | null
+          steps: number | null
+          steps_goal: number | null
+          total_calories: number | null
+          user_id: string
+        }
+        Insert: {
+          active_calories?: number | null
+          avg_hr?: number | null
+          avg_stress?: number | null
+          created_at?: string | null
+          date: string
+          id?: string
+          max_hr?: number | null
+          min_hr?: number | null
+          resting_hr?: number | null
+          sleep_hours?: number | null
+          sleep_score?: number | null
+          source?: string | null
+          steps?: number | null
+          steps_goal?: number | null
+          total_calories?: number | null
+          user_id?: string
+        }
+        Update: {
+          active_calories?: number | null
+          avg_hr?: number | null
+          avg_stress?: number | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          max_hr?: number | null
+          min_hr?: number | null
+          resting_hr?: number | null
+          sleep_hours?: number | null
+          sleep_score?: number | null
+          source?: string | null
+          steps?: number | null
+          steps_goal?: number | null
+          total_calories?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      garmin_sleep: {
+        Row: {
+          awake_hours: number | null
+          created_at: string | null
+          date: string
+          deep_hours: number | null
+          id: string
+          light_hours: number | null
+          quality_score: number | null
+          rem_hours: number | null
+          source: string | null
+          total_hours: number | null
+          user_id: string
+        }
+        Insert: {
+          awake_hours?: number | null
+          created_at?: string | null
+          date: string
+          deep_hours?: number | null
+          id?: string
+          light_hours?: number | null
+          quality_score?: number | null
+          rem_hours?: number | null
+          source?: string | null
+          total_hours?: number | null
+          user_id?: string
+        }
+        Update: {
+          awake_hours?: number | null
+          created_at?: string | null
+          date?: string
+          deep_hours?: number | null
+          id?: string
+          light_hours?: number | null
+          quality_score?: number | null
+          rem_hours?: number | null
+          source?: string | null
+          total_hours?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       generated_listings: {
         Row: {
@@ -3759,6 +4037,170 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string | null
+          embedding: string | null
+          end_word: number | null
+          id: string
+          parent_id: string
+          start_word: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          end_word?: number | null
+          id?: string
+          parent_id: string
+          start_word?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          end_word?: number | null
+          id?: string
+          parent_id?: string
+          start_word?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_connections: {
+        Row: {
+          connection_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          item_a_id: string
+          item_b_id: string
+          similarity_score: number | null
+          surfaced: boolean | null
+          surfaced_at: string | null
+        }
+        Insert: {
+          connection_type: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          item_a_id: string
+          item_b_id: string
+          similarity_score?: number | null
+          surfaced?: boolean | null
+          surfaced_at?: string | null
+        }
+        Update: {
+          connection_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          item_a_id?: string
+          item_b_id?: string
+          similarity_score?: number | null
+          surfaced?: boolean | null
+          surfaced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_connections_item_a_id_fkey"
+            columns: ["item_a_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_connections_item_b_id_fkey"
+            columns: ["item_b_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_items: {
+        Row: {
+          access_count: number | null
+          base_priority: number | null
+          capture_type: string
+          content_type: string
+          created_at: string | null
+          decay_score: number | null
+          full_text: string | null
+          id: string
+          last_accessed_at: string | null
+          promoted_at: string | null
+          site_name: string | null
+          source_message_id: string | null
+          source_system: string | null
+          source_url: string | null
+          status: string | null
+          summary: string | null
+          title: string | null
+          topics: string[] | null
+          updated_at: string | null
+          user_note: string | null
+          word_count: number | null
+        }
+        Insert: {
+          access_count?: number | null
+          base_priority?: number | null
+          capture_type?: string
+          content_type: string
+          created_at?: string | null
+          decay_score?: number | null
+          full_text?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          promoted_at?: string | null
+          site_name?: string | null
+          source_message_id?: string | null
+          source_system?: string | null
+          source_url?: string | null
+          status?: string | null
+          summary?: string | null
+          title?: string | null
+          topics?: string[] | null
+          updated_at?: string | null
+          user_note?: string | null
+          word_count?: number | null
+        }
+        Update: {
+          access_count?: number | null
+          base_priority?: number | null
+          capture_type?: string
+          content_type?: string
+          created_at?: string | null
+          decay_score?: number | null
+          full_text?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          promoted_at?: string | null
+          site_name?: string | null
+          source_message_id?: string | null
+          source_system?: string | null
+          source_url?: string | null
+          status?: string | null
+          summary?: string | null
+          title?: string | null
+          topics?: string[] | null
+          updated_at?: string | null
+          user_note?: string | null
+          word_count?: number | null
+        }
+        Relationships: []
       }
       listing_applied_suggestions: {
         Row: {
@@ -4207,6 +4649,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meal_favourites: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string | null
+          description: string
+          fat_g: number
+          id: string
+          last_used_at: string | null
+          meal_type: string | null
+          name: string
+          protein_g: number
+          use_count: number | null
+          user_id: string
+        }
+        Insert: {
+          calories: number
+          carbs_g: number
+          created_at?: string | null
+          description: string
+          fat_g: number
+          id?: string
+          last_used_at?: string | null
+          meal_type?: string | null
+          name: string
+          protein_g: number
+          use_count?: number | null
+          user_id?: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string | null
+          description?: string
+          fat_g?: number
+          id?: string
+          last_used_at?: string | null
+          meal_type?: string | null
+          name?: string
+          protein_g?: number
+          use_count?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       meal_presets: {
         Row: {
@@ -4746,6 +5233,7 @@ export type Database = {
           meal_type: string | null
           notes: string | null
           protein_g: number | null
+          water_ml: number | null
         }
         Insert: {
           calories?: number | null
@@ -4760,6 +5248,7 @@ export type Database = {
           meal_type?: string | null
           notes?: string | null
           protein_g?: number | null
+          water_ml?: number | null
         }
         Update: {
           calories?: number | null
@@ -4774,6 +5263,7 @@ export type Database = {
           meal_type?: string | null
           notes?: string | null
           protein_g?: number | null
+          water_ml?: number | null
         }
         Relationships: []
       }
@@ -5617,6 +6107,128 @@ export type Database = {
           },
         ]
       }
+      price_snapshots: {
+        Row: {
+          buy_box_winner: string | null
+          created_at: string
+          date: string
+          id: string
+          price_gbp: number | null
+          raw_data: Json | null
+          sales_rank: number | null
+          seller_count: number | null
+          set_num: string
+          source: string
+        }
+        Insert: {
+          buy_box_winner?: string | null
+          created_at?: string
+          date: string
+          id?: string
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num: string
+          source: string
+        }
+        Update: {
+          buy_box_winner?: string | null
+          created_at?: string
+          date?: string
+          id?: string
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      processed_purchase_emails: {
+        Row: {
+          cost: number | null
+          created_at: string
+          email_date: string | null
+          email_id: string
+          email_subject: string | null
+          error_message: string | null
+          id: string
+          inventory_id: string | null
+          item_name: string | null
+          order_reference: string | null
+          processed_at: string
+          purchase_id: string | null
+          skip_reason: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          email_date?: string | null
+          email_id: string
+          email_subject?: string | null
+          error_message?: string | null
+          id?: string
+          inventory_id?: string | null
+          item_name?: string | null
+          order_reference?: string | null
+          processed_at?: string
+          purchase_id?: string | null
+          skip_reason?: string | null
+          source: string
+          status: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          email_date?: string | null
+          email_id?: string
+          email_subject?: string | null
+          error_message?: string | null
+          id?: string
+          inventory_id?: string | null
+          item_name?: string | null
+          order_reference?: string | null
+          processed_at?: string
+          purchase_id?: string | null
+          skip_reason?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_purchase_emails_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processed_purchase_emails_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processed_purchase_emails_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_roi_view"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "processed_purchase_emails_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           business_name: string | null
@@ -6007,6 +6619,96 @@ export type Database = {
           },
         ]
       }
+      purchase_limits: {
+        Row: {
+          amount_gbp: number
+          created_at: string | null
+          id: string
+          limit_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount_gbp: number
+          created_at?: string | null
+          id?: string
+          limit_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount_gbp?: number
+          created_at?: string | null
+          id?: string
+          limit_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      purchase_log: {
+        Row: {
+          amount_gbp: number | null
+          cancelled_at: string | null
+          channel_id: number
+          completed_at: string | null
+          confirmation_message_id: string | null
+          confirmed_at: string | null
+          created_at: string | null
+          currency: string | null
+          delivery_estimate: string | null
+          domain: string
+          error_message: string | null
+          id: string
+          item_description: string | null
+          metadata: Json | null
+          order_reference: string | null
+          session_id: string
+          status: string
+          url: string | null
+          user_id: number
+        }
+        Insert: {
+          amount_gbp?: number | null
+          cancelled_at?: string | null
+          channel_id: number
+          completed_at?: string | null
+          confirmation_message_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          delivery_estimate?: string | null
+          domain: string
+          error_message?: string | null
+          id?: string
+          item_description?: string | null
+          metadata?: Json | null
+          order_reference?: string | null
+          session_id: string
+          status?: string
+          url?: string | null
+          user_id: number
+        }
+        Update: {
+          amount_gbp?: number | null
+          cancelled_at?: string | null
+          channel_id?: number
+          completed_at?: string | null
+          confirmation_message_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          delivery_estimate?: string | null
+          domain?: string
+          error_message?: string | null
+          id?: string
+          item_description?: string | null
+          metadata?: Json | null
+          order_reference?: string | null
+          session_id?: string
+          status?: string
+          url?: string | null
+          user_id?: number
+        }
+        Relationships: []
+      }
       purchases: {
         Row: {
           cost: number
@@ -6063,74 +6765,35 @@ export type Database = {
           },
         ]
       }
-      processed_purchase_emails: {
+      reminders: {
         Row: {
+          channel_id: number
+          created_at: string | null
+          fired_at: string | null
           id: string
-          email_id: string
-          source: string
-          order_reference: string | null
-          purchase_id: string | null
-          inventory_id: string | null
-          status: string
-          skip_reason: string | null
-          error_message: string | null
-          email_subject: string | null
-          email_date: string | null
-          item_name: string | null
-          cost: number | null
-          processed_at: string
-          created_at: string
+          run_at: string
+          task: string
+          user_id: number
         }
         Insert: {
-          id?: string
-          email_id: string
-          source: string
-          order_reference?: string | null
-          purchase_id?: string | null
-          inventory_id?: string | null
-          status: string
-          skip_reason?: string | null
-          error_message?: string | null
-          email_subject?: string | null
-          email_date?: string | null
-          item_name?: string | null
-          cost?: number | null
-          processed_at?: string
-          created_at?: string
+          channel_id: number
+          created_at?: string | null
+          fired_at?: string | null
+          id: string
+          run_at: string
+          task: string
+          user_id: number
         }
         Update: {
+          channel_id?: number
+          created_at?: string | null
+          fired_at?: string | null
           id?: string
-          email_id?: string
-          source?: string
-          order_reference?: string | null
-          purchase_id?: string | null
-          inventory_id?: string | null
-          status?: string
-          skip_reason?: string | null
-          error_message?: string | null
-          email_subject?: string | null
-          email_date?: string | null
-          item_name?: string | null
-          cost?: number | null
-          processed_at?: string
-          created_at?: string
+          run_at?: string
+          task?: string
+          user_id?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "processed_purchase_emails_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "processed_purchase_emails_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_items"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       repricing_pricing_cache: {
         Row: {
@@ -6183,6 +6846,42 @@ export type Database = {
           updated_at?: string
           user_id?: string
           was_price?: number | null
+        }
+        Relationships: []
+      }
+      retirement_sources: {
+        Row: {
+          confidence: string
+          created_at: string
+          expected_retirement_date: string | null
+          id: string
+          raw_data: Json | null
+          set_num: string
+          source: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          confidence?: string
+          created_at?: string
+          expected_retirement_date?: string | null
+          id?: string
+          raw_data?: Json | null
+          set_num: string
+          source: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          expected_retirement_date?: string | null
+          id?: string
+          raw_data?: Json | null
+          set_num?: string
+          source?: string
+          status?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6346,53 +7045,6 @@ export type Database = {
           },
         ]
       }
-      service_api_keys: {
-        Row: {
-          id: string
-          name: string
-          key_hash: string
-          key_prefix: string
-          permissions: Json
-          created_at: string
-          last_used_at: string | null
-          expires_at: string | null
-          revoked_at: string | null
-          created_by: string | null
-        }
-        Insert: {
-          id?: string
-          name: string
-          key_hash: string
-          key_prefix: string
-          permissions?: Json
-          created_at?: string
-          last_used_at?: string | null
-          expires_at?: string | null
-          revoked_at?: string | null
-          created_by?: string | null
-        }
-        Update: {
-          id?: string
-          name?: string
-          key_hash?: string
-          key_prefix?: string
-          permissions?: Json
-          created_at?: string
-          last_used_at?: string | null
-          expires_at?: string | null
-          revoked_at?: string | null
-          created_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_api_keys_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       seeded_asin_rankings: {
         Row: {
           asin: string
@@ -6508,6 +7160,53 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "user_seeded_arbitrage_items"
             referencedColumns: ["brickset_set_id"]
+          },
+        ]
+      }
+      service_api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          permissions: Json
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          permissions?: Json
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          permissions?: Json
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_api_keys_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6688,6 +7387,581 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      task_attachments: {
+        Row: {
+          created_at: string | null
+          external_url: string | null
+          file_path: string
+          file_size: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          task_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_url?: string | null
+          file_path: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          task_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_url?: string | null
+          file_path?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          task_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_categories: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
+      task_category_links: {
+        Row: {
+          category_id: string
+          task_id: string
+        }
+        Insert: {
+          category_id: string
+          task_id: string
+        }
+        Update: {
+          category_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_category_links_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "task_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_category_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_category_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_category_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_category_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_category_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_comments: {
+        Row: {
+          author: string
+          content: string
+          created_at: string | null
+          id: string
+          is_system_message: boolean | null
+          task_id: string
+        }
+        Insert: {
+          author: string
+          content: string
+          created_at?: string | null
+          id?: string
+          is_system_message?: boolean | null
+          task_id: string
+        }
+        Update: {
+          author?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_system_message?: boolean | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_history: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string | null
+          field_name: string | null
+          id: string
+          new_value: string | null
+          old_value: string | null
+          task_id: string
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string | null
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string | null
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_reminders: {
+        Row: {
+          channel: string
+          created_at: string | null
+          id: string
+          is_recurring: boolean | null
+          is_sent: boolean | null
+          message: string | null
+          recurrence_rule: Json | null
+          remind_at: string
+          sent_at: string | null
+          task_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          is_sent?: boolean | null
+          message?: string | null
+          recurrence_rule?: Json | null
+          remind_at: string
+          sent_at?: string | null
+          task_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          is_sent?: boolean | null
+          message?: string | null
+          recurrence_rule?: Json | null
+          remind_at?: string
+          sent_at?: string | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          description: string | null
+          discord_channel_id: string | null
+          discord_message_id: string | null
+          due_date: string | null
+          estimated_effort: string | null
+          heartbeat_id: string | null
+          heartbeat_scheduled_for: string | null
+          heartbeat_slot_order: number | null
+          id: string
+          idea_source: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"]
+          next_occurrence: string | null
+          parent_task_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          promoted_to: string | null
+          recurrence_rule: Json | null
+          research_depth: Database["public"]["Enums"]["research_depth"] | null
+          research_findings: Json | null
+          scheduled_date: string | null
+          sort_order: number | null
+          source_reference: string | null
+          spawned_from_id: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          discord_channel_id?: string | null
+          discord_message_id?: string | null
+          due_date?: string | null
+          estimated_effort?: string | null
+          heartbeat_id?: string | null
+          heartbeat_scheduled_for?: string | null
+          heartbeat_slot_order?: number | null
+          id?: string
+          idea_source?: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned?: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"]
+          next_occurrence?: string | null
+          parent_task_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          promoted_to?: string | null
+          recurrence_rule?: Json | null
+          research_depth?: Database["public"]["Enums"]["research_depth"] | null
+          research_findings?: Json | null
+          scheduled_date?: string | null
+          sort_order?: number | null
+          source_reference?: string | null
+          spawned_from_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          discord_channel_id?: string | null
+          discord_message_id?: string | null
+          due_date?: string | null
+          estimated_effort?: string | null
+          heartbeat_id?: string | null
+          heartbeat_scheduled_for?: string | null
+          heartbeat_slot_order?: number | null
+          id?: string
+          idea_source?: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned?: boolean | null
+          list_type?: Database["public"]["Enums"]["task_list_type"]
+          next_occurrence?: string | null
+          parent_task_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          promoted_to?: string | null
+          recurrence_rule?: Json | null
+          research_depth?: Database["public"]["Enums"]["research_depth"] | null
+          research_findings?: Json | null
+          scheduled_date?: string | null
+          sort_order?: number | null
+          source_reference?: string | null
+          spawned_from_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       time_daily_summaries: {
         Row: {
@@ -6901,6 +8175,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_goals: {
+        Row: {
+          calories_target: number
+          carbs_target_g: number
+          created_at: string | null
+          deadline: string
+          fat_target_g: number
+          goal_reason: string | null
+          id: string
+          protein_target_g: number
+          steps_target: number
+          target_weight_kg: number
+          updated_at: string | null
+          user_id: string
+          water_target_ml: number
+        }
+        Insert: {
+          calories_target?: number
+          carbs_target_g?: number
+          created_at?: string | null
+          deadline?: string
+          fat_target_g?: number
+          goal_reason?: string | null
+          id?: string
+          protein_target_g?: number
+          steps_target?: number
+          target_weight_kg?: number
+          updated_at?: string | null
+          user_id?: string
+          water_target_ml?: number
+        }
+        Update: {
+          calories_target?: number
+          carbs_target_g?: number
+          created_at?: string | null
+          deadline?: string
+          fat_target_g?: number
+          goal_reason?: string | null
+          id?: string
+          protein_target_g?: number
+          steps_target?: number
+          target_weight_kg?: number
+          updated_at?: string | null
+          user_id?: string
+          water_target_ml?: number
+        }
+        Relationships: []
       }
       user_seeded_asin_preferences: {
         Row: {
@@ -7414,6 +8736,33 @@ export type Database = {
           },
         ]
       }
+      weight_readings: {
+        Row: {
+          created_at: string | null
+          id: string
+          measured_at: string
+          source: string | null
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          measured_at: string
+          source?: string | null
+          user_id?: string
+          weight_kg: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          measured_at?: string
+          source?: string | null
+          user_id?: string
+          weight_kg?: number
+        }
+        Relationships: []
+      }
       workflow_config: {
         Row: {
           audio_break_complete: string | null
@@ -7666,6 +9015,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      youtube_shown_videos: {
+        Row: {
+          category: string
+          channel_name: string | null
+          created_at: string | null
+          id: string
+          shown_at: string | null
+          summary: string | null
+          title: string
+          video_id: string
+          video_url: string
+        }
+        Insert: {
+          category: string
+          channel_name?: string | null
+          created_at?: string | null
+          id?: string
+          shown_at?: string | null
+          summary?: string | null
+          title: string
+          video_id: string
+          video_url: string
+        }
+        Update: {
+          category?: string
+          channel_name?: string | null
+          created_at?: string | null
+          id?: string
+          shown_at?: string | null
+          summary?: string | null
+          title?: string
+          video_id?: string
+          video_url?: string
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -7995,6 +9380,15 @@ export type Database = {
         }
         Relationships: []
       }
+      spending_summary: {
+        Row: {
+          date: string | null
+          domain: string | null
+          purchase_count: number | null
+          total_gbp: number | null
+        }
+        Relationships: []
+      }
       user_seeded_arbitrage_items: {
         Row: {
           asin: string | null
@@ -8021,6 +9415,585 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_active_research: {
+        Row: {
+          assigned_to: string | null
+          categories: string[] | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          discord_channel_id: string | null
+          discord_message_id: string | null
+          due_date: string | null
+          estimated_effort: string | null
+          heartbeat_id: string | null
+          heartbeat_scheduled_for: string | null
+          heartbeat_slot_order: number | null
+          id: string | null
+          idea_source: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"] | null
+          next_occurrence: string | null
+          parent_task_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"] | null
+          promoted_to: string | null
+          recurrence_rule: Json | null
+          research_depth: Database["public"]["Enums"]["research_depth"] | null
+          research_findings: Json | null
+          scheduled_date: string | null
+          sort_order: number | null
+          source_reference: string | null
+          spawned_from_id: string | null
+          spawned_items: number | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_chris_active_todos: {
+        Row: {
+          assigned_to: string | null
+          categories: string[] | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          discord_channel_id: string | null
+          discord_message_id: string | null
+          due_date: string | null
+          estimated_effort: string | null
+          heartbeat_id: string | null
+          heartbeat_scheduled_for: string | null
+          heartbeat_slot_order: number | null
+          id: string | null
+          idea_source: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"] | null
+          next_occurrence: string | null
+          next_reminder: string | null
+          parent_task_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"] | null
+          promoted_to: string | null
+          recurrence_rule: Json | null
+          research_depth: Database["public"]["Enums"]["research_depth"] | null
+          research_findings: Json | null
+          scheduled_date: string | null
+          sort_order: number | null
+          source_reference: string | null
+          spawned_from_id: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_heartbeat_plan: {
+        Row: {
+          effort_points: number | null
+          plan_date: string | null
+          task_count: number | null
+          tasks: Json[] | null
+        }
+        Relationships: []
+      }
+      v_peter_available_work: {
+        Row: {
+          assigned_to: string | null
+          categories: string[] | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          discord_channel_id: string | null
+          discord_message_id: string | null
+          due_date: string | null
+          estimated_effort: string | null
+          heartbeat_id: string | null
+          heartbeat_scheduled_for: string | null
+          heartbeat_slot_order: number | null
+          id: string | null
+          idea_source: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"] | null
+          next_occurrence: string | null
+          parent_task_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"] | null
+          promoted_to: string | null
+          recurrence_rule: Json | null
+          research_depth: Database["public"]["Enums"]["research_depth"] | null
+          research_findings: Json | null
+          scheduled_date: string | null
+          sort_order: number | null
+          source_reference: string | null
+          spawned_from_id: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_unprocessed_ideas: {
+        Row: {
+          assigned_to: string | null
+          categories: string[] | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          discord_channel_id: string | null
+          discord_message_id: string | null
+          due_date: string | null
+          estimated_effort: string | null
+          heartbeat_id: string | null
+          heartbeat_scheduled_for: string | null
+          heartbeat_slot_order: number | null
+          id: string | null
+          idea_source: Database["public"]["Enums"]["idea_source"] | null
+          is_pinned: boolean | null
+          list_type: Database["public"]["Enums"]["task_list_type"] | null
+          next_occurrence: string | null
+          parent_task_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"] | null
+          promoted_to: string | null
+          recurrence_rule: Json | null
+          research_depth: Database["public"]["Enums"]["research_depth"] | null
+          research_findings: Json | null
+          scheduled_date: string | null
+          sort_order: number | null
+          source_reference: string | null
+          spawned_from_id: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_promoted_to_fkey"
+            columns: ["promoted_to"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_research"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_chris_active_todos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_peter_available_work"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_spawned_from_id_fkey"
+            columns: ["spawned_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_unprocessed_ideas"
             referencedColumns: ["id"]
           },
         ]
@@ -8090,6 +10063,40 @@ export type Database = {
         Args: { p_count?: number; p_pickup_id: string }
         Returns: undefined
       }
+      dblink: { Args: { "": string }; Returns: Record<string, unknown>[] }
+      dblink_cancel_query: { Args: { "": string }; Returns: string }
+      dblink_close: { Args: { "": string }; Returns: string }
+      dblink_connect: { Args: { "": string }; Returns: string }
+      dblink_connect_u: { Args: { "": string }; Returns: string }
+      dblink_current_query: { Args: never; Returns: string }
+      dblink_disconnect:
+        | { Args: never; Returns: string }
+        | { Args: { "": string }; Returns: string }
+      dblink_error_message: { Args: { "": string }; Returns: string }
+      dblink_exec: { Args: { "": string }; Returns: string }
+      dblink_fdw_validator: {
+        Args: { catalog: unknown; options: string[] }
+        Returns: undefined
+      }
+      dblink_get_connections: { Args: never; Returns: string[] }
+      dblink_get_notify:
+        | { Args: { conname: string }; Returns: Record<string, unknown>[] }
+        | { Args: never; Returns: Record<string, unknown>[] }
+      dblink_get_pkey: {
+        Args: { "": string }
+        Returns: Database["public"]["CompositeTypes"]["dblink_pkey_results"][]
+        SetofOptions: {
+          from: "*"
+          to: "dblink_pkey_results"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      dblink_get_result: {
+        Args: { "": string }
+        Returns: Record<string, unknown>[]
+      }
+      dblink_is_busy: { Args: { "": string }; Returns: number }
       get_adjusted_ebay_stats: {
         Args: { p_set_number: string; p_user_id: string }
         Returns: {
@@ -8171,6 +10178,50 @@ export type Database = {
           your_qty: number
         }[]
       }
+      get_daily_totals: {
+        Args: { end_date: string; start_date: string }
+        Returns: {
+          log_date: string
+          meal_count: number
+          total_calories: number
+          total_carbs_g: number
+          total_fat_g: number
+          total_protein_g: number
+          total_water_ml: number
+        }[]
+      }
+      get_fading_but_relevant: {
+        Args: { item_limit?: number }
+        Returns: {
+          access_count: number | null
+          base_priority: number | null
+          capture_type: string
+          content_type: string
+          created_at: string | null
+          decay_score: number | null
+          full_text: string | null
+          id: string
+          last_accessed_at: string | null
+          promoted_at: string | null
+          site_name: string | null
+          source_message_id: string | null
+          source_system: string | null
+          source_url: string | null
+          status: string | null
+          summary: string | null
+          title: string | null
+          topics: string[] | null
+          updated_at: string | null
+          user_note: string | null
+          word_count: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_latest_listing_review: {
         Args: { p_listing_id: string; p_user_id: string }
         Returns: {
@@ -8221,6 +10272,22 @@ export type Database = {
         }[]
       }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
+      get_remaining_limits: {
+        Args: { p_user_id?: number }
+        Returns: {
+          limit_amount: number
+          limit_type: string
+          remaining: number
+          spent: number
+        }[]
+      }
+      get_topic_counts: {
+        Args: never
+        Returns: {
+          count: number
+          topic: string
+        }[]
+      }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
       initialize_seeded_asins: {
         Args: never
@@ -8253,15 +10320,72 @@ export type Database = {
           storage_location: string
         }[]
       }
+      search_knowledge: {
+        Args: {
+          capture_types?: string[]
+          exclude_parent?: string
+          match_count?: number
+          match_threshold?: number
+          min_decay?: number
+          query_embedding: string
+        }
+        Returns: {
+          access_count: number
+          base_priority: number
+          capture_type: string
+          chunk_content: string
+          chunk_id: string
+          chunk_index: number
+          content_type: string
+          created_at: string
+          decay_score: number
+          full_text: string
+          last_accessed_at: string
+          parent_id: string
+          promoted_at: string
+          similarity: number
+          source_message_id: string
+          source_system: string
+          source_url: string
+          status: string
+          summary: string
+          title: string
+          topics: string[]
+        }[]
+      }
       seed_workflow_data:
         | { Args: never; Returns: undefined }
         | { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      idea_source:
+        | "discord_message"
+        | "conversation"
+        | "research"
+        | "manual"
+        | "pattern"
+        | "external"
+      research_depth: "shallow" | "standard" | "deep"
+      task_list_type: "personal_todo" | "peter_queue" | "idea" | "research"
+      task_priority: "critical" | "high" | "medium" | "low" | "someday"
+      task_status:
+        | "inbox"
+        | "scheduled"
+        | "queued"
+        | "heartbeat_scheduled"
+        | "in_heartbeat"
+        | "in_progress"
+        | "review"
+        | "findings_ready"
+        | "done"
+        | "cancelled"
+        | "parked"
     }
     CompositeTypes: {
-      [_ in never]: never
+      dblink_pkey_results: {
+        position: number | null
+        colname: string | null
+      }
     }
   }
 }
@@ -8385,6 +10509,31 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      idea_source: [
+        "discord_message",
+        "conversation",
+        "research",
+        "manual",
+        "pattern",
+        "external",
+      ],
+      research_depth: ["shallow", "standard", "deep"],
+      task_list_type: ["personal_todo", "peter_queue", "idea", "research"],
+      task_priority: ["critical", "high", "medium", "low", "someday"],
+      task_status: [
+        "inbox",
+        "scheduled",
+        "queued",
+        "heartbeat_scheduled",
+        "in_heartbeat",
+        "in_progress",
+        "review",
+        "findings_ready",
+        "done",
+        "cancelled",
+        "parked",
+      ],
+    },
   },
 } as const

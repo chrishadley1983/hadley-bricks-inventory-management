@@ -1,9 +1,11 @@
 /**
  * GET /api/investment
  *
- * Returns investment-tracked LEGO sets with retirement data.
+ * Returns investment-tracked LEGO sets with retirement data and Amazon pricing.
  * Supports filtering by retirement status, theme, year range, and "retiring within" timeframe.
  * Server-side pagination.
+ *
+ * Amazon pricing data is joined from amazon_arbitrage_pricing via the set's amazon_asin.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -50,11 +52,13 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceRoleClient();
 
-    // Build query
+    // Build query - include amazon_asin for pricing lookup
+    // Note: Some columns (retirement_status, amazon_asin, etc.) are added by investment
+    // migrations and may not be in generated types yet. Using raw select string.
     let query = supabase
       .from('brickset_sets')
       .select(
-        'id, set_number, set_name, theme, subtheme, year_from, pieces, minifigs, uk_retail_price, retirement_status, expected_retirement_date, retirement_confidence, exclusivity_tier, is_licensed, is_ucs, is_modular, image_url, availability',
+        'id, set_number, set_name, theme, subtheme, year_from, pieces, minifigs, uk_retail_price, retirement_status, expected_retirement_date, retirement_confidence, exclusivity_tier, is_licensed, is_ucs, is_modular, image_url, availability, amazon_asin, has_amazon_listing, classification_override',
         { count: 'exact' }
       );
 
@@ -66,11 +70,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (retirementStatus) {
-      query = query.eq('retirement_status', retirementStatus);
+      query = query.eq('retirement_status' as string, retirementStatus);
     }
 
     if (theme) {
-      query = query.eq('theme', theme);
+      query = query.ilike('theme', `%${theme}%`);
     }
 
     if (minYear) {
@@ -88,8 +92,8 @@ export async function GET(request: NextRequest) {
       const cutoff = cutoffDate.toISOString().split('T')[0];
 
       query = query
-        .gte('expected_retirement_date', today)
-        .lte('expected_retirement_date', cutoff);
+        .gte('expected_retirement_date' as string, today)
+        .lte('expected_retirement_date' as string, cutoff);
     }
 
     // Apply sorting
@@ -111,11 +115,77 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Cast since generated types may not include all investment columns yet
+    const sets = (data ?? []) as unknown as Record<string, unknown>[];
+
+    // Enrich with Amazon pricing data for sets that have ASINs
+    const asinsToLookup = sets
+      .filter((s) => s.amazon_asin)
+      .map((s) => s.amazon_asin as string);
+
+    const pricingMap = new Map<string, {
+      buy_box_price: number | null;
+      was_price_90d: number | null;
+      sales_rank: number | null;
+      offer_count: number | null;
+      snapshot_date: string | null;
+    }>();
+
+    if (asinsToLookup.length > 0) {
+      // Batch query: get latest pricing snapshot for each ASIN
+      // Using individual queries with LIMIT 1 per ASIN
+      const uniqueAsins = [...new Set(asinsToLookup)];
+
+      // Fetch in parallel batches of 10
+      const batchSize = 10;
+      for (let i = 0; i < uniqueAsins.length; i += batchSize) {
+        const batch = uniqueAsins.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map((asin) =>
+            supabase
+              .from('amazon_arbitrage_pricing')
+              .select('asin, buy_box_price, was_price_90d, sales_rank, offer_count, snapshot_date')
+              .eq('asin', asin)
+              .order('snapshot_date', { ascending: false })
+              .limit(1)
+              .single()
+          )
+        );
+
+        for (const result of results) {
+          if (result.data) {
+            const snap = result.data as Record<string, unknown>;
+            pricingMap.set(snap.asin as string, {
+              buy_box_price: snap.buy_box_price as number | null,
+              was_price_90d: snap.was_price_90d as number | null,
+              sales_rank: snap.sales_rank as number | null,
+              offer_count: snap.offer_count as number | null,
+              snapshot_date: snap.snapshot_date as string | null,
+            });
+          }
+        }
+      }
+    }
+
+    // Merge pricing into response
+    const enrichedSets = sets.map((set) => {
+      const asin = set.amazon_asin as string | null;
+      const pricing = asin ? pricingMap.get(asin) : null;
+      return {
+        ...set,
+        buy_box_price: pricing?.buy_box_price ?? null,
+        was_price: pricing?.was_price_90d ?? null,
+        sales_rank: pricing?.sales_rank ?? null,
+        offer_count: pricing?.offer_count ?? null,
+        latest_snapshot_date: pricing?.snapshot_date ?? null,
+      };
+    });
+
     const total = count ?? 0;
     const totalPages = Math.ceil(total / pageSize);
 
     return NextResponse.json({
-      data: data ?? [],
+      data: enrichedSets,
       total,
       page,
       pageSize,

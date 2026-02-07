@@ -2,6 +2,7 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { ArrowUpDown } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -33,6 +34,9 @@ export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
   subtheme: 'Subtheme',
   year_from: 'Year',
   uk_retail_price: 'RRP (GBP)',
+  buy_box_price: 'Buy Box (GBP)',
+  sales_rank: 'Sales Rank',
+  offer_count: 'Offers',
   retirement_status: 'Retirement Status',
   expected_retirement_date: 'Expected Retirement',
   retirement_confidence: 'Confidence',
@@ -75,7 +79,12 @@ export function getInvestmentColumns(): ColumnDef<InvestmentSet>[] {
         </Button>
       ),
       cell: ({ row }) => (
-        <span className="font-medium">{row.getValue('set_number')}</span>
+        <Link
+          href={`/investment/${encodeURIComponent(row.getValue('set_number') as string)}`}
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          {row.getValue('set_number')}
+        </Link>
       ),
     },
     {
@@ -131,6 +140,39 @@ export function getInvestmentColumns(): ColumnDef<InvestmentSet>[] {
       cell: ({ row }) => {
         const price = row.getValue('uk_retail_price') as number | null;
         return price != null ? formatCurrency(price) : '-';
+      },
+    },
+    {
+      accessorKey: 'buy_box_price',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="-ml-4"
+        >
+          Buy Box (GBP)
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const price = row.original.buy_box_price;
+        return price != null ? formatCurrency(price) : '\u2014';
+      },
+    },
+    {
+      accessorKey: 'sales_rank',
+      header: 'Sales Rank',
+      cell: ({ row }) => {
+        const rank = row.original.sales_rank;
+        return rank != null ? rank.toLocaleString() : '\u2014';
+      },
+    },
+    {
+      accessorKey: 'offer_count',
+      header: 'Offers',
+      cell: ({ row }) => {
+        const count = row.original.offer_count;
+        return count != null ? count.toLocaleString() : '\u2014';
       },
     },
     {

@@ -3,6 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchInvestmentSets,
+  fetchInvestmentSetDetail,
+  fetchPriceHistory,
   type InvestmentFilters,
   type InvestmentPaginationParams,
 } from '@/lib/api/investment';
@@ -15,6 +17,8 @@ export const investmentKeys = {
   lists: () => [...investmentKeys.all, 'list'] as const,
   list: (filters?: InvestmentFilters, pagination?: InvestmentPaginationParams) =>
     [...investmentKeys.lists(), { filters, pagination }] as const,
+  detail: (setNumber: string) => [...investmentKeys.all, 'detail', setNumber] as const,
+  priceHistory: (setNumber: string) => [...investmentKeys.all, 'priceHistory', setNumber] as const,
 };
 
 /**
@@ -28,5 +32,29 @@ export function useInvestmentSets(
     queryKey: investmentKeys.list(filters, pagination),
     queryFn: () => fetchInvestmentSets(filters, pagination),
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook to fetch a single investment set detail
+ */
+export function useInvestmentSetDetail(setNumber: string) {
+  return useQuery({
+    queryKey: investmentKeys.detail(setNumber),
+    queryFn: () => fetchInvestmentSetDetail(setNumber),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!setNumber,
+  });
+}
+
+/**
+ * Hook to fetch price history for a set
+ */
+export function usePriceHistory(setNumber: string) {
+  return useQuery({
+    queryKey: investmentKeys.priceHistory(setNumber),
+    queryFn: () => fetchPriceHistory(setNumber),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!setNumber,
   });
 }
