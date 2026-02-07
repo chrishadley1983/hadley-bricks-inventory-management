@@ -29,6 +29,7 @@ import {
   PenLine,
   ClipboardList,
   ChevronDown,
+  LineChart,
 } from 'lucide-react';
 
 interface NavItem {
@@ -69,6 +70,14 @@ const navSections: NavSection[] = [
       { href: '/cost-modelling', label: 'Cost Modelling', icon: Calculator },
       { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
       { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
+    ],
+  },
+  {
+    id: 'investment',
+    title: 'Investment',
+    defaultOpen: false,
+    items: [
+      { href: '/investment', label: 'Investment Tracker', icon: LineChart },
     ],
   },
   {
