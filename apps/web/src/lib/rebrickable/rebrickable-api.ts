@@ -39,7 +39,7 @@ export class RebrickableApiClient {
     this.apiKey = apiKey;
   }
 
-  /** Make an authenticated request to the Rebrickable API */
+  /** Make an authenticated request to the Rebrickable API with 429 retry */
   private async request<T>(
     path: string,
     params?: Record<string, string | number | undefined>
@@ -54,22 +54,47 @@ export class RebrickableApiClient {
       }
     }
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: `key ${this.apiKey}`,
-        Accept: 'application/json',
-      },
-    });
+    return this.fetchWithRetry<T>(url.toString());
+  }
 
-    if (!response.ok) {
-      throw new RebrickableApiError(
-        `Rebrickable API error: ${response.status} ${response.statusText}`,
-        response.status,
-        response.statusText
-      );
+  /** Fetch with 429 rate-limit retry (up to 3 attempts with exponential backoff) */
+  async fetchWithRetry<T>(url: string, maxRetries = 3): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `key ${this.apiKey}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitMs = retryAfter
+          ? parseInt(retryAfter, 10) * 1000
+          : Math.min(2000 * Math.pow(2, attempt), 10000);
+        console.warn(
+          `[RebrickableAPI] Rate limited (429), waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new RebrickableApiError(
+          `Rebrickable API error: ${response.status} ${response.statusText}`,
+          response.status,
+          response.statusText
+        );
+      }
+
+      return response.json() as Promise<T>;
     }
 
-    return response.json() as Promise<T>;
+    throw new RebrickableApiError(
+      'Rebrickable API rate limit exceeded after retries',
+      429,
+      'Too Many Requests'
+    );
   }
 
   /** Fetch a single page of sets */
@@ -124,14 +149,7 @@ export class RebrickableApiClient {
 
     while (nextUrl) {
       await new Promise((resolve) => setTimeout(resolve, 1100));
-      const nextResponse = await fetch(nextUrl, {
-        headers: {
-          Authorization: `key ${this.apiKey}`,
-          Accept: 'application/json',
-        },
-      });
-      const nextData =
-        (await nextResponse.json()) as RebrickablePaginatedResponse<RebrickableTheme>;
+      const nextData = await this.fetchWithRetry<RebrickablePaginatedResponse<RebrickableTheme>>(nextUrl);
       allThemes.push(...nextData.results);
       nextUrl = nextData.next;
     }

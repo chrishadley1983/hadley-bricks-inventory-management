@@ -3,7 +3,12 @@
  *
  * Syncs set data from Rebrickable API into the brickset_sets table.
  * Merges data without overwriting Brickset-specific fields (ratings, pricing, images).
- * Handles pagination and batch upserts within Supabase's 1,000-row limit.
+ * Uses batch upserts for performance (fits within Vercel 300s timeout).
+ *
+ * Rate limit strategy:
+ * - 1.1s delay between API page fetches (Rebrickable allows ~1 req/sec)
+ * - 429 retry with exponential backoff (handled by RebrickableApiClient)
+ * - Batch upserts of 500 rows to Supabase (avoids N+1 update problem)
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -13,18 +18,6 @@ import type {
   RebrickableTheme,
   RebrickableSyncResult,
 } from './types';
-
-/** Fields that Rebrickable populates - we only update these on existing rows */
-const REBRICKABLE_FIELDS = [
-  'set_name',
-  'year_from',
-  'theme',
-  'subtheme',
-  'pieces',
-  'minifigs',
-  'rebrickable_set_num',
-  'rebrickable_last_synced_at',
-] as const;
 
 export class RebrickableSyncService {
   private client: RebrickableApiClient;
@@ -37,7 +30,9 @@ export class RebrickableSyncService {
 
   /**
    * Full sync: fetch all sets from Rebrickable and upsert into brickset_sets.
-   * Only updates Rebrickable-sourced fields, preserving Brickset-specific data.
+   * Uses upsert on set_number to batch-merge rows efficiently.
+   * Only writes Rebrickable-sourced fields; Brickset-specific columns are preserved
+   * because upsert's onConflict only updates the columns we provide.
    */
   async syncAllSets(): Promise<RebrickableSyncResult> {
     const startTime = Date.now();
@@ -50,16 +45,12 @@ export class RebrickableSyncService {
     // 1. Build theme lookup map (theme_id -> { name, parent_name })
     console.log('[RebrickableSync] Fetching themes...');
     const themeMap = await this.buildThemeMap();
-    console.log(
-      `[RebrickableSync] Loaded ${themeMap.size} themes`
-    );
+    console.log(`[RebrickableSync] Loaded ${themeMap.size} themes`);
 
-    // 2. Get existing set numbers for merge detection
+    // 2. Get existing set numbers for insert/update counting
     console.log('[RebrickableSync] Loading existing set numbers...');
     const existingSetNumbers = await this.getExistingSetNumbers();
-    console.log(
-      `[RebrickableSync] Found ${existingSetNumbers.size} existing sets`
-    );
+    console.log(`[RebrickableSync] Found ${existingSetNumbers.size} existing sets`);
 
     // 3. Fetch all sets page by page and upsert in batches
     console.log('[RebrickableSync] Starting set sync...');
@@ -73,12 +64,10 @@ export class RebrickableSyncService {
       ordering: '-year',
     });
     totalAvailable = firstPage.count;
-    console.log(
-      `[RebrickableSync] Total sets available: ${totalAvailable}`
-    );
+    console.log(`[RebrickableSync] Total sets available: ${totalAvailable}`);
 
     // Process first page
-    const firstResult = await this.processBatch(
+    const firstResult = await this.upsertBatch(
       firstPage.results,
       themeMap,
       existingSetNumbers
@@ -89,47 +78,41 @@ export class RebrickableSyncService {
     errors += firstResult.errors;
     totalProcessed += firstPage.results.length;
 
-    // Process remaining pages
+    // Process remaining pages using retry-aware fetch
     let nextUrl = firstPage.next;
     while (nextUrl) {
       // Rate limit: ~1 req/sec
       await new Promise((resolve) => setTimeout(resolve, 1100));
 
-      const response = await fetch(nextUrl, {
-        headers: {
-          Authorization: `key ${this.client['apiKey']}`,
-          Accept: 'application/json',
-        },
-      });
+      try {
+        const pageData = await this.client.fetchWithRetry<{
+          next: string | null;
+          results: RebrickableSet[];
+        }>(nextUrl);
 
-      if (!response.ok) {
+        const batchResult = await this.upsertBatch(
+          pageData.results,
+          themeMap,
+          existingSetNumbers
+        );
+        inserted += batchResult.inserted;
+        updated += batchResult.updated;
+        skipped += batchResult.skipped;
+        errors += batchResult.errors;
+        totalProcessed += pageData.results.length;
+
+        console.log(
+          `[RebrickableSync] Processed ${totalProcessed}/${totalAvailable} sets (${inserted} new, ${updated} updated)`
+        );
+
+        nextUrl = pageData.next;
+      } catch (fetchError) {
         console.error(
-          `[RebrickableSync] Failed to fetch page: ${response.status}`
+          `[RebrickableSync] Failed to fetch page after retries:`,
+          fetchError instanceof Error ? fetchError.message : fetchError
         );
         break;
       }
-
-      const pageData = (await response.json()) as {
-        next: string | null;
-        results: RebrickableSet[];
-      };
-
-      const batchResult = await this.processBatch(
-        pageData.results,
-        themeMap,
-        existingSetNumbers
-      );
-      inserted += batchResult.inserted;
-      updated += batchResult.updated;
-      skipped += batchResult.skipped;
-      errors += batchResult.errors;
-      totalProcessed += pageData.results.length;
-
-      console.log(
-        `[RebrickableSync] Processed ${totalProcessed}/${totalAvailable} sets (${inserted} new, ${updated} updated)`
-      );
-
-      nextUrl = pageData.next;
     }
 
     const duration = Date.now() - startTime;
@@ -207,8 +190,16 @@ export class RebrickableSyncService {
     return setNumbers;
   }
 
-  /** Process a batch of Rebrickable sets, upserting into brickset_sets */
-  private async processBatch(
+  /**
+   * Upsert a batch of Rebrickable sets into brickset_sets.
+   *
+   * Uses Supabase upsert with onConflict: 'set_number' so that:
+   * - New rows are inserted with all provided columns
+   * - Existing rows only get the specified columns updated (Brickset fields preserved)
+   *
+   * This replaces the previous N+1 individual UPDATE approach with batch operations.
+   */
+  private async upsertBatch(
     sets: RebrickableSet[],
     themeMap: Map<number, { name: string; parentName: string | null }>,
     existingSetNumbers: Set<string>
@@ -223,9 +214,11 @@ export class RebrickableSyncService {
     let skipped = 0;
     let errors = 0;
 
-    // Normalize set numbers: Rebrickable uses "75192-1", brickset_sets uses "75192-1"
-    const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { setNumber: string; data: Record<string, unknown> }[] = [];
+    const now = new Date().toISOString();
+    // Split into new rows (with image_url) and existing rows (without image_url)
+    // This prevents upsert from overwriting Brickset images on existing rows
+    const newRows: Record<string, unknown>[] = [];
+    const existingRows: Record<string, unknown>[] = [];
 
     for (const set of sets) {
       const theme = themeMap.get(set.theme_id);
@@ -236,79 +229,66 @@ export class RebrickableSyncService {
       const resolvedTheme = parentThemeName ?? themeName;
       const resolvedSubtheme = parentThemeName ? themeName : null;
 
-      const now = new Date().toISOString();
+      const baseRow: Record<string, unknown> = {
+        set_number: set.set_num,
+        set_name: set.name,
+        year_from: set.year,
+        theme: resolvedTheme,
+        subtheme: resolvedSubtheme,
+        pieces: set.num_parts,
+        rebrickable_set_num: set.set_num,
+        rebrickable_last_synced_at: now,
+      };
 
       if (existingSetNumbers.has(set.set_num)) {
-        // Update: only Rebrickable-specific fields
-        toUpdate.push({
-          setNumber: set.set_num,
-          data: {
-            set_name: set.name,
-            year_from: set.year,
-            theme: resolvedTheme,
-            subtheme: resolvedSubtheme,
-            pieces: set.num_parts,
-            rebrickable_set_num: set.set_num,
-            rebrickable_last_synced_at: now,
-          },
-        });
+        existingRows.push(baseRow);
       } else {
-        // Insert: new set with Rebrickable data
-        toInsert.push({
-          set_number: set.set_num,
-          set_name: set.name,
-          year_from: set.year,
-          theme: resolvedTheme,
-          subtheme: resolvedSubtheme,
-          pieces: set.num_parts,
-          image_url: set.set_img_url,
-          rebrickable_set_num: set.set_num,
-          rebrickable_last_synced_at: now,
-        });
+        newRows.push({ ...baseRow, image_url: set.set_img_url });
       }
     }
 
-    // Batch insert new sets (in chunks of 500 to stay within limits)
-    for (let i = 0; i < toInsert.length; i += 500) {
-      const chunk = toInsert.slice(i, i + 500);
-      const { error } = await this.supabase
+    // Upsert new rows (includes image_url) in chunks of 500
+    for (let i = 0; i < newRows.length; i += 500) {
+      const chunk = newRows.slice(i, i + 500);
+      const { error: insertError } = await this.supabase
         .from('brickset_sets')
-        .insert(chunk);
+        .upsert(chunk, {
+          onConflict: 'set_number',
+          ignoreDuplicates: false,
+        });
 
-      if (error) {
+      if (insertError) {
         console.error(
-          `[RebrickableSync] Insert error (batch ${i}):`,
-          error.message
+          `[RebrickableSync] Insert upsert error (batch ${i}):`,
+          insertError.message
         );
         errors += chunk.length;
       } else {
         inserted += chunk.length;
-        // Track newly inserted sets so we don't try to update them
         for (const row of chunk) {
           existingSetNumbers.add(row.set_number as string);
         }
       }
     }
 
-    // Batch update existing sets (individual updates to avoid overwriting)
-    for (let i = 0; i < toUpdate.length; i += 500) {
-      const chunk = toUpdate.slice(i, i + 500);
+    // Upsert existing rows (no image_url — preserves Brickset images) in chunks of 500
+    for (let i = 0; i < existingRows.length; i += 500) {
+      const chunk = existingRows.slice(i, i + 500);
+      const { error: updateError } = await this.supabase
+        .from('brickset_sets')
+        .upsert(chunk, {
+          onConflict: 'set_number',
+          ignoreDuplicates: false,
+        });
 
-      for (const item of chunk) {
-        const { error } = await this.supabase
-          .from('brickset_sets')
-          .update(item.data)
-          .eq('set_number', item.setNumber);
-
-        if (error) {
-          console.error(
-            `[RebrickableSync] Update error for ${item.setNumber}:`,
-            error.message
-          );
-          errors++;
-        } else {
-          updated++;
-        }
+      if (updateError) {
+        console.error(
+          `[RebrickableSync] Update upsert error (batch ${i}):`,
+          updateError.message
+        );
+        errors += chunk.length;
+      } else {
+        updated += chunk.length;
       }
     }
 
