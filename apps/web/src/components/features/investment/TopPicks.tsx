@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { fetchPredictions } from '@/lib/api/investment';
-import type { InvestmentPrediction } from '@/lib/api/investment';
 
 const RETIRING_WITHIN_OPTIONS = [
   { label: 'All', value: undefined },
@@ -63,8 +62,7 @@ export function TopPicks() {
       ) : data?.data && data.data.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {data.data.map((item, index) => {
-            const prediction = item.prediction as InvestmentPrediction;
-            const set = item as unknown as Record<string, unknown>;
+            const { prediction } = item;
 
             return (
               <Link
@@ -94,10 +92,10 @@ export function TopPicks() {
 
                     {/* Image + Name */}
                     <div className="flex gap-3">
-                      {(set.image_url as string) ? (
+                      {item.image_url ? (
                         <img
-                          src={set.image_url as string}
-                          alt={set.set_name as string}
+                          src={item.image_url}
+                          alt={item.set_name ?? prediction.set_num}
                           className="h-12 w-12 rounded object-contain"
                           loading="lazy"
                         />
@@ -106,7 +104,7 @@ export function TopPicks() {
                       )}
                       <div className="min-w-0">
                         <div className="font-medium text-sm truncate">
-                          {(set.set_name as string) || prediction.set_num}
+                          {item.set_name ?? prediction.set_num}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           #{prediction.set_num}
@@ -128,29 +126,29 @@ export function TopPicks() {
 
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">RRP</span>
-                        <span>{(set.uk_retail_price as number | null) != null ? formatCurrency(set.uk_retail_price as number) : '\u2014'}</span>
+                        <span>{item.uk_retail_price != null ? formatCurrency(item.uk_retail_price) : '\u2014'}</span>
                       </div>
 
-                      {(set.retirement_status as string) && (
+                      {item.retirement_status && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Status</span>
                           <Badge
                             variant={
-                              (set.retirement_status as string) === 'retiring_soon'
+                              item.retirement_status === 'retiring_soon'
                                 ? 'destructive'
                                 : 'outline'
                             }
                             className="text-xs"
                           >
-                            {(set.retirement_status as string) === 'retiring_soon' ? 'Retiring Soon' : (set.retirement_status as string)}
+                            {item.retirement_status === 'retiring_soon' ? 'Retiring Soon' : item.retirement_status}
                           </Badge>
                         </div>
                       )}
 
-                      {(set.expected_retirement_date as string) && (
+                      {item.expected_retirement_date && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Retirement</span>
-                          <span className="text-xs">{formatDate(set.expected_retirement_date as string)}</span>
+                          <span className="text-xs">{formatDate(item.expected_retirement_date)}</span>
                         </div>
                       )}
                     </div>

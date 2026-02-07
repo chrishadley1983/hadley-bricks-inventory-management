@@ -16,6 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ModelTrainingService } from './ml/model-training.service';
 import {
   featuresToVector,
+  fetchThemeAverages,
   type RawFeatures,
   type FeatureNormContext,
 } from './ml/feature-engineering';
@@ -78,8 +79,8 @@ export class InvestmentScoringService {
     const useFallback = !modelData;
     const modelVersion = modelData?.modelVersion ?? null;
 
-    // Fetch theme averages for scoring
-    const themeAvgs = await this.fetchThemeAverages();
+    // Fetch theme averages for scoring (shared with feature-engineering)
+    const themeAvgs = await fetchThemeAverages(this.supabase);
 
     // Fetch demand data (latest sales ranks)
     const demandData = await this.fetchDemandData();
@@ -139,7 +140,7 @@ export class InvestmentScoringService {
                 predicted_1yr_price_gbp: p.predicted_1yr_price_gbp,
                 predicted_3yr_price_gbp: p.predicted_3yr_price_gbp,
                 confidence: p.confidence,
-                risk_factors: JSON.stringify(p.risk_factors),
+                risk_factors: p.risk_factors,
                 amazon_viable: p.amazon_viable,
                 model_version: p.model_version,
                 scored_at: new Date().toISOString(),
@@ -188,7 +189,7 @@ export class InvestmentScoringService {
     themeAvgs: Map<string, number>,
     demandData: Map<string, { salesRank: number; offerCount: number }>
   ): PredictionRow {
-    const features = this.buildFeatures(set, themeAvgs);
+    const features = this.buildFeatures(set, themeAvgs, demandData);
     const vector = featuresToVector(features, normContext);
 
     // Run inference
@@ -373,8 +374,10 @@ export class InvestmentScoringService {
    */
   private buildFeatures(
     set: SetForScoring,
-    themeAvgs: Map<string, number>
+    themeAvgs: Map<string, number>,
+    demandData: Map<string, { salesRank: number; offerCount: number }>
   ): RawFeatures {
+    const demand = demandData.get(set.set_number);
     return {
       set_num: set.set_number,
       theme: set.theme,
@@ -388,7 +391,7 @@ export class InvestmentScoringService {
       is_modular: set.is_modular,
       set_age_years: set.year_from ? new Date().getFullYear() - set.year_from : 0,
       has_amazon_listing: set.has_amazon_listing,
-      avg_sales_rank: null, // Will be filled from demand data
+      avg_sales_rank: demand?.salesRank ?? null,
       theme_historical_avg_appreciation: themeAvgs.get(set.theme) ?? 0,
     };
   }
@@ -417,79 +420,44 @@ export class InvestmentScoringService {
   }
 
   /**
-   * Fetch average historical appreciation per theme.
-   */
-  private async fetchThemeAverages(): Promise<Map<string, number>> {
-    const themeAvgs = new Map<string, number>();
-
-    const { data } = await this.supabase
-      .from('investment_historical')
-      .select('set_num, actual_1yr_appreciation')
-      .in('data_quality', ['good', 'partial'])
-      .not('actual_1yr_appreciation', 'is', null);
-
-    if (!data || data.length === 0) return themeAvgs;
-
-    const setNums = data.map((d) => (d as Record<string, unknown>).set_num as string);
-
-    // Get theme mapping (limit to first 1000 for safety)
-    const { data: sets } = await this.supabase
-      .from('brickset_sets')
-      .select('set_number, theme')
-      .in('set_number', setNums.slice(0, 1000));
-
-    if (!sets) return themeAvgs;
-
-    const setThemeMap = new Map<string, string>();
-    for (const s of sets) {
-      const r = s as unknown as Record<string, unknown>;
-      setThemeMap.set(r.set_number as string, (r.theme as string | null) ?? 'Unknown');
-    }
-
-    const themeApps = new Map<string, number[]>();
-    for (const row of data) {
-      const h = row as Record<string, unknown>;
-      const theme = setThemeMap.get(h.set_num as string);
-      if (!theme) continue;
-      const apps = themeApps.get(theme) ?? [];
-      apps.push(h.actual_1yr_appreciation as number);
-      themeApps.set(theme, apps);
-    }
-
-    for (const [theme, apps] of themeApps) {
-      themeAvgs.set(theme, apps.reduce((sum, a) => sum + a, 0) / apps.length);
-    }
-
-    return themeAvgs;
-  }
-
-  /**
    * Fetch latest demand data (sales rank, offer count) per set.
    */
   private async fetchDemandData(): Promise<Map<string, { salesRank: number; offerCount: number }>> {
     const demandMap = new Map<string, { salesRank: number; offerCount: number }>();
 
-    // Get latest price snapshots with sales rank data
-    const { data } = await this.supabase
-      .from('price_snapshots')
-      .select('set_num, sales_rank, seller_count, date')
-      .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
-      .not('sales_rank', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1000);
+    // Paginate price snapshots ordered by date desc, keeping most recent per set
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
 
-    if (!data) return demandMap;
+    while (hasMore) {
+      const { data } = await this.supabase
+        .from('price_snapshots')
+        .select('set_num, sales_rank, seller_count, date')
+        .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
+        .not('sales_rank', 'is', null)
+        .order('date', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    // Keep most recent entry per set
-    for (const row of data) {
-      const r = row as Record<string, unknown>;
-      const setNum = r.set_num as string;
-      if (!demandMap.has(setNum)) {
-        demandMap.set(setNum, {
-          salesRank: (r.sales_rank as number) ?? 0,
-          offerCount: (r.seller_count as number) ?? 0,
-        });
+      if (!data || data.length === 0) {
+        hasMore = false;
+        break;
       }
+
+      // Keep most recent entry per set (data is ordered by date desc)
+      for (const row of data) {
+        const r = row as Record<string, unknown>;
+        const setNum = r.set_num as string;
+        if (!demandMap.has(setNum)) {
+          demandMap.set(setNum, {
+            salesRank: (r.sales_rank as number) ?? 0,
+            offerCount: (r.seller_count as number) ?? 0,
+          });
+        }
+      }
+
+      hasMore = data.length === pageSize;
+      page++;
     }
 
     return demandMap;

@@ -1,5 +1,6 @@
 export {
   fetchTrainingSamples,
+  fetchThemeAverages,
   buildNormContext,
   featuresToVector,
   getFeatureCount,

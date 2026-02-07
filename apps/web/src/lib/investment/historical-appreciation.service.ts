@@ -5,6 +5,9 @@
  * by comparing RRP to post-retirement Amazon buy box prices from price_snapshots.
  *
  * Populates the investment_historical table with results.
+ *
+ * Uses batch-fetching to avoid N+1 query patterns - all price snapshots for
+ * retired sets are loaded upfront and processed in memory.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -24,6 +27,13 @@ interface RetiredSet {
   has_amazon_listing: boolean | null;
 }
 
+interface PriceSnapshot {
+  set_num: string;
+  date: string;
+  price_gbp: number | null;
+  sales_rank: number | null;
+}
+
 export class HistoricalAppreciationService {
   private supabase: SupabaseClient;
 
@@ -33,6 +43,7 @@ export class HistoricalAppreciationService {
 
   /**
    * Calculate and store historical appreciation for all retired sets.
+   * Batch-fetches all price snapshots to avoid N+1 queries.
    */
   async calculateAll(): Promise<HistoricalAppreciationResult> {
     const startTime = Date.now();
@@ -43,9 +54,26 @@ export class HistoricalAppreciationService {
     // Fetch all retired sets
     const retiredSets = await this.fetchRetiredSets();
 
+    if (retiredSets.length === 0) {
+      return {
+        total_retired_sets: 0,
+        calculated: 0,
+        insufficient_data: 0,
+        errors: 0,
+        duration_ms: Date.now() - startTime,
+      };
+    }
+
+    // Batch-fetch all price snapshots for retired sets
+    const setNums = retiredSets.map((s) => s.set_number);
+    const snapshotsBySet = await this.batchFetchSnapshots(setNums);
+
     for (const set of retiredSets) {
       try {
-        const success = await this.calculateForSet(set);
+        const snapshots = snapshotsBySet.get(set.set_number) ?? [];
+        const success = this.calculateForSet(set, snapshots);
+        // Upsert result
+        await this.upsertResult(set, snapshots);
         if (success) {
           calculated++;
         } else {
@@ -117,10 +145,87 @@ export class HistoricalAppreciationService {
   }
 
   /**
-   * Calculate appreciation for a single retired set.
+   * Batch-fetch all price snapshots for the given set numbers.
+   * Returns a map of set_num -> sorted snapshots.
+   */
+  private async batchFetchSnapshots(
+    setNums: string[]
+  ): Promise<Map<string, PriceSnapshot[]>> {
+    const snapshotsBySet = new Map<string, PriceSnapshot[]>();
+    const pageSize = 1000;
+
+    // Fetch in chunks of set numbers to avoid query size limits
+    for (let chunkStart = 0; chunkStart < setNums.length; chunkStart += 100) {
+      const setNumChunk = setNums.slice(chunkStart, chunkStart + 100);
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await this.supabase
+          .from('price_snapshots')
+          .select('set_num, date, price_gbp, sales_rank')
+          .in('set_num', setNumChunk)
+          .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
+          .order('date', { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          console.error('[HistoricalAppreciation] Error fetching snapshots:', error.message);
+          break;
+        }
+
+        if (!data || data.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        for (const row of data) {
+          const r = row as Record<string, unknown>;
+          const setNum = r.set_num as string;
+          const existing = snapshotsBySet.get(setNum) ?? [];
+          existing.push({
+            set_num: setNum,
+            date: r.date as string,
+            price_gbp: r.price_gbp as number | null,
+            sales_rank: r.sales_rank as number | null,
+          });
+          snapshotsBySet.set(setNum, existing);
+        }
+
+        hasMore = data.length === pageSize;
+        page++;
+      }
+    }
+
+    return snapshotsBySet;
+  }
+
+  /**
+   * Calculate appreciation for a single retired set using pre-fetched snapshots.
    * Returns true if calculated successfully, false if insufficient data.
    */
-  private async calculateForSet(set: RetiredSet): Promise<boolean> {
+  private calculateForSet(set: RetiredSet, snapshots: PriceSnapshot[]): boolean {
+    const rrp = set.uk_retail_price;
+    if (!rrp || rrp <= 0) return false;
+
+    const retiredDate = set.expected_retirement_date;
+    if (!retiredDate) return false;
+
+    const priceAtRetirement = this.findPriceNearDate(snapshots, retiredDate);
+    const oneYearPost = this.findPriceNearDate(snapshots, this.addYears(retiredDate, 1));
+    const threeYearPost = this.findPriceNearDate(snapshots, this.addYears(retiredDate, 3));
+
+    const hasAnyPrice = priceAtRetirement != null || oneYearPost != null || threeYearPost != null;
+    return hasAnyPrice;
+  }
+
+  /**
+   * Upsert the historical result for a set.
+   */
+  private async upsertResult(
+    set: RetiredSet,
+    snapshots: PriceSnapshot[]
+  ): Promise<void> {
     const rrp = set.uk_retail_price;
     const retiredDate = set.expected_retirement_date;
 
@@ -131,25 +236,23 @@ export class HistoricalAppreciationService {
         data_quality: 'insufficient',
         had_amazon_listing: set.has_amazon_listing ?? false,
       });
-      return false;
+      return;
     }
 
-    // Get price snapshots around retirement and post-retirement dates
     const priceAtRetirement = retiredDate
-      ? await this.findPriceNearDate(set.set_number, retiredDate)
+      ? this.findPriceNearDate(snapshots, retiredDate)
       : null;
 
     const oneYearPost = retiredDate
-      ? await this.findPriceNearDate(set.set_number, this.addYears(retiredDate, 1))
+      ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 1))
       : null;
 
     const threeYearPost = retiredDate
-      ? await this.findPriceNearDate(set.set_number, this.addYears(retiredDate, 3))
+      ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 3))
       : null;
 
-    // Get average sales rank post-retirement
     const avgSalesRank = retiredDate
-      ? await this.getAvgSalesRankPost(set.set_number, retiredDate)
+      ? this.getAvgSalesRankPost(snapshots, retiredDate)
       : null;
 
     // Calculate appreciation percentages
@@ -181,79 +284,47 @@ export class HistoricalAppreciationService {
       avg_sales_rank_post: avgSalesRank,
       data_quality: dataQuality,
     });
-
-    return dataQuality !== 'insufficient';
   }
 
   /**
-   * Find the closest price snapshot to a target date for a set.
+   * Find the closest price snapshot to a target date from pre-fetched data.
    * Looks within a 30-day window around the target date.
    */
-  private async findPriceNearDate(
-    setNum: string,
+  private findPriceNearDate(
+    snapshots: PriceSnapshot[],
     targetDate: string
-  ): Promise<number | null> {
-    const windowDays = 30;
-    const target = new Date(targetDate);
-    const from = new Date(target);
-    from.setDate(from.getDate() - windowDays);
-    const to = new Date(target);
-    to.setDate(to.getDate() + windowDays);
+  ): number | null {
+    const windowMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const targetTime = new Date(targetDate).getTime();
 
-    const fromStr = from.toISOString().split('T')[0];
-    const toStr = to.toISOString().split('T')[0];
+    let closest: PriceSnapshot | null = null;
+    let minDiff = Infinity;
 
-    const { data, error } = await this.supabase
-      .from('price_snapshots')
-      .select('date, price_gbp')
-      .eq('set_num', setNum)
-      .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
-      .gte('date', fromStr)
-      .lte('date', toStr)
-      .not('price_gbp', 'is', null)
-      .order('date', { ascending: true });
-
-    if (error || !data || data.length === 0) {
-      return null;
-    }
-
-    // Find the snapshot closest to the target date
-    let closest = data[0];
-    let minDiff = Math.abs(new Date(data[0].date).getTime() - target.getTime());
-
-    for (const row of data) {
-      const diff = Math.abs(new Date(row.date).getTime() - target.getTime());
-      if (diff < minDiff) {
+    for (const s of snapshots) {
+      if (s.price_gbp == null) continue;
+      const diff = Math.abs(new Date(s.date).getTime() - targetTime);
+      if (diff <= windowMs && diff < minDiff) {
         minDiff = diff;
-        closest = row;
+        closest = s;
       }
     }
 
-    return closest.price_gbp as number;
+    return closest?.price_gbp ?? null;
   }
 
   /**
-   * Get average sales rank for a set after retirement.
+   * Get average sales rank for a set after retirement from pre-fetched data.
    */
-  private async getAvgSalesRankPost(
-    setNum: string,
+  private getAvgSalesRankPost(
+    snapshots: PriceSnapshot[],
     retiredDate: string
-  ): Promise<number | null> {
-    const { data, error } = await this.supabase
-      .from('price_snapshots')
-      .select('sales_rank')
-      .eq('set_num', setNum)
-      .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
-      .gte('date', retiredDate)
-      .not('sales_rank', 'is', null);
+  ): number | null {
+    const retiredTime = new Date(retiredDate).getTime();
+    const ranks = snapshots
+      .filter((s) => new Date(s.date).getTime() >= retiredTime && s.sales_rank != null && s.sales_rank > 0)
+      .map((s) => s.sales_rank!);
 
-    if (error || !data || data.length === 0) {
-      return null;
-    }
-
-    const ranks = data.map((r) => r.sales_rank as number).filter((r) => r > 0);
     if (ranks.length === 0) return null;
-
     return Math.round(ranks.reduce((sum, r) => sum + r, 0) / ranks.length);
   }
 

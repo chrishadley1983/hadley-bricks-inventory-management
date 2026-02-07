@@ -517,7 +517,7 @@ function DetailRow({
   return (
     <div className="flex justify-between">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{value || '\u2014'}</dd>
+      <dd className="text-sm font-medium">{value ?? '\u2014'}</dd>
     </div>
   );
 }

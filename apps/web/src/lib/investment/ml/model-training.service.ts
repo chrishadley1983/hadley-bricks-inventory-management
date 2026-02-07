@@ -92,39 +92,38 @@ export class ModelTrainingService {
     // Convert to tensors
     const trainX = this.samplesToFeatureTensor(trainingSamples, normContext);
     const trainY = this.samplesToLabelTensor(trainingSamples);
-
-    // Build and train model
     const model = this.buildModel();
 
-    await model.fit(trainX, trainY, {
-      epochs: EPOCHS,
-      batchSize: BATCH_SIZE,
-      validationSplit: 0.1,
-      verbose: 0,
-    });
+    try {
+      await model.fit(trainX, trainY, {
+        epochs: EPOCHS,
+        batchSize: BATCH_SIZE,
+        validationSplit: 0.1,
+        verbose: 0,
+      });
 
-    // Evaluate on holdout set
-    const metrics = this.evaluate(model, holdoutSamples, normContext);
+      // Evaluate on holdout set
+      const metrics = this.evaluate(model, holdoutSamples, normContext);
 
-    // Generate model version
-    const modelVersion = `v${Date.now()}`;
+      // Generate model version
+      const modelVersion = `v${Date.now()}`;
 
-    // Save model artifact
-    await this.saveModelArtifact(model, normContext, modelVersion, metrics);
+      // Save model artifact
+      await this.saveModelArtifact(model, normContext, modelVersion, metrics);
 
-    // Clean up tensors
-    trainX.dispose();
-    trainY.dispose();
-    model.dispose();
-
-    return {
-      status: 'success',
-      metrics,
-      training_samples: trainingSamples.length,
-      holdout_samples: holdoutSamples.length,
-      model_version: modelVersion,
-      duration_ms: Date.now() - startTime,
-    };
+      return {
+        status: 'success',
+        metrics,
+        training_samples: trainingSamples.length,
+        holdout_samples: holdoutSamples.length,
+        model_version: modelVersion,
+        duration_ms: Date.now() - startTime,
+      };
+    } finally {
+      trainX.dispose();
+      trainY.dispose();
+      model.dispose();
+    }
   }
 
   /**
@@ -267,14 +266,14 @@ export class ModelTrainingService {
         metrics,
       };
 
-      // Store in investment_predictions as a special row or use a dedicated approach
-      // For simplicity, store as a row in a config-like pattern
+      // Store as a sentinel row with data_quality='model_artifact'
+      // so it's excluded from training queries that filter in('data_quality', ['good', 'partial'])
       const { error } = await this.supabase
         .from('investment_historical')
         .upsert(
           {
             set_num: '__model_artifact__',
-            data_quality: 'good',
+            data_quality: 'model_artifact',
             rrp_gbp: 0,
             raw_data: artifact,
             updated_at: new Date().toISOString(),

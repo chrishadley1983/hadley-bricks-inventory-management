@@ -71,6 +71,10 @@ export async function fetchTrainingSamples(
   supabase: SupabaseClient
 ): Promise<TrainingSample[]> {
   const samples: TrainingSample[] = [];
+
+  // Fetch theme averages once (outside pagination loop)
+  const themeAvgs = await fetchThemeAverages(supabase);
+
   const pageSize = 1000;
   let page = 0;
   let hasMore = true;
@@ -96,7 +100,6 @@ export async function fetchTrainingSamples(
     // For each historical record, fetch the matching brickset_sets data
     const setNums = data.map((d) => (d as Record<string, unknown>).set_num as string);
     const setDataMap = await fetchSetData(supabase, setNums);
-    const themeAvgs = await fetchThemeAverages(supabase);
 
     for (const row of data) {
       const h = row as Record<string, unknown>;
@@ -175,44 +178,73 @@ async function fetchSetData(
 
 /**
  * Fetch average historical appreciation per theme.
+ * Exported for reuse by scoring.service.ts.
+ * Paginates both historical and set data to avoid the 1000-row limit.
  */
-async function fetchThemeAverages(
+export async function fetchThemeAverages(
   supabase: SupabaseClient
 ): Promise<Map<string, number>> {
   const themeAvgs = new Map<string, number>();
 
-  // Join investment_historical with brickset_sets to group by theme
-  const { data, error } = await supabase
-    .from('investment_historical')
-    .select('set_num, actual_1yr_appreciation')
-    .in('data_quality', ['good', 'partial'])
-    .not('actual_1yr_appreciation', 'is', null);
+  // Paginate investment_historical to get all appreciation data
+  const allHistorical: { set_num: string; appreciation: number }[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
 
-  if (error || !data) return themeAvgs;
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('investment_historical')
+      .select('set_num, actual_1yr_appreciation')
+      .in('data_quality', ['good', 'partial'])
+      .not('actual_1yr_appreciation', 'is', null)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
 
-  // Get set -> theme mapping
-  const setNums = data.map((d) => (d as Record<string, unknown>).set_num as string);
-  const { data: sets } = await supabase
-    .from('brickset_sets')
-    .select('set_number, theme')
-    .in('set_number', setNums.slice(0, 1000)); // Limit for safety
+    if (error || !data || data.length === 0) {
+      hasMore = false;
+      break;
+    }
 
-  if (!sets) return themeAvgs;
+    for (const row of data) {
+      const h = row as Record<string, unknown>;
+      allHistorical.push({
+        set_num: h.set_num as string,
+        appreciation: h.actual_1yr_appreciation as number,
+      });
+    }
 
+    hasMore = data.length === pageSize;
+    page++;
+  }
+
+  if (allHistorical.length === 0) return themeAvgs;
+
+  // Paginate set -> theme mapping
+  const allSetNums = allHistorical.map((h) => h.set_num);
   const setThemeMap = new Map<string, string>();
-  for (const s of sets) {
-    const r = s as unknown as Record<string, unknown>;
-    setThemeMap.set(r.set_number as string, (r.theme as string) ?? 'Unknown');
+
+  for (let i = 0; i < allSetNums.length; i += pageSize) {
+    const chunk = allSetNums.slice(i, i + pageSize);
+    const { data: sets } = await supabase
+      .from('brickset_sets')
+      .select('set_number, theme')
+      .in('set_number', chunk);
+
+    if (!sets) continue;
+
+    for (const s of sets) {
+      const r = s as unknown as Record<string, unknown>;
+      setThemeMap.set(r.set_number as string, (r.theme as string) ?? 'Unknown');
+    }
   }
 
   // Group appreciations by theme
   const themeApps = new Map<string, number[]>();
-  for (const row of data) {
-    const h = row as Record<string, unknown>;
-    const theme = setThemeMap.get(h.set_num as string);
+  for (const h of allHistorical) {
+    const theme = setThemeMap.get(h.set_num);
     if (!theme) continue;
     const apps = themeApps.get(theme) ?? [];
-    apps.push(h.actual_1yr_appreciation as number);
+    apps.push(h.appreciation);
     themeApps.set(theme, apps);
   }
 

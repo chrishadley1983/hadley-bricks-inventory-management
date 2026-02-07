@@ -116,14 +116,14 @@ export async function fetchInvestmentSets(
 ): Promise<InvestmentResponse> {
   const params = new URLSearchParams();
 
-  if (pagination?.page) params.set('page', String(pagination.page));
-  if (pagination?.pageSize) params.set('pageSize', String(pagination.pageSize));
+  if (pagination?.page != null) params.set('page', String(pagination.page));
+  if (pagination?.pageSize != null) params.set('pageSize', String(pagination.pageSize));
   if (filters?.search) params.set('search', filters.search);
   if (filters?.retirementStatus) params.set('retirementStatus', filters.retirementStatus);
   if (filters?.theme) params.set('theme', filters.theme);
-  if (filters?.minYear) params.set('minYear', String(filters.minYear));
-  if (filters?.maxYear) params.set('maxYear', String(filters.maxYear));
-  if (filters?.retiringWithinMonths) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.minYear != null) params.set('minYear', String(filters.minYear));
+  if (filters?.maxYear != null) params.set('maxYear', String(filters.maxYear));
+  if (filters?.retiringWithinMonths != null) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
   if (filters?.sortBy) params.set('sortBy', filters.sortBy);
   if (filters?.sortOrder) params.set('sortOrder', filters.sortOrder);
 
@@ -184,11 +184,11 @@ export async function fetchPredictions(
 ): Promise<PredictionsResponse> {
   const params = new URLSearchParams();
 
-  if (filters?.minScore) params.set('minScore', String(filters.minScore));
-  if (filters?.retiringWithinMonths) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.minScore != null) params.set('minScore', String(filters.minScore));
+  if (filters?.retiringWithinMonths != null) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
   if (filters?.theme) params.set('theme', filters.theme);
-  if (filters?.page) params.set('page', String(filters.page));
-  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+  if (filters?.page != null) params.set('page', String(filters.page));
+  if (filters?.pageSize != null) params.set('pageSize', String(filters.pageSize));
 
   const response = await fetch(`/api/investment/predictions?${params.toString()}`);
 
