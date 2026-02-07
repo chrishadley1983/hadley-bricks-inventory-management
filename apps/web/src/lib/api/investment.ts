@@ -29,6 +29,25 @@ export interface InvestmentSet {
   sales_rank: number | null;
   offer_count: number | null;
   latest_snapshot_date: string | null;
+  // Investment predictions (enriched from investment_predictions)
+  investment_score: number | null;
+  predicted_1yr_appreciation: number | null;
+  predicted_3yr_appreciation: number | null;
+  confidence: number | null;
+}
+
+export interface InvestmentPrediction {
+  set_num: string;
+  investment_score: number;
+  predicted_1yr_appreciation: number | null;
+  predicted_3yr_appreciation: number | null;
+  predicted_1yr_price_gbp: number | null;
+  predicted_3yr_price_gbp: number | null;
+  confidence: number;
+  risk_factors: string[];
+  amazon_viable: boolean;
+  model_version: string | null;
+  scored_at: string;
 }
 
 export interface InvestmentSetDetail extends InvestmentSet {
@@ -48,6 +67,7 @@ export interface InvestmentSetDetail extends InvestmentSet {
     confidence: string;
     updated_at: string;
   }[];
+  prediction: InvestmentPrediction | null;
 }
 
 export interface PriceHistoryPoint {
@@ -138,6 +158,57 @@ export async function fetchPriceHistory(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `Failed to fetch price history (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export interface PredictionsFilters {
+  minScore?: number;
+  retiringWithinMonths?: number;
+  theme?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+interface PredictionsResponse {
+  data: (InvestmentSet & { prediction: InvestmentPrediction })[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function fetchPredictions(
+  filters?: PredictionsFilters
+): Promise<PredictionsResponse> {
+  const params = new URLSearchParams();
+
+  if (filters?.minScore) params.set('minScore', String(filters.minScore));
+  if (filters?.retiringWithinMonths) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.theme) params.set('theme', filters.theme);
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+
+  const response = await fetch(`/api/investment/predictions?${params.toString()}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch predictions (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function fetchSetPrediction(
+  setNumber: string
+): Promise<InvestmentPrediction | null> {
+  const response = await fetch(`/api/investment/predictions/${encodeURIComponent(setNumber)}`);
+
+  if (!response.ok) {
+    if (response.status === 404) return null;
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch prediction (${response.status})`);
   }
 
   return response.json();

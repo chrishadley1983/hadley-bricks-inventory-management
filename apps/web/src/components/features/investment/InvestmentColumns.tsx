@@ -30,6 +30,7 @@ export const COLUMN_DISPLAY_NAMES: Record<string, string> = {
   image: 'Image',
   set_number: 'Set Number',
   set_name: 'Name',
+  investment_score: 'Score',
   theme: 'Theme',
   subtheme: 'Subtheme',
   year_from: 'Year',
@@ -93,6 +94,33 @@ export function getInvestmentColumns(): ColumnDef<InvestmentSet>[] {
       cell: ({ row }) => {
         const name = row.getValue('set_name') as string | null;
         return <span className="max-w-[250px] truncate block">{name || '-'}</span>;
+      },
+    },
+    {
+      accessorKey: 'investment_score',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="-ml-4"
+        >
+          Score
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const score = row.original.investment_score;
+        if (score == null) return <span className="text-muted-foreground">{'\u2014'}</span>;
+        const variant = score >= 7
+          ? 'default'
+          : score >= 4
+            ? 'secondary'
+            : 'destructive';
+        return (
+          <Badge variant={variant} className="font-mono tabular-nums">
+            {score.toFixed(1)}
+          </Badge>
+        );
       },
     },
     {

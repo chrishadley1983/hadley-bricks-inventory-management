@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       amazon_arbitrage_pricing: {
@@ -4038,6 +4063,111 @@ export type Database = {
           },
         ]
       }
+      investment_historical: {
+        Row: {
+          actual_1yr_appreciation: number | null
+          actual_3yr_appreciation: number | null
+          avg_sales_rank_post: number | null
+          created_at: string
+          data_quality: string
+          had_amazon_listing: boolean | null
+          id: string
+          price_1yr_post: number | null
+          price_3yr_post: number | null
+          price_at_retirement: number | null
+          raw_data: Json | null
+          retired_date: string | null
+          rrp_gbp: number | null
+          set_num: string
+          updated_at: string
+        }
+        Insert: {
+          actual_1yr_appreciation?: number | null
+          actual_3yr_appreciation?: number | null
+          avg_sales_rank_post?: number | null
+          created_at?: string
+          data_quality?: string
+          had_amazon_listing?: boolean | null
+          id?: string
+          price_1yr_post?: number | null
+          price_3yr_post?: number | null
+          price_at_retirement?: number | null
+          raw_data?: Json | null
+          retired_date?: string | null
+          rrp_gbp?: number | null
+          set_num: string
+          updated_at?: string
+        }
+        Update: {
+          actual_1yr_appreciation?: number | null
+          actual_3yr_appreciation?: number | null
+          avg_sales_rank_post?: number | null
+          created_at?: string
+          data_quality?: string
+          had_amazon_listing?: boolean | null
+          id?: string
+          price_1yr_post?: number | null
+          price_3yr_post?: number | null
+          price_at_retirement?: number | null
+          raw_data?: Json | null
+          retired_date?: string | null
+          rrp_gbp?: number | null
+          set_num?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      investment_predictions: {
+        Row: {
+          amazon_viable: boolean | null
+          confidence: number
+          created_at: string
+          id: string
+          investment_score: number
+          model_version: string | null
+          predicted_1yr_appreciation: number | null
+          predicted_1yr_price_gbp: number | null
+          predicted_3yr_appreciation: number | null
+          predicted_3yr_price_gbp: number | null
+          risk_factors: Json | null
+          scored_at: string
+          set_num: string
+          updated_at: string
+        }
+        Insert: {
+          amazon_viable?: boolean | null
+          confidence?: number
+          created_at?: string
+          id?: string
+          investment_score: number
+          model_version?: string | null
+          predicted_1yr_appreciation?: number | null
+          predicted_1yr_price_gbp?: number | null
+          predicted_3yr_appreciation?: number | null
+          predicted_3yr_price_gbp?: number | null
+          risk_factors?: Json | null
+          scored_at?: string
+          set_num: string
+          updated_at?: string
+        }
+        Update: {
+          amazon_viable?: boolean | null
+          confidence?: number
+          created_at?: string
+          id?: string
+          investment_score?: number
+          model_version?: string | null
+          predicted_1yr_appreciation?: number | null
+          predicted_1yr_price_gbp?: number | null
+          predicted_3yr_appreciation?: number | null
+          predicted_3yr_price_gbp?: number | null
+          risk_factors?: Json | null
+          scored_at?: string
+          set_num?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       knowledge_chunks: {
         Row: {
           chunk_index: number
@@ -4692,6 +4822,121 @@ export type Database = {
           protein_g?: number
           use_count?: number | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      meal_plan_ingredients: {
+        Row: {
+          category: string
+          checked: boolean | null
+          created_at: string | null
+          for_recipe: string | null
+          id: string
+          item: string
+          plan_id: string
+          quantity: string | null
+        }
+        Insert: {
+          category: string
+          checked?: boolean | null
+          created_at?: string | null
+          for_recipe?: string | null
+          id?: string
+          item: string
+          plan_id: string
+          quantity?: string | null
+        }
+        Update: {
+          category?: string
+          checked?: boolean | null
+          created_at?: string | null
+          for_recipe?: string | null
+          id?: string
+          item?: string
+          plan_id?: string
+          quantity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_ingredients_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_plan_items: {
+        Row: {
+          adults_meal: string | null
+          created_at: string | null
+          date: string
+          id: string
+          kids_meal: string | null
+          meal_slot: number
+          plan_id: string
+          recipe_url: string | null
+          source_tag: string | null
+        }
+        Insert: {
+          adults_meal?: string | null
+          created_at?: string | null
+          date: string
+          id?: string
+          kids_meal?: string | null
+          meal_slot: number
+          plan_id: string
+          recipe_url?: string | null
+          source_tag?: string | null
+        }
+        Update: {
+          adults_meal?: string | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          kids_meal?: string | null
+          meal_slot?: number
+          plan_id?: string
+          recipe_url?: string | null
+          source_tag?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_plans: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          sheet_id: string | null
+          source: string | null
+          updated_at: string | null
+          week_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          sheet_id?: string | null
+          source?: string | null
+          updated_at?: string | null
+          week_start: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          sheet_id?: string | null
+          source?: string | null
+          updated_at?: string | null
+          week_start?: string
         }
         Relationships: []
       }
@@ -10508,6 +10753,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       idea_source: [

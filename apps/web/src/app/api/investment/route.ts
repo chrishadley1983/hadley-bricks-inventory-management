@@ -167,10 +167,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Merge pricing into response
+    // Fetch investment predictions for these sets
+    const setNumbers = sets.map((s) => s.set_number as string);
+    const predictionMap = new Map<string, {
+      investment_score: number;
+      predicted_1yr_appreciation: number | null;
+      predicted_3yr_appreciation: number | null;
+      confidence: number;
+    }>();
+
+    if (setNumbers.length > 0) {
+      for (let i = 0; i < setNumbers.length; i += 100) {
+        const chunk = setNumbers.slice(i, i + 100);
+        const { data: predictions } = await supabase
+          .from('investment_predictions')
+          .select('set_num, investment_score, predicted_1yr_appreciation, predicted_3yr_appreciation, confidence')
+          .in('set_num', chunk);
+
+        for (const pred of (predictions ?? [])) {
+          const p = pred as Record<string, unknown>;
+          predictionMap.set(p.set_num as string, {
+            investment_score: p.investment_score as number,
+            predicted_1yr_appreciation: p.predicted_1yr_appreciation as number | null,
+            predicted_3yr_appreciation: p.predicted_3yr_appreciation as number | null,
+            confidence: p.confidence as number,
+          });
+        }
+      }
+    }
+
+    // Merge pricing and predictions into response
     const enrichedSets = sets.map((set) => {
       const asin = set.amazon_asin as string | null;
       const pricing = asin ? pricingMap.get(asin) : null;
+      const prediction = predictionMap.get(set.set_number as string);
       return {
         ...set,
         buy_box_price: pricing?.buy_box_price ?? null,
@@ -178,6 +208,10 @@ export async function GET(request: NextRequest) {
         sales_rank: pricing?.sales_rank ?? null,
         offer_count: pricing?.offer_count ?? null,
         latest_snapshot_date: pricing?.snapshot_date ?? null,
+        investment_score: prediction?.investment_score ?? null,
+        predicted_1yr_appreciation: prediction?.predicted_1yr_appreciation ?? null,
+        predicted_3yr_appreciation: prediction?.predicted_3yr_appreciation ?? null,
+        confidence: prediction?.confidence ?? null,
       };
     });
 

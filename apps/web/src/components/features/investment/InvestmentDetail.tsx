@@ -332,6 +332,118 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
         </Card>
       </div>
 
+      {/* Investment Prediction */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Investment Prediction
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {set.prediction ? (
+            <div className="space-y-6">
+              {/* Score + Confidence row */}
+              <div className="flex items-center gap-6">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Investment Score</div>
+                  <Badge
+                    variant={
+                      set.prediction.investment_score >= 7
+                        ? 'default'
+                        : set.prediction.investment_score >= 4
+                          ? 'secondary'
+                          : 'destructive'
+                    }
+                    className="text-lg font-mono px-3 py-1"
+                  >
+                    {set.prediction.investment_score.toFixed(1)} / 10
+                  </Badge>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Confidence</div>
+                  <span className="text-lg font-medium">
+                    {set.prediction.confidence > 0
+                      ? `${(set.prediction.confidence * 100).toFixed(0)}%`
+                      : 'Rule-based'}
+                  </span>
+                </div>
+                {set.prediction.model_version && (
+                  <div>
+                    <div className="text-sm text-muted-foreground mb-1">Model</div>
+                    <span className="text-sm font-mono">{set.prediction.model_version}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Appreciation predictions */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm text-muted-foreground">1-Year Predicted Appreciation</div>
+                  {set.prediction.predicted_1yr_appreciation != null ? (
+                    <>
+                      <div className={`text-2xl font-bold ${set.prediction.predicted_1yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {set.prediction.predicted_1yr_appreciation > 0 ? '+' : ''}
+                        {set.prediction.predicted_1yr_appreciation.toFixed(1)}%
+                      </div>
+                      {set.prediction.predicted_1yr_price_gbp != null && (
+                        <div className="text-sm text-muted-foreground">
+                          Predicted price: {formatCurrency(set.prediction.predicted_1yr_price_gbp)}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-lg text-muted-foreground">{'\u2014'}</div>
+                  )}
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm text-muted-foreground">3-Year Predicted Appreciation</div>
+                  {set.prediction.predicted_3yr_appreciation != null ? (
+                    <>
+                      <div className={`text-2xl font-bold ${set.prediction.predicted_3yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {set.prediction.predicted_3yr_appreciation > 0 ? '+' : ''}
+                        {set.prediction.predicted_3yr_appreciation.toFixed(1)}%
+                      </div>
+                      {set.prediction.predicted_3yr_price_gbp != null && (
+                        <div className="text-sm text-muted-foreground">
+                          Predicted price: {formatCurrency(set.prediction.predicted_3yr_price_gbp)}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-lg text-muted-foreground">{'\u2014'}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Risk Factors */}
+              {set.prediction.risk_factors && set.prediction.risk_factors.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium mb-2">Risk Factors</div>
+                  <div className="flex flex-wrap gap-2">
+                    {set.prediction.risk_factors.map((risk, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">
+                        {risk.replace(/_/g, ' ')}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Last scored */}
+              <div className="text-xs text-muted-foreground">
+                Last scored: {formatDate(set.prediction.scored_at)}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4">
+              Prediction not available for this set. The scoring pipeline has not yet been run,
+              or this set is not eligible for scoring.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Price History Chart */}
       <Card>
         <CardHeader>

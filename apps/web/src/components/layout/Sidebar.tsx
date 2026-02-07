@@ -78,6 +78,7 @@ const navSections: NavSection[] = [
     defaultOpen: false,
     items: [
       { href: '/investment', label: 'Investment Tracker', icon: LineChart },
+      { href: '/investment/top-picks', label: 'Top Picks', icon: TrendingUp },
     ],
   },
   {

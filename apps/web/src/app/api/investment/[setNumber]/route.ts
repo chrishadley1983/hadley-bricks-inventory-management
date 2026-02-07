@@ -73,10 +73,40 @@ export async function GET(
       // Table may not exist yet, ignore
     }
 
+    // Fetch investment prediction
+    let prediction = null;
+    const { data: predData } = await supabase
+      .from('investment_predictions')
+      .select('*')
+      .eq('set_num', setNumber)
+      .single();
+
+    if (predData) {
+      const p = predData as Record<string, unknown>;
+      prediction = {
+        set_num: p.set_num,
+        investment_score: p.investment_score,
+        predicted_1yr_appreciation: p.predicted_1yr_appreciation,
+        predicted_3yr_appreciation: p.predicted_3yr_appreciation,
+        predicted_1yr_price_gbp: p.predicted_1yr_price_gbp,
+        predicted_3yr_price_gbp: p.predicted_3yr_price_gbp,
+        confidence: p.confidence,
+        risk_factors: p.risk_factors,
+        amazon_viable: p.amazon_viable,
+        model_version: p.model_version,
+        scored_at: p.scored_at,
+      };
+    }
+
     return NextResponse.json({
       ...set,
       pricing,
       retirement_sources: retirementSources,
+      prediction,
+      investment_score: prediction?.investment_score ?? null,
+      predicted_1yr_appreciation: prediction?.predicted_1yr_appreciation ?? null,
+      predicted_3yr_appreciation: prediction?.predicted_3yr_appreciation ?? null,
+      confidence: prediction?.confidence ?? null,
     });
   } catch (error) {
     console.error('[GET /api/investment/[setNumber]] Error:', error);
