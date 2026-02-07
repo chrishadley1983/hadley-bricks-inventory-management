@@ -25,5 +25,8 @@
     "migrate:purchases": "npm run migrate:purchases --workspace=apps/web",
     "validate:reconcile": "npm run validate:reconcile --workspace=apps/web",
     "sheets:test": "npm run sheets:test --workspace=apps/web"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2"
   }
 }
