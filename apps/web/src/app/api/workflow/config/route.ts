@@ -70,8 +70,8 @@ export async function GET() {
     // No config exists - create default config
     const defaultConfig = {
       user_id: user.id,
-      target_ebay_listings: 100,
-      target_amazon_listings: 50,
+      target_ebay_listings: 735,
+      target_amazon_listings: 1050,
       target_bricklink_weekly_value: 500,
       target_daily_listed_value: 200,
       target_daily_sold_value: 150,

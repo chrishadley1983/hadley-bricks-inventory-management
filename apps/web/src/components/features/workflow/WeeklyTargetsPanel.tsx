@@ -116,19 +116,21 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
       </CardHeader>
       <CardContent>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
-          {/* eBay Listings - count and target scale with view mode */}
+          {/* eBay Listed Value - value target scales with view mode */}
           <MetricCard
-            label="eBay Listings"
+            label={isWeekly ? 'eBay Listed Value' : 'eBay Listed Value'}
             current={ebayListingsCount}
             target={ebayListingsTarget}
+            isCurrency
             icon={<Package className="h-4 w-4" />}
           />
 
-          {/* Amazon Listings - count and target scale with view mode */}
+          {/* Amazon Listed Value - value target scales with view mode */}
           <MetricCard
-            label="Amazon Listings"
+            label={isWeekly ? 'Amazon Listed Value' : 'Amazon Listed Value'}
             current={amazonListingsCount}
             target={amazonListingsTarget}
+            isCurrency
             icon={<Package className="h-4 w-4" />}
           />
 

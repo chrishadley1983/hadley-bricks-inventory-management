@@ -32,8 +32,8 @@ export async function GET() {
       .maybeSingle();
 
     const targets = {
-      ebayListings: config?.target_ebay_listings ?? 500,
-      amazonListings: config?.target_amazon_listings ?? 250,
+      ebayListings: config?.target_ebay_listings ?? 735,
+      amazonListings: config?.target_amazon_listings ?? 1050,
       bricklinkWeeklyValue: config?.target_bricklink_weekly_value ?? 1000,
       dailyListedValue: config?.target_daily_listed_value ?? 300,
       dailySoldValue: config?.target_daily_sold_value ?? 250,
@@ -45,16 +45,18 @@ export async function GET() {
     const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
     const [ebayResult, amazonResult, bricklinkResult, brickowlResult] = await Promise.all([
+      // eBay: query listing VALUE (sum) instead of count
       supabase
         .from('inventory_items')
-        .select('id', { count: 'exact', head: true })
+        .select('listing_value')
         .eq('user_id', user.id)
         .eq('listing_platform', 'ebay')
         .gte('listing_date', weekStartStr)
         .lte('listing_date', weekEndStr),
+      // Amazon: query listing VALUE (sum) instead of count
       supabase
         .from('inventory_items')
-        .select('id', { count: 'exact', head: true })
+        .select('listing_value')
         .eq('user_id', user.id)
         .eq('listing_platform', 'amazon')
         .gte('listing_date', weekStartStr)
@@ -76,8 +78,8 @@ export async function GET() {
     ]);
 
     const listingCounts = {
-      ebay: ebayResult.count ?? 0,
-      amazon: amazonResult.count ?? 0,
+      ebay: ebayResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
+      amazon: amazonResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
       bricklink: bricklinkResult.count ?? 0,
       brickowl: brickowlResult.count ?? 0,
     };
@@ -85,15 +87,17 @@ export async function GET() {
     // Get daily listing counts by platform (items listed today)
     const [ebayDailyResult, amazonDailyResult, bricklinkDailyResult, brickowlDailyResult] =
       await Promise.all([
+        // eBay: query listing VALUE (sum) instead of count
         supabase
           .from('inventory_items')
-          .select('id', { count: 'exact', head: true })
+          .select('listing_value')
           .eq('user_id', user.id)
           .eq('listing_platform', 'ebay')
           .eq('listing_date', todayStr),
+        // Amazon: query listing VALUE (sum) instead of count
         supabase
           .from('inventory_items')
-          .select('id', { count: 'exact', head: true })
+          .select('listing_value')
           .eq('user_id', user.id)
           .eq('listing_platform', 'amazon')
           .eq('listing_date', todayStr),
@@ -112,8 +116,8 @@ export async function GET() {
       ]);
 
     const dailyListingCounts = {
-      ebay: ebayDailyResult.count ?? 0,
-      amazon: amazonDailyResult.count ?? 0,
+      ebay: ebayDailyResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
+      amazon: amazonDailyResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
       bricklink: bricklinkDailyResult.count ?? 0,
       brickowl: brickowlDailyResult.count ?? 0,
     };
