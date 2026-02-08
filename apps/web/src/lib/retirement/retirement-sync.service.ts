@@ -484,12 +484,20 @@ export class RetirementSyncService {
       `[RetirementSync] Rollup: ${sourcesBySet.size} sets with retirement data`
     );
 
-    // Calculate rollup for each set
+    // Calculate rollup for each set and group by update values for batching
     const confidencePriority: Record<RetirementConfidence, number> = {
       confirmed: 3,
       likely: 2,
       speculative: 1,
     };
+
+    // Group sets by their rollup values so we can batch updates
+    const updateGroups = new Map<string, {
+      status: RetirementStatus;
+      date: string | null;
+      confidence: RetirementConfidence;
+      setNumbers: string[];
+    }>();
 
     for (const [setNum, sources] of sourcesBySet) {
       // Sort sources by confidence (highest first)
@@ -503,33 +511,58 @@ export class RetirementSyncService {
       // Check if 2+ sources agree (makes it "likely" minimum)
       let rollupConfidence = bestSource.confidence;
       if (sources.length >= 2 && rollupConfidence === 'speculative') {
-        // Two sources agreeing elevates to "likely"
         rollupConfidence = 'likely';
       }
 
-      // Use best source's status and date
       const rollupStatus = bestSource.status ?? 'available';
       const rollupDate = bestSource.expected_retirement_date;
 
-      // Update brickset_sets
-      const { error } = await this.supabase
-        .from('brickset_sets')
-        .update({
-          retirement_status: rollupStatus,
-          expected_retirement_date: rollupDate,
-          retirement_confidence: rollupConfidence,
-        })
-        .eq('set_number', setNum);
+      // Group key: status|date|confidence
+      const key = `${rollupStatus}|${rollupDate ?? 'null'}|${rollupConfidence}`;
+      const group = updateGroups.get(key);
+      if (group) {
+        group.setNumbers.push(setNum);
+      } else {
+        updateGroups.set(key, {
+          status: rollupStatus,
+          date: rollupDate,
+          confidence: rollupConfidence,
+          setNumbers: [setNum],
+        });
+      }
+    }
 
-      if (error) {
-        // Set may not exist in brickset_sets yet (retirement source has data, but set not synced)
-        continue;
+    console.log(
+      `[RetirementSync] Rollup: ${updateGroups.size} distinct update groups`
+    );
+
+    // Batch update each group (chunk .in() to max 500 set numbers per call)
+    const BATCH_SIZE = 500;
+    for (const group of updateGroups.values()) {
+      for (let i = 0; i < group.setNumbers.length; i += BATCH_SIZE) {
+        const chunk = group.setNumbers.slice(i, i + BATCH_SIZE);
+        const { error, count } = await this.supabase
+          .from('brickset_sets')
+          .update({
+            retirement_status: group.status,
+            expected_retirement_date: group.date,
+            retirement_confidence: group.confidence,
+          })
+          .in('set_number', chunk);
+
+        if (error) {
+          console.error('[RetirementSync] Rollup batch update error:', error.message);
+        } else {
+          const updated = count ?? chunk.length;
+          setsUpdated += updated;
+        }
       }
 
-      setsUpdated++;
-      if (rollupConfidence === 'confirmed') confirmed++;
-      else if (rollupConfidence === 'likely') likely++;
-      else speculative++;
+      // Track confidence counts
+      const setCount = group.setNumbers.length;
+      if (group.confidence === 'confirmed') confirmed += setCount;
+      else if (group.confidence === 'likely') likely += setCount;
+      else speculative += setCount;
     }
 
     const duration = Date.now() - startTime;
