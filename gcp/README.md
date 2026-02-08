@@ -146,6 +146,48 @@ gcloud scheduler jobs create http refresh-watchlist \
   --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
   --time-zone="UTC" \
   --description="Weekly arbitrage watchlist refresh"
+
+# Rebrickable Sync - weekly on Sunday at 4am UTC
+gcloud scheduler jobs create http rebrickable-sync \
+  --location=europe-west2 \
+  --schedule="0 4 * * 0" \
+  --uri="$APP_URL/api/cron/rebrickable-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --description="Weekly Rebrickable set data sync"
+
+# Retirement Sync - daily at 6am UTC
+gcloud scheduler jobs create http retirement-sync \
+  --location=europe-west2 \
+  --schedule="0 6 * * *" \
+  --uri="$APP_URL/api/cron/retirement-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --attempt-deadline="300s" \
+  --description="Daily retirement status sync (Brickset + Brick Tap)"
+
+# Investment Sync - daily at 7am UTC (after retirement sync)
+gcloud scheduler jobs create http investment-sync \
+  --location=europe-west2 \
+  --schedule="0 7 * * *" \
+  --uri="$APP_URL/api/cron/investment-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --description="Daily investment classification sync (licensed/UCS/modular)"
+
+# Investment Retrain - monthly on 1st at 5am UTC
+gcloud scheduler jobs create http investment-retrain \
+  --location=europe-west2 \
+  --schedule="0 5 1 * *" \
+  --uri="$APP_URL/api/cron/investment-retrain" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --attempt-deadline="300s" \
+  --description="Monthly ML model retrain and investment scoring"
 ```
 
 #### Resumable Jobs (via Cloud Function Driver)
@@ -207,6 +249,12 @@ gcloud scheduler jobs run amazon-two-phase-sync --location=europe-west2
 gcloud scheduler jobs run ebay-negotiation-sync --location=europe-west2
 gcloud scheduler jobs run vinted-cleanup --location=europe-west2
 gcloud scheduler jobs run refresh-watchlist --location=europe-west2
+
+# Investment pipeline jobs
+gcloud scheduler jobs run rebrickable-sync --location=europe-west2
+gcloud scheduler jobs run retirement-sync --location=europe-west2
+gcloud scheduler jobs run investment-sync --location=europe-west2
+gcloud scheduler jobs run investment-retrain --location=europe-west2
 
 # Resumable jobs (these take longer)
 gcloud scheduler jobs run ebay-pricing-sync --location=europe-west2
