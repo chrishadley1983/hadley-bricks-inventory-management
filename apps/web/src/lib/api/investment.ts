@@ -93,6 +93,15 @@ export interface InvestmentFilters {
   minYear?: number;
   maxYear?: number;
   retiringWithinMonths?: number;
+  minPieces?: number;
+  maxPieces?: number;
+  minRrp?: number;
+  maxRrp?: number;
+  isLicensed?: boolean;
+  isUcs?: boolean;
+  isModular?: boolean;
+  exclusivityTier?: string;
+  hasAmazon?: boolean;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
@@ -124,6 +133,15 @@ export async function fetchInvestmentSets(
   if (filters?.minYear != null) params.set('minYear', String(filters.minYear));
   if (filters?.maxYear != null) params.set('maxYear', String(filters.maxYear));
   if (filters?.retiringWithinMonths != null) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.minPieces != null) params.set('minPieces', String(filters.minPieces));
+  if (filters?.maxPieces != null) params.set('maxPieces', String(filters.maxPieces));
+  if (filters?.minRrp != null) params.set('minRrp', String(filters.minRrp));
+  if (filters?.maxRrp != null) params.set('maxRrp', String(filters.maxRrp));
+  if (filters?.isLicensed != null) params.set('isLicensed', String(filters.isLicensed));
+  if (filters?.isUcs != null) params.set('isUcs', String(filters.isUcs));
+  if (filters?.isModular != null) params.set('isModular', String(filters.isModular));
+  if (filters?.exclusivityTier) params.set('exclusivityTier', filters.exclusivityTier);
+  if (filters?.hasAmazon != null) params.set('hasAmazon', String(filters.hasAmazon));
   if (filters?.sortBy) params.set('sortBy', filters.sortBy);
   if (filters?.sortOrder) params.set('sortOrder', filters.sortOrder);
 
@@ -212,4 +230,16 @@ export async function fetchSetPrediction(
   }
 
   return response.json();
+}
+
+export async function fetchInvestmentThemes(): Promise<string[]> {
+  const response = await fetch('/api/investment/themes');
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch themes (${response.status})`);
+  }
+
+  const result = await response.json();
+  return result.themes;
 }

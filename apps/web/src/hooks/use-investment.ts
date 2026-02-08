@@ -5,6 +5,7 @@ import {
   fetchInvestmentSets,
   fetchInvestmentSetDetail,
   fetchPriceHistory,
+  fetchInvestmentThemes,
   type InvestmentFilters,
   type InvestmentPaginationParams,
 } from '@/lib/api/investment';
@@ -19,6 +20,7 @@ export const investmentKeys = {
     [...investmentKeys.lists(), { filters, pagination }] as const,
   detail: (setNumber: string) => [...investmentKeys.all, 'detail', setNumber] as const,
   priceHistory: (setNumber: string) => [...investmentKeys.all, 'priceHistory', setNumber] as const,
+  themes: () => [...investmentKeys.all, 'themes'] as const,
 };
 
 /**
@@ -56,5 +58,16 @@ export function usePriceHistory(setNumber: string) {
     queryFn: () => fetchPriceHistory(setNumber),
     staleTime: 5 * 60 * 1000,
     enabled: !!setNumber,
+  });
+}
+
+/**
+ * Hook to fetch distinct themes for the filter dropdown
+ */
+export function useInvestmentThemes() {
+  return useQuery({
+    queryKey: investmentKeys.themes(),
+    queryFn: fetchInvestmentThemes,
+    staleTime: 10 * 60 * 1000, // 10 minutes - themes rarely change
   });
 }

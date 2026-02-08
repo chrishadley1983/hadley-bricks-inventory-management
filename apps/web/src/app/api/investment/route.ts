@@ -21,6 +21,15 @@ const QuerySchema = z.object({
   minYear: z.coerce.number().optional(),
   maxYear: z.coerce.number().optional(),
   retiringWithinMonths: z.coerce.number().min(1).max(36).optional(),
+  minPieces: z.coerce.number().optional(),
+  maxPieces: z.coerce.number().optional(),
+  minRrp: z.coerce.number().optional(),
+  maxRrp: z.coerce.number().optional(),
+  isLicensed: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  isUcs: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  isModular: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  exclusivityTier: z.string().optional(),
+  hasAmazon: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   sortBy: z.string().default('year_from'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -46,6 +55,15 @@ export async function GET(request: NextRequest) {
       minYear,
       maxYear,
       retiringWithinMonths,
+      minPieces,
+      maxPieces,
+      minRrp,
+      maxRrp,
+      isLicensed,
+      isUcs,
+      isModular,
+      exclusivityTier,
+      hasAmazon,
       sortBy,
       sortOrder,
     } = parsed.data;
@@ -74,7 +92,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (theme) {
-      query = query.ilike('theme', `%${theme}%`);
+      query = query.eq('theme', theme);
     }
 
     if (minYear) {
@@ -83,6 +101,42 @@ export async function GET(request: NextRequest) {
 
     if (maxYear) {
       query = query.lte('year_from', maxYear);
+    }
+
+    if (minPieces) {
+      query = query.gte('pieces', minPieces);
+    }
+
+    if (maxPieces) {
+      query = query.lte('pieces', maxPieces);
+    }
+
+    if (minRrp) {
+      query = query.gte('uk_retail_price' as string, minRrp);
+    }
+
+    if (maxRrp) {
+      query = query.lte('uk_retail_price' as string, maxRrp);
+    }
+
+    if (isLicensed != null) {
+      query = query.eq('is_licensed' as string, isLicensed);
+    }
+
+    if (isUcs != null) {
+      query = query.eq('is_ucs' as string, isUcs);
+    }
+
+    if (isModular != null) {
+      query = query.eq('is_modular' as string, isModular);
+    }
+
+    if (exclusivityTier) {
+      query = query.eq('exclusivity_tier' as string, exclusivityTier);
+    }
+
+    if (hasAmazon != null) {
+      query = query.eq('has_amazon_listing' as string, hasAmazon);
     }
 
     if (retiringWithinMonths) {
