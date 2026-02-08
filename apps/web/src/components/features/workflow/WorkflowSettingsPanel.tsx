@@ -123,33 +123,35 @@ export function WorkflowSettingsPanel() {
             <TabsContent value="targets" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="target_ebay_listings">eBay Listings Target</Label>
+                  <Label htmlFor="target_ebay_listings">eBay Weekly Listed Value (£)</Label>
                   <Input
                     id="target_ebay_listings"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={localConfig.target_ebay_listings ?? ''}
                     onChange={(e) =>
                       updateField(
                         'target_ebay_listings',
-                        e.target.value ? parseInt(e.target.value, 10) : null
+                        e.target.value ? parseFloat(e.target.value) : null
                       )
                     }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="target_amazon_listings">
-                    Amazon Listings Target
+                    Amazon Weekly Listed Value (£)
                   </Label>
                   <Input
                     id="target_amazon_listings"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={localConfig.target_amazon_listings ?? ''}
                     onChange={(e) =>
                       updateField(
                         'target_amazon_listings',
-                        e.target.value ? parseInt(e.target.value, 10) : null
+                        e.target.value ? parseFloat(e.target.value) : null
                       )
                     }
                   />

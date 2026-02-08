@@ -95,8 +95,8 @@ export const workflowConfigKeys = {
 
 // Default configuration values
 export const DEFAULT_CONFIG: Partial<WorkflowConfig> = {
-  target_ebay_listings: 100,
-  target_amazon_listings: 50,
+  target_ebay_listings: 735,
+  target_amazon_listings: 1050,
   target_bricklink_weekly_value: 500,
   target_daily_listed_value: 200,
   target_daily_sold_value: 150,
