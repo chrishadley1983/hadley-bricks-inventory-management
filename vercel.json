@@ -3,5 +3,23 @@
   "framework": "nextjs",
   "buildCommand": "cd apps/web && npm run build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/rebrickable-sync",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/retirement-sync",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/investment-sync",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/investment-retrain",
+      "schedule": "0 4 1 * *"
+    }
+  ]
 }
