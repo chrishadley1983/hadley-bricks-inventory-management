@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Exclude large packages from webpack bundling (resolve at runtime)
+  serverExternalPackages: ['@tensorflow/tfjs'],
   // External image domains
   images: {
     remotePatterns: [
