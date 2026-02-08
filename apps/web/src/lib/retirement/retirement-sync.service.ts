@@ -69,7 +69,7 @@ export class RetirementSyncService {
       while (hasMore) {
         const { data, error } = await this.supabase
           .from('brickset_sets')
-          .select('set_number, availability, exit_date, us_date_removed')
+          .select('set_number, availability, exit_date, us_date_removed, year_from')
           .not('availability', 'is', null)
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -138,36 +138,64 @@ export class RetirementSyncService {
     availability: string | null;
     exit_date: string | null;
     us_date_removed: string | null;
+    year_from: number | null;
   }): RetirementSourceRecord | null {
     if (!row.availability) return null;
 
     const avail = row.availability.toLowerCase();
+    const retirementDate = row.exit_date ?? row.us_date_removed ?? null;
+    const currentYear = new Date().getFullYear();
+    // Sets typically stay on shelves ~2 years. A set from 2+ years ago
+    // without current "Retail" availability is almost certainly retired.
+    const isCertainlyOld = row.year_from != null && row.year_from < currentYear - 2;
+
     let status: RetirementStatus;
+    let confidence: RetirementConfidence;
 
     if (avail === 'retired' || avail === 'no longer available') {
       status = 'retired';
+      confidence = 'confirmed';
+    } else if (avail === '{not specified}') {
+      // Brickset uses {Not specified} for sets no longer tracked - always retired
+      status = 'retired';
+      confidence = retirementDate ? 'confirmed' : 'likely';
     } else if (avail === 'retiring soon') {
       status = 'retiring_soon';
+      confidence = 'likely';
     } else if (
       avail === 'retail' ||
       avail === 'retail - limited' ||
+      avail === 'lego exclusive' ||
       avail === 'available'
     ) {
-      status = 'available';
+      if (retirementDate) {
+        // Has an exit date - check if it's in the past
+        const exitTime = new Date(retirementDate).getTime();
+        status = exitTime < Date.now() ? 'retired' : 'available';
+        confidence = 'confirmed';
+      } else if (isCertainlyOld) {
+        // Old set still listed as "Retail" but year_from is 2+ years ago
+        status = 'retired';
+        confidence = 'likely';
+      } else {
+        status = 'available';
+        confidence = 'speculative';
+      }
+    } else if (
+      avail === 'promotional' ||
+      avail === 'promotional (airline)' ||
+      avail === 'not sold' ||
+      avail === 'educational' ||
+      avail === 'legoland exclusive'
+    ) {
+      // Special distribution - treat old ones as retired
+      status = isCertainlyOld ? 'retired' : 'available';
+      confidence = retirementDate ? 'confirmed' : (isCertainlyOld ? 'likely' : 'speculative');
     } else {
-      // Unknown status, still record it
-      status = 'available';
+      // Unknown availability value
+      status = isCertainlyOld ? 'retired' : 'available';
+      confidence = 'speculative';
     }
-
-    // Use UK exit date first, then US
-    const retirementDate = row.exit_date ?? row.us_date_removed ?? null;
-
-    // Brickset data is authoritative when there's an official exit date
-    const confidence: RetirementConfidence = retirementDate
-      ? 'confirmed'
-      : status === 'retired'
-        ? 'confirmed'
-        : 'speculative';
 
     return {
       set_num: row.set_number,
@@ -179,6 +207,7 @@ export class RetirementSyncService {
         availability: row.availability,
         exit_date: row.exit_date,
         us_date_removed: row.us_date_removed,
+        year_from: row.year_from,
       },
     };
   }
@@ -216,6 +245,7 @@ export class RetirementSyncService {
 
       const response = await fetch(sheetUrl, {
         headers: { Accept: 'text/csv' },
+        redirect: 'follow',
       });
 
       if (!response.ok) {
@@ -275,7 +305,14 @@ export class RetirementSyncService {
    * Expected columns: Set Number, Name, Retirement Date, Source/Notes
    */
   private parseBrickTapCSV(csvText: string): RetirementSourceRecord[] {
-    const lines = csvText.trim().split('\n');
+    const allLines = csvText.trim().split('\n');
+    // Skip blank/empty-comma lines to find the actual header row
+    const headerIdx = allLines.findIndex(
+      (line) => line.replace(/,/g, '').trim().length > 0
+    );
+    if (headerIdx === -1 || headerIdx >= allLines.length - 1) return [];
+
+    const lines = allLines.slice(headerIdx);
     if (lines.length < 2) return [];
 
     const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
@@ -390,18 +427,36 @@ export class RetirementSyncService {
       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
 
+    // Month abbreviation/full name lookup
+    const monthLookup: Record<string, string> = {
+      jan: '01', january: '01', feb: '02', february: '02',
+      mar: '03', march: '03', apr: '04', april: '04',
+      may: '05', jun: '06', june: '06', jul: '07', july: '07',
+      aug: '08', august: '08', sep: '09', september: '09',
+      oct: '10', october: '10', nov: '11', november: '11',
+      dec: '12', december: '12',
+    };
+
+    // Try "Mon DD, YYYY" (e.g., "Apr 30, 2026")
+    const monDayYear = dateStr.match(
+      /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/
+    );
+    if (monDayYear) {
+      const month = monthLookup[monDayYear[1].toLowerCase()];
+      if (month) {
+        return `${monDayYear[3]}-${month}-${monDayYear[2].padStart(2, '0')}`;
+      }
+    }
+
     // Try Month YYYY (e.g., "December 2026")
     const monthYear = dateStr.match(
-      /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i
+      /^([A-Za-z]+)\s+(\d{4})$/
     );
     if (monthYear) {
-      const months: Record<string, string> = {
-        january: '01', february: '02', march: '03', april: '04',
-        may: '05', june: '06', july: '07', august: '08',
-        september: '09', october: '10', november: '11', december: '12',
-      };
-      const month = months[monthYear[1].toLowerCase()];
-      return `${monthYear[2]}-${month}-01`;
+      const month = monthLookup[monthYear[1].toLowerCase()];
+      if (month) {
+        return `${monthYear[2]}-${month}-01`;
+      }
     }
 
     // Try just year (e.g., "2026")
