@@ -8,15 +8,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { InvestmentScoringService } from '@/lib/investment';
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Auth check
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    // Auth check (supports both session and API key)
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

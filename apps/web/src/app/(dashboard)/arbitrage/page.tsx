@@ -379,6 +379,7 @@ function ArbitragePageContent() {
               sortField={ebayFilters.sortField}
               sortDirection={ebayFilters.sortDirection}
               onSort={handleEbaySort}
+              mode="ebay"
             />
           </TabsContent>
 

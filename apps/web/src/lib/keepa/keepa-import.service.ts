@@ -49,7 +49,7 @@ export class KeepaImportService {
     const results: KeepaImportResult[] = [];
 
     // Resolve ASINs to import
-    const asins = await this.resolveAsins(options);
+    let asins = await this.resolveAsins(options);
 
     if (asins.length === 0) {
       return {
@@ -65,6 +65,17 @@ export class KeepaImportService {
 
     // Build ASIN -> set_num mapping for storing snapshots
     const asinToSetNum = await this.buildAsinSetNumMap(asins);
+
+    // Skip ASINs that already have price_snapshots (avoid wasting Keepa tokens)
+    if (!options.asins) {
+      const alreadyImported = await this.getSetNumsWithPriceData();
+      const beforeCount = asins.length;
+      asins = asins.filter((asin) => {
+        const setNum = asinToSetNum.get(asin);
+        return !setNum || !alreadyImported.has(setNum);
+      });
+      console.log(`[KeepaImport] Skipping ${beforeCount - asins.length} ASINs with existing price data, ${asins.length} remaining`);
+    }
 
     // Process in batches of 10 (Keepa max per request)
     const batchSize = 10;
@@ -215,6 +226,44 @@ export class KeepaImportService {
     }
 
     return map;
+  }
+
+  /**
+   * Get set_nums that already have keepa price_snapshots data.
+   */
+  private async getSetNumsWithPriceData(): Promise<Set<string>> {
+    const setNums = new Set<string>();
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await this.supabase
+        .from('price_snapshots')
+        .select('set_num')
+        .eq('source', 'keepa_amazon_buybox')
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error('[KeepaImport] Error fetching existing price data:', error.message);
+        break;
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const row of data) {
+        const setNum = (row as unknown as Record<string, unknown>).set_num as string;
+        if (setNum) setNums.add(setNum);
+      }
+
+      hasMore = data.length === pageSize;
+      page++;
+    }
+
+    return setNums;
   }
 
   /**

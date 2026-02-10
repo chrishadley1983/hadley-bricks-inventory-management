@@ -28,6 +28,8 @@ import {
 } from '@/lib/arbitrage/calculations';
 import { AmazonOffersModal } from './AmazonOffersModal';
 
+type ArbitrageTableMode = 'bricklink' | 'ebay';
+
 interface ArbitrageTableProps {
   items: ArbitrageItem[];
   isLoading: boolean;
@@ -37,6 +39,7 @@ interface ArbitrageTableProps {
   sortField?: ArbitrageSortField;
   sortDirection?: SortDirection;
   onSort?: (field: ArbitrageSortField) => void;
+  mode?: ArbitrageTableMode;
 }
 
 // Sortable header component
@@ -91,6 +94,7 @@ export function ArbitrageTable({
   sortField,
   sortDirection,
   onSort,
+  mode = 'bricklink',
 }: ArbitrageTableProps) {
   const [offersModalItem, setOffersModalItem] = useState<ArbitrageItem | null>(null);
 
@@ -158,29 +162,22 @@ export function ArbitrageTable({
                 className="w-[8%]"
               />
               <SortableHeader
-                field="bl_price"
-                label="BL Min"
+                field={mode === 'ebay' ? 'ebay_price' : 'bl_price'}
+                label={mode === 'ebay' ? 'eBay Min' : 'BL Min'}
                 currentField={sortField}
                 direction={sortDirection}
                 onSort={onSort}
                 className="w-[10%]"
               />
               <SortableHeader
-                field="cog"
+                field={mode === 'ebay' ? 'ebay_margin' : 'cog'}
                 label="COG %"
                 currentField={sortField}
                 direction={sortDirection}
                 onSort={onSort}
                 className="w-[9%]"
               />
-              <SortableHeader
-                field="bl_lots"
-                label="BL Lots"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={onSort}
-                className="w-[6%]"
-              />
+              <TableHead className="w-[6%]">{mode === 'ebay' ? 'Listings' : 'BL Lots'}</TableHead>
               <TableHead className="w-[5%]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -191,6 +188,7 @@ export function ArbitrageTable({
                 item={item}
                 minMargin={minMargin}
                 maxCog={maxCog}
+                mode={mode}
                 onClick={() => onRowClick(item)}
                 onOffersClick={() => setOffersModalItem(item)}
               />
@@ -213,13 +211,17 @@ interface ArbitrageTableRowProps {
   item: ArbitrageItem;
   minMargin: number;
   maxCog: number;
+  mode: ArbitrageTableMode;
   onClick: () => void;
   onOffersClick: () => void;
 }
 
-function ArbitrageTableRow({ item, minMargin, maxCog, onClick, onOffersClick }: ArbitrageTableRowProps) {
+function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersClick }: ArbitrageTableRowProps) {
+  // Use the appropriate COG % based on mode
+  const cogValue = mode === 'ebay' ? item.ebayCogPercent : item.cogPercent;
+
   // Use COG % for opportunity detection (lower is better)
-  const cogIsGood = item.cogPercent !== null && item.cogPercent <= maxCog;
+  const cogIsGood = cogValue != null && cogValue <= maxCog;
   const isOpp = cogIsGood || isOpportunity(item.marginPercent, minMargin);
 
   // Determine effective price (buy box or lowest offer fallback)
@@ -380,14 +382,27 @@ function ArbitrageTableRow({ item, minMargin, maxCog, onClick, onOffersClick }: 
         </div>
       </TableCell>
 
-      {/* BL Min */}
+      {/* Source Min Price (BL or eBay) */}
       <TableCell>
-        <div className="font-mono font-semibold text-blue-600">
-          {formatCurrencyGBP(item.blMinPrice)}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Avg: {formatCurrencyGBP(item.blAvgPrice)}
-        </div>
+        {mode === 'ebay' ? (
+          <>
+            <div className="font-mono font-semibold text-purple-600">
+              {formatCurrencyGBP(item.ebayMinPrice)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Avg: {formatCurrencyGBP(item.ebayAvgPrice)}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-mono font-semibold text-blue-600">
+              {formatCurrencyGBP(item.blMinPrice)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Avg: {formatCurrencyGBP(item.blAvgPrice)}
+            </div>
+          </>
+        )}
       </TableCell>
 
       {/* COG % */}
@@ -395,27 +410,33 @@ function ArbitrageTableRow({ item, minMargin, maxCog, onClick, onOffersClick }: 
         <div
           className={cn(
             'font-mono font-bold',
-            item.cogPercent !== null && item.cogPercent <= maxCog
+            cogValue != null && cogValue <= maxCog
               ? 'text-green-600'
-              : item.cogPercent !== null && item.cogPercent > 70
+              : cogValue != null && cogValue > 70
               ? 'text-red-600'
               : 'text-muted-foreground'
           )}
         >
-          {item.cogPercent !== null ? `${item.cogPercent.toFixed(1)}%` : '—'}
+          {cogValue != null ? `${cogValue.toFixed(1)}%` : '—'}
         </div>
-        {item.minBlPriceOverride !== null && (
+        {mode === 'bricklink' && item.minBlPriceOverride != null && (
           <div className="text-xs text-amber-600" title="Override active">
-            ⚠️ Override
+            Override
           </div>
         )}
       </TableCell>
 
-      {/* BL Lots */}
+      {/* Lots / Listings */}
       <TableCell>
-        <Badge variant="outline" className="font-mono bg-blue-50 text-blue-700">
-          {item.blTotalLots ?? '—'}
-        </Badge>
+        {mode === 'ebay' ? (
+          <Badge variant="outline" className="font-mono bg-purple-50 text-purple-700">
+            {item.ebayTotalListings ?? '—'}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="font-mono bg-blue-50 text-blue-700">
+            {item.blTotalLots ?? '—'}
+          </Badge>
+        )}
       </TableCell>
 
       {/* Action */}
@@ -448,9 +469,9 @@ function ArbitrageTableSkeleton() {
             <TableHead className="w-[8%]">Offers</TableHead>
             <TableHead className="w-[10%]">Was Price</TableHead>
             <TableHead className="w-[8%]">Rank</TableHead>
-            <TableHead className="w-[10%]">BL Min</TableHead>
-            <TableHead className="w-[9%]">Margin</TableHead>
-            <TableHead className="w-[6%]">BL Lots</TableHead>
+            <TableHead className="w-[10%]">Source Min</TableHead>
+            <TableHead className="w-[9%]">COG %</TableHead>
+            <TableHead className="w-[6%]">Lots</TableHead>
             <TableHead className="w-[5%]"></TableHead>
           </TableRow>
         </TableHeader>

@@ -18,6 +18,10 @@ export interface KeepaProduct {
   title?: string;
   /** Sales rank history */
   salesRanks?: Record<string, number[]>;
+  /** EAN codes associated with this product */
+  eanList?: string[];
+  /** UPC codes associated with this product */
+  upcList?: string[];
 }
 
 export interface KeepaResponse {
@@ -26,6 +30,16 @@ export interface KeepaResponse {
   refillIn: number;
   refillRate: number;
   products?: KeepaProduct[];
+  error?: { type: string; message: string };
+}
+
+export interface KeepaFinderResponse {
+  timestamp: number;
+  tokensLeft: number;
+  refillIn: number;
+  refillRate: number;
+  asinList?: string[];
+  totalResults?: number;
   error?: { type: string; message: string };
 }
 
@@ -101,6 +115,7 @@ export class KeepaClient {
   private baseUrl = 'https://api.keepa.com';
   private tokensPerMinute = 20;
   private lastRequestTime = 0;
+  private tokensLeft = 0;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.KEEPA_API_KEY || '';
@@ -138,7 +153,7 @@ export class KeepaClient {
       history: '1', // Include full price history
     });
 
-    const response = await fetch(`${this.baseUrl}/product?${params.toString()}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/product?${params.toString()}`);
 
     if (!response.ok) {
       throw new Error(`Keepa API error: ${response.status} ${response.statusText}`);
@@ -150,6 +165,7 @@ export class KeepaClient {
       throw new Error(`Keepa API error: ${data.error.message}`);
     }
 
+    this.tokensLeft = data.tokensLeft;
     this.lastRequestTime = Date.now();
 
     return data.products ?? [];
@@ -232,15 +248,202 @@ export class KeepaClient {
   }
 
   /**
-   * Simple rate limiter: ensures minimum gap between requests.
-   * Keepa allows 20 tokens/min, each request costs ~3 tokens,
-   * so ~6 requests/min or one every 10 seconds.
+   * Batch lookup products by EAN/UPC codes from Amazon UK (domain 2).
+   * Up to 100 comma-separated codes per request. 1 token per matched product.
+   * Returns products without price history (history=0, stats=0).
    */
-  private async waitForRateLimit(): Promise<void> {
-    const minGapMs = 10_000; // 10 seconds between requests
+  async searchByCode(codes: string[]): Promise<KeepaProduct[]> {
+    if (!this.isConfigured()) {
+      throw new Error('Keepa API key not configured. Set KEEPA_API_KEY environment variable.');
+    }
+
+    if (codes.length > 100) {
+      throw new Error('Maximum 100 codes per Keepa searchByCode request');
+    }
+
+    await this.waitForRateLimit();
+
+    const params = new URLSearchParams({
+      key: this.apiKey,
+      domain: '2', // Amazon UK
+      code: codes.join(','),
+      history: '0',
+      stats: '0',
+    });
+
+    const response = await this.fetchWithRetry(`${this.baseUrl}/product?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Keepa API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: KeepaResponse = await response.json();
+
+    if (data.error) {
+      throw new Error(`Keepa API error: ${data.error.message}`);
+    }
+
+    this.tokensLeft = data.tokensLeft;
+    this.lastRequestTime = Date.now();
+
+    return data.products ?? [];
+  }
+
+  /**
+   * Lightweight ASIN lookup: fetch product metadata (title, EAN) without price history.
+   * Up to 100 ASINs per request, 1 token per product.
+   */
+  async fetchProductsLight(asins: string[]): Promise<KeepaProduct[]> {
+    if (!this.isConfigured()) {
+      throw new Error('Keepa API key not configured. Set KEEPA_API_KEY environment variable.');
+    }
+
+    if (asins.length > 100) {
+      throw new Error('Maximum 100 ASINs per Keepa fetchProductsLight request');
+    }
+
+    await this.waitForRateLimit();
+
+    const params = new URLSearchParams({
+      key: this.apiKey,
+      domain: '2', // Amazon UK
+      asin: asins.join(','),
+      history: '0',
+      stats: '0',
+    });
+
+    const response = await this.fetchWithRetry(`${this.baseUrl}/product?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Keepa API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: KeepaResponse = await response.json();
+
+    if (data.error) {
+      throw new Error(`Keepa API error: ${data.error.message}`);
+    }
+
+    this.tokensLeft = data.tokensLeft;
+    this.lastRequestTime = Date.now();
+
+    return data.products ?? [];
+  }
+
+  /**
+   * Fetch LEGO product ASINs from Amazon UK using Product Finder.
+   * 50 ASINs per page, 11 tokens per page.
+   */
+  async productFinder(page: number): Promise<{ asinList: string[]; totalResults: number }> {
+    if (!this.isConfigured()) {
+      throw new Error('Keepa API key not configured. Set KEEPA_API_KEY environment variable.');
+    }
+
+    await this.waitForRateLimit(11); // 11 tokens per Finder page
+
+    const selection = JSON.stringify({
+      brand: 'LEGO',
+      productType: 0,
+      page,
+      perPage: 50,
+    });
+
+    const params = new URLSearchParams({
+      key: this.apiKey,
+      domain: '2', // Amazon UK
+      selection,
+    });
+
+    const response = await this.fetchWithRetry(`${this.baseUrl}/query?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Keepa API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: KeepaFinderResponse = await response.json();
+
+    if (data.error) {
+      throw new Error(`Keepa API error: ${data.error.message}`);
+    }
+
+    this.tokensLeft = data.tokensLeft;
+    this.lastRequestTime = Date.now();
+
+    return {
+      asinList: data.asinList ?? [],
+      totalResults: data.totalResults ?? 0,
+    };
+  }
+
+  /** Current tokens remaining (updated after each request) */
+  get remainingTokens(): number {
+    return this.tokensLeft;
+  }
+
+  /**
+   * Fetch with automatic 429 retry. Waits for token refill and retries up to maxRetries times.
+   */
+  private async fetchWithRetry(
+    url: string,
+    maxRetries = 3
+  ): Promise<Response> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const response = await fetch(url);
+
+      if (response.status === 429) {
+        if (attempt === maxRetries) {
+          throw new Error(`Keepa API error: 429 Too Many Requests (after ${maxRetries} retries)`);
+        }
+        // Parse response to get refillIn
+        try {
+          const data = await response.json();
+          const refillIn = data.refillIn ?? 60_000;
+          const waitMs = Math.max(refillIn, 10_000) + 2_000;
+          console.log(
+            `[Keepa] 429 rate limited (attempt ${attempt + 1}/${maxRetries}), waiting ${Math.round(waitMs / 1000)}s for refill`
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          // Also reset rate limit state
+          this.tokensLeft = 0;
+          await this.waitForRateLimit(1);
+        } catch {
+          // If we can't parse the response, wait a fixed 60s
+          console.log(`[Keepa] 429 rate limited, waiting 60s`);
+          await new Promise((resolve) => setTimeout(resolve, 60_000));
+        }
+        continue;
+      }
+
+      return response;
+    }
+
+    throw new Error('Unreachable');
+  }
+
+  /**
+   * Token-aware rate limiter. Waits for token refill if balance is low,
+   * and ensures a minimum gap between requests.
+   *
+   * @param tokensNeeded - Estimated tokens this request will consume (default: 3)
+   */
+  async waitForRateLimit(tokensNeeded = 3): Promise<void> {
+    const minGapMs = 2_000; // 2s minimum gap between requests
+
+    // Wait for minimum gap
     const elapsed = Date.now() - this.lastRequestTime;
     if (elapsed < minGapMs) {
-      const waitMs = minGapMs - elapsed;
+      await new Promise((resolve) => setTimeout(resolve, minGapMs - elapsed));
+    }
+
+    // If we know our token balance is low, wait for refill
+    // tokensLeft is updated after each request from Keepa's response
+    if (this.tokensLeft > 0 && this.tokensLeft < tokensNeeded) {
+      // At 60 tokens/min refill, wait proportionally
+      const tokensShort = tokensNeeded - this.tokensLeft;
+      const waitMs = Math.ceil((tokensShort / this.tokensPerMinute) * 60_000) + 2_000;
+      console.log(
+        `[Keepa] Waiting ${Math.round(waitMs / 1000)}s for token refill (have ${this.tokensLeft}, need ${tokensNeeded})`
+      );
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }

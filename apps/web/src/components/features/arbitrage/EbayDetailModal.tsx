@@ -532,11 +532,11 @@ export function EbayDetailModal({
                                 <Star className="h-3 w-3 text-amber-500 fill-amber-500 flex-shrink-0" />
                                 <span className={cn(
                                   'text-xs flex-shrink-0',
-                                  listing.sellerFeedback >= 99 ? 'text-green-600' :
-                                  listing.sellerFeedback >= 95 ? 'text-amber-600' :
+                                  (listing.sellerFeedback ?? 0) >= 99 ? 'text-green-600' :
+                                  (listing.sellerFeedback ?? 0) >= 95 ? 'text-amber-600' :
                                   'text-red-600'
                                 )}>
-                                  {listing.sellerFeedback.toFixed(1)}%
+                                  {listing.sellerFeedback != null ? `${listing.sellerFeedback.toFixed(1)}%` : '—'}
                                 </span>
                               </div>
                             </td>
