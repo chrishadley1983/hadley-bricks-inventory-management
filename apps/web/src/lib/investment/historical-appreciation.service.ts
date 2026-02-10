@@ -23,7 +23,7 @@ export interface HistoricalAppreciationResult {
 interface RetiredSet {
   set_number: string;
   uk_retail_price: number | null;
-  expected_retirement_date: string | null;
+  retired_date: string | null; // COALESCE(exit_date, expected_retirement_date)
   has_amazon_listing: boolean | null;
 }
 
@@ -113,7 +113,7 @@ export class HistoricalAppreciationService {
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('brickset_sets')
-        .select('set_number, uk_retail_price, expected_retirement_date, has_amazon_listing')
+        .select('set_number, uk_retail_price, exit_date, expected_retirement_date, has_amazon_listing')
         .eq('retirement_status' as string, 'retired')
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -129,10 +129,12 @@ export class HistoricalAppreciationService {
 
       for (const row of data) {
         const record = row as unknown as Record<string, unknown>;
+        // Prefer exit_date (backfilled from Brickset CSV + us_date_removed), fall back to expected_retirement_date
+        const retiredDate = (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
         sets.push({
           set_number: record.set_number as string,
           uk_retail_price: record.uk_retail_price as number | null,
-          expected_retirement_date: record.expected_retirement_date as string | null,
+          retired_date: retiredDate,
           has_amazon_listing: record.has_amazon_listing as boolean | null,
         });
       }
@@ -208,7 +210,7 @@ export class HistoricalAppreciationService {
     const rrp = set.uk_retail_price;
     if (!rrp || rrp <= 0) return false;
 
-    const retiredDate = set.expected_retirement_date;
+    const retiredDate = set.retired_date;
     if (!retiredDate) return false;
 
     const priceAtRetirement = this.findPriceNearDate(snapshots, retiredDate);
@@ -227,7 +229,7 @@ export class HistoricalAppreciationService {
     snapshots: PriceSnapshot[]
   ): Promise<void> {
     const rrp = set.uk_retail_price;
-    const retiredDate = set.expected_retirement_date;
+    const retiredDate = set.retired_date;
 
     if (!rrp || rrp <= 0) {
       await this.upsertHistorical(set.set_number, {

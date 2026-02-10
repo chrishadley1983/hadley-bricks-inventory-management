@@ -287,17 +287,19 @@ export function ArbitrageDetailModal({
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1">
                         <span className="text-xs font-medium">Min Price Override</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-3 w-3 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p className="text-xs">
-                              Set a minimum BL price to override low prices from sellers with high minimum spend requirements.
-                              COG% will use MAX(actual BL min, override).
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="text-xs">
+                                Set a minimum BL price to override low prices from sellers with high minimum spend requirements.
+                                COG% will use MAX(actual BL min, override).
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-muted-foreground text-xs">£</span>
