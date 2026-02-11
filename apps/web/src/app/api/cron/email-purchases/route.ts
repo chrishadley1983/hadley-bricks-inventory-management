@@ -15,6 +15,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { discordService } from '@/lib/notifications';
+import { emailService } from '@/lib/email';
+import type { PurchaseImportEmailItem } from '@/lib/email';
 import { jobExecutionService } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
@@ -403,6 +405,76 @@ export async function POST(request: NextRequest) {
       };
 
       await discordService.send('sync-status', embed);
+    }
+
+    // 6. Send email summary with profit analysis
+    if (createdCount > 0 && importResult?.data?.created) {
+      try {
+        const createdItems: Array<{
+          email_id: string;
+          set_number: string;
+          set_name: string;
+          cost: number;
+          list_price: number | null;
+        }> = importResult.data.created;
+
+        // Build a lookup from enriched candidates for source/condition/bundle info
+        const enrichedMap = new Map(
+          enriched.map((e) => [`${e.email_id}:${e.set_number}`, e])
+        );
+
+        // Track which bundle groups have already had their first row labelled
+        const seenBundleGroups = new Set<string>();
+
+        const emailItems: PurchaseImportEmailItem[] = createdItems.map((c) => {
+          const e = enrichedMap.get(`${c.email_id}:${c.set_number}`);
+          const source = e?.source ?? 'Unknown';
+          const condition = e?.condition ?? 'Unknown';
+          const purchaseDate = e?.purchase_date ?? '';
+          const bundleGroup = e?.bundle_group;
+          const bundleTotalCost = e?.bundle_total_cost;
+
+          let purchaseLabel = '';
+          if (bundleGroup) {
+            if (!seenBundleGroups.has(bundleGroup)) {
+              seenBundleGroups.add(bundleGroup);
+              purchaseLabel = `\u00a3${(bundleTotalCost ?? c.cost).toFixed(2)} Bundle`;
+            }
+            // subsequent bundle items get empty label
+          } else {
+            purchaseLabel = `\u00a3${c.cost.toFixed(2)} (${source})`;
+          }
+
+          return {
+            set_number: c.set_number,
+            set_name: c.set_name,
+            source,
+            condition,
+            cost: c.cost,
+            list_price: c.list_price,
+            purchase_date: purchaseDate,
+            purchase_label: purchaseLabel,
+          };
+        });
+
+        const reviewItems = allSkipped.map((s) => ({
+          source: 'source' in s ? String(s.source) : 'Unknown',
+          item_name: ('item_name' in s ? String(s.item_name) : '') || 'Unknown item',
+          cost: 'cost' in s && s.cost != null ? Number(s.cost) : 0,
+        }));
+
+        await emailService.sendPurchaseImportSummary({
+          userEmail: 'chrishadley1983@gmail.com',
+          items: emailItems,
+          needsReview: reviewItems,
+          duration,
+        });
+
+        console.log(`[Cron EmailPurchases] Email summary sent (${emailItems.length} items)`);
+      } catch (emailErr) {
+        console.warn('[Cron EmailPurchases] Failed to send email summary:', emailErr);
+        // Email failure should not fail the cron
+      }
     }
 
     await execution.complete(

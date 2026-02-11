@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { LinkPurchaseDialog } from './LinkPurchaseDialog';
+import type { LinkedPurchaseData } from './LinkPurchaseDialog';
 
 interface BrickLinkUploadDetailProps {
   id: string;
@@ -56,12 +57,19 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
   const updateMutation = useUpdateBrickLinkUpload();
 
   const handleUnlink = async () => {
-    await updateMutation.mutateAsync({ id, data: { purchase_id: null } });
+    await updateMutation.mutateAsync({ id, data: { purchase_id: null, cost: null, source: null } });
     setShowUnlinkDialog(false);
   };
 
-  const handleLinkPurchase = async (purchaseId: string) => {
-    await updateMutation.mutateAsync({ id, data: { purchase_id: purchaseId } });
+  const handleLinkPurchase = async (purchase: LinkedPurchaseData) => {
+    await updateMutation.mutateAsync({
+      id,
+      data: {
+        purchase_id: purchase.id,
+        cost: purchase.cost,
+        source: purchase.source,
+      },
+    });
     setShowLinkDialog(false);
   };
 

@@ -36,6 +36,24 @@ export interface FeedRejectionParams {
   itemDetails: Array<{ sku: string; asin: string; setNumber: string; itemName: string }>;
 }
 
+export interface PurchaseImportEmailItem {
+  set_number: string;
+  set_name: string;
+  source: string;
+  condition: string;
+  cost: number;
+  list_price: number | null;
+  purchase_date: string;
+  purchase_label: string; // e.g. "£18.89 Bundle" or "£11.23 (Vinted)" — only on first item per purchase
+}
+
+export interface PurchaseImportSummaryParams {
+  userEmail: string;
+  items: PurchaseImportEmailItem[];
+  needsReview: Array<{ source: string; item_name: string; cost: number }>;
+  duration: number;
+}
+
 export interface TwoPhaseSuccessParams {
   userEmail: string;
   feedId: string;
@@ -271,6 +289,146 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
       subject: `✅ Amazon Sync Complete: ${itemCount} item(s) synced`,
       html,
     });
+  }
+  /**
+   * Send purchase import summary email with profit analysis table
+   */
+  async sendPurchaseImportSummary(params: PurchaseImportSummaryParams): Promise<void> {
+    const { userEmail, items, needsReview, duration } = params;
+
+    if (items.length === 0) return;
+
+    // Amazon FBM UK fee constants (self-contained, matches lib/arbitrage/calculations.ts)
+    const EFFECTIVE_FEE_RATE = 0.15 * 1.02 * 1.20; // 18.36%
+    const SHIPPING_THRESHOLD = 14.0;
+    const SHIPPING_LOW = 3.0;
+    const SHIPPING_HIGH = 4.0;
+
+    // Calculate per-item metrics
+    const rows = items.map((item) => {
+      const listPrice = item.list_price;
+      let cogPercent: number | null = null;
+      let profit: number | null = null;
+      let marginPercent: number | null = null;
+
+      if (listPrice && listPrice > 0) {
+        cogPercent = (item.cost / listPrice) * 100;
+        const fees = listPrice * EFFECTIVE_FEE_RATE;
+        const shipping = listPrice < SHIPPING_THRESHOLD ? SHIPPING_LOW : SHIPPING_HIGH;
+        profit = listPrice - fees - shipping - item.cost;
+        marginPercent = (profit / listPrice) * 100;
+      }
+
+      return { ...item, cogPercent, profit, marginPercent };
+    });
+
+    // Totals
+    const totalCost = rows.reduce((sum, r) => sum + r.cost, 0);
+    const totalListValue = rows.reduce((sum, r) => sum + (r.list_price ?? 0), 0);
+    const totalProfit = rows.reduce((sum, r) => sum + (r.profit ?? 0), 0);
+    const overallCogPercent = totalListValue > 0 ? (totalCost / totalListValue) * 100 : null;
+    const overallMarginPercent = totalListValue > 0 ? (totalProfit / totalListValue) * 100 : null;
+
+    const fmt = (n: number) => `£${n.toFixed(2)}`;
+    const pct = (n: number | null) => (n !== null ? `${n.toFixed(1)}%` : '-');
+
+    // Build HTML table rows
+    const tableRows = rows
+      .map((r) => {
+        const profitColor =
+          r.profit !== null ? (r.profit >= 0 ? '#27ae60' : '#e74c3c') : '#888';
+        return `<tr>
+          <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_label}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_date}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${r.set_number}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${r.set_name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;">${r.condition}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${fmt(r.cost)}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${r.list_price ? fmt(r.list_price) : '-'}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(r.cogPercent)}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;color:${profitColor};">${r.profit !== null ? fmt(r.profit) : '-'}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;color:${profitColor};">${pct(r.marginPercent)}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    // Totals row
+    const totalProfitColor = totalProfit >= 0 ? '#27ae60' : '#e74c3c';
+    const totalsRow = `<tr style="font-weight:bold;background:#f0f0f0;">
+      <td style="padding:6px 10px;border:1px solid #ddd;" colspan="5">Totals (${items.length} items)</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${fmt(totalCost)}</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${totalListValue > 0 ? fmt(totalListValue) : '-'}</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(overallCogPercent)}</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;color:${totalProfitColor};">${fmt(totalProfit)}</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;color:${totalProfitColor};">${pct(overallMarginPercent)}</td>
+    </tr>`;
+
+    // Needs review section
+    let reviewSection = '';
+    if (needsReview.length > 0) {
+      const reviewRows = needsReview
+        .map(
+          (r) =>
+            `<tr>
+            <td style="padding:4px 8px;border:1px solid #ddd;">${r.source}</td>
+            <td style="padding:4px 8px;border:1px solid #ddd;">${r.item_name}</td>
+            <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${fmt(r.cost)}</td>
+          </tr>`
+        )
+        .join('\n');
+
+      reviewSection = `
+        <h3 style="color:#e67e22;margin-top:24px;">⚠️ Needs Review (${needsReview.length})</h3>
+        <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;">
+          <thead>
+            <tr style="background:#fef3e2;">
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:left;">Source</th>
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:left;">Item</th>
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:right;">Cost</th>
+            </tr>
+          </thead>
+          <tbody>${reviewRows}</tbody>
+        </table>
+      `;
+    }
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;">
+        <h2 style="color:#333;">📦 Email Purchase Import Summary</h2>
+        <p style="color:#666;font-size:14px;">${items.length} item${items.length !== 1 ? 's' : ''} imported in ${Math.round(duration / 1000)}s</p>
+
+        <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;">
+          <thead>
+            <tr style="background:#2c3e50;color:#fff;">
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:left;">Purchase</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:left;">Date</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:left;">Set</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:left;">Name</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:center;">Cond</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Cost</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">List £</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">COG%</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Profit</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+            ${totalsRow}
+          </tbody>
+        </table>
+
+        ${reviewSection}
+
+        <p style="color:#999;font-size:11px;margin-top:24px;">
+          Profit calculated using Amazon FBM UK fees (18.36%) + shipping (£3/£4).
+        </p>
+      </div>
+    `;
+
+    const subject = `Email Purchase Import: ${items.length} item${items.length !== 1 ? 's' : ''} imported (${fmt(totalCost)} invested)`;
+
+    await this.send({ to: userEmail, subject, html });
   }
 }
 
