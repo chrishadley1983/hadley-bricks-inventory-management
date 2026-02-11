@@ -17,10 +17,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useDebouncedCallback } from 'use-debounce';
 
+export interface LinkedPurchaseData {
+  id: string;
+  cost: number;
+  source: string | null;
+}
+
 interface LinkPurchaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (purchaseId: string) => void;
+  onSelect: (purchase: LinkedPurchaseData) => void;
   uploadDate?: string;
 }
 
@@ -61,8 +67,8 @@ export function LinkPurchaseDialog({
     });
   }, [purchasesData?.data, uploadDate]);
 
-  const handleSelect = (purchaseId: string) => {
-    onSelect(purchaseId);
+  const handleSelect = (purchase: LinkedPurchaseData) => {
+    onSelect(purchase);
     setSearch('');
     setDebouncedSearch('');
   };
@@ -114,7 +120,7 @@ export function LinkPurchaseDialog({
                       key={purchase.id}
                       variant="ghost"
                       className="w-full justify-start h-auto py-3 px-3"
-                      onClick={() => handleSelect(purchase.id)}
+                      onClick={() => handleSelect({ id: purchase.id, cost: purchase.cost, source: purchase.source })}
                     >
                       <div className="flex flex-col items-start gap-1 text-left w-full">
                         <div className="flex items-center justify-between w-full">

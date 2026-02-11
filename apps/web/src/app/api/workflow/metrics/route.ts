@@ -153,20 +153,36 @@ export async function GET() {
       .gte('listing_date', format(weekStart, 'yyyy-MM-dd'))
       .lte('listing_date', format(weekEnd, 'yyyy-MM-dd'));
 
-    const bricklinkWeeklyValue =
-      bricklinkWeekItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0;
+    // Also include BrickLink uploads (batch uploads tracked in bricklink_uploads table)
+    const { data: bricklinkWeekUploads } = await supabase
+      .from('bricklink_uploads')
+      .select('selling_price')
+      .eq('user_id', user.id)
+      .gte('upload_date', format(weekStart, 'yyyy-MM-dd'))
+      .lte('upload_date', format(weekEnd, 'yyyy-MM-dd'));
 
-    // Get daily listed value (items listed today)
+    const bricklinkWeeklyValue =
+      (bricklinkWeekItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+      (bricklinkWeekUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
+
+    // Get daily listed value (items listed today + BrickLink uploads today)
     const { data: todayListedItems } = await supabase
       .from('inventory_items')
       .select('listing_value')
       .eq('user_id', user.id)
       .eq('listing_date', todayStr);
 
-    const todayListedValue =
-      todayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0;
+    const { data: todayBricklinkUploads } = await supabase
+      .from('bricklink_uploads')
+      .select('selling_price')
+      .eq('user_id', user.id)
+      .eq('upload_date', todayStr);
 
-    // Get week listed totals
+    const todayListedValue =
+      (todayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+      (todayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
+
+    // Get week listed totals (inventory items + BrickLink uploads)
     const { data: weekListedItems } = await supabase
       .from('inventory_items')
       .select('listing_value')
@@ -175,8 +191,9 @@ export async function GET() {
       .lte('listing_date', format(weekEnd, 'yyyy-MM-dd'));
 
     const weekListedValue =
-      weekListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0;
-    const weekListedCount = weekListedItems?.length ?? 0;
+      (weekListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+      (bricklinkWeekUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
+    const weekListedCount = (weekListedItems?.length ?? 0) + (bricklinkWeekUploads?.length ?? 0);
 
     // Get 7-day history for sparklines
     const history = {
@@ -189,15 +206,22 @@ export async function GET() {
       const date = subDays(today, i);
       const dateStr = format(date, 'yyyy-MM-dd');
 
-      // Listed value for the day
+      // Listed value for the day (inventory items + BrickLink uploads)
       const { data: dayListedItems } = await supabase
         .from('inventory_items')
         .select('listing_value')
         .eq('user_id', user.id)
         .eq('listing_date', dateStr);
 
+      const { data: dayBricklinkUploads } = await supabase
+        .from('bricklink_uploads')
+        .select('selling_price')
+        .eq('user_id', user.id)
+        .eq('upload_date', dateStr);
+
       history.dailyListedValue.push(
-        dayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0
+        (dayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+        (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
       );
 
       // Sold value for the day (order_date is a timestamp, so use range query)
@@ -211,7 +235,7 @@ export async function GET() {
 
       history.dailySoldValue.push(dayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0);
 
-      // BrickLink value for the day
+      // BrickLink value for the day (inventory items + uploads)
       const { data: dayBricklinkItems } = await supabase
         .from('inventory_items')
         .select('listing_value')
@@ -220,7 +244,8 @@ export async function GET() {
         .eq('listing_date', dateStr);
 
       history.bricklinkWeeklyValue.push(
-        dayBricklinkItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0
+        (dayBricklinkItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+        (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
       );
     }
 

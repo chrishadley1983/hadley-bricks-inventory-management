@@ -4,4 +4,6 @@ export type {
   TwoPhaseFailureParams,
   FeedRejectionParams,
   TwoPhaseSuccessParams,
+  PurchaseImportEmailItem,
+  PurchaseImportSummaryParams,
 } from './email.service';
