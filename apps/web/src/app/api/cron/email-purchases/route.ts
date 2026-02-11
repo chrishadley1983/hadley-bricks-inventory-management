@@ -65,6 +65,9 @@ interface ScanCandidate {
   email_date: string;
   payment_method: string;
   suggested_condition: 'New' | 'Used';
+  bundle_group?: string;
+  bundle_total_cost?: number;
+  bundle_index?: number;
 }
 
 interface EnrichedCandidate {
@@ -82,6 +85,9 @@ interface EnrichedCandidate {
   payment_method: string;
   amazon_asin?: string;
   list_price?: number;
+  bundle_group?: string;
+  bundle_total_cost?: number;
+  bundle_index?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -203,6 +209,9 @@ export async function POST(request: NextRequest) {
           payment_method: candidate.payment_method,
           amazon_asin: amazonAsin,
           list_price: listPrice,
+          bundle_group: candidate.bundle_group,
+          bundle_total_cost: candidate.bundle_total_cost,
+          bundle_index: candidate.bundle_index,
         });
       } catch (err) {
         console.warn(`[Cron EmailPurchases] Failed to enrich ${candidate.set_number}:`, err);
@@ -220,6 +229,9 @@ export async function POST(request: NextRequest) {
           purchase_date: candidate.purchase_date,
           condition: candidate.suggested_condition,
           payment_method: candidate.payment_method,
+          bundle_group: candidate.bundle_group,
+          bundle_total_cost: candidate.bundle_total_cost,
+          bundle_index: candidate.bundle_index,
         });
       }
     }
@@ -239,15 +251,49 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. Batch import
+    // 4. Batch import - separate standalone items from bundle groups
+    const bundleGroups = new Map<string, EnrichedCandidate[]>();
+    const standaloneItems: EnrichedCandidate[] = [];
+
+    for (const item of enriched) {
+      if (item.bundle_group) {
+        const group = bundleGroups.get(item.bundle_group) || [];
+        group.push(item);
+        bundleGroups.set(item.bundle_group, group);
+      } else {
+        standaloneItems.push(item);
+      }
+    }
+
+    // Convert bundle groups to import format
+    const bundleImports = Array.from(bundleGroups.values()).map(items => ({
+      email_id: items[0].email_id,
+      email_subject: items[0].email_subject,
+      email_date: items[0].email_date,
+      source: items[0].source,
+      order_reference: items[0].order_reference,
+      seller_username: items[0].seller_username,
+      total_cost: items[0].bundle_total_cost!,
+      purchase_date: items[0].purchase_date,
+      payment_method: items[0].payment_method,
+      items: items.map(i => ({
+        set_number: i.set_number,
+        set_name: i.set_name,
+        condition: i.condition,
+        amazon_asin: i.amazon_asin,
+        list_price: i.list_price,
+      })),
+    }));
+
+    console.log(`[Cron EmailPurchases] Importing ${standaloneItems.length} standalone + ${bundleImports.length} bundles (${enriched.length} total items)...`);
+
     let importResult = null;
     if (enriched.length > 0) {
-      console.log(`[Cron EmailPurchases] Importing ${enriched.length} enriched candidates...`);
-
       const importResponse = await internalFetch('/api/service/purchases/batch-import', {
         method: 'POST',
         body: JSON.stringify({
-          items: enriched,
+          items: standaloneItems,
+          bundles: bundleImports,
           skip_items: skipItems,
           automated: true,
           storage_location: 'TBC',

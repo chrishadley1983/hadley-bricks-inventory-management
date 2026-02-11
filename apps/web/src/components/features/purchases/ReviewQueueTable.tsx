@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { getReviewQueueColumns, REVIEW_COLUMN_DISPLAY_NAMES } from './ReviewQueueColumns';
 import {
@@ -35,7 +35,7 @@ interface BundleItem {
   condition: 'New' | 'Used';
 }
 
-const DEFAULT_BUNDLE_ITEM: BundleItem = { set_number: '', condition: 'Used' };
+const DEFAULT_BUNDLE_ITEM: BundleItem = { set_number: '', condition: 'New' };
 
 function formatCurrency(value: number): string {
   return `£${value.toFixed(2)}`;
@@ -156,6 +156,20 @@ export function ReviewQueueTable() {
     setBulkDismissIds(rows.map((r) => r.id));
   }, []);
 
+  // Refs for stable column definitions - prevents Input focus loss on keystroke
+  const bundleItemsRef = useRef(bundleItems);
+  bundleItemsRef.current = bundleItems;
+  const updateBundleItemRef = useRef(updateBundleItem);
+  updateBundleItemRef.current = updateBundleItem;
+  const addBundleItemRef = useRef(addBundleItem);
+  addBundleItemRef.current = addBundleItem;
+  const removeBundleItemRef = useRef(removeBundleItem);
+  removeBundleItemRef.current = removeBundleItem;
+  const handleApproveRef = useRef(handleApprove);
+  handleApproveRef.current = handleApprove;
+  const handleDismissRef = useRef(handleDismiss);
+  handleDismissRef.current = handleDismiss;
+
   const handleConfirmBulkDismiss = async () => {
     try {
       const result = await bulkDismissMutation.mutateAsync(bulkDismissIds);
@@ -172,6 +186,8 @@ export function ReviewQueueTable() {
   };
 
   // Extend columns with action column
+  // Uses refs for frequently-changing values to keep column definitions stable
+  // and prevent Input focus loss on every keystroke
   const columns = useMemo(() => {
     const baseColumns = getReviewQueueColumns();
 
@@ -183,7 +199,7 @@ export function ReviewQueueTable() {
         cell: ({ row }: { row: { original: ReviewQueueItem } }) => {
           const item = row.original;
           const isApproving = approvingId === item.id;
-          const items = getItemsForRow(item.id);
+          const items = bundleItemsRef.current[item.id] || [{ ...DEFAULT_BUNDLE_ITEM }];
 
           return (
             <div className="flex flex-col gap-1">
@@ -192,19 +208,19 @@ export function ReviewQueueTable() {
                   <Input
                     placeholder="e.g. 75192"
                     value={bundleItem.set_number}
-                    onChange={(e) => updateBundleItem(item.id, index, 'set_number', e.target.value)}
+                    onChange={(e) => updateBundleItemRef.current(item.id, index, 'set_number', e.target.value)}
                     className="h-8 w-24"
                     disabled={isApproving}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        handleApprove(item);
+                        handleApproveRef.current(item);
                       }
                     }}
                   />
                   <Select
                     value={bundleItem.condition}
                     onValueChange={(v: string) =>
-                      updateBundleItem(item.id, index, 'condition', v)
+                      updateBundleItemRef.current(item.id, index, 'condition', v)
                     }
                     disabled={isApproving}
                   >
@@ -221,7 +237,7 @@ export function ReviewQueueTable() {
                       size="sm"
                       variant="ghost"
                       className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeBundleItem(item.id, index)}
+                      onClick={() => removeBundleItemRef.current(item.id, index)}
                       disabled={isApproving}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -232,7 +248,7 @@ export function ReviewQueueTable() {
               {items.length < 10 && !isApproving && (
                 <button
                   type="button"
-                  onClick={() => addBundleItem(item.id)}
+                  onClick={() => addBundleItemRef.current(item.id)}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Plus className="h-3 w-3" />
@@ -251,7 +267,7 @@ export function ReviewQueueTable() {
           const item = row.original;
           const isApproving = approvingId === item.id;
           const isDismissing = dismissMutation.isPending;
-          const items = getItemsForRow(item.id);
+          const items = bundleItemsRef.current[item.id] || [{ ...DEFAULT_BUNDLE_ITEM }];
           const validCount = items.filter((i) => i.set_number.trim()).length;
 
           const importLabel =
@@ -263,7 +279,7 @@ export function ReviewQueueTable() {
                 size="sm"
                 variant="default"
                 className="h-8 gap-1"
-                onClick={() => handleApprove(item)}
+                onClick={() => handleApproveRef.current(item)}
                 disabled={validCount === 0 || isApproving}
               >
                 {isApproving ? (
@@ -277,7 +293,7 @@ export function ReviewQueueTable() {
                 size="sm"
                 variant="ghost"
                 className="h-8 gap-1 text-muted-foreground"
-                onClick={() => handleDismiss(item.id)}
+                onClick={() => handleDismissRef.current(item.id)}
                 disabled={isDismissing}
               >
                 <X className="h-3 w-3" />
@@ -289,16 +305,7 @@ export function ReviewQueueTable() {
         size: 220,
       },
     ];
-  }, [
-    approvingId,
-    dismissMutation.isPending,
-    getItemsForRow,
-    updateBundleItem,
-    addBundleItem,
-    removeBundleItem,
-    handleApprove,
-    handleDismiss,
-  ]);
+  }, [approvingId, dismissMutation.isPending]);
 
   if (error) {
     return (

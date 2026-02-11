@@ -41,8 +41,31 @@ const SkipItemSchema = z.object({
   skip_reason: z.string().min(1), // 'no_set_number', 'invalid_set', 'manual_skip', etc.
 });
 
+const BundleItemSchema = z.object({
+  set_number: z.string().min(1),
+  set_name: z.string().min(1),
+  condition: z.enum(['New', 'Used']),
+  amazon_asin: z.string().optional(),
+  list_price: z.number().positive().optional(),
+  storage_location: z.string().optional(),
+});
+
+const BundleSchema = z.object({
+  email_id: z.string().min(1),
+  email_subject: z.string().optional(),
+  email_date: z.string().optional(),
+  source: z.enum(['Vinted', 'eBay']),
+  order_reference: z.string().min(1),
+  seller_username: z.string().optional(),
+  total_cost: z.number().nonnegative(),
+  purchase_date: z.string().min(1),
+  payment_method: z.string().min(1),
+  items: z.array(BundleItemSchema).min(1).max(20),
+});
+
 const BatchImportSchema = z.object({
   items: z.array(ImportItemSchema).default([]),
+  bundles: z.array(BundleSchema).default([]),  // Bundle groups: 1 purchase per bundle, N inventory items
   skip_items: z.array(SkipItemSchema).default([]), // Items to mark as skipped
   automated: z.boolean().optional().default(false),
   storage_location: z.string().optional().default('TBC'),
@@ -95,7 +118,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { items, skip_items, automated, storage_location } = parsed.data;
+      const { items, bundles, skip_items, automated, storage_location } = parsed.data;
       const supabase = createServiceRoleClient();
       const userId = await getSystemUserId();
 
@@ -295,6 +318,244 @@ export async function POST(request: NextRequest) {
             order_reference: item.order_reference,
             error: err instanceof Error ? err.message : 'Unknown error',
           });
+        }
+      }
+
+      // Process bundles: 1 purchase per bundle, N inventory items with cost allocation
+      for (const bundle of bundles) {
+        try {
+          // Check if email already processed
+          const { data: existingBundleEmail } = await supabase
+            .from('processed_purchase_emails')
+            .select('id')
+            .eq('email_id', bundle.email_id)
+            .limit(1)
+            .single();
+
+          if (existingBundleEmail) {
+            for (const bItem of bundle.items) {
+              failed.push({
+                email_id: bundle.email_id,
+                set_number: bItem.set_number,
+                order_reference: bundle.order_reference,
+                error: 'Email already processed',
+              });
+            }
+            continue;
+          }
+
+          // 1. Create 1 purchase for the bundle (total cost)
+          const { data: bundlePurchase, error: bundlePurchaseError } = await supabase
+            .from('purchases')
+            .insert({
+              user_id: userId,
+              source: bundle.source,
+              cost: bundle.total_cost,
+              payment_method: bundle.payment_method,
+              purchase_date: bundle.purchase_date,
+              short_description: `Bundle: ${bundle.items.map(i => i.set_number).join(', ')}`,
+              description: `Bundle of ${bundle.items.length} sets from ${bundle.seller_username || bundle.source}`,
+              reference: bundle.order_reference,
+            })
+            .select('id')
+            .single();
+
+          if (bundlePurchaseError || !bundlePurchase) {
+            await supabase.from('processed_purchase_emails').insert({
+              email_id: bundle.email_id,
+              source: bundle.source,
+              order_reference: bundle.order_reference,
+              status: 'failed',
+              error_message: bundlePurchaseError?.message || 'Failed to create bundle purchase',
+              email_subject: bundle.email_subject,
+              email_date: bundle.email_date,
+              item_name: bundle.items.map(i => i.set_name).join(', '),
+              cost: bundle.total_cost,
+              seller_username: bundle.seller_username,
+            });
+            for (const bItem of bundle.items) {
+              failed.push({
+                email_id: bundle.email_id,
+                set_number: bItem.set_number,
+                order_reference: bundle.order_reference,
+                error: bundlePurchaseError?.message || 'Failed to create bundle purchase',
+              });
+            }
+            continue;
+          }
+
+          // 2. Allocate costs proportionally by list_price, fallback to equal split
+          const allHaveListPrice = bundle.items.every(i => i.list_price != null);
+          let allocatedCosts: number[];
+
+          if (allHaveListPrice) {
+            const totalListPrice = bundle.items.reduce((sum, i) => sum + (i.list_price || 0), 0);
+            allocatedCosts = bundle.items.map(i => {
+              const proportion = (i.list_price || 0) / totalListPrice;
+              return Math.round(proportion * bundle.total_cost * 100) / 100;
+            });
+          } else {
+            const equalCost = Math.round((bundle.total_cost / bundle.items.length) * 100) / 100;
+            allocatedCosts = bundle.items.map(() => equalCost);
+          }
+          // Fix rounding error on last item
+          const allocatedSum = allocatedCosts.reduce((s, c) => s + c, 0);
+          const diff = Math.round((bundle.total_cost - allocatedSum) * 100) / 100;
+          allocatedCosts[allocatedCosts.length - 1] += diff;
+
+          // 3. Create N inventory items
+          const createdInventoryIds: string[] = [];
+          let bundleCreateFailed = false;
+
+          for (let i = 0; i < bundle.items.length; i++) {
+            const bItem = bundle.items[i];
+            const allocatedCost = allocatedCosts[i];
+
+            // Generate SKU
+            const skuPrefix = bItem.condition === 'New' ? 'N' : 'U';
+            const { data: skuRows2 } = await supabase
+              .from('inventory_items')
+              .select('sku')
+              .not('sku', 'is', null)
+              .order('created_at', { ascending: false })
+              .limit(200);
+
+            let maxNum2 = 0;
+            if (skuRows2) {
+              for (const row of skuRows2) {
+                const match = row.sku?.match(/^[NU](\d+)$/);
+                if (match) {
+                  const num = parseInt(match[1], 10);
+                  if (num > maxNum2) maxNum2 = num;
+                }
+              }
+            }
+            const newSku2 = `${skuPrefix}${maxNum2 + 1}`;
+
+            const storLoc = bItem.storage_location || storage_location || 'TBC';
+            const { data: bundleInv, error: bundleInvError } = await supabase
+              .from('inventory_items')
+              .insert({
+                user_id: userId,
+                set_number: bItem.set_number,
+                item_name: bItem.set_name,
+                condition: bItem.condition,
+                cost: allocatedCost,
+                purchase_id: bundlePurchase.id,
+                linked_lot: bundle.order_reference,
+                source: bundle.source,
+                purchase_date: bundle.purchase_date,
+                listing_platform: 'amazon',
+                storage_location: storLoc,
+                amazon_asin: bItem.amazon_asin,
+                listing_value: bItem.list_price,
+                sku: newSku2,
+                status: 'Not Yet Received',
+                notes: `Auto-imported (bundle ${i + 1}/${bundle.items.length}). Seller: ${bundle.seller_username || 'unknown'}. https://mail.google.com/mail/u/0/#all/${bundle.email_id}`,
+              })
+              .select('id')
+              .single();
+
+            if (bundleInvError || !bundleInv) {
+              bundleCreateFailed = true;
+              break;
+            }
+            createdInventoryIds.push(bundleInv.id);
+          }
+
+          if (bundleCreateFailed) {
+            // Rollback: delete all created inventory items and the purchase
+            for (const invId of createdInventoryIds) {
+              await supabase.from('inventory_items').delete().eq('id', invId);
+            }
+            await supabase.from('purchases').delete().eq('id', bundlePurchase.id);
+
+            await supabase.from('processed_purchase_emails').insert({
+              email_id: bundle.email_id,
+              source: bundle.source,
+              order_reference: bundle.order_reference,
+              status: 'failed',
+              error_message: 'Failed to create all inventory items in bundle',
+              email_subject: bundle.email_subject,
+              email_date: bundle.email_date,
+              item_name: bundle.items.map(i => i.set_name).join(', '),
+              cost: bundle.total_cost,
+              seller_username: bundle.seller_username,
+            });
+            for (const bItem of bundle.items) {
+              failed.push({
+                email_id: bundle.email_id,
+                set_number: bItem.set_number,
+                order_reference: bundle.order_reference,
+                error: 'Bundle creation failed (rolled back)',
+              });
+            }
+            continue;
+          }
+
+          // 4. Record success - 1 processed_purchase_emails entry per bundle
+          await supabase.from('processed_purchase_emails').insert({
+            email_id: bundle.email_id,
+            source: bundle.source,
+            order_reference: bundle.order_reference,
+            purchase_id: bundlePurchase.id,
+            status: 'imported',
+            email_subject: bundle.email_subject,
+            email_date: bundle.email_date,
+            item_name: bundle.items.map(i => `${i.set_number} ${i.set_name}`).join(', '),
+            cost: bundle.total_cost,
+            seller_username: bundle.seller_username,
+          });
+
+          // Add to results
+          for (let i = 0; i < bundle.items.length; i++) {
+            const bItem = bundle.items[i];
+            const allocatedCost = allocatedCosts[i];
+
+            let roiPercent: number | null = null;
+            if (bItem.list_price && allocatedCost > 0) {
+              const estimatedNetRevenue = bItem.list_price * 0.85;
+              const profit = estimatedNetRevenue - allocatedCost;
+              roiPercent = Math.round((profit / allocatedCost) * 100);
+            }
+
+            created.push({
+              purchase_id: bundlePurchase.id,
+              inventory_id: createdInventoryIds[i],
+              email_id: bundle.email_id,
+              set_number: bItem.set_number,
+              set_name: bItem.set_name,
+              cost: allocatedCost,
+              list_price: bItem.list_price || null,
+              roi_percent: roiPercent,
+            });
+
+            totalInvested += allocatedCost;
+            if (bItem.list_price) {
+              totalExpectedRevenue += bItem.list_price;
+            }
+          }
+        } catch (err) {
+          await supabase.from('processed_purchase_emails').insert({
+            email_id: bundle.email_id,
+            source: bundle.source,
+            order_reference: bundle.order_reference,
+            status: 'failed',
+            error_message: err instanceof Error ? err.message : 'Unknown error',
+            email_subject: bundle.email_subject,
+            email_date: bundle.email_date,
+            item_name: bundle.items.map(i => i.set_name).join(', '),
+            cost: bundle.total_cost,
+            seller_username: bundle.seller_username,
+          });
+          for (const bItem of bundle.items) {
+            failed.push({
+              email_id: bundle.email_id,
+              set_number: bItem.set_number,
+              order_reference: bundle.order_reference,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
+          }
         }
       }
 
