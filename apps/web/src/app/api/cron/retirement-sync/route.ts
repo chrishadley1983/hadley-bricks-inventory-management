@@ -17,6 +17,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { RetirementSyncService } from '@/lib/retirement';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes
@@ -24,6 +26,7 @@ export const maxDuration = 300; // 5 minutes
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // 1. Verify cron secret
     const authHeader = request.headers.get('authorization');
@@ -33,6 +36,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron RetirementSync] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('retirement-sync', 'cron');
 
     // 2. Run sync
     const supabase = createServiceRoleClient();
@@ -74,6 +79,14 @@ export async function POST(request: NextRequest) {
       JSON.stringify({ sources: result.sources, rollup: result.rollup })
     );
 
+    const sourcesAllSuccess = Object.values(result.sources).every((r) => r.success);
+    await execution.complete(
+      { sources: result.sources, rollup: result.rollup },
+      200,
+      result.rollup.sets_updated,
+      sourcesAllSuccess ? 0 : 1
+    );
+
     return NextResponse.json({
       success: true,
       sources: result.sources,
@@ -89,6 +102,7 @@ export async function POST(request: NextRequest) {
       `[Cron RetirementSync] Failed after ${duration}ms:`,
       error
     );
+    await execution.fail(error, 500);
 
     try {
       await discordService.sendAlert({

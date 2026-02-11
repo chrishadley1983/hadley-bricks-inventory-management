@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { ArbitrageWatchlistService } from '@/lib/arbitrage';
 import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes
@@ -18,6 +20,7 @@ const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret
     const authHeader = request.headers.get('authorization');
@@ -27,6 +30,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron RefreshWatchlist] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('refresh-watchlist', 'cron');
 
     const supabase = createServiceRoleClient();
     const watchlistService = new ArbitrageWatchlistService(supabase);
@@ -55,6 +60,8 @@ export async function POST(request: NextRequest) {
       console.error('[Cron RefreshWatchlist] Discord notification failed:', discordError);
     }
 
+    await execution.complete({ added: result.added, removed: result.removed, total: result.total }, 200, result.total, 0);
+
     return NextResponse.json({
       success: true,
       ...result,
@@ -65,6 +72,7 @@ export async function POST(request: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
     console.error('[Cron RefreshWatchlist] Error:', error);
+    await execution.fail(error, 500);
 
     // Send error notification to Discord
     try {

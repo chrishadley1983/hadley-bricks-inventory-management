@@ -37,6 +37,7 @@ const SkipItemSchema = z.object({
   email_date: z.string().optional(),
   item_name: z.string().optional(),
   cost: z.number().optional(),
+  seller_username: z.string().optional(),
   skip_reason: z.string().min(1), // 'no_set_number', 'invalid_set', 'manual_skip', etc.
 });
 
@@ -324,6 +325,7 @@ export async function POST(request: NextRequest) {
             email_date: skipItem.email_date,
             item_name: skipItem.item_name,
             cost: skipItem.cost,
+            seller_username: skipItem.seller_username,
           });
 
           skipped.push({

@@ -15,6 +15,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayFpDetectorService, DEFAULT_USER_ID, DEFAULT_THRESHOLD } from '@/lib/arbitrage';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - Vercel Pro limit
@@ -24,6 +26,7 @@ const JOB_TYPE = 'ebay_fp_cleanup';
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret (skip if not set - development mode)
     const authHeader = request.headers.get('authorization');
@@ -33,6 +36,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron EbayFpCleanup] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('ebay-fp-cleanup', 'cron');
 
     console.log('[Cron EbayFpCleanup] Starting false-positive cleanup job');
 
@@ -111,6 +116,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    await execution.complete(
+      { itemsFlagged: result.itemsFlagged, itemsExcluded: result.itemsExcluded, topReasons: result.topReasons },
+      200, result.itemsScanned, result.errors
+    );
+
     return NextResponse.json({
       success: result.success,
       itemsScanned: result.itemsScanned,
@@ -127,6 +137,7 @@ export async function POST(request: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
     console.error('[Cron EbayFpCleanup] Error:', error);
+    await execution.fail(error, 500);
 
     // Update status with error
     const supabase = createServiceRoleClient();

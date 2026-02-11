@@ -15,11 +15,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getNegotiationService } from '@/lib/ebay/negotiation.service';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
 
 export async function POST(request: NextRequest) {
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret (Vercel adds Authorization header for cron jobs)
     const authHeader = request.headers.get('authorization');
@@ -31,6 +34,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron Negotiation] Unauthorized request - invalid or missing Authorization header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('negotiation', 'cron');
 
     console.log('[Cron Negotiation] Starting automated offer processing');
 
@@ -143,6 +148,8 @@ export async function POST(request: NextRequest) {
       `${totalOffersSent} offers sent, ${totalOffersFailed} failed`
     );
 
+    await execution.complete({ usersProcessed: configs.length, totalStatusSynced }, 200, totalOffersSent, totalOffersFailed);
+
     return NextResponse.json({
       success: true,
       usersProcessed: configs.length,
@@ -153,6 +160,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Cron Negotiation] Error:', error);
+    await execution.fail(error, 500);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal error' },
       { status: 500 }

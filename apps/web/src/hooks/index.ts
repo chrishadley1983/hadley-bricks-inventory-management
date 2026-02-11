@@ -90,3 +90,11 @@ export {
   type ProcessVintedScreenshotResult,
 } from './use-vinted-import';
 export { usePerf, usePerfPage, usePerfQuery } from './use-perf';
+export {
+  useReviewQueue,
+  useReviewQueueCount,
+  useApproveReviewItem,
+  useDismissReviewItem,
+  useBulkDismissReviewItems,
+  reviewQueueKeys,
+} from './use-review-queue';

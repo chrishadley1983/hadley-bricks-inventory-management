@@ -1,0 +1,353 @@
+# Claude Code CLI `--chrome` Flag Not Connecting to Browser Extension
+
+**Date:** 2026-01-29
+
+## Summary
+
+Claude Code CLI's `--chrome` flag cannot connect to the Chrome extension when Claude Desktop is also installed. This is a **known bug** with multiple GitHub issues tracking it. The CLI and extension use completely separate communication paths and never connect to each other.
+
+**Status:** RESOLVED via community patch (applied 2026-02-07)
+
+## Environment
+
+| Component | Version |
+|-----------|---------|
+| OS | Windows 11 (Build 10.0.26200.7623) |
+| Claude Code CLI | 2.1.23 |
+| Claude Desktop | 1.1.1093 (multiple versions installed: 1.1.673, 1.1.886, 1.1.1093) |
+| Chrome Extension | 1.0.41 |
+| Node.js | v24.11.1 |
+
+## Issue
+
+Claude Code CLI with `--chrome` flag reports "Browser extension is not connected" even when:
+- The Chrome extension is installed and enabled
+- The user is logged into the extension
+- The extension responds to prompts in the Chrome popup (confirmed working)
+- Claude Desktop is completely closed
+- Chrome has been restarted
+- The native host is manually started and listening
+
+**Last working:** January 26, 2026
+**Stopped working:** January 27, 2026
+
+## Test Command
+
+```powershell
+claude --chrome -p "Navigate to google.com and tell me the title"
+```
+
+## Result
+
+```
+The browser extension is not connected. To use browser automation, please ensure:
+1. The Claude browser extension is installed in Chrome
+2. Chrome is running
+3. The extension is active
+```
+
+---
+
+## Extensive Debugging Performed
+
+### 1. Extension Status
+- Extension version: 1.0.41
+- Extension ID: `fcoeoabgfenejglbffodgkkbkcdhcgfn`
+- Extension responds to prompts in Chrome popup - **WORKING**
+- Extension service worker DevTools console shows **NO ACTIVITY** when CLI attempts connection
+
+### 2. Native Host Manual Test
+
+**Command:**
+```powershell
+& "C:\Users\Chris Hadley\.claude\chrome\chrome-native-host.bat"
+```
+
+**Result when pipe is free:**
+```
+[Claude Chrome Native Host] Initializing...
+[Claude Chrome Native Host] Creating socket listener: \\.\pipe\claude-mcp-browser-bridge-Chris Hadley
+[Claude Chrome Native Host] Socket server listening for connections
+```
+
+**The native host starts successfully and listens for connections, but the CLI still reports "extension not connected".**
+
+### 3. Named Pipe Analysis
+
+Used Sysinternals Handle64.exe to identify what holds the pipe:
+
+```powershell
+# Download Handle tool
+curl -L -o "$TEMP/Handle.zip" https://download.sysinternals.com/files/Handle.zip
+unzip -o "$TEMP/Handle.zip" -d "$TEMP/Handle"
+
+# Find process holding the pipe
+"$TEMP/Handle/handle64.exe" -a "claude-mcp-browser-bridge" -accepteula
+```
+
+**Finding:** Chrome spawns a native host process that creates and holds the pipe:
+```
+node.exe  pid: XXXXX  type: File  \Device\NamedPipe\claude-mcp-browser-bridge-Chris Hadley
+```
+
+The parent process is Chrome launching the native host batch file:
+```
+cmd.exe /d /s /c "C:\Users\Chris Hadley\.claude\chrome\chrome-native-host.bat" chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/ --parent-window=0
+```
+
+**This proves Chrome IS spawning the native host correctly.**
+
+### 4. Registry Configuration
+
+Both native messaging hosts are registered:
+
+```
+HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_browser_extension
+HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_code_browser_extension
+```
+
+We tried:
+- Pointing `claude_browser_extension` to Claude Code's config file
+- Deleting `claude_browser_extension` entirely (leaving only `claude_code_browser_extension`)
+- Neither approach fixed the issue
+
+### 5. Native Host Config Files
+
+**Claude Code config** (`C:\Users\Chris Hadley\AppData\Roaming\Claude Code\ChromeNativeHost\com.anthropic.claude_browser_extension.json`):
+```json
+{
+  "name": "com.anthropic.claude_browser_extension",
+  "description": "Claude Browser Extension Native Host (redirected to Claude Code)",
+  "path": "C:\\Users\\Chris Hadley\\.claude\\chrome\\chrome-native-host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/"
+  ]
+}
+```
+
+**Claude Desktop config** (`C:\Users\Chris Hadley\AppData\Roaming\Claude\ChromeNativeHost\com.anthropic.claude_browser_extension.json`):
+```json
+{
+  "name": "com.anthropic.claude_browser_extension",
+  "description": "Claude Browser Extension Native Host",
+  "path": "C:\\Users\\Chris Hadley\\AppData\\Local\\AnthropicClaude\\app-1.1.673\\resources\\chrome-native-host.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://dihbgbndebgnbjfmelmegjepbnkhlgni/",
+    "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/",
+    "chrome-extension://dngcpimnedloihjnnfngkgjoidhnaolf/"
+  ]
+}
+```
+
+### 6. Native Host Batch File
+
+**Path:** `C:\Users\Chris Hadley\.claude\chrome\chrome-native-host.bat`
+```batch
+@echo off
+REM Chrome native host wrapper script
+REM Generated by Claude Code - do not edit manually
+"C:\Program Files\nodejs\node.exe" "C:\Users\Chris Hadley\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\cli.js" --chrome-native-host
+```
+
+All referenced files exist and are accessible.
+
+---
+
+## Root Cause Analysis
+
+### The Architecture Problem
+
+1. **Chrome extension** communicates with **native messaging host** via Chrome's Native Messaging API
+2. **Native host** creates a named pipe and listens for connections
+3. **Claude Code CLI** should connect to that pipe as a client
+
+**But:** The CLI tries to CREATE the same pipe instead of CONNECTING to it. When Chrome has already spawned a native host (holding the pipe), the CLI fails with `EADDRINUSE`.
+
+### The Deeper Issue
+
+Even when we:
+- Kill the existing native host process
+- Manually start the native host (successfully listening)
+- Run the CLI
+
+The CLI **still** reports "extension not connected" and the extension service worker shows **zero activity**.
+
+**Conclusion:** The CLI and extension are using completely separate communication paths. The CLI never reaches the extension at all.
+
+---
+
+## Workarounds Attempted (All Failed)
+
+| Workaround | Result |
+|------------|--------|
+| Close Claude Desktop completely | ❌ Failed |
+| Restart Chrome | ❌ Failed |
+| Update registry to point to Claude Code's config | ❌ Failed |
+| Delete Desktop's registry key entirely | ❌ Failed |
+| Fresh PowerShell terminal (not from VS Code) | ❌ Failed |
+| Kill stale native host processes | ❌ Failed (new ones spawn, CLI still fails) |
+| Manually start native host then run CLI | ❌ Failed |
+
+## Potential Fix (Untested)
+
+**Uninstall Claude Desktop entirely** - This is reported to work in GitHub issues and community posts, but we have not verified this ourselves.
+
+**Test plan for laptop:**
+1. Ensure Claude Desktop is NOT installed
+2. Install Claude Code CLI
+3. Install Chrome extension
+4. Run `claude --chrome -p "Navigate to google.com and tell me the title"`
+5. Verify if it works
+
+---
+
+## Related GitHub Issues
+
+- [#20546](https://github.com/anthropics/claude-code/issues/20546) - Chrome extension conflict: Claude Desktop and Claude Code CLI compete for same extension
+- [#20887](https://github.com/anthropics/claude-code/issues/20887) - Extension connects to Desktop instead of Code
+- [#20943](https://github.com/anthropics/claude-code/issues/20943) - Conflict over native messaging host
+- [#21300](https://github.com/anthropics/claude-code/issues/21300) - Windows-specific connection issue
+- [#20862](https://github.com/anthropics/claude-code/issues/20862) - MCP tools fail despite showing connected
+- [#20298](https://github.com/anthropics/claude-code/issues/20298) - Extension not connecting
+
+---
+
+## File Locations Summary
+
+| Component | Path |
+|-----------|------|
+| Native host batch | `C:\Users\Chris Hadley\.claude\chrome\chrome-native-host.bat` |
+| CLI native host config | `C:\Users\Chris Hadley\AppData\Roaming\Claude Code\ChromeNativeHost\` |
+| Desktop native host config | `C:\Users\Chris Hadley\AppData\Roaming\Claude\ChromeNativeHost\` |
+| Registry key (Desktop) | `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_browser_extension` |
+| Registry key (CLI) | `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_code_browser_extension` |
+| Named pipe | `\\.\pipe\claude-mcp-browser-bridge-Chris Hadley` |
+| Sysinternals Handle tool | `%TEMP%\Handle\handle64.exe` |
+
+---
+
+## Timeline
+
+| Date | Event |
+|------|-------|
+| Jan 21 | Native host batch file created |
+| Jan 26 | Claude Code CLI `--chrome` last working |
+| Jan 27 | Stopped working; redirect config file created (attempted fix) |
+| Jan 28 02:01 | Claude Desktop auto-updated |
+| Jan 29 | Extensive debugging performed, root cause identified as architectural bug |
+
+---
+
+## Resolution: Community Patch (2026-02-07)
+
+### Root Cause Confirmed
+
+Two bugs in Claude Code CLI v2.1.20+ on Windows:
+
+1. **`getSocketPaths()` (minified as `Gc4()`) missing Windows support** - The function scans Unix temp directories for `.sock` files. On Windows, these don't exist. The function never returns the correct Windows named pipe path `\\.\pipe\claude-mcp-browser-bridge-{username}`, so the MCP connector can never find the native host.
+
+2. **Bun binary crash** - `claude.exe` panics on stdin when invoked as `--chrome-native-host`. Mitigated by the native host batch file using `node.exe` directly (already in place).
+
+### The Fix
+
+A 1-line addition to `Gc4()` in the minified `cli.js` that adds a Windows early-return:
+
+```javascript
+// BEFORE (broken on Windows):
+function Gc4(){let A=[],q=ZQ1();try{...}
+
+// AFTER (fixed):
+function Gc4(){if(qCY()==="win32")return[`\\\\.\\pipe\\claude-mcp-browser-bridge-${ILA()}`];let A=[],q=ZQ1();try{...}
+```
+
+**Patch script:** `patch-chrome.js` in project root. Re-run after any Claude Code update:
+```powershell
+node patch-chrome.js
+```
+
+**Backup:** `cli.js.bak` in `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\`
+
+### Patched File
+
+| Component | Path |
+|-----------|------|
+| Patched file | `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\cli.js` |
+| Backup | `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\cli.js.bak` |
+| Patch script | `patch-chrome.js` (project root) |
+
+### Verified Environment
+
+| Component | Version |
+|-----------|---------|
+| Claude Code CLI | 2.1.34 |
+| Claude Desktop | 1.1.2321 (running simultaneously) |
+| Node.js | v24.11.1 |
+
+### Integration Test Results (2026-02-07)
+
+| Test | Status | Details |
+|------|--------|---------|
+| Chrome connection | PASSED | CLI connects to extension via named pipe |
+| Headed browser | PASSED | Visible Chrome window, not headless |
+| Basic query | PASSED | `claude --chrome -p "What is 2+2"` returned `4` |
+| Browser navigation | PASSED | Navigated to google.com, returned page title |
+| Vinted page load | PASSED | No Datadome, no CAPTCHA, logged in as hadlinho83 |
+| Broad sweep scan | PASSED | 10 LEGO listings extracted with valid JSON schema |
+| Watchlist scan (75192) | PASSED | 7 Millennium Falcon listings, correctly filtered |
+| JSON output format | PASSED | `--output-format json` returns valid ScanResult schema |
+| Co-existence with Desktop | PASSED | Claude Desktop v1.1.2321 running simultaneously |
+
+**Broad sweep sample output:**
+```json
+{
+  "success": true,
+  "captchaDetected": false,
+  "listings": [
+    {"title": "Lego Sonic Campfire Clash", "price": 10, "currency": "GBP", "vintedListingId": "8122673663"},
+    {"title": "Ninjago Dragon Riyus Battle 71855", "price": 25, "currency": "GBP", "vintedListingId": "8122668947"},
+    {"title": "Disney Lego Set Marie 43286", "price": 25, "currency": "GBP", "vintedListingId": "8122663501"}
+  ],
+  "pagesScanned": 1
+}
+```
+
+**Watchlist scan (75192) sample output:**
+```json
+{
+  "success": true,
+  "captchaDetected": false,
+  "listings": [
+    {"title": "Lego Starwars Millenium Falcon 75192", "price": 700, "currency": "GBP", "vintedListingId": "7891685065"},
+    {"title": "Lego Star Wars 75192 Millennium Falcon", "price": 549.95, "currency": "GBP", "vintedListingId": "5737049396"}
+  ],
+  "pagesScanned": 1
+}
+```
+
+### Additional GitHub Issues (discovered 2026-02-07)
+
+- [#21791](https://github.com/anthropics/claude-code/issues/21791) - EADDRINUSE: Native Host and MCP Server both try to create pipe listener
+- [#23828](https://github.com/anthropics/claude-code/issues/23828) - Claude-in-Chrome completely broken on Windows: two bugs with community fix
+
+### Caveat
+
+The patch is overwritten on every Claude Code update. Run `node patch-chrome.js` after updating. The official fix has not been shipped by Anthropic as of v2.1.34.
+
+---
+
+## Timeline
+
+| Date | Event |
+|------|-------|
+| Jan 21 | Native host batch file created |
+| Jan 26 | Claude Code CLI `--chrome` last working (v2.1.19) |
+| Jan 27 | Stopped working; redirect config file created (attempted fix) |
+| Jan 28 02:01 | Claude Desktop auto-updated |
+| Jan 29 | Extensive debugging performed, root cause identified as architectural bug |
+| Feb 07 | Community patch applied to v2.1.34, full integration test passed |
+
+---
+
+*Last updated: February 7, 2026*
