@@ -30,6 +30,9 @@ interface PurchaseCandidate {
   suggested_condition: 'New' | 'Used';
   status: 'new' | 'already_processed' | 'already_imported';
   skip_reason?: string;
+  bundle_group?: string;       // Shared group ID for bundle items (original order_reference)
+  bundle_total_cost?: number;  // Total cost of the bundle
+  bundle_index?: number;       // 1-based index within bundle
 }
 
 // Hadley API base URL
@@ -197,7 +200,7 @@ function parseVintedEmail(email: {
     const bundleItems = extractBundleItems(content);
 
     if (bundleItems.length === 0) {
-      // Couldn't extract items from body - return single candidate
+      // Couldn't extract items from body - return single candidate for review
       return [{
         source: 'Vinted',
         order_reference: orderRef,
@@ -215,27 +218,53 @@ function parseVintedEmail(email: {
       }];
     }
 
-    // Split cost evenly among bundle items
-    const perItemCost = Math.round((totalCost / bundleItems.length) * 100) / 100;
+    // Try to extract set numbers from all items
+    const itemsWithSetNumbers = bundleItems.map(name => ({
+      name,
+      setNumber: extractSetNumber(name),
+    }));
+    const allIdentified = itemsWithSetNumbers.every(i => i.setNumber !== null);
 
-    return bundleItems.map((itemName, index) => {
-      const setNumber = extractSetNumber(itemName);
-      return {
-        source: 'Vinted' as const,
-        order_reference: `${orderRef}-${index + 1}`,
+    if (!allIdentified) {
+      // If ANY item lacks a set number, return the whole bundle as 1 review candidate
+      return [{
+        source: 'Vinted',
+        order_reference: orderRef,
         seller_username: seller,
-        item_name: itemName,
-        set_number: setNumber,
-        cost: perItemCost,
+        item_name: bundleItems.join(' / '),
+        set_number: null,
+        cost: totalCost,
         purchase_date: purchaseDate,
-        email_id: `${email.id}_item_${index + 1}`,
+        email_id: email.id,
         email_subject: email.subject,
         email_date: email.date,
         payment_method: 'Monzo Card',
         suggested_condition: 'New',
-        skip_reason: setNumber ? undefined : 'no_set_number',
-      };
-    });
+        skip_reason: 'no_set_number',
+      }];
+    }
+
+    // All items identified - return N candidates with bundle grouping
+    // Keep original email_id and order_reference (no suffixes)
+    const perItemCost = Math.round((totalCost / bundleItems.length) * 100) / 100;
+
+    return itemsWithSetNumbers.map((item, index) => ({
+      source: 'Vinted' as const,
+      order_reference: orderRef,
+      seller_username: seller,
+      item_name: item.name,
+      set_number: item.setNumber,
+      cost: perItemCost,
+      purchase_date: purchaseDate,
+      email_id: email.id,
+      email_subject: email.subject,
+      email_date: email.date,
+      payment_method: 'Monzo Card',
+      suggested_condition: 'New' as const,
+      bundle_group: orderRef,
+      bundle_total_cost: totalCost,
+      bundle_index: index + 1,
+    }));
   }
 
   // Non-bundle: single item
