@@ -12,7 +12,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 const ApproveItemSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
-  condition: z.enum(['New', 'Used']).optional().default('Used'),
+  condition: z.enum(['New', 'Used']).optional().default('New'),
 });
 
 const ApproveSchema = z.object({
@@ -46,30 +46,16 @@ interface EnrichedItem {
   list_price: number | undefined;
 }
 
-/** Enrich a single item with Brickset name, ASIN, and Amazon pricing */
+/** Enrich a single item with ASIN, name (from ASIN title or Brickset), and Amazon pricing */
 async function enrichItem(
   setNumber: string,
-  condition: 'New' | 'Used',
-  fallbackName: string
+  condition: 'New' | 'Used'
 ): Promise<EnrichedItem> {
-  let setName = fallbackName;
+  let setName = setNumber; // Fallback to set number, never use bundle name
   let amazonAsin: string | undefined;
   let listPrice: number | undefined;
 
-  // Brickset lookup
-  try {
-    const bricksetResponse = await internalFetch(
-      `/api/service/brickset/lookup?setNumber=${encodeURIComponent(setNumber)}`
-    );
-    if (bricksetResponse.ok) {
-      const bricksetData = await bricksetResponse.json();
-      setName = bricksetData.data?.name || setName;
-    }
-  } catch {
-    // Use fallback name
-  }
-
-  // ASIN lookup
+  // ASIN lookup (also returns title which is a good name source)
   try {
     const asinResponse = await internalFetch(
       `/api/service/inventory/lookup-asin?setNumber=${encodeURIComponent(setNumber)}`
@@ -77,9 +63,30 @@ async function enrichItem(
     if (asinResponse.ok) {
       const asinData = await asinResponse.json();
       amazonAsin = asinData.data?.asin;
+      // Use ASIN title as name if available (more reliable than Brickset)
+      if (asinData.data?.title) {
+        setName = asinData.data.title;
+      }
+    } else {
+      console.warn(`[enrichItem] ASIN lookup failed for ${setNumber}: ${asinResponse.status}`);
+    }
+  } catch (err) {
+    console.warn(`[enrichItem] ASIN lookup error for ${setNumber}:`, err);
+  }
+
+  // Brickset lookup (overrides ASIN title if available - cleaner names)
+  try {
+    const bricksetResponse = await internalFetch(
+      `/api/service/brickset/lookup?setNumber=${encodeURIComponent(setNumber)}`
+    );
+    if (bricksetResponse.ok) {
+      const bricksetData = await bricksetResponse.json();
+      if (bricksetData.data?.name) {
+        setName = bricksetData.data.name;
+      }
     }
   } catch {
-    // Skip ASIN
+    // Brickset is optional - ASIN title or set_number used as fallback
   }
 
   // Amazon pricing
@@ -92,9 +99,11 @@ async function enrichItem(
         const pricingData = await pricingResponse.json();
         const asinPricing = pricingData.data?.[amazonAsin];
         listPrice = asinPricing?.buyBoxPrice ?? asinPricing?.lowestNewPrice;
+      } else {
+        console.warn(`[enrichItem] Amazon pricing failed for ${amazonAsin}: ${pricingResponse.status}`);
       }
-    } catch {
-      // Skip pricing
+    } catch (err) {
+      console.warn(`[enrichItem] Amazon pricing error for ${amazonAsin}:`, err);
     }
   }
 
@@ -164,10 +173,9 @@ export async function POST(
       );
     }
 
-    // Enrich all items in parallel
-    const fallbackName = emailRecord.item_name || items[0].set_number;
+    // Enrich all items in parallel (ASIN lookup, Brickset name, Amazon pricing)
     const enrichedItems = await Promise.all(
-      items.map((item) => enrichItem(item.set_number, item.condition, fallbackName))
+      items.map((item) => enrichItem(item.set_number, item.condition))
     );
 
     // Cost allocation

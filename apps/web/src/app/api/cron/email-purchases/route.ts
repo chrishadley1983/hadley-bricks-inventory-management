@@ -161,24 +161,33 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Brickset lookup for set name
-        const bricksetResponse = await internalFetch(
-          `/api/service/brickset/lookup?setNumber=${encodeURIComponent(candidate.set_number)}`
-        );
-        let setName = candidate.item_name;
-        if (bricksetResponse.ok) {
-          const bricksetData = await bricksetResponse.json();
-          setName = bricksetData.data?.name || candidate.item_name;
-        }
-
-        // ASIN lookup
+        // ASIN lookup (also returns title for name fallback)
         let amazonAsin: string | undefined;
+        let setName = candidate.item_name;
         const asinResponse = await internalFetch(
           `/api/service/inventory/lookup-asin?setNumber=${encodeURIComponent(candidate.set_number)}`
         );
         if (asinResponse.ok) {
           const asinData = await asinResponse.json();
           amazonAsin = asinData.data?.asin;
+          if (asinData.data?.title) {
+            setName = asinData.data.title;
+          }
+        }
+
+        // Brickset lookup (overrides ASIN title if available)
+        try {
+          const bricksetResponse = await internalFetch(
+            `/api/service/brickset/lookup?setNumber=${encodeURIComponent(candidate.set_number)}`
+          );
+          if (bricksetResponse.ok) {
+            const bricksetData = await bricksetResponse.json();
+            if (bricksetData.data?.name) {
+              setName = bricksetData.data.name;
+            }
+          }
+        } catch {
+          // Brickset optional - ASIN title used as fallback
         }
 
         // Amazon pricing (if we have an ASIN)
