@@ -2209,6 +2209,52 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          player_id: string
+          tournament_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          player_id: string
+          tournament_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          player_id?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_model_package_costs: {
         Row: {
           bubble_wrap: number
@@ -3799,6 +3845,240 @@ export type Database = {
           },
         ]
       }
+      group_matches: {
+        Row: {
+          away_score: number | null
+          away_team_id: string | null
+          group_id: string | null
+          home_score: number | null
+          home_team_id: string | null
+          id: string
+          match_number: number | null
+          scheduled_at: string | null
+          sort_order: number
+          venue: string | null
+        }
+        Insert: {
+          away_score?: number | null
+          away_team_id?: string | null
+          group_id?: string | null
+          home_score?: number | null
+          home_team_id?: string | null
+          id?: string
+          match_number?: number | null
+          scheduled_at?: string | null
+          sort_order?: number
+          venue?: string | null
+        }
+        Update: {
+          away_score?: number | null
+          away_team_id?: string | null
+          group_id?: string | null
+          home_score?: number | null
+          home_team_id?: string | null
+          id?: string
+          match_number?: number | null
+          scheduled_at?: string | null
+          sort_order?: number
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_matches_away_team_id_fkey"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_matches_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_matches_home_team_id_fkey"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_predictions: {
+        Row: {
+          entry_id: string
+          group_id: string
+          id: string
+          points_earned: number | null
+          predicted_1st: string | null
+          predicted_2nd: string | null
+          predicted_3rd: string | null
+          submitted_at: string | null
+        }
+        Insert: {
+          entry_id: string
+          group_id: string
+          id?: string
+          points_earned?: number | null
+          predicted_1st?: string | null
+          predicted_2nd?: string | null
+          predicted_3rd?: string | null
+          submitted_at?: string | null
+        }
+        Update: {
+          entry_id?: string
+          group_id?: string
+          id?: string
+          points_earned?: number | null
+          predicted_1st?: string | null
+          predicted_2nd?: string | null
+          predicted_3rd?: string | null
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_predictions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_predicted_1st_fkey"
+            columns: ["predicted_1st"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_predicted_2nd_fkey"
+            columns: ["predicted_2nd"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_predicted_3rd_fkey"
+            columns: ["predicted_3rd"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_results: {
+        Row: {
+          final_position: number
+          group_id: string
+          id: string
+          qualified: boolean | null
+          team_id: string
+        }
+        Insert: {
+          final_position: number
+          group_id: string
+          id?: string
+          qualified?: boolean | null
+          team_id: string
+        }
+        Update: {
+          final_position?: number
+          group_id?: string
+          id?: string
+          qualified?: boolean | null
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_results_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_results_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_teams: {
+        Row: {
+          group_id: string
+          id: string
+          seed_position: number | null
+          team_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          seed_position?: number | null
+          team_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          seed_position?: number | null
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_teams_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          id: string
+          name: string
+          sort_order: number
+          tournament_id: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          sort_order: number
+          tournament_id: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          sort_order?: number
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       home_costs: {
         Row: {
           annual_premium: number | null
@@ -3867,6 +4147,64 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      honours: {
+        Row: {
+          description: string | null
+          id: string
+          player_id: string | null
+          player_name: string | null
+          points: number | null
+          prize_amount_gbp: number | null
+          prize_type: string | null
+          sort_order: number | null
+          tournament_id: string | null
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          player_id?: string | null
+          player_name?: string | null
+          points?: number | null
+          prize_amount_gbp?: number | null
+          prize_type?: string | null
+          sort_order?: number | null
+          tournament_id?: string | null
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          player_id?: string | null
+          player_name?: string | null
+          points?: number | null
+          prize_amount_gbp?: number | null
+          prize_type?: string | null
+          sort_order?: number | null
+          tournament_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honours_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honours_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honours_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventory_items: {
         Row: {
@@ -4092,56 +4430,490 @@ export type Database = {
         }
         Relationships: []
       }
+      investment_model_runs: {
+        Row: {
+          algorithm: string | null
+          created_at: string | null
+          feature_importances: Json | null
+          horizon: string
+          hyperparams: Json | null
+          id: string
+          model_version: string
+          notes: string | null
+          test_mae: number | null
+          test_r2: number | null
+          train_mae: number | null
+          train_r2: number | null
+          training_date_range: string | null
+          training_rows: number | null
+          val_mae: number | null
+          val_r2: number | null
+        }
+        Insert: {
+          algorithm?: string | null
+          created_at?: string | null
+          feature_importances?: Json | null
+          horizon: string
+          hyperparams?: Json | null
+          id?: string
+          model_version: string
+          notes?: string | null
+          test_mae?: number | null
+          test_r2?: number | null
+          train_mae?: number | null
+          train_r2?: number | null
+          training_date_range?: string | null
+          training_rows?: number | null
+          val_mae?: number | null
+          val_r2?: number | null
+        }
+        Update: {
+          algorithm?: string | null
+          created_at?: string | null
+          feature_importances?: Json | null
+          horizon?: string
+          hyperparams?: Json | null
+          id?: string
+          model_version?: string
+          notes?: string | null
+          test_mae?: number | null
+          test_r2?: number | null
+          train_mae?: number | null
+          train_r2?: number | null
+          training_date_range?: string | null
+          training_rows?: number | null
+          val_mae?: number | null
+          val_r2?: number | null
+        }
+        Relationships: []
+      }
       investment_predictions: {
         Row: {
           amazon_viable: boolean | null
           confidence: number
+          confidence_1yr: number | null
+          confidence_2yr: number | null
+          confidence_3yr: number | null
+          confidence_6m: number | null
           created_at: string
+          expected_profit_1yr_gbp: number | null
+          expected_profit_3yr_gbp: number | null
+          features_used: Json | null
           id: string
           investment_score: number
           model_version: string | null
+          pred_1yr_p25: number | null
+          pred_1yr_p75: number | null
+          pred_2yr_p25: number | null
+          pred_2yr_p75: number | null
+          pred_3yr_p25: number | null
+          pred_3yr_p75: number | null
+          pred_6m_p25: number | null
+          pred_6m_p75: number | null
           predicted_1yr_appreciation: number | null
           predicted_1yr_price_gbp: number | null
+          predicted_2yr_appreciation: number | null
+          predicted_2yr_price_gbp: number | null
           predicted_3yr_appreciation: number | null
           predicted_3yr_price_gbp: number | null
+          predicted_6m_appreciation: number | null
+          predicted_6m_price_gbp: number | null
+          risk_adjusted_score: number | null
           risk_factors: Json | null
           scored_at: string
           set_num: string
+          training_r2: number | null
           updated_at: string
+          validation_r2: number | null
         }
         Insert: {
           amazon_viable?: boolean | null
           confidence?: number
+          confidence_1yr?: number | null
+          confidence_2yr?: number | null
+          confidence_3yr?: number | null
+          confidence_6m?: number | null
           created_at?: string
+          expected_profit_1yr_gbp?: number | null
+          expected_profit_3yr_gbp?: number | null
+          features_used?: Json | null
           id?: string
           investment_score: number
           model_version?: string | null
+          pred_1yr_p25?: number | null
+          pred_1yr_p75?: number | null
+          pred_2yr_p25?: number | null
+          pred_2yr_p75?: number | null
+          pred_3yr_p25?: number | null
+          pred_3yr_p75?: number | null
+          pred_6m_p25?: number | null
+          pred_6m_p75?: number | null
           predicted_1yr_appreciation?: number | null
           predicted_1yr_price_gbp?: number | null
+          predicted_2yr_appreciation?: number | null
+          predicted_2yr_price_gbp?: number | null
           predicted_3yr_appreciation?: number | null
           predicted_3yr_price_gbp?: number | null
+          predicted_6m_appreciation?: number | null
+          predicted_6m_price_gbp?: number | null
+          risk_adjusted_score?: number | null
           risk_factors?: Json | null
           scored_at?: string
           set_num: string
+          training_r2?: number | null
           updated_at?: string
+          validation_r2?: number | null
         }
         Update: {
           amazon_viable?: boolean | null
           confidence?: number
+          confidence_1yr?: number | null
+          confidence_2yr?: number | null
+          confidence_3yr?: number | null
+          confidence_6m?: number | null
           created_at?: string
+          expected_profit_1yr_gbp?: number | null
+          expected_profit_3yr_gbp?: number | null
+          features_used?: Json | null
           id?: string
           investment_score?: number
           model_version?: string | null
+          pred_1yr_p25?: number | null
+          pred_1yr_p75?: number | null
+          pred_2yr_p25?: number | null
+          pred_2yr_p75?: number | null
+          pred_3yr_p25?: number | null
+          pred_3yr_p75?: number | null
+          pred_6m_p25?: number | null
+          pred_6m_p75?: number | null
           predicted_1yr_appreciation?: number | null
           predicted_1yr_price_gbp?: number | null
+          predicted_2yr_appreciation?: number | null
+          predicted_2yr_price_gbp?: number | null
           predicted_3yr_appreciation?: number | null
           predicted_3yr_price_gbp?: number | null
+          predicted_6m_appreciation?: number | null
+          predicted_6m_price_gbp?: number | null
+          risk_adjusted_score?: number | null
           risk_factors?: Json | null
           scored_at?: string
           set_num?: string
+          training_r2?: number | null
           updated_at?: string
+          validation_r2?: number | null
         }
         Relationships: []
+      }
+      investment_training_data: {
+        Row: {
+          created_at: string | null
+          data_quality: string | null
+          exit_date: string
+          features: Json | null
+          id: string
+          price_1yr: number | null
+          price_2yr: number | null
+          price_3yr: number | null
+          price_6m: number | null
+          price_at_retirement: number | null
+          rrp_gbp: number
+          set_num: string
+          snapshot_count: number | null
+          target_1yr: number | null
+          target_2yr: number | null
+          target_3yr: number | null
+          target_6m: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_quality?: string | null
+          exit_date: string
+          features?: Json | null
+          id?: string
+          price_1yr?: number | null
+          price_2yr?: number | null
+          price_3yr?: number | null
+          price_6m?: number | null
+          price_at_retirement?: number | null
+          rrp_gbp: number
+          set_num: string
+          snapshot_count?: number | null
+          target_1yr?: number | null
+          target_2yr?: number | null
+          target_3yr?: number | null
+          target_6m?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          data_quality?: string | null
+          exit_date?: string
+          features?: Json | null
+          id?: string
+          price_1yr?: number | null
+          price_2yr?: number | null
+          price_3yr?: number | null
+          price_6m?: number | null
+          price_at_retirement?: number | null
+          rrp_gbp?: number
+          set_num?: string
+          snapshot_count?: number | null
+          target_1yr?: number | null
+          target_2yr?: number | null
+          target_3yr?: number | null
+          target_6m?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "brickset_sets"
+            referencedColumns: ["set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "seeded_asin_pricing"
+            referencedColumns: ["set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "seeded_asins_with_sets"
+            referencedColumns: ["set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "user_seeded_arbitrage_items"
+            referencedColumns: ["bricklink_set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "v_amazon_latest_price"
+            referencedColumns: ["set_number"]
+          },
+        ]
+      }
+      job_execution_history: {
+        Row: {
+          completed_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          error_stack: string | null
+          http_status: number | null
+          id: string
+          items_failed: number | null
+          items_processed: number | null
+          job_name: string
+          result_summary: Json | null
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          error_stack?: string | null
+          http_status?: number | null
+          id?: string
+          items_failed?: number | null
+          items_processed?: number | null
+          job_name: string
+          result_summary?: Json | null
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Update: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          error_stack?: string | null
+          http_status?: number | null
+          id?: string
+          items_failed?: number | null
+          items_processed?: number | null
+          job_name?: string
+          result_summary?: Json | null
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Relationships: []
+      }
+      knockout_matches: {
+        Row: {
+          away_source: string | null
+          away_team_id: string | null
+          bracket_side: string | null
+          home_source: string | null
+          home_team_id: string | null
+          id: string
+          match_number: number
+          points_value: number
+          round: string
+          scheduled_at: string | null
+          sort_order: number
+          tournament_id: string
+          venue: string | null
+          winner_team_id: string | null
+        }
+        Insert: {
+          away_source?: string | null
+          away_team_id?: string | null
+          bracket_side?: string | null
+          home_source?: string | null
+          home_team_id?: string | null
+          id?: string
+          match_number: number
+          points_value: number
+          round: string
+          scheduled_at?: string | null
+          sort_order: number
+          tournament_id: string
+          venue?: string | null
+          winner_team_id?: string | null
+        }
+        Update: {
+          away_source?: string | null
+          away_team_id?: string | null
+          bracket_side?: string | null
+          home_source?: string | null
+          home_team_id?: string | null
+          id?: string
+          match_number?: number
+          points_value?: number
+          round?: string
+          scheduled_at?: string | null
+          sort_order?: number
+          tournament_id?: string
+          venue?: string | null
+          winner_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knockout_matches_away_team_id_fkey"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_matches_home_team_id_fkey"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_matches_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_matches_winner_team_id_fkey"
+            columns: ["winner_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knockout_predictions: {
+        Row: {
+          entry_id: string
+          id: string
+          is_correct: boolean | null
+          match_id: string
+          points_earned: number | null
+          predicted_winner_id: string | null
+          submitted_at: string | null
+        }
+        Insert: {
+          entry_id: string
+          id?: string
+          is_correct?: boolean | null
+          match_id: string
+          points_earned?: number | null
+          predicted_winner_id?: string | null
+          submitted_at?: string | null
+        }
+        Update: {
+          entry_id?: string
+          id?: string
+          is_correct?: boolean | null
+          match_id?: string
+          points_earned?: number | null
+          predicted_winner_id?: string | null
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knockout_predictions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_predictions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "knockout_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_predictions_predicted_winner_id_fkey"
+            columns: ["predicted_winner_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knockout_round_config: {
+        Row: {
+          id: string
+          match_count: number
+          points_value: number
+          round: string
+          sort_order: number
+          tournament_id: string | null
+        }
+        Insert: {
+          id?: string
+          match_count: number
+          points_value: number
+          round: string
+          sort_order: number
+          tournament_id?: string | null
+        }
+        Update: {
+          id?: string
+          match_count?: number
+          points_value?: number
+          round?: string
+          sort_order?: number
+          tournament_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knockout_round_config_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_chunks: {
         Row: {
@@ -6252,6 +7024,36 @@ export type Database = {
           },
         ]
       }
+      players: {
+        Row: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          created_at: string | null
+          display_name: string
+          email: string
+          id: string
+          nickname: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name: string
+          email: string
+          id?: string
+          nickname?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name?: string
+          email?: string
+          id?: string
+          nickname?: string | null
+        }
+        Relationships: []
+      }
       pomodoro_sessions: {
         Row: {
           break_completed_at: string | null
@@ -6327,6 +7129,53 @@ export type Database = {
           },
         ]
       }
+      posts: {
+        Row: {
+          author: string | null
+          content: string
+          created_at: string | null
+          id: string
+          image_url: string | null
+          is_published: boolean | null
+          published_at: string | null
+          slug: string
+          title: string
+          tournament_id: string
+        }
+        Insert: {
+          author?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_published?: boolean | null
+          published_at?: string | null
+          slug: string
+          title: string
+          tournament_id: string
+        }
+        Update: {
+          author?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_published?: boolean | null
+          published_at?: string | null
+          slug?: string
+          title?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_snapshots: {
         Row: {
           buy_box_winner: string | null
@@ -6380,6 +7229,7 @@ export type Database = {
           order_reference: string | null
           processed_at: string
           purchase_id: string | null
+          seller_username: string | null
           skip_reason: string | null
           source: string
           status: string
@@ -6397,6 +7247,7 @@ export type Database = {
           order_reference?: string | null
           processed_at?: string
           purchase_id?: string | null
+          seller_username?: string | null
           skip_reason?: string | null
           source: string
           status: string
@@ -6414,6 +7265,7 @@ export type Database = {
           order_reference?: string | null
           processed_at?: string
           purchase_id?: string | null
+          seller_username?: string | null
           skip_reason?: string | null
           source?: string
           status?: string
@@ -8183,6 +9035,30 @@ export type Database = {
           },
         ]
       }
+      teams: {
+        Row: {
+          code: string
+          flag_emoji: string | null
+          flag_url: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          flag_emoji?: string | null
+          flag_url?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string
+          flag_emoji?: string | null
+          flag_url?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       time_daily_summaries: {
         Row: {
           admin_seconds: number | null
@@ -8298,6 +9174,150 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tournament_entries: {
+        Row: {
+          created_at: string | null
+          group_stage_points: number | null
+          group_stage_rank: number | null
+          id: string
+          knockout_points: number | null
+          overall_rank: number | null
+          payment_status: string | null
+          player_id: string
+          tiebreaker_diff: number | null
+          tiebreaker_goals: number | null
+          total_points: number | null
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          group_stage_points?: number | null
+          group_stage_rank?: number | null
+          id?: string
+          knockout_points?: number | null
+          overall_rank?: number | null
+          payment_status?: string | null
+          player_id: string
+          tiebreaker_diff?: number | null
+          tiebreaker_goals?: number | null
+          total_points?: number | null
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string | null
+          group_stage_points?: number | null
+          group_stage_rank?: number | null
+          id?: string
+          knockout_points?: number | null
+          overall_rank?: number | null
+          payment_status?: string | null
+          player_id?: string
+          tiebreaker_diff?: number | null
+          tiebreaker_goals?: number | null
+          total_points?: number | null
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entries_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_stats: {
+        Row: {
+          id: string
+          total_group_stage_goals: number | null
+          tournament_id: string | null
+        }
+        Insert: {
+          id?: string
+          total_group_stage_goals?: number | null
+          tournament_id?: string | null
+        }
+        Update: {
+          id?: string
+          total_group_stage_goals?: number | null
+          tournament_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_stats_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournaments: {
+        Row: {
+          created_at: string | null
+          entry_fee_gbp: number | null
+          group_stage_deadline: string | null
+          group_stage_prize_pct: number | null
+          id: string
+          knockout_stage_deadline: string | null
+          name: string
+          overall_prize_pct: number | null
+          prize_pool_gbp: number | null
+          slug: string
+          status: string | null
+          type: string
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          entry_fee_gbp?: number | null
+          group_stage_deadline?: string | null
+          group_stage_prize_pct?: number | null
+          id?: string
+          knockout_stage_deadline?: string | null
+          name: string
+          overall_prize_pct?: number | null
+          prize_pool_gbp?: number | null
+          slug: string
+          status?: string | null
+          type: string
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          entry_fee_gbp?: number | null
+          group_stage_deadline?: string | null
+          group_stage_prize_pct?: number | null
+          id?: string
+          knockout_stage_deadline?: string | null
+          name?: string
+          overall_prize_pct?: number | null
+          prize_pool_gbp?: number | null
+          slug?: string
+          status?: string | null
+          type?: string
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: []
       }
       tracked_asins: {
         Row: {
@@ -9515,6 +10535,27 @@ export type Database = {
           },
         ]
       }
+      public_player_profiles: {
+        Row: {
+          avatar_url: string | null
+          display_name: string | null
+          id: string | null
+          nickname: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          display_name?: string | null
+          id?: string | null
+          nickname?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          display_name?: string | null
+          id?: string | null
+          nickname?: string | null
+        }
+        Relationships: []
+      }
       purchase_roi_view: {
         Row: {
           items_count: number | null
@@ -9539,6 +10580,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seeded_asin_pricing: {
+        Row: {
+          amazon_price: number | null
+          asin: string | null
+          ean: string | null
+          set_name: string | null
+          set_number: string | null
+          snapshot_date: string | null
+          uk_retail_price: number | null
+          was_price_90d: number | null
+        }
+        Relationships: []
       }
       seeded_asins_with_sets: {
         Row: {
@@ -9781,6 +10835,14 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_amazon_latest_price: {
+        Row: {
+          amazon_price: number | null
+          asin: string | null
+          set_number: string | null
+        }
+        Relationships: []
       }
       v_chris_active_todos: {
         Row: {
@@ -10364,6 +11426,7 @@ export type Database = {
           bricklink_set_number: string
           buy_box_is_yours: boolean
           buy_box_price: number
+          cog_percent: number
           competitive_price: number
           ebay_avg_price: number
           ebay_listings: Json
@@ -10374,6 +11437,7 @@ export type Database = {
           ebay_snapshot_date: string
           ebay_total_listings: number
           effective_amazon_price: number
+          effective_bl_price: number
           image_url: string
           lowest_offer_is_fba: boolean
           lowest_offer_is_prime: boolean
@@ -10382,6 +11446,7 @@ export type Database = {
           margin_absolute: number
           margin_percent: number
           match_confidence: string
+          min_bl_price_override: number
           name: string
           offer_count: number
           offers_json: Json
@@ -10492,6 +11557,7 @@ export type Database = {
           total_offers_sent: number
         }[]
       }
+      get_player_id: { Args: never; Returns: string }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
       get_remaining_limits: {
         Args: { p_user_id?: number }
@@ -10517,6 +11583,7 @@ export type Database = {
           skipped_count: number
         }[]
       }
+      is_admin: { Args: never; Returns: boolean }
       search_inventory_excluding_linked: {
         Args: {
           p_offset?: number

@@ -18,6 +18,8 @@ import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
 import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
 import { AmazonArbitrageSyncService } from '@/lib/arbitrage/amazon-sync.service';
 import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
@@ -450,6 +452,7 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret
     const authHeader = request.headers.get('authorization');
@@ -459,6 +462,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron FullSync] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('full-sync', 'cron');
 
     console.log('[Cron FullSync] Starting full sync job');
 
@@ -652,6 +657,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Cron FullSync] Completed in ${results.totalDurationMs}ms`);
 
+    await execution.complete(
+      { platformSyncs: results.platformSyncs.length, stuckJobsFound: results.stuckJobs.length, stuckJobsReset: results.stuckJobsReset },
+      200,
+      results.platformSyncs.filter((s) => s.status === 'success').length,
+      results.platformSyncs.filter((s) => s.status === 'failed').length
+    );
+
     return NextResponse.json({
       success: true,
       duration: results.totalDurationMs,
@@ -663,6 +675,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error('[Cron FullSync] Error:', error);
+
+    await execution.fail(error, 500);
 
     // Try to send error notification to Discord
     try {

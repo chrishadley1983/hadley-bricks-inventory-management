@@ -71,7 +71,7 @@ async function fetchEmails(query: string): Promise<Array<{
 }>> {
   try {
     const response = await fetch(
-      `${HADLEY_API_BASE}/gmail/search?q=${encodeURIComponent(query)}&maxResults=50`
+      `${HADLEY_API_BASE}/gmail/search?q=${encodeURIComponent(query)}&limit=50`
     );
 
     if (!response.ok) {
@@ -111,7 +111,40 @@ async function fetchEmails(query: string): Promise<Array<{
 }
 
 /**
- * Parse Vinted purchase confirmation email
+ * Extract individual item names from the Vinted email body Order section.
+ * Body format has items between "| Order |" and "| Paid |", separated by newlines.
+ */
+function extractBundleItems(body: string): string[] {
+  // Match content between Order and Paid sections
+  const orderMatch = body.match(/\|\s*Order\s*\|([\s\S]*?)\|\s*Paid/i);
+  if (!orderMatch) return [];
+
+  // Split by newlines and filter empty lines
+  return orderMatch[1]
+    .split('\n')
+    .map((line) => line.replace(/^\|?\s*/, '').trim())
+    .filter((line) => line.length > 0 && !line.startsWith('|'));
+}
+
+/**
+ * Try to extract a LEGO set number from text.
+ * Handles: (10786), 40461, 30578-1, "set 40461", "set no 40679"
+ */
+function extractSetNumber(text: string): string | null {
+  // Pattern 1: Set number in parentheses like (10786)
+  const parenMatch = text.match(/\((\d{4,5})\)/);
+  if (parenMatch) return parenMatch[1];
+
+  // Pattern 2: Standalone 4-5 digit number (possibly with -1 suffix)
+  const standaloneMatch = text.match(/\b(\d{4,5})(?:-\d)?\b/);
+  if (standaloneMatch) return standaloneMatch[1];
+
+  return null;
+}
+
+/**
+ * Parse Vinted purchase confirmation email.
+ * Returns an array of candidates - multiple for bundles, single for regular purchases.
  * Subject format: Your receipt for „{item name}"
  */
 function parseVintedEmail(email: {
@@ -121,46 +154,117 @@ function parseVintedEmail(email: {
   date: string;
   snippet: string;
   body?: string;
-}): Partial<PurchaseCandidate> | null {
-  // Subject pattern: "Your receipt for „Item Name"" (note special quotes „ ")
-  const subjectMatch = email.subject.match(/Your receipt for [„"](.+)[""]/i);
-  if (!subjectMatch) return null;
+}): Partial<PurchaseCandidate>[] {
+  // Subject pattern: "Your receipt for „Item Name""
+  // Handle double-quote variants (NOT single quotes - those match apostrophes in names like "Gabby's")
+  // Vinted uses U+201E (opening „) and U+201C (closing ")
+  const DQUOTES = '\u201C\u201D\u201E\u201F\u00AB\u00BB"';
+  const subjectMatch = email.subject.match(new RegExp(`Your receipt for\\s*[${DQUOTES}](.+?)[${DQUOTES}]`, 'i'));
+  let subjectItemName: string;
 
-  const itemName = subjectMatch[1];
+  if (!subjectMatch) {
+    // Fallback: try without quotes entirely - just grab everything after "Your receipt for"
+    const fallbackMatch = email.subject.match(/Your receipt for\s+(.+)/i);
+    if (!fallbackMatch) return [];
+    subjectItemName = fallbackMatch[1].trim();
+  } else {
+    subjectItemName = subjectMatch[1];
+  }
+
+  // Strip any residual quote characters from item name
+  subjectItemName = subjectItemName.replace(/^[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+|[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+$/g, '').trim();
+
   const content = email.body || email.snippet;
   const normalizedContent = content.replace(/[\r\n\s]+/g, ' ');
 
-  // Extract total paid: "Paid £XX.XX" or "Paid    £XX.XX"
-  const paidMatch = normalizedContent.match(/Paid\s*£([\d.]+)/i);
-  const cost = paidMatch ? parseFloat(paidMatch[1]) : 0;
+  // Extract common fields from email body
+  const paidMatch = normalizedContent.match(/Paid\s*\|?\s*£([\d.]+)/i);
+  const totalCost = paidMatch ? parseFloat(paidMatch[1]) : 0;
 
-  // Extract seller: "Seller m1ck3ymcq" or "Seller    username"
-  const sellerMatch = normalizedContent.match(/Seller\s+(\w+)/i);
+  const sellerMatch = normalizedContent.match(/Seller\s*\|?\s*(\w+)/i);
   const seller = sellerMatch ? sellerMatch[1] : 'unknown';
 
-  // Extract Transaction ID
-  const transactionMatch = normalizedContent.match(/Transaction ID\s*(\d+)/i);
+  const transactionMatch = normalizedContent.match(/Transaction ID\s*\|?\s*(\d+)/i);
   const orderRef = transactionMatch ? transactionMatch[1] : `vinted-${email.id}`;
 
-  // Try to extract set number from item name
-  const setNumberMatch = itemName.match(/\b(\d{4,5})(?:-\d)?\b/);
-  const setNumber = setNumberMatch ? setNumberMatch[1] : null;
+  const purchaseDate = new Date(email.date).toISOString().split('T')[0];
 
-  return {
+  // Check if this is a bundle
+  const isBundle = /^Bundle \d+ items?$/i.test(subjectItemName);
+
+  if (isBundle) {
+    // Extract individual items from the email body
+    const bundleItems = extractBundleItems(content);
+
+    if (bundleItems.length === 0) {
+      // Couldn't extract items from body - return single candidate
+      return [{
+        source: 'Vinted',
+        order_reference: orderRef,
+        seller_username: seller,
+        item_name: subjectItemName,
+        set_number: null,
+        cost: totalCost,
+        purchase_date: purchaseDate,
+        email_id: email.id,
+        email_subject: email.subject,
+        email_date: email.date,
+        payment_method: 'Monzo Card',
+        suggested_condition: 'New',
+        skip_reason: 'no_set_number',
+      }];
+    }
+
+    // Split cost evenly among bundle items
+    const perItemCost = Math.round((totalCost / bundleItems.length) * 100) / 100;
+
+    return bundleItems.map((itemName, index) => {
+      const setNumber = extractSetNumber(itemName);
+      return {
+        source: 'Vinted' as const,
+        order_reference: `${orderRef}-${index + 1}`,
+        seller_username: seller,
+        item_name: itemName,
+        set_number: setNumber,
+        cost: perItemCost,
+        purchase_date: purchaseDate,
+        email_id: `${email.id}_item_${index + 1}`,
+        email_subject: email.subject,
+        email_date: email.date,
+        payment_method: 'Monzo Card',
+        suggested_condition: 'New',
+        skip_reason: setNumber ? undefined : 'no_set_number',
+      };
+    });
+  }
+
+  // Non-bundle: single item
+  // First try set number from subject item name
+  let setNumber = extractSetNumber(subjectItemName);
+
+  // If not found in subject, try from the body Order section (may have more detail)
+  if (!setNumber) {
+    const bodyItems = extractBundleItems(content);
+    if (bodyItems.length > 0) {
+      setNumber = extractSetNumber(bodyItems[0]);
+    }
+  }
+
+  return [{
     source: 'Vinted',
     order_reference: orderRef,
     seller_username: seller,
-    item_name: itemName,
+    item_name: subjectItemName,
     set_number: setNumber,
-    cost,
-    purchase_date: new Date(email.date).toISOString().split('T')[0],
+    cost: totalCost,
+    purchase_date: purchaseDate,
     email_id: email.id,
     email_subject: email.subject,
     email_date: email.date,
     payment_method: 'Monzo Card',
-    suggested_condition: 'New', // Vinted always New
+    suggested_condition: 'New',
     skip_reason: setNumber ? undefined : 'no_set_number',
-  };
+  }];
 }
 
 /**
@@ -267,21 +371,36 @@ export async function GET(request: NextRequest) {
       const supabase = createServiceRoleClient();
 
       const allCandidates: PurchaseCandidate[] = [];
+      let totalFetched = 0;
+      let totalParsed = 0;
+      let totalCutoffSkipped = 0;
 
       // Search Vinted emails - subject is "Your receipt for „Item Name""
       const vintedEmails = await fetchEmails(
-        `from:noreply@vinted.co.uk subject:"Your receipt for" newer_than:${days}d`
+        `from:no-reply@vinted.co.uk subject:"Your receipt for" newer_than:${days}d`
       );
+      totalFetched += vintedEmails.length;
+      console.log(`[scan-emails] Fetched ${vintedEmails.length} Vinted emails from Gmail`);
 
       for (const email of vintedEmails) {
         // Skip emails before cutoff date
         const emailDate = new Date(email.date);
         if (emailDate < CUTOFF_DATE) {
+          totalCutoffSkipped++;
+          console.log(`[scan-emails] Skipped Vinted email before cutoff: "${email.subject}" (${email.date})`);
           continue;
         }
 
-        const candidate = parseVintedEmail(email);
-        if (candidate && candidate.email_id) {
+        const candidates = parseVintedEmail(email);
+        if (candidates.length === 0) {
+          console.warn(`[scan-emails] Failed to parse Vinted email: id=${email.id} subject="${email.subject}" date=${email.date}`);
+          continue;
+        }
+        totalParsed++;
+
+        for (const candidate of candidates) {
+          if (!candidate.email_id) continue;
+
           // Check 1: Already processed (by email_id - most reliable)
           const { data: processedEmail } = await supabase
             .from('processed_purchase_emails')
@@ -322,62 +441,81 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Search eBay emails (both .co.uk and .com domains)
+      // Search eBay emails (both .co.uk and .com domains, both "Order confirmed" and "You won")
       const ebayEmailsUk = await fetchEmails(
         `from:ebay@ebay.co.uk subject:"Order confirmed" newer_than:${days}d`
       );
       const ebayEmailsCom = await fetchEmails(
         `from:ebay@ebay.com subject:"Order confirmed" newer_than:${days}d`
       );
-      const ebayEmails = [...ebayEmailsUk, ...ebayEmailsCom];
+      const ebayWonUk = await fetchEmails(
+        `from:ebay@ebay.co.uk subject:"You won" newer_than:${days}d`
+      );
+      const ebayWonCom = await fetchEmails(
+        `from:ebay@ebay.com subject:"You won" newer_than:${days}d`
+      );
+      // Deduplicate by email ID in case an email matches multiple queries
+      const ebayEmailMap = new Map<string, typeof ebayEmailsUk[number]>();
+      for (const email of [...ebayEmailsUk, ...ebayEmailsCom, ...ebayWonUk, ...ebayWonCom]) {
+        ebayEmailMap.set(email.id, email);
+      }
+      const ebayEmails = Array.from(ebayEmailMap.values());
+      totalFetched += ebayEmails.length;
+      console.log(`[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, after dedup)`);
 
       for (const email of ebayEmails) {
         // Skip emails before cutoff date
         const emailDate = new Date(email.date);
         if (emailDate < CUTOFF_DATE) {
+          totalCutoffSkipped++;
+          console.log(`[scan-emails] Skipped eBay email before cutoff: "${email.subject}" (${email.date})`);
           continue;
         }
 
         const candidate = parseEbayEmail(email);
-        if (candidate && candidate.email_id) {
-          // Check 1: Already processed (by email_id)
-          const { data: processedEmail } = await supabase
-            .from('processed_purchase_emails')
-            .select('id, status')
-            .eq('email_id', candidate.email_id)
-            .limit(1)
-            .single();
+        if (!candidate || !candidate.email_id) {
+          console.warn(`[scan-emails] Failed to parse eBay email: id=${email.id} subject="${email.subject}" date=${email.date}`);
+          continue;
+        }
+        totalParsed++;
 
-          if (processedEmail) {
+        // Check 1: Already processed (by email_id)
+        const { data: processedEmail } = await supabase
+          .from('processed_purchase_emails')
+          .select('id, status')
+          .eq('email_id', candidate.email_id)
+          .limit(1)
+          .single();
+
+        if (processedEmail) {
+          allCandidates.push({
+            ...candidate,
+            status: 'already_processed',
+          } as PurchaseCandidate);
+          continue;
+        }
+
+        // Check 2: Already imported (by order_reference)
+        if (candidate.order_reference) {
+          const { data: existingPurchase } = await supabase
+            .from('purchases')
+            .select('id')
+            .eq('reference', candidate.order_reference)
+            .limit(1);
+
+          if (existingPurchase && existingPurchase.length > 0) {
             allCandidates.push({
               ...candidate,
-              status: 'already_processed',
+              status: 'already_imported',
             } as PurchaseCandidate);
             continue;
           }
-
-          // Check 2: Already imported (by order_reference)
-          if (candidate.order_reference) {
-            const { data: existingPurchase } = await supabase
-              .from('purchases')
-              .select('id')
-              .eq('reference', candidate.order_reference)
-              .limit(1);
-
-            if (existingPurchase && existingPurchase.length > 0) {
-              allCandidates.push({
-                ...candidate,
-                status: 'already_imported',
-              } as PurchaseCandidate);
-              continue;
-            }
-          }
-
-          allCandidates.push({
-            ...candidate,
-            status: 'new',
-          } as PurchaseCandidate);
         }
+
+        allCandidates.push({
+          ...candidate,
+          status: 'new',
+        } as PurchaseCandidate);
       }
 
       // Categorize candidates
@@ -387,6 +525,9 @@ export async function GET(request: NextRequest) {
       const alreadyProcessedCount = allCandidates.filter(
         (c) => c.status === 'already_processed' || c.status === 'already_imported'
       ).length;
+      const parseFailures = totalFetched - totalParsed - totalCutoffSkipped;
+
+      console.log(`[scan-emails] Summary: ${totalFetched} fetched, ${totalParsed} parsed, ${totalCutoffSkipped} cutoff-skipped, ${parseFailures} parse-failures, ${readyToImport.length} ready, ${needsReview.length} needs-review, ${alreadyProcessedCount} already-processed`);
 
       return NextResponse.json({
         data: {
@@ -394,6 +535,10 @@ export async function GET(request: NextRequest) {
           needs_review: needsReview,
           already_processed_count: alreadyProcessedCount,
           total_found: allCandidates.length,
+          total_fetched: totalFetched,
+          total_parsed: totalParsed,
+          total_cutoff_skipped: totalCutoffSkipped,
+          parse_failures: parseFailures,
           search_period_days: days,
           cutoff_date: CUTOFF_DATE.toISOString().split('T')[0], // Only emails after this date
           // Include full list if requested (for debugging)

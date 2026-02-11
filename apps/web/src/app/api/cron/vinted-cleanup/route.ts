@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 // Lazy initialization to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -49,12 +51,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  let execution: ExecutionHandle = noopHandle;
+
   const results: Record<string, unknown> = {
     startedAt: new Date().toISOString(),
     tasks: {},
   };
 
   try {
+    execution = await jobExecutionService.start('vinted-cleanup', 'cron');
     // =========================================================================
     // Task 1: Expire old active opportunities (> 7 days)
     // =========================================================================
@@ -191,9 +196,11 @@ export async function POST(request: NextRequest) {
     }
 
     results.completedAt = new Date().toISOString();
+    await execution.complete(results as Record<string, unknown>, 200);
     return NextResponse.json(results);
   } catch (error) {
     console.error('[vinted-cleanup] Error:', error);
+    await execution.fail(error, 500);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Unknown error',

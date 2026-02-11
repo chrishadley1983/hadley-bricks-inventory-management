@@ -15,8 +15,11 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { HistoricalAppreciationService } from '@/lib/investment';
 import { ModelTrainingService } from '@/lib/investment/ml';
 import { InvestmentScoringService } from '@/lib/investment';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export async function POST(request: NextRequest) {
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify CRON_SECRET
     const authHeader = request.headers.get('authorization');
@@ -25,6 +28,8 @@ export async function POST(request: NextRequest) {
     if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('investment-retrain', 'cron');
 
     const startTime = Date.now();
     const supabase = createServiceRoleClient();
@@ -47,6 +52,11 @@ export async function POST(request: NextRequest) {
     const totalDuration = Date.now() - startTime;
 
     console.log(`[InvestmentRetrain] Complete in ${totalDuration}ms`);
+
+    await execution.complete(
+      { historical_calculated: historicalResult.calculated, model_status: trainingResult.status, sets_scored: scoringResult.sets_scored },
+      200, scoringResult.sets_scored, historicalResult.errors
+    );
 
     return NextResponse.json({
       success: true,
@@ -75,6 +85,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/cron/investment-retrain] Error:', error);
+    await execution.fail(error, 500);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

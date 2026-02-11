@@ -26,6 +26,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
@@ -42,6 +44,7 @@ const PROCESSABLE_STEPS = [
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret (Vercel adds Authorization header for cron jobs)
     const authHeader = request.headers.get('authorization');
@@ -51,6 +54,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron AmazonSync] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('amazon-sync', 'cron');
 
     console.log('[Cron AmazonSync] Starting two-phase sync processing');
 
@@ -73,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     if (!feeds || feeds.length === 0) {
       console.log('[Cron AmazonSync] No feeds need processing');
+      await execution.complete({ message: 'No feeds need processing' }, 200, 0, 0);
       return NextResponse.json({
         success: true,
         message: 'No feeds need processing',
@@ -148,6 +154,8 @@ export async function POST(request: NextRequest) {
       `[Cron AmazonSync] Complete: ${feeds.length} processed, ${completed} completed, ${errors} errors (${duration}ms)`
     );
 
+    await execution.complete({ feedsCompleted: completed, feedsWithErrors: errors }, 200, feeds.length, errors);
+
     return NextResponse.json({
       success: true,
       feedsProcessed: feeds.length,
@@ -159,6 +167,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error('[Cron AmazonSync] Error:', error);
+    await execution.fail(error, 500);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Internal error',

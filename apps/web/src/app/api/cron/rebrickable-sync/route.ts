@@ -13,6 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { RebrickableSyncService } from '@/lib/rebrickable';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - Vercel Pro limit
@@ -20,6 +22,7 @@ export const maxDuration = 300; // 5 minutes - Vercel Pro limit
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // 1. Verify cron secret
     const authHeader = request.headers.get('authorization');
@@ -44,6 +47,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ error: errorMsg }, { status: 500 });
     }
+
+    execution = await jobExecutionService.start('rebrickable-sync', 'cron');
 
     // 3. Run sync
     const supabase = createServiceRoleClient();
@@ -72,6 +77,11 @@ export async function POST(request: NextRequest) {
       JSON.stringify(result)
     );
 
+    await execution.complete(
+      { inserted: result.inserted, updated: result.updated, themes: result.theme_map_size },
+      200, result.total_processed, result.errors
+    );
+
     return NextResponse.json({
       success: true,
       ...result,
@@ -82,6 +92,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
 
     console.error(`[Cron RebrickableSync] Failed after ${duration}ms:`, error);
+    await execution.fail(error, 500);
 
     // Send Discord alert on failure
     try {

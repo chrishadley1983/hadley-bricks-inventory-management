@@ -144,13 +144,20 @@ Create-SchedulerJob -Name "ebay-pricing-sync" -Schedule "0 2 * * *" -Uri $FUNCTI
 Create-SchedulerJob -Name "bricklink-pricing-sync" -Schedule "30 2 * * *" -Uri $FUNCTION_URL -Description "Daily BrickLink pricing sync (resumable)" -Body '{"jobType":"bricklink-pricing"}' -UseOIDC $true
 Create-SchedulerJob -Name "amazon-pricing-sync" -Schedule "0 4 * * *" -Uri $FUNCTION_URL -Description "Daily Amazon pricing sync (resumable)" -Body '{"jobType":"amazon-pricing"}' -UseOIDC $true
 
+# Additional fire-and-forget jobs
+Create-SchedulerJob -Name "email-purchases" -Schedule "17 2 * * *" -Uri "$APP_URL/api/cron/email-purchases" -Description "Daily email purchase import (Vinted/eBay)"
+Create-SchedulerJob -Name "retirement-sync" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/retirement-sync" -Description "Daily retirement data sync from Brickset/BrickTap"
+Create-SchedulerJob -Name "rebrickable-sync" -Schedule "0 4 * * 0" -Uri "$APP_URL/api/cron/rebrickable-sync" -Description "Weekly Rebrickable set data sync"
+Create-SchedulerJob -Name "investment-sync" -Schedule "0 5 * * *" -Uri "$APP_URL/api/cron/investment-sync" -Description "Daily investment ASIN linkage and classification"
+Create-SchedulerJob -Name "investment-retrain" -Schedule "0 6 1 * *" -Uri "$APP_URL/api/cron/investment-retrain" -Description "Monthly investment model retraining"
+
 # Summary
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Created 7 Cloud Scheduler jobs:" -ForegroundColor White
+Write-Host "Created 12 Cloud Scheduler jobs:" -ForegroundColor White
 gcloud scheduler jobs list --location=$REGION --format="table(name,schedule,state)"
 
 Write-Host ""

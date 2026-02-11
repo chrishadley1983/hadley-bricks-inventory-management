@@ -16,6 +16,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { BrickLinkArbitrageSyncService, ArbitrageWatchlistService } from '@/lib/arbitrage';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - Vercel Pro limit
@@ -29,6 +31,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   const today = new Date().toISOString().split('T')[0];
 
+  let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret
     const authHeader = request.headers.get('authorization');
@@ -38,6 +41,8 @@ export async function POST(request: NextRequest) {
       console.warn('[Cron BrickLinkPricing] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('bricklink-pricing', 'cron');
 
     const supabase = createServiceRoleClient();
     const watchlistService = new ArbitrageWatchlistService(supabase);
@@ -173,6 +178,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await execution.complete({ complete: isComplete, cursorPosition: newCursorPosition }, 200, result.processed, result.failed);
+
     return NextResponse.json({
       success: true,
       complete: isComplete,
@@ -190,6 +197,7 @@ export async function POST(request: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
     console.error('[Cron BrickLinkPricing] Error:', error);
+    await execution.fail(error, 500);
 
     // Update status with error
     const supabase = createServiceRoleClient();
