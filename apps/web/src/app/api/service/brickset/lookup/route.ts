@@ -45,19 +45,20 @@ export async function GET(request: NextRequest) {
 
       const { setNumber, forceRefresh } = parsed.data;
 
-      // Use system API key from environment
+      // Use service role client for cache operations
+      const supabase = createServiceRoleClient();
+      const cacheService = new BricksetCacheService(supabase);
+
+      // API key is optional - cache can serve data without it
       const apiKey = process.env.BRICKSET_API_KEY;
-      if (!apiKey) {
+      if (!apiKey && forceRefresh) {
         return NextResponse.json(
-          { error: 'Brickset API key not configured on server' },
+          { error: 'Brickset API key not configured on server (cannot force refresh)' },
           { status: 500 }
         );
       }
 
-      // Use service role client for cache operations
-      const supabase = createServiceRoleClient();
-      const cacheService = new BricksetCacheService(supabase);
-      const set = await cacheService.getSet(setNumber, apiKey, forceRefresh);
+      const set = await cacheService.getSet(setNumber, apiKey || '', forceRefresh);
 
       if (!set) {
         return NextResponse.json(
