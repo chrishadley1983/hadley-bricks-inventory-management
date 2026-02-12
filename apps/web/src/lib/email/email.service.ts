@@ -8,6 +8,7 @@
  */
 
 import { Resend } from 'resend';
+import type { VercelUsageReport } from '@/lib/services/vercel-usage.service';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -427,6 +428,117 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     `;
 
     const subject = `Email Purchase Import: ${items.length} item${items.length !== 1 ? 's' : ''} imported (${fmt(totalCost)} invested)`;
+
+    await this.send({ to: userEmail, subject, html });
+  }
+
+  /**
+   * Send Vercel usage monitoring report with RAG-status metrics table
+   */
+  async sendVercelUsageReport(params: {
+    userEmail: string;
+    report: VercelUsageReport;
+  }): Promise<void> {
+    const { userEmail, report } = params;
+
+    const statusEmoji: Record<string, string> = { GREEN: '🟢', AMBER: '🟡', RED: '🔴' };
+    const statusColor: Record<string, string> = {
+      GREEN: '#27ae60',
+      AMBER: '#f39c12',
+      RED: '#e74c3c',
+    };
+
+    // Count non-GREEN metrics
+    const redCount = report.metrics.filter((m) => m.status === 'RED').length;
+    const amberCount = report.metrics.filter((m) => m.status === 'AMBER').length;
+
+    // Subject line based on overall status
+    let subject: string;
+    if (redCount > 0) {
+      subject = `🔴 ALERT: Vercel usage - ${redCount} metric(s) critical`;
+    } else if (amberCount > 0) {
+      subject = `🟡 WARNING: Vercel usage - ${amberCount} metric(s) elevated`;
+    } else {
+      subject = `✅ Vercel Usage Report - All metrics GREEN`;
+    }
+
+    // Alert banner (conditional)
+    let alertBanner = '';
+    if (report.overallStatus === 'RED') {
+      alertBanner = `
+        <div style="background:#fde8e8;border-left:4px solid #e74c3c;padding:12px 16px;margin:16px 0;border-radius:4px;">
+          <strong style="color:#e74c3c;">🔴 CRITICAL:</strong> ${redCount} metric(s) exceeding 75% of Hobby plan limits.
+          ${amberCount > 0 ? `Additionally ${amberCount} metric(s) above 50%.` : ''}
+        </div>`;
+    } else if (report.overallStatus === 'AMBER') {
+      alertBanner = `
+        <div style="background:#fef9e7;border-left:4px solid #f39c12;padding:12px 16px;margin:16px 0;border-radius:4px;">
+          <strong style="color:#f39c12;">🟡 WARNING:</strong> ${amberCount} metric(s) between 50-75% of Hobby plan limits.
+        </div>`;
+    } else {
+      alertBanner = `
+        <div style="background:#eafaf1;border-left:4px solid #27ae60;padding:12px 16px;margin:16px 0;border-radius:4px;">
+          <strong style="color:#27ae60;">✅ ALL GREEN:</strong> All metrics below 50% of Hobby plan limits.
+        </div>`;
+    }
+
+    // Build metrics table rows
+    const metricRows = report.metrics
+      .map((m) => {
+        const badge = `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:bold;color:#fff;background:${statusColor[m.status]};">${m.status}</span>`;
+        return `<tr>
+          <td style="padding:8px 10px;border:1px solid #ddd;">${m.name}</td>
+          <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;">${m.currentFormatted}</td>
+          <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;">${m.limitFormatted}</td>
+          <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;">${m.usedPercent.toFixed(1)}%</td>
+          <td style="padding:8px 10px;border:1px solid #ddd;text-align:center;">${badge}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hadley-bricks.vercel.app';
+    const usageUrl = 'https://vercel.com/account/usage';
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;">
+        <h2 style="color:#333;margin-bottom:4px;">VERCEL USAGE REPORT</h2>
+        <p style="color:#666;font-size:13px;margin-top:0;">
+          Plan: <strong>${report.plan}</strong> | Period: <strong>${report.period.formatted}</strong>
+        </p>
+
+        ${alertBanner}
+
+        <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;margin-top:16px;">
+          <thead>
+            <tr style="background:#2c3e50;color:#fff;">
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:left;">Metric</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Current</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Limit</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;">Used %</th>
+              <th style="padding:8px 10px;border:1px solid #2c3e50;text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${metricRows}
+          </tbody>
+        </table>
+
+        <p style="color:#888;font-size:11px;margin-top:16px;">
+          ${statusEmoji.GREEN} GREEN &lt; 50% | ${statusEmoji.AMBER} AMBER 50-75% | ${statusEmoji.RED} RED &gt; 75%
+        </p>
+
+        ${!report.fromApi ? '<p style="color:#888;font-size:11px;">Note: Data provided manually (Vercel API not available on Hobby plan).</p>' : ''}
+
+        <p style="color:#888;font-size:11px;">
+          Cron jobs have been migrated to GCP Cloud Scheduler to reduce Function Invocations.
+        </p>
+
+        <p style="font-size:12px;margin-top:16px;">
+          <a href="${usageUrl}" style="color:#3498db;">View on Vercel</a> |
+          <a href="${appUrl}" style="color:#3498db;">Open App</a>
+        </p>
+      </div>
+    `;
 
     await this.send({ to: userEmail, subject, html });
   }
