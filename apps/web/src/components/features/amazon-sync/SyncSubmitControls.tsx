@@ -61,7 +61,7 @@ export function SyncSubmitControls({
   onTwoPhaseComplete,
 }: SyncSubmitControlsProps) {
   const [dryRun, setDryRun] = useState(true);
-  const [syncMode, setSyncMode] = useState<SyncMode>('single');
+  const [syncMode, setSyncMode] = useState<SyncMode>('two_phase');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [twoPhaseError, setTwoPhaseError] = useState<string | null>(null);
 
