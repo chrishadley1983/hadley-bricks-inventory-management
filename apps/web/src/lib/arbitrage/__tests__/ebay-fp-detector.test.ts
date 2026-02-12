@@ -54,8 +54,8 @@ describe('EbayFpDetectorService', () => {
   // ============================================
 
   describe('signal weights', () => {
-    it('should have 21 signals defined', () => {
-      expect(Object.keys(SIGNAL_WEIGHTS)).toHaveLength(21);
+    it('should have 22 signals defined', () => {
+      expect(Object.keys(SIGNAL_WEIGHTS)).toHaveLength(22);
     });
 
     it('should have a default threshold of 50', () => {
@@ -591,6 +591,113 @@ describe('EbayFpDetectorService', () => {
       });
       const { signals } = service.scoreListing(listing, '21327', 'Typewriter', 199.99, validSets);
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(false);
+    });
+  });
+
+  // ============================================
+  // Signal 22: STICKER_POSTER (25 pts)
+  // ============================================
+
+  describe('signal 22: STICKER_POSTER', () => {
+    it('should detect "Sticker Sheet" for LEGO set', () => {
+      const listing = makeListing({
+        title: 'LEGO Technic 42146 Sticker Sheet',
+        totalPrice: 9.14,
+      });
+      const { signals } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Decal Sheet"', () => {
+      const listing = makeListing({
+        title: 'Decal Sheet LEGO Star Wars 75192',
+        totalPrice: 5,
+      });
+      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Poster" standalone', () => {
+      const listing = makeListing({
+        title: 'LEGO Star Wars 10225 R2-D2 Poster Large',
+        totalPrice: 11.36,
+      });
+      const { signals } = service.scoreListing(listing, '10225', 'R2-D2', 227.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Art Print"', () => {
+      const listing = makeListing({
+        title: 'LEGO Star Wars Art Print Millennium Falcon 75192',
+        totalPrice: 15,
+      });
+      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Wall Sticker"', () => {
+      const listing = makeListing({
+        title: 'LEGO Star Wars Wall Sticker Bedroom Decor 75192',
+        totalPrice: 8,
+      });
+      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Vinyl Sticker"', () => {
+      const listing = makeListing({
+        title: 'Vinyl Sticker LEGO Star Wars 75192 Custom',
+        totalPrice: 4,
+      });
+      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should detect "Sticker Set"', () => {
+      const listing = makeListing({
+        title: 'LEGO 75280 Sticker Set Replacement',
+        totalPrice: 3.08,
+      });
+      const { signals } = service.scoreListing(listing, '75280', '501st Legion Clone Troopers', 99.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
+    });
+
+    it('should NOT detect "sticker" alone (could be in set description)', () => {
+      const listing = makeListing({
+        title: 'LEGO Technic 42146 Liebherr Crane New Sealed with Sticker',
+        totalPrice: 400,
+      });
+      const { signals } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(false);
+    });
+
+    it('should NOT detect "post" in "posted" or "postage"', () => {
+      const listing = makeListing({
+        title: 'LEGO 75192 Millennium Falcon New Sealed Free Postage',
+        totalPrice: 550,
+      });
+      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(false);
+    });
+
+    it('should exclude sticker sheet with VERY_LOW_COG (combined > 50)', () => {
+      const listing = makeListing({
+        title: 'LEGO Technic 42146 Sticker Sheet',
+        totalPrice: 9.14,
+      });
+      const { score } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      // VERY_LOW_COG (35) + STICKER_POSTER (25) + PRICE_ANOMALY (20) = 80
+      expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
+    });
+
+    it('should exclude poster at £11+ with VERY_LOW_COG (combined > 50)', () => {
+      const listing = makeListing({
+        title: 'LEGO Star Wars 10225 R2-D2 Poster',
+        totalPrice: 11.36,
+      });
+      const { score } = service.scoreListing(listing, '10225', 'R2-D2', 227.99, validSets);
+      // VERY_LOW_COG (35) + STICKER_POSTER (25) = 60
+      expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
   });
 

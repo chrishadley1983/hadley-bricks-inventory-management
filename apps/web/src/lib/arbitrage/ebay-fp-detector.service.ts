@@ -2,7 +2,7 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 21 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Uses 22 weighted scoring signals. Listings scoring >= 50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -26,6 +26,7 @@
  * 19. Custom/MOC - 30 pts
  * 20. Multi-Quantity - 20 pts
  * 21. Book/Magazine - 25 pts
+ * 22. Sticker/Poster/Decal - 25 pts
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -64,6 +65,8 @@ const CUSTOM_MOC_KEYWORDS = /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creat
 const MULTI_QUANTITY_PATTERN = /\bx\s*[2-9]\b|\b[2-9]\s*x\s+(?!.*\bin[- ]1\b)/i;
 const BOOK_MAGAZINE_KEYWORDS =
   /\b(annual|activity\s+book|magazine|encyclop\w*|handbook|ultimate\s+guide)\b/i;
+const STICKER_POSTER_KEYWORDS =
+  /\b(sticker\s+sheet|decal\s+sheet|sticker\s+set|decal\s+set|poster|art\s+print|wall\s+sticker|vinyl\s+sticker)\b/i;
 
 // Stop words for name matching
 const STOP_WORDS = new Set([
@@ -449,6 +452,16 @@ export class EbayFpDetectorService {
       });
     }
 
+    // 22. Sticker sheet / poster / decal detection
+    if (STICKER_POSTER_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.STICKER_POSTER;
+      signals.push({
+        signal: 'STICKER_POSTER',
+        points: SIGNAL_WEIGHTS.STICKER_POSTER,
+        description: 'Sticker sheet/poster/decal (not a complete set)',
+      });
+    }
+
     // Cap at 100
     return { score: Math.min(score, 100), signals };
   }
@@ -466,6 +479,7 @@ export class EbayFpDetectorService {
       const { data, error } = await this.supabase
         .from('arbitrage_current_view')
         .select('bricklink_set_number, name, effective_amazon_price, ebay_listings')
+        .eq('item_type', 'inventory')
         .not('ebay_listings', 'is', null)
         .range(offset, offset + pageSize - 1);
 
