@@ -1,11 +1,19 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-01-24T11:30:00Z",
+  "lastRun": "2026-02-12T12:00:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 10,
-  "averageCriteriaPerFeature": 70,
+  "featuresDefinedCount": 11,
+  "averageCriteriaPerFeature": 65,
   "recentFeatures": [
+    {
+      "name": "vercel-optimisation",
+      "criteriaCount": 15,
+      "autoVerifyCount": 15,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-02-12T12:00:00Z",
+      "note": "Reduce Vercel Hobby tier usage: polling intervals (1s→30s, 30s→90s, 60s→120s), refetchIntervalInBackground:false, cache headers on 8 routes, batched orders dashboard-status endpoint"
+    },
     {
       "name": "fix-agent",
       "criteriaCount": 28,
