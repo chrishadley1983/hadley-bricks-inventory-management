@@ -195,6 +195,34 @@ async function pollFeed(feedId: string): Promise<PollFeedResponse> {
   return { ...json.data, message: json.message };
 }
 
+interface VerifyFeedResponse {
+  feed: SyncFeed;
+  allVerified: boolean;
+  itemResults: Array<{
+    sku: string;
+    asin: string;
+    submittedPrice: number;
+    verifiedPrice: number | null;
+    priceMatches: boolean;
+    error?: string;
+  }>;
+  message: string;
+}
+
+async function verifyFeed(feedId: string): Promise<VerifyFeedResponse> {
+  const response = await fetch(`/api/amazon/sync/feeds/${feedId}/verify`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to verify feed');
+  }
+
+  const json = await response.json();
+  return json;
+}
+
 /**
  * Process the next step of a two-phase sync
  */
@@ -386,6 +414,26 @@ export function usePollSyncFeed() {
     },
     onError: (error) => {
       console.error('[usePollSyncFeed] Error:', error);
+    },
+  });
+}
+
+/**
+ * Verify prices for a feed in done_verifying status
+ */
+export function useVerifyFeed() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (feedId: string) => verifyFeed(feedId),
+    onSuccess: (data) => {
+      // Update the feed in cache
+      queryClient.setQueryData(amazonSyncKeys.feed(data.feed.id), data.feed);
+      // Invalidate feed history to update status
+      queryClient.invalidateQueries({ queryKey: amazonSyncKeys.feeds() });
+    },
+    onError: (error) => {
+      console.error('[useVerifyFeed] Error:', error);
     },
   });
 }

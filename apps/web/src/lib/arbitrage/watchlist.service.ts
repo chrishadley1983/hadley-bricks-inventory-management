@@ -43,7 +43,7 @@ function normalizeToBricklinkFormat(setNumber: string): string {
   return setNumber;
 }
 
-export type WatchlistSource = 'sold_inventory' | 'retired_with_pricing';
+export type WatchlistSource = 'sold_inventory' | 'retired_with_pricing' | 'seeded';
 
 export interface WatchlistItem {
   id: string;
@@ -157,9 +157,10 @@ export class ArbitrageWatchlistService {
     }
 
     // Deactivate items that are no longer in the watchlist criteria
+    // Skip 'seeded' source items - they're managed separately via migration/manual insertion
     const setNumbersToDeactivate: string[] = [];
     for (const [setNumber, existing] of existingMap) {
-      if (!watchlistMap.has(setNumber) && existing.isActive) {
+      if (!watchlistMap.has(setNumber) && existing.isActive && existing.source !== 'seeded') {
         setNumbersToDeactivate.push(setNumber);
         removed++;
       }
