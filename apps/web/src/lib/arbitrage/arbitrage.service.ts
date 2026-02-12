@@ -74,18 +74,8 @@ export class ArbitrageService {
       }
     }
 
-    // For eBay sorting, use raw SQL to sort by exclusion-adjusted values
-    // This ensures consistent sorting across pagination
-    if (sortField === 'ebay_margin' || sortField === 'ebay_price') {
-      return this.getArbitrageDataWithAdjustedEbaySort(
-        userId,
-        excludedBySet,
-        allExcludedIds,
-        options
-      );
-    }
-
-    // Use the view for denormalized data (non-eBay sorting)
+    // Use the view for denormalized data (all sort fields including eBay)
+    // Client-side recalculateEbayStats handles exclusion adjustments after query
     let query = this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact' })
@@ -169,114 +159,6 @@ export class ArbitrageService {
       totalCount: count ?? 0,
       opportunityCount: opportunityCount ?? 0,
       hasMore: (count ?? 0) > from + items.length,
-      seededCount,
-      inventoryCount,
-    };
-  }
-
-  /**
-   * Get arbitrage data with eBay sorting using exclusion-adjusted values
-   * Uses RPC function to calculate adjusted eBay min price considering user exclusions
-   */
-  private async getArbitrageDataWithAdjustedEbaySort(
-    userId: string,
-    excludedBySet: Map<string, Set<string>>,
-    allExcludedIds: Set<string>,
-    options: ArbitrageFilterOptions
-  ): Promise<ArbitrageDataResponse> {
-    const {
-      minMargin = 30,
-      maxCog = 50,
-      show = 'all',
-      sortField = 'ebay_margin',
-      sortDirection = 'asc',
-      search,
-      page = 1,
-      pageSize = 50,
-    } = options;
-
-    const offset = (page - 1) * pageSize;
-
-    // Call the RPC function that handles adjusted eBay sorting
-    const { data, error } = await this.supabase.rpc('get_arbitrage_with_adjusted_ebay', {
-      p_user_id: userId,
-      p_show: show,
-      p_max_cog: maxCog,
-      p_min_margin: minMargin,
-      p_search: search ?? undefined,
-      p_sort_field: sortField,
-      p_sort_direction: sortDirection,
-      p_page_size: pageSize,
-      p_offset: offset,
-    });
-
-    if (error) {
-      console.error('[ArbitrageService.getArbitrageDataWithAdjustedEbaySort] Error:', error);
-      throw new Error(`Failed to fetch arbitrage data: ${error.message}`);
-    }
-
-    // Get the count using the count RPC
-    const { data: countData, error: countError } = await this.supabase.rpc('get_arbitrage_adjusted_count', {
-      p_user_id: userId,
-      p_show: show,
-      p_max_cog: maxCog,
-      p_min_margin: minMargin,
-      p_search: search ?? undefined,
-    });
-
-    if (countError) {
-      console.error('[ArbitrageService.getArbitrageDataWithAdjustedEbaySort] Count error:', countError);
-    }
-
-    const totalCount = countData ?? 0;
-
-    // Transform RPC results and use the adjusted values from the RPC directly
-    // The RPC already calculated exclusion-adjusted eBay stats - use those instead of recalculating
-    const items = (data ?? []).map((row: Record<string, unknown>) => {
-      const item = this.transformToArbitrageItem(row);
-
-      // Use the RPC's pre-calculated adjusted values if available
-      const adjustedMinPrice = row.adjusted_ebay_min_price as number | null;
-      const adjustedCogPercent = row.adjusted_cog_percent as number | null;
-
-      if (adjustedMinPrice !== null || adjustedCogPercent !== null) {
-        // Get excluded listings count to update ebayTotalListings
-        // Check both per-set and global exclusion sets (same listing can appear across multiple sets)
-        const perSetIds = excludedBySet.get(item.bricklinkSetNumber ?? '');
-        const originalListings = item.ebayListings as EbayListing[] | null;
-        const activeListings = originalListings?.filter(
-          (l) => !perSetIds?.has(l.itemId) && !allExcludedIds.has(l.itemId)
-        ) ?? originalListings;
-
-        return {
-          ...item,
-          ebayMinPrice: adjustedMinPrice ?? item.ebayMinPrice,
-          ebayCogPercent: adjustedCogPercent,
-          ebayTotalListings: activeListings?.length ?? item.ebayTotalListings,
-          ebayListings: activeListings,
-        };
-      }
-
-      // Fallback to client-side recalculation if RPC didn't return adjusted values
-      return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
-    });
-
-    // Count opportunities (BrickLink-based)
-    const { count: opportunityCount } = await this.supabase
-      .from('arbitrage_current_view')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('margin_percent', minMargin);
-
-    // Count seeded vs inventory items in current result set
-    const seededCount = items.filter((item) => item.itemType === 'seeded').length;
-    const inventoryCount = items.filter((item) => item.itemType === 'inventory').length;
-
-    return {
-      items,
-      totalCount,
-      opportunityCount: opportunityCount ?? 0,
-      hasMore: totalCount > offset + items.length,
       seededCount,
       inventoryCount,
     };
