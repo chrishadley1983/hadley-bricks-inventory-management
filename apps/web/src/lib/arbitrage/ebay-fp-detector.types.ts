@@ -98,6 +98,7 @@ export const SIGNAL_WEIGHTS = {
   CUSTOM_MOC: 30,
   MULTI_QUANTITY: 20,
   BOOK_MAGAZINE: 25,
+  STICKER_POSTER: 25,
 } as const;
 
 /**

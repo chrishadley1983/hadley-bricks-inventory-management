@@ -5,7 +5,7 @@
  * Runs daily at 4am UTC (after eBay pricing sync at 2am) to clean up
  * false positive listings (minifigs, keyrings, instructions, wrong sets, etc.)
  *
- * Scoring: 14 weighted signals, threshold 50 (items scoring 50+ excluded)
+ * Scoring: 22 weighted signals, threshold 50 (items scoring 50+ excluded)
  * All items in arbitrage_current_view with eBay data are processed.
  *
  * Recommended schedule: Daily at 4am UTC
