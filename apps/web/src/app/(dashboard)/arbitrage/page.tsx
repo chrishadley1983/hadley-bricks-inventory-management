@@ -29,8 +29,8 @@ import {
 import type { SyncProgress } from '@/hooks/use-arbitrage';
 import type { ArbitrageFilterOptions, ArbitrageItem, ArbitrageSortField } from '@/lib/arbitrage/types';
 import {
-  SHOW_FILTER_OPTIONS,
-  EBAY_SHOW_FILTER_OPTIONS,
+  SHOW_FILTER_OPTIONS_WITH_SEEDED,
+  EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED,
   SORT_OPTIONS,
   EBAY_SORT_OPTIONS,
 } from '@/lib/arbitrage/types';
@@ -122,17 +122,36 @@ function ArbitragePageContent() {
   }, [searchParams, router]);
 
   const handleBlFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setBlFilters((prev) => ({
-      ...newFilters,
-      page: newFilters.page !== prev.page ? newFilters.page : 1,
-    }));
+    setBlFilters((prev) => {
+      // If only the page changed, keep it. Otherwise reset to page 1.
+      const pageChanged = newFilters.page !== prev.page;
+      const onlyPageChanged = pageChanged &&
+        newFilters.show === prev.show &&
+        newFilters.sortField === prev.sortField &&
+        newFilters.sortDirection === prev.sortDirection &&
+        newFilters.maxCog === prev.maxCog &&
+        newFilters.search === prev.search;
+      return {
+        ...newFilters,
+        page: onlyPageChanged ? newFilters.page : (pageChanged ? newFilters.page : 1),
+      };
+    });
   }, []);
 
   const handleEbayFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setEbayFilters((prev) => ({
-      ...newFilters,
-      page: newFilters.page !== prev.page ? newFilters.page : 1,
-    }));
+    setEbayFilters((prev) => {
+      const pageChanged = newFilters.page !== prev.page;
+      const onlyPageChanged = pageChanged &&
+        newFilters.show === prev.show &&
+        newFilters.sortField === prev.sortField &&
+        newFilters.sortDirection === prev.sortDirection &&
+        newFilters.maxCog === prev.maxCog &&
+        newFilters.search === prev.search;
+      return {
+        ...newFilters,
+        page: onlyPageChanged ? newFilters.page : (pageChanged ? newFilters.page : 1),
+      };
+    });
   }, []);
 
   const handleRowClick = useCallback((item: ArbitrageItem) => {
@@ -284,9 +303,12 @@ function ArbitragePageContent() {
               opportunities={blOpportunityCount}
               unmappedCount={summary?.unmapped ?? 0}
               onOpenExcluded={() => setExcludedModalOpen(true)}
-              showFilterOptions={SHOW_FILTER_OPTIONS}
+              showFilterOptions={SHOW_FILTER_OPTIONS_WITH_SEEDED}
               sortOptions={SORT_OPTIONS}
               defaultSortField="cog"
+              hasMore={arbitrageData?.hasMore ?? false}
+              seededCount={arbitrageData?.seededCount}
+              inventoryCount={arbitrageData?.inventoryCount}
             />
             <ArbitrageTable
               items={items}
@@ -366,9 +388,12 @@ function ArbitragePageContent() {
               opportunities={ebayOpportunityCount}
               unmappedCount={summary?.unmapped ?? 0}
               onOpenExcluded={() => setExcludedModalOpen(true)}
-              showFilterOptions={EBAY_SHOW_FILTER_OPTIONS}
+              showFilterOptions={EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED}
               sortOptions={EBAY_SORT_OPTIONS}
               defaultSortField="ebay_margin"
+              hasMore={arbitrageData?.hasMore ?? false}
+              seededCount={arbitrageData?.seededCount}
+              inventoryCount={arbitrageData?.inventoryCount}
             />
             <ArbitrageTable
               items={items}

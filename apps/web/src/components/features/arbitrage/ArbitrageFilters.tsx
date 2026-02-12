@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -33,6 +33,8 @@ interface ArbitrageFiltersProps {
   seededCount?: number;
   /** Count of inventory items in results */
   inventoryCount?: number;
+  /** Whether there are more pages of results */
+  hasMore?: boolean;
 }
 
 export function ArbitrageFilters({
@@ -47,6 +49,7 @@ export function ArbitrageFilters({
   defaultSortField = 'margin',
   seededCount,
   inventoryCount,
+  hasMore,
 }: ArbitrageFiltersProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
 
@@ -98,6 +101,22 @@ export function ArbitrageFilters({
     setSearchInput('');
     onFiltersChange({ ...filters, search: undefined });
   }, [filters, onFiltersChange]);
+
+  const currentPage = filters.page ?? 1;
+  const pageSize = filters.pageSize ?? 50;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  const handlePreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      onFiltersChange({ ...filters, page: currentPage - 1 });
+    }
+  }, [filters, onFiltersChange, currentPage]);
+
+  const handleNextPage = useCallback(() => {
+    if (hasMore) {
+      onFiltersChange({ ...filters, page: currentPage + 1 });
+    }
+  }, [filters, onFiltersChange, currentPage, hasMore]);
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-4">
@@ -185,6 +204,33 @@ export function ArbitrageFilters({
         <Filter className="mr-2 h-4 w-4" />
         Excluded
       </Button>
+
+      {/* Pagination */}
+      {totalItems > pageSize && (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handlePreviousPage}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-mono px-2 text-muted-foreground">
+            {currentPage} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleNextPage}
+            disabled={!hasMore}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="ml-auto flex items-center gap-4">

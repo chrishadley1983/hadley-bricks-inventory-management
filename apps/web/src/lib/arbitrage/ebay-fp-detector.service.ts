@@ -83,7 +83,7 @@ const STOP_WORDS = new Set([
 export class EbayFpDetectorService {
   private supabase: SupabaseClient;
   private validSetNumbers: Set<string> | null = null;
-  private excludedItemIds: Set<string> | null = null;
+  private excludedBySet: Map<string, Set<string>> | null = null;
 
   constructor(supabase: SupabaseClient) {
     this.supabase = supabase;
@@ -133,20 +133,21 @@ export class EbayFpDetectorService {
   }
 
   /**
-   * Load already excluded listing IDs (paginated)
+   * Load already excluded listing IDs grouped by set number (paginated)
    */
-  async loadExcludedListings(userId: string): Promise<Set<string>> {
-    if (this.excludedItemIds) return this.excludedItemIds;
+  async loadExcludedListings(userId: string): Promise<Map<string, Set<string>>> {
+    if (this.excludedBySet) return this.excludedBySet;
 
-    const excludedIds = new Set<string>();
+    const excludedBySet = new Map<string, Set<string>>();
     const pageSize = 1000;
     let offset = 0;
     let hasMore = true;
+    let totalCount = 0;
 
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('excluded_ebay_listings')
-        .select('ebay_item_id')
+        .select('ebay_item_id, set_number')
         .eq('user_id', userId)
         .range(offset, offset + pageSize - 1);
 
@@ -161,16 +162,21 @@ export class EbayFpDetectorService {
       }
 
       for (const row of data) {
-        excludedIds.add(row.ebay_item_id);
+        const setKey = row.set_number;
+        if (!excludedBySet.has(setKey)) {
+          excludedBySet.set(setKey, new Set<string>());
+        }
+        excludedBySet.get(setKey)!.add(row.ebay_item_id);
+        totalCount++;
       }
 
       hasMore = data.length === pageSize;
       offset += pageSize;
     }
 
-    console.log(`[EbayFpDetector] Loaded ${excludedIds.size} existing exclusions`);
-    this.excludedItemIds = excludedIds;
-    return excludedIds;
+    console.log(`[EbayFpDetector] Loaded ${totalCount} existing exclusions across ${excludedBySet.size} sets`);
+    this.excludedBySet = excludedBySet;
+    return excludedBySet;
   }
 
   /**
@@ -500,7 +506,7 @@ export class EbayFpDetectorService {
 
     try {
       // Load valid set numbers and existing exclusions in parallel
-      const [validSetNumbers, excludedIds] = await Promise.all([
+      const [validSetNumbers, excludedBySet] = await Promise.all([
         this.loadValidSetNumbers(),
         this.loadExcludedListings(userId),
       ]);
@@ -545,12 +551,15 @@ export class EbayFpDetectorService {
           continue;
         }
 
+        // Get per-set exclusion list
+        const setExcludedIds = excludedBySet.get(item.bricklink_set_number ?? '') ?? new Set<string>();
+
         // Score each listing
         for (const listing of listings) {
           listingsScanned++;
 
-          // Skip already excluded
-          if (excludedIds.has(listing.itemId)) {
+          // Skip already excluded for THIS set
+          if (setExcludedIds.has(listing.itemId)) {
             continue;
           }
 
@@ -589,7 +598,7 @@ export class EbayFpDetectorService {
         const { error: insertError } = await this.supabase
           .from('excluded_ebay_listings')
           .upsert(exclusionsToInsert, {
-            onConflict: 'user_id,ebay_item_id',
+            onConflict: 'user_id,ebay_item_id,set_number',
             ignoreDuplicates: true,
           });
 

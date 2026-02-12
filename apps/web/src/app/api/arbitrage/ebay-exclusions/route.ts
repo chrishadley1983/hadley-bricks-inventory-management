@@ -23,6 +23,7 @@ const ExcludeListingSchema = z.object({
 
 const RestoreListingSchema = z.object({
   ebayItemId: z.string().min(1),
+  setNumber: z.string().min(1),
 });
 
 // ============================================================================
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
           reason,
         },
         {
-          onConflict: 'user_id,ebay_item_id',
+          onConflict: 'user_id,ebay_item_id,set_number',
         }
       )
       .select()
@@ -152,13 +153,14 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { ebayItemId } = parsed.data;
+    const { ebayItemId, setNumber } = parsed.data;
 
     const { error } = await supabase
       .from('excluded_ebay_listings')
       .delete()
       .eq('user_id', user.id)
-      .eq('ebay_item_id', ebayItemId);
+      .eq('ebay_item_id', ebayItemId)
+      .eq('set_number', setNumber);
 
     if (error) {
       console.error('[DELETE /api/arbitrage/ebay-exclusions] Error:', error);

@@ -151,7 +151,8 @@ export function EbayDetailModal({
 
   // Handler for restoring a listing
   const handleRestoreListing = (itemId: string) => {
-    restoreListingMutation.mutate(itemId);
+    if (!item.bricklinkSetNumber) return;
+    restoreListingMutation.mutate({ ebayItemId: itemId, setNumber: item.bricklinkSetNumber });
   };
 
   return (

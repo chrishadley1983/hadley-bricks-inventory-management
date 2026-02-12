@@ -636,9 +636,10 @@ export function useExcludeEbayListing() {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      // Surgical invalidation - only invalidate eBay exclusions and lists
+      // Invalidate eBay exclusions, lists, and all item queries so modal refreshes
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions(variables.setNumber) });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.items() });
     },
   });
 }
@@ -650,11 +651,11 @@ export function useRestoreEbayListing() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (ebayItemId: string) => {
+    mutationFn: async (input: { ebayItemId: string; setNumber: string }) => {
       const response = await fetch('/api/arbitrage/ebay-exclusions', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ebayItemId }),
+        body: JSON.stringify(input),
       });
 
       if (!response.ok) {
@@ -663,10 +664,11 @@ export function useRestoreEbayListing() {
 
       return response.json();
     },
-    onSuccess: () => {
-      // Surgical invalidation - invalidate all eBay exclusions and lists
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions() });
+    onSuccess: (_, variables) => {
+      // Invalidate eBay exclusions, lists, and all item queries so modal refreshes
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions(variables.setNumber) });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.items() });
     },
   });
 }
