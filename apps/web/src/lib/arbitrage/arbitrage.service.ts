@@ -82,15 +82,13 @@ export class ArbitrageService {
       .eq('user_id', userId);
 
     // Apply show filter
-    // Note: COG% = 100 - margin%, so maxCog filter uses gte on margin: margin >= (100 - maxCog)
-    const minMarginFromCog = 100 - maxCog;
     switch (show) {
       case 'opportunities':
         query = query.gte('margin_percent', minMargin);
         break;
       case 'ebay_opportunities':
-        // Filter by COG%: items with COG <= maxCog have margin >= (100 - maxCog)
-        query = query.gte('ebay_margin_percent', minMarginFromCog);
+        // Filter by eBay COG% directly: only items with COG <= maxCog
+        query = query.lte('ebay_cog_percent', maxCog);
         break;
       case 'with_ebay_data':
         query = query.not('ebay_min_price', 'is', null);
@@ -568,7 +566,7 @@ export class ArbitrageService {
       sales_rank: 'sales_rank',
       bl_lots: 'bl_total_lots',
       name: 'name',
-      ebay_margin: 'ebay_margin_percent',
+      ebay_margin: 'ebay_cog_percent',
       ebay_price: 'ebay_min_price',
     };
     return mapping[sortField] ?? 'cog_percent';
