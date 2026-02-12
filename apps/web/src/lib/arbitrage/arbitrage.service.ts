@@ -47,19 +47,31 @@ export class ArbitrageService {
       pageSize = 50,
     } = options;
 
-    // Fetch user's excluded eBay listings for recalculating stats
-    const { data: excludedEbayListings } = await this.supabase
-      .from('excluded_ebay_listings')
-      .select('ebay_item_id, set_number')
-      .eq('user_id', userId);
-
-    // Create a lookup: set_number -> Set of excluded item IDs
+    // Fetch user's excluded eBay listings for recalculating stats (paginated - may exceed 1000)
     const excludedBySet = new Map<string, Set<string>>();
-    for (const row of excludedEbayListings ?? []) {
-      if (!excludedBySet.has(row.set_number)) {
-        excludedBySet.set(row.set_number, new Set());
+    const allExcludedIds = new Set<string>();
+    {
+      const pageSize = 1000;
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data: page } = await this.supabase
+          .from('excluded_ebay_listings')
+          .select('ebay_item_id, set_number')
+          .eq('user_id', userId)
+          .range(offset, offset + pageSize - 1);
+
+        for (const row of page ?? []) {
+          if (!excludedBySet.has(row.set_number)) {
+            excludedBySet.set(row.set_number, new Set());
+          }
+          excludedBySet.get(row.set_number)!.add(row.ebay_item_id);
+          allExcludedIds.add(row.ebay_item_id);
+        }
+
+        hasMore = (page?.length ?? 0) === pageSize;
+        offset += pageSize;
       }
-      excludedBySet.get(row.set_number)!.add(row.ebay_item_id);
     }
 
     // For eBay sorting, use raw SQL to sort by exclusion-adjusted values
@@ -68,6 +80,7 @@ export class ArbitrageService {
       return this.getArbitrageDataWithAdjustedEbaySort(
         userId,
         excludedBySet,
+        allExcludedIds,
         options
       );
     }
@@ -104,6 +117,12 @@ export class ArbitrageService {
       case 'pending_review':
         query = query.eq('status', 'pending_review');
         break;
+      case 'inventory':
+        query = query.eq('item_type', 'inventory');
+        break;
+      case 'seeded':
+        query = query.eq('item_type', 'seeded');
+        break;
       // 'all' - no additional filter
     }
 
@@ -131,7 +150,7 @@ export class ArbitrageService {
     // Transform to ArbitrageItem type and recalculate eBay stats excluding user's excluded listings
     const items = (data ?? []).map((row) => {
       const item = this.transformToArbitrageItem(row);
-      return this.recalculateEbayStats(item, excludedBySet);
+      return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
     });
 
     // Count opportunities
@@ -141,11 +160,17 @@ export class ArbitrageService {
       .eq('user_id', userId)
       .gte('margin_percent', minMargin);
 
+    // Count seeded vs inventory items in current result set
+    const seededCount = items.filter((item) => item.itemType === 'seeded').length;
+    const inventoryCount = items.filter((item) => item.itemType === 'inventory').length;
+
     return {
       items,
       totalCount: count ?? 0,
       opportunityCount: opportunityCount ?? 0,
       hasMore: (count ?? 0) > from + items.length,
+      seededCount,
+      inventoryCount,
     };
   }
 
@@ -156,6 +181,7 @@ export class ArbitrageService {
   private async getArbitrageDataWithAdjustedEbaySort(
     userId: string,
     excludedBySet: Map<string, Set<string>>,
+    allExcludedIds: Set<string>,
     options: ArbitrageFilterOptions
   ): Promise<ArbitrageDataResponse> {
     const {
@@ -215,10 +241,11 @@ export class ArbitrageService {
 
       if (adjustedMinPrice !== null || adjustedCogPercent !== null) {
         // Get excluded listings count to update ebayTotalListings
-        const excludedIds = excludedBySet.get(item.bricklinkSetNumber ?? '');
+        // Check both per-set and global exclusion sets (same listing can appear across multiple sets)
+        const perSetIds = excludedBySet.get(item.bricklinkSetNumber ?? '');
         const originalListings = item.ebayListings as EbayListing[] | null;
         const activeListings = originalListings?.filter(
-          (l) => !excludedIds?.has(l.itemId)
+          (l) => !perSetIds?.has(l.itemId) && !allExcludedIds.has(l.itemId)
         ) ?? originalListings;
 
         return {
@@ -231,7 +258,7 @@ export class ArbitrageService {
       }
 
       // Fallback to client-side recalculation if RPC didn't return adjusted values
-      return this.recalculateEbayStats(item, excludedBySet);
+      return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
     });
 
     // Count opportunities (BrickLink-based)
@@ -241,11 +268,17 @@ export class ArbitrageService {
       .eq('user_id', userId)
       .gte('margin_percent', minMargin);
 
+    // Count seeded vs inventory items in current result set
+    const seededCount = items.filter((item) => item.itemType === 'seeded').length;
+    const inventoryCount = items.filter((item) => item.itemType === 'inventory').length;
+
     return {
       items,
       totalCount,
       opportunityCount: opportunityCount ?? 0,
       hasMore: totalCount > offset + items.length,
+      seededCount,
+      inventoryCount,
     };
   }
 
@@ -269,21 +302,20 @@ export class ArbitrageService {
 
     const item = this.transformToArbitrageItem(data);
 
-    // Fetch user's excluded eBay listings for this item's set
-    if (item.bricklinkSetNumber) {
+    // Fetch ALL user's excluded eBay listings (not just this set)
+    // Same listing can appear in search results for multiple sets
+    if (item.ebayListings && item.ebayListings.length > 0) {
+      const listingIds = (item.ebayListings as EbayListing[]).map((l) => l.itemId);
       const { data: excludedEbayListings } = await this.supabase
         .from('excluded_ebay_listings')
         .select('ebay_item_id')
         .eq('user_id', userId)
-        .eq('set_number', item.bricklinkSetNumber);
+        .in('ebay_item_id', listingIds);
 
       if (excludedEbayListings && excludedEbayListings.length > 0) {
+        const allExcludedIds = new Set(excludedEbayListings.map((r) => r.ebay_item_id));
         const excludedBySet = new Map<string, Set<string>>();
-        excludedBySet.set(
-          item.bricklinkSetNumber,
-          new Set(excludedEbayListings.map((r) => r.ebay_item_id))
-        );
-        return this.recalculateEbayStats(item, excludedBySet);
+        return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
       }
     }
 
@@ -687,23 +719,28 @@ export class ArbitrageService {
    */
   private recalculateEbayStats(
     item: ArbitrageItem,
-    excludedBySet: Map<string, Set<string>>
+    excludedBySet: Map<string, Set<string>>,
+    allExcludedIds?: Set<string>
   ): ArbitrageItem {
     // If no eBay listings or no set number, return as-is
     if (!item.ebayListings || !item.bricklinkSetNumber) {
       return item;
     }
 
-    // Get excluded item IDs for this set
-    const excludedIds = excludedBySet.get(item.bricklinkSetNumber);
-    if (!excludedIds || excludedIds.size === 0) {
-      // No exclusions for this set, return as-is
+    // Get excluded item IDs for this set + global exclusion set
+    // Same eBay listing can appear in search results for multiple sets,
+    // so check both per-set and global exclusion sets
+    const perSetIds = excludedBySet.get(item.bricklinkSetNumber);
+    if ((!perSetIds || perSetIds.size === 0) && (!allExcludedIds || allExcludedIds.size === 0)) {
+      // No exclusions at all, return as-is
       return item;
     }
 
-    // Filter out excluded listings
+    // Filter out excluded listings (check both per-set and global)
     const listings = item.ebayListings as EbayListing[];
-    const activeListings = listings.filter((l) => !excludedIds.has(l.itemId));
+    const activeListings = listings.filter(
+      (l) => !(perSetIds?.has(l.itemId)) && !(allExcludedIds?.has(l.itemId))
+    );
 
     // If no active listings remain, clear eBay data
     if (activeListings.length === 0) {
@@ -715,6 +752,7 @@ export class ArbitrageService {
         ebayTotalListings: 0,
         ebayMarginPercent: null,
         ebayMarginAbsolute: null,
+        ebayCogPercent: null,
         ebayListings: [],
       };
     }

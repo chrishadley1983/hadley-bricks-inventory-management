@@ -10307,6 +10307,11 @@ export type Database = {
           bl_total_lots: number | null
           bl_total_qty: number | null
           bricklink_set_number: string | null
+          brickset_pieces: number | null
+          brickset_rrp: number | null
+          brickset_set_id: string | null
+          brickset_theme: string | null
+          brickset_year: number | null
           buy_box_is_yours: boolean | null
           buy_box_price: number | null
           cog_percent: number | null
@@ -10323,6 +10328,7 @@ export type Database = {
           effective_amazon_price: number | null
           effective_bl_price: number | null
           image_url: string | null
+          item_type: string | null
           lowest_offer_is_fba: boolean | null
           lowest_offer_is_prime: boolean | null
           lowest_offer_price: number | null
@@ -10337,6 +10343,9 @@ export type Database = {
           price_is_lowest_offer: boolean | null
           sales_rank: number | null
           sales_rank_category: string | null
+          seeded_asin_id: string | null
+          seeded_match_confidence: number | null
+          seeded_match_method: string | null
           sku: string | null
           source: string | null
           status: string | null
@@ -10346,15 +10355,7 @@ export type Database = {
           your_price: number | null
           your_qty: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "tracked_asins_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       arbitrage_watchlist_stats: {
         Row: {
@@ -11426,7 +11427,6 @@ export type Database = {
           bricklink_set_number: string
           buy_box_is_yours: boolean
           buy_box_price: number
-          cog_percent: number
           competitive_price: number
           ebay_avg_price: number
           ebay_listings: Json
@@ -11437,8 +11437,8 @@ export type Database = {
           ebay_snapshot_date: string
           ebay_total_listings: number
           effective_amazon_price: number
-          effective_bl_price: number
           image_url: string
+          item_type: string
           lowest_offer_is_fba: boolean
           lowest_offer_is_prime: boolean
           lowest_offer_price: number
@@ -11446,7 +11446,6 @@ export type Database = {
           margin_absolute: number
           margin_percent: number
           match_confidence: string
-          min_bl_price_override: number
           name: string
           offer_count: number
           offers_json: Json

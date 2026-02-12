@@ -278,7 +278,9 @@ export type ArbitrageShowFilter =
   | 'no_ebay_data'
   | 'in_stock'
   | 'zero_qty'
-  | 'pending_review';
+  | 'pending_review'
+  | 'inventory'
+  | 'seeded';
 
 export type ArbitrageSortField =
   | 'margin'
@@ -324,6 +326,8 @@ export interface ArbitrageDataResponse {
   totalCount: number;
   opportunityCount: number;
   hasMore: boolean;
+  seededCount: number;
+  inventoryCount: number;
 }
 
 export interface ExcludeAsinRequest {
