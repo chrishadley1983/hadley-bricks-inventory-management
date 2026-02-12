@@ -38,7 +38,6 @@ export class ArbitrageService {
   ): Promise<ArbitrageDataResponse> {
     const {
       minMargin = 30,
-      maxCog = 50,
       show = 'all',
       sortField = 'margin',
       sortDirection = 'desc',
