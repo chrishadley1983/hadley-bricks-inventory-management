@@ -114,6 +114,14 @@ export class ArbitrageService {
       // 'all' - no additional filter
     }
 
+    // Scope to inventory items unless explicitly viewing seeded.
+    // This enables Postgres UNION ALL branch elimination, skipping the
+    // expensive seeded branch (~7k rows × 3 LATERAL JOINs) and preventing
+    // statement timeouts.
+    if (show !== 'seeded') {
+      query = query.eq('item_type', 'inventory');
+    }
+
     // Apply search filter
     if (search) {
       query = query.or(`name.ilike.%${search}%,asin.ilike.%${search}%,bricklink_set_number.ilike.%${search}%`);
@@ -141,11 +149,12 @@ export class ArbitrageService {
       return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
     });
 
-    // Count opportunities
+    // Count opportunities (inventory only - skip seeded branch for performance)
     const { count: opportunityCount } = await this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .eq('item_type', 'inventory')
       .gte('margin_percent', minMargin);
 
     // Count seeded vs inventory items in current result set
@@ -523,12 +532,14 @@ export class ArbitrageService {
         .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
+        .eq('item_type', 'inventory')
         .gte('margin_percent', minMargin),
       // eBay opportunities: use COG% (maxCog) converted to margin threshold
       this.supabase
         .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
+        .eq('item_type', 'inventory')
         .gte('ebay_margin_percent', ebayMinMarginFromCog),
       this.supabase
         .from('tracked_asins')
