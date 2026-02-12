@@ -2,7 +2,7 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 21 weighted scoring signals. Listings scoring ≥50 are excluded.
+ * Uses 21 weighted scoring signals. Listings scoring >= 50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
