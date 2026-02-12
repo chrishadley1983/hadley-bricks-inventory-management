@@ -2,7 +2,7 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Ported from Python script with 14 weighted scoring signals.
+ * Uses 21 weighted scoring signals. Listings scoring ≥50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -19,6 +19,13 @@
  * 12. Name Mismatch - 25 pts
  * 13. Wrong Set Number - 40 pts
  * 14. Price Anomaly (<£10 when Amazon >£50) - 20 pts
+ * 15. LED Light Kit - 30 pts
+ * 16. Display Accessory - 25 pts
+ * 17. Third-Party Product - 30 pts
+ * 18. Bundle/Lot - 25 pts
+ * 19. Custom/MOC - 30 pts
+ * 20. Multi-Quantity - 20 pts
+ * 21. Book/Magazine - 25 pts
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -38,10 +45,25 @@ const SET_NUMBER_PATTERN = /\b(\d{4,5})\b/g;
 const MINIFIG_KEYWORDS = /\b(minifig|minifigure|figure|fig|figurine|mini fig)\b/i;
 const INSTRUCTIONS_KEYWORDS = /\b(instruction|manual|booklet|directions)\b/i;
 const PARTS_KEYWORDS = /\b(part|piece|brick|plate|tile|slope|wedge|axle|technic)\b/i;
-const INCOMPLETE_KEYWORDS = /\b(spares?|missing|incomplete|partial|damaged|opened|no box)\b/i;
+const INCOMPLETE_KEYWORDS =
+  /\b(spares?|missing|incomplete|partial|damaged|opened|no box|ex[\s-]?display|shop\s+display|unsealed|open\s+box|box\s+only)\b/i;
 const KEYRING_KEYWORDS = /\b(keyring|key ring|keychain|key chain|key light|torch)\b/i;
 const ITEM_ONLY_PATTERN =
   /\b(sticker|part|parts|piece|pieces|build|builds|minifig|minifigure|figure|manual|instruction|booklet|box|packaging|light kit|led)\s*(sheet|s)?\s+only\b/i;
+
+// New detection patterns (signals 15-21)
+const LED_LIGHT_KIT_KEYWORDS =
+  /\b(led\s+light|light\s*kit|lighting\s+kit|lighting\s+set|led\s+kit)\b/i;
+const DISPLAY_ACCESSORY_KEYWORDS =
+  /\b(display\s+stand|display\s+case|display\s+frame|display\s+plaque|name\s*plate|wall\s+mount|acrylic\s+case|acrylic\s+display|dust\s+cover)\b/i;
+const THIRD_PARTY_KEYWORDS =
+  /\b(for\s+lego|compatible\s+with|compatible\s+for|fits\s+lego|to\s+fit\s+lego|replacement\s+sticker)\b/i;
+const BUNDLE_LOT_KEYWORDS =
+  /\b(job\s*lot|bulk\s+lot|bundle\s+lot|joblot|mixed\s+lot)\b/i;
+const CUSTOM_MOC_KEYWORDS = /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creation)\b/i;
+const MULTI_QUANTITY_PATTERN = /\bx\s*[2-9]\b|\b[2-9]\s*x\s+(?!.*\bin[- ]1\b)/i;
+const BOOK_MAGAZINE_KEYWORDS =
+  /\b(annual|activity\s+book|magazine|encyclop\w*|handbook|ultimate\s+guide)\b/i;
 
 // Stop words for name matching
 const STOP_WORDS = new Set([
@@ -348,6 +370,76 @@ export class EbayFpDetectorService {
         signal: 'PRICE_ANOMALY',
         points: SIGNAL_WEIGHTS.PRICE_ANOMALY,
         description: `Price anomaly: £${totalPrice.toFixed(2)} vs £${amazonPrice.toFixed(2)} Amazon`,
+      });
+    }
+
+    // 15. LED light kit detection
+    if (LED_LIGHT_KIT_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.LED_LIGHT_KIT;
+      signals.push({
+        signal: 'LED_LIGHT_KIT',
+        points: SIGNAL_WEIGHTS.LED_LIGHT_KIT,
+        description: 'LED light kit / lighting set (not a LEGO set)',
+      });
+    }
+
+    // 16. Display accessory detection
+    if (DISPLAY_ACCESSORY_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.DISPLAY_ACCESSORY;
+      signals.push({
+        signal: 'DISPLAY_ACCESSORY',
+        points: SIGNAL_WEIGHTS.DISPLAY_ACCESSORY,
+        description: 'Display stand/case/frame accessory',
+      });
+    }
+
+    // 17. Third-party product detection
+    if (THIRD_PARTY_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.THIRD_PARTY_PRODUCT;
+      signals.push({
+        signal: 'THIRD_PARTY_PRODUCT',
+        points: SIGNAL_WEIGHTS.THIRD_PARTY_PRODUCT,
+        description: 'Third-party product ("for LEGO" / "compatible with")',
+      });
+    }
+
+    // 18. Bundle/lot detection
+    if (BUNDLE_LOT_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.BUNDLE_LOT;
+      signals.push({
+        signal: 'BUNDLE_LOT',
+        points: SIGNAL_WEIGHTS.BUNDLE_LOT,
+        description: 'Bundle/job lot listing',
+      });
+    }
+
+    // 19. Custom/MOC detection
+    if (CUSTOM_MOC_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.CUSTOM_MOC;
+      signals.push({
+        signal: 'CUSTOM_MOC',
+        points: SIGNAL_WEIGHTS.CUSTOM_MOC,
+        description: 'Custom MOC / non-official build',
+      });
+    }
+
+    // 20. Multi-quantity detection
+    if (MULTI_QUANTITY_PATTERN.test(title)) {
+      score += SIGNAL_WEIGHTS.MULTI_QUANTITY;
+      signals.push({
+        signal: 'MULTI_QUANTITY',
+        points: SIGNAL_WEIGHTS.MULTI_QUANTITY,
+        description: 'Multi-quantity listing (x2, x3, etc.)',
+      });
+    }
+
+    // 21. Book/magazine detection
+    if (BOOK_MAGAZINE_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.BOOK_MAGAZINE;
+      signals.push({
+        signal: 'BOOK_MAGAZINE',
+        points: SIGNAL_WEIGHTS.BOOK_MAGAZINE,
+        description: 'Book/magazine/annual (not a set)',
       });
     }
 
