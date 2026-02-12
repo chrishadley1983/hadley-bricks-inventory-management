@@ -59,3 +59,11 @@ export type {
 } from './amazon-fee-reconciliation.service';
 export { MtdExportService } from './mtd-export.service';
 export { QuickFileService } from './quickfile.service';
+export { VercelUsageService, vercelUsageService } from './vercel-usage.service';
+export type {
+  RagStatus,
+  UsageMetric,
+  BillingPeriod,
+  VercelUsageReport,
+  ManualUsageData,
+} from './vercel-usage.service';

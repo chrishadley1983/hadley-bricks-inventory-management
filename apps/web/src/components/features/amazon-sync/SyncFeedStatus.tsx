@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   XCircle,
@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { usePollSyncFeed } from '@/hooks/use-amazon-sync';
+import { usePollSyncFeed, useVerifyFeed } from '@/hooks/use-amazon-sync';
 import type { SyncFeed } from '@/lib/amazon/amazon-sync.types';
 import { MAX_POLL_ATTEMPTS } from '@/lib/amazon/amazon-sync.types';
 
@@ -167,6 +167,13 @@ const STATUS_CONFIG: Record<
 export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusProps) {
   const [isPolling, setIsPolling] = useState(false);
   const pollMutation = usePollSyncFeed();
+  const verifyMutation = useVerifyFeed();
+
+  // Stable refs for mutations to avoid re-registering intervals on every render
+  const pollRef = useRef(pollMutation);
+  pollRef.current = pollMutation;
+  const verifyRef = useRef(verifyMutation);
+  verifyRef.current = verifyMutation;
 
   const config = STATUS_CONFIG[feed.status] || STATUS_CONFIG.pending;
   const Icon = config.icon;
@@ -180,13 +187,33 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
 
     const interval = setInterval(() => {
       setIsPolling(true);
-      pollMutation.mutate(feed.id, {
+      pollRef.current.mutate(feed.id, {
         onSettled: () => setIsPolling(false),
       });
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [feed.id, feed.status, isProcessing, pollMutation]);
+  }, [feed.id, isProcessing]);
+
+  // Auto-verify prices while in done_verifying status
+  useEffect(() => {
+    if (!isVerifying) return;
+
+    // Initial verify after a short delay (give Amazon time to propagate)
+    const initialTimeout = setTimeout(() => {
+      verifyRef.current.mutate(feed.id);
+    }, 5000);
+
+    // Then retry every 60 seconds
+    const interval = setInterval(() => {
+      verifyRef.current.mutate(feed.id);
+    }, 60000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [feed.id, isVerifying]);
 
   const handleManualPoll = () => {
     setIsPolling(true);

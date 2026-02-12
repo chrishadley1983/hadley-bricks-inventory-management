@@ -188,6 +188,16 @@ gcloud scheduler jobs create http investment-retrain \
   --time-zone="UTC" \
   --attempt-deadline="300s" \
   --description="Monthly ML model retrain and investment scoring"
+
+# Vercel Usage Report - daily at 7am UK time
+gcloud scheduler jobs create http vercel-usage-report \
+  --location=europe-west2 \
+  --schedule="0 7 * * *" \
+  --uri="$APP_URL/api/cron/vercel-usage" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --description="Daily Vercel usage monitoring report"
 ```
 
 #### Resumable Jobs (via Cloud Function Driver)
@@ -255,6 +265,9 @@ gcloud scheduler jobs run rebrickable-sync --location=europe-west2
 gcloud scheduler jobs run retirement-sync --location=europe-west2
 gcloud scheduler jobs run investment-sync --location=europe-west2
 gcloud scheduler jobs run investment-retrain --location=europe-west2
+
+# Monitoring jobs
+gcloud scheduler jobs run vercel-usage-report --location=europe-west2
 
 # Resumable jobs (these take longer)
 gcloud scheduler jobs run ebay-pricing-sync --location=europe-west2
