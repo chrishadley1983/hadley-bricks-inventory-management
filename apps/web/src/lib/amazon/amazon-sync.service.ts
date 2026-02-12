@@ -770,46 +770,22 @@ export class AmazonSyncService {
       throw new Error('No items in the sync queue');
     }
 
-    // Split items: new SKUs need single-phase (UPDATE), existing SKUs use two-phase (PATCH)
-    // New SKUs send price+quantity together atomically, so two-phase doesn't make sense for them
+    // Two-phase: ALL items get price-only first, then quantity after verification
+    // New SKUs: UPDATE with quantity=0 (creates listing but not buyable)
+    // Existing SKUs: PATCH with price-only
     const newSkuItems = aggregatedItems.filter((item) => item.isNewSku);
     const existingSkuItems = aggregatedItems.filter((item) => !item.isNewSku);
 
-    console.log(`[AmazonSyncService] Queue split: ${newSkuItems.length} new SKUs (single-phase), ${existingSkuItems.length} existing SKUs (two-phase)`);
-
-    // Submit new SKUs as single-phase (full UPDATE with price+quantity)
-    // These don't need verification because price and quantity are sent atomically
-    if (newSkuItems.length > 0) {
-      console.log('[AmazonSyncService] Submitting new SKUs as single-phase feed');
-      const newSkuFeed = await this.submitNewSkuFeed(newSkuItems, credentials, dryRun);
-      console.log(`[AmazonSyncService] New SKU feed submitted: ${newSkuFeed.id}`);
-
-      // Clear new SKU items from queue immediately (they're fully submitted)
-      if (!dryRun) {
-        await this.clearQueueForFeed(newSkuItems);
-      }
-    }
-
-    // If no existing SKUs, we're done (only had new SKUs)
-    if (existingSkuItems.length === 0) {
-      console.log('[AmazonSyncService] No existing SKUs - two-phase not needed');
-      // Return a synthetic result since we only had new SKUs
-      return {
-        priceFeed: newSkuItems.length > 0 ? await this.getLatestFeed() : null as unknown as SyncFeed,
-        status: 'price_verified', // Effectively complete
-      };
-    }
-
-    // Submit existing SKUs as two-phase (price-only PATCH first)
-    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed for existing SKUs');
+    console.log(`[AmazonSyncService] Two-phase: ${newSkuItems.length} new SKUs, ${existingSkuItems.length} existing SKUs`);
+    console.log('[AmazonSyncService] Phase 1: Submitting price-only feed for all items');
 
     // Send sync started notification (fire-and-forget to not block sync)
     discordService.sendSyncStatus({
       title: '🔄 Amazon Sync Started',
-      message: `Two-phase sync started\n${existingSkuItems.length} item(s) to process`,
+      message: `Two-phase sync started\n${aggregatedItems.length} item(s) to process${newSkuItems.length > 0 ? ` (${newSkuItems.length} new SKU)` : ''}`,
     }).catch(() => {}); // Ignore notification failures
 
-    const priceFeed = await this.submitPriceOnlyFeed(existingSkuItems, credentials, dryRun);
+    const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
 
     if (dryRun) {
       return {
@@ -1374,13 +1350,37 @@ export class AmazonSyncService {
     } as Parameters<typeof this.updateFeedRecord>[1]);
 
     // Build price-only payload
-    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
-      messageId: index + 1,
-      sku: item.amazonSku,
-      operationType: 'PATCH' as const,
-      productType: item.productType,
-      patches: this.buildPriceOnlyPatches(item),
-    }));
+    // New SKUs: UPDATE with quantity=0 (creates listing at correct price but not buyable)
+    // Existing SKUs: PATCH with price-only
+    const messages: ListingsFeedMessage[] = items.map((item, index) => {
+      if (item.isNewSku) {
+        // New SKU: must use UPDATE to create the listing, but with quantity=0
+        const attributes = this.buildAttributes(item);
+        // Override quantity to 0 for phase 1 - quantity set in phase 2 after price verification
+        attributes.fulfillment_availability = [
+          {
+            fulfillment_channel_code: 'DEFAULT',
+            quantity: 0,
+          },
+        ];
+        return {
+          messageId: index + 1,
+          sku: item.amazonSku,
+          operationType: 'UPDATE' as const,
+          productType: 'PRODUCT',
+          requirements: 'LISTING_OFFER_ONLY' as const,
+          attributes,
+        };
+      }
+      // Existing SKU: PATCH price only
+      return {
+        messageId: index + 1,
+        sku: item.amazonSku,
+        operationType: 'PATCH' as const,
+        productType: item.productType,
+        patches: this.buildPriceOnlyPatches(item),
+      };
+    });
 
     const payload: ListingsFeedPayload = {
       header: {
