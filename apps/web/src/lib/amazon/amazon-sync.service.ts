@@ -700,6 +700,12 @@ export class AmazonSyncService {
           submitted_at: new Date().toISOString(),
         });
 
+        // Send Discord notification for feed submitted
+        discordService.sendSyncStatus({
+          title: '🔄 Amazon Sync Submitted',
+          message: `Feed submitted to Amazon\n${aggregatedItems.length} item(s)`,
+        }).catch(() => {});
+
         return await this.getFeed(feed.id);
       }
     } catch (error) {
@@ -709,6 +715,14 @@ export class AmazonSyncService {
         error_message: error instanceof Error ? error.message : 'Unknown error',
         completed_at: new Date().toISOString(),
       });
+
+      // Send Discord notification for feed error
+      discordService.sendSyncStatus({
+        title: '🔴 Amazon Sync Failed',
+        message: `Feed submission failed\n${error instanceof Error ? error.message : 'Unknown error'}`,
+        success: false,
+      }).catch(() => {});
+
       throw error;
     }
   }
@@ -1730,9 +1744,31 @@ export class AmazonSyncService {
         updates.status = 'done_verifying';
         updates.verification_started_at = new Date().toISOString();
         console.log('[AmazonSyncService] Feed has new SKUs - status set to done_verifying');
+
+        // Discord notification - feed processed, now verifying prices
+        discordService.sendSyncStatus({
+          title: '🔍 Amazon Sync Verifying',
+          message: `Feed processed by Amazon\n${updates.success_count} ok, ${updates.error_count} errors\nVerifying prices on listing...`,
+        }).catch(() => {});
       } else {
         // All items are existing SKUs or had errors - no verification needed
         updates.status = 'done';
+
+        // Discord notification - feed complete (no verification needed)
+        const totalItems = (updates.success_count ?? 0) + (updates.error_count ?? 0);
+        if (updates.error_count && updates.error_count > 0) {
+          discordService.sendSyncStatus({
+            title: '⚠️ Amazon Sync Complete (with errors)',
+            message: `${updates.success_count} ok, ${updates.error_count} errors out of ${totalItems} items`,
+            success: false,
+          }).catch(() => {});
+        } else {
+          discordService.sendSyncStatus({
+            title: '✅ Amazon Sync Complete',
+            message: `${updates.success_count} item(s) updated successfully`,
+            success: true,
+          }).catch(() => {});
+        }
       }
 
       // Clear queue items for successful/accepted submissions
@@ -1830,6 +1866,13 @@ export class AmazonSyncService {
         })
         .eq('feed_id', feedId)
         .eq('status', 'accepted');
+
+      // Discord notification - verification timed out
+      discordService.sendSyncStatus({
+        title: '⚠️ Amazon Sync Verification Timeout',
+        message: `Price verification timed out after 30 minutes\nFeed: ${feedId.slice(0, 8)}`,
+        success: false,
+      }).catch(() => {});
 
       return {
         feed: (await this.getFeed(feedId))!,
@@ -1953,6 +1996,16 @@ export class AmazonSyncService {
       updates.status = 'verified';
       updates.verification_completed_at = new Date().toISOString();
       console.log(`[AmazonSyncService] All items verified for feed ${feedId}`);
+
+      // Discord notification - prices verified (single-phase feeds only; two-phase has its own notifications)
+      if (feed.sync_mode !== 'two_phase') {
+        const verifiedCount = itemResults.filter(r => r.priceMatches).length;
+        discordService.sendSyncStatus({
+          title: '✅ Amazon Sync Verified',
+          message: `All ${verifiedCount} price(s) confirmed live on Amazon`,
+          success: true,
+        }).catch(() => {});
+      }
     } else {
       console.log(`[AmazonSyncService] Some items still pending verification for feed ${feedId}`);
     }

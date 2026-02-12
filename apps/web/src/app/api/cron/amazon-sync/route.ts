@@ -76,7 +76,22 @@ export async function POST(request: NextRequest) {
       throw feedsError;
     }
 
-    if (!feeds || feeds.length === 0) {
+    // Also find single-phase feeds stuck in done_verifying (need price verification)
+    const { data: verifyFeeds, error: verifyError } = await supabase
+      .from('amazon_sync_feeds')
+      .select('id, user_id, amazon_feed_id, verification_started_at')
+      .eq('status', 'done_verifying')
+      .neq('sync_mode', 'two_phase')
+      .order('verification_started_at', { ascending: true })
+      .limit(5);
+
+    if (verifyError) {
+      console.error('[Cron AmazonSync] Error fetching verify feeds:', verifyError);
+    }
+
+    const totalFeeds = (feeds?.length ?? 0) + (verifyFeeds?.length ?? 0);
+
+    if (totalFeeds === 0) {
       console.log('[Cron AmazonSync] No feeds need processing');
       await execution.complete({ message: 'No feeds need processing' }, 200, 0, 0);
       return NextResponse.json({
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`[Cron AmazonSync] Found ${feeds.length} feed(s) to process`);
+    console.log(`[Cron AmazonSync] Found ${feeds?.length ?? 0} two-phase + ${verifyFeeds?.length ?? 0} single-phase verify feed(s)`);
 
     const results: Array<{
       feedId: string;
@@ -100,8 +115,8 @@ export async function POST(request: NextRequest) {
       error?: string;
     }> = [];
 
-    // Process each feed
-    for (const feed of feeds) {
+    // Process two-phase feeds
+    for (const feed of feeds ?? []) {
       try {
         console.log(
           `[Cron AmazonSync] Processing feed ${feed.id} (user: ${feed.user_id}, step: ${feed.two_phase_step})`
@@ -141,6 +156,48 @@ export async function POST(request: NextRequest) {
           newStatus: 'error',
           isComplete: true,
           message: 'Processing failed',
+          error: errorMsg,
+        });
+      }
+    }
+
+    // Process single-phase feeds needing price verification
+    for (const feed of verifyFeeds ?? []) {
+      try {
+        console.log(
+          `[Cron AmazonSync] Verifying single-phase feed ${feed.id} (user: ${feed.user_id})`
+        );
+
+        const syncService = new AmazonSyncService(supabase, feed.user_id);
+        const result = await syncService.verifyFeedPrices(feed.id);
+
+        results.push({
+          feedId: feed.id,
+          userId: feed.user_id,
+          amazonFeedId: feed.amazon_feed_id,
+          previousStep: 'done_verifying',
+          newStatus: result.feed.status,
+          isComplete: result.allVerified || result.feed.status === 'verification_failed',
+          message: result.allVerified
+            ? 'All prices verified'
+            : `Verification pending (${result.itemResults.filter(r => r.priceMatches).length}/${result.itemResults.length} verified)`,
+        });
+
+        console.log(
+          `[Cron AmazonSync] Feed ${feed.id}: ${result.feed.status} - allVerified=${result.allVerified}`
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Cron AmazonSync] Error verifying feed ${feed.id}:`, error);
+
+        results.push({
+          feedId: feed.id,
+          userId: feed.user_id,
+          amazonFeedId: feed.amazon_feed_id,
+          previousStep: 'done_verifying',
+          newStatus: 'error',
+          isComplete: true,
+          message: 'Verification failed',
           error: errorMsg,
         });
       }
