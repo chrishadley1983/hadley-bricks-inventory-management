@@ -51,17 +51,17 @@ export class ArbitrageService {
     const excludedBySet = new Map<string, Set<string>>();
     const allExcludedIds = new Set<string>();
     {
-      const pageSize = 1000;
+      const pgSize = 1000;
       let offset = 0;
       let hasMore = true;
       while (hasMore) {
-        const { data: page } = await this.supabase
+        const { data: pg } = await this.supabase
           .from('excluded_ebay_listings')
           .select('ebay_item_id, set_number')
           .eq('user_id', userId)
-          .range(offset, offset + pageSize - 1);
+          .range(offset, offset + pgSize - 1);
 
-        for (const row of page ?? []) {
+        for (const row of pg ?? []) {
           if (!excludedBySet.has(row.set_number)) {
             excludedBySet.set(row.set_number, new Set());
           }
@@ -69,13 +69,27 @@ export class ArbitrageService {
           allExcludedIds.add(row.ebay_item_id);
         }
 
-        hasMore = (page?.length ?? 0) === pageSize;
-        offset += pageSize;
+        hasMore = (pg?.length ?? 0) === pgSize;
+        offset += pgSize;
       }
     }
 
-    // Use the view for denormalized data (all sort fields including eBay)
-    // Client-side recalculateEbayStats handles exclusion adjustments after query
+    // When sorting/filtering by eBay fields, excluded listings change the
+    // min price and COG% after the DB query. Server-side sort on raw DB
+    // values would be wrong, so fetch all items and sort client-side.
+    const isEbaySortOrFilter =
+      sortField === 'ebay_margin' ||
+      sortField === 'ebay_price' ||
+      show === 'ebay_opportunities';
+
+    if (isEbaySortOrFilter) {
+      return this.getArbitrageDataWithClientEbaySort(
+        userId, excludedBySet, allExcludedIds, options
+      );
+    }
+
+    // --- Server-side path (BrickLink tab and non-eBay sorts) ---
+
     let query = this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact' })
@@ -85,10 +99,6 @@ export class ArbitrageService {
     switch (show) {
       case 'opportunities':
         query = query.gte('margin_percent', minMargin);
-        break;
-      case 'ebay_opportunities':
-        // Filter by eBay COG% directly: only items with COG <= maxCog
-        query = query.lte('ebay_cog_percent', maxCog);
         break;
       case 'with_ebay_data':
         query = query.not('ebay_min_price', 'is', null);
@@ -105,19 +115,13 @@ export class ArbitrageService {
       case 'pending_review':
         query = query.eq('status', 'pending_review');
         break;
-      case 'inventory':
-        query = query.eq('item_type', 'inventory');
-        break;
       case 'seeded':
         query = query.eq('item_type', 'seeded');
         break;
-      // 'all' - no additional filter
+      // 'all', 'inventory' - no additional filter beyond item_type below
     }
 
     // Scope to inventory items unless explicitly viewing seeded.
-    // This enables Postgres UNION ALL branch elimination, skipping the
-    // expensive seeded branch (~7k rows × 3 LATERAL JOINs) and preventing
-    // statement timeouts.
     if (show !== 'seeded') {
       query = query.eq('item_type', 'inventory');
     }
@@ -143,13 +147,13 @@ export class ArbitrageService {
       throw new Error(`Failed to fetch arbitrage data: ${error.message}`);
     }
 
-    // Transform to ArbitrageItem type and recalculate eBay stats excluding user's excluded listings
+    // Transform and recalculate eBay stats
     const items = (data ?? []).map((row) => {
       const item = this.transformToArbitrageItem(row);
       return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
     });
 
-    // Count opportunities (inventory only - skip seeded branch for performance)
+    // Count BrickLink opportunities (inventory only)
     const { count: opportunityCount } = await this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
@@ -157,7 +161,6 @@ export class ArbitrageService {
       .eq('item_type', 'inventory')
       .gte('margin_percent', minMargin);
 
-    // Count seeded vs inventory items in current result set
     const seededCount = items.filter((item) => item.itemType === 'seeded').length;
     const inventoryCount = items.filter((item) => item.itemType === 'inventory').length;
 
@@ -168,6 +171,136 @@ export class ArbitrageService {
       hasMore: (count ?? 0) > from + items.length,
       seededCount,
       inventoryCount,
+    };
+  }
+
+  /**
+   * Client-side eBay sort path.
+   * Fetches all matching items, recalculates eBay stats (excluding FP listings),
+   * sorts by recalculated COG%, and paginates in code.
+   */
+  private async getArbitrageDataWithClientEbaySort(
+    userId: string,
+    excludedBySet: Map<string, Set<string>>,
+    allExcludedIds: Set<string>,
+    options: ArbitrageFilterOptions
+  ): Promise<ArbitrageDataResponse> {
+    const {
+      minMargin = 30,
+      maxCog = 50,
+      show = 'all',
+      sortField = 'ebay_margin',
+      sortDirection = 'desc',
+      search,
+      page = 1,
+      pageSize = 50,
+    } = options;
+
+    // Build base query — no eBay sort/filter, no pagination.
+    // eBay filtering and sorting happens after recalculation.
+    let baseQuery = this.supabase
+      .from('arbitrage_current_view')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('item_type', 'inventory');
+
+    // Apply non-eBay show filters
+    switch (show) {
+      case 'ebay_opportunities':
+        // Only require eBay data exists — COG filter applied after recalc
+        baseQuery = baseQuery.not('ebay_min_price', 'is', null);
+        break;
+      case 'with_ebay_data':
+        baseQuery = baseQuery.not('ebay_min_price', 'is', null);
+        break;
+      case 'no_ebay_data':
+        baseQuery = baseQuery.is('ebay_min_price', null);
+        break;
+      case 'opportunities':
+        baseQuery = baseQuery.gte('margin_percent', minMargin);
+        break;
+      case 'in_stock':
+        baseQuery = baseQuery.gt('your_qty', 0);
+        break;
+      case 'zero_qty':
+        baseQuery = baseQuery.eq('your_qty', 0);
+        break;
+      case 'pending_review':
+        baseQuery = baseQuery.eq('status', 'pending_review');
+        break;
+      // 'all', 'inventory' — no additional filter
+    }
+
+    if (search) {
+      baseQuery = baseQuery.or(
+        `name.ilike.%${search}%,asin.ilike.%${search}%,bricklink_set_number.ilike.%${search}%`
+      );
+    }
+
+    // Fetch all matching items (paginate through Supabase 1000-row limit)
+    const allItems: ArbitrageItem[] = [];
+    const batchSize = 1000;
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data: batch, error: batchError } = await baseQuery
+        .range(offset, offset + batchSize - 1);
+
+      if (batchError) {
+        console.error('[ArbitrageService.getArbitrageDataWithClientEbaySort] Error:', batchError);
+        throw new Error(`Failed to fetch arbitrage data: ${batchError.message}`);
+      }
+
+      for (const row of batch ?? []) {
+        const item = this.transformToArbitrageItem(row);
+        allItems.push(this.recalculateEbayStats(item, excludedBySet, allExcludedIds));
+      }
+
+      hasMore = (batch?.length ?? 0) === batchSize;
+      offset += batchSize;
+    }
+
+    // Apply eBay-specific filter after recalculation
+    let filtered = allItems;
+    if (show === 'ebay_opportunities') {
+      filtered = allItems.filter(
+        (item) => item.ebayCogPercent != null && item.ebayCogPercent <= maxCog
+      );
+    }
+
+    // Sort by recalculated values
+    filtered.sort((a, b) => {
+      const aVal =
+        sortField === 'ebay_price' ? a.ebayMinPrice : a.ebayCogPercent;
+      const bVal =
+        sortField === 'ebay_price' ? b.ebayMinPrice : b.ebayCogPercent;
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1; // nulls last
+      if (bVal == null) return -1;
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    // Paginate in code
+    const from = (page - 1) * pageSize;
+    const pagedItems = filtered.slice(from, from + pageSize);
+
+    // Count BrickLink opportunities (inventory only)
+    const { count: opportunityCount } = await this.supabase
+      .from('arbitrage_current_view')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('item_type', 'inventory')
+      .gte('margin_percent', minMargin);
+
+    return {
+      items: pagedItems,
+      totalCount: filtered.length,
+      opportunityCount: opportunityCount ?? 0,
+      hasMore: filtered.length > from + pagedItems.length,
+      seededCount: 0,
+      inventoryCount: pagedItems.length,
     };
   }
 
