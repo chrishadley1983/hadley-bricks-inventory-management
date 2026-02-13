@@ -272,6 +272,7 @@ export async function POST(request: NextRequest) {
             email_date: item.email_date,
             item_name: item.set_name,
             cost: item.cost,
+            seller_username: item.seller_username,
           });
 
           // Calculate ROI if list price is available

@@ -419,6 +419,62 @@ export async function POST(request: NextRequest) {
       `[Cron EmailPurchases] Complete: ${summary.created_count ?? 0} imported, ${summary.failed_count ?? 0} failed, ${summary.skipped_count ?? 0} skipped (${Math.round(duration / 1000)}s)`
     );
 
+    // 4b. Queue seller messages for Vinted purchases (one per order)
+    if ((summary.created_count ?? 0) > 0) {
+      try {
+        const supabase = createServiceRoleClient();
+        const vintedOrders = new Map<string, { seller_username: string }>();
+        for (const item of enriched) {
+          if (item.source === 'Vinted' && item.seller_username && item.order_reference) {
+            vintedOrders.set(item.order_reference, { seller_username: item.seller_username });
+          }
+        }
+
+        if (vintedOrders.size > 0) {
+          // Look up user ID from the first enriched item's import
+          const { data: userData } = await supabase
+            .from('processed_purchase_emails')
+            .select('purchase_id')
+            .eq('email_id', enriched[0].email_id)
+            .eq('status', 'imported')
+            .limit(1)
+            .single();
+
+          if (userData?.purchase_id) {
+            const { data: purchaseData } = await supabase
+              .from('purchases')
+              .select('user_id')
+              .eq('id', userData.purchase_id)
+              .limit(1)
+              .single();
+
+            if (purchaseData?.user_id) {
+              const messages = Array.from(vintedOrders.entries()).map(([orderRef, { seller_username }]) => ({
+                user_id: purchaseData.user_id,
+                order_reference: orderRef,
+                seller_username,
+              }));
+
+              const { error: msgError } = await supabase
+                .from('vinted_seller_messages')
+                .upsert(messages, {
+                  onConflict: 'order_reference,seller_username',
+                  ignoreDuplicates: true,
+                });
+
+              if (msgError) {
+                console.warn('[Cron EmailPurchases] Failed to queue seller messages:', msgError);
+              } else {
+                console.log(`[Cron EmailPurchases] Queued ${messages.length} seller message(s)`);
+              }
+            }
+          }
+        }
+      } catch (msgErr) {
+        console.warn('[Cron EmailPurchases] Seller message queue error:', msgErr);
+      }
+    }
+
     // 5. Send Discord notification
     const createdCount = summary.created_count ?? 0;
     const failedCount = summary.failed_count ?? 0;
