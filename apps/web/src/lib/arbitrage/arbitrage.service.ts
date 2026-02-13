@@ -650,29 +650,13 @@ export class ArbitrageService {
     // Convert maxCog to equivalent minMargin for eBay: COG% = 100 - margin%
     const ebayMinMarginFromCog = 100 - maxCog;
 
-    const [
-      { count: totalItems },
-      { count: opportunities },
-      { count: ebayOpportunities },
-      { count: excluded },
-    ] = await Promise.all([
-      // Total items in view (inventory + seeded)
-      this.supabase
-        .from('arbitrage_current_view')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId),
-      // BrickLink opportunities (all item types)
-      this.supabase
-        .from('arbitrage_current_view')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('margin_percent', minMargin),
-      // eBay opportunities (all item types)
-      this.supabase
-        .from('arbitrage_current_view')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('ebay_margin_percent', ebayMinMarginFromCog),
+    // Use single RPC for view counts (avoids statement timeout on 3 parallel COUNT queries)
+    const [rpcResult, { count: excluded }] = await Promise.all([
+      this.supabase.rpc('get_arbitrage_summary_stats', {
+        p_user_id: userId,
+        p_min_margin: minMargin,
+        p_ebay_min_margin: ebayMinMarginFromCog,
+      }),
       this.supabase
         .from('tracked_asins')
         .select('*', { count: 'exact', head: true })
@@ -680,12 +664,17 @@ export class ArbitrageService {
         .eq('status', 'excluded'),
     ]);
 
+    const stats = rpcResult.data as {
+      total_items: number;
+      bl_opportunities: number;
+      ebay_opportunities: number;
+    } | null;
     const unmapped = await this.getUnmappedCount(userId);
 
     return {
-      totalItems: totalItems ?? 0,
-      opportunities: opportunities ?? 0,
-      ebayOpportunities: ebayOpportunities ?? 0,
+      totalItems: stats?.total_items ?? 0,
+      opportunities: stats?.bl_opportunities ?? 0,
+      ebayOpportunities: stats?.ebay_opportunities ?? 0,
       unmapped,
       excluded: excluded ?? 0,
     };
