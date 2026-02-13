@@ -847,13 +847,14 @@ export class AmazonSyncService {
       two_phase_poll_count: (feed.two_phase_poll_count ?? 0) + 1,
     } as Parameters<typeof this.updateFeedRecord>[1]);
 
-    // Check for timeout (30 minutes from start)
+    // Check for timeout (2 hours from start - new listings can take much longer)
     const startedAt = feed.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : 0;
     const elapsed = Date.now() - startedAt;
     const timeout = TWO_PHASE_DEFAULTS.priceVerificationTimeout;
 
     if (elapsed > timeout && step !== 'complete' && step !== 'failed') {
-      return this.failTwoPhaseSync(feedId, userEmail, 'Timeout: Two-phase sync exceeded 30 minute limit');
+      const elapsedMin = Math.round(elapsed / 60000);
+      return this.failTwoPhaseSync(feedId, userEmail, `Timeout: Two-phase sync exceeded ${elapsedMin} minute limit`);
     }
 
     // Process based on current step
@@ -1844,14 +1845,15 @@ export class AmazonSyncService {
       };
     }
 
-    // Check if verification has timed out (30 minutes)
+    // Check if verification has timed out (2 hours)
     const verificationStarted = feed.verification_started_at
       ? new Date(feed.verification_started_at).getTime()
       : Date.now();
     const elapsed = Date.now() - verificationStarted;
+    const elapsedMin = Math.round(elapsed / 60000);
 
     if (elapsed > VERIFICATION_TIMEOUT_MS) {
-      console.log(`[AmazonSyncService] Verification timeout for feed ${feedId} (${elapsed}ms)`);
+      console.log(`[AmazonSyncService] Verification timeout for feed ${feedId} (${elapsedMin} min)`);
       // Mark as verification failed
       await this.updateFeedRecord(feedId, {
         status: 'verification_failed',
@@ -1862,7 +1864,7 @@ export class AmazonSyncService {
         .from('amazon_sync_feed_items')
         .update({
           status: 'verification_failed',
-          verification_error: 'Price verification timed out after 30 minutes',
+          verification_error: `Price verification timed out after ${elapsedMin} minutes`,
         })
         .eq('feed_id', feedId)
         .eq('status', 'accepted');
@@ -1870,7 +1872,7 @@ export class AmazonSyncService {
       // Discord notification - verification timed out
       discordService.sendSyncStatus({
         title: '⚠️ Amazon Sync Verification Timeout',
-        message: `Price verification timed out after 30 minutes\nFeed: ${feedId.slice(0, 8)}`,
+        message: `Price verification timed out after ${elapsedMin} minutes\nFeed: ${feedId.slice(0, 8)}`,
         success: false,
       }).catch(() => {});
 
