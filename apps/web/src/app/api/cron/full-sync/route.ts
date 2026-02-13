@@ -255,46 +255,57 @@ async function resetStuckJobs(
   return resetCount;
 }
 
-/** Get weekly stats */
+/** Get weekly stats (aligned with /api/workflow/metrics) */
 async function getWeeklyStats(supabase: ReturnType<typeof createServiceRoleClient>): Promise<WeeklyStats> {
-  // Get start of current week (Monday)
+  // Get start of current week (Monday) - use date strings to match workflow metrics
   const now = new Date();
   const dayOfWeek = now.getDay();
   const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - daysFromMonday);
   weekStart.setHours(0, 0, 0, 0);
-  const weekStartIso = weekStart.toISOString();
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
 
-  // Listed this week (inventory items created this week with status LISTED)
+  const weekStartStr = weekStart.toISOString().split('T')[0]; // yyyy-MM-dd
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+  // Listed this week - inventory items by listing_date (matches workflow metrics)
   const { data: listedItems } = await supabase
     .from('inventory_items')
     .select('id, listing_value')
-    .eq('status', 'LISTED')
-    .gte('created_at', weekStartIso);
+    .gte('listing_date', weekStartStr)
+    .lte('listing_date', weekEndStr);
 
-  const listedCount = listedItems?.length ?? 0;
-  const listedValue = listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) ?? 0;
+  // Also include BrickLink batch uploads (tracked in bricklink_uploads table)
+  const { data: bricklinkUploads } = await supabase
+    .from('bricklink_uploads')
+    .select('id, selling_price')
+    .gte('upload_date', weekStartStr)
+    .lte('upload_date', weekEndStr);
+
+  const listedCount = (listedItems?.length ?? 0) + (bricklinkUploads?.length ?? 0);
+  const listedValue =
+    (listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) ?? 0) +
+    (bricklinkUploads?.reduce((sum, u) => sum + (Number(u.selling_price) || 0), 0) ?? 0);
 
   // Sold this week - combine platform_orders and ebay_orders
   const { data: platformOrders } = await supabase
     .from('platform_orders')
     .select('id, total')
-    .gte('order_date', weekStartIso);
+    .gte('order_date', weekStartStr)
+    .lte('order_date', weekEndStr);
 
   const { data: ebayOrders } = await supabase
     .from('ebay_orders')
     .select('id, total_fee_basis_amount')
-    .gte('creation_date', weekStartIso);
+    .gte('creation_date', weekStartStr)
+    .lte('creation_date', weekEndStr);
 
-  const platformSoldCount = platformOrders?.length ?? 0;
-  const platformSoldValue = platformOrders?.reduce((sum, order) => sum + (Number(order.total) || 0), 0) ?? 0;
-
-  const ebaySoldCount = ebayOrders?.length ?? 0;
-  const ebaySoldValue = ebayOrders?.reduce((sum, order) => sum + (Number(order.total_fee_basis_amount) || 0), 0) ?? 0;
-
-  const soldCount = platformSoldCount + ebaySoldCount;
-  const soldValue = platformSoldValue + ebaySoldValue;
+  const soldCount = (platformOrders?.length ?? 0) + (ebayOrders?.length ?? 0);
+  const soldValue =
+    (platformOrders?.reduce((sum, order) => sum + (Number(order.total) || 0), 0) ?? 0) +
+    (ebayOrders?.reduce((sum, order) => sum + (Number(order.total_fee_basis_amount) || 0), 0) ?? 0);
 
   // Backlog (items with status BACKLOG)
   const { count: backlogCount } = await supabase
