@@ -165,7 +165,18 @@ export class KeepaClient {
       throw new Error('Keepa API key not configured. Set KEEPA_API_KEY environment variable.');
     }
 
-    if (asins.length > 10) {
+    // Filter out invalid ASINs (must be 10 alphanumeric characters)
+    const validAsins = asins.filter(a => /^[A-Z0-9]{10}$/.test(a));
+    if (validAsins.length === 0) {
+      console.warn(`[Keepa] No valid ASINs in batch: ${asins.join(', ')}`);
+      return [];
+    }
+    if (validAsins.length < asins.length) {
+      const invalid = asins.filter(a => !validAsins.includes(a));
+      console.warn(`[Keepa] Filtered ${invalid.length} invalid ASINs: ${invalid.join(', ')}`);
+    }
+
+    if (validAsins.length > 10) {
       throw new Error('Maximum 10 ASINs per Keepa request');
     }
 
@@ -175,7 +186,7 @@ export class KeepaClient {
     const params = new URLSearchParams({
       key: this.apiKey,
       domain: '2', // Amazon UK
-      asin: asins.join(','),
+      asin: validAsins.join(','),
       stats: '90', // Include 90-day stats (for was_price_90d)
       buybox: '1', // Include buy box history
       history: '1', // Include full price history
@@ -189,12 +200,17 @@ export class KeepaClient {
 
     const data: KeepaResponse = await response.json();
 
-    if (data.error) {
-      throw new Error(`Keepa API error: ${data.error.message}`);
-    }
-
     this.tokensLeft = data.tokensLeft;
     this.lastRequestTime = Date.now();
+
+    // Keepa may return partial results alongside an error (e.g. invalid ASINs in batch).
+    // Only throw if there are zero products returned.
+    if (data.error && (!data.products || data.products.length === 0)) {
+      throw new Error(`Keepa API error: ${data.error.message}`);
+    }
+    if (data.error) {
+      console.warn(`[Keepa] Partial error (${data.products?.length ?? 0} products returned): ${data.error.message}`);
+    }
 
     return data.products ?? [];
   }
@@ -277,8 +293,10 @@ export class KeepaClient {
 
   /**
    * Extract current pricing data from a Keepa product for the daily pricing sync.
-   * Uses the latest CSV values and stats for 90-day averages.
-   * Lighter than extractSnapshots() — returns only the current state.
+   * Uses stats.current (preferred) with CSV fallback for non-buy-box fields.
+   *
+   * Note: BUY_BOX CSV uses triples [timestamp, price, shipping] not pairs,
+   * so we must use stats.current for buy box price to avoid reading shipping as price.
    */
   extractCurrentPricing(product: KeepaProduct): {
     buyBoxPrice: number | null;
@@ -287,18 +305,27 @@ export class KeepaClient {
     offerCount: number | null;
     lowestNewPrice: number | null;
   } {
+    const current = product.stats?.current ?? [];
+
+    const getStatsCurrent = (csvIndex: number): number | null => {
+      const value = current[csvIndex] ?? null;
+      return value !== null && value >= 0 ? value : null;
+    };
+
     const getLatestValue = (csvIndex: number): number | null => {
       const csv = product.csv?.[csvIndex];
       if (!csv || csv.length < 2) return null;
-      // Last pair: [timestamp, value] — take the value
+      // Standard CSV: pairs of [timestamp, value]
       const value = csv[csv.length - 1];
       return value >= 0 ? value : null;
     };
 
-    const buyBoxRaw = getLatestValue(KEEPA_CSV_INDEX.BUY_BOX);
-    const salesRankRaw = getLatestValue(KEEPA_CSV_INDEX.SALES_RANK);
-    const offerCountRaw = getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
-    const lowestNewRaw = getLatestValue(KEEPA_CSV_INDEX.NEW);
+    // Use stats.current for BUY_BOX (avoids triple-format CSV issue) and NEW price
+    // Fall back to CSV for sales rank and offer count (standard pair format)
+    const buyBoxRaw = getStatsCurrent(KEEPA_CSV_INDEX.BUY_BOX) ?? getLatestValue(KEEPA_CSV_INDEX.BUY_BOX);
+    const lowestNewRaw = getStatsCurrent(KEEPA_CSV_INDEX.NEW) ?? getLatestValue(KEEPA_CSV_INDEX.NEW);
+    const salesRankRaw = getStatsCurrent(KEEPA_CSV_INDEX.SALES_RANK) ?? getLatestValue(KEEPA_CSV_INDEX.SALES_RANK);
+    const offerCountRaw = getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
 
     // 90-day average buy box from stats
     const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
