@@ -89,7 +89,7 @@ interface HobbyLimit {
 const HOBBY_LIMITS: HobbyLimit[] = [
   { name: 'Fluid Active CPU', key: 'fluidActiveCpuSeconds', limit: 14400, unit: 'seconds' },
   { name: 'Function Invocations', key: 'functionInvocations', limit: 1_000_000, unit: 'invocations' },
-  { name: 'Function Duration', key: 'functionDurationGbSeconds', limit: 1000, unit: 'GB-seconds' },
+  { name: 'Function Duration', key: 'functionDurationGbSeconds', limit: 1000, unit: 'GB-hours' },
   { name: 'Edge Requests', key: 'edgeRequests', limit: 10_000_000, unit: 'requests' },
   { name: 'Edge Middleware Invocations', key: 'edgeMiddlewareInvocations', limit: 1_000_000, unit: 'invocations' },
   { name: 'Source Images', key: 'sourceImages', limit: 1000, unit: 'images' },
@@ -228,6 +228,7 @@ export class VercelUsageService {
       }
       case 'GB':
       case 'GB-seconds':
+      case 'GB-hours':
         return `${value.toFixed(1)} ${unit}`;
       default:
         return `${value.toLocaleString('en-GB')} ${unit}`;
@@ -311,8 +312,8 @@ export class VercelUsageService {
     }
 
     manualData.functionInvocations = totalFnInvocations;
-    // Convert GB-hours to GB-seconds (1 hour = 3600 seconds)
-    manualData.functionDurationGbSeconds = totalFnGbHours * 3600;
+    // v2 API returns GB-hours, Hobby limit is 1000 GB-hours — no conversion needed
+    manualData.functionDurationGbSeconds = totalFnGbHours;
     manualData.dataTransferGb = totalBandwidthBytes / (1024 * 1024 * 1024);
 
     // Aggregate daily build metrics across the period
