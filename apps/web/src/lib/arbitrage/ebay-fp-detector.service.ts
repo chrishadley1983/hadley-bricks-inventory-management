@@ -2,12 +2,13 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 22 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Uses 28 weighted scoring signals. Listings scoring >= 50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
  * 2. Low COG (<10%) - 25 pts
  * 3. Suspicious COG (<15%) - 15 pts
+ * 3b. Elevated COG (<20%) - 10 pts
  * 4. Part Number Pattern (e.g., "24183pb01") - 30 pts
  * 5. Minifigure Keywords - 25 pts
  * 6. Instructions Only - 30 pts
@@ -27,6 +28,12 @@
  * 20. Multi-Quantity - 20 pts
  * 21. Book/Magazine - 25 pts
  * 22. Sticker/Poster/Decal - 25 pts
+ * 23. Polybag/Paper Bag - 30 pts
+ * 24. Advent Day Sale - 35 pts
+ * 25. Split From Set - 30 pts
+ * 26. No Minifigures - 30 pts
+ * 27. Promotional Item - 25 pts
+ * 28. Min-to-Avg Price Ratio (<10%) - 25 pts
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -66,7 +73,14 @@ const MULTI_QUANTITY_PATTERN = /\bx\s*[2-9]\b|\b[2-9]\s*x\s+(?!.*\bin[- ]1\b)/i;
 const BOOK_MAGAZINE_KEYWORDS =
   /\b(annual|activity\s+book|magazine|encyclop\w*|handbook|ultimate\s+guide)\b/i;
 const STICKER_POSTER_KEYWORDS =
-  /\b(sticker\s+sheet|decal\s+sheet|sticker\s+set|decal\s+set|poster|art\s+print|wall\s+sticker|vinyl\s+sticker)\b/i;
+  /\b(sticker\s+sheet|decal\s+sheet|sticker\s+set|decal\s+set|poster|art\s+print|wall\s+sticker|vinyl\s+sticker|sheet\s+of\s+sticker|stickers?\s+(?:for|from)\s+(?:set|\d))\b/i;
+
+// New detection patterns (signals 23-27)
+const POLYBAG_KEYWORDS = /\b(poly\s*bag|paper\s*bag|foil\s*(bag|pack)|promo\s*bag)\b/i;
+const ADVENT_DAY_KEYWORDS = /\b(choose\s+your\s+day|pick\s+your\s+day)\b/i;
+const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,5}\b)/i;
+const NO_MINIFIGS_KEYWORDS = /\bno\s+(minifig(ure)?s?|mini\s*figs?|figs?|figures?)\b/i;
+const PROMOTIONAL_KEYWORDS = /\b(metal\s*box|shaped\s*box|promotional\s+tin)\b/i;
 
 // Stop words for name matching
 const STOP_WORDS = new Set([
@@ -200,7 +214,8 @@ export class EbayFpDetectorService {
     setNumber: string | null,
     setName: string | null,
     amazonPrice: number | null,
-    validSetNumbers: Set<string>
+    validSetNumbers: Set<string>,
+    avgPrice: number | null = null
   ): { score: number; signals: DetectionSignal[] } {
     let score = 0;
     const signals: DetectionSignal[] = [];
@@ -231,6 +246,13 @@ export class EbayFpDetectorService {
           points: SIGNAL_WEIGHTS.SUSPICIOUS_COG,
           description: `Suspicious COG: ${cogPercent.toFixed(1)}%`,
         });
+      } else if (cogPercent < 20) {
+        score += SIGNAL_WEIGHTS.ELEVATED_COG;
+        signals.push({
+          signal: 'ELEVATED_COG',
+          points: SIGNAL_WEIGHTS.ELEVATED_COG,
+          description: `Elevated COG: ${cogPercent.toFixed(1)}%`,
+        });
       }
     }
 
@@ -244,8 +266,8 @@ export class EbayFpDetectorService {
       });
     }
 
-    // 5. Minifigure keywords
-    if (MINIFIG_KEYWORDS.test(title)) {
+    // 5. Minifigure keywords (skip if "buildable figure" — that's a real LEGO product line)
+    if (MINIFIG_KEYWORDS.test(title) && !/\bbuildable\s+figure/i.test(title)) {
       score += SIGNAL_WEIGHTS.MINIFIGURE_KEYWORDS;
       signals.push({
         signal: 'MINIFIGURE_KEYWORDS',
@@ -256,7 +278,7 @@ export class EbayFpDetectorService {
 
     // 6. Instructions/manual only
     if (INSTRUCTIONS_KEYWORDS.test(title)) {
-      if (/\b(only|just|booklet)\b/i.test(title)) {
+      if (/\b(only|just|booklet|vgc|good\s+condition)\b/i.test(title) || /\b(?:for|from)\s+\d{4,5}\b/i.test(title)) {
         score += SIGNAL_WEIGHTS.INSTRUCTIONS_ONLY;
         signals.push({
           signal: 'INSTRUCTIONS_ONLY',
@@ -303,7 +325,7 @@ export class EbayFpDetectorService {
     }
 
     // 12. Name mismatch check
-    if (setName && setNumber && !title.includes(setNumber)) {
+    if (setName && setNumber) {
       const setWords = new Set(
         (setName.match(/\b[a-zA-Z]{3,}\b/g) || [])
           .map((w) => w.toLowerCase())
@@ -462,6 +484,66 @@ export class EbayFpDetectorService {
       });
     }
 
+    // 23. Polybag / paper bag detection (skip if set number is in title — selling the actual polybag set)
+    if (POLYBAG_KEYWORDS.test(title) && !(setNumber && title.includes(setNumber))) {
+      score += SIGNAL_WEIGHTS.POLYBAG_PAPER_BAG;
+      signals.push({
+        signal: 'POLYBAG_PAPER_BAG',
+        points: SIGNAL_WEIGHTS.POLYBAG_PAPER_BAG,
+        description: 'Polybag/paper bag listing (not boxed set)',
+      });
+    }
+
+    // 24. Advent calendar day sale
+    if (ADVENT_DAY_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.ADVENT_DAY_SALE;
+      signals.push({
+        signal: 'ADVENT_DAY_SALE',
+        points: SIGNAL_WEIGHTS.ADVENT_DAY_SALE,
+        description: 'Advent calendar individual day sale',
+      });
+    }
+
+    // 25. Split from set
+    if (SPLIT_FROM_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.SPLIT_FROM_SET;
+      signals.push({
+        signal: 'SPLIT_FROM_SET',
+        points: SIGNAL_WEIGHTS.SPLIT_FROM_SET,
+        description: 'Item split/extracted from a set',
+      });
+    }
+
+    // 26. No minifigures included
+    if (NO_MINIFIGS_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.NO_MINIFIGURES;
+      signals.push({
+        signal: 'NO_MINIFIGURES',
+        points: SIGNAL_WEIGHTS.NO_MINIFIGURES,
+        description: 'Listing explicitly states no minifigures',
+      });
+    }
+
+    // 27. Promotional item (tin, metal box, shaped box)
+    if (PROMOTIONAL_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.PROMOTIONAL_ITEM;
+      signals.push({
+        signal: 'PROMOTIONAL_ITEM',
+        points: SIGNAL_WEIGHTS.PROMOTIONAL_ITEM,
+        description: 'Promotional item (metal box/tin/shaped box)',
+      });
+    }
+
+    // 28. Min-to-avg price ratio check
+    if (avgPrice && avgPrice > 0 && totalPrice > 0 && totalPrice / avgPrice < 0.10) {
+      score += SIGNAL_WEIGHTS.MIN_TO_AVG_RATIO;
+      signals.push({
+        signal: 'MIN_TO_AVG_RATIO',
+        points: SIGNAL_WEIGHTS.MIN_TO_AVG_RATIO,
+        description: `Price is <10% of avg eBay price (£${totalPrice.toFixed(2)} vs £${avgPrice.toFixed(2)} avg)`,
+      });
+    }
+
     // Cap at 100
     return { score: Math.min(score, 100), signals };
   }
@@ -479,7 +561,7 @@ export class EbayFpDetectorService {
       const { data, error } = await this.supabase
         .from('arbitrage_current_view')
         .select('bricklink_set_number, name, effective_amazon_price, ebay_listings')
-        .eq('item_type', 'inventory')
+        .in('item_type', ['inventory', 'seeded'])
         .not('ebay_listings', 'is', null)
         .range(offset, offset + pageSize - 1);
 
@@ -568,6 +650,14 @@ export class EbayFpDetectorService {
         // Get per-set exclusion list
         const setExcludedIds = excludedBySet.get(item.bricklink_set_number ?? '') ?? new Set<string>();
 
+        // Compute average price across listings for this item
+        const prices = listings
+          .map((l) => l.totalPrice ?? l.price ?? 0)
+          .filter((p) => p > 0);
+        const avgPrice = prices.length > 0
+          ? prices.reduce((sum, p) => sum + p, 0) / prices.length
+          : null;
+
         // Score each listing
         for (const listing of listings) {
           listingsScanned++;
@@ -582,7 +672,8 @@ export class EbayFpDetectorService {
             setNumber,
             item.name,
             amazonPrice,
-            validSetNumbers
+            validSetNumbers,
+            avgPrice
           );
 
           if (score >= threshold) {
