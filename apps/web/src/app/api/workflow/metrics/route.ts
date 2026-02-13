@@ -122,7 +122,7 @@ export async function GET() {
       brickowl: brickowlDailyResult.count ?? 0,
     };
 
-    // Get week totals from platform_orders
+    // Get week totals from platform_orders + ebay_orders
     const { data: weekOrders } = await supabase
       .from('platform_orders')
       .select('total, platform')
@@ -130,8 +130,17 @@ export async function GET() {
       .gte('order_date', format(weekStart, 'yyyy-MM-dd'))
       .lte('order_date', format(weekEnd, 'yyyy-MM-dd'));
 
-    const weekSoldValue = weekOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0;
-    const weekSoldCount = weekOrders?.length ?? 0;
+    const { data: weekEbayOrders } = await supabase
+      .from('ebay_orders')
+      .select('total_fee_basis_amount')
+      .eq('user_id', user.id)
+      .gte('creation_date', format(weekStart, 'yyyy-MM-dd'))
+      .lte('creation_date', format(weekEnd, 'yyyy-MM-dd'));
+
+    const weekSoldValue =
+      (weekOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0) +
+      (weekEbayOrders?.reduce((sum, order) => sum + (order.total_fee_basis_amount || 0), 0) ?? 0);
+    const weekSoldCount = (weekOrders?.length ?? 0) + (weekEbayOrders?.length ?? 0);
 
     // Get today's sold value (order_date is a timestamp, so use range query)
     const tomorrowStr = format(new Date(today.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
@@ -142,7 +151,16 @@ export async function GET() {
       .gte('order_date', todayStr)
       .lt('order_date', tomorrowStr);
 
-    const todaySoldValue = todayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0;
+    const { data: todayEbayOrders } = await supabase
+      .from('ebay_orders')
+      .select('total_fee_basis_amount')
+      .eq('user_id', user.id)
+      .gte('creation_date', todayStr)
+      .lt('creation_date', tomorrowStr);
+
+    const todaySoldValue =
+      (todayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0) +
+      (todayEbayOrders?.reduce((sum, order) => sum + (order.total_fee_basis_amount || 0), 0) ?? 0);
 
     // Get BrickLink weekly value (from inventory items listed this week on BrickLink)
     const { data: bricklinkWeekItems } = await supabase
@@ -224,7 +242,7 @@ export async function GET() {
         (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
       );
 
-      // Sold value for the day (order_date is a timestamp, so use range query)
+      // Sold value for the day (platform_orders + ebay_orders)
       const nextDateStr = format(new Date(date.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
       const { data: dayOrders } = await supabase
         .from('platform_orders')
@@ -233,7 +251,17 @@ export async function GET() {
         .gte('order_date', dateStr)
         .lt('order_date', nextDateStr);
 
-      history.dailySoldValue.push(dayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0);
+      const { data: dayEbayOrders } = await supabase
+        .from('ebay_orders')
+        .select('total_fee_basis_amount')
+        .eq('user_id', user.id)
+        .gte('creation_date', dateStr)
+        .lt('creation_date', nextDateStr);
+
+      history.dailySoldValue.push(
+        (dayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0) +
+        (dayEbayOrders?.reduce((sum, order) => sum + (order.total_fee_basis_amount || 0), 0) ?? 0)
+      );
 
       // BrickLink value for the day (inventory items + uploads)
       const { data: dayBricklinkItems } = await supabase
