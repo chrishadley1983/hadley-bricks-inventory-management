@@ -464,7 +464,7 @@ export async function POST(request: NextRequest) {
         }));
 
         await emailService.sendPurchaseImportSummary({
-          userEmail: 'chrishadley1983@gmail.com',
+          userEmail: 'chris@hadleybricks.co.uk',
           items: emailItems,
           needsReview: reviewItems,
           duration,

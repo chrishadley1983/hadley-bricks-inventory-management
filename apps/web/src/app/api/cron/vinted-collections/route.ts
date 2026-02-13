@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
         </div>`;
 
       await emailService.send({
-        to: 'chrishadley1983@gmail.com',
+        to: 'chris@hadleybricks.co.uk',
         subject: `\ud83d\udce6 ${newItems.length} parcel${newItems.length > 1 ? 's' : ''} ready to collect`,
         html: emailHtml,
       });
