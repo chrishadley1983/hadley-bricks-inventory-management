@@ -8,7 +8,7 @@
  * Two-phase sync workflow:
  * 1. Submit price-only feed to Amazon
  * 2. Poll until price feed completes
- * 3. Verify price is live on Amazon (up to 30 min)
+ * 3. Verify price is live on Amazon (up to 2 hours for new listings)
  * 4. Submit quantity feed
  * 5. Poll until quantity feed completes
  *

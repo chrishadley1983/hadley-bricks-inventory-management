@@ -474,11 +474,11 @@ export const DEFAULT_PRODUCT_TYPE = 'TOY_BUILDING_BLOCK';
 /** Feed polling interval in milliseconds (30 seconds) */
 export const POLL_INTERVAL_MS = 30000;
 
-/** Maximum polling duration in milliseconds (30 minutes - extended for new SKUs) */
-export const MAX_POLL_DURATION_MS = 30 * 60 * 1000;
+/** Maximum polling duration in milliseconds (2 hours - new listings can take much longer) */
+export const MAX_POLL_DURATION_MS = 120 * 60 * 1000;
 
-/** Maximum number of poll attempts (60 attempts = 30 minutes at 30s intervals) */
-export const MAX_POLL_ATTEMPTS = 60;
+/** Maximum number of poll attempts (240 attempts = 2 hours at 30s intervals) */
+export const MAX_POLL_ATTEMPTS = 240;
 
 /** Product type cache TTL in days (180 days = 6 months) */
 export const PRODUCT_TYPE_CACHE_TTL_DAYS = 180;
@@ -493,11 +493,11 @@ export const VERIFICATION_INITIAL_DELAY_MS = 5 * 60 * 1000;
 /** Interval between verification attempts (5 minutes) */
 export const VERIFICATION_INTERVAL_MS = 5 * 60 * 1000;
 
-/** Maximum time to wait for price verification (30 minutes) */
-export const VERIFICATION_TIMEOUT_MS = 30 * 60 * 1000;
+/** Maximum time to wait for price verification (2 hours - new listings need longer) */
+export const VERIFICATION_TIMEOUT_MS = 120 * 60 * 1000;
 
-/** Maximum number of verification attempts */
-export const MAX_VERIFICATION_ATTEMPTS = 6;
+/** Maximum number of verification attempts (24 attempts at 5 min intervals = 2 hours) */
+export const MAX_VERIFICATION_ATTEMPTS = 24;
 
 // ============================================================================
 // TWO-PHASE SYNC TYPES
@@ -601,8 +601,8 @@ export interface TwoPhaseStepResult {
  * Default two-phase sync configuration
  */
 export const TWO_PHASE_DEFAULTS = {
-  /** Max time to wait for price verification (30 minutes - Amazon can be slow) */
-  priceVerificationTimeout: 30 * 60 * 1000,
+  /** Max time to wait for price verification (2 hours - new listings can take much longer) */
+  priceVerificationTimeout: 120 * 60 * 1000,
 
   /** How often to check if price is live (30 seconds) */
   priceVerificationInterval: 30 * 1000,
