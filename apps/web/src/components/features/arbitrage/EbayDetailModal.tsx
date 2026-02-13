@@ -107,9 +107,9 @@ export function EbayDetailModal({
   // Parse the editable buy price
   const buyPrice = parseFloat(buyPriceInput) || 0;
 
-  // Use your_price if available, otherwise effective Amazon price (buy box or lowest offer)
-  const effectiveAmazonPrice = item.effectiveAmazonPrice ?? item.buyBoxPrice ?? item.lowestOfferPrice;
-  const sellPrice = item.yourPrice ?? effectiveAmazonPrice ?? 0;
+  // Use effective Amazon price (buy_box → was_price_90d from view)
+  const effectiveAmazonPrice = item.effectiveAmazonPrice ?? item.buyBoxPrice ?? item.wasPrice90d;
+  const sellPrice = effectiveAmazonPrice ?? 0;
 
   // Calculate Amazon FBM profit breakdown with current buy price
   const profitBreakdown = calculateAmazonFBMProfit(sellPrice, buyPrice);
