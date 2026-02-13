@@ -6,7 +6,7 @@
  * manual data input for when the API is unavailable on Hobby plans.
  *
  * Environment variables:
- * - VERCEL_TOKEN: Personal access token from https://vercel.com/account/tokens
+ * - VERCEL_API_TOKEN: Personal access token from https://vercel.com/account/tokens
  */
 
 // ---------------------------------------------------------------------------
@@ -116,10 +116,10 @@ export class VercelUsageService {
   private readonly token: string | undefined;
 
   constructor() {
-    this.token = process.env.VERCEL_TOKEN;
+    this.token = process.env.VERCEL_API_TOKEN;
 
     if (!this.token) {
-      console.log('[VercelUsageService] Disabled - missing VERCEL_TOKEN');
+      console.log('[VercelUsageService] Disabled - missing VERCEL_API_TOKEN');
     }
   }
 
@@ -143,7 +143,7 @@ export class VercelUsageService {
     const period = this.getCurrentBillingPeriod();
 
     if (!this.token) {
-      console.warn('[VercelUsageService] No VERCEL_TOKEN configured');
+      console.warn('[VercelUsageService] No VERCEL_API_TOKEN configured');
       return null;
     }
 
