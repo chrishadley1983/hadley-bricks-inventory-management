@@ -18,6 +18,8 @@ import { discordService } from '@/lib/notifications';
 import { emailService } from '@/lib/email';
 import type { PurchaseImportEmailItem } from '@/lib/email';
 import { jobExecutionService } from '@/lib/services/job-execution.service';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { KeepaClient } from '@/lib/keepa/keepa-client';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes
@@ -245,6 +247,84 @@ export async function POST(request: NextRequest) {
           bundle_index: candidate.bundle_index,
         });
       }
+    }
+
+    // Keepa fallback for items missing list price
+    const missingPriceItems = enriched.filter(e => !e.list_price && e.amazon_asin);
+    if (missingPriceItems.length > 0) {
+      console.log(`[Cron EmailPurchases] ${missingPriceItems.length} items missing Amazon pricing, trying Keepa fallback...`);
+
+      // Tier 1: Check price_snapshots table for existing Keepa data (free, no API call)
+      //   Process in batches of 15 set_nums to stay under Supabase 1000-row limit
+      try {
+        const supabase = createServiceRoleClient();
+        const setNums = missingPriceItems.map(e => `${e.set_number}-1`);
+        const priceMap = new Map<string, number>();
+
+        for (let i = 0; i < setNums.length; i += 15) {
+          const batch = setNums.slice(i, i + 15);
+          const { data: snapshots } = await supabase
+            .from('price_snapshots')
+            .select('set_num, price_gbp')
+            .in('set_num', batch)
+            .eq('source', 'keepa_amazon_buybox')
+            .order('date', { ascending: false });
+
+          if (snapshots) {
+            for (const snap of snapshots) {
+              if (!priceMap.has(snap.set_num)) {
+                priceMap.set(snap.set_num, Number(snap.price_gbp));
+              }
+            }
+          }
+        }
+
+        for (const item of missingPriceItems) {
+          const price = priceMap.get(`${item.set_number}-1`);
+          if (price) {
+            item.list_price = price;
+            console.log(`[Cron EmailPurchases] Keepa DB price for ${item.set_number}: £${price.toFixed(2)}`);
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[Cron EmailPurchases] Keepa DB lookup failed:', dbErr);
+      }
+
+      // Tier 2: Keepa API for items still missing price
+      const stillMissing = enriched.filter(e => !e.list_price && e.amazon_asin);
+      if (stillMissing.length > 0) {
+        try {
+          const keepaClient = new KeepaClient();
+          if (keepaClient.isConfigured()) {
+            const asins = stillMissing.map(e => e.amazon_asin!);
+            // Batch in groups of 10 (Keepa limit)
+            for (let i = 0; i < asins.length; i += 10) {
+              const batch = asins.slice(i, i + 10);
+              console.log(`[Cron EmailPurchases] Keepa API lookup for ${batch.length} ASINs: ${batch.join(', ')}`);
+              const products = await keepaClient.fetchProducts(batch);
+
+              for (const product of products) {
+                const pricing = keepaClient.extractCurrentPricing(product);
+                const price = pricing.buyBoxPrice ?? pricing.lowestNewPrice;
+                if (price) {
+                  const item = stillMissing.find(e => e.amazon_asin === product.asin);
+                  if (item) {
+                    item.list_price = price;
+                    console.log(`[Cron EmailPurchases] Keepa API price for ${item.set_number} (${product.asin}): £${price.toFixed(2)}`);
+                  }
+                }
+              }
+            }
+          } else {
+            console.warn('[Cron EmailPurchases] Keepa API key not configured, skipping API fallback');
+          }
+        } catch (keepaErr) {
+          console.warn('[Cron EmailPurchases] Keepa API fallback failed:', keepaErr);
+        }
+      }
+
+      const resolved = missingPriceItems.filter(e => e.list_price).length;
+      console.log(`[Cron EmailPurchases] Keepa fallback resolved ${resolved}/${missingPriceItems.length} missing prices`);
     }
 
     // Also mark needs_review items as skipped

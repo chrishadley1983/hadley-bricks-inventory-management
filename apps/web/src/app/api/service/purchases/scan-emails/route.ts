@@ -167,15 +167,41 @@ function extractBundleItems(body: string): string[] {
  * Handles: (10786), 40461, 30578-1, "set 40461", "set no 40679"
  */
 function extractSetNumber(text: string): string | null {
-  // Pattern 1: Set number in parentheses like (10786)
-  const parenMatch = text.match(/\((\d{4,5})\)/);
-  if (parenMatch) return parenMatch[1];
+  const all = extractAllSetNumbers(text);
+  return all.length > 0 ? all[0] : null;
+}
 
-  // Pattern 2: Standalone 4-5 digit number (possibly with -1 suffix)
-  const standaloneMatch = text.match(/\b(\d{4,5})(?:-\d)?\b/);
-  if (standaloneMatch) return standaloneMatch[1];
+/**
+ * Extract ALL LEGO set numbers from text.
+ * Handles comma-separated in parentheses like (30666,30565,30679),
+ * single in parentheses like (10786), and standalone like 40461.
+ */
+function extractAllSetNumbers(text: string): string[] {
+  // Pattern 1: Comma-separated numbers in parentheses like (30666,30565,30679)
+  const multiParenMatch = text.match(/\(([\d,\s-]+)\)/);
+  if (multiParenMatch) {
+    const nums = multiParenMatch[1]
+      .split(/[,\s]+/)
+      .map(n => n.replace(/-\d$/, '').trim())
+      .filter(n => /^\d{4,5}$/.test(n));
+    if (nums.length > 1) return nums;
+    if (nums.length === 1) return nums;
+  }
 
-  return null;
+  // Pattern 2: Single number in parentheses like (10786)
+  const singleParenMatch = text.match(/\((\d{4,5})\)/);
+  if (singleParenMatch) return [singleParenMatch[1]];
+
+  // Pattern 3: Standalone 4-5 digit numbers (deduplicated)
+  const seen = new Set<string>();
+  const results: string[] = [];
+  for (const match of text.matchAll(/\b(\d{4,5})(?:-\d)?\b/g)) {
+    if (!seen.has(match[1])) {
+      seen.add(match[1]);
+      results.push(match[1]);
+    }
+  }
+  return results;
 }
 
 /**
@@ -251,12 +277,23 @@ function parseVintedEmail(email: {
       }];
     }
 
-    // Try to extract set numbers from all items
-    const itemsWithSetNumbers = bundleItems.map(name => ({
-      name,
-      setNumber: extractSetNumber(name),
-    }));
-    const allIdentified = itemsWithSetNumbers.every(i => i.setNumber !== null);
+    // Extract set numbers from all items, expanding multi-set listings
+    // e.g. "3 x Lego (30666,30565,30679)" → 3 separate entries
+    const expandedItems: Array<{ name: string; setNumber: string | null }> = [];
+    for (const name of bundleItems) {
+      const setNumbers = extractAllSetNumbers(name);
+      if (setNumbers.length > 1) {
+        for (const sn of setNumbers) {
+          expandedItems.push({ name, setNumber: sn });
+        }
+      } else if (setNumbers.length === 1) {
+        expandedItems.push({ name, setNumber: setNumbers[0] });
+      } else {
+        expandedItems.push({ name, setNumber: null });
+      }
+    }
+
+    const allIdentified = expandedItems.every(i => i.setNumber !== null);
 
     if (!allIdentified) {
       // If ANY item lacks a set number, return the whole bundle as 1 review candidate
@@ -278,10 +315,10 @@ function parseVintedEmail(email: {
     }
 
     // All items identified - return N candidates with bundle grouping
-    // Keep original email_id and order_reference (no suffixes)
-    const perItemCost = Math.round((totalCost / bundleItems.length) * 100) / 100;
+    // Cost split equally across ALL expanded items (not just Vinted line items)
+    const perItemCost = Math.round((totalCost / expandedItems.length) * 100) / 100;
 
-    return itemsWithSetNumbers.map((item, index) => ({
+    return expandedItems.map((item, index) => ({
       source: 'Vinted' as const,
       order_reference: orderRef,
       seller_username: seller,
@@ -300,17 +337,41 @@ function parseVintedEmail(email: {
     }));
   }
 
-  // Non-bundle: single item
-  // First try set number from subject item name
-  let setNumber = extractSetNumber(subjectItemName);
+  // Non-bundle: single Vinted listing
+  // Check if the listing contains multiple set numbers (e.g. "3 x LEGO (30666,30565,30679)")
+  let allSetNumbers = extractAllSetNumbers(subjectItemName);
 
-  // If not found in subject, try from the body Order section (may have more detail)
-  if (!setNumber) {
+  // If not found in subject, try from the body Order section
+  if (allSetNumbers.length === 0) {
     const bodyItems = extractBundleItems(content);
     if (bodyItems.length > 0) {
-      setNumber = extractSetNumber(bodyItems[0]);
+      allSetNumbers = extractAllSetNumbers(bodyItems[0]);
     }
   }
+
+  if (allSetNumbers.length > 1) {
+    // Single listing with multiple sets - expand into bundle-like entries
+    const perItemCost = Math.round((totalCost / allSetNumbers.length) * 100) / 100;
+    return allSetNumbers.map((sn, index) => ({
+      source: 'Vinted' as const,
+      order_reference: orderRef,
+      seller_username: seller,
+      item_name: subjectItemName,
+      set_number: sn,
+      cost: perItemCost,
+      purchase_date: purchaseDate,
+      email_id: email.id,
+      email_subject: email.subject,
+      email_date: email.date,
+      payment_method: 'Monzo Card',
+      suggested_condition: 'New' as const,
+      bundle_group: orderRef,
+      bundle_total_cost: totalCost,
+      bundle_index: index + 1,
+    }));
+  }
+
+  const setNumber = allSetNumbers[0] ?? null;
 
   return [{
     source: 'Vinted',
