@@ -47,28 +47,6 @@ function detectService(text: string): string {
   return 'Unknown';
 }
 
-/** Minimal HTML-to-text converter. */
-function htmlToText(html: string): string {
-  let text = html;
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<\/?(p|div|tr|li|h[1-6])[^>]*>/gi, '\n');
-  text = text.replace(/<td[^>]*>/gi, ' | ');
-  text = text.replace(/<[^>]+>/g, '');
-  text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
-  text = text.replace(/[ \t]+/g, ' ');
-  text = text.replace(/\n[ \t]+/g, '\n');
-  text = text.replace(/\n{3,}/g, '\n\n');
-  return text.trim();
-}
-
 interface ParsedCollection {
   item: string;
   service: string;
