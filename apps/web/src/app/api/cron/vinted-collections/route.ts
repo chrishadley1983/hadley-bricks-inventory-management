@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { discordService } from '@/lib/notifications';
+import { emailService } from '@/lib/email/email.service';
 import { jobExecutionService } from '@/lib/services/job-execution.service';
 import {
   searchEmails,
@@ -277,16 +278,67 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Discord notification
+    // Group by location for notification
     if (newItems.length > 0) {
-      const lines = newItems.map(
-        (i) => `\u2022 **${i.item}** | ${i.service} | ${i.location}`,
-      );
+      const byLocation = new Map<string, typeof newItems>();
+      for (const item of newItems) {
+        const key = item.location || 'Unknown location';
+        if (!byLocation.has(key)) byLocation.set(key, []);
+        byLocation.get(key)!.push(item);
+      }
+
+      // Discord: grouped by location
+      const discordLines: string[] = [];
+      for (const [location, locationItems] of byLocation) {
+        discordLines.push(`\n\ud83d\udccd **${location}**`);
+        for (const i of locationItems) {
+          discordLines.push(`\u2022 ${i.item} (${i.service})`);
+        }
+      }
 
       await discordService.send('sync-status', {
-        title: `\ud83d\udce6 ${newItems.length} Vinted Parcel${newItems.length > 1 ? 's' : ''} Ready to Collect`,
-        description: lines.join('\n').slice(0, 4000),
+        title: `\ud83d\udce6 ${newItems.length} Parcel${newItems.length > 1 ? 's' : ''} Ready to Collect`,
+        description: discordLines.join('\n').slice(0, 4000),
         color: 0x09b1ba, // Vinted teal
+      });
+
+      // Email: HTML grouped by location
+      const locationSections = Array.from(byLocation.entries())
+        .map(([location, locationItems]) => {
+          const rows = locationItems
+            .map(
+              (i) =>
+                `<tr>
+                  <td style="padding:6px 10px;border:1px solid #ddd;">${i.item}</td>
+                  <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;">${i.service}</td>
+                </tr>`,
+            )
+            .join('');
+          return `
+            <h3 style="color:#333;margin:16px 0 8px 0;">\ud83d\udccd ${location}</h3>
+            <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;">
+              <thead>
+                <tr style="background:#09b1ba;color:#fff;">
+                  <th style="padding:8px 10px;text-align:left;">Item</th>
+                  <th style="padding:8px 10px;text-align:center;width:100px;">Service</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>`;
+        })
+        .join('');
+
+      const emailHtml = `
+        <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+          <h2 style="color:#333;">\ud83d\udce6 ${newItems.length} Parcel${newItems.length > 1 ? 's' : ''} Ready to Collect</h2>
+          ${locationSections}
+          <p style="color:#999;font-size:11px;margin-top:24px;">Sent by Hadley Bricks cron</p>
+        </div>`;
+
+      await emailService.send({
+        to: 'chrishadley1983@gmail.com',
+        subject: `\ud83d\udce6 ${newItems.length} parcel${newItems.length > 1 ? 's' : ''} ready to collect`,
+        html: emailHtml,
       });
     }
 
