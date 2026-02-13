@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withServiceAuth } from '@/lib/middleware/service-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import {
+  searchEmails as gmailSearchEmails,
+  getEmailBody as gmailGetEmailBody,
+  isGmailConfigured,
+} from '@/lib/google/gmail-client';
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(30).optional().default(7),
@@ -35,13 +40,19 @@ interface PurchaseCandidate {
   bundle_index?: number;       // 1-based index within bundle
 }
 
-// Hadley API base URL
+// Hadley API base URL (fallback for local dev without Gmail OAuth creds)
 const HADLEY_API_BASE = 'http://172.19.64.1:8100';
 
 /**
- * Fetch full email details including body from Hadley API
+ * Fetch full email details including body.
+ * Tries direct Gmail API first, falls back to Hadley API.
  */
 async function fetchEmailBody(emailId: string): Promise<string | null> {
+  // Try direct Gmail API first
+  const directBody = await gmailGetEmailBody(emailId);
+  if (directBody !== null) return directBody;
+
+  // Fall back to Hadley API
   try {
     const response = await fetch(
       `${HADLEY_API_BASE}/gmail/get?id=${encodeURIComponent(emailId)}`
@@ -61,7 +72,8 @@ async function fetchEmailBody(emailId: string): Promise<string | null> {
 }
 
 /**
- * Fetch emails from Hadley API Gmail endpoint
+ * Fetch emails matching a Gmail query.
+ * Tries direct Gmail API first, falls back to Hadley API.
  */
 async function fetchEmails(query: string): Promise<Array<{
   id: string;
@@ -72,6 +84,27 @@ async function fetchEmails(query: string): Promise<Array<{
   snippet: string;
   body?: string;
 }>> {
+  // Try direct Gmail API first
+  if (isGmailConfigured()) {
+    try {
+      const results = await gmailSearchEmails(query, 50);
+      if (results.length > 0 || isGmailConfigured()) {
+        // Enrich with bodies
+        const enriched = await Promise.all(
+          results.map(async (email) => {
+            const body = await gmailGetEmailBody(email.id);
+            return { ...email, body: body || email.snippet };
+          })
+        );
+        console.log(`[scan-emails] Fetched ${enriched.length} emails via Gmail API`);
+        return enriched;
+      }
+    } catch (err) {
+      console.warn('[scan-emails] Gmail API failed, falling back to Hadley API:', err);
+    }
+  }
+
+  // Fall back to Hadley API
   try {
     const response = await fetch(
       `${HADLEY_API_BASE}/gmail/search?q=${encodeURIComponent(query)}&limit=50`
@@ -83,7 +116,6 @@ async function fetchEmails(query: string): Promise<Array<{
     }
 
     const data = await response.json();
-    // Ensure we return an array - Hadley API uses 'emails', fallback to 'messages'
     let emails: Array<{
       id: string;
       threadId: string;
@@ -106,6 +138,7 @@ async function fetchEmails(query: string): Promise<Array<{
       })
     );
 
+    console.log(`[scan-emails] Fetched ${enrichedEmails.length} emails via Hadley API`);
     return enrichedEmails;
   } catch (error) {
     console.error('[scan-emails] Failed to fetch emails:', error);

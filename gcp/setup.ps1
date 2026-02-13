@@ -146,6 +146,7 @@ Create-SchedulerJob -Name "amazon-pricing-sync" -Schedule "0 4 * * *" -Uri $FUNC
 
 # Additional fire-and-forget jobs
 Create-SchedulerJob -Name "email-purchases" -Schedule "17 2 * * *" -Uri "$APP_URL/api/cron/email-purchases" -Description "Daily email purchase import (Vinted/eBay)"
+Create-SchedulerJob -Name "vinted-collections" -Schedule "0 8 * * *" -Uri "$APP_URL/api/cron/vinted-collections" -Description "Daily Vinted parcel collection check"
 Create-SchedulerJob -Name "retirement-sync" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/retirement-sync" -Description "Daily retirement data sync from Brickset/BrickTap"
 Create-SchedulerJob -Name "rebrickable-sync" -Schedule "0 4 * * 0" -Uri "$APP_URL/api/cron/rebrickable-sync" -Description "Weekly Rebrickable set data sync"
 Create-SchedulerJob -Name "investment-sync" -Schedule "0 5 * * *" -Uri "$APP_URL/api/cron/investment-sync" -Description "Daily investment ASIN linkage and classification"
@@ -157,7 +158,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Created 12 Cloud Scheduler jobs:" -ForegroundColor White
+Write-Host "Created 13 Cloud Scheduler jobs:" -ForegroundColor White
 gcloud scheduler jobs list --location=$REGION --format="table(name,schedule,state)"
 
 Write-Host ""
