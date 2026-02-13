@@ -57,6 +57,24 @@ export interface ManualUsageData {
   deployments?: number;
 }
 
+/** v2 API daily request data shape */
+interface V2RequestsDay {
+  function_invocation_successful_count?: number;
+  function_invocation_error_count?: number;
+  function_invocation_timeout_count?: number;
+  function_execution_successful_gb_hours?: number;
+  function_execution_error_gb_hours?: number;
+  function_execution_timeout_gb_hours?: number;
+  bandwidth_outgoing_bytes?: number;
+}
+
+/** v2 API daily builds data shape */
+interface V2BuildsDay {
+  build_build_seconds?: number;
+  build_completed_count?: number;
+  build_failed_count?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -115,9 +133,11 @@ export class VercelUsageService {
   // -----------------------------------------------------------------------
 
   /**
-   * Fetch usage from the Vercel API.
-   * Returns null if the API is unavailable (Hobby plan restriction, auth error, etc.)
-   * so the caller can decide whether to require manual data instead.
+   * Fetch usage from the Vercel v2 API.
+   * Uses /v2/usage with type=requests and type=builds, which work on Hobby plans
+   * (unlike /v1/usage which requires Pro/Enterprise).
+   * Returns null if the API is unavailable so the caller can decide whether
+   * to require manual data instead.
    */
   async fetchUsage(): Promise<VercelUsageReport | null> {
     const period = this.getCurrentBillingPeriod();
@@ -133,22 +153,27 @@ export class VercelUsageService {
         to: period.end.toISOString(),
       });
 
-      const response = await fetch(`https://api.vercel.com/v1/usage?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
+      const headers = { Authorization: `Bearer ${this.token}` };
 
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
+      // Fetch requests and builds data in parallel
+      const [requestsRes, buildsRes] = await Promise.all([
+        fetch(`https://api.vercel.com/v2/usage?type=requests&${params.toString()}`, { headers }),
+        fetch(`https://api.vercel.com/v2/usage?type=builds&${params.toString()}`, { headers }),
+      ]);
+
+      if (!requestsRes.ok || !buildsRes.ok) {
+        const reqBody = !requestsRes.ok ? await requestsRes.text().catch(() => '') : '';
+        const buildBody = !buildsRes.ok ? await buildsRes.text().catch(() => '') : '';
         console.warn(
-          `[VercelUsageService] API returned ${response.status}: ${body}`
+          `[VercelUsageService] v2 API error - requests: ${requestsRes.status} ${reqBody}, builds: ${buildsRes.status} ${buildBody}`
         );
         return null;
       }
 
-      const data = await response.json();
-      return this.buildReportFromApiData(data, period);
+      const requestsData = await requestsRes.json();
+      const buildsData = await buildsRes.json();
+
+      return this.buildReportFromV2Data(requestsData, buildsData, period);
     } catch (error) {
       console.error('[VercelUsageService] API fetch failed:', error);
       return null;
@@ -259,32 +284,54 @@ export class VercelUsageService {
     });
   }
 
-  /** Build report from Vercel API response data */
-  private buildReportFromApiData(
-    apiData: Record<string, unknown>,
+  /** Build report from Vercel v2 API daily data (requests + builds) */
+  private buildReportFromV2Data(
+    requestsData: { data?: V2RequestsDay[] },
+    buildsData: { data?: V2BuildsDay[] },
     period: BillingPeriod
   ): VercelUsageReport {
-    // Map Vercel API fields to our manual data keys
-    // The Vercel API response structure may vary - map what we can
     const manualData: ManualUsageData = {};
 
-    // Extract known fields from API response (best-effort mapping)
-    const usage = (apiData.usage || apiData) as Record<string, number>;
-    if (typeof usage.serverlessFunctionExecution === 'number') {
-      manualData.functionInvocations = usage.serverlessFunctionExecution;
+    // Aggregate daily request metrics across the period
+    const reqDays = requestsData.data ?? [];
+    let totalFnInvocations = 0;
+    let totalFnGbHours = 0;
+    let totalBandwidthBytes = 0;
+
+    for (const day of reqDays) {
+      totalFnInvocations +=
+        (day.function_invocation_successful_count ?? 0) +
+        (day.function_invocation_error_count ?? 0) +
+        (day.function_invocation_timeout_count ?? 0);
+      totalFnGbHours +=
+        (day.function_execution_successful_gb_hours ?? 0) +
+        (day.function_execution_error_gb_hours ?? 0) +
+        (day.function_execution_timeout_gb_hours ?? 0);
+      totalBandwidthBytes += day.bandwidth_outgoing_bytes ?? 0;
     }
-    if (typeof usage.edgeRequests === 'number') {
-      manualData.edgeRequests = usage.edgeRequests;
+
+    manualData.functionInvocations = totalFnInvocations;
+    // Convert GB-hours to GB-seconds (1 hour = 3600 seconds)
+    manualData.functionDurationGbSeconds = totalFnGbHours * 3600;
+    manualData.dataTransferGb = totalBandwidthBytes / (1024 * 1024 * 1024);
+
+    // Aggregate daily build metrics across the period
+    const buildDays = buildsData.data ?? [];
+    let totalBuildSeconds = 0;
+    let totalDeployments = 0;
+
+    for (const day of buildDays) {
+      totalBuildSeconds += day.build_build_seconds ?? 0;
+      totalDeployments += (day.build_completed_count ?? 0) + (day.build_failed_count ?? 0);
     }
-    if (typeof usage.sourceImages === 'number') {
-      manualData.sourceImages = usage.sourceImages;
-    }
-    if (typeof usage.dataTransfer === 'number') {
-      manualData.dataTransferGb = usage.dataTransfer / (1024 * 1024 * 1024); // bytes to GB
-    }
-    if (typeof usage.buildMinutes === 'number') {
-      manualData.buildMinutes = usage.buildMinutes;
-    }
+
+    manualData.buildMinutes = totalBuildSeconds / 60;
+    manualData.deployments = totalDeployments;
+
+    console.log(
+      `[VercelUsageService] v2 API aggregated: ${reqDays.length} request days, ${buildDays.length} build days, ` +
+      `${totalFnInvocations} invocations, ${manualData.buildMinutes.toFixed(0)} build mins`
+    );
 
     const metrics = this.buildMetrics(manualData);
     const overallStatus = this.getWorstStatus(metrics);
