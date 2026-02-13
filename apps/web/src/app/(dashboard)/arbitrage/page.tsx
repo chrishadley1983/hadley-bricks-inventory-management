@@ -251,9 +251,9 @@ function ArbitragePageContent() {
               ) : (
                 <>
                   <SummaryCard
-                    label="Total Tracked"
+                    label="Total ASINs"
                     value={summary?.totalItems ?? 0}
-                    description="ASINs with pricing data"
+                    description="Tracked + seeded"
                   />
                   <SummaryCard
                     label="Opportunities"
@@ -336,9 +336,9 @@ function ArbitragePageContent() {
               ) : (
                 <>
                   <SummaryCard
-                    label="Total Tracked"
+                    label="Total ASINs"
                     value={summary?.totalItems ?? 0}
-                    description="ASINs with pricing data"
+                    description="Tracked + seeded"
                   />
                   <SummaryCard
                     label="eBay Opportunities"
