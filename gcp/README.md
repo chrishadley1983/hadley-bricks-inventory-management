@@ -189,6 +189,16 @@ gcloud scheduler jobs create http investment-retrain \
   --attempt-deadline="300s" \
   --description="Monthly ML model retrain and investment scoring"
 
+# Vinted Collections - daily at 8am UK time
+gcloud scheduler jobs create http vinted-collections \
+  --location=europe-west2 \
+  --schedule="0 8 * * *" \
+  --uri="$APP_URL/api/cron/vinted-collections" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --description="Daily Vinted parcel collection check"
+
 # Vercel Usage Report - daily at 7am UK time
 gcloud scheduler jobs create http vercel-usage-report \
   --location=europe-west2 \
@@ -265,6 +275,9 @@ gcloud scheduler jobs run rebrickable-sync --location=europe-west2
 gcloud scheduler jobs run retirement-sync --location=europe-west2
 gcloud scheduler jobs run investment-sync --location=europe-west2
 gcloud scheduler jobs run investment-retrain --location=europe-west2
+
+# Notification jobs
+gcloud scheduler jobs run vinted-collections --location=europe-west2
 
 # Monitoring jobs
 gcloud scheduler jobs run vercel-usage-report --location=europe-west2
