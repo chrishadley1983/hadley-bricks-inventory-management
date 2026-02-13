@@ -10,6 +10,24 @@
  * Domain 2 = Amazon UK (amazon.co.uk)
  */
 
+/**
+ * Keepa stats object returned when stats parameter is set.
+ * Contains current, average, min, max values for each CSV type.
+ * Array indices match KEEPA_CSV_INDEX values.
+ */
+export interface KeepaStats {
+  /** Current value for each CSV type (index matches KEEPA_CSV_INDEX) */
+  current?: (number | null)[];
+  /** Average over the stats period for each CSV type */
+  avg?: (number | null)[];
+  /** Average over 30 days for each CSV type */
+  avg30?: (number | null)[];
+  /** Average over 90 days for each CSV type */
+  avg90?: (number | null)[];
+  /** Average over 180 days for each CSV type */
+  avg180?: (number | null)[];
+}
+
 export interface KeepaProduct {
   asin: string;
   /** CSV-encoded price history: [timestamp, price, timestamp, price, ...] */
@@ -22,6 +40,8 @@ export interface KeepaProduct {
   eanList?: string[];
   /** UPC codes associated with this product */
   upcList?: string[];
+  /** Stats object when stats parameter is set */
+  stats?: KeepaStats;
 }
 
 export interface KeepaResponse {
@@ -56,11 +76,11 @@ export interface KeepaImportResult {
  */
 export const KEEPA_CSV_INDEX = {
   AMAZON: 0,        // Amazon price
-  NEW: 1,           // Marketplace new price
+  NEW: 1,           // Marketplace new price (lowest new offer)
   USED: 2,          // Marketplace used price
   SALES_RANK: 3,    // Sales rank
-  BUY_BOX: 18,      // Buy box price
   COUNT_NEW: 11,    // New offer count
+  BUY_BOX: 18,      // Buy box price (shipping included)
 } as const;
 
 /**
@@ -113,12 +133,20 @@ export function parseKeepaCSV(
 export class KeepaClient {
   private apiKey: string;
   private baseUrl = 'https://api.keepa.com';
-  private tokensPerMinute = 20;
+  private tokensPerMinute: number;
   private lastRequestTime = 0;
   private tokensLeft = 0;
 
-  constructor(apiKey?: string) {
+  /**
+   * @param apiKey - Keepa API key (defaults to KEEPA_API_KEY env var)
+   * @param tokensPerMinute - Token refill rate for rate limiting.
+   *   Defaults to KEEPA_TOKENS_PER_MINUTE env var or 20 (EUR 49 plan).
+   *   Set to 60 for EUR 129 plan.
+   */
+  constructor(apiKey?: string, tokensPerMinute?: number) {
     this.apiKey = apiKey || process.env.KEEPA_API_KEY || '';
+    this.tokensPerMinute = tokensPerMinute
+      ?? parseInt(process.env.KEEPA_TOKENS_PER_MINUTE ?? '20', 10);
   }
 
   /**
@@ -148,7 +176,7 @@ export class KeepaClient {
       key: this.apiKey,
       domain: '2', // Amazon UK
       asin: asins.join(','),
-      stats: '365', // Include 365-day stats
+      stats: '90', // Include 90-day stats (for was_price_90d)
       buybox: '1', // Include buy box history
       history: '1', // Include full price history
     });
@@ -245,6 +273,43 @@ export class KeepaClient {
     return Array.from(dateMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, data]) => ({ date, ...data }));
+  }
+
+  /**
+   * Extract current pricing data from a Keepa product for the daily pricing sync.
+   * Uses the latest CSV values and stats for 90-day averages.
+   * Lighter than extractSnapshots() — returns only the current state.
+   */
+  extractCurrentPricing(product: KeepaProduct): {
+    buyBoxPrice: number | null;
+    salesRank: number | null;
+    was90dAvg: number | null;
+    offerCount: number | null;
+    lowestNewPrice: number | null;
+  } {
+    const getLatestValue = (csvIndex: number): number | null => {
+      const csv = product.csv?.[csvIndex];
+      if (!csv || csv.length < 2) return null;
+      // Last pair: [timestamp, value] — take the value
+      const value = csv[csv.length - 1];
+      return value >= 0 ? value : null;
+    };
+
+    const buyBoxRaw = getLatestValue(KEEPA_CSV_INDEX.BUY_BOX);
+    const salesRankRaw = getLatestValue(KEEPA_CSV_INDEX.SALES_RANK);
+    const offerCountRaw = getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
+    const lowestNewRaw = getLatestValue(KEEPA_CSV_INDEX.NEW);
+
+    // 90-day average buy box from stats
+    const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+
+    return {
+      buyBoxPrice: buyBoxRaw !== null ? keepaPriceToGBP(buyBoxRaw) : null,
+      salesRank: salesRankRaw,
+      was90dAvg: was90dRaw !== null && was90dRaw >= 0 ? keepaPriceToGBP(was90dRaw) : null,
+      offerCount: offerCountRaw,
+      lowestNewPrice: lowestNewRaw !== null ? keepaPriceToGBP(lowestNewRaw) : null,
+    };
   }
 
   /**

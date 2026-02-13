@@ -117,12 +117,10 @@ export class ArbitrageService {
       case 'seeded':
         query = query.eq('item_type', 'seeded');
         break;
-      // 'all', 'inventory' - no additional filter beyond item_type below
-    }
-
-    // Scope to inventory items unless explicitly viewing seeded.
-    if (show !== 'seeded') {
-      query = query.eq('item_type', 'inventory');
+      case 'inventory':
+        query = query.eq('item_type', 'inventory');
+        break;
+      // 'all' - no item_type filter, shows both inventory + seeded
     }
 
     // Apply search filter
@@ -152,12 +150,11 @@ export class ArbitrageService {
       return this.recalculateEbayStats(item, excludedBySet, allExcludedIds);
     });
 
-    // Count BrickLink opportunities (inventory only)
+    // Count BrickLink opportunities (all item types)
     const { count: opportunityCount } = await this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('item_type', 'inventory')
       .gte('margin_percent', minMargin);
 
     const seededCount = items.filter((item) => item.itemType === 'seeded').length;
@@ -200,8 +197,7 @@ export class ArbitrageService {
     let baseQuery = this.supabase
       .from('arbitrage_current_view')
       .select('*')
-      .eq('user_id', userId)
-      .eq('item_type', 'inventory');
+      .eq('user_id', userId);
 
     // Apply non-eBay show filters
     switch (show) {
@@ -227,7 +223,13 @@ export class ArbitrageService {
       case 'pending_review':
         baseQuery = baseQuery.eq('status', 'pending_review');
         break;
-      // 'all', 'inventory' — no additional filter
+      case 'seeded':
+        baseQuery = baseQuery.eq('item_type', 'seeded');
+        break;
+      case 'inventory':
+        baseQuery = baseQuery.eq('item_type', 'inventory');
+        break;
+      // 'all' — no item_type filter, shows both inventory + seeded
     }
 
     if (search) {
@@ -285,12 +287,11 @@ export class ArbitrageService {
     const from = (page - 1) * pageSize;
     const pagedItems = filtered.slice(from, from + pageSize);
 
-    // Count BrickLink opportunities (inventory only)
+    // Count BrickLink opportunities (all item types)
     const { count: opportunityCount } = await this.supabase
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('item_type', 'inventory')
       .gte('margin_percent', minMargin);
 
     return {
@@ -655,23 +656,22 @@ export class ArbitrageService {
       { count: ebayOpportunities },
       { count: excluded },
     ] = await Promise.all([
+      // Total items in view (inventory + seeded)
       this.supabase
-        .from('tracked_asins')
+        .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('status', 'active'),
+        .eq('user_id', userId),
+      // BrickLink opportunities (all item types)
       this.supabase
         .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('item_type', 'inventory')
         .gte('margin_percent', minMargin),
-      // eBay opportunities: use COG% (maxCog) converted to margin threshold
+      // eBay opportunities (all item types)
       this.supabase
         .from('arbitrage_current_view')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('item_type', 'inventory')
         .gte('ebay_margin_percent', ebayMinMarginFromCog),
       this.supabase
         .from('tracked_asins')
@@ -786,8 +786,8 @@ export class ArbitrageService {
     const maxPrice = Math.max(...prices);
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
 
-    // Recalculate margin and COG% based on buy_box_price first (matching DB logic)
-    const sellPrice = item.buyBoxPrice ?? item.yourPrice ?? 0;
+    // Recalculate margin and COG% based on buy_box → was_price_90d (matching DB logic)
+    const sellPrice = item.buyBoxPrice ?? item.wasPrice90d ?? 0;
     let marginPercent: number | null = null;
     let marginAbsolute: number | null = null;
     let cogPercent: number | null = null;
