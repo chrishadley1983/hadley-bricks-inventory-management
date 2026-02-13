@@ -151,6 +151,62 @@ public class ApiClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fetch pending seller messages from the server
+    /// </summary>
+    public async Task<PendingMessagesResponse?> GetPendingMessagesAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{_baseUrl}/api/arbitrage/vinted/automation/messages/pending"
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Log.Error("Failed to fetch pending messages: {StatusCode}", response.StatusCode);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<PendingMessagesResponse>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error fetching pending messages");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Report the result of a seller message send attempt
+    /// </summary>
+    public async Task<bool> ReportMessageResultAsync(MessageResultRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"{_baseUrl}/api/arbitrage/vinted/automation/messages/result",
+                request
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Log.Error("Failed to report message result: {StatusCode} - {Error}",
+                    response.StatusCode, error);
+                return false;
+            }
+
+            Log.Debug("Message result reported successfully");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error reporting message result");
+            return false;
+        }
+    }
+
     public void Dispose()
     {
         if (!_disposed)
