@@ -16,13 +16,13 @@ import { KeepaClient } from '@/lib/keepa/keepa-client';
 
 export async function POST(request: NextRequest) {
   return withServiceAuth(request, ['read', 'write'], async () => {
-    return handleBackfill(request);
+    return handleBackfill(request) as Promise<NextResponse>;
   });
 }
 
 export async function GET(request: NextRequest) {
   return withServiceAuth(request, ['read'], async () => {
-    return handleBackfill(request);
+    return handleBackfill(request) as Promise<NextResponse>;
   });
 }
 
