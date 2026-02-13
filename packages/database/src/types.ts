@@ -7837,6 +7837,33 @@ export type Database = {
           },
         ]
       }
+      scraped_metrics: {
+        Row: {
+          key: string
+          value: number
+          unit: string
+          scraped_at: string
+          billing_period_start: string | null
+          billing_period_end: string | null
+        }
+        Insert: {
+          key: string
+          value: number
+          unit?: string
+          scraped_at?: string
+          billing_period_start?: string | null
+          billing_period_end?: string | null
+        }
+        Update: {
+          key?: string
+          value?: number
+          unit?: string
+          scraped_at?: string
+          billing_period_start?: string | null
+          billing_period_end?: string | null
+        }
+        Relationships: []
+      }
       reminders: {
         Row: {
           channel_id: number

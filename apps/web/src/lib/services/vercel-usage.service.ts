@@ -2,12 +2,16 @@
  * Vercel Usage Monitoring Service
  *
  * Fetches Vercel platform usage metrics and calculates RAG status
- * for monitoring Hobby plan limits. Supports both API-based and
- * manual data input for when the API is unavailable on Hobby plans.
+ * for monitoring Hobby plan limits. Combines v2 API data (function
+ * invocations, builds, bandwidth) with scraped dashboard data
+ * (Fluid Active CPU, ISR, Edge metrics, etc.) from Supabase.
  *
  * Environment variables:
  * - VERCEL_API_TOKEN: Personal access token from https://vercel.com/account/tokens
+ * - SUPABASE_SERVICE_ROLE_KEY: For reading scraped metrics from Supabase
  */
+
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,18 +46,29 @@ export interface VercelUsageReport {
   fromApi: boolean;
 }
 
-/** Manual data keys matching Hobby plan metric names */
+/** Keys matching Hobby plan metric names (dashboard + v2 API) */
 export interface ManualUsageData {
-  fluidActiveCpuSeconds?: number;
-  functionInvocations?: number;
-  functionDurationGbSeconds?: number;
+  // Networking
+  fastDataTransferGb?: number;
+  fastOriginTransferGb?: number;
   edgeRequests?: number;
+  edgeRequestCpuDurationSeconds?: number;
+  microfrontendsRouting?: number;
+  // ISR
+  isrReads?: number;
+  isrWrites?: number;
+  // Vercel Functions
+  functionInvocations?: number;
+  functionDurationGbHours?: number;
+  fluidProvisionedMemoryGbHours?: number;
+  fluidActiveCpuSeconds?: number;
+  edgeFnExecutionUnits?: number;
   edgeMiddlewareInvocations?: number;
-  sourceImages?: number;
-  dataTransferGb?: number;
-  webAnalyticsEvents?: number;
+  // Storage
+  blobDataStorageGb?: number;
+  blobSimpleOperations?: number;
+  // Build (v2 API only)
   buildMinutes?: number;
-  concurrentBuilds?: number;
   deployments?: number;
 }
 
@@ -86,19 +101,50 @@ interface HobbyLimit {
   unit: string;
 }
 
+/** All Hobby plan limits — matches Vercel dashboard usage table */
 const HOBBY_LIMITS: HobbyLimit[] = [
-  { name: 'Fluid Active CPU', key: 'fluidActiveCpuSeconds', limit: 14400, unit: 'seconds' },
+  // Networking
+  { name: 'Fast Data Transfer', key: 'fastDataTransferGb', limit: 100, unit: 'GB' },
+  { name: 'Fast Origin Transfer', key: 'fastOriginTransferGb', limit: 10, unit: 'GB' },
+  { name: 'Edge Requests', key: 'edgeRequests', limit: 1_000_000, unit: 'requests' },
+  { name: 'Edge Request CPU Duration', key: 'edgeRequestCpuDurationSeconds', limit: 3600, unit: 'seconds' },
+  { name: 'Microfrontends Routing', key: 'microfrontendsRouting', limit: 50_000, unit: 'requests' },
+  // ISR
+  { name: 'ISR Reads', key: 'isrReads', limit: 1_000_000, unit: 'reads' },
+  { name: 'ISR Writes', key: 'isrWrites', limit: 200_000, unit: 'writes' },
+  // Vercel Functions
   { name: 'Function Invocations', key: 'functionInvocations', limit: 1_000_000, unit: 'invocations' },
-  { name: 'Function Duration', key: 'functionDurationGbSeconds', limit: 1000, unit: 'GB-hours' },
-  { name: 'Edge Requests', key: 'edgeRequests', limit: 10_000_000, unit: 'requests' },
+  { name: 'Function Duration', key: 'functionDurationGbHours', limit: 100, unit: 'GB-Hrs' },
+  { name: 'Fluid Provisioned Memory', key: 'fluidProvisionedMemoryGbHours', limit: 360, unit: 'GB-Hrs' },
+  { name: 'Fluid Active CPU', key: 'fluidActiveCpuSeconds', limit: 14_400, unit: 'seconds' },
+  { name: 'Edge Function Execution Units', key: 'edgeFnExecutionUnits', limit: 500_000, unit: 'units' },
   { name: 'Edge Middleware Invocations', key: 'edgeMiddlewareInvocations', limit: 1_000_000, unit: 'invocations' },
-  { name: 'Source Images', key: 'sourceImages', limit: 1000, unit: 'images' },
-  { name: 'Data Transfer', key: 'dataTransferGb', limit: 100, unit: 'GB' },
-  { name: 'Web Analytics Events', key: 'webAnalyticsEvents', limit: 25_000, unit: 'events' },
+  // Storage
+  { name: 'Blob Data Storage', key: 'blobDataStorageGb', limit: 1, unit: 'GB' },
+  { name: 'Blob Simple Operations', key: 'blobSimpleOperations', limit: 10_000, unit: 'operations' },
+  // Build (v2 API — not on dashboard usage page)
   { name: 'Build Minutes', key: 'buildMinutes', limit: 6000, unit: 'minutes' },
-  { name: 'Concurrent Builds', key: 'concurrentBuilds', limit: 1, unit: 'builds' },
   { name: 'Deployments', key: 'deployments', limit: 100, unit: 'per day' },
 ];
+
+/** Maps scraped_metrics keys to HOBBY_LIMITS metric names */
+const SCRAPED_KEY_TO_METRIC: Record<string, string> = {
+  vercel_fast_data_transfer: 'Fast Data Transfer',
+  vercel_fast_origin_transfer: 'Fast Origin Transfer',
+  vercel_edge_requests: 'Edge Requests',
+  vercel_edge_request_cpu_duration: 'Edge Request CPU Duration',
+  vercel_microfrontends_routing: 'Microfrontends Routing',
+  vercel_isr_reads: 'ISR Reads',
+  vercel_isr_writes: 'ISR Writes',
+  vercel_function_invocations: 'Function Invocations',
+  vercel_function_duration: 'Function Duration',
+  vercel_fluid_provisioned_memory: 'Fluid Provisioned Memory',
+  vercel_fluid_active_cpu: 'Fluid Active CPU',
+  vercel_edge_function_execution_units: 'Edge Function Execution Units',
+  vercel_edge_middleware_invocations: 'Edge Middleware Invocations',
+  vercel_blob_data_storage: 'Blob Data Storage',
+  vercel_blob_simple_operations: 'Blob Simple Operations',
+};
 
 const RAG_THRESHOLDS = {
   GREEN_MAX: 50,
@@ -133,11 +179,9 @@ export class VercelUsageService {
   // -----------------------------------------------------------------------
 
   /**
-   * Fetch usage from the Vercel v2 API.
-   * Uses /v2/usage with type=requests and type=builds, which work on Hobby plans
-   * (unlike /v1/usage which requires Pro/Enterprise).
-   * Returns null if the API is unavailable so the caller can decide whether
-   * to require manual data instead.
+   * Fetch usage from the Vercel v2 API + scraped dashboard data.
+   * The v2 API provides function invocations, function duration, bandwidth,
+   * build minutes, and deployments. All other metrics come from scraped data.
    */
   async fetchUsage(): Promise<VercelUsageReport | null> {
     const period = this.getCurrentBillingPeriod();
@@ -173,7 +217,9 @@ export class VercelUsageService {
       const requestsData = await requestsRes.json();
       const buildsData = await buildsRes.json();
 
-      return this.buildReportFromV2Data(requestsData, buildsData, period);
+      const report = this.buildReportFromV2Data(requestsData, buildsData, period);
+      await this.mergeScrapedMetrics(report);
+      return report;
     } catch (error) {
       console.error('[VercelUsageService] API fetch failed:', error);
       return null;
@@ -227,8 +273,7 @@ export class VercelUsageService {
         return `${Math.round(value)}m`;
       }
       case 'GB':
-      case 'GB-seconds':
-      case 'GB-hours':
+      case 'GB-Hrs':
         return `${value.toFixed(1)} ${unit}`;
       default:
         return `${value.toLocaleString('en-GB')} ${unit}`;
@@ -238,6 +283,69 @@ export class VercelUsageService {
   // -----------------------------------------------------------------------
   // Private helpers
   // -----------------------------------------------------------------------
+
+  /**
+   * Merge ALL scraped metrics from Supabase into the report.
+   * Overrides v2 API values for overlapping metrics (scraped = dashboard truth).
+   * Non-fatal: if the read fails or data is stale, metrics keep their v2 API values.
+   */
+  private async mergeScrapedMetrics(report: VercelUsageReport): Promise<void> {
+    try {
+      const supabase = createServiceRoleClient();
+
+      const { data, error } = await supabase
+        .from('scraped_metrics')
+        .select('key, value, unit, scraped_at')
+        .like('key', 'vercel_%');
+
+      if (error || !data || data.length === 0) {
+        console.log('[VercelUsageService] No scraped metrics found');
+        return;
+      }
+
+      // Validate freshness of the most recent scrape
+      const mostRecent = data.reduce((a, b) =>
+        new Date(a.scraped_at) > new Date(b.scraped_at) ? a : b
+      );
+      const ageMs = Date.now() - new Date(mostRecent.scraped_at).getTime();
+      const maxAgeMs = 36 * 60 * 60 * 1000; // 36 hours
+
+      if (ageMs > maxAgeMs) {
+        console.warn(
+          `[VercelUsageService] Scraped data too old (${(ageMs / 3600000).toFixed(1)}h) — ignoring`
+        );
+        return;
+      }
+
+      let mergedCount = 0;
+      for (const row of data) {
+        const metricName = SCRAPED_KEY_TO_METRIC[row.key];
+        if (!metricName) continue;
+
+        const metric = report.metrics.find((m) => m.name === metricName);
+        if (!metric) continue;
+
+        const value = Number(row.value);
+        metric.current = value;
+        metric.usedPercent =
+          metric.limit > 0 ? Math.round((value / metric.limit) * 1000) / 10 : 0;
+        metric.status = VercelUsageService.calculateRag(metric.usedPercent);
+        metric.currentFormatted = VercelUsageService.formatValue(value, metric.unit);
+        mergedCount++;
+      }
+
+      // Recalculate overall status
+      report.overallStatus = this.getWorstStatus(report.metrics);
+
+      console.log(
+        `[VercelUsageService] Merged ${mergedCount}/${data.length} scraped metrics ` +
+        `(scraped ${(ageMs / 3600000).toFixed(1)}h ago)`
+      );
+    } catch (err) {
+      // Non-fatal — metrics keep v2 API values (or 0)
+      console.warn('[VercelUsageService] Failed to merge scraped metrics:', err);
+    }
+  }
 
   /** Get the current billing period based on the configured start day */
   private getCurrentBillingPeriod(): BillingPeriod {
@@ -312,9 +420,8 @@ export class VercelUsageService {
     }
 
     manualData.functionInvocations = totalFnInvocations;
-    // v2 API returns GB-hours, Hobby limit is 1000 GB-hours — no conversion needed
-    manualData.functionDurationGbSeconds = totalFnGbHours;
-    manualData.dataTransferGb = totalBandwidthBytes / (1024 * 1024 * 1024);
+    manualData.functionDurationGbHours = totalFnGbHours;
+    manualData.fastDataTransferGb = totalBandwidthBytes / (1024 * 1024 * 1024);
 
     // Aggregate daily build metrics across the period
     const buildDays = buildsData.data ?? [];
