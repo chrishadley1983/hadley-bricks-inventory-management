@@ -423,10 +423,17 @@ export async function POST(request: NextRequest) {
     if ((summary.created_count ?? 0) > 0) {
       try {
         const supabase = createServiceRoleClient();
+        // Only queue messages for emails received after 2pm 13-Feb-2026 (avoids
+        // duplicating messages already sent manually before automation went live)
+        const messagingCutoff = new Date('2026-02-13T14:00:00Z');
+
         const vintedOrders = new Map<string, { seller_username: string }>();
         for (const item of enriched) {
           if (item.source === 'Vinted' && item.seller_username && item.order_reference) {
-            vintedOrders.set(item.order_reference, { seller_username: item.seller_username });
+            const emailDate = item.email_date ? new Date(item.email_date) : null;
+            if (emailDate && emailDate > messagingCutoff) {
+              vintedOrders.set(item.order_reference, { seller_username: item.seller_username });
+            }
           }
         }
 
