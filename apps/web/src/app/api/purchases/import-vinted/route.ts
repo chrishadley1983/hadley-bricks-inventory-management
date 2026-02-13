@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { deriveInventoryStatusFromVinted } from '@/lib/utils';
 
 // Request validation schema
@@ -111,7 +112,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Build inventory items for non-skipped purchases
+    // 4. Enrich item names from brickset_sets for items missing proper names
+    const setNumbersToEnrich = [
+      ...new Set(
+        purchases
+          .filter((p) => !p.inventoryItem.skipCreation)
+          .map((p) => p.inventoryItem.setNumber)
+          .filter(Boolean)
+      ),
+    ];
+
+    const bricksetNameMap = new Map<string, string>();
+    if (setNumbersToEnrich.length > 0) {
+      try {
+        const serviceClient = createServiceRoleClient();
+        const normalizedNumbers = setNumbersToEnrich.map((n) =>
+          n.includes('-') ? n : `${n}-1`
+        );
+
+        const { data: bricksetSets } = await serviceClient
+          .from('brickset_sets')
+          .select('set_number, set_name')
+          .in('set_number', normalizedNumbers);
+
+        if (bricksetSets) {
+          for (const bs of bricksetSets) {
+            // Map both "12345-1" and "12345" to the name
+            bricksetNameMap.set(bs.set_number, bs.set_name);
+            const baseNumber = bs.set_number.replace(/-\d+$/, '');
+            bricksetNameMap.set(baseNumber, bs.set_name);
+          }
+        }
+      } catch (err) {
+        console.error('[POST /api/purchases/import-vinted] Brickset enrichment failed (non-fatal):', err);
+      }
+    }
+
+    // 5. Build inventory items for non-skipped purchases
     const inventoryInserts: Array<{
       purchaseIndex: number;
       data: {
@@ -133,12 +170,24 @@ export async function POST(request: NextRequest) {
     purchases.forEach((purchaseData, index) => {
       if (!purchaseData.inventoryItem.skipCreation) {
         const inventoryStatus = deriveInventoryStatusFromVinted(purchaseData.vintedStatus);
+        const setNum = purchaseData.inventoryItem.setNumber;
+        let itemName = purchaseData.inventoryItem.itemName;
+
+        // If itemName is missing or is just the set number, enrich from brickset
+        const looksLikeSetNumber = /^\d+(-\d+)?$/.test(itemName.trim());
+        if (!itemName.trim() || looksLikeSetNumber) {
+          const bricksetName = bricksetNameMap.get(setNum);
+          if (bricksetName) {
+            itemName = bricksetName;
+          }
+        }
+
         inventoryInserts.push({
           purchaseIndex: index,
           data: {
             user_id: user.id,
-            set_number: purchaseData.inventoryItem.setNumber,
-            item_name: purchaseData.inventoryItem.itemName,
+            set_number: setNum,
+            item_name: itemName,
             condition: purchaseData.inventoryItem.condition,
             status: purchaseData.inventoryItem.status || inventoryStatus,
             storage_location: purchaseData.inventoryItem.storageLocation || null,
@@ -153,7 +202,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // 5. Batch insert inventory items if any
+    // 6. Batch insert inventory items if any
     let createdInventoryItems: Array<{ id: string }> = [];
     if (inventoryInserts.length > 0) {
       const { data: inventoryData, error: inventoryError } = await supabase
@@ -169,7 +218,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Build results mapping
+    // 7. Build results mapping
     const results: ImportResult[] = purchases.map((purchaseData, index) => {
       const purchaseId = createdPurchases[index]?.id || '';
       const isSkipped = purchaseData.inventoryItem.skipCreation;
@@ -191,7 +240,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // 4. Calculate summary
+    // 8. Calculate summary
     const summary: ImportSummary = {
       totalPurchases: purchases.length,
       successfulPurchases: results.filter((r) => r.success).length,
@@ -204,7 +253,7 @@ export async function POST(request: NextRequest) {
       `[POST /api/purchases/import-vinted] Import complete: ${summary.successfulPurchases}/${summary.totalPurchases} purchases, ${summary.totalInventoryItems} inventory items`
     );
 
-    // 5. Return results
+    // 9. Return results
     return NextResponse.json(
       {
         data: {
