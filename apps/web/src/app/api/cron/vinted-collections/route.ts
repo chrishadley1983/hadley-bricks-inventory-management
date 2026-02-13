@@ -1,14 +1,16 @@
 /**
  * POST /api/cron/vinted-collections
  *
- * Daily cron endpoint that checks Gmail for Vinted "ready to collect" emails
+ * Daily cron endpoint that checks Gmail for parcel collection emails
  * and posts a Discord notification with any new parcels.
  *
  * Pipeline:
  * 1. Search Gmail for Vinted collection-ready notifications (last 7 days)
- * 2. Parse item name, delivery service, and pickup location from each email
- * 3. Dedup against vinted_collections_reported table
- * 4. Post Discord embed for any new items
+ * 2. Search Gmail for Royal Mail collection notifications (last 7 days)
+ *    - Links Royal Mail emails to Vinted items by searching for the seller name
+ * 3. Parse item name, delivery service, and pickup location from each email
+ * 4. Dedup against vinted_collections_reported table
+ * 5. Post Discord embed for any new items
  *
  * Recommended schedule: Daily at 8am UK time
  */
@@ -32,7 +34,7 @@ export const maxDuration = 120; // 2 minutes
 
 const SERVICE_PATTERNS: [string, RegExp][] = [
   ['InPost', /inpost/i],
-  ['Evri', /evri|hermes/i],
+  ['Evri', /evri|hermes|one\s*stop/i],
   ['Royal Mail', /royal\s*mail/i],
   ['Yodel', /yodel/i],
   ['DPD', /\bdpd\b/i],
@@ -50,6 +52,11 @@ function detectService(text: string): string {
 interface ParsedCollection {
   item: string;
   service: string;
+  location: string;
+}
+
+interface ParsedRoyalMail {
+  senderName: string;
   location: string;
 }
 
@@ -80,6 +87,43 @@ function parseCollection(subject: string, body: string): ParsedCollection {
   }
 
   return { item, service, location };
+}
+
+function parseRoyalMailCollection(body: string): ParsedRoyalMail {
+  // "Your parcel from Claire Harper is ready to collect* from:"
+  const senderMatch = /Your parcel from\s+(.+?)\s+is ready to collect/i.exec(body);
+  const senderName = senderMatch ? senderMatch[1].trim() : '';
+
+  // Location follows "from:" on the next line, e.g. "York Parade Post Office [TN10 3NP]"
+  const locationMatch = /is ready to collect\*?\s*"?\s*from:\s*\n?\s*(.+)/i.exec(body);
+  let location = locationMatch ? locationMatch[1].trim() : '';
+  // Strip trailing noise like "Bring ID" or button text
+  location = location.replace(/\s*Bring\s+ID.*/i, '').trim();
+
+  return { senderName, location };
+}
+
+/**
+ * Try to find a Vinted item name by searching for the seller name in Vinted emails.
+ * Returns the item name if found, or "Parcel from [name]" as fallback.
+ */
+async function linkRoyalMailToVintedItem(senderName: string): Promise<string> {
+  if (!senderName) return 'Unknown parcel';
+
+  const vintedEmails = await searchEmails(
+    `from:no-reply@vinted.co.uk "${senderName}" newer_than:14d`,
+    1,
+  );
+
+  if (vintedEmails.length > 0) {
+    let subject = vintedEmails[0].subject;
+    if (subject.toLowerCase().startsWith('order update for ')) {
+      subject = subject.slice('Order update for '.length);
+    }
+    return subject;
+  }
+
+  return `Parcel from ${senderName}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +201,28 @@ export async function POST(request: NextRequest) {
           email_id: email.id,
           item: parsed.item,
           service: parsed.service,
+          location: parsed.location,
+          date: email.date,
+        });
+      }
+
+      // Also search Royal Mail collection emails
+      const royalMailEmails = await searchEmails(
+        `from:no-reply@royalmail.com "ready to collect" newer_than:${DAYS}d`,
+        100,
+      );
+
+      console.log(`[Cron VintedCollections] Found ${royalMailEmails.length} Royal Mail emails`);
+
+      for (const email of royalMailEmails) {
+        const body = await getEmailBody(email.id);
+        const parsed = parseRoyalMailCollection(body ?? '');
+        const itemName = await linkRoyalMailToVintedItem(parsed.senderName);
+
+        items.push({
+          email_id: email.id,
+          item: itemName,
+          service: 'Royal Mail',
           location: parsed.location,
           date: email.date,
         });
