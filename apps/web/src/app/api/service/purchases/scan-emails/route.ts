@@ -163,15 +163,6 @@ function extractBundleItems(body: string): string[] {
 }
 
 /**
- * Try to extract a LEGO set number from text.
- * Handles: (10786), 40461, 30578-1, "set 40461", "set no 40679"
- */
-function extractSetNumber(text: string): string | null {
-  const all = extractAllSetNumbers(text);
-  return all.length > 0 ? all[0] : null;
-}
-
-/**
  * Extract ALL LEGO set numbers from text.
  * Handles comma-separated in parentheses like (30666,30565,30679),
  * single in parentheses like (10786), and standalone like 40461.
