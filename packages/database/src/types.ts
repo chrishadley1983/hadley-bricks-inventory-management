@@ -9573,6 +9573,30 @@ export type Database = {
           },
         ]
       }
+      vinted_collections_reported: {
+        Row: {
+          email_id: string
+          item: string | null
+          location: string | null
+          reported_at: string | null
+          service: string | null
+        }
+        Insert: {
+          email_id: string
+          item?: string | null
+          location?: string | null
+          reported_at?: string | null
+          service?: string | null
+        }
+        Update: {
+          email_id?: string
+          item?: string | null
+          location?: string | null
+          reported_at?: string | null
+          service?: string | null
+        }
+        Relationships: []
+      }
       vinted_dom_selectors: {
         Row: {
           active: boolean
@@ -10368,6 +10392,7 @@ export type Database = {
           oldest_bricklink_sync: string | null
           oldest_ebay_sync: string | null
           retired_with_pricing_count: number | null
+          seeded_count: number | null
           sold_inventory_count: number | null
           total_active: number | null
           user_id: string | null
@@ -11398,6 +11423,14 @@ export type Database = {
           p_user_id: string
         }
         Returns: number
+      }
+      get_arbitrage_summary_stats: {
+        Args: {
+          p_ebay_min_margin?: number
+          p_min_margin?: number
+          p_user_id: string
+        }
+        Returns: Json
       }
       get_arbitrage_with_adjusted_ebay: {
         Args: {
