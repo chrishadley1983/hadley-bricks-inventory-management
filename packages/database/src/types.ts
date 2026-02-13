@@ -7837,33 +7837,6 @@ export type Database = {
           },
         ]
       }
-      scraped_metrics: {
-        Row: {
-          key: string
-          value: number
-          unit: string
-          scraped_at: string
-          billing_period_start: string | null
-          billing_period_end: string | null
-        }
-        Insert: {
-          key: string
-          value: number
-          unit?: string
-          scraped_at?: string
-          billing_period_start?: string | null
-          billing_period_end?: string | null
-        }
-        Update: {
-          key?: string
-          value?: number
-          unit?: string
-          scraped_at?: string
-          billing_period_start?: string | null
-          billing_period_end?: string | null
-        }
-        Relationships: []
-      }
       reminders: {
         Row: {
           channel_id: number
@@ -8143,6 +8116,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scraped_metrics: {
+        Row: {
+          billing_period_end: string | null
+          billing_period_start: string | null
+          key: string
+          scraped_at: string
+          unit: string
+          value: number
+        }
+        Insert: {
+          billing_period_end?: string | null
+          billing_period_start?: string | null
+          key: string
+          scraped_at?: string
+          unit?: string
+          value: number
+        }
+        Update: {
+          billing_period_end?: string | null
+          billing_period_start?: string | null
+          key?: string
+          scraped_at?: string
+          unit?: string
+          value?: number
+        }
+        Relationships: []
       }
       seeded_asin_rankings: {
         Row: {
@@ -9903,6 +9903,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vinted_seller_messages: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          max_attempts: number
+          message_text: string
+          order_reference: string
+          picked_up_at: string | null
+          seller_username: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          message_text?: string
+          order_reference: string
+          picked_up_at?: string | null
+          seller_username: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          message_text?: string
+          order_reference?: string
+          picked_up_at?: string | null
+          seller_username?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       vinted_watchlist: {
         Row: {

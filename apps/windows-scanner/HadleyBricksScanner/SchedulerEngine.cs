@@ -36,12 +36,15 @@ public class SchedulerEngine : IDisposable
     private int _currentConfigVersion;
     private int _currentScheduleVersion;
     private DateTime _currentScheduleDate; // DATE1: Track current schedule date for midnight reset
+    private DateTime? _lastMessageCheckAt; // Track when we last checked for pending messages
 
     // Timing constants
     private const int MainLoopIntervalMs = 30_000;      // LOOP1: 30 seconds
     private const int ConfigPollIntervalMs = 300_000;   // POLL1: 5 minutes
     private const int HeartbeatIntervalMs = 300_000;    // THB1: 5 minutes
     private const int MaxConsecutiveFailures = 3;       // TERR2: 3 failures before alert
+    private const int MessageCheckIntervalHours = 4;    // Check for pending messages every 4 hours
+    private static readonly Random _messageDelayRandom = new(); // For human-like delays between messages
 
     public SchedulerEngine(ConfigManager configManager, TrayApplicationContext trayContext)
     {
@@ -134,6 +137,9 @@ public class SchedulerEngine : IDisposable
                 }
 
                 _trayContext.SetState(TrayState.Running);
+
+                // Check for pending seller messages (every 4 hours)
+                await CheckAndProcessMessagesAsync(ct);
 
                 // Find next due scan (LOOP3)
                 var dueScan = GetNextDueScan();
@@ -496,6 +502,110 @@ public class SchedulerEngine : IDisposable
         else
         {
             Log.Warning("Heartbeat failed: no response from server");
+        }
+    }
+
+    /// <summary>
+    /// Check if it's time to process pending seller messages (every 4 hours)
+    /// </summary>
+    private async Task CheckAndProcessMessagesAsync(CancellationToken ct)
+    {
+        // Skip if last check was less than 4 hours ago
+        if (_lastMessageCheckAt.HasValue &&
+            (DateTime.UtcNow - _lastMessageCheckAt.Value).TotalHours < MessageCheckIntervalHours)
+        {
+            return;
+        }
+
+        _lastMessageCheckAt = DateTime.UtcNow;
+        await ProcessPendingMessagesAsync(ct);
+    }
+
+    /// <summary>
+    /// Fetch and process pending seller messages via Claude CLI
+    /// </summary>
+    private async Task ProcessPendingMessagesAsync(CancellationToken ct)
+    {
+        if (_apiClient == null) return;
+
+        Log.Information("Checking for pending seller messages...");
+
+        try
+        {
+            var response = await _apiClient.GetPendingMessagesAsync();
+            if (response == null || response.Messages.Count == 0)
+            {
+                Log.Information("No pending seller messages");
+                return;
+            }
+
+            Log.Information("Found {Count} pending seller message(s)", response.Messages.Count);
+
+            foreach (var message in response.Messages)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                // Check if paused (CAPTCHA may have been detected)
+                if (_isPaused || (_config?.Paused ?? false))
+                {
+                    Log.Warning("Scanner paused - stopping message processing");
+                    break;
+                }
+
+                Log.Information("Sending message to seller: {Seller} (attempt {Attempt})",
+                    message.SellerUsername, message.Attempts + 1);
+
+                var result = await _claudeExecutor.SendSellerMessageAsync(message, ct);
+
+                // Report result to server
+                var reportRequest = new MessageResultRequest
+                {
+                    MessageId = message.Id,
+                    Success = result.Success && result.MessageSent,
+                    CaptchaDetected = result.CaptchaDetected,
+                    Error = result.Error
+                };
+
+                await _apiClient.ReportMessageResultAsync(reportRequest);
+
+                // Handle CAPTCHA - stop processing all messages
+                if (result.CaptchaDetected)
+                {
+                    _isPaused = true;
+                    _trayContext.SetState(TrayState.Paused, "CAPTCHA detected during messaging");
+                    _trayContext.ShowBalloon("CAPTCHA Detected",
+                        "Scanner paused during seller messaging.", ToolTipIcon.Warning);
+                    break;
+                }
+
+                // Clean up browser after each message
+                try
+                {
+                    await Task.Delay(2000, ct);
+                    ChromeTabManager.CloseVintedTabs();
+                    ChromeTabManager.ClosePlaywrightBrowsers();
+                }
+                catch (Exception cleanupEx)
+                {
+                    Log.Warning(cleanupEx, "Failed to clean up browser after message send");
+                }
+
+                // Random delay between messages (30-90 seconds) for human-like behaviour
+                if (message != response.Messages.Last())
+                {
+                    var delayMs = _messageDelayRandom.Next(30_000, 90_000);
+                    Log.Debug("Waiting {Delay}s before next message", delayMs / 1000);
+                    await Task.Delay(delayMs, ct);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error processing pending seller messages");
         }
     }
 

@@ -494,6 +494,245 @@ public class ClaudeExecutor
     }
 
     /// <summary>
+    /// Execute a seller message send using Claude CLI
+    /// </summary>
+    public async Task<MessageSendResult> SendSellerMessageAsync(PendingMessage message, CancellationToken cancellationToken)
+    {
+        var startTime = DateTime.UtcNow;
+        Log.Information("Sending message to seller: {Seller} (order: {Order})",
+            message.SellerUsername, message.OrderReference);
+
+        try
+        {
+            // Load and prepare prompt
+            var promptPath = Path.Combine(_promptsDirectory, "send-seller-message.md");
+            if (!File.Exists(promptPath))
+            {
+                throw new FileNotFoundException($"Prompt file not found: {promptPath}");
+            }
+
+            var promptContent = await File.ReadAllTextAsync(promptPath);
+            promptContent = promptContent
+                .Replace("{SELLER_USERNAME}", message.SellerUsername)
+                .Replace("{MESSAGE_TEXT}", message.MessageText);
+
+            // Invoke Claude CLI and parse as MessageSendResult
+            var result = await InvokeClaudeForMessageAsync(promptContent, cancellationToken);
+
+            Log.Information("Message send result for {Seller}: success={Success}, sent={Sent}",
+                message.SellerUsername, result.Success, result.MessageSent);
+
+            return result;
+        }
+        catch (TimeoutException)
+        {
+            Log.Error("Message send to {Seller} timed out", message.SellerUsername);
+            return new MessageSendResult
+            {
+                Success = false,
+                CaptchaDetected = false,
+                MessageSent = false,
+                SellerUsername = message.SellerUsername,
+                Error = $"Timed out after {TimeoutSeconds} seconds"
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Message send to {Seller} failed", message.SellerUsername);
+            return new MessageSendResult
+            {
+                Success = false,
+                CaptchaDetected = false,
+                MessageSent = false,
+                SellerUsername = message.SellerUsername,
+                Error = ex.Message
+            };
+        }
+    }
+
+    /// <summary>
+    /// Invoke Claude CLI and parse output as MessageSendResult
+    /// </summary>
+    private async Task<MessageSendResult> InvokeClaudeForMessageAsync(string promptContent, CancellationToken cancellationToken)
+    {
+        var invokeStart = DateTime.UtcNow;
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _claudePath,
+            Arguments = "--chrome --print --output-format json --dangerously-skip-permissions",
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+
+        var stdoutBuilder = new System.Text.StringBuilder();
+        var stderrBuilder = new System.Text.StringBuilder();
+
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data != null) stdoutBuilder.AppendLine(e.Data);
+        };
+
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null) stderrBuilder.AppendLine(e.Data);
+        };
+
+        try
+        {
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            await process.StandardInput.WriteLineAsync(promptContent);
+            process.StandardInput.Close();
+
+            var waitStart = DateTime.UtcNow;
+            while (!process.HasExited)
+            {
+                await Task.Delay(2000, cancellationToken);
+                if (process.HasExited) break;
+
+                var elapsed = (DateTime.UtcNow - waitStart).TotalSeconds;
+                if (elapsed >= TimeoutSeconds)
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    throw new TimeoutException();
+                }
+            }
+
+            await Task.Delay(500, CancellationToken.None);
+
+            var stdout = stdoutBuilder.ToString();
+            return ParseMessageOutput(stdout);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Parse Claude output as MessageSendResult JSON
+    /// </summary>
+    private MessageSendResult ParseMessageOutput(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return new MessageSendResult { Success = false, Error = "Claude output was empty" };
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            var root = doc.RootElement;
+
+            // Check for Claude CLI wrapper format
+            if (root.TryGetProperty("type", out var typeElement) && typeElement.GetString() == "result")
+            {
+                if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
+                {
+                    var errorMsg = root.TryGetProperty("result", out var errResult)
+                        ? errResult.GetString() ?? "Unknown error" : "Unknown error";
+                    return new MessageSendResult { Success = false, Error = errorMsg };
+                }
+
+                if (root.TryGetProperty("result", out var resultElement))
+                {
+                    var resultText = resultElement.GetString();
+                    if (!string.IsNullOrEmpty(resultText))
+                    {
+                        return ExtractMessageResultFromText(resultText);
+                    }
+                }
+            }
+
+            // Try direct deserialization
+            var result = JsonSerializer.Deserialize<MessageSendResult>(output);
+            return result ?? new MessageSendResult { Success = false, Error = "Failed to deserialize" };
+        }
+        catch (JsonException ex)
+        {
+            Log.Error(ex, "Failed to parse message output");
+            return new MessageSendResult { Success = false, Error = $"Invalid JSON: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// Extract MessageSendResult from Claude's text response
+    /// </summary>
+    private MessageSendResult ExtractMessageResultFromText(string text)
+    {
+        // Strategy 1: JSON in code blocks
+        var codeBlockPatterns = new[]
+        {
+            @"```json\s*([\s\S]*?)\s*```",
+            @"```\s*([\s\S]*?)\s*```"
+        };
+
+        foreach (var pattern in codeBlockPatterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(text, pattern);
+            if (match.Success)
+            {
+                var json = match.Groups[1].Value.Trim();
+                var result = TryParseAsMessageResult(json);
+                if (result != null) return result;
+            }
+        }
+
+        // Strategy 2: Find JSON object with "messageSent" or "success"
+        var startIndex = text.IndexOf('{');
+        while (startIndex >= 0)
+        {
+            var braceCount = 0;
+            var endIndex = -1;
+
+            for (var i = startIndex; i < text.Length; i++)
+            {
+                if (text[i] == '{') braceCount++;
+                else if (text[i] == '}')
+                {
+                    braceCount--;
+                    if (braceCount == 0) { endIndex = i; break; }
+                }
+            }
+
+            if (endIndex > startIndex)
+            {
+                var json = text.Substring(startIndex, endIndex - startIndex + 1);
+                if (json.Contains("\"messageSent\"") || json.Contains("\"success\""))
+                {
+                    var result = TryParseAsMessageResult(json);
+                    if (result != null) return result;
+                }
+            }
+
+            startIndex = text.IndexOf('{', startIndex + 1);
+        }
+
+        return new MessageSendResult { Success = false, Error = "Could not extract result from Claude response" };
+    }
+
+    private MessageSendResult? TryParseAsMessageResult(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<MessageSendResult>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Wait for process exit with cancellation support
     /// </summary>
     private static async Task<bool> WaitForExitAsync(Process process, CancellationToken cancellationToken)
