@@ -37,12 +37,21 @@ interface SyncSubmitControlsProps {
 }
 
 /** Map two-phase step to user-friendly status */
-function getStepDisplayInfo(step: TwoPhaseStepResult['step']): { label: string; progress: number } {
-  switch (step) {
+function getStepDisplayInfo(result: TwoPhaseStepResult): { label: string; progress: number } {
+  const vp = result.verificationProgress;
+  switch (result.step) {
     case 'price_polling':
       return { label: 'Waiting for Amazon to process price update...', progress: 20 };
-    case 'price_verification':
+    case 'price_verification': {
+      if (vp && vp.total > 0) {
+        const pct = 30 + Math.round((vp.verified / vp.total) * 30); // 30-60% range
+        return {
+          label: `Verifying prices: ${vp.verified} / ${vp.total} confirmed on Amazon`,
+          progress: pct,
+        };
+      }
       return { label: 'Verifying price is live on Amazon...', progress: 50 };
+    }
     case 'quantity_submission':
       return { label: 'Submitting quantity update...', progress: 70 };
     case 'quantity_polling':
@@ -133,7 +142,7 @@ export function SyncSubmitControls({
   const isDisabled = isEmpty || isSubmitting || isTwoPhaseInProgress;
 
   // Get display info for current two-phase step
-  const stepInfo = twoPhaseResult?.step ? getStepDisplayInfo(twoPhaseResult.step) : null;
+  const stepInfo = twoPhaseResult ? getStepDisplayInfo(twoPhaseResult) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -155,6 +164,11 @@ export function SyncSubmitControls({
                 {stepInfo?.label || 'Starting...'}
               </p>
               <Progress value={stepInfo?.progress || 5} className="h-2" />
+              {twoPhaseResult?.verificationProgress && twoPhaseResult.verificationProgress.pendingSkus.length > 0 && (
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Pending: {twoPhaseResult.verificationProgress.pendingSkus.join(', ')}
+                </p>
+              )}
               <p className="text-xs text-blue-600 dark:text-blue-400">
                 You can safely navigate away - you&apos;ll receive a notification when complete.
               </p>
@@ -217,9 +231,9 @@ export function SyncSubmitControls({
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p>
-                      Submits price update first, waits until it&apos;s live on Amazon (up to 30 min),
+                      Submits price update first, waits until it&apos;s live on Amazon (up to 2 hours),
                       then submits quantity. Prevents selling at old price when updating both.
-                      You can safely navigate away - you&apos;ll receive email/push notifications when complete.
+                      You can safely navigate away - you&apos;ll receive a notification when complete.
                     </p>
                   </TooltipContent>
                 </Tooltip>
