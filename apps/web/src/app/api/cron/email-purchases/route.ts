@@ -26,12 +26,15 @@ export const maxDuration = 300; // 5 minutes
 
 /** Base URL for internal API calls */
 function getBaseUrl(): string {
-  // In production, use VERCEL_URL or APP_URL
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
+  // Use production URL to avoid Vercel deployment protection on preview URLs
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
   if (process.env.APP_URL) {
     return process.env.APP_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
   }
   return 'http://localhost:3000';
 }
