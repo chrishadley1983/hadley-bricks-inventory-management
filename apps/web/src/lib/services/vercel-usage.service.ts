@@ -186,44 +186,50 @@ export class VercelUsageService {
   async fetchUsage(): Promise<VercelUsageReport | null> {
     const period = this.getCurrentBillingPeriod();
 
-    if (!this.token) {
-      console.warn('[VercelUsageService] No VERCEL_API_TOKEN configured');
-      return null;
-    }
+    // Try v2 API first, then fall back to scraped-only
+    let report: VercelUsageReport | null = null;
 
-    try {
-      const params = new URLSearchParams({
-        from: period.start.toISOString(),
-        to: period.end.toISOString(),
-      });
+    if (this.token) {
+      try {
+        const params = new URLSearchParams({
+          from: period.start.toISOString(),
+          to: period.end.toISOString(),
+        });
 
-      const headers = { Authorization: `Bearer ${this.token}` };
+        const headers = { Authorization: `Bearer ${this.token}` };
 
-      // Fetch requests and builds data in parallel
-      const [requestsRes, buildsRes] = await Promise.all([
-        fetch(`https://api.vercel.com/v2/usage?type=requests&${params.toString()}`, { headers }),
-        fetch(`https://api.vercel.com/v2/usage?type=builds&${params.toString()}`, { headers }),
-      ]);
+        const [requestsRes, buildsRes] = await Promise.all([
+          fetch(`https://api.vercel.com/v2/usage?type=requests&${params.toString()}`, { headers }),
+          fetch(`https://api.vercel.com/v2/usage?type=builds&${params.toString()}`, { headers }),
+        ]);
 
-      if (!requestsRes.ok || !buildsRes.ok) {
-        const reqBody = !requestsRes.ok ? await requestsRes.text().catch(() => '') : '';
-        const buildBody = !buildsRes.ok ? await buildsRes.text().catch(() => '') : '';
-        console.warn(
-          `[VercelUsageService] v2 API error - requests: ${requestsRes.status} ${reqBody}, builds: ${buildsRes.status} ${buildBody}`
-        );
-        return null;
+        if (requestsRes.ok && buildsRes.ok) {
+          const requestsData = await requestsRes.json();
+          const buildsData = await buildsRes.json();
+          report = this.buildReportFromV2Data(requestsData, buildsData, period);
+        } else {
+          const reqBody = !requestsRes.ok ? await requestsRes.text().catch(() => '') : '';
+          const buildBody = !buildsRes.ok ? await buildsRes.text().catch(() => '') : '';
+          console.warn(
+            `[VercelUsageService] v2 API error - requests: ${requestsRes.status} ${reqBody}, builds: ${buildsRes.status} ${buildBody}`
+          );
+        }
+      } catch (error) {
+        console.warn('[VercelUsageService] v2 API fetch failed, falling back to scraped data:', error);
       }
-
-      const requestsData = await requestsRes.json();
-      const buildsData = await buildsRes.json();
-
-      const report = this.buildReportFromV2Data(requestsData, buildsData, period);
-      await this.mergeScrapedMetrics(report);
-      return report;
-    } catch (error) {
-      console.error('[VercelUsageService] API fetch failed:', error);
-      return null;
+    } else {
+      console.log('[VercelUsageService] No VERCEL_API_TOKEN — using scraped data only');
     }
+
+    // If v2 API failed or unavailable, build a baseline report from empty data
+    if (!report) {
+      report = this.buildReportFromManualData({});
+      report.fromApi = false;
+    }
+
+    // Always merge scraped dashboard metrics (overrides v2 API values where available)
+    await this.mergeScrapedMetrics(report);
+    return report;
   }
 
   /**
