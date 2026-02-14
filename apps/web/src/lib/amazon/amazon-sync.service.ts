@@ -993,6 +993,7 @@ export class AmazonSyncService {
     const listingsClient = new AmazonListingsClient(credentials);
     let allVerified = true;
     const failedSkus: string[] = [];
+    let verifiedCount = 0;
 
     for (const item of aggregatedItems) {
       try {
@@ -1007,6 +1008,8 @@ export class AmazonSyncService {
             `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
               `expected ${item.price}, got ${livePrice}`
           );
+        } else {
+          verifiedCount++;
         }
       } catch (error) {
         allVerified = false;
@@ -1034,6 +1037,11 @@ export class AmazonSyncService {
         message: `Waiting for price to appear on Amazon (${Math.round(elapsed / 1000)}s elapsed)`,
         priceFeed: await this.getFeed(feedId),
         nextPollDelay: 30000,
+        verificationProgress: {
+          total: aggregatedItems.length,
+          verified: verifiedCount,
+          pendingSkus: failedSkus,
+        },
       };
     }
 

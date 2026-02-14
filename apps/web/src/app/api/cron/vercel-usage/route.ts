@@ -73,14 +73,8 @@ export async function POST(request: NextRequest) {
     if (manualData) {
       report = vercelUsageService.buildReportFromManualData(manualData);
     } else {
-      const apiReport = await vercelUsageService.fetchUsage();
-      if (!apiReport) {
-        const msg = 'Vercel API unavailable and no manual data provided. POST with { "manualData": { ... } } to send a report.';
-        console.warn(`[Cron VercelUsage] ${msg}`);
-        await execution.complete({ skipped: true }, 200);
-        return NextResponse.json({ success: false, error: msg }, { status: 422 });
-      }
-      report = apiReport;
+      // fetchUsage() tries v2 API first, falls back to scraped dashboard data
+      report = (await vercelUsageService.fetchUsage())!;
     }
 
     // Send email report

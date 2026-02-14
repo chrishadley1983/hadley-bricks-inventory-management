@@ -591,6 +591,12 @@ export interface TwoPhaseStepResult {
   priceVerifiedAt?: string;
   /** Recommended delay before next poll (ms) */
   nextPollDelay?: number;
+  /** Per-SKU verification progress (only during price_verification step) */
+  verificationProgress?: {
+    total: number;
+    verified: number;
+    pendingSkus: string[];
+  };
 }
 
 // ============================================================================
