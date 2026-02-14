@@ -26,9 +26,10 @@ async function internalFetch(path: string): Promise<Response> {
     throw new Error('SERVICE_API_KEY environment variable is not set');
   }
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.APP_URL || 'http://localhost:3000';
+  // Use production URL to avoid Vercel deployment protection on preview URLs
+  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   return fetch(`${baseUrl}${path}`, {
     headers: {
