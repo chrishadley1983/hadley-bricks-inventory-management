@@ -216,7 +216,7 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
           <CardDescription>Track travel costs for this purchase</CardDescription>
         </div>
         {!readOnly && !showForm && (
-          <Button size="sm" onClick={() => setShowForm(true)}>
+          <Button type="button" size="sm" onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Add
           </Button>
@@ -279,6 +279,7 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
                     {!readOnly && (
                       <div className="flex gap-1">
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(entry)}
@@ -286,6 +287,7 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
                           Edit
                         </Button>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(entry)}
