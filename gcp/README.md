@@ -208,6 +208,17 @@ gcloud scheduler jobs create http vercel-usage-report \
   --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
   --time-zone="Europe/London" \
   --description="Daily Vercel usage monitoring report"
+
+# Cost Allocation - daily at 9:15pm UK time
+gcloud scheduler jobs create http cost-allocation \
+  --location=europe-west2 \
+  --schedule="15 21 * * *" \
+  --uri="$APP_URL/api/cron/cost-allocation" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="300s" \
+  --description="Daily proportional cost allocation across purchase items"
 ```
 
 #### Resumable Jobs (via Cloud Function Driver)
