@@ -70,3 +70,28 @@ purchase-photos/
 
 # Windows artifacts
 nul
+
+# Scanner publish output
+apps/windows-scanner/HadleyBricksScanner/publish/
+
+# Playwright test results (screenshots regenerate each run)
+apps/web/test-results/
+
+# Keepa API response dumps
+keepa_*.json
+
+# Generated reports
+reports/
+
+# ML artifacts
+scripts/ml/__pycache__/
+scripts/ml/models/
+scripts/ml/validation_results/
+scripts/ml/reports/
+
+# Vercel env export
+.env.vercel
+
+# Temp scratch files
+_tmp_*.txt
+_launch_*.ps1
