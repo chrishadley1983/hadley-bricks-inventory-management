@@ -1104,8 +1104,10 @@ export class AmazonSyncService {
       };
     }
 
-    if (quantityFeed.status === 'done') {
+    if (quantityFeed.status === 'done' || quantityFeed.status === 'done_verifying') {
       // SUCCESS - complete the two-phase sync
+      // Note: 'done_verifying' means new SKUs need price verification, but since we already
+      // verified prices in the price_verifying step, this is still a success for the quantity feed.
       return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
     }
 
