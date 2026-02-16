@@ -20,6 +20,7 @@ import {
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CreateEbayListingModal } from './CreateEbayListingModal';
 import { EbayListingDetailsDialog } from './EbayListingDetailsDialog';
+import { AddToSyncButton } from '@/components/features/amazon-sync/AddToSyncButton';
 
 interface InventoryDetailProps {
   id: string;
@@ -127,6 +128,12 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               <Store className="mr-2 h-4 w-4" />
               Create eBay Listing
             </Button>
+            <AddToSyncButton
+              inventoryItemId={item.id}
+              hasAsin={!!item.amazon_asin}
+              hasPrice={!!item.listing_value}
+              variant="button"
+            />
             {/* View eBay Listing button - only show if item has eBay listing */}
             {item.ebay_listing_id && (
               <Button
