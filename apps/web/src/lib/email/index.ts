@@ -6,4 +6,5 @@ export type {
   TwoPhaseSuccessParams,
   PurchaseImportEmailItem,
   PurchaseImportSummaryParams,
+  CostAllocationReportParams,
 } from './email.service';

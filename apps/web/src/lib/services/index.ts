@@ -67,3 +67,9 @@ export type {
   VercelUsageReport,
   ManualUsageData,
 } from './vercel-usage.service';
+export { CostAllocationService } from './cost-allocation.service';
+export type {
+  CostAllocationSummary,
+  PurchaseAllocationResult,
+  CostChange,
+} from './cost-allocation.service';
