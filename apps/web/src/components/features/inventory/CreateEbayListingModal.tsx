@@ -7,7 +7,7 @@
  * Includes sections for pricing, photos, content generation, and publishing options.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -128,7 +128,7 @@ export function CreateEbayListingModal({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [enhancePhotos, setEnhancePhotos] = useState(true);
-  const [descriptionStyle, setDescriptionStyle] = useState<DescriptionStyle>('Standard');
+  const [descriptionStyle, setDescriptionStyle] = useState<DescriptionStyle>('Minimalist');
   const [listingType, setListingType] = useState<ListingType>('live');
   const [scheduledDate, setScheduledDate] = useState('');
 
@@ -139,7 +139,7 @@ export function CreateEbayListingModal({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('ai');
 
   // Condition description state
-  const [useAIConditionDescription, setUseAIConditionDescription] = useState(false);
+  const [useAIConditionDescription, setUseAIConditionDescription] = useState(true);
   const [conditionDescription, setConditionDescription] = useState(
     generateConditionDescription(inventoryItem.condition, inventoryItem.set_name)
   );
@@ -177,6 +177,16 @@ export function CreateEbayListingModal({
 
   // Storage locations hook for autocomplete
   const { data: storageLocations = [] } = useStorageLocations();
+
+  // Default to the template marked is_default when templates load
+  useEffect(() => {
+    if (templates && selectedTemplateId === 'ai') {
+      const defaultTemplate = templates.find((t) => t.is_default);
+      if (defaultTemplate) {
+        setSelectedTemplateId(defaultTemplate.id);
+      }
+    }
+  }, [templates]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get fulfillment policies for the dropdown (postage policies)
   const fulfillmentPolicies = policies?.fulfillment ?? [];
