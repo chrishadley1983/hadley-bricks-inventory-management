@@ -952,37 +952,33 @@ export class AmazonSyncService {
   /**
    * Process price verification step
    *
-   * Uses queue items for verification. If queue is empty (edge case), falls back to feed items.
+   * Always reconstructs items from Phase 1 feed items (not the live queue).
+   * The queue is unreliable between phases: items are cleared after Phase 1
+   * completes, and new items may be added by the user in between.
    */
   private async processPriceVerificationStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
-    // Try to get items from queue first
-    let aggregatedItems = await this.getAggregatedQueueItems();
+    // Always reconstruct from Phase 1 feed items - the queue may have changed between phases
+    console.log('[AmazonSyncService] Reconstructing items from Phase 1 feed items');
+    const feedItems = await this.getFeedItems(feedId);
 
-    // Fallback: If queue is empty, reconstruct from feed items
-    // This handles edge cases where queue was cleared unexpectedly
-    if (aggregatedItems.length === 0) {
-      console.log('[AmazonSyncService] Queue empty - reconstructing from feed items');
-      const feedItems = await this.getFeedItems(feedId);
-
-      if (feedItems.length === 0) {
-        return this.failTwoPhaseSync(feedId, userEmail, 'No items found for verification');
-      }
-
-      // Reconstruct aggregated items from feed items
-      aggregatedItems = feedItems.map((item) => ({
-        asin: item.asin,
-        amazonSku: item.amazon_sku,
-        price: Number(item.submitted_price),
-        queueQuantity: item.submitted_quantity,
-        existingAmazonQuantity: 0, // Not needed for verification
-        totalQuantity: item.submitted_quantity,
-        inventoryItemIds: item.inventory_item_ids,
-        queueItemIds: [], // Not available
-        itemNames: [],
-        productType: DEFAULT_PRODUCT_TYPE,
-        isNewSku: item.is_new_sku ?? false,
-      }));
+    if (feedItems.length === 0) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'No items found for verification');
     }
+
+    // Reconstruct aggregated items from feed items
+    const aggregatedItems = feedItems.map((item) => ({
+      asin: item.asin,
+      amazonSku: item.amazon_sku,
+      price: Number(item.submitted_price),
+      queueQuantity: item.submitted_quantity,
+      existingAmazonQuantity: 0,
+      totalQuantity: item.submitted_quantity,
+      inventoryItemIds: item.inventory_item_ids,
+      queueItemIds: [],
+      itemNames: [],
+      productType: DEFAULT_PRODUCT_TYPE,
+      isNewSku: item.is_new_sku ?? false,
+    }));
 
     // Check if prices are live
     const credentials = await this.getAmazonCredentials();
@@ -1558,13 +1554,29 @@ export class AmazonSyncService {
     }
 
     // Build quantity-only payload
-    const messages: ListingsFeedMessage[] = items.map((item, index) => ({
-      messageId: index + 1,
-      sku: item.amazonSku,
-      operationType: 'PATCH' as const,
-      productType: item.productType,
-      patches: this.buildQuantityOnlyPatches(item),
-    }));
+    // New SKUs need UPDATE (full attributes) since the listing was just created in Phase 1.
+    // Existing SKUs use PATCH (targeted update).
+    const messages: ListingsFeedMessage[] = items.map((item, index) => {
+      if (item.isNewSku) {
+        // New SKU: use UPDATE with full attributes to set quantity (and re-confirm price)
+        const attributes = this.buildAttributes(item);
+        return {
+          messageId: index + 1,
+          sku: item.amazonSku,
+          operationType: 'UPDATE' as const,
+          productType: 'PRODUCT',
+          requirements: 'LISTING_OFFER_ONLY' as const,
+          attributes,
+        };
+      }
+      return {
+        messageId: index + 1,
+        sku: item.amazonSku,
+        operationType: 'PATCH' as const,
+        productType: item.productType,
+        patches: this.buildQuantityOnlyPatches(item),
+      };
+    });
 
     const payload: ListingsFeedPayload = {
       header: {
