@@ -311,7 +311,7 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
         {/* Add/Edit Form */}
         {showForm && !readOnly && (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 border-t pt-4">
+            <div className="space-y-4 border-t pt-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -480,11 +480,11 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
                 <Button type="button" variant="outline" onClick={resetForm}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="button" disabled={isSubmitting} onClick={form.handleSubmit(onSubmit)}>
                   {isSubmitting ? 'Saving...' : editingId ? 'Update' : 'Add'}
                 </Button>
               </div>
-            </form>
+            </div>
           </Form>
         )}
       </CardContent>
