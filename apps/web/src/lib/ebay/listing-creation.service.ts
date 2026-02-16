@@ -1191,6 +1191,7 @@ Return JSON with these fields (omit any you're not confident about):
       ebay_listing_url: listingUrl,
       sku,
       status: 'LISTED',
+      listing_platform: 'ebay',
       listing_date: now,
       updated_at: now,
     };
