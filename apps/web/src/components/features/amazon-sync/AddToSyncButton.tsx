@@ -11,6 +11,8 @@ interface AddToSyncButtonProps {
   hasPrice: boolean;
   variant?: 'icon' | 'button';
   className?: string;
+  /** Called when the API returns a price conflict instead of adding directly */
+  onPriceConflict?: (conflict: import('@/lib/amazon/amazon-sync.types').PriceConflict) => void;
 }
 
 export function AddToSyncButton({
@@ -19,6 +21,7 @@ export function AddToSyncButton({
   hasPrice,
   variant = 'icon',
   className,
+  onPriceConflict,
 }: AddToSyncButtonProps) {
   const { toast } = useToast();
   const addMutation = useAddToSyncQueue();
@@ -36,6 +39,10 @@ export function AddToSyncButton({
   const handleClick = async () => {
     try {
       const result = await addMutation.mutateAsync({ inventoryItemId });
+      if (result.priceConflict && onPriceConflict) {
+        onPriceConflict(result.priceConflict);
+        return;
+      }
       toast({
         title: 'Added to queue',
         description: result.message,

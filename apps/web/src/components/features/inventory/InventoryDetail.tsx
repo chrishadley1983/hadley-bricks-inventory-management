@@ -21,6 +21,9 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { CreateEbayListingModal } from './CreateEbayListingModal';
 import { EbayListingDetailsDialog } from './EbayListingDetailsDialog';
 import { AddToSyncButton } from '@/components/features/amazon-sync/AddToSyncButton';
+import { PriceConflictDialog } from '@/components/features/amazon-sync/PriceConflictDialog';
+import { useToast } from '@/hooks/use-toast';
+import type { PriceConflict } from '@/lib/amazon/amazon-sync.types';
 
 interface InventoryDetailProps {
   id: string;
@@ -42,6 +45,8 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const [showResetEbayDialog, setShowResetEbayDialog] = useState(false);
   const [showCreateListingModal, setShowCreateListingModal] = useState(false);
   const [showListingDetailsDialog, setShowListingDetailsDialog] = useState(false);
+  const [priceConflict, setPriceConflict] = useState<PriceConflict | null>(null);
+  const { toast } = useToast();
 
   // Performance logging
   usePerf('InventoryDetail', isLoading);
@@ -133,6 +138,7 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               hasAsin={!!item.amazon_asin}
               hasPrice={!!item.listing_value}
               variant="button"
+              onPriceConflict={setPriceConflict}
             />
             {/* View eBay Listing button - only show if item has eBay listing */}
             {item.ebay_listing_id && (
@@ -438,6 +444,19 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
         inventoryId={item.id}
         open={showListingDetailsDialog}
         onOpenChange={setShowListingDetailsDialog}
+      />
+
+      {/* Amazon Price Conflict Dialog */}
+      <PriceConflictDialog
+        open={!!priceConflict}
+        onOpenChange={(open) => {
+          if (!open) setPriceConflict(null);
+        }}
+        conflict={priceConflict}
+        onResolved={(message) => {
+          toast({ title: 'Added to sync queue', description: message });
+          setPriceConflict(null);
+        }}
       />
     </>
   );
