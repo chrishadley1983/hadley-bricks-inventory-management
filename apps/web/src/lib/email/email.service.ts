@@ -9,6 +9,7 @@
 
 import { Resend } from 'resend';
 import type { VercelUsageReport } from '@/lib/services/vercel-usage.service';
+import type { CostAllocationSummary } from '@/lib/services/cost-allocation.service';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -53,6 +54,11 @@ export interface PurchaseImportSummaryParams {
   items: PurchaseImportEmailItem[];
   needsReview: Array<{ source: string; item_name: string; cost: number }>;
   duration: number;
+}
+
+export interface CostAllocationReportParams {
+  userEmail: string;
+  summary: CostAllocationSummary;
 }
 
 export interface TwoPhaseSuccessParams {
@@ -539,6 +545,92 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
         </p>
       </div>
     `;
+
+    await this.send({ to: userEmail, subject, html });
+  }
+
+  /**
+   * Send cost allocation report with per-purchase breakdown
+   */
+  async sendCostAllocationReport(params: CostAllocationReportParams): Promise<void> {
+    const { userEmail, summary } = params;
+
+    // Only include purchases that had changes
+    const changedResults = summary.results.filter((r) => r.changes.length > 0);
+
+    if (changedResults.length === 0) return;
+
+    const fmt = (n: number) => `£${n.toFixed(2)}`;
+    const durationSec = Math.round(summary.durationMs / 1000);
+
+    // Build per-purchase sections
+    const purchaseSections = changedResults
+      .map((result) => {
+        const changeRows = result.changes
+          .map((c) => {
+            const changeColor = c.change >= 0 ? '#e67e22' : '#27ae60';
+            const changeSign = c.change >= 0 ? '+' : '';
+            return `<tr>
+              <td style="padding:4px 8px;border:1px solid #ddd;">${c.name}</td>
+              <td style="padding:4px 8px;border:1px solid #ddd;text-align:center;">${c.type === 'inventory_item' ? 'Set' : 'Upload'}</td>
+              <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${fmt(c.listingValue)}</td>
+              <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${fmt(c.oldCost)}</td>
+              <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${fmt(c.newCost)}</td>
+              <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;color:${changeColor};">${changeSign}${fmt(c.change)}</td>
+            </tr>`;
+          })
+          .join('\n');
+
+        const purchaseLabel = result.purchaseDescription || result.purchaseSource || result.purchaseId;
+        return `
+          <tr style="background:#2c3e50;color:#fff;">
+            <td style="padding:8px 10px;border:1px solid #2c3e50;" colspan="4">
+              <strong>${purchaseLabel}</strong>
+            </td>
+            <td style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;" colspan="1">
+              Cost: ${fmt(result.purchaseCost)}
+            </td>
+            <td style="padding:8px 10px;border:1px solid #2c3e50;text-align:right;" colspan="1">
+              LV: ${fmt(result.totalListingValue)}
+            </td>
+          </tr>
+          ${changeRows}`;
+      })
+      .join('\n');
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;">
+        <h2 style="color:#333;">💰 Cost Allocation Report</h2>
+        <p style="color:#666;font-size:14px;">
+          ${summary.purchasesWithChanges} purchase${summary.purchasesWithChanges !== 1 ? 's' : ''} updated,
+          ${summary.totalChanges} item${summary.totalChanges !== 1 ? 's' : ''} changed
+          in ${durationSec}s.
+          ${summary.purchasesSkipped} skipped, ${summary.purchasesProcessed} processed.
+        </p>
+
+        <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;">
+          <thead>
+            <tr style="background:#34495e;color:#fff;">
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:left;">Item</th>
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:center;">Type</th>
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:right;">List Value</th>
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:right;">Old Cost</th>
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:right;">New Cost</th>
+              <th style="padding:8px 10px;border:1px solid #34495e;text-align:right;">Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${purchaseSections}
+          </tbody>
+        </table>
+
+        <p style="color:#999;font-size:11px;margin-top:24px;">
+          Cost allocated proportionally by listing value. Rounding remainder applied to highest-value item.
+        </p>
+      </div>
+    `;
+
+    const subject = `Cost Allocation: ${summary.totalChanges} item${summary.totalChanges !== 1 ? 's' : ''} updated across ${summary.purchasesWithChanges} purchase${summary.purchasesWithChanges !== 1 ? 's' : ''}`;
 
     await this.send({ to: userEmail, subject, html });
   }
