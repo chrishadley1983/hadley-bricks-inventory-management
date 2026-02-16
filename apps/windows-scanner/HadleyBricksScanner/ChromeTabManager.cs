@@ -175,6 +175,60 @@ public static class ChromeTabManager
     }
 
     /// <summary>
+    /// Capture current browser process IDs (Chrome, Chromium, Edge).
+    /// Call this BEFORE launching Claude CLI to establish a baseline.
+    /// </summary>
+    public static HashSet<int> SnapshotBrowserProcessIds()
+    {
+        var pids = new HashSet<int>();
+        foreach (var name in new[] { "chrome", "chromium", "msedge" })
+        {
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                pids.Add(p.Id);
+            }
+        }
+        Log.Debug("Snapshotted {Count} existing browser process(es)", pids.Count);
+        return pids;
+    }
+
+    /// <summary>
+    /// Close only browser processes that were NOT in the pre-existing snapshot.
+    /// This ensures the user's own browser windows are never touched.
+    /// </summary>
+    public static int CloseNewBrowserProcesses(HashSet<int> existingPids)
+    {
+        var closedCount = 0;
+        foreach (var name in new[] { "chrome", "chromium", "msedge" })
+        {
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                if (!existingPids.Contains(p.Id))
+                {
+                    try
+                    {
+                        p.Kill();
+                        closedCount++;
+                        Log.Debug("Killed new browser process {Name} (PID {Pid})", name, p.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "Failed to kill browser process {Pid}", p.Id);
+                    }
+                }
+            }
+        }
+
+        if (closedCount > 0)
+        {
+            Log.Information("Closed {Count} new browser process(es) (preserved {Existing} existing)",
+                closedCount, existingPids.Count);
+        }
+
+        return closedCount;
+    }
+
+    /// <summary>
     /// Get count of open Chrome processes
     /// </summary>
     public static int GetChromeProcessCount()

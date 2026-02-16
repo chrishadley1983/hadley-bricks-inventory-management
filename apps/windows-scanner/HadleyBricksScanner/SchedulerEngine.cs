@@ -138,15 +138,15 @@ public class SchedulerEngine : IDisposable
 
                 _trayContext.SetState(TrayState.Running);
 
-                // Check for pending seller messages (every 4 hours)
-                await CheckAndProcessMessagesAsync(ct);
+                // Vinted messaging disabled — was causing failures at 2am
+                // await CheckAndProcessMessagesAsync(ct);
 
-                // Find next due scan (LOOP3)
-                var dueScan = GetNextDueScan();
-                if (dueScan != null)
-                {
-                    await ExecuteScanAsync(dueScan, ct);
-                }
+                // Scanning disabled — closing user's Vinted tabs as side effect
+                // var dueScan = GetNextDueScan();
+                // if (dueScan != null)
+                // {
+                //     await ExecuteScanAsync(dueScan, ct);
+                // }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
