@@ -200,6 +200,18 @@ export async function GET() {
       (todayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
       (todayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
 
+    // Get today's BrickLink value (inventory items listed today on BrickLink + uploads today)
+    const { data: todayBricklinkItems } = await supabase
+      .from('inventory_items')
+      .select('listing_value')
+      .eq('user_id', user.id)
+      .eq('listing_platform', 'bricklink')
+      .eq('listing_date', todayStr);
+
+    const todayBricklinkValue =
+      (todayBricklinkItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
+      (todayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
+
     // Get week listed totals (inventory items + BrickLink uploads)
     const { data: weekListedItems } = await supabase
       .from('inventory_items')
@@ -282,6 +294,7 @@ export async function GET() {
       dailyListingCounts,
       bricklinkWeeklyValue: {
         current: bricklinkWeeklyValue,
+        daily: todayBricklinkValue,
         target: targets.bricklinkWeeklyValue,
         history: history.bricklinkWeeklyValue,
       },
