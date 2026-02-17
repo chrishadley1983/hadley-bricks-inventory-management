@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 // Types
 export interface MetricData {
   current: number;
+  daily?: number;
   target: number;
   history: number[]; // Last 7 days
 }

@@ -59,10 +59,10 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
     ? metrics.targets.dailySoldValue * 7
     : metrics.targets.dailySoldValue;
 
-  // BrickLink is already a weekly metric - for daily we show average
+  // BrickLink: show weekly total or today's actual value
   const bricklinkValue = isWeekly
     ? metrics.bricklinkWeeklyValue.current
-    : Math.round(metrics.bricklinkWeeklyValue.current / 7);
+    : (metrics.bricklinkWeeklyValue.daily ?? 0);
   const bricklinkTarget = isWeekly
     ? metrics.bricklinkWeeklyValue.target
     : Math.round(metrics.bricklinkWeeklyValue.target / 7);
