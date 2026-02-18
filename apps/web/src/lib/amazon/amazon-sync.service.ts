@@ -994,15 +994,26 @@ export class AmazonSyncService {
     for (const item of aggregatedItems) {
       try {
         const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', ['offers']);
-        const offer = listing?.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
-        const livePrice = offer?.price?.amount;
 
-        if (livePrice === undefined || Math.abs(livePrice - item.price) > 0.01) {
+        if (!listing) {
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+          console.warn(
+            `[AmazonSyncService] getListing returned null for ${item.amazonSku} - API call may have failed`
+          );
+          continue;
+        }
+
+        const offer = listing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
+        // Amazon API returns amount as string despite type definition - coerce to number
+        const livePrice = offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
+
+        if (livePrice === undefined || isNaN(livePrice) || Math.abs(livePrice - item.price) > 0.01) {
           allVerified = false;
           failedSkus.push(item.amazonSku);
           console.log(
             `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
-              `expected ${item.price}, got ${livePrice}`
+              `expected ${item.price}, got ${livePrice} (raw: ${offer?.price?.amount}, type: ${typeof offer?.price?.amount})`
           );
         } else {
           verifiedCount++;
@@ -1954,18 +1965,33 @@ export class AmazonSyncService {
           ['offers', 'fulfillmentAvailability']
         );
 
-        // Extract the offer price
-        const offer = listing?.offers?.find(
+        if (!listing) {
+          console.warn(`[AmazonSyncService] getListing returned null for ${item.amazon_sku} - API call may have failed`);
+          allVerified = false;
+          itemResults.push({
+            sku: item.amazon_sku,
+            asin: item.asin,
+            submittedPrice: Number(item.submitted_price),
+            verifiedPrice: null,
+            priceMatches: false,
+            error: 'getListing returned null',
+          });
+          continue;
+        }
+
+        // Extract the offer price - Amazon API returns amount as string despite type definition
+        const offer = listing.offers?.find(
           (o) => o.marketplaceId === 'A1F83G8C2ARO7P'
         );
-        const verifiedPrice = offer?.price?.amount ?? null;
+        const rawAmount = offer?.price?.amount;
+        const verifiedPrice = rawAmount !== undefined ? Number(rawAmount) : null;
 
         // Check if price matches (within 0.01 tolerance)
         const submittedPrice = Number(item.submitted_price);
-        const priceMatches = verifiedPrice !== null &&
+        const priceMatches = verifiedPrice !== null && !isNaN(verifiedPrice) &&
           Math.abs(verifiedPrice - submittedPrice) < 0.01;
 
-        console.log(`[AmazonSyncService] SKU ${item.amazon_sku}: submitted=${submittedPrice}, verified=${verifiedPrice}, matches=${priceMatches}`);
+        console.log(`[AmazonSyncService] SKU ${item.amazon_sku}: submitted=${submittedPrice}, verified=${verifiedPrice}, matches=${priceMatches} (raw: ${rawAmount}, type: ${typeof rawAmount})`);
 
         itemResults.push({
           sku: item.amazon_sku,
