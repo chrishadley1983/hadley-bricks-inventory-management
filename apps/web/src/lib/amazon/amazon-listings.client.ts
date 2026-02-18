@@ -302,9 +302,9 @@ export class AmazonListingsClient {
       };
     }
 
-    // Extract actual price from offers
+    // Extract actual price from offers - Amazon API returns amount as string
     const offer = listing.offers?.find((o) => o.marketplaceId === marketplaceId);
-    const actualPrice = offer?.price?.amount;
+    const actualPrice = offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
 
     // Extract actual quantity from fulfillment availability
     const fulfillment = listing.fulfillmentAvailability?.find(
@@ -313,7 +313,7 @@ export class AmazonListingsClient {
     const actualQuantity = fulfillment?.quantity;
 
     const priceMatch =
-      actualPrice !== undefined &&
+      actualPrice !== undefined && !isNaN(actualPrice) &&
       Math.abs(actualPrice - expectedPrice) < 0.01;
     const quantityMatch = actualQuantity === expectedQuantity;
 
@@ -381,7 +381,7 @@ export class AmazonListingsClient {
 
         return {
           sku: item.sku,
-          price: offer?.price?.amount,
+          price: offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined,
           quantity: fulfillment?.quantity,
         };
       });
