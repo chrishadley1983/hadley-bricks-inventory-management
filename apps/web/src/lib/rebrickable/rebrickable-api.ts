@@ -9,6 +9,8 @@
  */
 
 import type {
+  RebrickableMinifig,
+  RebrickableMinifigSet,
   RebrickablePaginatedResponse,
   RebrickableSet,
   RebrickableSetMinifig,
@@ -174,6 +176,23 @@ export class RebrickableApiClient {
     return this.request<RebrickableSet>(
       `/lego/sets/${encodeURIComponent(setNum)}/`
     );
+  }
+
+  /** Get a minifig by figure number (e.g., "fig-000001") */
+  async getMinifig(figNum: string): Promise<RebrickableMinifig> {
+    return this.request<RebrickableMinifig>(
+      `/lego/minifigs/${encodeURIComponent(figNum)}/`
+    );
+  }
+
+  /** Get all sets that contain a specific minifig */
+  async getMinifigSets(figNum: string): Promise<RebrickableMinifigSet[]> {
+    const response = await this.request<
+      RebrickablePaginatedResponse<RebrickableMinifigSet>
+    >(`/lego/minifigs/${encodeURIComponent(figNum)}/sets/`, {
+      page_size: 1000,
+    });
+    return response.results;
   }
 
   /** Check if the API key is valid */
