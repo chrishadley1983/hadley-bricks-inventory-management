@@ -51,6 +51,25 @@ export interface RebrickableSetSearchParams {
   search?: string;
 }
 
+/** Minifig data from Rebrickable minifigs endpoint */
+export interface RebrickableMinifig {
+  set_num: string;
+  name: string;
+  num_parts: number;
+  set_img_url: string | null;
+  set_url: string;
+  last_modified_dt: string;
+}
+
+/** Set that contains a minifig (from /lego/minifigs/{fig_num}/sets/) */
+export interface RebrickableMinifigSet {
+  id: number;
+  set_num: string;
+  set_name: string;
+  set_img_url: string | null;
+  quantity: number;
+}
+
 /** Sync result statistics */
 export interface RebrickableSyncResult {
   inserted: number;
