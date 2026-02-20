@@ -68,6 +68,8 @@ export function useMinifigSyncStream() {
         const decoder = new TextDecoder();
         let buffer = '';
 
+        let receivedTerminal = false;
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -101,6 +103,7 @@ export function useMinifigSyncStream() {
                       itemMessage: event.message,
                     }));
                   } else if (event.type === 'complete') {
+                    receivedTerminal = true;
                     setState((prev) => ({
                       ...prev,
                       status: 'complete',
@@ -110,6 +113,7 @@ export function useMinifigSyncStream() {
                     queryClient.invalidateQueries({ queryKey: minifigSyncKeys.lists() });
                     queryClient.invalidateQueries({ queryKey: minifigSyncKeys.dashboard() });
                   } else if (event.type === 'error') {
+                    receivedTerminal = true;
                     setState((prev) => ({
                       ...prev,
                       status: 'error',
@@ -124,6 +128,15 @@ export function useMinifigSyncStream() {
           }
         } finally {
           reader.releaseLock();
+        }
+
+        // Handle unexpected stream end (e.g. Vercel timeout)
+        if (!receivedTerminal) {
+          setState((prev) => ({
+            ...prev,
+            status: 'error',
+            error: 'Connection lost — the operation may still be running on the server.',
+          }));
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
