@@ -108,6 +108,7 @@ export class RepricingService {
             .from('minifig_sync_items')
             .select('recommended_price, best_offer_auto_accept, best_offer_auto_decline, ebay_offer_id')
             .eq('id', item.id)
+            .eq('user_id', this.userId)
             .single();
 
           if (!updatedItem?.ebay_offer_id || !updatedItem.recommended_price) {

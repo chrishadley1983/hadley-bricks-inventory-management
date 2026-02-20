@@ -6,8 +6,6 @@ import type { BricqerCredentials } from '../bricqer/types';
 import { CredentialsRepository } from '../repositories/credentials.repository';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
-import type { MinifigSyncConfig } from './types';
-
 interface PullResult {
   jobId: string;
   itemsProcessed: number;

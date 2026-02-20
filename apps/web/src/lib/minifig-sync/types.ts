@@ -36,6 +36,7 @@ export type MinifigSyncConfigRow =
 export type ListingStatus =
   | 'NOT_LISTED'
   | 'STAGED'
+  | 'PUBLISHING'
   | 'REVIEWING'
   | 'PUBLISHED'
   | 'SOLD_EBAY_PENDING_REMOVAL'

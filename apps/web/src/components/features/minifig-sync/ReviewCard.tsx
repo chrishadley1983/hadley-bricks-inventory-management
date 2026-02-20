@@ -98,7 +98,7 @@ function sanitizeHtml(html: string): string {
     'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'a', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr',
   ]);
-  const ALLOWED_ATTRS = new Set(['href', 'class', 'style']);
+  const ALLOWED_ATTRS = new Set(['href', 'class']);
 
   // Parse via DOMParser (safe — no script execution in parsed doc)
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -123,8 +123,11 @@ function sanitizeHtml(html: string): string {
     const cleanEl = document.createElement(tag);
     for (const attr of Array.from(el.attributes)) {
       if (ALLOWED_ATTRS.has(attr.name.toLowerCase())) {
-        // Block javascript: in href values
-        if (attr.name === 'href' && /^\s*javascript\s*:/i.test(attr.value)) continue;
+        // Only allow http(s) URLs in href values
+        if (attr.name === 'href') {
+          const trimmed = attr.value.trim().toLowerCase();
+          if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) continue;
+        }
         cleanEl.setAttribute(attr.name, attr.value);
       }
     }

@@ -80,6 +80,24 @@ export class OrderPollService {
       ordersChecked = orders.length;
       let latestDate = lastCursor || '';
 
+      // Pre-fetch all sync items into a Map for O(1) lookup (CR-010)
+      const syncItemsByBricqerId = new Map<string, { id: string; listing_status: string | null; name: string | null; bricklink_id: string | null }>();
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await this.supabase
+          .from('minifig_sync_items')
+          .select('id, bricqer_item_id, listing_status, name, bricklink_id')
+          .eq('user_id', this.userId)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        for (const row of data ?? []) {
+          syncItemsByBricqerId.set(row.bricqer_item_id, row);
+        }
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+
       for (const order of orders) {
         // Track latest order date for cursor update (compare as Date objects for timezone safety)
         const orderDate = order.creationDate || order.lastModifiedDate || '';
@@ -99,14 +117,8 @@ export class OrderPollService {
           salesDetected++;
 
           try {
-            // Find the sync item
-            const { data: syncItem } = await this.supabase
-              .from('minifig_sync_items')
-              .select('id, listing_status')
-              .eq('bricqer_item_id', bricqerItemId)
-              .eq('user_id', this.userId)
-              .single();
-
+            // Find the sync item from pre-fetched map (CR-010)
+            const syncItem = syncItemsByBricqerId.get(bricqerItemId);
             if (!syncItem) continue;
 
             // Skip if already handled
@@ -146,8 +158,8 @@ export class OrderPollService {
             if (inserted && inserted.length > 0) {
               removalEntriesCreated++;
 
-              // Discord notification (F60)
-              const syncItemName = await this.getSyncItemName(syncItem.id);
+              // Use name from pre-fetched map (CR-011)
+              const syncItemName = syncItem.name || syncItem.bricklink_id || 'Unknown Minifig';
               discordService.send('alerts', {
                 title: '🔔 Minifig Sold on eBay',
                 description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
@@ -244,14 +256,14 @@ export class OrderPollService {
       let latestDate = lastCursor || '';
 
       // Get all published sync items for matching — build a map by bricqer_item_id for O(1) lookup
-      const publishedItems: Array<{ id: string; bricqer_item_id: string; bricklink_id: string | null; listing_status: string | null; ebay_offer_id: string | null }> = [];
+      const publishedItems: Array<{ id: string; bricqer_item_id: string; bricklink_id: string | null; listing_status: string | null; ebay_offer_id: string | null; name: string | null }> = [];
       const pageSize = 1000;
       let page = 0;
       let hasMore = true;
       while (hasMore) {
         const { data } = await this.supabase
           .from('minifig_sync_items')
-          .select('id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id')
+          .select('id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id, name')
           .eq('user_id', this.userId)
           .eq('listing_status', 'PUBLISHED')
           .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -311,7 +323,7 @@ export class OrderPollService {
                   minifig_sync_id: matchingItem.id,
                   sold_on: 'BRICQER',
                   remove_from: 'EBAY',
-                  sale_price: price || 0,
+                  sale_price: price ?? 0,
                   sale_date: order.created || order.created_at || new Date().toISOString(),
                   order_id: String(order.id),
                   status: 'PENDING',
@@ -324,15 +336,15 @@ export class OrderPollService {
             if (inserted && inserted.length > 0) {
               removalEntriesCreated++;
 
-              // Discord notification (F60)
-              const syncItemName = await this.getSyncItemName(matchingItem.id);
+              // Discord notification (F60) — use name from pre-fetched map (CR-011)
+              const syncItemName = matchingItem.name || matchingItem.bricklink_id || 'Unknown Minifig';
               discordService.send('alerts', {
                 title: '🔔 Minifig Sold on Bricqer',
-                description: `**${syncItemName}** sold for £${(price || 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
+                description: `**${syncItemName}** sold for £${(price ?? 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
                 color: DiscordColors.GREEN,
                 fields: [
                   { name: 'Platform', value: 'Bricqer', inline: true },
-                  { name: 'Sale Price', value: `£${(price || 0).toFixed(2)}`, inline: true },
+                  { name: 'Sale Price', value: `£${(price ?? 0).toFixed(2)}`, inline: true },
                   { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
                 ],
               }).catch(() => { /* non-blocking */ });
@@ -381,13 +393,4 @@ export class OrderPollService {
     }
   }
 
-  private async getSyncItemName(syncItemId: string): Promise<string> {
-    const { data } = await this.supabase
-      .from('minifig_sync_items')
-      .select('name, bricklink_id')
-      .eq('id', syncItemId)
-      .eq('user_id', this.userId)
-      .single();
-    return data?.name || data?.bricklink_id || 'Unknown Minifig';
-  }
 }

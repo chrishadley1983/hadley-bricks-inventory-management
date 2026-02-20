@@ -101,11 +101,22 @@ export class ListingActionsService {
     skipped: number;
     errors: Array<{ itemId: string; error: string }>;
   }> {
-    const { data: stagedItems } = await this.supabase
-      .from('minifig_sync_items')
-      .select('*')
-      .eq('user_id', this.userId)
-      .eq('listing_status', 'STAGED');
+    // Paginated fetch for staged items (CR-009)
+    const stagedItems: MinifigSyncItem[] = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data } = await this.supabase
+        .from('minifig_sync_items')
+        .select('*')
+        .eq('user_id', this.userId)
+        .eq('listing_status', 'STAGED')
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      stagedItems.push(...((data ?? []) as MinifigSyncItem[]));
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+    }
 
     let published = 0;
     let skipped = 0;
@@ -114,7 +125,7 @@ export class ListingActionsService {
     // Share a single eBay adapter across all publish calls (M3)
     const adapter = await this.getEbayAdapter();
 
-    for (const item of (stagedItems ?? []) as MinifigSyncItem[]) {
+    for (const item of stagedItems) {
       const qualityCheck = this.checkQuality(item);
       if (!qualityCheck.passed) {
         skipped++;

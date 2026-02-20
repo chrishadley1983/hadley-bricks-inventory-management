@@ -3,7 +3,7 @@
  * Called by TanStack Query hooks — NOT imported directly by components.
  */
 
-import type { MinifigSyncItem, MinifigSyncJob, MinifigRemovalQueue, ListingStatus } from '@/lib/minifig-sync/types';
+import type { MinifigSyncItem, MinifigRemovalQueue, ListingStatus } from '@/lib/minifig-sync/types';
 
 export interface MinifigSyncFilters {
   listingStatus?: ListingStatus;
@@ -57,12 +57,6 @@ export async function fetchMinifigSyncItems(
 
 export async function fetchMinifigSyncItem(id: string): Promise<MinifigSyncItem> {
   return apiFetch<MinifigSyncItem>(`/api/minifigs/sync/items/${id}`);
-}
-
-// ── Jobs ───────────────────────────────────────────────
-
-export async function fetchMinifigSyncJobs(): Promise<MinifigSyncJob[]> {
-  return apiFetch<MinifigSyncJob[]>('/api/minifigs/sync/jobs');
 }
 
 // ── Actions ────────────────────────────────────────────

@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMinifigSyncItems,
   fetchMinifigSyncItem,
-  fetchMinifigSyncJobs,
   triggerInventoryPull,
   triggerResearch,
   triggerForceRefresh,
@@ -30,7 +29,6 @@ export const minifigSyncKeys = {
     [...minifigSyncKeys.lists(), filters] as const,
   items: () => [...minifigSyncKeys.all, 'item'] as const,
   item: (id: string) => [...minifigSyncKeys.items(), id] as const,
-  jobs: () => [...minifigSyncKeys.all, 'jobs'] as const,
   removals: () => [...minifigSyncKeys.all, 'removals'] as const,
   dashboard: () => [...minifigSyncKeys.all, 'dashboard'] as const,
 };
@@ -51,14 +49,6 @@ export function useMinifigSyncItem(id: string | null) {
     queryFn: () => fetchMinifigSyncItem(id!),
     enabled: !!id,
     staleTime: 2 * 60 * 1000,
-  });
-}
-
-export function useMinifigSyncJobs() {
-  return useQuery({
-    queryKey: minifigSyncKeys.jobs(),
-    queryFn: fetchMinifigSyncJobs,
-    staleTime: 30 * 1000,
   });
 }
 
@@ -86,7 +76,7 @@ export function useInventoryPull() {
     mutationFn: triggerInventoryPull,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: minifigSyncKeys.jobs() });
+
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.dashboard() });
     },
   });
@@ -98,7 +88,7 @@ export function useResearch() {
     mutationFn: (itemIds?: string[]) => triggerResearch(itemIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: minifigSyncKeys.jobs() });
+
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.dashboard() });
     },
   });
@@ -121,7 +111,7 @@ export function useCreateListings() {
     mutationFn: (itemIds?: string[]) => triggerCreateListings(itemIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: minifigSyncKeys.jobs() });
+
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.dashboard() });
     },
   });
