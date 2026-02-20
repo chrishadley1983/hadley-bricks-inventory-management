@@ -537,33 +537,44 @@ export class BricqerClient {
   }
 
   /**
-   * Get all inventory items with pagination
+   * Get all inventory items with pagination.
+   *
+   * The Bricqer inventory API returns: { page: { count, number, size, links: { next, previous } }, results: [...] }
+   * This differs from the order API which uses top-level count/next fields.
    */
   async getAllInventoryItems(
     params?: Omit<BricqerInventoryListParams, 'limit' | 'offset'>,
     options?: { onPage?: (fetched: number, total: number) => void | Promise<void> }
   ): Promise<BricqerInventoryItem[]> {
     const allItems: BricqerInventoryItem[] = [];
-    let offset = 0;
+    let page = 1;
     const limit = 100;
     let hasMore = true;
     let totalCount = 0;
+    const maxPages = 500; // Safety limit
 
-    while (hasMore) {
-      const response = await this.request<
-        BricqerPaginatedResponse<BricqerInventoryItem> | BricqerInventoryItem[]
-      >('/inventory/item/', {
-        params: this.convertInventoryParams({ ...params, limit, offset }),
+    while (hasMore && page <= maxPages) {
+      const queryParams = this.convertInventoryParams({ ...params, limit });
+      queryParams.page = page;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await this.request<any>('/inventory/item/', {
+        params: queryParams,
       });
 
       if (Array.isArray(response)) {
         allItems.push(...response);
         hasMore = false;
       } else {
-        allItems.push(...(response.results || []));
-        totalCount = response.count ?? allItems.length;
-        hasMore = response.next !== null;
-        offset += limit;
+        const results = response.results || [];
+        allItems.push(...results);
+
+        // Read pagination from page object (Bricqer inventory API format)
+        // or fall back to top-level fields (order API format)
+        totalCount = response.page?.count ?? response.count ?? allItems.length;
+        const nextUrl = response.page?.links?.next ?? response.next ?? null;
+        hasMore = nextUrl !== null && nextUrl !== undefined && results.length > 0;
+        page++;
       }
 
       await options?.onPage?.(allItems.length, totalCount);
