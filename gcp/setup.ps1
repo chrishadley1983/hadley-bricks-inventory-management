@@ -152,13 +152,17 @@ Create-SchedulerJob -Name "rebrickable-sync" -Schedule "0 4 * * 0" -Uri "$APP_UR
 Create-SchedulerJob -Name "investment-sync" -Schedule "0 5 * * *" -Uri "$APP_URL/api/cron/investment-sync" -Description "Daily investment ASIN linkage and classification"
 Create-SchedulerJob -Name "investment-retrain" -Schedule "0 6 1 * *" -Uri "$APP_URL/api/cron/investment-retrain" -Description "Monthly investment model retraining"
 
+# Minifig sync jobs (eBay/Bricqer cross-listing)
+Create-SchedulerJob -Name "minifig-daily-inventory" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/minifigs/daily-inventory" -Description "Daily minifig inventory pull, Bricqer order poll, research refresh, repricing"
+Create-SchedulerJob -Name "minifig-poll-ebay-orders" -Schedule "*/15 * * * *" -Uri "$APP_URL/api/cron/minifigs/poll-ebay-orders" -Description "Poll eBay for minifig sales (cross-platform delisting)"
+
 # Summary
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Created 13 Cloud Scheduler jobs:" -ForegroundColor White
+Write-Host "Created 15 Cloud Scheduler jobs:" -ForegroundColor White
 gcloud scheduler jobs list --location=$REGION --format="table(name,schedule,state)"
 
 Write-Host ""
