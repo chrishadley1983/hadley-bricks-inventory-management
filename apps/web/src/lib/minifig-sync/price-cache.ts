@@ -21,6 +21,25 @@ export class PriceCacheService {
   }
 
   /**
+   * Look up a valid (non-expired) cache entry for a BrickLink ID filtered by source.
+   * Returns null if no cache or cache is expired or source doesn't match.
+   */
+  async lookupBySource(
+    bricklinkId: string,
+    source: 'terapeak' | 'bricklink',
+  ): Promise<MinifigPriceCache | null> {
+    const { data } = await this.supabase
+      .from('minifig_price_cache')
+      .select('*')
+      .eq('bricklink_id', bricklinkId)
+      .eq('source', source)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    return data;
+  }
+
+  /**
    * Check if a valid cache entry exists (without returning full data).
    */
   async hasValidCache(bricklinkId: string): Promise<boolean> {
