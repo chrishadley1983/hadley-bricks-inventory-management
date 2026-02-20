@@ -95,6 +95,57 @@ export class MinifigJobTracker {
     }
   }
 
+  /**
+   * Save incremental progress counts and cursor to the job.
+   */
+  async updateProgress(
+    jobId: string,
+    cursor: string,
+    counts: {
+      itemsProcessed: number;
+      itemsCreated: number;
+      itemsUpdated: number;
+      itemsErrored: number;
+    },
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from('minifig_sync_jobs')
+      .update({
+        last_poll_cursor: cursor,
+        items_processed: counts.itemsProcessed,
+        items_created: counts.itemsCreated,
+        items_updated: counts.itemsUpdated,
+        items_errored: counts.itemsErrored,
+      })
+      .eq('id', jobId)
+      .eq('user_id', this.userId);
+
+    if (error) {
+      console.error(`Failed to update progress for job ${jobId}:`, error.message);
+    }
+  }
+
+  /**
+   * Find a RUNNING job that was likely interrupted (started > 2 minutes ago).
+   * Returns the job with its cursor for resumption.
+   */
+  async findInterruptedJob(jobType: MinifigJobType): Promise<MinifigSyncJob | null> {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    const { data } = await this.supabase
+      .from('minifig_sync_jobs')
+      .select('*')
+      .eq('user_id', this.userId)
+      .eq('job_type', jobType)
+      .eq('status', 'RUNNING')
+      .lt('started_at', twoMinutesAgo)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    return data;
+  }
+
   async getLatestCursor(jobType: MinifigJobType): Promise<string | null> {
     const { data } = await this.supabase
       .from('minifig_sync_jobs')

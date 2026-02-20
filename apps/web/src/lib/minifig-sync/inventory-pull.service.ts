@@ -10,6 +10,8 @@ import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 interface PullOptions {
   onProgress?: SyncProgressCallback;
+  /** Maximum time in ms before the pull should return (even if incomplete). Default: no limit. */
+  maxDurationMs?: number;
 }
 
 interface PullResult {
@@ -19,7 +21,12 @@ interface PullResult {
   itemsUpdated: number;
   itemsErrored: number;
   errors: Array<{ item?: string; error: string }>;
+  /** True if all pages were processed; false if interrupted and needs another invocation */
+  complete: boolean;
 }
+
+/** Maximum pages to process in a single function invocation (stay within Vercel timeout) */
+const MAX_PAGES_PER_INVOCATION = 500;
 
 export class InventoryPullService {
   private configService: MinifigConfigService;
@@ -35,19 +42,41 @@ export class InventoryPullService {
 
   async pull(options?: PullOptions): Promise<PullResult> {
     const onProgress = options?.onProgress;
-    const jobId = await this.jobTracker.start('INVENTORY_PULL');
-    const errors: Array<{ item?: string; error: string }> = [];
+    const startTime = Date.now();
+    const maxDurationMs = options?.maxDurationMs;
+
+    // 1. Check for an interrupted job to resume
+    let jobId: string;
+    let startPage = 1;
     let itemsProcessed = 0;
     let itemsCreated = 0;
     let itemsUpdated = 0;
     let itemsErrored = 0;
+    const errors: Array<{ item?: string; error: string }> = [];
+
+    const interrupted = await this.jobTracker.findInterruptedJob('INVENTORY_PULL');
+    if (interrupted) {
+      jobId = interrupted.id;
+      startPage = interrupted.last_poll_cursor ? parseInt(interrupted.last_poll_cursor, 10) + 1 : 1;
+      itemsProcessed = interrupted.items_processed ?? 0;
+      itemsCreated = interrupted.items_created ?? 0;
+      itemsUpdated = interrupted.items_updated ?? 0;
+      itemsErrored = interrupted.items_errored ?? 0;
+      await onProgress?.({
+        type: 'stage',
+        stage: 'resume',
+        message: `Resuming from page ${startPage} (${itemsProcessed} items already processed)...`,
+      });
+    } else {
+      jobId = await this.jobTracker.start('INVENTORY_PULL');
+    }
 
     try {
-      // 1. Load config
+      // 2. Load config
       await onProgress?.({ type: 'stage', stage: 'config', message: 'Loading configuration...' });
       const config = await this.configService.getConfig();
 
-      // 2. Get Bricqer credentials and create client
+      // 3. Get Bricqer credentials and create client
       await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking Bricqer credentials...' });
       const credentialsRepo = new CredentialsRepository(this.supabase);
       const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(
@@ -61,85 +90,92 @@ export class InventoryPullService {
 
       const client = new BricqerClient(credentials);
 
-      // 3. Fetch all inventory items from Bricqer (condition filter not supported server-side)
-      await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Fetching inventory from Bricqer...' });
-      const rawItems = await client.getAllInventoryItems(undefined, {
-        onPage: async (fetched, total) => {
-          await onProgress?.({
-            type: 'progress',
-            current: fetched,
-            total: total || fetched,
-            message: `Fetched ${fetched}${total ? ` of ${total}` : ''} items from Bricqer...`,
-          });
-        },
+      // 4. Load existing sync items for upsert matching
+      await onProgress?.({ type: 'stage', stage: 'match', message: 'Loading existing sync items...' });
+      const existingByBricqerId = await this.loadExistingItems();
+
+      // 5. Page-by-page fetch, filter, and upsert
+      await onProgress?.({
+        type: 'stage',
+        stage: 'sync',
+        message: startPage > 1
+          ? `Syncing inventory (resuming from page ${startPage})...`
+          : 'Syncing inventory from Bricqer...',
       });
 
-      // 4. Post-filter for used minifigures meeting price threshold
-      await onProgress?.({ type: 'stage', stage: 'filter', message: 'Filtering minifigures...' });
-      const minifigs = rawItems
-        .map((item) => {
-          const normalized = normalizeInventoryItem(item);
-          return { raw: item, normalized };
-        })
-        .filter(({ normalized }) => normalized.condition === 'Used')
-        .filter(({ normalized }) => normalized.itemType === 'Minifig')
-        .filter(
-          ({ normalized }) =>
-            (normalized.price ?? 0) >= config.min_bricqer_listing_price,
-        );
-
-      itemsProcessed = minifigs.length;
-
-      // 5. Fetch all existing sync items in one query for batch matching (C2)
-      await onProgress?.({ type: 'stage', stage: 'match', message: 'Loading existing sync items...' });
-      const existingItems: Array<{ id: string; bricqer_item_id: string; bricqer_price: number | null; updated_at: string | null }> = [];
-      const pageSize = 1000;
-      let page = 0;
+      let page = startPage;
       let hasMore = true;
-      while (hasMore) {
-        const { data } = await this.supabase
-          .from('minifig_sync_items')
-          .select('id, bricqer_item_id, bricqer_price, updated_at')
-          .eq('user_id', this.userId)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        existingItems.push(...(data ?? []) as Array<{ id: string; bricqer_item_id: string; bricqer_price: number | null; updated_at: string | null }>);
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
-      }
-      const existingByBricqerId = new Map(
-        existingItems.map((item) => [item.bricqer_item_id, item]),
-      );
+      let totalCount = 0;
+      let pagesThisInvocation = 0;
 
-      // 6. Upsert each minifig using the pre-fetched map
-      await onProgress?.({ type: 'stage', stage: 'upsert', message: 'Processing minifigures...' });
-      for (let i = 0; i < minifigs.length; i++) {
-        const { raw, normalized } = minifigs[i];
+      while (hasMore && pagesThisInvocation < MAX_PAGES_PER_INVOCATION) {
+        // Check time budget before fetching next page
+        if (maxDurationMs && (Date.now() - startTime) >= maxDurationMs) {
+          break;
+        }
+
+        const pageResult = await client.fetchInventoryPage(page);
+        totalCount = pageResult.totalCount;
+        hasMore = pageResult.hasMore;
+        pagesThisInvocation++;
+
+        // Filter this page for used minifigs meeting price threshold
+        for (const rawItem of pageResult.items) {
+          const normalized = normalizeInventoryItem(rawItem);
+          if (
+            normalized.condition !== 'Used' ||
+            normalized.itemType !== 'Minifig' ||
+            (normalized.price ?? 0) < config.min_bricqer_listing_price
+          ) {
+            continue;
+          }
+
+          itemsProcessed++;
+          try {
+            const result = await this.upsertMinifig(rawItem, normalized, existingByBricqerId);
+            if (result === 'created') itemsCreated++;
+            else if (result === 'updated') itemsUpdated++;
+          } catch (err) {
+            itemsErrored++;
+            errors.push({
+              item: normalized.itemNumber,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        // Checkpoint progress after each page
+        await this.jobTracker.updateProgress(jobId, String(page), {
+          itemsProcessed,
+          itemsCreated,
+          itemsUpdated,
+          itemsErrored,
+        });
+
+        // Emit progress
+        const totalPages = totalCount > 0 ? Math.ceil(totalCount / 100) : page;
         await onProgress?.({
           type: 'progress',
-          current: i + 1,
-          total: minifigs.length,
-          message: normalized.itemNumber || normalized.itemName || `Item ${i + 1}`,
+          current: page * 100,
+          total: totalCount || page * 100,
+          message: `Page ${page}/${totalPages} — ${itemsProcessed} minifigs found`,
         });
-        try {
-          const result = await this.upsertMinifig(raw, normalized, existingByBricqerId);
-          if (result === 'created') itemsCreated++;
-          else if (result === 'updated') itemsUpdated++;
-        } catch (err) {
-          itemsErrored++;
-          errors.push({
-            item: normalized.itemNumber,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+
+        page++;
       }
 
-      // 7. Complete job
-      await this.jobTracker.complete(jobId, {
-        itemsProcessed,
-        itemsCreated,
-        itemsUpdated,
-        itemsErrored,
-      });
+      const isComplete = !hasMore;
+
+      if (isComplete) {
+        // All pages processed — mark job complete
+        await this.jobTracker.complete(jobId, {
+          itemsProcessed,
+          itemsCreated,
+          itemsUpdated,
+          itemsErrored,
+        });
+      }
+      // If not complete, job stays RUNNING with cursor for next invocation
 
       return {
         jobId,
@@ -148,9 +184,9 @@ export class InventoryPullService {
         itemsUpdated,
         itemsErrored,
         errors,
+        complete: isComplete,
       };
     } catch (err) {
-      // Top-level failure (credentials, API outage, etc.)
       const errorMsg = err instanceof Error ? err.message : String(err);
       errors.push({ error: errorMsg });
 
@@ -165,10 +201,45 @@ export class InventoryPullService {
     }
   }
 
+  private async loadExistingItems(): Promise<
+    Map<string, { id: string; bricqer_price: number | null; updated_at: string | null }>
+  > {
+    const existingItems: Array<{
+      id: string;
+      bricqer_item_id: string;
+      bricqer_price: number | null;
+      updated_at: string | null;
+    }> = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data } = await this.supabase
+        .from('minifig_sync_items')
+        .select('id, bricqer_item_id, bricqer_price, updated_at')
+        .eq('user_id', this.userId)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      existingItems.push(
+        ...((data ?? []) as Array<{
+          id: string;
+          bricqer_item_id: string;
+          bricqer_price: number | null;
+          updated_at: string | null;
+        }>),
+      );
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+    }
+    return new Map(existingItems.map((item) => [item.bricqer_item_id, item]));
+  }
+
   private async upsertMinifig(
     raw: Parameters<typeof normalizeInventoryItem>[0],
     normalized: ReturnType<typeof normalizeInventoryItem>,
-    existingByBricqerId: Map<string, { id: string; bricqer_price: number | null; updated_at: string | null }>,
+    existingByBricqerId: Map<
+      string,
+      { id: string; bricqer_price: number | null; updated_at: string | null }
+    >,
   ): Promise<'created' | 'updated'> {
     const bricqerItemId = String(raw.id);
     const definition = raw.definition;
@@ -177,7 +248,6 @@ export class InventoryPullService {
     const existing = existingByBricqerId.get(bricqerItemId);
 
     if (existing) {
-      // Update existing row (with user_id guard)
       await this.supabase
         .from('minifig_sync_items')
         .update({
@@ -194,7 +264,6 @@ export class InventoryPullService {
 
       return 'updated';
     } else {
-      // Insert new row
       await this.supabase.from('minifig_sync_items').insert({
         user_id: this.userId,
         bricqer_item_id: bricqerItemId,
@@ -205,6 +274,13 @@ export class InventoryPullService {
         bricqer_image_url: definition.picture || definition.legoPicture || null,
         listing_status: 'NOT_LISTED',
         last_synced_at: now,
+      });
+
+      // Add to map so subsequent pages don't re-insert
+      existingByBricqerId.set(bricqerItemId, {
+        id: bricqerItemId,
+        bricqer_price: normalized.price ?? null,
+        updated_at: now,
       });
 
       return 'created';
