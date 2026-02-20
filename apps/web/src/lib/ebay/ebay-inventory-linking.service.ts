@@ -63,7 +63,7 @@ export interface NetSaleCalculation {
 
 export interface LinkingResult {
   orderId: string;
-  status: 'complete' | 'partial' | 'pending';
+  status: 'complete' | 'partial' | 'pending' | 'pre_linked';
   lineItemsProcessed: number;
   autoLinked: number;
   queuedForResolution: number;
@@ -221,10 +221,12 @@ export class EbayInventoryLinkingService {
       }
 
       // Update order linking status
+      // Use 'pre_linked' instead of 'complete' so processFulfilledOrder still runs
+      // when the order transitions to FULFILLED (to mark inventory SOLD + write financials)
       const allLinked = result.queuedForResolution === 0;
       const someLinked = result.autoLinked > 0;
 
-      result.status = allLinked ? 'complete' : someLinked ? 'partial' : 'pending';
+      result.status = allLinked ? 'pre_linked' : someLinked ? 'partial' : 'pending';
 
       await this.supabase
         .from('ebay_orders')
@@ -268,26 +270,51 @@ export class EbayInventoryLinkingService {
         return result;
       }
 
-      // Get line items that haven't been linked yet
-      const { data: lineItems, error: lineItemsError } = await this.supabase
+      // Get ALL line items for this order
+      const { data: allLineItems, error: lineItemsError } = await this.supabase
         .from('ebay_order_line_items')
         .select('id, order_id, sku, title, quantity, total_amount, inventory_item_id')
-        .eq('order_id', orderId)
-        .is('inventory_item_id', null);
+        .eq('order_id', orderId);
 
       if (lineItemsError) {
         result.errors.push(`Failed to fetch line items: ${lineItemsError.message}`);
         return result;
       }
 
-      if (!lineItems || lineItems.length === 0) {
-        // All items already linked
+      if (!allLineItems || allLineItems.length === 0) {
         result.status = 'complete';
         return result;
       }
 
-      // Process each line item
-      for (const lineItem of lineItems) {
+      // Separate into unlinked items and pre-linked items (linked but not yet marked SOLD)
+      const unlinkedItems = allLineItems.filter((li: EbayOrderLineItem) => !li.inventory_item_id);
+      const preLinkedItems = allLineItems.filter((li: EbayOrderLineItem) => li.inventory_item_id);
+
+      // For pre-linked items, check which inventory items still need to be marked SOLD
+      if (preLinkedItems.length > 0) {
+        const preLinkedInventoryIds = preLinkedItems.map((li: EbayOrderLineItem) => li.inventory_item_id);
+        const { data: inventoryItems } = await this.supabase
+          .from('inventory_items')
+          .select('id, status')
+          .in('id', preLinkedInventoryIds)
+          .eq('user_id', this.userId)
+          .neq('status', 'SOLD');
+
+        const unsoldInventoryIds = new Set((inventoryItems || []).map((ii: { id: string }) => ii.id));
+
+        for (const lineItem of preLinkedItems) {
+          if (unsoldInventoryIds.has(lineItem.inventory_item_id)) {
+            // Pre-linked but not marked SOLD — calculate financials and mark sold
+            result.lineItemsProcessed++;
+            const netSale = await this.calculateNetSale(order.ebay_order_id, lineItem);
+            await this.markInventoryAsSold(lineItem.inventory_item_id!, lineItem, order, netSale);
+            result.autoLinked++;
+          }
+        }
+      }
+
+      // Process unlinked items (normal matching flow)
+      for (const lineItem of unlinkedItems) {
         result.lineItemsProcessed++;
 
         const matchResult = await this.matchLineItemToInventory(lineItem);
@@ -345,7 +372,8 @@ export class EbayInventoryLinkingService {
       errors: [],
     };
 
-    // Get all fulfilled orders without inventory linking - with pagination to handle >1000 orders
+    // Get all fulfilled orders that need inventory linking
+    // Includes: no status (null), pre_linked (linked during PAID but not marked SOLD), partial
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
@@ -357,7 +385,7 @@ export class EbayInventoryLinkingService {
         .select('id, ebay_order_id, creation_date')
         .eq('user_id', this.userId)
         .eq('order_fulfilment_status', 'FULFILLED')
-        .is('inventory_link_status', null)
+        .or('inventory_link_status.is.null,inventory_link_status.eq.pre_linked,inventory_link_status.eq.partial')
         .order('creation_date', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
