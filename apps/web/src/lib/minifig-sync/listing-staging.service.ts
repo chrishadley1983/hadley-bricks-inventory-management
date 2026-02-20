@@ -76,6 +76,7 @@ export class ListingStagingService {
       const policiesService = new EbayBusinessPoliciesService(
         this.supabase,
         this.userId,
+        this.ebayAuth,
       );
       const policies = await policiesService.getPolicies();
       const defaultFulfillment = policies.fulfillment[0];

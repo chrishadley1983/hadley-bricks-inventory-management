@@ -27,10 +27,10 @@ export class EbayBusinessPoliciesService {
   private userId: string;
   private authService: EbayAuthService;
 
-  constructor(supabase: SupabaseClient<Database>, userId: string) {
+  constructor(supabase: SupabaseClient<Database>, userId: string, authService?: EbayAuthService) {
     this.supabase = supabase;
     this.userId = userId;
-    this.authService = new EbayAuthService();
+    this.authService = authService ?? new EbayAuthService();
   }
 
   /**
