@@ -10,20 +10,8 @@
       "schedule": "0 6 * * *"
     },
     {
-      "path": "/api/cron/minifigs/research-refresh",
-      "schedule": "0 7 * * *"
-    },
-    {
       "path": "/api/cron/minifigs/poll-ebay-orders",
       "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/minifigs/poll-bricqer-orders",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/minifigs/reprice",
-      "schedule": "0 8 * * 1"
     }
   ]
 }
