@@ -61,9 +61,9 @@ export class InventoryPullService {
 
       const client = new BricqerClient(credentials);
 
-      // 3. Fetch all used inventory items from Bricqer
+      // 3. Fetch all inventory items from Bricqer (condition filter not supported server-side)
       await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Fetching inventory from Bricqer...' });
-      const rawItems = await client.getAllInventoryItems({ condition: 'U' }, {
+      const rawItems = await client.getAllInventoryItems(undefined, {
         onPage: async (fetched, total) => {
           await onProgress?.({
             type: 'progress',
@@ -74,13 +74,14 @@ export class InventoryPullService {
         },
       });
 
-      // 4. Post-filter for minifigures and price threshold
+      // 4. Post-filter for used minifigures meeting price threshold
       await onProgress?.({ type: 'stage', stage: 'filter', message: 'Filtering minifigures...' });
       const minifigs = rawItems
         .map((item) => {
           const normalized = normalizeInventoryItem(item);
           return { raw: item, normalized };
         })
+        .filter(({ normalized }) => normalized.condition === 'Used')
         .filter(({ normalized }) => normalized.itemType === 'Minifig')
         .filter(
           ({ normalized }) =>
