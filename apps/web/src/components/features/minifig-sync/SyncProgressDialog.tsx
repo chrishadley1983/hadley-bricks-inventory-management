@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -45,12 +46,42 @@ function ResultSummary({ result }: { result: Record<string, unknown> }) {
   );
 }
 
+function formatElapsed(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialogProps) {
   const isStreaming = stream.status === 'streaming';
   const isComplete = stream.status === 'complete';
   const isError = stream.status === 'error';
   const title = stream.operation ? SYNC_OPERATION_LABELS[stream.operation] : 'Sync';
   const progressPercent = stream.total > 0 ? Math.round((stream.current / stream.total) * 100) : 0;
+
+  // Elapsed time counter
+  const [elapsed, setElapsed] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isStreaming) {
+      setElapsed(0);
+      intervalRef.current = setInterval(() => {
+        setElapsed((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isStreaming]);
 
   return (
     <Dialog
@@ -80,9 +111,14 @@ export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialog
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Stage message */}
+          {/* Stage message with elapsed time */}
           {isStreaming && stream.stageMessage && (
-            <p className="text-sm text-muted-foreground">{stream.stageMessage}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">{stream.stageMessage}</p>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {formatElapsed(elapsed)}
+              </span>
+            </div>
           )}
 
           {/* Progress bar (only when we have a total) */}
@@ -98,8 +134,15 @@ export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialog
             </div>
           )}
 
-          {/* Complete: show result summary */}
-          {isComplete && stream.result && <ResultSummary result={stream.result} />}
+          {/* Complete: show result summary with elapsed time */}
+          {isComplete && stream.result && (
+            <div className="space-y-2">
+              <ResultSummary result={stream.result} />
+              <p className="text-xs text-muted-foreground">
+                Completed in {formatElapsed(elapsed)}
+              </p>
+            </div>
+          )}
 
           {/* Error message */}
           {isError && stream.error && (
