@@ -139,8 +139,12 @@ export class BricqerClient {
     }
 
     let lastError: Error | null = null;
+    let errorRetries = 0;
+    let rateLimitWaits = 0;
+    const maxRateLimitWaits = 10; // Allow up to 10 rate limit waits (~10 minutes)
 
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
       try {
         const result = await this.makeRequest<T>(url.toString(), method, body);
         return result;
@@ -163,12 +167,33 @@ export class BricqerClient {
           throw error;
         }
 
-        // Wait before retry with exponential backoff
-        if (attempt < MAX_RETRIES - 1) {
-          const delay = BASE_RETRY_DELAY * Math.pow(2, attempt);
-          console.log(`[Bricqer] Retrying request in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-          await this.sleep(delay);
+        // Rate limit errors: wait until reset (don't count against error retries)
+        if (error instanceof BricqerRateLimitError) {
+          rateLimitWaits++;
+          if (rateLimitWaits > maxRateLimitWaits) {
+            throw error;
+          }
+          const resetTime = error.rateLimitInfo.resetTime;
+          const waitMs = Math.max(0, resetTime.getTime() - Date.now()) + 1000; // +1s buffer
+          // Cap wait at 5 minutes for serverless environments
+          const cappedWaitMs = Math.min(waitMs, 5 * 60 * 1000);
+          if (waitMs > cappedWaitMs) {
+            console.log(`[Bricqer] Rate limited for ${Math.round(waitMs / 1000)}s — too long to wait, throwing`);
+            throw error;
+          }
+          console.log(`[Bricqer] Rate limited. Waiting ${Math.round(cappedWaitMs / 1000)}s until reset (rate limit wait ${rateLimitWaits}/${maxRateLimitWaits})`);
+          await this.sleep(cappedWaitMs);
+          continue;
         }
+
+        // Other errors: exponential backoff with limited retries
+        errorRetries++;
+        if (errorRetries >= MAX_RETRIES) {
+          break;
+        }
+        const delay = BASE_RETRY_DELAY * Math.pow(2, errorRetries - 1);
+        console.log(`[Bricqer] Retrying request in ${delay}ms (attempt ${errorRetries}/${MAX_RETRIES})`);
+        await this.sleep(delay);
       }
     }
 
@@ -262,14 +287,42 @@ export class BricqerClient {
   }
 
   /**
-   * Update rate limit info from response headers
+   * Proactively pause before hitting the rate limit.
+   * If remaining requests are low, sleep until the reset window.
+   */
+  private async throttleIfNeeded(): Promise<void> {
+    if (!this.rateLimitInfo) return;
+
+    const { remaining, resetTime } = this.rateLimitInfo;
+
+    // If we have fewer than 5 remaining requests, wait for the reset
+    if (remaining <= 5) {
+      const waitMs = Math.max(0, resetTime.getTime() - Date.now()) + 1000; // +1s buffer
+      if (waitMs > 0 && waitMs < 120000) { // Cap at 2 minutes to avoid infinite waits
+        console.log(`[Bricqer] Rate limit low (${remaining} remaining). Waiting ${Math.round(waitMs / 1000)}s for reset...`);
+        await this.sleep(waitMs);
+      }
+    }
+  }
+
+  /**
+   * Update rate limit info from response headers.
+   * Bricqer uses `Retry-After` (seconds) header instead of X-RateLimit-* headers.
    */
   private updateRateLimitInfo(headers: Headers): void {
     const remaining = headers.get('X-RateLimit-Remaining');
     const limit = headers.get('X-RateLimit-Limit');
     const reset = headers.get('X-RateLimit-Reset');
+    const retryAfter = headers.get('Retry-After');
 
-    if (remaining !== null || limit !== null) {
+    if (retryAfter !== null) {
+      const retryAfterSecs = parseInt(retryAfter, 10);
+      this.rateLimitInfo = {
+        remaining: 0,
+        limit: limit ? parseInt(limit, 10) : 100,
+        resetTime: new Date(Date.now() + retryAfterSecs * 1000),
+      };
+    } else if (remaining !== null || limit !== null) {
       this.rateLimitInfo = {
         remaining: remaining ? parseInt(remaining, 10) : 0,
         limit: limit ? parseInt(limit, 10) : 100,
@@ -554,6 +607,9 @@ export class BricqerClient {
     const maxPages = 500; // Safety limit
 
     while (hasMore && page <= maxPages) {
+      // Proactive rate limit throttling: pause before we hit the limit
+      await this.throttleIfNeeded();
+
       const queryParams = this.convertInventoryParams({ ...params, limit });
       queryParams.page = page;
 
@@ -581,6 +637,34 @@ export class BricqerClient {
     }
 
     return allItems;
+  }
+
+  /**
+   * Fetch a single page of inventory items with pagination metadata.
+   * Used for resumable page-by-page processing.
+   */
+  async fetchInventoryPage(page: number): Promise<{
+    items: BricqerInventoryItem[];
+    totalCount: number;
+    hasMore: boolean;
+  }> {
+    await this.throttleIfNeeded();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await this.request<any>('/inventory/item/', {
+      params: { limit: 100, page },
+    });
+
+    if (Array.isArray(response)) {
+      return { items: response, totalCount: response.length, hasMore: false };
+    }
+
+    const items = response.results || [];
+    const totalCount = response.page?.count ?? response.count ?? 0;
+    const nextUrl = response.page?.links?.next ?? response.next ?? null;
+    const hasMore = nextUrl !== null && nextUrl !== undefined && items.length > 0;
+
+    return { items, totalCount, hasMore };
   }
 
   /**
