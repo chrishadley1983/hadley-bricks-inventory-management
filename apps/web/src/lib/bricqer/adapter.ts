@@ -369,8 +369,11 @@ function mapInventoryCondition(condition: 'N' | 'U' | undefined): 'New' | 'Used'
  */
 export function normalizeInventoryItem(
   item: BricqerInventoryItem
-): NormalizedBricqerInventoryItem {
+): NormalizedBricqerInventoryItem | null {
   const definition = item.definition;
+
+  // Some items have no definition (deleted or corrupted) — skip them
+  if (!definition) return null;
 
   // Get condition from item or definition
   const condition = item.condition || definition.condition || 'N';
@@ -410,7 +413,9 @@ export function normalizeInventoryItem(
 export function normalizeInventoryItems(
   items: BricqerInventoryItem[]
 ): NormalizedBricqerInventoryItem[] {
-  return items.map(normalizeInventoryItem);
+  return items.map(normalizeInventoryItem).filter(
+    (item): item is NormalizedBricqerInventoryItem => item !== null,
+  );
 }
 
 /**

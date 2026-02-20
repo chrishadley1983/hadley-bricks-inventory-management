@@ -674,8 +674,14 @@ describe('Bricqer Adapter', () => {
       },
     };
 
+    it('should return null for items with no definition', () => {
+      const item = { ...baseItem, definition: null } as unknown as BricqerInventoryItem;
+      const result = normalizeInventoryItem(item);
+      expect(result).toBeNull();
+    });
+
     it('should normalize a basic inventory item', () => {
-      const result = normalizeInventoryItem(baseItem);
+      const result = normalizeInventoryItem(baseItem)!;
 
       expect(result.externalId).toBe('1');
       expect(result.itemNumber).toBe('3001');
@@ -692,19 +698,19 @@ describe('Bricqer Adapter', () => {
 
     it('should map legoType P to Part', () => {
       const item = { ...baseItem, definition: { ...baseItem.definition, legoType: 'P' } };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.itemType).toBe('Part');
     });
 
     it('should map legoType S to Set', () => {
       const item = { ...baseItem, definition: { ...baseItem.definition, legoType: 'S' } };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.itemType).toBe('Set');
     });
 
     it('should map legoType M to Minifig', () => {
       const item = { ...baseItem, definition: { ...baseItem.definition, legoType: 'M' } };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.itemType).toBe('Minifig');
     });
 
@@ -712,51 +718,51 @@ describe('Bricqer Adapter', () => {
       const types = ['G', 'B', 'C', 'I', 'O'];
       for (const type of types) {
         const item = { ...baseItem, definition: { ...baseItem.definition, legoType: type } };
-        const result = normalizeInventoryItem(item);
+        const result = normalizeInventoryItem(item)!;
         expect(result.itemType).toBe('Other');
       }
     });
 
     it('should map condition N to New', () => {
       const item = { ...baseItem, condition: 'N' as const };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.condition).toBe('New');
     });
 
     it('should map condition U to Used', () => {
       const item = { ...baseItem, condition: 'U' as const };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.condition).toBe('Used');
     });
 
     it('should default condition to New when undefined', () => {
       const item = { ...baseItem, condition: undefined };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.condition).toBe('New');
     });
 
     it('should use remainingQuantity when quantity not available', () => {
       const item = { ...baseItem, quantity: undefined, remainingQuantity: 3 };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.quantity).toBe(3);
     });
 
     it('should default quantity to 1 when neither available', () => {
       const item = { ...baseItem, quantity: undefined, remainingQuantity: undefined };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.quantity).toBe(1);
     });
 
     it('should use colorId from item when available', () => {
       const item = { ...baseItem, colorId: 10, colorName: 'Blue' };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.colorId).toBe(10);
       expect(result.colorName).toBe('Blue');
     });
 
     it('should use price from definition when item price not available', () => {
       const item = { ...baseItem, price: undefined };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.price).toBe(2.5);
     });
 
@@ -765,12 +771,12 @@ describe('Bricqer Adapter', () => {
         ...baseItem,
         definition: { ...baseItem.definition, legoId: undefined },
       } as unknown as BricqerInventoryItem;
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.itemNumber).toBe('100');
     });
 
     it('should include image URL from picture field', () => {
-      const result = normalizeInventoryItem(baseItem);
+      const result = normalizeInventoryItem(baseItem)!;
       expect(result.imageUrl).toBe('https://example.com/brick.jpg');
     });
 
@@ -783,24 +789,24 @@ describe('Bricqer Adapter', () => {
           legoPicture: 'https://example.com/lego-brick.jpg',
         },
       };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.imageUrl).toBe('https://example.com/lego-brick.jpg');
     });
 
     it('should include purchaseId when available', () => {
       const item = { ...baseItem, purchaseId: 999 };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.purchaseId).toBe(999);
     });
 
     it('should include remarks when available', () => {
       const item = { ...baseItem, remarks: 'Some notes about this item' };
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.remarks).toBe('Some notes about this item');
     });
 
     it('should preserve raw data', () => {
-      const result = normalizeInventoryItem(baseItem);
+      const result = normalizeInventoryItem(baseItem)!;
       expect(result.rawData).toBeDefined();
       expect(result.rawData.id).toBe(1);
     });
@@ -810,7 +816,7 @@ describe('Bricqer Adapter', () => {
         ...baseItem,
         definition: { ...baseItem.definition, description: undefined },
       } as unknown as BricqerInventoryItem;
-      const result = normalizeInventoryItem(item);
+      const result = normalizeInventoryItem(item)!;
       expect(result.itemName).toBe('Unknown Item');
     });
   });
