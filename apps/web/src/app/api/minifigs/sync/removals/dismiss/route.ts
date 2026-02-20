@@ -28,19 +28,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch the removal to get the linked sync item (CR-013)
+    const { data: removal, error: fetchError } = await supabase
+      .from('minifig_removal_queue')
+      .select('id, minifig_sync_id')
+      .eq('id', parsed.data.removalId)
+      .eq('user_id', user.id)
+      .eq('status', 'PENDING')
+      .single();
+
+    if (fetchError || !removal) {
+      return NextResponse.json({ error: 'Removal not found or already processed' }, { status: 404 });
+    }
+
+    const now = new Date().toISOString();
+
+    // Mark removal as dismissed
     const { error } = await supabase
       .from('minifig_removal_queue')
       .update({
         status: 'DISMISSED',
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: now,
       })
-      .eq('id', parsed.data.removalId)
-      .eq('user_id', user.id)
-      .eq('status', 'PENDING');
+      .eq('id', removal.id)
+      .eq('user_id', user.id);
 
     if (error) {
       throw new Error(error.message);
     }
+
+    // Revert sync item status back to PUBLISHED (CR-013)
+    await supabase
+      .from('minifig_sync_items')
+      .update({
+        listing_status: 'PUBLISHED',
+        updated_at: now,
+      })
+      .eq('id', removal.minifig_sync_id)
+      .eq('user_id', user.id);
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {

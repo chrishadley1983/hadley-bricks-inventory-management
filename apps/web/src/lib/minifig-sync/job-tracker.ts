@@ -46,7 +46,8 @@ export class MinifigJobTracker {
         items_updated: counts.itemsUpdated,
         items_errored: counts.itemsErrored,
       })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .eq('user_id', this.userId);
 
     if (error) {
       console.error(`Failed to complete job ${jobId}:`, error.message);
@@ -74,7 +75,8 @@ export class MinifigJobTracker {
         items_updated: counts?.itemsUpdated ?? 0,
         items_errored: counts?.itemsErrored ?? 0,
       })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .eq('user_id', this.userId);
 
     if (error) {
       console.error(`Failed to mark job ${jobId} as failed:`, error.message);
@@ -85,7 +87,8 @@ export class MinifigJobTracker {
     const { error } = await this.supabase
       .from('minifig_sync_jobs')
       .update({ last_poll_cursor: cursor })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .eq('user_id', this.userId);
 
     if (error) {
       console.error(`Failed to update cursor for job ${jobId}:`, error.message);

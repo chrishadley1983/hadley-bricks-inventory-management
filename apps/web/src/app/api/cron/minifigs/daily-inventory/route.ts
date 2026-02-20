@@ -16,6 +16,21 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient();
+
+    // CR-002: Reset any items stuck in PUBLISHING status (crash recovery)
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: stuckItems } = await supabase
+      .from('minifig_sync_items')
+      .update({ listing_status: 'STAGED', updated_at: new Date().toISOString() })
+      .eq('user_id', DEFAULT_USER_ID)
+      .eq('listing_status', 'PUBLISHING')
+      .lt('updated_at', fiveMinAgo)
+      .select('id');
+
+    if (stuckItems && stuckItems.length > 0) {
+      console.log(`[daily-inventory] Reset ${stuckItems.length} stuck PUBLISHING items back to STAGED`);
+    }
+
     const service = new InventoryPullService(supabase, DEFAULT_USER_ID);
     const result = await service.pull();
 
