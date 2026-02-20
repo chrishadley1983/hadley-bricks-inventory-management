@@ -540,12 +540,14 @@ export class BricqerClient {
    * Get all inventory items with pagination
    */
   async getAllInventoryItems(
-    params?: Omit<BricqerInventoryListParams, 'limit' | 'offset'>
+    params?: Omit<BricqerInventoryListParams, 'limit' | 'offset'>,
+    options?: { onPage?: (fetched: number, total: number) => void | Promise<void> }
   ): Promise<BricqerInventoryItem[]> {
     const allItems: BricqerInventoryItem[] = [];
     let offset = 0;
     const limit = 100;
     let hasMore = true;
+    let totalCount = 0;
 
     while (hasMore) {
       const response = await this.request<
@@ -559,9 +561,12 @@ export class BricqerClient {
         hasMore = false;
       } else {
         allItems.push(...(response.results || []));
+        totalCount = response.count ?? allItems.length;
         hasMore = response.next !== null;
         offset += limit;
       }
+
+      await options?.onPage?.(allItems.length, totalCount);
     }
 
     return allItems;
