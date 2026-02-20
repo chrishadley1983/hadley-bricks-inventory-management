@@ -1,5 +1,38 @@
 import type { MinifigSyncConfig, BestOfferThresholds } from './types';
 
+/**
+ * Round a price down to the nearest charm price ending (.49 or .99).
+ *
+ * Examples:
+ *   14.61 → 14.49
+ *    6.25 →  5.99
+ *    4.10 →  3.99
+ *    5.49 →  5.49 (already charm)
+ *    5.99 →  5.99 (already charm)
+ */
+export function roundToNearestCharm(price: number): number {
+  if (price < 0.99) return 0.99;
+
+  const whole = Math.floor(price);
+  // Round fractional pence to avoid floating-point comparison errors
+  // e.g. 5.49 - 5 can yield 0.48999… in IEEE 754
+  const frac = Math.round((price - whole) * 100) / 100;
+
+  if (frac >= 0.99) return whole + 0.99;
+  if (frac >= 0.49) return whole + 0.49;
+  // fraction < 0.49 → drop to previous whole's .99
+  return (whole - 1) + 0.99;
+}
+
+/**
+ * Calculate the markup-based recommended price.
+ * Formula: bricqerPrice × 1.25, rounded down to nearest .49 or .99.
+ */
+export function calculateMarkupPrice(bricqerPrice: number): number {
+  const raw = bricqerPrice * 1.25;
+  return roundToNearestCharm(raw);
+}
+
 export class PricingEngine {
   constructor(private config: MinifigSyncConfig) {}
 

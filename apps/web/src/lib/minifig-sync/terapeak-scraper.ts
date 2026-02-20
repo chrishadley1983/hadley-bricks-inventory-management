@@ -2,28 +2,21 @@
  * Terapeak Research Scraper
  *
  * Uses Playwright to scrape eBay's Terapeak research tool for sold market data.
- * Requires a Chromium runtime (cannot run on Vercel serverless).
- * Intended for GCP Cloud Function or similar runtime with Playwright support.
+ * Requires a local Chrome install and a persistent browser profile created by
+ * `npm run terapeak:login` (which stores session state that survives eBay's
+ * bot detection / captcha checks).
  *
  * The research.service.ts falls back to BrickLink when Terapeak is unavailable.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@hadley-bricks/database';
+import { homedir } from 'os';
+import { join } from 'path';
+import { existsSync } from 'fs';
 import type { TerapeakResult } from './types';
-import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 
 const TERAPEAK_URL = 'https://www.ebay.co.uk/sh/research';
+const PROFILE_DIR = join(homedir(), '.hadley-bricks', 'terapeak-profile');
 const MIN_DELAY_MS = 3000;
-
-interface EbaySessionCookies {
-  cookies: Array<{
-    name: string;
-    value: string;
-    domain: string;
-    path: string;
-  }>;
-}
 
 export class TerapeakSessionExpiredError extends Error {
   constructor() {
@@ -35,11 +28,6 @@ export class TerapeakSessionExpiredError extends Error {
 export class TerapeakScraper {
   private lastRequestTime = 0;
 
-  constructor(
-    private supabase: SupabaseClient<Database>,
-    private userId: string,
-  ) {}
-
   /**
    * Research a single minifigure on Terapeak.
    * Returns null if no results found.
@@ -49,34 +37,32 @@ export class TerapeakScraper {
     name: string,
     bricklinkId: string,
   ): Promise<TerapeakResult | null> {
+    // Check profile directory exists (created by `npm run terapeak:login`)
+    if (!existsSync(PROFILE_DIR)) {
+      throw new Error(
+        'eBay Terapeak browser profile not found. Run `npm run terapeak:login` first.',
+      );
+    }
+
     // Lazy import Playwright — only available in runtimes with Chromium
     const { chromium } = await import('playwright');
 
     // Rate limit: enforce minimum delay between requests (F15)
     await this.enforceRateLimit();
 
-    // Load encrypted session cookies (I6)
-    const credentialsRepo = new CredentialsRepository(this.supabase);
-    const sessionData =
-      await credentialsRepo.getCredentials<EbaySessionCookies>(
-        this.userId,
-        'ebay-terapeak' as Parameters<typeof credentialsRepo.getCredentials>[1],
-      );
+    // Use the persistent profile that was set up via terapeak:login.
+    // This preserves the full browser state (cookies, localStorage, fingerprint)
+    // which prevents eBay's captcha/bot detection.
+    const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      headless: true,
+      channel: 'chrome',
+      args: ['--disable-blink-features=AutomationControlled'],
+    });
 
-    if (!sessionData?.cookies?.length) {
-      throw new Error('eBay Terapeak session cookies not configured');
-    }
-
-    const browser = await chromium.launch({ headless: true });
     try {
-      const context = await browser.newContext();
-
-      // Load session cookies (F13)
-      await context.addCookies(sessionData.cookies);
-
       const page = await context.newPage();
 
-      // Navigate to Terapeak (F13)
+      // Navigate to Terapeak search
       const searchQuery = `LEGO ${name} ${bricklinkId}`;
       const url = new URL(TERAPEAK_URL);
       url.searchParams.set('query', searchQuery);
@@ -84,13 +70,17 @@ export class TerapeakScraper {
       url.searchParams.set('soldItemsFilter', 'true');
       url.searchParams.set('dayRange', '90'); // Last 90 days
 
-      await page.goto(url.toString(), { waitUntil: 'networkidle' });
+      await page.goto(url.toString(), { waitUntil: 'domcontentloaded' });
 
-      // Detect session expiry (E3)
+      // Wait for any redirects to settle
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Detect session expiry or captcha (E3)
       const currentUrl = page.url();
       if (
         currentUrl.includes('signin.ebay') ||
         currentUrl.includes('login') ||
+        currentUrl.includes('captcha') ||
         !currentUrl.includes('sh/research')
       ) {
         throw new TerapeakSessionExpiredError();
@@ -100,7 +90,7 @@ export class TerapeakScraper {
       const result = await this.extractData(page);
       return result;
     } finally {
-      await browser.close();
+      await context.close();
       this.lastRequestTime = Date.now();
     }
   }

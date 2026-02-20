@@ -56,7 +56,7 @@ export class ResearchService {
 
   private getTerapeakScraper(): TerapeakScraper {
     if (!this._terapeakScraper) {
-      this._terapeakScraper = new TerapeakScraper(this.supabase, this.userId);
+      this._terapeakScraper = new TerapeakScraper();
     }
     return this._terapeakScraper;
   }
