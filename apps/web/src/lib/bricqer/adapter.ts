@@ -382,8 +382,8 @@ export function normalizeInventoryItem(
   const colorId = item.colorId || definition.color?.id;
   const colorName = item.colorName || definition.color?.name;
 
-  // Get quantity - use remainingQuantity if quantity not present
-  const quantity = item.quantity || item.remainingQuantity || 1;
+  // Get quantity - use remainingQuantity if quantity not present (use ?? to preserve 0)
+  const quantity = item.quantity ?? item.remainingQuantity ?? 1;
 
   // Get price from item or definition
   const price = item.price ? parseNumeric(item.price) : definition.price;

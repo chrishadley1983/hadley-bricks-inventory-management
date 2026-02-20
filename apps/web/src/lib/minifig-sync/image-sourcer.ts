@@ -1,29 +1,40 @@
 /**
- * Image Sourcing Service (F26-F30, E5)
+ * Image Sourcing Service
  *
- * Attempts to find up to 3 images per minifigure from multiple sources
+ * Attempts to find up to 4 images per minifigure from multiple sources
  * in priority order:
- *   1. Non-stock sourced images via Google Images (Playwright)
- *   2. Rebrickable catalogue image
- *   3. BrickLink catalogue image
+ *   1. Google Images (up to 2, excluding eBay results)
+ *   2. BrickLink catalogue image
+ *   3. Rebrickable catalogue image
  *   4. Bricqer stored image
  *
- * Gracefully degrades — if Google Images fails (E5), continues to
- * catalogue fallbacks without erroring.
+ * Uses persistent Chrome profile + channel:'chrome' for Google Images
+ * to avoid bot detection. Gracefully degrades on failure.
  */
 
+import { homedir } from 'os';
+import { join } from 'path';
 import { RebrickableApiClient } from '@/lib/rebrickable';
 import { validateImageDimensions } from './image-processor';
 import type { SourcedImage } from './types';
 
-const TARGET_IMAGE_COUNT = 3;
+const TARGET_IMAGE_COUNT = 4;
+const MAX_GOOGLE_IMAGES = 2;
+const PROFILE_DIR = join(homedir(), '.hadley-bricks', 'chrome-profile');
+
+/**
+ * Check if a URL contains 'ebay' anywhere (catches all eBay domains).
+ */
+function isEbayUrl(url: string): boolean {
+  return /ebay/i.test(url);
+}
 
 export class ImageSourcer {
   constructor(private rebrickableApiKey: string) {}
 
   /**
-   * Source up to 3 images for a minifigure.
-   * Returns images in priority order: sourced > catalogue > original.
+   * Source up to 4 images for a minifigure.
+   * Returns images in priority order: Google sourced > BrickLink > Rebrickable > Bricqer.
    */
   async sourceImages(
     name: string,
@@ -32,16 +43,15 @@ export class ImageSourcer {
   ): Promise<SourcedImage[]> {
     const images: SourcedImage[] = [];
 
-    // 1. Non-stock via Google Images search (F28)
+    // 1. Google Images (up to 2, excluding eBay)
     if (images.length < TARGET_IMAGE_COUNT) {
       try {
         const sourced = await this.searchGoogleImages(name, bricklinkId);
         for (const img of sourced) {
-          if (images.length >= TARGET_IMAGE_COUNT) break;
+          if (images.length >= MAX_GOOGLE_IMAGES) break;
           images.push(img);
         }
       } catch (err) {
-        // E5: Continue to fallback sources on failure
         console.warn(
           `[ImageSourcer] Google Images search failed for ${bricklinkId}:`,
           err instanceof Error ? err.message : err,
@@ -49,7 +59,16 @@ export class ImageSourcer {
       }
     }
 
-    // 2. Rebrickable catalogue image (F29)
+    // 2. BrickLink catalogue image (always add)
+    if (images.length < TARGET_IMAGE_COUNT) {
+      images.push({
+        url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
+        source: 'bricklink',
+        type: 'stock',
+      });
+    }
+
+    // 3. Rebrickable catalogue image
     if (images.length < TARGET_IMAGE_COUNT) {
       try {
         const rebrickableImg = await this.getRebrickableImage(bricklinkId);
@@ -62,15 +81,6 @@ export class ImageSourcer {
           err instanceof Error ? err.message : err,
         );
       }
-    }
-
-    // 3. BrickLink catalogue image (F30)
-    if (images.length < TARGET_IMAGE_COUNT) {
-      images.push({
-        url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
-        source: 'bricklink',
-        type: 'stock',
-      });
     }
 
     // 4. Bricqer stored image
@@ -86,9 +96,10 @@ export class ImageSourcer {
   }
 
   /**
-   * Search Google Images for non-stock minifigure photos (F28).
-   * Requires Playwright — only works in runtimes with Chromium.
-   * Validates images meet minimum 800x800px (F31).
+   * Search Google Images for non-stock minifigure photos.
+   * Uses persistent Chrome profile + channel:'chrome' to avoid bot detection.
+   * Excludes eBay results via search query AND URL filtering.
+   * Validates images meet minimum 800x800px.
    */
   private async searchGoogleImages(
     name: string,
@@ -96,32 +107,58 @@ export class ImageSourcer {
   ): Promise<SourcedImage[]> {
     const { chromium } = await import('playwright');
 
-    const query = `LEGO ${name} ${bricklinkId} minifigure -stock -render -official`;
+    const query = `LEGO ${name} ${bricklinkId} minifigure -stock -render -official -site:ebay.com -site:ebay.co.uk`;
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch&tbs=isz:l`;
 
-    const browser = await chromium.launch({ headless: true });
+    const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      headless: true,
+      channel: 'chrome',
+    });
     try {
-      const page = await browser.newPage();
+      const page = await context.newPage();
       await page.goto(searchUrl, { waitUntil: 'networkidle' });
 
-      // Extract image URLs from search results
-      const imageUrls = await page.evaluate(() => {
-        const imgs = Array.from(document.querySelectorAll('img[data-src]'));
-        return imgs
-          .map((img) => img.getAttribute('data-src'))
-          .filter((src): src is string => !!src && src.startsWith('http'))
-          .slice(0, 10);
+      // Extract image URLs and their source page URLs from search results
+      const imageResults = await page.evaluate(() => {
+        const anchors = Array.from(document.querySelectorAll('a[href]'));
+        const results: Array<{ imgUrl: string; pageUrl: string }> = [];
+
+        for (const anchor of anchors) {
+          const img = anchor.querySelector('img[data-src]');
+          if (!img) continue;
+          const imgUrl = img.getAttribute('data-src');
+          const pageUrl = anchor.getAttribute('href') || '';
+          if (imgUrl && imgUrl.startsWith('http')) {
+            results.push({ imgUrl, pageUrl });
+          }
+        }
+
+        // Also grab standalone data-src images
+        const standaloneImgs = Array.from(document.querySelectorAll('img[data-src]'));
+        for (const img of standaloneImgs) {
+          const imgUrl = img.getAttribute('data-src');
+          if (imgUrl && imgUrl.startsWith('http') && !results.some(r => r.imgUrl === imgUrl)) {
+            results.push({ imgUrl, pageUrl: '' });
+          }
+        }
+
+        return results.slice(0, 15);
       });
 
-      // Validate dimensions (F31: minimum 800x800)
+      // Filter out eBay URLs (safety net for all eBay domains)
+      const nonEbayResults = imageResults.filter(
+        (r) => !isEbayUrl(r.imgUrl) && !isEbayUrl(r.pageUrl),
+      );
+
+      // Validate dimensions (minimum 800x800)
       const validImages: SourcedImage[] = [];
-      for (const url of imageUrls) {
-        if (validImages.length >= TARGET_IMAGE_COUNT) break;
+      for (const { imgUrl } of nonEbayResults) {
+        if (validImages.length >= MAX_GOOGLE_IMAGES) break;
         try {
-          const validation = await validateImageDimensions(url);
+          const validation = await validateImageDimensions(imgUrl);
           if (validation.valid) {
             validImages.push({
-              url,
+              url: imgUrl,
               source: 'google',
               type: 'sourced',
             });
@@ -133,12 +170,12 @@ export class ImageSourcer {
 
       return validImages;
     } finally {
-      await browser.close();
+      await context.close();
     }
   }
 
   /**
-   * Get catalogue image from Rebrickable API (F29).
+   * Get catalogue image from Rebrickable API.
    * Queries GET /api/v3/lego/minifigs/{fig_num}/ and uses set_img_url.
    */
   private async getRebrickableImage(

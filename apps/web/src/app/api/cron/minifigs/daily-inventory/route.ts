@@ -57,34 +57,9 @@ export async function GET(request: NextRequest) {
       results.bricqerOrderPoll = { error: err instanceof Error ? err.message : String(err) };
     }
 
-    // 4. Research refresh (expired cache)
-    try {
-      const { data: expiredItems } = await supabase
-        .from('minifig_price_cache')
-        .select('bricklink_id')
-        .lt('expires_at', new Date().toISOString());
-
-      if (expiredItems && expiredItems.length > 0) {
-        const expiredBricklinkIds = expiredItems.map((e: { bricklink_id: string }) => e.bricklink_id);
-        const { data: syncItems } = await supabase
-          .from('minifig_sync_items')
-          .select('id')
-          .eq('user_id', DEFAULT_USER_ID)
-          .in('bricklink_id', expiredBricklinkIds);
-
-        if (syncItems && syncItems.length > 0) {
-          const researchService = new ResearchService(supabase, DEFAULT_USER_ID);
-          results.researchRefresh = await researchService.researchAll(syncItems.map((si: { id: string }) => si.id));
-        } else {
-          results.researchRefresh = { message: 'No sync items need refresh', itemsRefreshed: 0 };
-        }
-      } else {
-        results.researchRefresh = { message: 'No expired cache entries', itemsRefreshed: 0 };
-      }
-    } catch (err) {
-      console.error('[daily-inventory] Research refresh failed:', err);
-      results.researchRefresh = { error: err instanceof Error ? err.message : String(err) };
-    }
+    // 4. Research refresh — DISABLED: Terapeak requires local Playwright + Chrome session.
+    // Re-enable once Chrome extension or alternative approach is in place.
+    results.researchRefresh = { message: 'Research refresh disabled', itemsRefreshed: 0 };
 
     // 5. Repricing (Mondays only)
     const dayOfWeek = new Date().getUTCDay();

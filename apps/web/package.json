@@ -21,7 +21,8 @@
     "migrate:bricklink-uploads": "tsx scripts/migrate-bricklink-uploads.ts",
     "validate:reconcile": "tsx scripts/reconcile-data.ts",
     "sheets:test": "tsx scripts/test-sheets-connection.ts",
-    "seed:brickset": "tsx src/scripts/seed-brickset-data.ts"
+    "seed:brickset": "tsx src/scripts/seed-brickset-data.ts",
+    "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

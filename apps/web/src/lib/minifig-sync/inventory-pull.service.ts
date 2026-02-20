@@ -6,6 +6,7 @@ import type { BricqerCredentials } from '../bricqer/types';
 import { CredentialsRepository } from '../repositories/credentials.repository';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
+import { calculateMarkupPrice } from './pricing-engine';
 import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 interface PullOptions {
@@ -19,6 +20,7 @@ interface PullResult {
   itemsProcessed: number;
   itemsCreated: number;
   itemsUpdated: number;
+  itemsRemoved: number;
   itemsErrored: number;
   errors: Array<{ item?: string; error: string }>;
   /** True if all pages were processed; false if interrupted and needs another invocation */
@@ -126,6 +128,7 @@ export class InventoryPullService {
             !normalized ||
             normalized.condition !== 'Used' ||
             normalized.itemType !== 'Minifig' ||
+            normalized.quantity < 1 ||
             (normalized.price ?? 0) < config.min_bricqer_listing_price
           ) {
             continue;
@@ -167,7 +170,25 @@ export class InventoryPullService {
 
       const isComplete = !hasMore;
 
+      // Remove items no longer in Bricqer inventory (sold / 0 quantity)
+      let itemsRemoved = 0;
       if (isComplete) {
+        const syncCutoff = new Date(startTime).toISOString();
+        const { data: staleItems } = await this.supabase
+          .from('minifig_sync_items')
+          .select('id')
+          .eq('user_id', this.userId)
+          .lt('last_synced_at', syncCutoff);
+
+        if (staleItems && staleItems.length > 0) {
+          const staleIds = staleItems.map((s: { id: string }) => s.id);
+          await this.supabase
+            .from('minifig_sync_items')
+            .delete()
+            .in('id', staleIds);
+          itemsRemoved = staleIds.length;
+        }
+
         // All pages processed — mark job complete
         await this.jobTracker.complete(jobId, {
           itemsProcessed,
@@ -183,6 +204,7 @@ export class InventoryPullService {
         itemsProcessed,
         itemsCreated,
         itemsUpdated,
+        itemsRemoved,
         itemsErrored,
         errors,
         complete: isComplete,
@@ -248,6 +270,12 @@ export class InventoryPullService {
 
     const existing = existingByBricqerId.get(bricqerItemId);
 
+    // Calculate pricing from Bricqer price using simple markup formula
+    const bricqerPrice = normalized.price ?? 0;
+    const recommendedPrice = bricqerPrice > 0 ? calculateMarkupPrice(bricqerPrice) : null;
+    const autoAccept = recommendedPrice ? Math.round(recommendedPrice * 0.95 * 100) / 100 : null;
+    const autoDecline = recommendedPrice ? Math.round(recommendedPrice * 0.75 * 100) / 100 : null;
+
     if (existing) {
       await this.supabase
         .from('minifig_sync_items')
@@ -257,6 +285,10 @@ export class InventoryPullService {
           bricqer_price: normalized.price,
           condition_notes: raw.remarks || null,
           bricqer_image_url: definition.picture || definition.legoPicture || null,
+          recommended_price: recommendedPrice,
+          best_offer_auto_accept: autoAccept,
+          best_offer_auto_decline: autoDecline,
+          meets_threshold: recommendedPrice !== null,
           updated_at: now,
           last_synced_at: now,
         })
@@ -273,6 +305,10 @@ export class InventoryPullService {
         condition_notes: raw.remarks || null,
         bricqer_price: normalized.price,
         bricqer_image_url: definition.picture || definition.legoPicture || null,
+        recommended_price: recommendedPrice,
+        best_offer_auto_accept: autoAccept,
+        best_offer_auto_decline: autoDecline,
+        meets_threshold: recommendedPrice !== null,
         listing_status: 'NOT_LISTED',
         last_synced_at: now,
       });
