@@ -123,6 +123,7 @@ export class InventoryPullService {
         for (const rawItem of pageResult.items) {
           const normalized = normalizeInventoryItem(rawItem);
           if (
+            !normalized ||
             normalized.condition !== 'Used' ||
             normalized.itemType !== 'Minifig' ||
             (normalized.price ?? 0) < config.min_bricqer_listing_price
@@ -235,7 +236,7 @@ export class InventoryPullService {
 
   private async upsertMinifig(
     raw: Parameters<typeof normalizeInventoryItem>[0],
-    normalized: ReturnType<typeof normalizeInventoryItem>,
+    normalized: NonNullable<ReturnType<typeof normalizeInventoryItem>>,
     existingByBricqerId: Map<
       string,
       { id: string; bricqer_price: number | null; updated_at: string | null }
