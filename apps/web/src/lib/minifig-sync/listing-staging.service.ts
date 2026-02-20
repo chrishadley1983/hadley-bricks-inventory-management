@@ -16,6 +16,7 @@ import { MinifigJobTracker } from './job-tracker';
 import { generateDescription } from './description-generator';
 import { buildSku } from './types';
 import type { MinifigSyncItem } from './types';
+import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 const EBAY_MINIFIG_CATEGORY_ID = '19003'; // eBay category for LEGO Minifigures
 
@@ -44,7 +45,8 @@ export class ListingStagingService {
    * Create staged eBay listings for qualifying minifigs (F36).
    * Only processes items with meets_threshold=true AND listing_status='NOT_LISTED'.
    */
-  async createStagedListings(itemIds?: string[]): Promise<StagingResult> {
+  async createStagedListings(itemIds?: string[], options?: { onProgress?: SyncProgressCallback }): Promise<StagingResult> {
+    const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('LISTING_CREATION');
     const errors: Array<{ item?: string; error: string }> = [];
     let itemsProcessed = 0;
@@ -54,6 +56,7 @@ export class ListingStagingService {
 
     try {
       // Get eBay access token
+      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking eBay credentials...' });
       const accessToken = await ebayAuthService.getAccessToken(this.userId);
       if (!accessToken) {
         throw new Error('eBay credentials not configured or token expired');
@@ -66,6 +69,7 @@ export class ListingStagingService {
       });
 
       // Get business policies
+      await onProgress?.({ type: 'stage', stage: 'policies', message: 'Loading business policies...' });
       const policiesService = new EbayBusinessPoliciesService(
         this.supabase,
         this.userId,
@@ -85,6 +89,7 @@ export class ListingStagingService {
       const rebrickableApiKey = process.env.REBRICKABLE_API_KEY ?? '';
 
       // Query qualifying items (F36) — paginated (M1)
+      await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Loading qualifying items...' });
       const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
       const pageSize = 1000;
       let page = 0;
@@ -110,8 +115,17 @@ export class ListingStagingService {
         page++;
       }
 
-      for (const item of items as MinifigSyncItem[]) {
+      await onProgress?.({ type: 'stage', stage: 'staging', message: 'Creating eBay listings...' });
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] as MinifigSyncItem;
         itemsProcessed++;
+
+        await onProgress?.({
+          type: 'progress',
+          current: i + 1,
+          total: items.length,
+          message: item.bricklink_id || item.name || `Item ${i + 1}`,
+        });
 
         if (!item.bricklink_id || item.recommended_price == null) {
           itemsSkipped++;

@@ -3,3 +3,4 @@ export { ReviewQueue } from './ReviewQueue';
 export { RemovalCard } from './RemovalCard';
 export { RemovalQueue } from './RemovalQueue';
 export { MinifigDashboard } from './Dashboard';
+export { SyncProgressDialog } from './SyncProgressDialog';
