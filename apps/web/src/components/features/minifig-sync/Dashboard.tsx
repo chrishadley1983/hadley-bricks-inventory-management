@@ -14,8 +14,18 @@ import {
   Send,
   ShoppingCart,
   BarChart3,
+  Download,
+  Search,
+  FileText,
+  Loader2,
 } from 'lucide-react';
-import { useMinifigDashboard } from '@/hooks/use-minifig-sync';
+import { toast } from 'sonner';
+import {
+  useMinifigDashboard,
+  useInventoryPull,
+  useResearch,
+  useCreateListings,
+} from '@/hooks/use-minifig-sync';
 
 function formatCurrency(value: number): string {
   return `£${value.toFixed(2)}`;
@@ -53,6 +63,9 @@ function StatCard({ title, value, description, icon: Icon, href }: StatCardProps
 
 export function MinifigDashboard() {
   const { data, isLoading } = useMinifigDashboard();
+  const inventoryPull = useInventoryPull();
+  const research = useResearch();
+  const createListings = useCreateListings();
 
   if (isLoading) {
     return (
@@ -90,8 +103,62 @@ export function MinifigDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Quick actions */}
-      <div className="flex gap-2">
+      {/* Pipeline actions */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="default"
+          disabled={inventoryPull.isPending}
+          onClick={() => {
+            inventoryPull.mutate(undefined, {
+              onSuccess: (result) => {
+                toast.success(`Inventory pull complete: ${result.itemsCreated} new, ${result.itemsUpdated} updated`);
+              },
+              onError: (err) => {
+                toast.error(`Inventory pull failed: ${err.message}`);
+              },
+            });
+          }}
+        >
+          {inventoryPull.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          Pull Inventory
+        </Button>
+        <Button
+          variant="default"
+          disabled={research.isPending}
+          onClick={() => {
+            research.mutate(undefined, {
+              onSuccess: (result) => {
+                toast.success(`Research complete: ${result.itemsProcessed} items, ${result.itemsUpdated} updated`);
+              },
+              onError: (err) => {
+                toast.error(`Research failed: ${err.message}`);
+              },
+            });
+          }}
+        >
+          {research.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+          Research
+        </Button>
+        <Button
+          variant="default"
+          disabled={createListings.isPending}
+          onClick={() => {
+            createListings.mutate(undefined, {
+              onSuccess: (result) => {
+                toast.success(`Listings created: ${result.itemsStaged} staged, ${result.itemsSkipped} skipped`);
+              },
+              onError: (err) => {
+                toast.error(`Create listings failed: ${err.message}`);
+              },
+            });
+          }}
+        >
+          {createListings.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+          Create Listings
+        </Button>
+
+        <div className="w-px bg-border mx-1" />
+
         <Button asChild variant="outline">
           <Link href="/minifigs/review">
             <Send className="h-4 w-4 mr-2" />
