@@ -63,7 +63,16 @@ export class InventoryPullService {
 
       // 3. Fetch all used inventory items from Bricqer
       await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Fetching inventory from Bricqer...' });
-      const rawItems = await client.getAllInventoryItems({ condition: 'U' });
+      const rawItems = await client.getAllInventoryItems({ condition: 'U' }, {
+        onPage: async (fetched, total) => {
+          await onProgress?.({
+            type: 'progress',
+            current: fetched,
+            total: total || fetched,
+            message: `Fetched ${fetched}${total ? ` of ${total}` : ''} items from Bricqer...`,
+          });
+        },
+      });
 
       // 4. Post-filter for minifigures and price threshold
       await onProgress?.({ type: 'stage', stage: 'filter', message: 'Filtering minifigures...' });
