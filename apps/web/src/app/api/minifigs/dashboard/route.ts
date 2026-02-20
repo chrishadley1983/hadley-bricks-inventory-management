@@ -14,24 +14,50 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Total minifigs in Bricqer inventory
-    const { count: totalInBricqer } = await supabase
-      .from('minifig_sync_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
-
-    // Total meeting threshold
-    const { count: totalMeetingThreshold } = await supabase
-      .from('minifig_sync_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('meets_threshold', true);
-
-    // Count by status
-    const { data: statusCounts } = await supabase
-      .from('minifig_sync_items')
-      .select('listing_status')
-      .eq('user_id', user.id);
+    // Run all independent queries in parallel (M2)
+    const [
+      { count: totalInBricqer },
+      { count: totalMeetingThreshold },
+      { data: statusCounts },
+      { data: executedRemovals },
+      { data: soldItems },
+      { count: pendingRemovals },
+    ] = await Promise.all([
+      // Total minifigs in Bricqer inventory
+      supabase
+        .from('minifig_sync_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id),
+      // Total meeting threshold
+      supabase
+        .from('minifig_sync_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('meets_threshold', true),
+      // Count by status
+      supabase
+        .from('minifig_sync_items')
+        .select('listing_status')
+        .eq('user_id', user.id),
+      // Revenue + fee savings (merged query)
+      supabase
+        .from('minifig_removal_queue')
+        .select('sale_price, sold_on')
+        .eq('user_id', user.id)
+        .eq('status', 'EXECUTED'),
+      // Average time to sell
+      supabase
+        .from('minifig_sync_items')
+        .select('created_at, updated_at')
+        .eq('user_id', user.id)
+        .in('listing_status', ['SOLD_EBAY', 'SOLD_BRICQER']),
+      // Pending removals count
+      supabase
+        .from('minifig_removal_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'PENDING'),
+    ]);
 
     const countByStatus: Record<string, number> = {};
     for (const row of statusCounts ?? []) {
@@ -39,37 +65,16 @@ export async function GET() {
       countByStatus[status] = (countByStatus[status] || 0) + 1;
     }
 
-    // Revenue from sold items (both eBay and Bricqer sales)
-    const { data: executedRemovals } = await supabase
-      .from('minifig_removal_queue')
-      .select('sale_price')
-      .eq('user_id', user.id)
-      .eq('status', 'EXECUTED');
-
+    // Calculate revenue and fee savings in a single pass
     let totalRevenue = 0;
-    for (const removal of executedRemovals ?? []) {
-      totalRevenue += Number(removal.sale_price) || 0;
-    }
-
-    // Fee savings: 3.5% Bricqer fee avoided on eBay sales
-    const { data: ebayExecuted } = await supabase
-      .from('minifig_removal_queue')
-      .select('sale_price')
-      .eq('user_id', user.id)
-      .eq('status', 'EXECUTED')
-      .eq('sold_on', 'EBAY');
-
     let feeSavings = 0;
-    for (const removal of ebayExecuted ?? []) {
-      feeSavings += (Number(removal.sale_price) || 0) * 0.035;
+    for (const removal of executedRemovals ?? []) {
+      const price = Number(removal.sale_price) || 0;
+      totalRevenue += price;
+      if (removal.sold_on === 'EBAY') {
+        feeSavings += price * 0.035;
+      }
     }
-
-    // Average time to sell (days between created_at and updated_at for sold items)
-    const { data: soldItems } = await supabase
-      .from('minifig_sync_items')
-      .select('created_at, updated_at')
-      .eq('user_id', user.id)
-      .in('listing_status', ['SOLD_EBAY', 'SOLD_BRICQER']);
 
     let avgTimeToSell: number | null = null;
     if (soldItems && soldItems.length > 0) {
@@ -83,13 +88,6 @@ export async function GET() {
       }
       avgTimeToSell = Math.round((totalDays / soldItems.length) * 10) / 10;
     }
-
-    // Pending removals count
-    const { count: pendingRemovals } = await supabase
-      .from('minifig_removal_queue')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('status', 'PENDING');
 
     return NextResponse.json({
       data: {
@@ -107,7 +105,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error: 'Failed to fetch dashboard metrics',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

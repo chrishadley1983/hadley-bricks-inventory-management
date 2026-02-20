@@ -87,7 +87,8 @@ export async function POST(request: NextRequest) {
         executed_at: now,
         reviewed_at: now,
       })
-      .eq('id', parsed.data.removalId);
+      .eq('id', parsed.data.removalId)
+      .eq('user_id', user.id);
 
     // Update sync item status
     if (syncItem) {
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
           listing_status: finalStatus,
           updated_at: now,
         })
-        .eq('id', removal.minifig_sync_id);
+        .eq('id', removal.minifig_sync_id)
+        .eq('user_id', user.id);
     }
 
     return NextResponse.json({ data: { success: true } });
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to approve removal',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

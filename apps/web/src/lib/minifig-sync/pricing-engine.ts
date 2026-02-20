@@ -50,7 +50,12 @@ export class PricingEngine {
 
     const base = Math.round(avgSoldPrice * 1.05 * 100) / 100;
     const floor = bricqerPrice + 1.0;
-    const ceiling = maxSoldPrice;
+    const ceiling = maxSoldPrice > 0 ? maxSoldPrice : Infinity;
+
+    // If floor exceeds ceiling, floor wins (never list below cost + margin)
+    if (floor > ceiling) {
+      return Math.round(floor * 100) / 100;
+    }
 
     return Math.round(Math.min(Math.max(base, floor), ceiling) * 100) / 100;
   }

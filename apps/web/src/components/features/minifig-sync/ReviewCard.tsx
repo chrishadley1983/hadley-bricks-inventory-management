@@ -91,6 +91,19 @@ function formatCurrency(value: number | string | null | undefined): string {
   return `£${num.toFixed(2)}`;
 }
 
+function sanitizeHtml(html: string): string {
+  // Strip script tags, event handlers, and dangerous attributes
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^>]*>/gi, '')
+    .replace(/<link\b[^>]*>/gi, '');
+}
+
 function getSourceLabel(source: string): string {
   switch (source) {
     case 'google': return 'Google';
@@ -273,7 +286,7 @@ export function ReviewCard({
             <div>
               <div
                 className={`text-xs text-muted-foreground ${!showFullDesc ? 'line-clamp-3' : ''}`}
-                dangerouslySetInnerHTML={{ __html: displayDesc }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayDesc) }}
               />
               {displayDesc.length > 200 && (
                 <Button

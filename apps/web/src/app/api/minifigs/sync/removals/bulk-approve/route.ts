@@ -32,35 +32,40 @@ export async function POST() {
     let failed = 0;
     const errors: Array<{ id: string; error: string }> = [];
 
+    // Share a single eBay adapter across all removals (M3)
+    let ebayAdapter: EbayApiAdapter | null = null;
+    const needsEbay = (removals ?? []).some((r) => r.remove_from === 'EBAY');
+    if (needsEbay) {
+      const accessToken = await ebayAuthService.getAccessToken(user.id);
+      if (accessToken) {
+        ebayAdapter = new EbayApiAdapter({
+          accessToken,
+          marketplaceId: 'EBAY_GB',
+          userId: user.id,
+        });
+      }
+    }
+
     for (const removal of removals ?? []) {
       try {
         const syncItem = removal.minifig_sync_items as Record<string, unknown> | null;
         const now = new Date().toISOString();
 
         // Execute removal based on remove_from
-        if (removal.remove_from === 'EBAY' && syncItem?.ebay_offer_id) {
-          const accessToken = await ebayAuthService.getAccessToken(user.id);
-          if (accessToken) {
-            const adapter = new EbayApiAdapter({
-              accessToken,
-              marketplaceId: 'EBAY_GB',
-              userId: user.id,
-            });
-
+        if (removal.remove_from === 'EBAY' && syncItem?.ebay_offer_id && ebayAdapter) {
             try {
-              await adapter.withdrawOffer(syncItem.ebay_offer_id as string);
+              await ebayAdapter.withdrawOffer(syncItem.ebay_offer_id as string);
             } catch {
               // Already withdrawn or not found (E9)
             }
 
             if (syncItem.ebay_sku) {
               try {
-                await adapter.deleteInventoryItem(syncItem.ebay_sku as string);
+                await ebayAdapter.deleteInventoryItem(syncItem.ebay_sku as string);
               } catch {
                 // Already deleted
               }
             }
-          }
         }
 
         // Mark removal as executed
@@ -71,7 +76,8 @@ export async function POST() {
             executed_at: now,
             reviewed_at: now,
           })
-          .eq('id', removal.id);
+          .eq('id', removal.id)
+          .eq('user_id', user.id);
 
         // Update sync item status
         if (syncItem) {
@@ -83,7 +89,8 @@ export async function POST() {
               listing_status: finalStatus,
               updated_at: now,
             })
-            .eq('id', removal.minifig_sync_id);
+            .eq('id', removal.minifig_sync_id)
+            .eq('user_id', user.id);
         }
 
         approved++;
@@ -102,7 +109,7 @@ export async function POST() {
     return NextResponse.json(
       {
         error: 'Failed to bulk approve',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

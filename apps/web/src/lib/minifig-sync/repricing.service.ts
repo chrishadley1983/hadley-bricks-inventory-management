@@ -56,14 +56,25 @@ export class RepricingService {
       const staleDate = new Date();
       staleDate.setDate(staleDate.getDate() - staleDays);
 
-      const { data: staleItems } = await this.supabase
-        .from('minifig_sync_items')
-        .select('*')
-        .eq('user_id', this.userId)
-        .eq('listing_status', 'PUBLISHED')
-        .lt('updated_at', staleDate.toISOString());
+      // Paginated query for stale items (M1)
+      const staleItems: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMorePages = true;
+      while (hasMorePages) {
+        const { data } = await this.supabase
+          .from('minifig_sync_items')
+          .select('*')
+          .eq('user_id', this.userId)
+          .eq('listing_status', 'PUBLISHED')
+          .lt('updated_at', staleDate.toISOString())
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        staleItems.push(...(data ?? []));
+        hasMorePages = (data?.length ?? 0) === pageSize;
+        page++;
+      }
 
-      itemsChecked = staleItems?.length ?? 0;
+      itemsChecked = staleItems.length;
 
       if (itemsChecked === 0) {
         await this.jobTracker.complete(jobId, {
@@ -87,7 +98,7 @@ export class RepricingService {
         userId: this.userId,
       });
 
-      for (const item of (staleItems ?? []) as MinifigSyncItem[]) {
+      for (const item of staleItems as MinifigSyncItem[]) {
         try {
           // Force-refresh research data (F66)
           await this.researchService.forceRefresh(item.id);

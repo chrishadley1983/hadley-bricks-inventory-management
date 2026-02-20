@@ -25,7 +25,7 @@ export async function POST() {
     return NextResponse.json(
       {
         error: 'Failed to bulk publish',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

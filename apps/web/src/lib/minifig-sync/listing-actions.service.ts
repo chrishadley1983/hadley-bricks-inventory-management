@@ -26,7 +26,7 @@ export class ListingActionsService {
    * Publish a staged listing to eBay (F42).
    * Enforces quality check before publishing (F45).
    */
-  async publish(itemId: string): Promise<{ listingId: string; listingUrl: string }> {
+  async publish(itemId: string, sharedAdapter?: EbayApiAdapter): Promise<{ listingId: string; listingUrl: string }> {
     const item = await this.getItem(itemId);
 
     if (item.listing_status !== 'STAGED') {
@@ -43,7 +43,7 @@ export class ListingActionsService {
       throw new Error('Cannot publish: no eBay offer ID');
     }
 
-    const adapter = await this.getEbayAdapter();
+    const adapter = sharedAdapter ?? await this.getEbayAdapter();
 
     // Publish the offer (F42) — this is the ONLY place publish is called (I2)
     const publishResult = await adapter.publishOffer(item.ebay_offer_id);
@@ -60,7 +60,8 @@ export class ListingActionsService {
         ebay_listing_url: listingUrl,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .eq('user_id', this.userId);
 
     return { listingId, listingUrl };
   }
@@ -83,6 +84,9 @@ export class ListingActionsService {
     let skipped = 0;
     const errors: Array<{ itemId: string; error: string }> = [];
 
+    // Share a single eBay adapter across all publish calls (M3)
+    const adapter = await this.getEbayAdapter();
+
     for (const item of (stagedItems ?? []) as MinifigSyncItem[]) {
       const qualityCheck = this.checkQuality(item);
       if (!qualityCheck.passed) {
@@ -91,7 +95,7 @@ export class ListingActionsService {
       }
 
       try {
-        await this.publish(item.id);
+        await this.publish(item.id, adapter);
         published++;
       } catch (err) {
         errors.push({
@@ -145,7 +149,8 @@ export class ListingActionsService {
         ebay_listing_url: null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .eq('user_id', this.userId);
   }
 
   /**
@@ -176,7 +181,8 @@ export class ListingActionsService {
     await this.supabase
       .from('minifig_sync_items')
       .update(dbUpdates as Database['public']['Tables']['minifig_sync_items']['Update'])
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .eq('user_id', this.userId);
 
     // If item has an eBay offer, update it too (F46)
     if (item.ebay_offer_id && item.ebay_sku) {
