@@ -80,7 +80,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'Failed to update item',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

@@ -81,9 +81,9 @@ export class OrderPollService {
       let latestDate = lastCursor || '';
 
       for (const order of orders) {
-        // Track latest order date for cursor update
+        // Track latest order date for cursor update (compare as Date objects for timezone safety)
         const orderDate = order.creationDate || order.lastModifiedDate || '';
-        if (orderDate > latestDate) {
+        if (orderDate && (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())) {
           latestDate = orderDate;
         }
 
@@ -232,16 +232,31 @@ export class OrderPollService {
       ordersChecked = orders.length;
       let latestDate = lastCursor || '';
 
-      // Get all published sync items for matching
-      const { data: publishedItems } = await this.supabase
-        .from('minifig_sync_items')
-        .select('id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id')
-        .eq('user_id', this.userId)
-        .eq('listing_status', 'PUBLISHED');
+      // Get all published sync items for matching — build a map by bricqer_item_id for O(1) lookup
+      const publishedItems: Array<{ id: string; bricqer_item_id: string; bricklink_id: string | null; listing_status: string | null; ebay_offer_id: string | null }> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await this.supabase
+          .from('minifig_sync_items')
+          .select('id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id')
+          .eq('user_id', this.userId)
+          .eq('listing_status', 'PUBLISHED')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        publishedItems.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+
+      // Build lookup map by bricqer_item_id for accurate matching (C3)
+      const publishedByBricqerId = new Map(
+        publishedItems.map((si) => [si.bricqer_item_id, si]),
+      );
 
       for (const order of orders) {
         const orderDate = order.created || order.created_at || '';
-        if (orderDate > latestDate) {
+        if (orderDate && (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())) {
           latestDate = orderDate;
         }
 
@@ -254,14 +269,17 @@ export class OrderPollService {
         }
 
         for (const orderItem of orderItems) {
-          // Match by BrickLink ID against published sync items
-          const bricklinkId = orderItem.bricklink_id;
-          if (!bricklinkId) continue;
+          // Match by bricqer_item_id for accurate per-item matching (C3)
+          // Fall back to bricklink_id if bricqer_item_id not available on order item
+          const itemId = (orderItem as unknown as Record<string, unknown>).inventory_item_id || orderItem.id;
+          let matchingItem = itemId ? publishedByBricqerId.get(String(itemId)) : undefined;
 
-          // Find matching sync item
-          const matchingItem = (publishedItems ?? []).find(
-            (si) => si.bricklink_id === bricklinkId,
-          );
+          // Fallback: try matching by bricklink_id (less accurate for duplicates)
+          if (!matchingItem && orderItem.bricklink_id) {
+            matchingItem = publishedItems.find(
+              (si) => si.bricklink_id === orderItem.bricklink_id,
+            );
+          }
           if (!matchingItem) continue;
 
           salesDetected++;
@@ -309,7 +327,7 @@ export class OrderPollService {
               .eq('id', matchingItem.id);
           } catch (err) {
             errors.push({
-              error: `Bricqer order ${order.id}, item ${bricklinkId}: ${err instanceof Error ? err.message : String(err)}`,
+              error: `Bricqer order ${order.id}, item ${orderItem.bricklink_id || orderItem.id}: ${err instanceof Error ? err.message : String(err)}`,
             });
           }
         }

@@ -85,23 +85,33 @@ export class ListingStagingService {
       // Get Rebrickable API key for description generation
       const rebrickableApiKey = process.env.REBRICKABLE_API_KEY ?? '';
 
-      // Query qualifying items (F36)
-      let query = this.supabase
-        .from('minifig_sync_items')
-        .select('*')
-        .eq('user_id', this.userId)
-        .eq('meets_threshold', true)
-        .eq('listing_status', 'NOT_LISTED')
-        .not('bricklink_id', 'is', null)
-        .not('recommended_price', 'is', null);
+      // Query qualifying items (F36) — paginated (M1)
+      const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        let query = this.supabase
+          .from('minifig_sync_items')
+          .select('*')
+          .eq('user_id', this.userId)
+          .eq('meets_threshold', true)
+          .eq('listing_status', 'NOT_LISTED')
+          .not('bricklink_id', 'is', null)
+          .not('recommended_price', 'is', null)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      if (itemIds?.length) {
-        query = query.in('id', itemIds);
+        if (itemIds?.length) {
+          query = query.in('id', itemIds);
+        }
+
+        const { data } = await query;
+        items.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
       }
 
-      const { data: items } = await query;
-
-      for (const item of (items ?? []) as MinifigSyncItem[]) {
+      for (const item of items as MinifigSyncItem[]) {
         itemsProcessed++;
 
         if (!item.bricklink_id || item.recommended_price == null) {

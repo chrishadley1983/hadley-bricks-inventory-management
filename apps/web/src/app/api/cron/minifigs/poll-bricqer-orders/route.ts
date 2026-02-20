@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     // Verify cron secret
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to poll Bricqer orders',
-        details: error instanceof Error ? error.message : String(error),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
       },
       { status: 500 },
     );

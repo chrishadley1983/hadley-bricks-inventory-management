@@ -56,20 +56,30 @@ export class ResearchService {
 
       const client = await this.getBrickLinkClient();
 
-      // Get items to research (must have a bricklink_id)
-      let query = this.supabase
-        .from('minifig_sync_items')
-        .select('*')
-        .eq('user_id', this.userId)
-        .not('bricklink_id', 'is', null);
+      // Get items to research (must have a bricklink_id) — paginated (M1)
+      const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        let query = this.supabase
+          .from('minifig_sync_items')
+          .select('*')
+          .eq('user_id', this.userId)
+          .not('bricklink_id', 'is', null)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      if (itemIds?.length) {
-        query = query.in('id', itemIds);
+        if (itemIds?.length) {
+          query = query.in('id', itemIds);
+        }
+
+        const { data } = await query;
+        items.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
       }
 
-      const { data: items } = await query;
-
-      for (const item of (items ?? []) as MinifigSyncItem[]) {
+      for (const item of items as MinifigSyncItem[]) {
         itemsProcessed++;
         try {
           // Check cache (F20: skip if valid cache exists)

@@ -28,14 +28,16 @@ export async function GET(request: NextRequest) {
     if (listingStatus) {
       query = query.eq('listing_status', listingStatus);
     }
-    if (meetsThreshold !== null) {
+    if (meetsThreshold !== null && meetsThreshold !== '') {
       query = query.eq('meets_threshold', meetsThreshold === 'true');
     }
     if (search) {
-      query = query.or(`name.ilike.%${search}%,bricklink_id.ilike.%${search}%`);
+      // Escape PostgREST special characters to prevent filter injection (C4)
+      const escaped = search.replace(/[%_,().\\]/g, '\\$&');
+      query = query.or(`name.ilike.%${escaped}%,bricklink_id.ilike.%${escaped}%`);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query.limit(1000);
     if (error) {
       throw new Error(error.message);
     }
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/minifigs/sync/items] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch items', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to fetch items' },
       { status: 500 },
     );
   }

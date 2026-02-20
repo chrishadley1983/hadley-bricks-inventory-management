@@ -68,7 +68,7 @@ export class PriceCacheService {
         terapeak_avg_shipping: result.avgShipping,
       };
     } else {
-      // BrickLink fallback
+      // BrickLink fallback — null out terapeak-specific fields to prevent stale data (M7)
       upsertData = {
         ...baseData,
         bricklink_avg_sold_price: result.avgSoldPrice,
@@ -78,6 +78,10 @@ export class PriceCacheService {
         terapeak_min_sold_price: result.minSoldPrice,
         terapeak_max_sold_price: result.maxSoldPrice,
         terapeak_sold_count: result.soldCount,
+        // Null out fields BrickLink doesn't provide to avoid stale terapeak data
+        terapeak_active_count: null,
+        terapeak_sell_through_rate: null,
+        terapeak_avg_shipping: null,
       };
     }
 
