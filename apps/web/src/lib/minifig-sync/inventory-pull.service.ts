@@ -6,6 +6,12 @@ import type { BricqerCredentials } from '../bricqer/types';
 import { CredentialsRepository } from '../repositories/credentials.repository';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
+import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
+
+interface PullOptions {
+  onProgress?: SyncProgressCallback;
+}
+
 interface PullResult {
   jobId: string;
   itemsProcessed: number;
@@ -27,7 +33,8 @@ export class InventoryPullService {
     this.jobTracker = new MinifigJobTracker(supabase, userId);
   }
 
-  async pull(): Promise<PullResult> {
+  async pull(options?: PullOptions): Promise<PullResult> {
+    const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('INVENTORY_PULL');
     const errors: Array<{ item?: string; error: string }> = [];
     let itemsProcessed = 0;
@@ -37,9 +44,11 @@ export class InventoryPullService {
 
     try {
       // 1. Load config
+      await onProgress?.({ type: 'stage', stage: 'config', message: 'Loading configuration...' });
       const config = await this.configService.getConfig();
 
       // 2. Get Bricqer credentials and create client
+      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking Bricqer credentials...' });
       const credentialsRepo = new CredentialsRepository(this.supabase);
       const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(
         this.userId,
@@ -53,9 +62,11 @@ export class InventoryPullService {
       const client = new BricqerClient(credentials);
 
       // 3. Fetch all used inventory items from Bricqer
+      await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Fetching inventory from Bricqer...' });
       const rawItems = await client.getAllInventoryItems({ condition: 'U' });
 
       // 4. Post-filter for minifigures and price threshold
+      await onProgress?.({ type: 'stage', stage: 'filter', message: 'Filtering minifigures...' });
       const minifigs = rawItems
         .map((item) => {
           const normalized = normalizeInventoryItem(item);
@@ -70,6 +81,7 @@ export class InventoryPullService {
       itemsProcessed = minifigs.length;
 
       // 5. Fetch all existing sync items in one query for batch matching (C2)
+      await onProgress?.({ type: 'stage', stage: 'match', message: 'Loading existing sync items...' });
       const existingItems: Array<{ id: string; bricqer_item_id: string; bricqer_price: number | null; updated_at: string | null }> = [];
       const pageSize = 1000;
       let page = 0;
@@ -89,7 +101,15 @@ export class InventoryPullService {
       );
 
       // 6. Upsert each minifig using the pre-fetched map
-      for (const { raw, normalized } of minifigs) {
+      await onProgress?.({ type: 'stage', stage: 'upsert', message: 'Processing minifigures...' });
+      for (let i = 0; i < minifigs.length; i++) {
+        const { raw, normalized } = minifigs[i];
+        await onProgress?.({
+          type: 'progress',
+          current: i + 1,
+          total: minifigs.length,
+          message: normalized.itemNumber || normalized.itemName || `Item ${i + 1}`,
+        });
         try {
           const result = await this.upsertMinifig(raw, normalized, existingByBricqerId);
           if (result === 'created') itemsCreated++;

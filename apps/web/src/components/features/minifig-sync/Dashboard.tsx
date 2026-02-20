@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,15 +18,11 @@ import {
   Download,
   Search,
   FileText,
-  Loader2,
 } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  useMinifigDashboard,
-  useInventoryPull,
-  useResearch,
-  useCreateListings,
-} from '@/hooks/use-minifig-sync';
+import { useMinifigDashboard } from '@/hooks/use-minifig-sync';
+import { useMinifigSyncStream } from '@/hooks/use-minifig-sync-stream';
+import { SyncProgressDialog } from './SyncProgressDialog';
+import type { SyncOperation } from '@/types/minifig-sync-stream';
 
 function formatCurrency(value: number): string {
   return `£${value.toFixed(2)}`;
@@ -63,9 +60,18 @@ function StatCard({ title, value, description, icon: Icon, href }: StatCardProps
 
 export function MinifigDashboard() {
   const { data, isLoading } = useMinifigDashboard();
-  const inventoryPull = useInventoryPull();
-  const research = useResearch();
-  const createListings = useCreateListings();
+  const syncStream = useMinifigSyncStream();
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const handleAction = (operation: SyncOperation) => {
+    setDialogOpen(true);
+    syncStream.startStream(operation);
+  };
+
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    syncStream.reset();
+  };
 
   if (isLoading) {
     return (
@@ -107,53 +113,26 @@ export function MinifigDashboard() {
       <div className="flex flex-wrap gap-2">
         <Button
           variant="default"
-          disabled={inventoryPull.isPending}
-          onClick={() => {
-            inventoryPull.mutate(undefined, {
-              onSuccess: (result) => {
-                toast.success(`Inventory pull complete: ${result.itemsCreated} new, ${result.itemsUpdated} updated`);
-              },
-              onError: (err) => {
-                toast.error(`Inventory pull failed: ${err.message}`);
-              },
-            });
-          }}
+          disabled={syncStream.status === 'streaming'}
+          onClick={() => handleAction('pull-inventory')}
         >
-          {inventoryPull.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          <Download className="h-4 w-4 mr-2" />
           Pull Inventory
         </Button>
         <Button
           variant="default"
-          disabled={research.isPending}
-          onClick={() => {
-            research.mutate(undefined, {
-              onSuccess: (result) => {
-                toast.success(`Research complete: ${result.itemsProcessed} items, ${result.itemsUpdated} updated`);
-              },
-              onError: (err) => {
-                toast.error(`Research failed: ${err.message}`);
-              },
-            });
-          }}
+          disabled={syncStream.status === 'streaming'}
+          onClick={() => handleAction('research')}
         >
-          {research.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+          <Search className="h-4 w-4 mr-2" />
           Research
         </Button>
         <Button
           variant="default"
-          disabled={createListings.isPending}
-          onClick={() => {
-            createListings.mutate(undefined, {
-              onSuccess: (result) => {
-                toast.success(`Listings created: ${result.itemsStaged} staged, ${result.itemsSkipped} skipped`);
-              },
-              onError: (err) => {
-                toast.error(`Create listings failed: ${err.message}`);
-              },
-            });
-          }}
+          disabled={syncStream.status === 'streaming'}
+          onClick={() => handleAction('create-listings')}
         >
-          {createListings.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+          <FileText className="h-4 w-4 mr-2" />
           Create Listings
         </Button>
 
@@ -250,6 +229,12 @@ export function MinifigDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <SyncProgressDialog
+        open={dialogOpen}
+        onClose={handleDialogClose}
+        stream={syncStream}
+      />
     </div>
   );
 }

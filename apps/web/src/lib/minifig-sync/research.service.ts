@@ -14,6 +14,7 @@ import type {
   ResearchResult,
   BrickLinkResearchResult,
 } from './types';
+import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 interface ResearchJobResult {
   jobId: string;
@@ -42,7 +43,8 @@ export class ResearchService {
    * Research pricing for all (or specific) sync items.
    * Skips items with valid cache unless forceRefresh is true.
    */
-  async researchAll(itemIds?: string[]): Promise<ResearchJobResult> {
+  async researchAll(itemIds?: string[], options?: { onProgress?: SyncProgressCallback }): Promise<ResearchJobResult> {
+    const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('MARKET_RESEARCH');
     const errors: Array<{ item?: string; error: string }> = [];
     let itemsProcessed = 0;
@@ -51,12 +53,15 @@ export class ResearchService {
     let itemsErrored = 0;
 
     try {
+      await onProgress?.({ type: 'stage', stage: 'config', message: 'Loading configuration...' });
       const config = await this.configService.getConfig();
       const pricingEngine = new PricingEngine(config);
 
+      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking BrickLink credentials...' });
       const client = await this.getBrickLinkClient();
 
       // Get items to research (must have a bricklink_id) — paginated (M1)
+      await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Loading sync items...' });
       const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
       const pageSize = 1000;
       let page = 0;
@@ -79,8 +84,16 @@ export class ResearchService {
         page++;
       }
 
-      for (const item of items as MinifigSyncItem[]) {
+      await onProgress?.({ type: 'stage', stage: 'research', message: 'Researching pricing...' });
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] as MinifigSyncItem;
         itemsProcessed++;
+        await onProgress?.({
+          type: 'progress',
+          current: i + 1,
+          total: items.length,
+          message: item.bricklink_id || item.name || `Item ${i + 1}`,
+        });
         try {
           // Check cache (F20: skip if valid cache exists)
           const cached = await this.cacheService.lookup(item.bricklink_id!);
