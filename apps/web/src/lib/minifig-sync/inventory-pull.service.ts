@@ -71,10 +71,29 @@ export class InventoryPullService {
 
       itemsProcessed = minifigs.length;
 
-      // 5. Upsert each minifig into minifig_sync_items
+      // 5. Fetch all existing sync items in one query for batch matching (C2)
+      const existingItems: Array<{ id: string; bricqer_item_id: string; bricqer_price: number | null; updated_at: string | null }> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await this.supabase
+          .from('minifig_sync_items')
+          .select('id, bricqer_item_id, bricqer_price, updated_at')
+          .eq('user_id', this.userId)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        existingItems.push(...(data ?? []) as Array<{ id: string; bricqer_item_id: string; bricqer_price: number | null; updated_at: string | null }>);
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+      const existingByBricqerId = new Map(
+        existingItems.map((item) => [item.bricqer_item_id, item]),
+      );
+
+      // 6. Upsert each minifig using the pre-fetched map
       for (const { raw, normalized } of minifigs) {
         try {
-          const result = await this.upsertMinifig(raw, normalized, config);
+          const result = await this.upsertMinifig(raw, normalized, existingByBricqerId);
           if (result === 'created') itemsCreated++;
           else if (result === 'updated') itemsUpdated++;
         } catch (err) {
@@ -86,7 +105,7 @@ export class InventoryPullService {
         }
       }
 
-      // 6. Complete job
+      // 7. Complete job
       await this.jobTracker.complete(jobId, {
         itemsProcessed,
         itemsCreated,
@@ -121,22 +140,16 @@ export class InventoryPullService {
   private async upsertMinifig(
     raw: Parameters<typeof normalizeInventoryItem>[0],
     normalized: ReturnType<typeof normalizeInventoryItem>,
-    _config: MinifigSyncConfig,
+    existingByBricqerId: Map<string, { id: string; bricqer_price: number | null; updated_at: string | null }>,
   ): Promise<'created' | 'updated'> {
     const bricqerItemId = String(raw.id);
     const definition = raw.definition;
-
-    // Check if already exists
-    const { data: existing } = await this.supabase
-      .from('minifig_sync_items')
-      .select('id, bricqer_price, updated_at')
-      .eq('bricqer_item_id', bricqerItemId)
-      .single();
-
     const now = new Date().toISOString();
 
+    const existing = existingByBricqerId.get(bricqerItemId);
+
     if (existing) {
-      // Update existing row
+      // Update existing row (with user_id guard)
       await this.supabase
         .from('minifig_sync_items')
         .update({
@@ -148,7 +161,8 @@ export class InventoryPullService {
           updated_at: now,
           last_synced_at: now,
         })
-        .eq('id', existing.id);
+        .eq('id', existing.id)
+        .eq('user_id', this.userId);
 
       return 'updated';
     } else {

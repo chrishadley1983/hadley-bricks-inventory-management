@@ -258,12 +258,13 @@ export class ResearchService {
     item: MinifigSyncItem,
     result: ResearchResult,
     pricingEngine: PricingEngine,
-    config: MinifigSyncConfig,
+    _config: MinifigSyncConfig,
   ): Promise<void> {
+    // Use conservative defaults when BrickLink data has no sell-through/shipping info (M8)
     const avgShipping =
-      result.source === 'terapeak' ? result.avgShipping : 0;
+      result.source === 'terapeak' ? result.avgShipping : 1.50;
     const sellThroughRate =
-      result.source === 'terapeak' ? result.sellThroughRate : 100;
+      result.source === 'terapeak' ? result.sellThroughRate : 50;
 
     const meetsThreshold = pricingEngine.evaluateThreshold({
       soldCount: result.soldCount,
@@ -277,10 +278,7 @@ export class ResearchService {
     let autoDecline: number | null = null;
 
     if (meetsThreshold && item.bricqer_price != null) {
-      const maxSoldPrice =
-        result.source === 'terapeak'
-          ? result.maxSoldPrice
-          : result.maxSoldPrice;
+      const maxSoldPrice = result.maxSoldPrice;
 
       recommendedPrice = pricingEngine.calculateRecommendedPrice({
         avgSoldPrice: result.avgSoldPrice,
@@ -303,7 +301,8 @@ export class ResearchService {
         meets_threshold: meetsThreshold,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', item.id);
+      .eq('id', item.id)
+      .eq('user_id', this.userId);
   }
 
   /**
@@ -313,7 +312,7 @@ export class ResearchService {
     item: MinifigSyncItem,
     cached: MinifigPriceCache,
     pricingEngine: PricingEngine,
-    config: MinifigSyncConfig,
+    _config: MinifigSyncConfig,
   ): Promise<void> {
     const isTerapeak = cached.source === 'terapeak';
 
@@ -327,14 +326,14 @@ export class ResearchService {
         ? cached.terapeak_sold_count
         : cached.bricklink_sold_count,
     ) || 0;
+    // Use conservative defaults when BrickLink data has no sell-through/shipping info (M8)
     const avgShipping = isTerapeak
       ? Number(cached.terapeak_avg_shipping) || 0
-      : 0;
+      : 1.50;
     const sellThroughRate = isTerapeak
       ? Number(cached.terapeak_sell_through_rate) || 0
-      : 100;
+      : 50;
     const maxSoldPrice = Number(cached.terapeak_max_sold_price) || avgSoldPrice;
-    const minSoldPrice = Number(cached.terapeak_min_sold_price) || avgSoldPrice;
 
     const meetsThreshold = pricingEngine.evaluateThreshold({
       soldCount,
@@ -369,6 +368,7 @@ export class ResearchService {
         meets_threshold: meetsThreshold,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', item.id);
+      .eq('id', item.id)
+      .eq('user_id', this.userId);
   }
 }

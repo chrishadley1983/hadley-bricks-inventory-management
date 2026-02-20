@@ -14,13 +14,70 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Paginated fetch helpers for queries that may exceed 1000 rows (M1)
+    async function fetchStatusCounts() {
+      const results: Array<{ listing_status: string | null }> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await supabase
+          .from('minifig_sync_items')
+          .select('listing_status')
+          .eq('user_id', user!.id)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        results.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+      return results;
+    }
+
+    async function fetchExecutedRemovals() {
+      const results: Array<{ sale_price: number | null; sold_on: string }> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await supabase
+          .from('minifig_removal_queue')
+          .select('sale_price, sold_on')
+          .eq('user_id', user!.id)
+          .eq('status', 'EXECUTED')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        results.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+      return results;
+    }
+
+    async function fetchSoldItems() {
+      const results: Array<{ created_at: string | null; updated_at: string | null }> = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await supabase
+          .from('minifig_sync_items')
+          .select('created_at, updated_at')
+          .eq('user_id', user!.id)
+          .in('listing_status', ['SOLD_EBAY', 'SOLD_BRICQER'])
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        results.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
+      return results;
+    }
+
     // Run all independent queries in parallel (M2)
     const [
       { count: totalInBricqer },
       { count: totalMeetingThreshold },
-      { data: statusCounts },
-      { data: executedRemovals },
-      { data: soldItems },
+      statusCounts,
+      executedRemovals,
+      soldItems,
       { count: pendingRemovals },
     ] = await Promise.all([
       // Total minifigs in Bricqer inventory
@@ -34,23 +91,12 @@ export async function GET() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('meets_threshold', true),
-      // Count by status
-      supabase
-        .from('minifig_sync_items')
-        .select('listing_status')
-        .eq('user_id', user.id),
-      // Revenue + fee savings (merged query)
-      supabase
-        .from('minifig_removal_queue')
-        .select('sale_price, sold_on')
-        .eq('user_id', user.id)
-        .eq('status', 'EXECUTED'),
-      // Average time to sell
-      supabase
-        .from('minifig_sync_items')
-        .select('created_at, updated_at')
-        .eq('user_id', user.id)
-        .in('listing_status', ['SOLD_EBAY', 'SOLD_BRICQER']),
+      // Count by status — paginated (M1)
+      fetchStatusCounts(),
+      // Revenue + fee savings — paginated (M1)
+      fetchExecutedRemovals(),
+      // Average time to sell — paginated (M1)
+      fetchSoldItems(),
       // Pending removals count
       supabase
         .from('minifig_removal_queue')
@@ -60,7 +106,7 @@ export async function GET() {
     ]);
 
     const countByStatus: Record<string, number> = {};
-    for (const row of statusCounts ?? []) {
+    for (const row of statusCounts) {
       const status = row.listing_status || 'UNKNOWN';
       countByStatus[status] = (countByStatus[status] || 0) + 1;
     }
@@ -68,7 +114,7 @@ export async function GET() {
     // Calculate revenue and fee savings in a single pass
     let totalRevenue = 0;
     let feeSavings = 0;
-    for (const removal of executedRemovals ?? []) {
+    for (const removal of executedRemovals) {
       const price = Number(removal.sale_price) || 0;
       totalRevenue += price;
       if (removal.sold_on === 'EBAY') {
@@ -77,7 +123,7 @@ export async function GET() {
     }
 
     let avgTimeToSell: number | null = null;
-    if (soldItems && soldItems.length > 0) {
+    if (soldItems.length > 0) {
       let totalDays = 0;
       for (const item of soldItems) {
         const created = new Date(item.created_at || '').getTime();

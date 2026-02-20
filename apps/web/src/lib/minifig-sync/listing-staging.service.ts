@@ -13,7 +13,6 @@ import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.s
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
-import { ImageSourcer } from './image-sourcer';
 import { generateDescription } from './description-generator';
 import { buildSku } from './types';
 import type { MinifigSyncItem } from './types';
@@ -270,7 +269,8 @@ export class ListingStagingService {
         ebay_description: description,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', item.id);
+      .eq('id', item.id)
+      .eq('user_id', this.userId);
   }
 
   /**

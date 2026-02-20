@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { BricqerClient } from '@/lib/bricqer/client';
+import type { BricqerCredentials } from '@/lib/bricqer/types';
+import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -17,24 +20,40 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all pending removals
-    const { data: removals, error: fetchError } = await supabase
-      .from('minifig_removal_queue')
-      .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)')
-      .eq('user_id', user.id)
-      .eq('status', 'PENDING');
+    // Get all pending removals — paginated (M2)
+    const removals: Array<Record<string, unknown>> = [];
+    {
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error: fetchError } = await supabase
+          .from('minifig_removal_queue')
+          .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)')
+          .eq('user_id', user.id)
+          .eq('status', 'PENDING')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    if (fetchError) {
-      throw new Error(fetchError.message);
+        if (fetchError) {
+          throw new Error(fetchError.message);
+        }
+
+        removals.push(...(data ?? []));
+        hasMore = (data?.length ?? 0) === pageSize;
+        page++;
+      }
     }
 
     let approved = 0;
     let failed = 0;
     const errors: Array<{ id: string; error: string }> = [];
 
-    // Share a single eBay adapter across all removals (M3)
+    // Share adapters across all removals (M3)
     let ebayAdapter: EbayApiAdapter | null = null;
-    const needsEbay = (removals ?? []).some((r) => r.remove_from === 'EBAY');
+    let bricqerClient: BricqerClient | null = null;
+    const needsEbay = removals.some((r) => r.remove_from === 'EBAY');
+    const needsBricqer = removals.some((r) => r.remove_from === 'BRICQER');
+
     if (needsEbay) {
       const accessToken = await ebayAuthService.getAccessToken(user.id);
       if (accessToken) {
@@ -45,8 +64,15 @@ export async function POST() {
         });
       }
     }
+    if (needsBricqer) {
+      const credentialsRepo = new CredentialsRepository(supabase);
+      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(user.id, 'bricqer');
+      if (bricqerCreds) {
+        bricqerClient = new BricqerClient(bricqerCreds);
+      }
+    }
 
-    for (const removal of removals ?? []) {
+    for (const removal of removals) {
       try {
         const syncItem = removal.minifig_sync_items as Record<string, unknown> | null;
         const now = new Date().toISOString();
@@ -66,6 +92,13 @@ export async function POST() {
                 // Already deleted
               }
             }
+        } else if (removal.remove_from === 'BRICQER' && syncItem?.bricqer_item_id && bricqerClient) {
+            // Remove from Bricqer inventory (C1)
+            try {
+              await bricqerClient.deleteInventoryItem(Number(syncItem.bricqer_item_id));
+            } catch {
+              // Item may already be removed or sold through Bricqer
+            }
         }
 
         // Mark removal as executed
@@ -76,7 +109,7 @@ export async function POST() {
             executed_at: now,
             reviewed_at: now,
           })
-          .eq('id', removal.id)
+          .eq('id', removal.id as string)
           .eq('user_id', user.id);
 
         // Update sync item status
@@ -89,7 +122,7 @@ export async function POST() {
               listing_status: finalStatus,
               updated_at: now,
             })
-            .eq('id', removal.minifig_sync_id)
+            .eq('id', removal.minifig_sync_id as string)
             .eq('user_id', user.id);
         }
 
@@ -97,7 +130,7 @@ export async function POST() {
       } catch (err) {
         failed++;
         errors.push({
-          id: removal.id,
+          id: removal.id as string,
           error: err instanceof Error ? err.message : String(err),
         });
       }
