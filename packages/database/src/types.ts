@@ -5793,6 +5793,299 @@ export type Database = {
           },
         ]
       }
+      minifig_price_cache: {
+        Row: {
+          bricklink_avg_sold_price: number | null
+          bricklink_id: string
+          bricklink_sold_count: number | null
+          created_at: string | null
+          expires_at: string
+          id: string
+          researched_at: string
+          source: string
+          terapeak_active_count: number | null
+          terapeak_avg_shipping: number | null
+          terapeak_avg_sold_price: number | null
+          terapeak_max_sold_price: number | null
+          terapeak_min_sold_price: number | null
+          terapeak_raw_data: Json | null
+          terapeak_sell_through_rate: number | null
+          terapeak_sold_count: number | null
+        }
+        Insert: {
+          bricklink_avg_sold_price?: number | null
+          bricklink_id: string
+          bricklink_sold_count?: number | null
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          researched_at?: string
+          source?: string
+          terapeak_active_count?: number | null
+          terapeak_avg_shipping?: number | null
+          terapeak_avg_sold_price?: number | null
+          terapeak_max_sold_price?: number | null
+          terapeak_min_sold_price?: number | null
+          terapeak_raw_data?: Json | null
+          terapeak_sell_through_rate?: number | null
+          terapeak_sold_count?: number | null
+        }
+        Update: {
+          bricklink_avg_sold_price?: number | null
+          bricklink_id?: string
+          bricklink_sold_count?: number | null
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          researched_at?: string
+          source?: string
+          terapeak_active_count?: number | null
+          terapeak_avg_shipping?: number | null
+          terapeak_avg_sold_price?: number | null
+          terapeak_max_sold_price?: number | null
+          terapeak_min_sold_price?: number | null
+          terapeak_raw_data?: Json | null
+          terapeak_sell_through_rate?: number | null
+          terapeak_sold_count?: number | null
+        }
+        Relationships: []
+      }
+      minifig_removal_queue: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          minifig_sync_id: string
+          notes: string | null
+          order_id: string | null
+          order_url: string | null
+          removal_details: Json | null
+          remove_from: string
+          reviewed_at: string | null
+          sale_date: string | null
+          sale_price: number | null
+          sold_on: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          minifig_sync_id: string
+          notes?: string | null
+          order_id?: string | null
+          order_url?: string | null
+          removal_details?: Json | null
+          remove_from: string
+          reviewed_at?: string | null
+          sale_date?: string | null
+          sale_price?: number | null
+          sold_on: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          minifig_sync_id?: string
+          notes?: string | null
+          order_id?: string | null
+          order_url?: string | null
+          removal_details?: Json | null
+          remove_from?: string
+          reviewed_at?: string | null
+          sale_date?: string | null
+          sale_price?: number | null
+          sold_on?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "minifig_removal_queue_minifig_sync_id_fkey"
+            columns: ["minifig_sync_id"]
+            isOneToOne: false
+            referencedRelation: "minifig_sync_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      minifig_sync_config: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      minifig_sync_items: {
+        Row: {
+          best_offer_auto_accept: number | null
+          best_offer_auto_decline: number | null
+          bricklink_id: string | null
+          bricqer_image_url: string | null
+          bricqer_item_id: string
+          bricqer_price: number | null
+          condition_notes: string | null
+          created_at: string | null
+          ebay_active_count: number | null
+          ebay_avg_shipping: number | null
+          ebay_avg_sold_price: number | null
+          ebay_description: string | null
+          ebay_inventory_item_id: string | null
+          ebay_listing_id: string | null
+          ebay_listing_url: string | null
+          ebay_max_sold_price: number | null
+          ebay_min_sold_price: number | null
+          ebay_offer_id: string | null
+          ebay_research_date: string | null
+          ebay_sell_through_rate: number | null
+          ebay_sku: string | null
+          ebay_sold_count: number | null
+          ebay_title: string | null
+          id: string
+          images: Json | null
+          last_synced_at: string | null
+          listing_status: string | null
+          meets_threshold: boolean | null
+          name: string
+          recommended_price: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          best_offer_auto_accept?: number | null
+          best_offer_auto_decline?: number | null
+          bricklink_id?: string | null
+          bricqer_image_url?: string | null
+          bricqer_item_id: string
+          bricqer_price?: number | null
+          condition_notes?: string | null
+          created_at?: string | null
+          ebay_active_count?: number | null
+          ebay_avg_shipping?: number | null
+          ebay_avg_sold_price?: number | null
+          ebay_description?: string | null
+          ebay_inventory_item_id?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_url?: string | null
+          ebay_max_sold_price?: number | null
+          ebay_min_sold_price?: number | null
+          ebay_offer_id?: string | null
+          ebay_research_date?: string | null
+          ebay_sell_through_rate?: number | null
+          ebay_sku?: string | null
+          ebay_sold_count?: number | null
+          ebay_title?: string | null
+          id?: string
+          images?: Json | null
+          last_synced_at?: string | null
+          listing_status?: string | null
+          meets_threshold?: boolean | null
+          name: string
+          recommended_price?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          best_offer_auto_accept?: number | null
+          best_offer_auto_decline?: number | null
+          bricklink_id?: string | null
+          bricqer_image_url?: string | null
+          bricqer_item_id?: string
+          bricqer_price?: number | null
+          condition_notes?: string | null
+          created_at?: string | null
+          ebay_active_count?: number | null
+          ebay_avg_shipping?: number | null
+          ebay_avg_sold_price?: number | null
+          ebay_description?: string | null
+          ebay_inventory_item_id?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_url?: string | null
+          ebay_max_sold_price?: number | null
+          ebay_min_sold_price?: number | null
+          ebay_offer_id?: string | null
+          ebay_research_date?: string | null
+          ebay_sell_through_rate?: number | null
+          ebay_sku?: string | null
+          ebay_sold_count?: number | null
+          ebay_title?: string | null
+          id?: string
+          images?: Json | null
+          last_synced_at?: string | null
+          listing_status?: string | null
+          meets_threshold?: boolean | null
+          name?: string
+          recommended_price?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      minifig_sync_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_log: Json | null
+          id: string
+          items_created: number | null
+          items_errored: number | null
+          items_processed: number | null
+          items_updated: number | null
+          job_type: string
+          last_poll_cursor: string | null
+          started_at: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          id?: string
+          items_created?: number | null
+          items_errored?: number | null
+          items_processed?: number | null
+          items_updated?: number | null
+          job_type: string
+          last_poll_cursor?: string | null
+          started_at?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          id?: string
+          items_created?: number | null
+          items_errored?: number | null
+          items_processed?: number | null
+          items_updated?: number | null
+          job_type?: string
+          last_poll_cursor?: string | null
+          started_at?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       monzo_credentials: {
         Row: {
           access_token: string
@@ -9308,6 +9601,7 @@ export type Database = {
           prize_pool_gbp: number | null
           slug: string
           status: string | null
+          third_place_qualifiers_count: number | null
           type: string
           updated_at: string | null
           year: number
@@ -9324,6 +9618,7 @@ export type Database = {
           prize_pool_gbp?: number | null
           slug: string
           status?: string | null
+          third_place_qualifiers_count?: number | null
           type: string
           updated_at?: string | null
           year: number
@@ -9340,6 +9635,7 @@ export type Database = {
           prize_pool_gbp?: number | null
           slug?: string
           status?: string | null
+          third_place_qualifiers_count?: number | null
           type?: string
           updated_at?: string | null
           year?: number
