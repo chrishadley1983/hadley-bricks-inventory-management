@@ -9,7 +9,7 @@
  *
  * Items will be in STAGED status — NOT published. Review in the app first.
  *
- * Usage: npx tsx apps/web/scripts/create-sample-listings.ts
+ * Usage: cd apps/web && npx tsx scripts/create-sample-listings.ts
  */
 
 import { config } from 'dotenv';
@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { ImageSourcer } from '../src/lib/minifig-sync/image-sourcer';
 import { ListingStagingService } from '../src/lib/minifig-sync/listing-staging.service';
+import { EbayAuthService } from '../src/lib/ebay/ebay-auth.service';
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const SAMPLE_COUNT = 10;
@@ -103,9 +104,10 @@ async function main() {
     return;
   }
 
-  // 4. Stage listings
+  // 4. Stage listings — inject service-role EbayAuthService (avoids Next.js cookies())
   console.log(`\nStaging ${sampleIds.length} items on eBay (unpublished)...`);
-  const stagingService = new ListingStagingService(supabase, DEFAULT_USER_ID);
+  const ebayAuth = new EbayAuthService(undefined, supabase);
+  const stagingService = new ListingStagingService(supabase, DEFAULT_USER_ID, ebayAuth);
 
   const result = await stagingService.createStagedListings(sampleIds, {
     onProgress: (event) => {
