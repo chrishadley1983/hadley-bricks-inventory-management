@@ -51,6 +51,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
               itemsUpdated: result.itemsUpdated,
               itemsErrored: result.itemsErrored,
               errors: result.errors,
+              complete: result.complete,
             },
           }),
         ),

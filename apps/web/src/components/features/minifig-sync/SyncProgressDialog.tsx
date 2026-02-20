@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import type { SyncStreamState } from '@/types/minifig-sync-stream';
 import { SYNC_OPERATION_LABELS } from '@/types/minifig-sync-stream';
 
@@ -99,13 +99,18 @@ export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialog
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isStreaming && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-            {isComplete && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+            {isComplete && stream.result?.complete === false && <Clock className="h-5 w-5 text-yellow-500" />}
+            {isComplete && stream.result?.complete !== false && <CheckCircle2 className="h-5 w-5 text-green-500" />}
             {isError && <AlertCircle className="h-5 w-5 text-destructive" />}
             {title}
           </DialogTitle>
           <DialogDescription>
             {isStreaming && 'Operation in progress...'}
-            {isComplete && 'Operation completed successfully.'}
+            {isComplete && stream.result?.complete === false
+              ? 'Partial progress saved. Will continue on next run.'
+              : isComplete
+                ? 'Operation completed successfully.'
+                : null}
             {isError && 'Operation failed.'}
           </DialogDescription>
         </DialogHeader>

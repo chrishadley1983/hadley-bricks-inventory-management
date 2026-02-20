@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
     }
     results.stuckItemsReset = stuckItems?.length ?? 0;
 
-    // 2. Inventory pull
+    // 2. Inventory pull (time-budgeted to leave room for other tasks)
     const pullService = new InventoryPullService(supabase, DEFAULT_USER_ID);
-    results.inventoryPull = await pullService.pull();
+    results.inventoryPull = await pullService.pull({ maxDurationMs: 40_000 });
 
     // 3. Bricqer order polling
     try {
