@@ -91,6 +91,7 @@ const navSections: NavSection[] = [
       { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
       { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
       { href: '/minifigs', label: 'Minifig Sync', icon: CloudUpload },
+      { href: '/minifigs/items', label: 'Minifig Items', icon: Package },
       { href: '/minifigs/review', label: 'Minifig Review', icon: CloudUpload },
       { href: '/minifigs/removals', label: 'Minifig Removals', icon: Layers },
     ],

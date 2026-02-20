@@ -165,12 +165,14 @@ export function MinifigDashboard() {
           value={data.totalInBricqer}
           description="Minifigures in inventory"
           icon={Package}
+          href="/minifigs/items"
         />
         <StatCard
           title="Meeting Threshold"
           value={data.totalMeetingThreshold}
           description={`${data.totalInBricqer > 0 ? Math.round((data.totalMeetingThreshold / data.totalInBricqer) * 100) : 0}% of inventory`}
           icon={TrendingUp}
+          href="/minifigs/items?meetsThreshold=true"
         />
         <StatCard
           title="Staged"

@@ -7,6 +7,7 @@ import { PriceCacheService } from './price-cache';
 import { MinifigConfigService } from './config.service';
 import { PricingEngine } from './pricing-engine';
 import { MinifigJobTracker } from './job-tracker';
+import { TerapeakScraper, TerapeakSessionExpiredError } from './terapeak-scraper';
 import type {
   MinifigSyncItem,
   MinifigPriceCache,
@@ -25,10 +26,24 @@ interface ResearchJobResult {
   errors: Array<{ item?: string; error: string }>;
 }
 
+/**
+ * Check if an error indicates Playwright/Chromium is unavailable (e.g. on Vercel).
+ */
+function isPlaywrightUnavailable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return (
+    msg.includes('playwright') ||
+    msg.includes('chromium') ||
+    msg.includes('cannot find module') ||
+    msg.includes('could not find expected browser')
+  );
+}
+
 export class ResearchService {
   private configService: MinifigConfigService;
   private cacheService: PriceCacheService;
   private jobTracker: MinifigJobTracker;
+  private _terapeakScraper: TerapeakScraper | null = null;
 
   constructor(
     private supabase: SupabaseClient<Database>,
@@ -39,9 +54,16 @@ export class ResearchService {
     this.jobTracker = new MinifigJobTracker(supabase, userId);
   }
 
+  private getTerapeakScraper(): TerapeakScraper {
+    if (!this._terapeakScraper) {
+      this._terapeakScraper = new TerapeakScraper(this.supabase, this.userId);
+    }
+    return this._terapeakScraper;
+  }
+
   /**
    * Research pricing for all (or specific) sync items.
-   * Skips items with valid cache unless forceRefresh is true.
+   * Uses 4-step priority: Terapeak cache -> Live Terapeak -> BrickLink cache -> Live BrickLink.
    */
   async researchAll(itemIds?: string[], options?: { onProgress?: SyncProgressCallback }): Promise<ResearchJobResult> {
     const onProgress = options?.onProgress;
@@ -52,12 +74,15 @@ export class ResearchService {
     let itemsCached = 0;
     let itemsErrored = 0;
 
+    // Terapeak availability flag — disabled on session expiry or Playwright unavailable
+    let terapeakAvailable = true;
+
     try {
       await onProgress?.({ type: 'stage', stage: 'config', message: 'Loading configuration...' });
       const config = await this.configService.getConfig();
       const pricingEngine = new PricingEngine(config);
 
-      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking BrickLink credentials...' });
+      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking credentials...' });
       const client = await this.getBrickLinkClient();
 
       // Get items to research (must have a bricklink_id) — paginated (M1)
@@ -87,33 +112,66 @@ export class ResearchService {
       await onProgress?.({ type: 'stage', stage: 'research', message: 'Researching pricing...' });
       for (let i = 0; i < items.length; i++) {
         const item = items[i] as MinifigSyncItem;
+        const bricklinkId = item.bricklink_id!;
         itemsProcessed++;
         await onProgress?.({
           type: 'progress',
           current: i + 1,
           total: items.length,
-          message: item.bricklink_id || item.name || `Item ${i + 1}`,
+          message: bricklinkId || item.name || `Item ${i + 1}`,
         });
         try {
-          // Check cache (F20: skip if valid cache exists)
-          const cached = await this.cacheService.lookup(item.bricklink_id!);
-          if (cached) {
+          // ── Step 1: Terapeak cache hit ──
+          if (terapeakAvailable) {
+            const terapeakCached = await this.cacheService.lookupBySource(bricklinkId, 'terapeak');
+            if (terapeakCached) {
+              itemsCached++;
+              await this.updateItemFromCache(item, terapeakCached, pricingEngine, config);
+              continue;
+            }
+          }
+
+          // ── Step 2: Live Terapeak scrape ──
+          if (terapeakAvailable) {
+            try {
+              const scraper = this.getTerapeakScraper();
+              const terapeakResult = await scraper.research(
+                item.name || '',
+                bricklinkId,
+              );
+
+              if (terapeakResult) {
+                await this.cacheService.upsert(bricklinkId, terapeakResult, config.price_cache_months);
+                await this.updateItemFromResearch(item, terapeakResult, pricingEngine, config);
+                itemsResearched++;
+                continue;
+              }
+              // null result (no Terapeak data) — fall through to BrickLink
+            } catch (terapeakErr) {
+              if (terapeakErr instanceof TerapeakSessionExpiredError) {
+                console.warn('[Research] Terapeak session expired — disabling for rest of batch');
+                terapeakAvailable = false;
+              } else if (isPlaywrightUnavailable(terapeakErr)) {
+                console.warn('[Research] Playwright unavailable — disabling Terapeak for this batch');
+                terapeakAvailable = false;
+              } else {
+                console.warn(`[Research] Terapeak error for ${bricklinkId}, falling back to BrickLink:`, terapeakErr);
+              }
+              // Fall through to BrickLink
+            }
+          }
+
+          // ── Step 3: BrickLink cache hit ──
+          const bricklinkCached = await this.cacheService.lookupBySource(bricklinkId, 'bricklink');
+          if (bricklinkCached) {
             itemsCached++;
-            await this.updateItemFromCache(item, cached, pricingEngine, config);
+            await this.updateItemFromCache(item, bricklinkCached, pricingEngine, config);
             continue;
           }
 
-          // No cache or expired — fetch from BrickLink (F16 fallback, F21 expired)
-          const result = await this.fetchBrickLinkData(item.bricklink_id!, client);
-
-          // Store in cache (F19)
-          await this.cacheService.upsert(
-            item.bricklink_id!,
-            result,
-            config.price_cache_months,
-          );
-
-          // Update sync item pricing
+          // ── Step 4: Live BrickLink API ──
+          const result = await this.fetchBrickLinkData(bricklinkId, client);
+          await this.cacheService.upsert(bricklinkId, result, config.price_cache_months);
           await this.updateItemFromResearch(item, result, pricingEngine, config);
           itemsResearched++;
         } catch (err) {
@@ -155,6 +213,7 @@ export class ResearchService {
 
   /**
    * Force-refresh research for a specific minifig, bypassing cache (F18).
+   * Tries Terapeak first, falls back to BrickLink.
    */
   async forceRefresh(itemId: string): Promise<void> {
     const config = await this.configService.getConfig();
@@ -174,17 +233,37 @@ export class ResearchService {
     // Invalidate existing cache
     await this.cacheService.invalidate(item.bricklink_id);
 
+    // Try Terapeak first
+    try {
+      const scraper = this.getTerapeakScraper();
+      const terapeakResult = await scraper.research(
+        item.name || '',
+        item.bricklink_id,
+      );
+
+      if (terapeakResult) {
+        await this.cacheService.upsert(item.bricklink_id, terapeakResult, config.price_cache_months);
+        await this.updateItemFromResearch(item as MinifigSyncItem, terapeakResult, pricingEngine, config);
+        return;
+      }
+    } catch (err) {
+      if (err instanceof TerapeakSessionExpiredError || isPlaywrightUnavailable(err)) {
+        console.warn('[ForceRefresh] Terapeak unavailable, falling back to BrickLink');
+      } else {
+        console.warn(`[ForceRefresh] Terapeak error for ${item.bricklink_id}, falling back to BrickLink:`, err);
+      }
+    }
+
+    // Fall back to BrickLink
     const client = await this.getBrickLinkClient();
     const result = await this.fetchBrickLinkData(item.bricklink_id, client);
 
-    // Store fresh cache entry
     await this.cacheService.upsert(
       item.bricklink_id,
       result,
       config.price_cache_months,
     );
 
-    // Update sync item pricing
     await this.updateItemFromResearch(
       item as MinifigSyncItem,
       result,
