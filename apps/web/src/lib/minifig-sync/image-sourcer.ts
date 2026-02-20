@@ -118,47 +118,43 @@ export class ImageSourcer {
       const page = await context.newPage();
       await page.goto(searchUrl, { waitUntil: 'networkidle' });
 
-      // Extract image URLs and their source page URLs from search results
-      const imageResults = await page.evaluate(() => {
-        const anchors = Array.from(document.querySelectorAll('a[href]'));
-        const results: Array<{ imgUrl: string; pageUrl: string }> = [];
+      // Google embeds full-size image URLs in inline <script> tags.
+      // The visible DOM only has base64-encoded thumbnails.
+      const imageUrls = await page.evaluate(() => {
+        const scripts = Array.from(document.querySelectorAll('script'));
+        const urls: string[] = [];
+        const urlPattern = /https?:\/\/[^"'\s\\]+\.(jpg|jpeg|png|webp)/gi;
 
-        for (const anchor of anchors) {
-          const img = anchor.querySelector('img[data-src]');
-          if (!img) continue;
-          const imgUrl = img.getAttribute('data-src');
-          const pageUrl = anchor.getAttribute('href') || '';
-          if (imgUrl && imgUrl.startsWith('http')) {
-            results.push({ imgUrl, pageUrl });
+        for (const script of scripts) {
+          const content = script.textContent || '';
+          const matches = content.match(urlPattern);
+          if (matches) {
+            for (const url of matches) {
+              // Skip Google infrastructure URLs
+              if (url.includes('gstatic.com')) continue;
+              if (url.includes('google.com')) continue;
+              if (url.includes('googleapis.com')) continue;
+              if (url.includes('favicon')) continue;
+              if (urls.includes(url)) continue;
+              urls.push(url);
+            }
           }
         }
-
-        // Also grab standalone data-src images
-        const standaloneImgs = Array.from(document.querySelectorAll('img[data-src]'));
-        for (const img of standaloneImgs) {
-          const imgUrl = img.getAttribute('data-src');
-          if (imgUrl && imgUrl.startsWith('http') && !results.some(r => r.imgUrl === imgUrl)) {
-            results.push({ imgUrl, pageUrl: '' });
-          }
-        }
-
-        return results.slice(0, 15);
+        return urls.slice(0, 20);
       });
 
       // Filter out eBay URLs (safety net for all eBay domains)
-      const nonEbayResults = imageResults.filter(
-        (r) => !isEbayUrl(r.imgUrl) && !isEbayUrl(r.pageUrl),
-      );
+      const nonEbayUrls = imageUrls.filter((url) => !isEbayUrl(url));
 
       // Validate dimensions (minimum 800x800)
       const validImages: SourcedImage[] = [];
-      for (const { imgUrl } of nonEbayResults) {
+      for (const url of nonEbayUrls) {
         if (validImages.length >= MAX_GOOGLE_IMAGES) break;
         try {
-          const validation = await validateImageDimensions(imgUrl);
+          const validation = await validateImageDimensions(url);
           if (validation.valid) {
             validImages.push({
-              url: imgUrl,
+              url,
               source: 'google',
               type: 'sourced',
             });

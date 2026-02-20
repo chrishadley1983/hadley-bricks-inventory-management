@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
-import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { ebayAuthService, EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.service';
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
 import { MinifigConfigService } from './config.service';
@@ -32,13 +32,16 @@ interface StagingResult {
 export class ListingStagingService {
   private configService: MinifigConfigService;
   private jobTracker: MinifigJobTracker;
+  private ebayAuth: EbayAuthService;
 
   constructor(
     private supabase: SupabaseClient<Database>,
     private userId: string,
+    ebayAuth?: EbayAuthService,
   ) {
     this.configService = new MinifigConfigService(supabase);
     this.jobTracker = new MinifigJobTracker(supabase, userId);
+    this.ebayAuth = ebayAuth ?? ebayAuthService;
   }
 
   /**
@@ -57,7 +60,7 @@ export class ListingStagingService {
     try {
       // Get eBay access token
       await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking eBay credentials...' });
-      const accessToken = await ebayAuthService.getAccessToken(this.userId);
+      const accessToken = await this.ebayAuth.getAccessToken(this.userId);
       if (!accessToken) {
         throw new Error('eBay credentials not configured or token expired');
       }
