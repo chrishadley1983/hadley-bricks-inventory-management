@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { BricqerClient } from '@/lib/bricqer/client';
+import type { BricqerCredentials } from '@/lib/bricqer/types';
+import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -74,6 +77,18 @@ export async function POST(request: NextRequest) {
           } catch {
             // Already deleted
           }
+        }
+      }
+    } else if (removal.remove_from === 'BRICQER' && syncItem?.bricqer_item_id) {
+      // Remove from Bricqer inventory (C1)
+      const credentialsRepo = new CredentialsRepository(supabase);
+      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(user.id, 'bricqer');
+      if (bricqerCreds) {
+        const bricqerClient = new BricqerClient(bricqerCreds);
+        try {
+          await bricqerClient.deleteInventoryItem(Number(syncItem.bricqer_item_id));
+        } catch {
+          // Item may already be removed or sold through Bricqer
         }
       }
     }

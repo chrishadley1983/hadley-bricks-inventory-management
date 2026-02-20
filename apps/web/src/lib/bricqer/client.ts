@@ -575,6 +575,14 @@ export class BricqerClient {
   }
 
   /**
+   * Delete an inventory item by ID.
+   * Used when removing a sold item from Bricqer inventory.
+   */
+  async deleteInventoryItem(itemId: number): Promise<void> {
+    await this.request<void>(`/inventory/item/${itemId}/`, { method: 'DELETE' });
+  }
+
+  /**
    * Get all storage locations
    */
   async getStorageLocations(): Promise<BricqerStorage[]> {

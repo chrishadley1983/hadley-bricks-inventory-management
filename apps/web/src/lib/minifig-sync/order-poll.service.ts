@@ -14,7 +14,7 @@ import type { BricqerCredentials } from '@/lib/bricqer/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
 import { MinifigJobTracker } from './job-tracker';
-import { isMinifigSku, parseSku, MINIFIG_SKU_PREFIX } from './types';
+import { isMinifigSku, parseSku } from './types';
 import type { MinifigJobType } from './types';
 
 interface PollResult {
@@ -123,41 +123,52 @@ export class OrderPollService {
             const orderId = order.orderId || '';
             const orderUrl = `https://www.ebay.co.uk/sh/ord/details?orderid=${encodeURIComponent(orderId)}`;
 
-            await this.supabase.from('minifig_removal_queue').insert({
-              user_id: this.userId,
-              minifig_sync_id: syncItem.id,
-              sold_on: 'EBAY',
-              remove_from: 'BRICQER',
-              sale_price: parseFloat(salePrice),
-              sale_date: order.creationDate || new Date().toISOString(),
-              order_id: orderId,
-              order_url: orderUrl,
-              status: 'PENDING',
-            });
+            // Upsert to prevent duplicates on re-poll (M7)
+            const { data: inserted } = await this.supabase
+              .from('minifig_removal_queue')
+              .upsert(
+                {
+                  user_id: this.userId,
+                  minifig_sync_id: syncItem.id,
+                  sold_on: 'EBAY',
+                  remove_from: 'BRICQER',
+                  sale_price: parseFloat(salePrice),
+                  sale_date: order.creationDate || new Date().toISOString(),
+                  order_id: orderId,
+                  order_url: orderUrl,
+                  status: 'PENDING',
+                },
+                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true },
+              )
+              .select('id');
 
-            removalEntriesCreated++;
+            // Only notify and update status for new entries, not duplicates
+            if (inserted && inserted.length > 0) {
+              removalEntriesCreated++;
 
-            // Discord notification (F60)
-            const syncItemName = await this.getSyncItemName(syncItem.id);
-            discordService.send('alerts', {
-              title: '🔔 Minifig Sold on eBay',
-              description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
-              color: DiscordColors.GREEN,
-              fields: [
-                { name: 'Platform', value: 'eBay', inline: true },
-                { name: 'Sale Price', value: `£${parseFloat(salePrice).toFixed(2)}`, inline: true },
-                { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
-              ],
-            }).catch(() => { /* non-blocking */ });
+              // Discord notification (F60)
+              const syncItemName = await this.getSyncItemName(syncItem.id);
+              discordService.send('alerts', {
+                title: '🔔 Minifig Sold on eBay',
+                description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
+                color: DiscordColors.GREEN,
+                fields: [
+                  { name: 'Platform', value: 'eBay', inline: true },
+                  { name: 'Sale Price', value: `£${parseFloat(salePrice).toFixed(2)}`, inline: true },
+                  { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
+                ],
+              }).catch(() => { /* non-blocking */ });
 
-            // Update sync item status (F50)
-            await this.supabase
-              .from('minifig_sync_items')
-              .update({
-                listing_status: 'SOLD_EBAY_PENDING_REMOVAL',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', syncItem.id);
+              // Update sync item status (F50)
+              await this.supabase
+                .from('minifig_sync_items')
+                .update({
+                  listing_status: 'SOLD_EBAY_PENDING_REMOVAL',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', syncItem.id)
+                .eq('user_id', this.userId);
+            }
           } catch (err) {
             errors.push({
               error: `eBay order ${order.orderId}, SKU ${sku}: ${err instanceof Error ? err.message : String(err)}`,
@@ -291,40 +302,51 @@ export class OrderPollService {
                 ? parseFloat(orderItem.price)
                 : orderItem.price;
 
-            await this.supabase.from('minifig_removal_queue').insert({
-              user_id: this.userId,
-              minifig_sync_id: matchingItem.id,
-              sold_on: 'BRICQER',
-              remove_from: 'EBAY',
-              sale_price: price || 0,
-              sale_date: order.created || order.created_at || new Date().toISOString(),
-              order_id: String(order.id),
-              status: 'PENDING',
-            });
+            // Upsert to prevent duplicates on re-poll (M7)
+            const { data: inserted } = await this.supabase
+              .from('minifig_removal_queue')
+              .upsert(
+                {
+                  user_id: this.userId,
+                  minifig_sync_id: matchingItem.id,
+                  sold_on: 'BRICQER',
+                  remove_from: 'EBAY',
+                  sale_price: price || 0,
+                  sale_date: order.created || order.created_at || new Date().toISOString(),
+                  order_id: String(order.id),
+                  status: 'PENDING',
+                },
+                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true },
+              )
+              .select('id');
 
-            removalEntriesCreated++;
+            // Only notify and update status for new entries, not duplicates
+            if (inserted && inserted.length > 0) {
+              removalEntriesCreated++;
 
-            // Discord notification (F60)
-            const syncItemName = await this.getSyncItemName(matchingItem.id);
-            discordService.send('alerts', {
-              title: '🔔 Minifig Sold on Bricqer',
-              description: `**${syncItemName}** sold for £${(price || 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
-              color: DiscordColors.GREEN,
-              fields: [
-                { name: 'Platform', value: 'Bricqer', inline: true },
-                { name: 'Sale Price', value: `£${(price || 0).toFixed(2)}`, inline: true },
-                { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
-              ],
-            }).catch(() => { /* non-blocking */ });
+              // Discord notification (F60)
+              const syncItemName = await this.getSyncItemName(matchingItem.id);
+              discordService.send('alerts', {
+                title: '🔔 Minifig Sold on Bricqer',
+                description: `**${syncItemName}** sold for £${(price || 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
+                color: DiscordColors.GREEN,
+                fields: [
+                  { name: 'Platform', value: 'Bricqer', inline: true },
+                  { name: 'Sale Price', value: `£${(price || 0).toFixed(2)}`, inline: true },
+                  { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
+                ],
+              }).catch(() => { /* non-blocking */ });
 
-            // Update sync item status (F53)
-            await this.supabase
-              .from('minifig_sync_items')
-              .update({
-                listing_status: 'SOLD_BRICQER_PENDING_REMOVAL',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', matchingItem.id);
+              // Update sync item status (F53)
+              await this.supabase
+                .from('minifig_sync_items')
+                .update({
+                  listing_status: 'SOLD_BRICQER_PENDING_REMOVAL',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', matchingItem.id)
+                .eq('user_id', this.userId);
+            }
           } catch (err) {
             errors.push({
               error: `Bricqer order ${order.id}, item ${orderItem.bricklink_id || orderItem.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -364,6 +386,7 @@ export class OrderPollService {
       .from('minifig_sync_items')
       .select('name, bricklink_id')
       .eq('id', syncItemId)
+      .eq('user_id', this.userId)
       .single();
     return data?.name || data?.bricklink_id || 'Unknown Minifig';
   }

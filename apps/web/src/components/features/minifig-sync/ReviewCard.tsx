@@ -92,16 +92,58 @@ function formatCurrency(value: number | string | null | undefined): string {
 }
 
 function sanitizeHtml(html: string): string {
-  // Strip script tags, event handlers, and dangerous attributes
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
-    .replace(/javascript\s*:/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
-    .replace(/<embed\b[^>]*>/gi, '')
-    .replace(/<link\b[^>]*>/gi, '');
+  // Allowlist-based sanitizer: only permit safe tags and attributes (M11)
+  const ALLOWED_TAGS = new Set([
+    'p', 'br', 'b', 'i', 'u', 'em', 'strong', 'span', 'div',
+    'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'a', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr',
+  ]);
+  const ALLOWED_ATTRS = new Set(['href', 'class', 'style']);
+
+  // Parse via DOMParser (safe — no script execution in parsed doc)
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  function cleanNode(node: Node): Node | null {
+    if (node.nodeType === Node.TEXT_NODE) return node.cloneNode(true);
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+    const el = node as Element;
+    const tag = el.tagName.toLowerCase();
+
+    if (!ALLOWED_TAGS.has(tag)) {
+      // Replace disallowed tag with its children
+      const fragment = document.createDocumentFragment();
+      for (const child of Array.from(el.childNodes)) {
+        const cleaned = cleanNode(child);
+        if (cleaned) fragment.appendChild(cleaned);
+      }
+      return fragment;
+    }
+
+    const cleanEl = document.createElement(tag);
+    for (const attr of Array.from(el.attributes)) {
+      if (ALLOWED_ATTRS.has(attr.name.toLowerCase())) {
+        // Block javascript: in href values
+        if (attr.name === 'href' && /^\s*javascript\s*:/i.test(attr.value)) continue;
+        cleanEl.setAttribute(attr.name, attr.value);
+      }
+    }
+    for (const child of Array.from(el.childNodes)) {
+      const cleaned = cleanNode(child);
+      if (cleaned) cleanEl.appendChild(cleaned);
+    }
+    return cleanEl;
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const child of Array.from(doc.body.childNodes)) {
+    const cleaned = cleanNode(child);
+    if (cleaned) fragment.appendChild(cleaned);
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.appendChild(fragment);
+  return wrapper.innerHTML;
 }
 
 function getSourceLabel(source: string): string {

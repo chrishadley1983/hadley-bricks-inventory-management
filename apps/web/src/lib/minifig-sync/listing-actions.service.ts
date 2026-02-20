@@ -26,8 +26,11 @@ export class ListingActionsService {
    * Publish a staged listing to eBay (F42).
    * Enforces quality check before publishing (F45).
    */
-  async publish(itemId: string, sharedAdapter?: EbayApiAdapter): Promise<{ listingId: string; listingUrl: string }> {
-    const item = await this.getItem(itemId);
+  async publish(itemId: string, sharedAdapter?: EbayApiAdapter): Promise<{ listingId: string; listingUrl: string }>;
+  async publish(item: MinifigSyncItem, sharedAdapter?: EbayApiAdapter): Promise<{ listingId: string; listingUrl: string }>;
+  async publish(itemOrId: string | MinifigSyncItem, sharedAdapter?: EbayApiAdapter): Promise<{ listingId: string; listingUrl: string }> {
+    const item = typeof itemOrId === 'string' ? await this.getItem(itemOrId) : itemOrId;
+    const itemId = item.id;
 
     if (item.listing_status !== 'STAGED') {
       throw new Error(`Cannot publish: item is ${item.listing_status}, not STAGED`);
@@ -43,27 +46,51 @@ export class ListingActionsService {
       throw new Error('Cannot publish: no eBay offer ID');
     }
 
+    // Optimistic lock: atomically claim the item (M9)
+    const { data: claimed, error: claimError } = await this.supabase
+      .from('minifig_sync_items')
+      .update({ listing_status: 'PUBLISHING', updated_at: new Date().toISOString() })
+      .eq('id', itemId)
+      .eq('user_id', this.userId)
+      .eq('listing_status', 'STAGED')
+      .select('id')
+      .single();
+
+    if (claimError || !claimed) {
+      throw new Error('Cannot publish: item was modified by another process');
+    }
+
     const adapter = sharedAdapter ?? await this.getEbayAdapter();
 
-    // Publish the offer (F42) — this is the ONLY place publish is called (I2)
-    const publishResult = await adapter.publishOffer(item.ebay_offer_id);
+    try {
+      // Publish the offer (F42) — this is the ONLY place publish is called (I2)
+      const publishResult = await adapter.publishOffer(item.ebay_offer_id);
 
-    const listingId = publishResult.listingId;
-    const listingUrl = `https://www.ebay.co.uk/itm/${listingId}`;
+      const listingId = publishResult.listingId;
+      const listingUrl = `https://www.ebay.co.uk/itm/${listingId}`;
 
-    // Update sync item (F42)
-    await this.supabase
-      .from('minifig_sync_items')
-      .update({
-        listing_status: 'PUBLISHED',
-        ebay_listing_id: listingId,
-        ebay_listing_url: listingUrl,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', itemId)
-      .eq('user_id', this.userId);
+      // Update sync item (F42)
+      await this.supabase
+        .from('minifig_sync_items')
+        .update({
+          listing_status: 'PUBLISHED',
+          ebay_listing_id: listingId,
+          ebay_listing_url: listingUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId)
+        .eq('user_id', this.userId);
 
-    return { listingId, listingUrl };
+      return { listingId, listingUrl };
+    } catch (err) {
+      // Rollback status on failure
+      await this.supabase
+        .from('minifig_sync_items')
+        .update({ listing_status: 'STAGED', updated_at: new Date().toISOString() })
+        .eq('id', itemId)
+        .eq('user_id', this.userId);
+      throw err;
+    }
   }
 
   /**
@@ -95,7 +122,7 @@ export class ListingActionsService {
       }
 
       try {
-        await this.publish(item.id, adapter);
+        await this.publish(item, adapter);
         published++;
       } catch (err) {
         errors.push({

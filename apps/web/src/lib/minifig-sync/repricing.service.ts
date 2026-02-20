@@ -153,7 +153,8 @@ export class RepricingService {
           await this.supabase
             .from('minifig_sync_items')
             .update({ updated_at: new Date().toISOString() })
-            .eq('id', item.id);
+            .eq('id', item.id)
+            .eq('user_id', this.userId);
         } catch (err) {
           itemsErrored++;
           errors.push({
