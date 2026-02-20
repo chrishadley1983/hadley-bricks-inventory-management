@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/minifigs/poll-ebay-orders",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
