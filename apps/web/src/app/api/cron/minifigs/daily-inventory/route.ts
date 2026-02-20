@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { InventoryPullService } from '@/lib/minifig-sync/inventory-pull.service';
 import { OrderPollService } from '@/lib/minifig-sync/order-poll.service';
-import { ResearchService } from '@/lib/minifig-sync/research.service';
 import { RepricingService } from '@/lib/minifig-sync/repricing.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
 
