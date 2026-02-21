@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       const { data, error: fetchError } = await applyFilters(
         supabase.from('amazon_transactions').select('*')
       )
-        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .order('posted_date', { ascending: sortOrder === 'asc' })
         .range(fetchOffset, fetchOffset + fetchPageSize - 1);
 
       if (fetchError) {

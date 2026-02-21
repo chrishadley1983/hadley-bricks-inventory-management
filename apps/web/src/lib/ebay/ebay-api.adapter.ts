@@ -361,8 +361,8 @@ export class EbayApiAdapter {
    * Update an existing offer
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/updateOffer
    */
-  async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<EbayOfferResponse> {
-    return this.request<EbayOfferResponse>(
+  async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<void> {
+    await this.request<void>(
       `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`,
       {
         method: 'PUT',
@@ -393,7 +393,13 @@ export class EbayApiAdapter {
     try {
       const response = await this.request<{ offers?: EbayOfferResponse[]; total?: number }>(
         `${INVENTORY_API_PATH}/offer`,
-        { params: { sku } }
+        {
+          params: { sku },
+          headers: {
+            'Content-Language': 'en-GB',
+            'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          },
+        }
       );
       return response?.offers ?? [];
     } catch {
