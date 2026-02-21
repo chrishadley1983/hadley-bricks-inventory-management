@@ -51,7 +51,7 @@ export class ListingStagingService {
    */
   async createStagedListings(
     itemIds?: string[],
-    options?: { onProgress?: SyncProgressCallback }
+    options?: { onProgress?: SyncProgressCallback; limit?: number }
   ): Promise<StagingResult> {
     const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('LISTING_CREATION');
@@ -128,15 +128,18 @@ export class ListingStagingService {
         page++;
       }
 
-      await onProgress?.({ type: 'stage', stage: 'staging', message: 'Creating eBay listings...' });
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i] as MinifigSyncItem;
+      // Apply limit if specified
+      const itemsToProcess = options?.limit ? items.slice(0, options.limit) : items;
+
+      await onProgress?.({ type: 'stage', stage: 'staging', message: `Creating eBay listings (${itemsToProcess.length} of ${items.length} qualifying)...` });
+      for (let i = 0; i < itemsToProcess.length; i++) {
+        const item = itemsToProcess[i] as MinifigSyncItem;
         itemsProcessed++;
 
         await onProgress?.({
           type: 'progress',
           current: i + 1,
-          total: items.length,
+          total: itemsToProcess.length,
           message: item.bricklink_id || item.name || `Item ${i + 1}`,
         });
 

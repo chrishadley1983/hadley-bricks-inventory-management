@@ -19,6 +19,7 @@ import {
   Search,
   FileText,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useMinifigDashboard } from '@/hooks/use-minifig-sync';
 import { useMinifigSyncStream } from '@/hooks/use-minifig-sync-stream';
 import { SyncProgressDialog } from './SyncProgressDialog';
@@ -60,10 +61,11 @@ export function MinifigDashboard() {
   const { data, isLoading } = useMinifigDashboard();
   const syncStream = useMinifigSyncStream();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [listingCount, setListingCount] = useState('5');
 
-  const handleAction = (operation: SyncOperation) => {
+  const handleAction = (operation: SyncOperation, params?: Record<string, string>) => {
     setDialogOpen(true);
-    syncStream.startStream(operation);
+    syncStream.startStream(operation, params);
   };
 
   const handleDialogClose = () => {
@@ -126,19 +128,34 @@ export function MinifigDashboard() {
           <Search className="h-4 w-4 mr-2" />
           Research
         </Button>
-        <Button
-          variant="default"
-          disabled={syncStream.status === 'streaming'}
-          onClick={() => handleAction('create-listings')}
-        >
-          <FileText className="h-4 w-4 mr-2" />
-          Create Listings
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="default"
+            disabled={syncStream.status === 'streaming'}
+            onClick={() => {
+              const count = parseInt(listingCount, 10);
+              const params = count > 0 ? { limit: String(count) } : undefined;
+              handleAction('create-listings', params);
+            }}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Create
+          </Button>
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            value={listingCount}
+            onChange={(e) => setListingCount(e.target.value)}
+            className="w-16 h-9 text-center"
+            disabled={syncStream.status === 'streaming'}
+          />
+        </div>
 
         <div className="w-px bg-border mx-1" />
 
         <Button asChild variant="outline">
-          <Link href="/minifigs/review">
+          <Link href="/minifigs?tab=review">
             <Send className="h-4 w-4 mr-2" />
             Review Queue
             {stagedCount > 0 && (
@@ -149,7 +166,7 @@ export function MinifigDashboard() {
           </Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/minifigs/removals">
+          <Link href="/minifigs?tab=removals">
             <AlertCircle className="h-4 w-4 mr-2" />
             Removal Queue
             {data.pendingRemovals > 0 && (
@@ -168,21 +185,21 @@ export function MinifigDashboard() {
           value={data.totalInBricqer}
           description="Minifigures in inventory"
           icon={Package}
-          href="/minifigs/items"
+          href="/minifigs?tab=items"
         />
         <StatCard
           title="Meeting Threshold"
           value={data.totalMeetingThreshold}
           description={`${data.totalInBricqer > 0 ? Math.round((data.totalMeetingThreshold / data.totalInBricqer) * 100) : 0}% of inventory`}
           icon={TrendingUp}
-          href="/minifigs/items?meetsThreshold=true"
+          href="/minifigs?tab=items"
         />
         <StatCard
           title="Staged"
           value={stagedCount}
           description="Awaiting review"
           icon={BarChart3}
-          href="/minifigs/review"
+          href="/minifigs?tab=review"
         />
         <StatCard title="Published" value={publishedCount} description="Live on eBay" icon={Send} />
       </div>
