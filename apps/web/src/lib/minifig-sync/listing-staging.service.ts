@@ -224,8 +224,9 @@ export class ListingStagingService {
           conditionNotes: item.condition_notes || undefined,
           pieceCount: 1,
           minifigureCount: 1,
+          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 19003 (not 183447). Condition must be USED (3000) not USED_EXCELLENT.',
         },
-        { style: 'Standard', price }
+        { style: 'Minimalist', price }
       );
     } catch (err) {
       console.warn(
@@ -388,15 +389,16 @@ export class ListingStagingService {
   ): Promise<SourcedImage[]> {
     const images: SourcedImage[] = [];
     const MAX_IMAGES = 4;
-    const MAX_BRAVE_IMAGES = 2;
+    const MAX_BRAVE_IMAGES = 3;
 
-    // 1. Brave Image Search — two queries for front + back diversity
+    // 1. Brave Image Search — three queries for front, back, and alternate views
     const braveApiKey = process.env.BRAVE_API_KEY;
     if (braveApiKey && images.length < MAX_IMAGES) {
       const usedDomains = new Set<string>();
       const braveQueries = [
         `LEGO ${name || ''} ${bricklinkId} minifigure front -site:ebay.com -site:ebay.co.uk`,
         `LEGO ${name || ''} ${bricklinkId} minifigure back -site:ebay.com -site:ebay.co.uk`,
+        `LEGO ${bricklinkId} minifig -site:ebay.com -site:ebay.co.uk`,
       ];
 
       for (const query of braveQueries) {
@@ -415,8 +417,8 @@ export class ListingStagingService {
               if (images.length >= MAX_BRAVE_IMAGES) break;
               const imageUrl = result.properties?.url || result.thumbnail?.src;
               if (!imageUrl) continue;
-              // Skip eBay URLs
-              if (/ebay/i.test(imageUrl)) continue;
+              // Skip eBay, BrickLink, and Rebrickable URLs (catalogue dupes)
+              if (/ebay|bricklink|rebrickable/i.test(imageUrl)) continue;
               // Skip tiny thumbnails
               const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
               if (w > 0 && w < 200) continue;
@@ -444,7 +446,8 @@ export class ListingStagingService {
     }
 
     // 2. BrickLink catalogue image (static URL, always available)
-    if (images.length < MAX_IMAGES) {
+    const hasBrickLink = images.length < MAX_IMAGES;
+    if (hasBrickLink) {
       images.push({
         url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
         source: 'bricklink',
@@ -452,8 +455,9 @@ export class ListingStagingService {
       });
     }
 
-    // 3. Rebrickable catalogue image
-    if (images.length < MAX_IMAGES) {
+    // 3. Rebrickable catalogue image — skip if BrickLink already added
+    //    (both render the same front-view catalogue image)
+    if (!hasBrickLink && images.length < MAX_IMAGES) {
       const rebrickableApiKey = process.env.REBRICKABLE_API_KEY;
       if (rebrickableApiKey) {
         try {
