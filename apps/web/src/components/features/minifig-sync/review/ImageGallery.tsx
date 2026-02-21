@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Upload, X, Loader2, ZoomIn, Sparkles } from 'lucide-react';
+import { Upload, X, Loader2, ZoomIn, Crop } from 'lucide-react';
 import { compressImage } from '@/lib/utils/image-compression';
 import type { SourcedImage } from '@/lib/minifig-sync/types';
 import { PhotoEnhanceDialog } from './PhotoEnhanceDialog';
@@ -148,8 +148,8 @@ export function ImageGallery({
             onClick={() => setIsEnhanceOpen(true)}
             disabled={isUpdating}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            Enhance
+            <Crop className="h-3.5 w-3.5" />
+            Trim
           </button>
           <label
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border cursor-pointer hover:bg-muted transition-colors ${
