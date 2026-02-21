@@ -67,7 +67,7 @@ export interface MinifigSyncConfig {
 // Image types
 export interface SourcedImage {
   url: string;
-  source: 'google' | 'rebrickable' | 'bricklink' | 'bricqer' | 'uploaded';
+  source: 'google' | 'brave' | 'rebrickable' | 'bricklink' | 'bricqer' | 'uploaded';
   type: 'sourced' | 'stock' | 'original';
 }
 
