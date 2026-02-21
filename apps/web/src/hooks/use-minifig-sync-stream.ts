@@ -37,7 +37,7 @@ export function useMinifigSyncStream() {
   const queryClient = useQueryClient();
 
   const startStream = useCallback(
-    async (operation: SyncOperation) => {
+    async (operation: SyncOperation, params?: Record<string, string>) => {
       // Abort any in-flight stream
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -52,7 +52,13 @@ export function useMinifigSyncStream() {
       });
 
       try {
-        const response = await fetch(STREAM_URLS[operation], {
+        let url = STREAM_URLS[operation];
+        if (params) {
+          const searchParams = new URLSearchParams(params);
+          url += `?${searchParams.toString()}`;
+        }
+
+        const response = await fetch(url, {
           signal: controller.signal,
         });
 
