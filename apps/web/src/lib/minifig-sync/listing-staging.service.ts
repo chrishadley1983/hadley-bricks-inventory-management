@@ -416,7 +416,7 @@ export class ListingStagingService {
     // 2. Brave Image Search — 2 queries (front + back) for 2 diverse photos
     const braveApiKey = process.env.BRAVE_API_KEY;
     if (braveApiKey) {
-      const usedDomains = new Set<string>();
+      const usedUrls = new Set<string>();
       const braveQueries = [
         `LEGO ${name || ''} ${bricklinkId} minifigure front`,
         `LEGO ${name || ''} ${bricklinkId} minifigure back`,
@@ -438,19 +438,20 @@ export class ListingStagingService {
               if (!imageUrl) continue;
               // Skip eBay and BrickLink (we already have the BrickLink catalogue image)
               if (/ebay|bricklink/i.test(imageUrl)) continue;
+              // Skip exact same URL already used by the other query
+              if (usedUrls.has(imageUrl)) continue;
               // Skip tiny thumbnails
               const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
               if (w > 0 && w < 200) continue;
-              // Skip duplicate domains to ensure visual diversity
+              // Validate URL
               try {
-                const domain = new URL(imageUrl).hostname;
-                if (usedDomains.has(domain)) continue;
-                usedDomains.add(domain);
+                new URL(imageUrl);
               } catch {
                 continue;
               }
 
               images.push({ url: imageUrl, source: 'brave', type: 'sourced' });
+              usedUrls.add(imageUrl);
               break; // One image per query
             }
           }
