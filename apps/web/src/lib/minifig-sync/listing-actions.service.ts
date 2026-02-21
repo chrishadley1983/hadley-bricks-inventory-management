@@ -73,8 +73,11 @@ export class ListingActionsService {
     const adapter = sharedAdapter ?? (await this.getEbayAdapter());
 
     try {
-      // Ensure offer is publishable (backfill missing fields from pre-fix offers)
-      await this.ensureOfferPublishable(adapter, item.ebay_offer_id);
+      // Sync inventory item from DB to eBay (picks up edits made during review)
+      await this.syncInventoryItemToEbay(adapter, item);
+
+      // Ensure offer is publishable (backfill missing fields, sync price from DB)
+      await this.ensureOfferPublishable(adapter, item.ebay_offer_id, item);
 
       // Publish the offer (F42) — this is the ONLY place publish is called (I2)
       const publishResult = await adapter.publishOffer(item.ebay_offer_id);
@@ -270,8 +273,9 @@ export class ListingActionsService {
 
     const ebayWarnings: string[] = [];
 
-    // If item has an eBay offer, update it too (F46)
-    if (item.ebay_offer_id && item.ebay_sku) {
+    // Only sync to eBay for PUBLISHED items — STAGED items save to DB only
+    // and get synced to eBay at publish time via ensureOfferPublishable
+    if (item.listing_status === 'PUBLISHED' && item.ebay_offer_id && item.ebay_sku) {
       const adapter = await this.getEbayAdapter();
 
       // Update inventory item if any inventory-level fields changed
@@ -286,6 +290,9 @@ export class ListingActionsService {
       if (inventoryFieldsChanged) {
         try {
           const currentItem = await adapter.getInventoryItem(item.ebay_sku);
+          // Strip read-only fields that eBay returns in GET but rejects in PUT
+          delete currentItem.sku;
+          delete currentItem.locale;
           if (updates.title) {
             currentItem.product.title = updates.title;
           }
@@ -405,13 +412,52 @@ export class ListingActionsService {
   }
 
   /**
+   * Sync the inventory item from DB state to eBay before publishing.
+   * Picks up any edits the user made during review (images, title, description, etc.).
+   */
+  private async syncInventoryItemToEbay(
+    adapter: EbayApiAdapter,
+    item: MinifigSyncItem
+  ): Promise<void> {
+    if (!item.ebay_sku) return;
+
+    try {
+      const currentItem = await adapter.getInventoryItem(item.ebay_sku);
+      // Strip read-only fields that eBay returns in GET but rejects in PUT
+      delete currentItem.sku;
+      delete currentItem.locale;
+
+      // Overwrite with DB values
+      if (item.name) currentItem.product.title = item.ebay_title || item.name;
+      if (item.ebay_description) currentItem.product.description = item.ebay_description;
+      if (item.ebay_condition) currentItem.condition = item.ebay_condition as EbayConditionEnum;
+      if (item.ebay_condition_description) currentItem.conditionDescription = item.ebay_condition_description;
+
+      const images = item.images as Array<{ url: string }> | null;
+      if (images?.length) {
+        currentItem.product.imageUrls = images.map((img) => img.url);
+      }
+
+      const aspects = item.ebay_aspects as Record<string, string[]> | null;
+      if (aspects) currentItem.product.aspects = aspects;
+
+      await adapter.createOrReplaceInventoryItem(item.ebay_sku, currentItem);
+      console.log(`[ListingActionsService] Synced inventory item to eBay for SKU ${item.ebay_sku}`);
+    } catch (err) {
+      console.error('[ListingActionsService] syncInventoryItemToEbay failed:', err instanceof Error ? err.message : err);
+      throw new Error(`Failed to sync inventory item to eBay: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /**
    * Ensure the offer is publishable by backfilling missing/invalid fields.
    * Handles offers created before fixes for merchantLocationKey and return policy.
    * eBay's Update Offer API requires the FULL offer body (PUT, not PATCH).
    */
   private async ensureOfferPublishable(
     adapter: EbayApiAdapter,
-    offerId: string
+    offerId: string,
+    item?: MinifigSyncItem
   ): Promise<void> {
     try {
       const offer = await adapter.getOffer(offerId);
@@ -420,6 +466,20 @@ export class ListingActionsService {
       // Strip read-only fields for the update body
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { offerId: _, status, statusReason, listing, soldQuantity, ...updatableFields } = offer;
+
+      // 0. Sync price from DB if it differs from the offer
+      if (item?.recommended_price) {
+        const dbPrice = Number(item.recommended_price).toFixed(2);
+        const offerPrice = offer.pricingSummary?.price?.value;
+        if (offerPrice !== dbPrice) {
+          updatableFields.pricingSummary = {
+            ...updatableFields.pricingSummary,
+            price: { value: dbPrice, currency: 'GBP' },
+          };
+          needsUpdate = true;
+          console.log(`[ListingActionsService] Syncing price ${offerPrice} → ${dbPrice} on offer ${offerId}`);
+        }
+      }
 
       // 1. Ensure merchantLocationKey is set (provides Item.Country)
       if (!offer.merchantLocationKey) {
