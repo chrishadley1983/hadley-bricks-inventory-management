@@ -46,13 +46,12 @@ describe('Offer Upsert Logic (createOrUpdateOffer scenarios)', () => {
     it('should update the existing offer and return its ID', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        status: 200,
-        json: () => Promise.resolve({ offerId: KNOWN_OFFER_ID, sku: TEST_SKU }),
+        status: 204,
+        json: () => Promise.resolve(null),
       });
 
-      const result = await adapter.updateOffer(KNOWN_OFFER_ID, OFFER_BODY);
+      await adapter.updateOffer(KNOWN_OFFER_ID, OFFER_BODY);
 
-      expect(result.offerId).toBe(KNOWN_OFFER_ID);
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toContain(`/offer/${KNOWN_OFFER_ID}`);
       expect(options.method).toBe('PUT');
@@ -148,16 +147,15 @@ describe('Offer Upsert Logic (createOrUpdateOffer scenarios)', () => {
       // updateOffer succeeds
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        status: 200,
-        json: () => Promise.resolve({ offerId: KNOWN_OFFER_ID, sku: TEST_SKU }),
+        status: 204,
+        json: () => Promise.resolve(null),
       });
 
       const offers = await adapter.getOffersBySku(TEST_SKU);
       expect(offers).toHaveLength(1);
       expect(offers[0].offerId).toBe(KNOWN_OFFER_ID);
 
-      const result = await adapter.updateOffer(offers[0].offerId, OFFER_BODY);
-      expect(result.offerId).toBe(KNOWN_OFFER_ID);
+      await adapter.updateOffer(offers[0].offerId, OFFER_BODY);
 
       // Verify the correct API calls were made
       expect(mockFetch).toHaveBeenCalledTimes(2);
