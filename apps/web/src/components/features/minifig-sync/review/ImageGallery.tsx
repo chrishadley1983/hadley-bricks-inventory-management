@@ -20,6 +20,8 @@ function getSourceLabel(source: string): string {
   switch (source) {
     case 'google':
       return 'Google';
+    case 'brave':
+      return 'Brave';
     case 'rebrickable':
       return 'Rebrickable';
     case 'bricklink':
@@ -36,6 +38,7 @@ function getSourceLabel(source: string): string {
 function getSourceBadgeVariant(source: string): 'default' | 'secondary' | 'outline' {
   switch (source) {
     case 'google':
+    case 'brave':
       return 'default';
     case 'rebrickable':
       return 'secondary';

@@ -13,10 +13,11 @@ import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.s
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
 import { ListingGenerationService } from '@/lib/ebay/listing-generation.service';
 import type { AIGeneratedListing } from '@/lib/ebay/listing-creation.types';
+import { RebrickableApiClient } from '@/lib/rebrickable';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
 import { buildSku } from './types';
-import type { MinifigSyncItem } from './types';
+import type { MinifigSyncItem, SourcedImage } from './types';
 import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 const EBAY_MINIFIG_CATEGORY_ID = '19003'; // eBay category for LEGO Minifigures
@@ -234,6 +235,24 @@ export class ListingStagingService {
       throw err;
     }
 
+    // Source images if none exist yet
+    const existingImages = (item.images as SourcedImage[] | null) ?? [];
+    if (existingImages.length === 0 && item.bricklink_id) {
+      const sourced = await this.sourceImagesServerless(
+        item.bricklink_id,
+        item.name,
+        item.bricqer_image_url
+      );
+      if (sourced.length > 0) {
+        await this.supabase
+          .from('minifig_sync_items')
+          .update({ images: sourced as unknown as Database['public']['Tables']['minifig_sync_items']['Update']['images'] })
+          .eq('id', item.id);
+        // Update local reference for getImageUrls below
+        (item as Record<string, unknown>).images = sourced;
+      }
+    }
+
     // Get image URLs from stored images
     const imageUrls = this.getImageUrls(item);
 
@@ -355,5 +374,96 @@ export class ListingStagingService {
       return item.bricqer_image_url ? [item.bricqer_image_url] : [];
     }
     return images.map((img) => img.url);
+  }
+
+  /**
+   * Source up to 4 images from Brave Search, BrickLink, Rebrickable, and Bricqer.
+   * Serverless-compatible (HTTP APIs only, no Playwright).
+   */
+  private async sourceImagesServerless(
+    bricklinkId: string,
+    name?: string | null,
+    bricqerImageUrl?: string | null
+  ): Promise<SourcedImage[]> {
+    const images: SourcedImage[] = [];
+    const MAX_IMAGES = 4;
+    const MAX_BRAVE_IMAGES = 2;
+
+    // 1. Brave Image Search (up to 2 non-stock photos, excluding eBay)
+    const braveApiKey = process.env.BRAVE_API_KEY;
+    if (braveApiKey && images.length < MAX_IMAGES) {
+      try {
+        const query = `LEGO ${name || ''} ${bricklinkId} minifigure -site:ebay.com -site:ebay.co.uk`;
+        const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=10&safesearch=off`;
+        const response = await fetch(url, {
+          headers: { 'X-Subscription-Token': braveApiKey },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const results = data.results ?? [];
+          let added = 0;
+
+          for (const result of results) {
+            if (added >= MAX_BRAVE_IMAGES) break;
+            const imageUrl = result.properties?.url || result.thumbnail?.src;
+            if (!imageUrl) continue;
+            // Skip eBay URLs
+            if (/ebay/i.test(imageUrl)) continue;
+            // Skip tiny thumbnails
+            const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
+            if (w > 0 && w < 200) continue;
+
+            images.push({ url: imageUrl, source: 'brave', type: 'sourced' });
+            added++;
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `[ListingStagingService] Brave image search failed for ${bricklinkId}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+
+    // 2. BrickLink catalogue image (static URL, always available)
+    if (images.length < MAX_IMAGES) {
+      images.push({
+        url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
+        source: 'bricklink',
+        type: 'stock',
+      });
+    }
+
+    // 3. Rebrickable catalogue image
+    if (images.length < MAX_IMAGES) {
+      const rebrickableApiKey = process.env.REBRICKABLE_API_KEY;
+      if (rebrickableApiKey) {
+        try {
+          const client = new RebrickableApiClient(rebrickableApiKey);
+          const minifig = await client.getMinifig(bricklinkId);
+          if (minifig.set_img_url) {
+            images.push({
+              url: minifig.set_img_url,
+              source: 'rebrickable',
+              type: 'stock',
+            });
+          }
+        } catch {
+          // Rebrickable lookup failed — continue without
+        }
+      }
+    }
+
+    // 4. Bricqer stored image
+    if (images.length < MAX_IMAGES && bricqerImageUrl) {
+      images.push({
+        url: bricqerImageUrl,
+        source: 'bricqer',
+        type: 'original',
+      });
+    }
+
+    return images.slice(0, MAX_IMAGES);
   }
 }
