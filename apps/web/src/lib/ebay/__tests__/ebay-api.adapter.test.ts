@@ -812,6 +812,54 @@ describe('EbayApiAdapter', () => {
     });
   });
 
+  describe('getOffersBySku', () => {
+    it('should return offers for a given SKU', async () => {
+      const mockOffers = {
+        offers: [
+          { offerId: '123456', sku: 'HB-MF-9426-U302-13', marketplaceId: 'EBAY_GB', format: 'FIXED_PRICE' },
+        ],
+        total: 1,
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockOffers),
+      });
+
+      const result = await adapter.getOffersBySku('HB-MF-9426-U302-13');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].offerId).toBe('123456');
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('sku=HB-MF-9426-U302-13');
+    });
+
+    it('should return empty array when no offers exist (404)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        json: () => Promise.resolve({ errors: [{ errorId: 25710, domain: 'API_INVENTORY', category: 'REQUEST', message: 'No offers found' }] }),
+      });
+
+      const result = await adapter.getOffersBySku('HB-MF-NONEXISTENT');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return empty array when response has no offers field', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+      });
+
+      const result = await adapter.getOffersBySku('HB-MF-9426');
+
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('getAllTransactions (pagination)', () => {
     it('should fetch all transactions across multiple pages', async () => {
       vi.useRealTimers();

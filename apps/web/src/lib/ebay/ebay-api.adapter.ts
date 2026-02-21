@@ -386,6 +386,23 @@ export class EbayApiAdapter {
   }
 
   /**
+   * Get all offers for a given SKU
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/getOffers
+   */
+  async getOffersBySku(sku: string): Promise<EbayOfferResponse[]> {
+    try {
+      const response = await this.request<{ offers?: EbayOfferResponse[]; total?: number }>(
+        `${INVENTORY_API_PATH}/offer`,
+        { params: { sku } }
+      );
+      return response?.offers ?? [];
+    } catch {
+      // If no offers exist, eBay may return 404
+      return [];
+    }
+  }
+
+  /**
    * Publish an offer to create an eBay listing
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/publishOffer
    */

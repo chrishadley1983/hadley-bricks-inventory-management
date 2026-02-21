@@ -347,22 +347,8 @@ export class ListingStagingService {
       },
     };
 
-    // Create offer, or reuse existing one if it already exists on eBay
-    let offerId: string;
-    try {
-      const createOfferResponse = await ebayAdapter.createOffer(offer);
-      offerId = createOfferResponse.offerId;
-    } catch (err) {
-      // eBay returns "Offer entity already exists. [offerId=XXX]" if offer exists for this SKU
-      const existingId = this.extractExistingOfferId(err);
-      if (existingId) {
-        console.log(`[ListingStagingService] Offer already exists (${existingId}), updating instead`);
-        await ebayAdapter.updateOffer(existingId, offer);
-        offerId = existingId;
-      } else {
-        throw err;
-      }
-    }
+    // Create or update offer — proactively check for existing offers by SKU
+    const offerId = await this.createOrUpdateOffer(ebayAdapter, offer, sku, item.ebay_offer_id);
 
     // Update sync item to STAGED (F39) — NO publish call (I2)
     await this.supabase
@@ -387,24 +373,40 @@ export class ListingStagingService {
   }
 
   /**
-   * Extract existing offer ID from an "Offer already exists" eBay error.
-   * The EbayApiError stores the offerId in its errors[].parameters array.
+   * Create or update an eBay offer for a SKU.
+   * Proactively checks for existing offers by SKU to avoid "offer already exists" errors.
    */
-  private extractExistingOfferId(err: unknown): string | null {
-    // Check EbayApiError's errors array for offerId parameter
-    if (err && typeof err === 'object' && 'errors' in err) {
-      const errors = (err as { errors?: Array<{ parameters?: Array<{ name: string; value: string }> }> }).errors;
-      if (errors) {
-        for (const e of errors) {
-          const param = e.parameters?.find((p) => p.name === 'offerId');
-          if (param) return param.value;
-        }
+  private async createOrUpdateOffer(
+    ebayAdapter: EbayApiAdapter,
+    offer: EbayOfferRequest,
+    sku: string,
+    knownOfferId?: string | null
+  ): Promise<string> {
+    // 1. If we already know the offer ID (from a previous staging), try updating it
+    if (knownOfferId) {
+      try {
+        console.log(`[ListingStagingService] Updating known offer ${knownOfferId} for SKU ${sku}`);
+        await ebayAdapter.updateOffer(knownOfferId, offer);
+        return knownOfferId;
+      } catch (err) {
+        console.warn(`[ListingStagingService] Failed to update known offer ${knownOfferId}:`, err instanceof Error ? err.message : err);
+        // Offer might have been deleted on eBay — fall through to create/query
       }
     }
-    // Fallback: try regex on message string
-    const message = err instanceof Error ? err.message : String(err);
-    const match = message.match(/offerId=(\d+)/);
-    return match ? match[1] : null;
+
+    // 2. Query eBay for existing offers for this SKU
+    const existingOffers = await ebayAdapter.getOffersBySku(sku);
+    if (existingOffers.length > 0) {
+      const existingId = existingOffers[0].offerId;
+      console.log(`[ListingStagingService] Found existing offer ${existingId} for SKU ${sku}, updating`);
+      await ebayAdapter.updateOffer(existingId, offer);
+      return existingId;
+    }
+
+    // 3. No existing offer — create a new one
+    console.log(`[ListingStagingService] Creating new offer for SKU ${sku}`);
+    const response = await ebayAdapter.createOffer(offer);
+    return response.offerId;
   }
 
   /**
