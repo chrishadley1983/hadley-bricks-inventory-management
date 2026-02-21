@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Pencil,
   Loader2,
+  MapPin,
 } from 'lucide-react';
 import type { MinifigSyncItem, SourcedImage } from '@/lib/minifig-sync/types';
 import type { SyncItemUpdateData } from '@/lib/api/minifig-sync';
@@ -180,6 +181,12 @@ export function ListingReviewDetail({
             {item.ebay_sku && (
               <Badge variant="secondary" className="text-xs">
                 SKU: {item.ebay_sku}
+              </Badge>
+            )}
+            {item.storage_location && (
+              <Badge variant="outline" className="text-xs">
+                <MapPin className="h-3 w-3 mr-1" />
+                {item.storage_location}
               </Badge>
             )}
             {item.ebay_offer_id && (
