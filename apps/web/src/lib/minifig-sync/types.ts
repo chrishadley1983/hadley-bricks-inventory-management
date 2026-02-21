@@ -67,7 +67,7 @@ export interface MinifigSyncConfig {
 // Image types
 export interface SourcedImage {
   url: string;
-  source: 'google' | 'brave' | 'rebrickable' | 'bricklink' | 'bricqer' | 'uploaded';
+  source: 'google' | 'brave' | 'rebrickable' | 'bricklink' | 'bricqer' | 'uploaded' | 'enhanced';
   type: 'sourced' | 'stock' | 'original';
 }
 
@@ -125,15 +125,19 @@ export const MINIFIG_SKU_PREFIX = 'HB-MF-';
 // Default user ID for cron operations
 export const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
-// Build SKU from Bricqer item ID
-export function buildSku(bricqerItemId: string | number): string {
-  return `${MINIFIG_SKU_PREFIX}${bricqerItemId}`;
+// Build SKU from Bricqer item ID and optional storage location
+export function buildSku(bricqerItemId: string | number, storageLocation?: string | null): string {
+  const base = `${MINIFIG_SKU_PREFIX}${bricqerItemId}`;
+  return storageLocation ? `${base}-${storageLocation}` : base;
 }
 
 // Extract Bricqer item ID from SKU
 export function parseSku(sku: string): string | null {
   if (!sku.startsWith(MINIFIG_SKU_PREFIX)) return null;
-  return sku.slice(MINIFIG_SKU_PREFIX.length);
+  const remainder = sku.slice(MINIFIG_SKU_PREFIX.length);
+  // Bricqer item ID is always numeric; storage location follows after first hyphen
+  const match = remainder.match(/^(\d+)/);
+  return match ? match[1] : remainder;
 }
 
 // Check if SKU is a minifig sync SKU

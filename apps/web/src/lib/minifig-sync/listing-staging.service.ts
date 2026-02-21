@@ -224,7 +224,7 @@ export class ListingStagingService {
       returnPolicyId: string;
     }
   ): Promise<void> {
-    const sku = buildSku(item.bricqer_item_id); // I1: HB-MF-{bricqer_item_id}
+    const sku = buildSku(item.bricqer_item_id, item.storage_location); // I1: HB-MF-{bricqer_item_id}-{storage}
     const price = Number(item.recommended_price);
     const autoAccept = Number(item.best_offer_auto_accept) || Math.round(price * 0.95 * 100) / 100;
     const autoDecline =

@@ -5969,6 +5969,7 @@ export type Database = {
           meets_threshold: boolean | null
           name: string
           recommended_price: number | null
+          storage_location: string | null
           updated_at: string | null
           user_id: string
         }
@@ -6007,6 +6008,7 @@ export type Database = {
           meets_threshold?: boolean | null
           name: string
           recommended_price?: number | null
+          storage_location?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -6045,6 +6047,7 @@ export type Database = {
           meets_threshold?: boolean | null
           name?: string
           recommended_price?: number | null
+          storage_location?: string | null
           updated_at?: string | null
           user_id?: string
         }
