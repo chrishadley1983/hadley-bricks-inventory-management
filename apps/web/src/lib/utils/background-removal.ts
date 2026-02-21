@@ -1,89 +1,69 @@
 /**
- * Background Removal + Wood Surface Composite
+ * Image Auto-Trim Utility
  *
- * Uses @imgly/background-removal (browser WASM, free, no API costs)
- * to remove background, auto-trim, and composite onto a wood surface.
+ * Strips uniform-colour borders (white, light grey, etc.) from screenshots
+ * and crops tight around the subject. No heavy dependencies — pure canvas.
  */
-
-import { removeBackground } from '@imgly/background-removal';
-
-export type EnhanceStage = 'removing-background' | 'compositing';
-
-export interface EnhanceProgress {
-  stage: EnhanceStage;
-  progress?: number; // 0-1 for background removal
-}
 
 /**
- * Remove background from an image, auto-trim, and composite onto a wood surface.
- * Returns a JPEG blob ready for upload.
+ * Auto-trim an image: remove uniform-coloured borders, crop tight,
+ * and output a square JPEG ready for eBay listing upload.
  */
-export async function enhanceMinifigPhoto(
-  imageBlob: Blob,
-  onProgress?: (p: EnhanceProgress) => void
-): Promise<Blob> {
-  // 1. Remove background via @imgly/background-removal (browser WASM)
-  onProgress?.({ stage: 'removing-background', progress: 0 });
+export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
+  const img = await loadImage(imageBlob);
 
-  const transparentBlob = await removeBackground(imageBlob, {
-    progress: (key: string, current: number, total: number) => {
-      if (key === 'compute:inference') {
-        onProgress?.({ stage: 'removing-background', progress: current / total });
-      }
-    },
-    output: { format: 'image/png' },
-  });
+  // Draw onto a canvas so we can read pixels
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
 
-  // 2. Load transparent image onto canvas
-  onProgress?.({ stage: 'compositing' });
-  const transparentImg = await loadImage(transparentBlob);
-
-  // 3. Auto-trim: find bounding box of non-transparent pixels
-  const trimCanvas = document.createElement('canvas');
-  trimCanvas.width = transparentImg.width;
-  trimCanvas.height = transparentImg.height;
-  const trimCtx = trimCanvas.getContext('2d')!;
-  trimCtx.drawImage(transparentImg, 0, 0);
-
-  const bounds = findBounds(trimCtx, trimCanvas.width, trimCanvas.height);
-
-  // 4. Create output canvas with wood background
-  const outputSize = 1200;
-  const outputCanvas = document.createElement('canvas');
-  outputCanvas.width = outputSize;
-  outputCanvas.height = outputSize;
-  const outCtx = outputCanvas.getContext('2d')!;
-
-  // Draw procedural wood background
-  drawWoodBackground(outCtx, outputSize, outputSize);
-
-  // 5. Center the trimmed cutout with padding
-  const padding = outputSize * 0.1;
-  const availableSize = outputSize - padding * 2;
+  // Find the content bounding box by trimming uniform borders
+  const bounds = findContentBounds(ctx, canvas.width, canvas.height);
 
   const cropW = bounds.right - bounds.left;
   const cropH = bounds.bottom - bounds.top;
-  const scale = Math.min(availableSize / cropW, availableSize / cropH);
-  const drawW = cropW * scale;
-  const drawH = cropH * scale;
-  const drawX = (outputSize - drawW) / 2;
-  const drawY = (outputSize - drawH) / 2;
 
+  // Add 5% padding around the content (clamped to image edges)
+  const padX = Math.round(cropW * 0.05);
+  const padY = Math.round(cropH * 0.05);
+  const padLeft = Math.max(0, bounds.left - padX);
+  const padTop = Math.max(0, bounds.top - padY);
+  const padRight = Math.min(canvas.width, bounds.right + padX);
+  const padBottom = Math.min(canvas.height, bounds.bottom + padY);
+
+  const finalW = padRight - padLeft;
+  const finalH = padBottom - padTop;
+
+  // Make it square by centering the content in a square canvas
+  const side = Math.max(finalW, finalH);
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = side;
+  outCanvas.height = side;
+  const outCtx = outCanvas.getContext('2d')!;
+
+  // Fill with white so letterboxing is clean
+  outCtx.fillStyle = '#ffffff';
+  outCtx.fillRect(0, 0, side, side);
+
+  // Center the cropped region
+  const offsetX = Math.round((side - finalW) / 2);
+  const offsetY = Math.round((side - finalH) / 2);
   outCtx.drawImage(
-    trimCanvas,
-    bounds.left,
-    bounds.top,
-    cropW,
-    cropH,
-    drawX,
-    drawY,
-    drawW,
-    drawH
+    canvas,
+    padLeft,
+    padTop,
+    finalW,
+    finalH,
+    offsetX,
+    offsetY,
+    finalW,
+    finalH
   );
 
-  // 6. Export as JPEG
   return new Promise<Blob>((resolve, reject) => {
-    outputCanvas.toBlob(
+    outCanvas.toBlob(
       (blob) => {
         if (blob) resolve(blob);
         else reject(new Error('Failed to export canvas to JPEG'));
@@ -113,10 +93,15 @@ function loadImage(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
+/** Tolerance for considering a pixel "same as the border colour". */
+const COLOUR_TOLERANCE = 30;
+
 /**
- * Find the bounding box of non-transparent pixels.
+ * Find the bounding box of the actual content by trimming uniform-coloured
+ * borders inward from each edge. Works with white, light grey, or any solid
+ * border colour — samples each edge's dominant colour independently.
  */
-function findBounds(
+function findContentBounds(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number
@@ -124,103 +109,60 @@ function findBounds(
   const imageData = ctx.getImageData(0, 0, width, height);
   const { data } = imageData;
 
-  let top = height;
-  let left = width;
-  let right = 0;
-  let bottom = 0;
+  const px = (x: number, y: number) => {
+    const i = (y * width + x) * 4;
+    return [data[i], data[i + 1], data[i + 2]] as [number, number, number];
+  };
 
-  for (let y = 0; y < height; y++) {
+  const similar = (a: [number, number, number], b: [number, number, number]) =>
+    Math.abs(a[0] - b[0]) < COLOUR_TOLERANCE &&
+    Math.abs(a[1] - b[1]) < COLOUR_TOLERANCE &&
+    Math.abs(a[2] - b[2]) < COLOUR_TOLERANCE;
+
+  // Scan from top — sample top-left corner as reference colour
+  const topRef = px(0, 0);
+  let top = 0;
+  outer_top: for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const alpha = data[(y * width + x) * 4 + 3];
-      if (alpha > 10) {
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
-        if (x < left) left = x;
-        if (x > right) right = x;
-      }
+      if (!similar(px(x, y), topRef)) break outer_top;
     }
+    top = y + 1;
   }
 
-  // Handle edge case where image is fully transparent
+  // Scan from bottom
+  const botRef = px(0, height - 1);
+  let bottom = height;
+  outer_bot: for (let y = height - 1; y >= top; y--) {
+    for (let x = 0; x < width; x++) {
+      if (!similar(px(x, y), botRef)) break outer_bot;
+    }
+    bottom = y;
+  }
+
+  // Scan from left
+  const leftRef = px(0, Math.floor(height / 2));
+  let left = 0;
+  outer_left: for (let x = 0; x < width; x++) {
+    for (let y = top; y < bottom; y++) {
+      if (!similar(px(x, y), leftRef)) break outer_left;
+    }
+    left = x + 1;
+  }
+
+  // Scan from right
+  const rightRef = px(width - 1, Math.floor(height / 2));
+  let right = width;
+  outer_right: for (let x = width - 1; x >= left; x--) {
+    for (let y = top; y < bottom; y++) {
+      if (!similar(px(x, y), rightRef)) break outer_right;
+    }
+    right = x;
+  }
+
+  // If nothing was trimmed (or image is all one colour), return full image
   if (right <= left || bottom <= top) {
     return { left: 0, top: 0, right: width, bottom: height };
   }
 
-  return { left, top, right: right + 1, bottom: bottom + 1 };
-}
-
-/**
- * Simple seeded PRNG (mulberry32) for deterministic wood background.
- * Same seed always produces the same texture.
- */
-function seededRandom(seed: number): () => number {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Draw a procedural light wood surface background.
- * Uses a seeded PRNG so the same background is generated every time.
- */
-function drawWoodBackground(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
-): void {
-  const rand = seededRandom(42);
-
-  // Base warm wood color
-  ctx.fillStyle = '#d4a574';
-  ctx.fillRect(0, 0, width, height);
-
-  // Add wood grain lines
-  ctx.globalAlpha = 0.08;
-  for (let i = 0; i < 60; i++) {
-    const y = rand() * height;
-    const thickness = 1 + rand() * 3;
-    const waviness = 2 + rand() * 4;
-
-    ctx.beginPath();
-    ctx.strokeStyle = rand() > 0.5 ? '#8b6914' : '#c4955a';
-    ctx.lineWidth = thickness;
-
-    ctx.moveTo(0, y);
-    for (let x = 0; x < width; x += 10) {
-      const offset = Math.sin(x * 0.01 + i) * waviness;
-      ctx.lineTo(x, y + offset);
-    }
-    ctx.stroke();
-  }
-
-  // Add subtle color variation
-  ctx.globalAlpha = 0.04;
-  for (let i = 0; i < 20; i++) {
-    const x = rand() * width;
-    const y = rand() * height;
-    const r = 50 + rand() * 200;
-
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
-    gradient.addColorStop(0, rand() > 0.5 ? '#c4955a' : '#e8c99b');
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-  }
-
-  // Add slight vignette for depth
-  ctx.globalAlpha = 0.15;
-  const vignette = ctx.createRadialGradient(
-    width / 2, height / 2, width * 0.3,
-    width / 2, height / 2, width * 0.7
-  );
-  vignette.addColorStop(0, 'transparent');
-  vignette.addColorStop(1, '#6b4226');
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.globalAlpha = 1;
+  return { left, top, right, bottom };
 }
