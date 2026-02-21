@@ -361,8 +361,8 @@ export class EbayApiAdapter {
    * Update an existing offer
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/updateOffer
    */
-  async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<EbayOfferResponse> {
-    return this.request<EbayOfferResponse>(
+  async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<void> {
+    await this.request<void>(
       `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`,
       {
         method: 'PUT',
@@ -383,6 +383,29 @@ export class EbayApiAdapter {
     return this.request<EbayOfferResponse>(
       `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`
     );
+  }
+
+  /**
+   * Get all offers for a given SKU
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/getOffers
+   */
+  async getOffersBySku(sku: string): Promise<EbayOfferResponse[]> {
+    try {
+      const response = await this.request<{ offers?: EbayOfferResponse[]; total?: number }>(
+        `${INVENTORY_API_PATH}/offer`,
+        {
+          params: { sku },
+          headers: {
+            'Content-Language': 'en-GB',
+            'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          },
+        }
+      );
+      return response?.offers ?? [];
+    } catch {
+      // If no offers exist, eBay may return 404
+      return [];
+    }
   }
 
   /**
