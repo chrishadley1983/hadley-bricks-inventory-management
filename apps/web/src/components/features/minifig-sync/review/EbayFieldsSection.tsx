@@ -10,10 +10,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// eBay minifigure category (19003) only allows New or Used
+// eBay Inventory API condition values for minifigures
 const CONDITION_OPTIONS = [
   { value: 'NEW', label: 'New' },
-  { value: 'USED', label: 'Used' },
+  { value: 'USED_EXCELLENT', label: 'Used - Excellent' },
+  { value: 'USED_VERY_GOOD', label: 'Used - Very Good' },
+  { value: 'USED_GOOD', label: 'Used - Good' },
 ];
 
 interface EbayFieldsSectionProps {
@@ -60,7 +62,7 @@ export function EbayFieldsSection({
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Condition</label>
           <Select
-            value={condition || 'USED'}
+            value={condition || 'USED_EXCELLENT'}
             onValueChange={onConditionChange}
             disabled={isUpdating}
           >
