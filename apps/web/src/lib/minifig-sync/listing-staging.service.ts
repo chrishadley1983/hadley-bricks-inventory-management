@@ -159,9 +159,17 @@ export class ListingStagingService {
         } catch (err) {
           // E6: Log error, keep status NOT_LISTED, continue batch
           itemsErrored++;
+          // Extract detailed eBay error message if available
+          let errorDetail = err instanceof Error ? err.message : String(err);
+          if (err && typeof err === 'object' && 'errors' in err) {
+            const ebayErrors = (err as { errors?: Array<{ message?: string; longMessage?: string }> }).errors;
+            if (ebayErrors?.[0]?.longMessage) {
+              errorDetail = ebayErrors[0].longMessage;
+            }
+          }
           errors.push({
             item: item.bricklink_id || item.id,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorDetail,
           });
         }
       }
