@@ -166,12 +166,16 @@ export class ListingStagingService {
         }
       }
 
-      await this.jobTracker.complete(jobId, {
-        itemsProcessed,
-        itemsCreated: itemsStaged,
-        itemsUpdated: itemsSkipped,
-        itemsErrored,
-      });
+      await this.jobTracker.complete(
+        jobId,
+        {
+          itemsProcessed,
+          itemsCreated: itemsStaged,
+          itemsUpdated: itemsSkipped,
+          itemsErrored,
+        },
+        errors.length > 0 ? errors : undefined
+      );
 
       return {
         jobId,

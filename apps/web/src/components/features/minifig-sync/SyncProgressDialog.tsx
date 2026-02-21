@@ -35,14 +35,28 @@ function ResultSummary({ result }: { result: Record<string, unknown> }) {
   if ('itemsSkipped' in result) lines.push({ label: 'Skipped', value: result.itemsSkipped });
   if ('itemsErrored' in result) lines.push({ label: 'Errors', value: result.itemsErrored });
 
+  const errors = Array.isArray(result.errors) ? result.errors as Array<{ item?: string; error: string }> : [];
+
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-      {lines.map(({ label, value }) => (
-        <div key={label} className="contents">
-          <span className="text-muted-foreground">{label}</span>
-          <span className="font-medium">{String(value)}</span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        {lines.map(({ label, value }) => (
+          <div key={label} className="contents">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium">{String(value)}</span>
+          </div>
+        ))}
+      </div>
+      {errors.length > 0 && (
+        <div className="space-y-1">
+          {errors.map((err, i) => (
+            <p key={i} className="text-xs text-destructive">
+              {err.item ? <span className="font-medium">{err.item}: </span> : null}
+              {err.error}
+            </p>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

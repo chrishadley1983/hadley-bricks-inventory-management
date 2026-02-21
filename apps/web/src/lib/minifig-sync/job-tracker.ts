@@ -34,7 +34,8 @@ export class MinifigJobTracker {
       itemsCreated: number;
       itemsUpdated: number;
       itemsErrored: number;
-    }
+    },
+    errorLog?: unknown[]
   ): Promise<void> {
     const { error } = await this.supabase
       .from('minifig_sync_jobs')
@@ -45,6 +46,12 @@ export class MinifigJobTracker {
         items_created: counts.itemsCreated,
         items_updated: counts.itemsUpdated,
         items_errored: counts.itemsErrored,
+        ...(errorLog && errorLog.length > 0
+          ? {
+              error_log:
+                errorLog as unknown as Database['public']['Tables']['minifig_sync_jobs']['Update']['error_log'],
+            }
+          : {}),
       })
       .eq('id', jobId)
       .eq('user_id', this.userId);
