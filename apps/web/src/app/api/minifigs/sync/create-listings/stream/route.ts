@@ -14,7 +14,10 @@ import { formatSSE } from '@/types/minifig-sync-stream';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-export async function GET(_request: NextRequest): Promise<Response> {
+export async function GET(request: NextRequest): Promise<Response> {
+  const limitParam = request.nextUrl.searchParams.get('limit');
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
@@ -35,6 +38,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
 
       const service = new ListingStagingService(supabase, user.id);
       const result = await service.createStagedListings(undefined, {
+        limit: limit && limit > 0 ? limit : undefined,
         onProgress: async (event) => {
           await writer.write(encoder.encode(formatSSE(event)));
         },
