@@ -49,9 +49,7 @@ export function RefreshJobProgress({ progress, isExecuting }: RefreshJobProgress
             )}
           </CardTitle>
           {progress && (
-            <Badge className={PHASE_COLORS[progress.phase]}>
-              {PHASE_LABELS[progress.phase]}
-            </Badge>
+            <Badge className={PHASE_COLORS[progress.phase]}>{PHASE_LABELS[progress.phase]}</Badge>
           )}
         </div>
       </CardHeader>

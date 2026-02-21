@@ -32,9 +32,7 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center text-muted-foreground">
-            Unable to load metrics
-          </div>
+          <div className="text-center text-muted-foreground">Unable to load metrics</div>
         </CardContent>
       </Card>
     );
@@ -45,19 +43,13 @@ export function WeeklyTargetsPanel({ className }: WeeklyTargetsPanelProps) {
 
   // For weekly view: sum the history (last 7 days) for listed/sold values
   // For daily view: use today's values
-  const listedValue = isWeekly
-    ? metrics.weekTotals.listedValue
-    : metrics.dailyListedValue.current;
+  const listedValue = isWeekly ? metrics.weekTotals.listedValue : metrics.dailyListedValue.current;
   const listedTarget = isWeekly
     ? metrics.targets.dailyListedValue * 7
     : metrics.targets.dailyListedValue;
 
-  const soldValue = isWeekly
-    ? metrics.weekTotals.soldValue
-    : metrics.dailySoldValue.current;
-  const soldTarget = isWeekly
-    ? metrics.targets.dailySoldValue * 7
-    : metrics.targets.dailySoldValue;
+  const soldValue = isWeekly ? metrics.weekTotals.soldValue : metrics.dailySoldValue.current;
+  const soldTarget = isWeekly ? metrics.targets.dailySoldValue * 7 : metrics.targets.dailySoldValue;
 
   // BrickLink: show weekly total or today's actual value
   const bricklinkValue = isWeekly

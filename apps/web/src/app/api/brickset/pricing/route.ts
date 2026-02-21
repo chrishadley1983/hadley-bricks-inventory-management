@@ -12,10 +12,7 @@ import { getEbayBrowseClient } from '@/lib/ebay';
 import type { EbayItemSummary } from '@/lib/ebay';
 import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
-import {
-  createAmazonCatalogClient,
-  createAmazonPricingClient,
-} from '@/lib/amazon';
+import { createAmazonCatalogClient, createAmazonPricingClient } from '@/lib/amazon';
 import type { AmazonCredentials } from '@/lib/amazon';
 import { CredentialsRepository } from '@/lib/repositories';
 import { BricksetCacheService } from '@/lib/brickset';
@@ -119,7 +116,9 @@ export async function GET(request: NextRequest) {
     // Check if EAN is in scientific notation (data quality issue)
     // If so, refresh from Brickset API to get the correct value
     if (isScientificNotation(ean)) {
-      console.log(`[GET /api/brickset/pricing] EAN "${ean}" is in scientific notation, attempting to get correct EAN from Brickset API`);
+      console.log(
+        `[GET /api/brickset/pricing] EAN "${ean}" is in scientific notation, attempting to get correct EAN from Brickset API`
+      );
 
       // Try to get Brickset API key and refresh the set data
       const bricksetCredService = new BricksetCredentialsService(supabase);
@@ -131,11 +130,15 @@ export async function GET(request: NextRequest) {
           const refreshedSet = await cacheService.getSet(setNumber, apiKey, true); // Force refresh
 
           if (refreshedSet?.ean && !isScientificNotation(refreshedSet.ean)) {
-            console.log(`[GET /api/brickset/pricing] Got corrected EAN from Brickset: ${refreshedSet.ean}`);
+            console.log(
+              `[GET /api/brickset/pricing] Got corrected EAN from Brickset: ${refreshedSet.ean}`
+            );
             ean = refreshedSet.ean;
           } else {
             // Brickset didn't have a valid EAN either, can't recover precision
-            console.log(`[GET /api/brickset/pricing] Brickset also has invalid EAN, cannot recover original value`);
+            console.log(
+              `[GET /api/brickset/pricing] Brickset also has invalid EAN, cannot recover original value`
+            );
             ean = null; // Set to null since we can't recover the correct EAN
           }
         } catch (error) {
@@ -145,7 +148,9 @@ export async function GET(request: NextRequest) {
         }
       } else {
         // No API key, cannot recover the correct EAN from scientific notation
-        console.log(`[GET /api/brickset/pricing] No API key, cannot recover EAN from scientific notation`);
+        console.log(
+          `[GET /api/brickset/pricing] No API key, cannot recover EAN from scientific notation`
+        );
         ean = null;
       }
     }
@@ -163,24 +168,19 @@ export async function GET(request: NextRequest) {
     const credentialsRepo = new CredentialsRepository(supabase);
 
     // Fetch pricing in parallel (including used conditions)
-    const [
-      ebayResult,
-      ebayUsedResult,
-      bricklinkResult,
-      bricklinkUsedResult,
-      amazonResult,
-    ] = await Promise.allSettled([
-      // eBay pricing (New)
-      fetchEbayPricing(baseSetNumber, 'new'),
-      // eBay pricing (Used)
-      fetchEbayPricing(baseSetNumber, 'used'),
-      // BrickLink pricing (New)
-      fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'N'),
-      // BrickLink pricing (Used)
-      fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'U'),
-      // Amazon pricing (requires EAN/UPC to find ASIN)
-      fetchAmazonPricing(credentialsRepo, userId, ean || upc || null),
-    ]);
+    const [ebayResult, ebayUsedResult, bricklinkResult, bricklinkUsedResult, amazonResult] =
+      await Promise.allSettled([
+        // eBay pricing (New)
+        fetchEbayPricing(baseSetNumber, 'new'),
+        // eBay pricing (Used)
+        fetchEbayPricing(baseSetNumber, 'used'),
+        // BrickLink pricing (New)
+        fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'N'),
+        // BrickLink pricing (Used)
+        fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'U'),
+        // Amazon pricing (requires EAN/UPC to find ASIN)
+        fetchAmazonPricing(credentialsRepo, userId, ean || upc || null),
+      ]);
 
     if (ebayResult.status === 'fulfilled') {
       pricing.ebay = ebayResult.value;
@@ -203,7 +203,10 @@ export async function GET(request: NextRequest) {
     if (bricklinkUsedResult.status === 'fulfilled') {
       pricing.bricklinkUsed = bricklinkUsedResult.value;
     } else {
-      console.error('[GET /api/brickset/pricing] BrickLink Used error:', bricklinkUsedResult.reason);
+      console.error(
+        '[GET /api/brickset/pricing] BrickLink Used error:',
+        bricklinkUsedResult.reason
+      );
     }
 
     if (amazonResult.status === 'fulfilled') {
@@ -230,11 +233,14 @@ async function fetchEbayPricing(
 
   try {
     const ebayClient = getEbayBrowseClient();
-    const results = condition === 'used'
-      ? await ebayClient.searchLegoSetUsed(setNumber, 50)
-      : await ebayClient.searchLegoSet(setNumber, 50);
+    const results =
+      condition === 'used'
+        ? await ebayClient.searchLegoSetUsed(setNumber, 50)
+        : await ebayClient.searchLegoSet(setNumber, 50);
 
-    console.log(`[fetchEbayPricing] ${condition} - Got ${results.itemSummaries?.length ?? 0} results, total: ${results.total}`);
+    console.log(
+      `[fetchEbayPricing] ${condition} - Got ${results.itemSummaries?.length ?? 0} results, total: ${results.total}`
+    );
 
     if (!results.itemSummaries || results.itemSummaries.length === 0) {
       return {
@@ -311,12 +317,15 @@ async function fetchBricklinkPricing(
       currencyCode: 'GBP',
     });
 
-    console.log(`[fetchBricklinkPricing] ${condition} response:`, JSON.stringify({
-      min_price: priceGuide.min_price,
-      avg_price: priceGuide.avg_price,
-      max_price: priceGuide.max_price,
-      unit_quantity: priceGuide.unit_quantity,
-    }));
+    console.log(
+      `[fetchBricklinkPricing] ${condition} response:`,
+      JSON.stringify({
+        min_price: priceGuide.min_price,
+        avg_price: priceGuide.avg_price,
+        max_price: priceGuide.max_price,
+        unit_quantity: priceGuide.unit_quantity,
+      })
+    );
 
     // BrickLink API returns prices as strings, need to parse them
     const minPrice = priceGuide.min_price ? parseFloat(priceGuide.min_price) : null;
@@ -349,10 +358,7 @@ async function fetchAmazonPricing(
 
   try {
     // Get Amazon credentials
-    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(
-      userId,
-      'amazon'
-    );
+    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(userId, 'amazon');
 
     if (!credentials) {
       return null;
@@ -361,10 +367,7 @@ async function fetchAmazonPricing(
     // First, find the ASIN using the catalog API
     const catalogClient = createAmazonCatalogClient(credentials);
     const identifierType = identifier.length === 13 ? 'EAN' : 'UPC';
-    const catalogResult = await catalogClient.searchCatalogByIdentifier(
-      identifier,
-      identifierType
-    );
+    const catalogResult = await catalogClient.searchCatalogByIdentifier(identifier, identifierType);
 
     if (!catalogResult.items || catalogResult.items.length === 0) {
       return {

@@ -52,7 +52,9 @@ const columns: { key: ColumnKey; label: string; defaultVisible: boolean }[] = [
   { key: 'condition', label: 'Condition', defaultVisible: false },
 ];
 
-function getStatusBadgeVariant(status: ListingStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusBadgeVariant(
+  status: ListingStatus
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'Active':
       return 'default';
@@ -82,12 +84,7 @@ export function ListingsView({ platform }: ListingsViewProps) {
     new Set(columns.filter((c) => c.defaultVisible).map((c) => c.key))
   );
 
-  const { data, isLoading, error } = usePlatformListings(
-    platform,
-    filters,
-    page,
-    pageSize
-  );
+  const { data, isLoading, error } = usePlatformListings(platform, filters, page, pageSize);
 
   const toggleColumn = (key: ColumnKey) => {
     setVisibleColumns((prev) => {
@@ -213,12 +210,8 @@ export function ListingsView({ platform }: ListingsViewProps) {
                       <TableHead className="text-right">Price</TableHead>
                     )}
                     {visibleColumns.has('status') && <TableHead>Status</TableHead>}
-                    {visibleColumns.has('fulfillment') && (
-                      <TableHead>Fulfillment</TableHead>
-                    )}
-                    {visibleColumns.has('condition') && (
-                      <TableHead>Condition</TableHead>
-                    )}
+                    {visibleColumns.has('fulfillment') && <TableHead>Fulfillment</TableHead>}
+                    {visibleColumns.has('condition') && <TableHead>Condition</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -243,14 +236,10 @@ export function ListingsView({ platform }: ListingsViewProps) {
                         </TableCell>
                       )}
                       {visibleColumns.has('quantity') && (
-                        <TableCell className="text-right font-medium">
-                          {listing.quantity}
-                        </TableCell>
+                        <TableCell className="text-right font-medium">{listing.quantity}</TableCell>
                       )}
                       {visibleColumns.has('price') && (
-                        <TableCell className="text-right">
-                          {formatPrice(listing.price)}
-                        </TableCell>
+                        <TableCell className="text-right">{formatPrice(listing.price)}</TableCell>
                       )}
                       {visibleColumns.has('status') && (
                         <TableCell>
@@ -261,9 +250,7 @@ export function ListingsView({ platform }: ListingsViewProps) {
                       )}
                       {visibleColumns.has('fulfillment') && (
                         <TableCell>
-                          <Badge variant="outline">
-                            {listing.fulfillmentChannel || '-'}
-                          </Badge>
+                          <Badge variant="outline">{listing.fulfillmentChannel || '-'}</Badge>
                         </TableCell>
                       )}
                       {visibleColumns.has('condition') && (
@@ -296,9 +283,7 @@ export function ListingsView({ platform }: ListingsViewProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setPage((p) => Math.min(pagination.totalPages, p + 1))
-                    }
+                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                     disabled={pagination.page >= pagination.totalPages}
                   >
                     Next

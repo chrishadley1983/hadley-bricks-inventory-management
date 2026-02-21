@@ -19,14 +19,14 @@ import type {
  */
 function normalizeStatus(status: string): string {
   const statusMap: Record<string, string> = {
-    'Pending': 'Pending',
+    Pending: 'Pending',
     'Payment Received': 'Paid',
     'Payment Submitted': 'Payment Submitted',
-    'Processing': 'Processing',
-    'Processed': 'Processed',
-    'Shipped': 'Shipped',
-    'Received': 'Received',
-    'Cancelled': 'Cancelled',
+    Processing: 'Processing',
+    Processed: 'Processed',
+    Shipped: 'Shipped',
+    Received: 'Received',
+    Cancelled: 'Cancelled',
     'On Hold': 'On Hold',
   };
 
@@ -54,7 +54,10 @@ function parseCurrencyValue(value: string | undefined | null): number {
 /**
  * Normalize a Brick Owl order item to internal format
  */
-function normalizeOrderItem(item: BrickOwlOrderItem, currency: string): NormalizedBrickOwlOrderItem {
+function normalizeOrderItem(
+  item: BrickOwlOrderItem,
+  currency: string
+): NormalizedBrickOwlOrderItem {
   const unitPrice = parseCurrencyValue(item.unit_price || item.base_price);
   const quantity = item.ordered_quantity;
 

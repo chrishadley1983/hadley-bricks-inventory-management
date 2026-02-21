@@ -77,13 +77,14 @@ export class ArbitrageService {
     // min price and COG% after the DB query. Server-side sort on raw DB
     // values would be wrong, so fetch all items and sort client-side.
     const isEbaySortOrFilter =
-      sortField === 'ebay_margin' ||
-      sortField === 'ebay_price' ||
-      show === 'ebay_opportunities';
+      sortField === 'ebay_margin' || sortField === 'ebay_price' || show === 'ebay_opportunities';
 
     if (isEbaySortOrFilter) {
       return this.getArbitrageDataWithClientEbaySort(
-        userId, excludedBySet, allExcludedIds, options
+        userId,
+        excludedBySet,
+        allExcludedIds,
+        options
       );
     }
 
@@ -125,7 +126,9 @@ export class ArbitrageService {
 
     // Apply search filter
     if (search) {
-      query = query.or(`name.ilike.%${search}%,asin.ilike.%${search}%,bricklink_set_number.ilike.%${search}%`);
+      query = query.or(
+        `name.ilike.%${search}%,asin.ilike.%${search}%,bricklink_set_number.ilike.%${search}%`
+      );
     }
 
     // Apply sorting
@@ -194,10 +197,7 @@ export class ArbitrageService {
 
     // Build base query — no eBay sort/filter, no pagination.
     // eBay filtering and sorting happens after recalculation.
-    let baseQuery = this.supabase
-      .from('arbitrage_current_view')
-      .select('*')
-      .eq('user_id', userId);
+    let baseQuery = this.supabase.from('arbitrage_current_view').select('*').eq('user_id', userId);
 
     // Apply non-eBay show filters
     switch (show) {
@@ -245,8 +245,10 @@ export class ArbitrageService {
     let hasMore = true;
 
     while (hasMore) {
-      const { data: batch, error: batchError } = await baseQuery
-        .range(offset, offset + batchSize - 1);
+      const { data: batch, error: batchError } = await baseQuery.range(
+        offset,
+        offset + batchSize - 1
+      );
 
       if (batchError) {
         console.error('[ArbitrageService.getArbitrageDataWithClientEbaySort] Error:', batchError);
@@ -272,10 +274,8 @@ export class ArbitrageService {
 
     // Sort by recalculated values
     filtered.sort((a, b) => {
-      const aVal =
-        sortField === 'ebay_price' ? a.ebayMinPrice : a.ebayCogPercent;
-      const bVal =
-        sortField === 'ebay_price' ? b.ebayMinPrice : b.ebayCogPercent;
+      const aVal = sortField === 'ebay_price' ? a.ebayMinPrice : a.ebayCogPercent;
+      const bVal = sortField === 'ebay_price' ? b.ebayMinPrice : b.ebayCogPercent;
 
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return 1; // nulls last
@@ -418,7 +418,10 @@ export class ArbitrageService {
       .order('excluded_at', { ascending: false });
 
     if (asinsError) {
-      console.error('[ArbitrageService.getExcludedAsins] Error fetching excluded ASINs:', asinsError);
+      console.error(
+        '[ArbitrageService.getExcludedAsins] Error fetching excluded ASINs:',
+        asinsError
+      );
       throw new Error(`Failed to fetch excluded ASINs: ${asinsError.message}`);
     }
 
@@ -440,9 +443,7 @@ export class ArbitrageService {
     }
 
     // Create mapping lookup
-    const mappingLookup = new Map(
-      (mappings ?? []).map((m) => [m.asin, m.bricklink_set_number])
-    );
+    const mappingLookup = new Map((mappings ?? []).map((m) => [m.asin, m.bricklink_set_number]));
 
     return excludedAsins.map((row) => ({
       asin: row.asin,
@@ -538,16 +539,14 @@ export class ArbitrageService {
     asin: string,
     bricklinkSetNumber: string
   ): Promise<void> {
-    const { error } = await this.supabase
-      .from('asin_bricklink_mapping')
-      .upsert({
-        asin,
-        user_id: userId,
-        bricklink_set_number: bricklinkSetNumber,
-        match_confidence: 'manual',
-        match_method: 'user_manual_entry',
-        verified_at: new Date().toISOString(),
-      });
+    const { error } = await this.supabase.from('asin_bricklink_mapping').upsert({
+      asin,
+      user_id: userId,
+      bricklink_set_number: bricklinkSetNumber,
+      match_confidence: 'manual',
+      match_method: 'user_manual_entry',
+      verified_at: new Date().toISOString(),
+    });
 
     if (error) {
       console.error('[ArbitrageService.createManualMapping] Error:', error);
@@ -584,9 +583,9 @@ export class ArbitrageService {
 
     // Map database job types to UI-expected job types
     const jobTypeMapping: Record<string, SyncJobType> = {
-      'bricklink_scheduled_pricing': 'bricklink_pricing',
-      'ebay_scheduled_pricing': 'ebay_pricing',
-      'pricing_sync': 'amazon_pricing',
+      bricklink_scheduled_pricing: 'bricklink_pricing',
+      ebay_scheduled_pricing: 'ebay_pricing',
+      pricing_sync: 'amazon_pricing',
     };
 
     for (const row of data ?? []) {
@@ -608,11 +607,12 @@ export class ArbitrageService {
   async updateSyncStatus(
     userId: string,
     jobType: SyncJobType,
-    status: Partial<Omit<ArbitrageSyncStatus, 'id' | 'userId' | 'jobType' | 'createdAt' | 'updatedAt'>>
+    status: Partial<
+      Omit<ArbitrageSyncStatus, 'id' | 'userId' | 'jobType' | 'createdAt' | 'updatedAt'>
+    >
   ): Promise<void> {
-    const { error } = await this.supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    const { error } = await this.supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: userId,
         job_type: jobType,
         status: status.status,
@@ -623,9 +623,11 @@ export class ArbitrageService {
         items_failed: status.itemsFailed,
         error_message: status.errorMessage,
         error_details: (status.errorDetails ?? null) as Json,
-      }, {
+      },
+      {
         onConflict: 'user_id,job_type',
-      });
+      }
+    );
 
     if (error) {
       console.error('[ArbitrageService.updateSyncStatus] Error:', error);
@@ -640,7 +642,11 @@ export class ArbitrageService {
   /**
    * Get summary statistics
    */
-  async getSummaryStats(userId: string, minMargin: number = 30, maxCog: number = 50): Promise<{
+  async getSummaryStats(
+    userId: string,
+    minMargin: number = 30,
+    maxCog: number = 50
+  ): Promise<{
     totalItems: number;
     opportunities: number;
     ebayOpportunities: number;
@@ -751,7 +757,7 @@ export class ArbitrageService {
     // Filter out excluded listings (check both per-set and global)
     const listings = item.ebayListings as EbayListing[];
     const activeListings = listings.filter(
-      (l) => !(perSetIds?.has(l.itemId)) && !(allExcludedIds?.has(l.itemId))
+      (l) => !perSetIds?.has(l.itemId) && !allExcludedIds?.has(l.itemId)
     );
 
     // If no active listings remain, clear eBay data
@@ -857,9 +863,8 @@ export class ArbitrageService {
       ebayMarginPercent: row.ebay_margin_percent as number | null,
       ebayMarginAbsolute: row.ebay_margin_absolute as number | null,
       // Calculate COG% from margin%: COG% = 100 - margin%
-      ebayCogPercent: row.ebay_margin_percent != null
-        ? 100 - (row.ebay_margin_percent as number)
-        : null,
+      ebayCogPercent:
+        row.ebay_margin_percent != null ? 100 - (row.ebay_margin_percent as number) : null,
       // Seeded ASIN fields
       itemType: (row.item_type as ArbitrageItem['itemType']) ?? 'inventory',
       seededAsinId: row.seeded_asin_id as string | null,

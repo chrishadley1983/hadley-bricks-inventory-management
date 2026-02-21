@@ -29,7 +29,7 @@ export type SyncOperation = 'pull-inventory' | 'research' | 'create-listings';
 /** Labels for each operation (used in dialog titles) */
 export const SYNC_OPERATION_LABELS: Record<SyncOperation, string> = {
   'pull-inventory': 'Pull Inventory',
-  'research': 'Research',
+  research: 'Research',
   'create-listings': 'Create Listings',
 };
 

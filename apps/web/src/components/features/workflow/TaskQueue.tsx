@@ -106,7 +106,9 @@ export function TaskQueue({ className }: TaskQueueProps) {
   }
 
   const tasks = data?.tasks ?? [];
-  const pendingTasks = tasks.filter((t: WorkflowTask) => t.status === 'pending' || t.status === 'in_progress');
+  const pendingTasks = tasks.filter(
+    (t: WorkflowTask) => t.status === 'pending' || t.status === 'in_progress'
+  );
 
   return (
     <>
@@ -129,39 +131,36 @@ export function TaskQueue({ className }: TaskQueueProps) {
             </div>
           </CardTitle>
         </CardHeader>
-      <CardContent>
-        {pendingTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <CheckCircle2 className="h-12 w-12 text-green-500 mb-3" />
-            <p className="text-muted-foreground">All tasks complete for today!</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingTasks.map((task: WorkflowTask) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onStart={() => handleStart(task.id)}
-                onComplete={() => handleComplete(task.id)}
-                onSkip={() => handleSkip(task.id)}
-                onDefer={(date) => handleDefer(task.id, date)}
-                isLoading={
-                  (startTask.isPending && startTask.variables?.taskId === task.id) ||
-                  (completeTask.isPending && completeTask.variables?.taskId === task.id) ||
-                  (skipTask.isPending && skipTask.variables?.taskId === task.id) ||
-                  (deferTask.isPending && deferTask.variables?.taskId === task.id)
-                }
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
+        <CardContent>
+          {pendingTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mb-3" />
+              <p className="text-muted-foreground">All tasks complete for today!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingTasks.map((task: WorkflowTask) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onStart={() => handleStart(task.id)}
+                  onComplete={() => handleComplete(task.id)}
+                  onSkip={() => handleSkip(task.id)}
+                  onDefer={(date) => handleDefer(task.id, date)}
+                  isLoading={
+                    (startTask.isPending && startTask.variables?.taskId === task.id) ||
+                    (completeTask.isPending && completeTask.variables?.taskId === task.id) ||
+                    (skipTask.isPending && skipTask.variables?.taskId === task.id) ||
+                    (deferTask.isPending && deferTask.variables?.taskId === task.id)
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
-      <TaskDefinitionsDialog
-        open={configDialogOpen}
-        onOpenChange={setConfigDialogOpen}
-      />
+      <TaskDefinitionsDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
     </>
   );
 }

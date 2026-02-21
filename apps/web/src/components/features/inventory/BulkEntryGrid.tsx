@@ -108,18 +108,18 @@ export function BulkEntryGrid() {
   const router = useRouter();
 
   // State
-  const [rows, setRows] = React.useState<BulkRow[]>([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
+  const [rows, setRows] = React.useState<BulkRow[]>([
+    createEmptyRow(),
+    createEmptyRow(),
+    createEmptyRow(),
+  ]);
   const [errors, setErrors] = React.useState<Map<string, RowErrors>>(new Map());
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState('');
 
   // Update a single cell
   const updateCell = (rowId: string, field: keyof BulkRow, value: string) => {
-    setRows((prev) =>
-      prev.map((row) =>
-        row.id === rowId ? { ...row, [field]: value } : row
-      )
-    );
+    setRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
 
     // Clear error for this field
     setErrors((prev) => {
@@ -250,7 +250,10 @@ export function BulkEntryGrid() {
           id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           set_number: values[0] || '',
           item_name: values[1] || '',
-          condition: (values[2] === 'New' || values[2] === 'Used' ? values[2] : '') as '' | 'New' | 'Used',
+          condition: (values[2] === 'New' || values[2] === 'Used' ? values[2] : '') as
+            | ''
+            | 'New'
+            | 'Used',
           status: values[3] || 'NOT YET RECEIVED',
           cost: values[4] || '',
           source: values[5] || '',
@@ -348,7 +351,9 @@ export function BulkEntryGrid() {
                         <TableCell>
                           <Select
                             value={row.condition || '_none'}
-                            onValueChange={(value: string) => updateCell(row.id, 'condition', value === '_none' ? '' : value)}
+                            onValueChange={(value: string) =>
+                              updateCell(row.id, 'condition', value === '_none' ? '' : value)
+                            }
                           >
                             <SelectTrigger className="h-8">
                               <SelectValue placeholder="-" />
@@ -417,7 +422,9 @@ export function BulkEntryGrid() {
                         <TableCell>
                           <Select
                             value={row.listing_platform || '_none'}
-                            onValueChange={(value: string) => updateCell(row.id, 'listing_platform', value === '_none' ? '' : value)}
+                            onValueChange={(value: string) =>
+                              updateCell(row.id, 'listing_platform', value === '_none' ? '' : value)
+                            }
                           >
                             <SelectTrigger className="h-8">
                               <SelectValue placeholder="-" />
@@ -503,8 +510,9 @@ export function BulkEntryGrid() {
           </ScrollArea>
 
           <p className="text-xs text-muted-foreground mt-4">
-            Tip: Copy data from Excel or Google Sheets and paste directly into this grid.
-            Column order: Set #, Name, Condition, Status, Cost, Source, Purchase Date, Storage, Platform, Listing Date, List Value, SKU, Linked Lot, ASIN, Notes
+            Tip: Copy data from Excel or Google Sheets and paste directly into this grid. Column
+            order: Set #, Name, Condition, Status, Cost, Source, Purchase Date, Storage, Platform,
+            Listing Date, List Value, SKU, Linked Lot, ASIN, Notes
           </p>
         </CardContent>
       </Card>
@@ -521,10 +529,7 @@ export function BulkEntryGrid() {
 
       {/* Actions */}
       <div className="flex justify-end gap-4">
-        <Button
-          onClick={handleSubmit}
-          disabled={validRowCount === 0 || isSubmitting}
-        >
+        <Button onClick={handleSubmit} disabled={validRowCount === 0 || isSubmitting}>
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

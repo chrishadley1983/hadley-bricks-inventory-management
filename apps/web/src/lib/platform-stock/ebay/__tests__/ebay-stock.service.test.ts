@@ -58,18 +58,20 @@ function createMockSupabase() {
   return mockSupabase;
 }
 
-function createMockPlatformListing(overrides: Partial<{
-  id: string;
-  user_id: string;
-  platform_sku: string | null;
-  platform_item_id: string | null;
-  title: string | null;
-  quantity: number | null;
-  price: number | null;
-  listing_status: string | null;
-  ebay_data: Record<string, unknown> | null;
-  created_at: string;
-}> = {}) {
+function createMockPlatformListing(
+  overrides: Partial<{
+    id: string;
+    user_id: string;
+    platform_sku: string | null;
+    platform_item_id: string | null;
+    title: string | null;
+    quantity: number | null;
+    price: number | null;
+    listing_status: string | null;
+    ebay_data: Record<string, unknown> | null;
+    created_at: string;
+  }> = {}
+) {
   return {
     id: overrides.id ?? 'listing-001',
     user_id: overrides.user_id ?? 'user-123',
@@ -84,17 +86,19 @@ function createMockPlatformListing(overrides: Partial<{
   };
 }
 
-function createMockInventoryItem(overrides: Partial<{
-  id: string;
-  sku: string | null;
-  set_number: string;
-  item_name: string | null;
-  condition: string | null;
-  listing_value: number | null;
-  storage_location: string | null;
-  status: string | null;
-  created_at: string;
-}> = {}) {
+function createMockInventoryItem(
+  overrides: Partial<{
+    id: string;
+    sku: string | null;
+    set_number: string;
+    item_name: string | null;
+    condition: string | null;
+    listing_value: number | null;
+    storage_location: string | null;
+    status: string | null;
+    created_at: string;
+  }> = {}
+) {
   return {
     id: overrides.id ?? 'inv-001',
     sku: overrides.sku !== undefined ? overrides.sku : 'TEST-SKU-001',
@@ -248,7 +252,7 @@ describe('EbayStockService', () => {
 
       expect(result.hasIssues).toBe(true);
       expect(result.emptySkuCount).toBe(2);
-      expect(result.issues.filter(i => i.issueType === 'empty')).toHaveLength(2);
+      expect(result.issues.filter((i) => i.issueType === 'empty')).toHaveLength(2);
     });
 
     it('should detect duplicate SKUs', async () => {
@@ -276,7 +280,7 @@ describe('EbayStockService', () => {
 
       expect(result.hasIssues).toBe(true);
       expect(result.duplicateSkuCount).toBe(1); // One unique SKU has duplicates
-      expect(result.issues.filter(i => i.issueType === 'duplicate')).toHaveLength(2);
+      expect(result.issues.filter((i) => i.issueType === 'duplicate')).toHaveLength(2);
     });
 
     it('should handle database error gracefully', async () => {
@@ -338,9 +342,7 @@ describe('EbayStockService', () => {
 
   describe('getSkuIssues', () => {
     it('should delegate to validateSkus', async () => {
-      const mockListings = [
-        createMockPlatformListing({ platform_sku: 'SKU-001' }),
-      ];
+      const mockListings = [createMockPlatformListing({ platform_sku: 'SKU-001' })];
 
       mockSupabase.from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -394,75 +396,79 @@ describe('EbayStockService', () => {
         latestImport = { id: 'import-123', completed_at: '2024-01-01T00:00:00Z' },
       } = options;
 
-      (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn((table: string) => {
-        if (table === 'platform_listings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
+      (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn(
+        (table: string) => {
+          if (table === 'platform_listings') {
+            return {
+              select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  range: vi.fn().mockResolvedValue({
-                    data: platformListings.map(l => ({
-                      platform_sku: l.platform_sku,
-                      title: l.title,
-                      quantity: l.quantity,
-                      price: l.price,
-                      listing_status: l.listing_status,
-                      platform_item_id: l.platform_item_id,
-                      raw_data: l.raw_data,
-                    })),
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === 'inventory_items') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  ilike: vi.fn().mockReturnValue({
-                    not: vi.fn().mockResolvedValue({
-                      data: inventoryItems,
+                  eq: vi.fn().mockReturnValue({
+                    range: vi.fn().mockResolvedValue({
+                      data: platformListings.map((l) => ({
+                        platform_sku: l.platform_sku,
+                        title: l.title,
+                        quantity: l.quantity,
+                        price: l.price,
+                        listing_status: l.listing_status,
+                        platform_item_id: l.platform_item_id,
+                        raw_data: l.raw_data,
+                      })),
                       error: null,
                     }),
                   }),
                 }),
               }),
-            }),
-          };
-        }
-        if (table === 'ebay_sku_mappings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({
-                data: skuMappings,
-                error: null,
-              }),
-            }),
-          };
-        }
-        if (table === 'platform_listing_imports') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
+            };
+          }
+          if (table === 'inventory_items') {
+            return {
+              select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  order: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({
-                        data: latestImport,
-                        error: latestImport ? null : { code: 'PGRST116', message: 'No rows found' },
+                  eq: vi.fn().mockReturnValue({
+                    ilike: vi.fn().mockReturnValue({
+                      not: vi.fn().mockResolvedValue({
+                        data: inventoryItems,
+                        error: null,
                       }),
                     }),
                   }),
                 }),
               }),
-            }),
-          };
+            };
+          }
+          if (table === 'ebay_sku_mappings') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({
+                  data: skuMappings,
+                  error: null,
+                }),
+              }),
+            };
+          }
+          if (table === 'platform_listing_imports') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        single: vi.fn().mockResolvedValue({
+                          data: latestImport,
+                          error: latestImport
+                            ? null
+                            : { code: 'PGRST116', message: 'No rows found' },
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
         }
-        return {};
-      });
+      );
     }
 
     it('should return match when quantities equal', async () => {
@@ -478,9 +484,7 @@ describe('EbayStockService', () => {
             raw_data: { condition: 'New' },
           },
         ],
-        inventoryItems: [
-          createMockInventoryItem({ sku: 'SKU-001', condition: 'New' }),
-        ],
+        inventoryItems: [createMockInventoryItem({ sku: 'SKU-001', condition: 'New' })],
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
@@ -524,9 +528,7 @@ describe('EbayStockService', () => {
     it('should detect inventory_only items', async () => {
       setupStockComparisonMocks(mockSupabase, {
         platformListings: [],
-        inventoryItems: [
-          createMockInventoryItem({ sku: 'SKU-INV-ONLY' }),
-        ],
+        inventoryItems: [createMockInventoryItem({ sku: 'SKU-INV-ONLY' })],
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
@@ -582,9 +584,7 @@ describe('EbayStockService', () => {
             raw_data: { condition: 'New' },
           },
         ],
-        inventoryItems: [
-          createMockInventoryItem({ sku: 'SKU-001', condition: 'Used' }),
-        ],
+        inventoryItems: [createMockInventoryItem({ sku: 'SKU-001', condition: 'Used' })],
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
@@ -655,9 +655,7 @@ describe('EbayStockService', () => {
             raw_data: {},
           },
         ],
-        inventoryItems: [
-          createMockInventoryItem({ sku: 'SKU-001' }),
-        ],
+        inventoryItems: [createMockInventoryItem({ sku: 'SKU-001' })],
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
@@ -751,49 +749,51 @@ describe('EbayStockService', () => {
     });
 
     it('should throw error when inventory fetch fails', async () => {
-      (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn((table: string) => {
-        if (table === 'platform_listings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
+      (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn(
+        (table: string) => {
+          if (table === 'platform_listings') {
+            return {
+              select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  range: vi.fn().mockResolvedValue({
-                    data: [],
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === 'inventory_items') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  ilike: vi.fn().mockReturnValue({
-                    not: vi.fn().mockResolvedValue({
-                      data: null,
-                      error: { message: 'Database connection failed' },
+                  eq: vi.fn().mockReturnValue({
+                    range: vi.fn().mockResolvedValue({
+                      data: [],
+                      error: null,
                     }),
                   }),
                 }),
               }),
-            }),
-          };
-        }
-        if (table === 'ebay_sku_mappings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({
-                data: [],
-                error: null,
+            };
+          }
+          if (table === 'inventory_items') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    ilike: vi.fn().mockReturnValue({
+                      not: vi.fn().mockResolvedValue({
+                        data: null,
+                        error: { message: 'Database connection failed' },
+                      }),
+                    }),
+                  }),
+                }),
               }),
-            }),
-          };
+            };
+          }
+          if (table === 'ebay_sku_mappings') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
+            };
+          }
+          return {};
         }
-        return {};
-      });
+      );
 
       const { EbayStockService } = await import('../ebay-stock.service');
       const service = new EbayStockService(mockSupabase, userId);

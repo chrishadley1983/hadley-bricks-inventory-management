@@ -80,31 +80,40 @@ export function RichTextEditor({
     }
   }, [onChange]);
 
-  const execCommand = useCallback((command: string, cmdValue?: string) => {
-    // Save selection before command
-    const savedRange = saveSelection();
+  const execCommand = useCallback(
+    (command: string, cmdValue?: string) => {
+      // Save selection before command
+      const savedRange = saveSelection();
 
-    document.execCommand(command, false, cmdValue);
+      document.execCommand(command, false, cmdValue);
 
-    // Restore selection after command
-    restoreSelection(savedRange);
-    editorRef.current?.focus();
-    handleInput();
-  }, [handleInput]);
+      // Restore selection after command
+      restoreSelection(savedRange);
+      editorRef.current?.focus();
+      handleInput();
+    },
+    [handleInput]
+  );
 
-  const formatBlock = useCallback((tag: string) => {
-    const savedRange = saveSelection();
+  const formatBlock = useCallback(
+    (tag: string) => {
+      const savedRange = saveSelection();
 
-    document.execCommand('formatBlock', false, tag);
+      document.execCommand('formatBlock', false, tag);
 
-    restoreSelection(savedRange);
-    editorRef.current?.focus();
-    handleInput();
-  }, [handleInput]);
+      restoreSelection(savedRange);
+      editorRef.current?.focus();
+      handleInput();
+    },
+    [handleInput]
+  );
 
-  const handleSourceChange = useCallback((html: string) => {
-    onChange(html);
-  }, [onChange]);
+  const handleSourceChange = useCallback(
+    (html: string) => {
+      onChange(html);
+    },
+    [onChange]
+  );
 
   // Source view
   if (isSourceView) {
@@ -144,49 +153,25 @@ export function RichTextEditor({
     <div className={cn('rounded-md border bg-background', className)}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 border-b p-2">
-        <Toggle
-          size="sm"
-          onPressedChange={() => execCommand('bold')}
-          aria-label="Bold"
-        >
+        <Toggle size="sm" onPressedChange={() => execCommand('bold')} aria-label="Bold">
           <Bold className="h-4 w-4" />
         </Toggle>
-        <Toggle
-          size="sm"
-          onPressedChange={() => execCommand('italic')}
-          aria-label="Italic"
-        >
+        <Toggle size="sm" onPressedChange={() => execCommand('italic')} aria-label="Italic">
           <Italic className="h-4 w-4" />
         </Toggle>
-        <Toggle
-          size="sm"
-          onPressedChange={() => execCommand('underline')}
-          aria-label="Underline"
-        >
+        <Toggle size="sm" onPressedChange={() => execCommand('underline')} aria-label="Underline">
           <Underline className="h-4 w-4" />
         </Toggle>
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
-        <Toggle
-          size="sm"
-          onPressedChange={() => formatBlock('h2')}
-          aria-label="Heading 2"
-        >
+        <Toggle size="sm" onPressedChange={() => formatBlock('h2')} aria-label="Heading 2">
           <Heading2 className="h-4 w-4" />
         </Toggle>
-        <Toggle
-          size="sm"
-          onPressedChange={() => formatBlock('h3')}
-          aria-label="Heading 3"
-        >
+        <Toggle size="sm" onPressedChange={() => formatBlock('h3')} aria-label="Heading 3">
           <Heading3 className="h-4 w-4" />
         </Toggle>
-        <Toggle
-          size="sm"
-          onPressedChange={() => formatBlock('p')}
-          aria-label="Paragraph"
-        >
+        <Toggle size="sm" onPressedChange={() => formatBlock('p')} aria-label="Paragraph">
           <Pilcrow className="h-4 w-4" />
         </Toggle>
 

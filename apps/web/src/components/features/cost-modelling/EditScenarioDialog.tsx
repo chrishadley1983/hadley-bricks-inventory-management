@@ -97,7 +97,8 @@ export function EditScenarioDialog({
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
-                Optional. Add context like assumptions, purpose, or key changes from other scenarios.
+                Optional. Add context like assumptions, purpose, or key changes from other
+                scenarios.
               </p>
             </div>
           </div>

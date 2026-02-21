@@ -22,7 +22,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePickup, useUpdatePickup, type CreatePickupInput, type StockPickup } from '@/hooks/use-pickups';
+import {
+  useCreatePickup,
+  useUpdatePickup,
+  type CreatePickupInput,
+  type StockPickup,
+} from '@/hooks/use-pickups';
 import {
   useGoogleCalendarStatus,
   useConnectGoogleCalendar,
@@ -45,7 +50,10 @@ const SOURCE_PLATFORMS = [
   { value: 'other', label: 'Other' },
 ];
 
-const getInitialFormData = (pickup?: StockPickup | null, initialDate?: string): CreatePickupInput => ({
+const getInitialFormData = (
+  pickup?: StockPickup | null,
+  initialDate?: string
+): CreatePickupInput => ({
   title: pickup?.title || '',
   description: pickup?.description || null,
   scheduled_date: pickup?.scheduled_date || initialDate || new Date().toISOString().split('T')[0],
@@ -308,10 +316,7 @@ export function SchedulePickupDialog({
                   className="pl-7"
                   value={formData.agreed_price ?? ''}
                   onChange={(e) =>
-                    updateField(
-                      'agreed_price',
-                      e.target.value ? parseFloat(e.target.value) : null
-                    )
+                    updateField('agreed_price', e.target.value ? parseFloat(e.target.value) : null)
                   }
                 />
               </div>
@@ -419,11 +424,7 @@ export function SchedulePickupDialog({
           )}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={createPickup.isPending || updatePickup.isPending}>

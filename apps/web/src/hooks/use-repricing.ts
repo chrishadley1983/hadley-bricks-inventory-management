@@ -6,11 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  RepricingFilters,
-  RepricingDataResponse,
-  PushPriceResponse,
-} from '@/lib/repricing';
+import type { RepricingFilters, RepricingDataResponse, PushPriceResponse } from '@/lib/repricing';
 
 // ============================================================================
 // API FUNCTIONS
@@ -173,20 +169,17 @@ export function useSyncPricing() {
     onSuccess: (data) => {
       // Directly update all matching queries with the fresh data
       // This avoids triggering any additional fetches
-      queryClient.setQueriesData<RepricingDataResponse>(
-        { queryKey: repricingKeys.all },
-        (old) => {
-          // If old data exists, update with fresh data
-          // Keep the structure but update items and summary
-          if (old) {
-            return {
-              ...data,
-              pagination: old.pagination, // Keep current pagination state
-            };
-          }
-          return data;
+      queryClient.setQueriesData<RepricingDataResponse>({ queryKey: repricingKeys.all }, (old) => {
+        // If old data exists, update with fresh data
+        // Keep the structure but update items and summary
+        if (old) {
+          return {
+            ...data,
+            pagination: old.pagination, // Keep current pagination state
+          };
         }
-      );
+        return data;
+      });
     },
   });
 }
@@ -209,20 +202,15 @@ export function usePushPrice() {
     }) => pushPriceUpdate(sku, newPrice, productType),
     onSuccess: (data, variables) => {
       // Optimistically update the item in cache
-      queryClient.setQueriesData<RepricingDataResponse>(
-        { queryKey: repricingKeys.all },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.map((item) =>
-              item.sku === variables.sku
-                ? { ...item, yourPrice: variables.newPrice }
-                : item
-            ),
-          };
-        }
-      );
+      queryClient.setQueriesData<RepricingDataResponse>({ queryKey: repricingKeys.all }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.map((item) =>
+            item.sku === variables.sku ? { ...item, yourPrice: variables.newPrice } : item
+          ),
+        };
+      });
     },
   });
 }

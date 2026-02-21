@@ -424,7 +424,9 @@ export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogP
                           {listing.title}
                         </p>
                         {listing.setName && (
-                          <p className="text-xs text-muted-foreground truncate">{listing.setName}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {listing.setName}
+                          </p>
                         )}
                       </div>
                     </TableCell>
@@ -443,9 +445,7 @@ export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogP
                     </TableCell>
                     <TableCell className="text-right">
                       {listing.profit !== null ? (
-                        <span
-                          className={listing.profit > 0 ? 'text-green-600' : 'text-red-600'}
-                        >
+                        <span className={listing.profit > 0 ? 'text-green-600' : 'text-red-600'}>
                           £{listing.profit.toFixed(2)}
                         </span>
                       ) : (
@@ -460,7 +460,8 @@ export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogP
                           // targetTotalCost = amazonPrice * threshold / 100
                           // targetVintedPrice = targetTotalCost - fees
                           const fees = listing.totalCost - listing.vintedPrice;
-                          const targetTotalCost = listing.amazonPrice * (summary.cogThreshold / 100);
+                          const targetTotalCost =
+                            listing.amazonPrice * (summary.cogThreshold / 100);
                           const targetPrice = targetTotalCost - fees;
                           const discount = listing.vintedPrice - targetPrice;
 
@@ -469,7 +470,10 @@ export function ScanDetailDialog({ scan, open, onOpenChange }: ScanDetailDialogP
                           }
 
                           return targetPrice > 0 ? (
-                            <span className="text-blue-600" title={`Need £${discount.toFixed(2)} off`}>
+                            <span
+                              className="text-blue-600"
+                              title={`Need £${discount.toFixed(2)} off`}
+                            >
                               £{targetPrice.toFixed(2)}
                             </span>
                           ) : (

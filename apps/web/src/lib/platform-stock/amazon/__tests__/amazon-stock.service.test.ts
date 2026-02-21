@@ -92,15 +92,17 @@ function createMockSupabase(): SupabaseClient<Database> & { mockQueryBuilder: Mo
 /**
  * Create a mock TSV report for testing
  */
-function createMockReport(rows: Array<{
-  sku: string;
-  asin: string;
-  title: string;
-  price: string;
-  quantity: string;
-  status?: string;
-  fulfillmentChannel?: string;
-}>): string {
+function createMockReport(
+  rows: Array<{
+    sku: string;
+    asin: string;
+    title: string;
+    price: string;
+    quantity: string;
+    status?: string;
+    fulfillmentChannel?: string;
+  }>
+): string {
   const headers = [
     'item-name',
     'item-description',
@@ -210,9 +212,7 @@ describe('AmazonStockService', () => {
       const { AmazonStockService } = await import('../amazon-stock.service');
       const service = new AmazonStockService(mockSupabase, userId);
 
-      await expect(service.triggerImport()).rejects.toThrow(
-        'Amazon credentials not configured'
-      );
+      await expect(service.triggerImport()).rejects.toThrow('Amazon credentials not configured');
     });
 
     it('should throw error when credentials fetch fails', async () => {
@@ -221,9 +221,7 @@ describe('AmazonStockService', () => {
       const { AmazonStockService } = await import('../amazon-stock.service');
       const service = new AmazonStockService(mockSupabase, userId);
 
-      await expect(service.triggerImport()).rejects.toThrow(
-        'Amazon credentials not configured'
-      );
+      await expect(service.triggerImport()).rejects.toThrow('Amazon credentials not configured');
     });
 
     it('should create import record and process report successfully', async () => {
@@ -241,7 +239,6 @@ describe('AmazonStockService', () => {
 
       // Track call count to provide different responses (unused but kept for debugging)
       mockSupabase.from = vi.fn((table: string) => {
-
         if (table === 'platform_listing_imports') {
           // First call: createImportRecord (insert)
           // Last call: getImportStatus (select single)
@@ -1300,4 +1297,3 @@ describe('AmazonStockService', () => {
     });
   });
 });
-

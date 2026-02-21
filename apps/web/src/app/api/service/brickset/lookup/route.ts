@@ -69,9 +69,10 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         data: set,
-        source: set.lastFetchedAt && new Date(set.lastFetchedAt) > new Date(Date.now() - 60000)
-          ? 'api'
-          : 'cache',
+        source:
+          set.lastFetchedAt && new Date(set.lastFetchedAt) > new Date(Date.now() - 60000)
+            ? 'api'
+            : 'cache',
       });
     } catch (error) {
       console.error('[GET /api/service/brickset/lookup] Error:', error);

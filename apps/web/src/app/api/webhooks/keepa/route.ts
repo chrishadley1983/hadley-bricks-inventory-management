@@ -62,9 +62,7 @@ export async function POST(request: NextRequest) {
       ? keepaTimestampToDate(notification.createDate)
       : new Date().toISOString().split('T')[0];
 
-    console.log(
-      `[Keepa Webhook] ${notification.asin}: ${cause} on ${priceType} (${date})`
-    );
+    console.log(`[Keepa Webhook] ${notification.asin}: ${cause} on ${priceType} (${date})`);
 
     // Extract current buy box price if available
     const buyBoxPrice = notification.currentPrices?.[KEEPA_CSV_INDEX.BUY_BOX];
@@ -89,23 +87,21 @@ export async function POST(request: NextRequest) {
     if (setNumber && priceGBP != null) {
       const today = new Date().toISOString().split('T')[0];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('price_snapshots')
-        .upsert(
-          {
-            set_num: setNumber,
-            date: today,
-            source: 'keepa_amazon_buybox',
-            price_gbp: priceGBP,
-            raw_data: {
-              keepa_asin: notification.asin,
-              cause,
-              csv_type: notification.csvType,
-              all_prices: notification.currentPrices,
-            },
+      await (supabase as any).from('price_snapshots').upsert(
+        {
+          set_num: setNumber,
+          date: today,
+          source: 'keepa_amazon_buybox',
+          price_gbp: priceGBP,
+          raw_data: {
+            keepa_asin: notification.asin,
+            cause,
+            csv_type: notification.csvType,
+            all_prices: notification.currentPrices,
           },
-          { onConflict: 'set_num,date,source' }
-        );
+        },
+        { onConflict: 'set_num,date,source' }
+      );
     }
 
     // Send Discord alert for significant events
@@ -115,28 +111,32 @@ export async function POST(request: NextRequest) {
       const rrpStr = rrp != null ? `£${(rrp as number).toFixed(2)}` : 'N/A';
       const setLabel = setNumber ? `${setNumber} ${setName ?? ''}` : notification.asin;
 
-      const emoji = cause === 'OUT_STOCK' ? '🔴'
-        : cause === 'IN_STOCK' ? '🟢'
-        : cause === 'DESIRED_PRICE' || cause === 'DESIRED_PRICE_AGAIN' ? '🎯'
-        : '📊';
+      const emoji =
+        cause === 'OUT_STOCK'
+          ? '🔴'
+          : cause === 'IN_STOCK'
+            ? '🟢'
+            : cause === 'DESIRED_PRICE' || cause === 'DESIRED_PRICE_AGAIN'
+              ? '🎯'
+              : '📊';
 
       await fetch(discordWebhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          embeds: [{
-            title: `${emoji} Keepa: ${cause.replace(/_/g, ' ')}`,
-            description: `**${setLabel}**`,
-            fields: [
-              { name: 'Price Type', value: priceType, inline: true },
-              { name: 'Current Price', value: priceStr, inline: true },
-              { name: 'RRP', value: rrpStr, inline: true },
-            ],
-            color: cause === 'OUT_STOCK' ? 0xff0000
-              : cause === 'IN_STOCK' ? 0x00ff00
-              : 0x0099ff,
-            timestamp: new Date().toISOString(),
-          }],
+          embeds: [
+            {
+              title: `${emoji} Keepa: ${cause.replace(/_/g, ' ')}`,
+              description: `**${setLabel}**`,
+              fields: [
+                { name: 'Price Type', value: priceType, inline: true },
+                { name: 'Current Price', value: priceStr, inline: true },
+                { name: 'RRP', value: rrpStr, inline: true },
+              ],
+              color: cause === 'OUT_STOCK' ? 0xff0000 : cause === 'IN_STOCK' ? 0x00ff00 : 0x0099ff,
+              timestamp: new Date().toISOString(),
+            },
+          ],
         }),
       });
     }

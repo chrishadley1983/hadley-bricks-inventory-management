@@ -10,12 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import {
   useCurrentTimeEntry,
@@ -33,7 +28,14 @@ interface TimeTrackingPanelProps {
   className?: string;
 }
 
-const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
+const CATEGORIES: TimeCategory[] = [
+  'Development',
+  'Listing',
+  'Shipping',
+  'Sourcing',
+  'Admin',
+  'Other',
+];
 
 export function TimeTrackingPanel({ className }: TimeTrackingPanelProps) {
   const [selectedCategory, setSelectedCategory] = useState<TimeCategory>('Development');
@@ -87,7 +89,10 @@ export function TimeTrackingPanel({ className }: TimeTrackingPanelProps) {
       await startMutation.mutateAsync(selectedCategory);
       toast({ title: `Started tracking: ${selectedCategory}` });
     } catch (error) {
-      toast({ title: error instanceof Error ? error.message : 'Failed to start tracking', variant: 'destructive' });
+      toast({
+        title: error instanceof Error ? error.message : 'Failed to start tracking',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -96,7 +101,10 @@ export function TimeTrackingPanel({ className }: TimeTrackingPanelProps) {
       await stopMutation.mutateAsync();
       toast({ title: 'Time tracking stopped' });
     } catch (error) {
-      toast({ title: error instanceof Error ? error.message : 'Failed to stop tracking', variant: 'destructive' });
+      toast({
+        title: error instanceof Error ? error.message : 'Failed to stop tracking',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -105,7 +113,10 @@ export function TimeTrackingPanel({ className }: TimeTrackingPanelProps) {
       await pauseMutation.mutateAsync();
       toast({ title: 'Time tracking paused' });
     } catch (error) {
-      toast({ title: error instanceof Error ? error.message : 'Failed to pause tracking', variant: 'destructive' });
+      toast({
+        title: error instanceof Error ? error.message : 'Failed to pause tracking',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -114,7 +125,10 @@ export function TimeTrackingPanel({ className }: TimeTrackingPanelProps) {
       await resumeMutation.mutateAsync();
       toast({ title: 'Time tracking resumed' });
     } catch (error) {
-      toast({ title: error instanceof Error ? error.message : 'Failed to resume tracking', variant: 'destructive' });
+      toast({
+        title: error instanceof Error ? error.message : 'Failed to resume tracking',
+        variant: 'destructive',
+      });
     }
   };
 

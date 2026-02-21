@@ -68,10 +68,7 @@ export async function GET() {
 
     const completedThisMonth = completedResult.data?.length ?? 0;
     const totalValueThisMonth =
-      completedResult.data?.reduce(
-        (sum, pickup) => sum + (pickup.final_amount_paid || 0),
-        0
-      ) ?? 0;
+      completedResult.data?.reduce((sum, pickup) => sum + (pickup.final_amount_paid || 0), 0) ?? 0;
 
     return NextResponse.json({
       upcoming: upcomingResult.count ?? 0,

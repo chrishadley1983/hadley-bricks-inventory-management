@@ -59,8 +59,8 @@ export function VintedPurchaseReviewRow({
         isExactDuplicate
           ? 'border-destructive/50 bg-destructive/5'
           : selected
-          ? 'border-primary/50 bg-primary/5'
-          : 'border-border'
+            ? 'border-primary/50 bg-primary/5'
+            : 'border-border'
       }`}
     >
       <div className="flex items-start gap-4">
@@ -113,9 +113,7 @@ export function VintedPurchaseReviewRow({
             <Label className="text-xs text-muted-foreground flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               Purchase Date
-              {hasMonzoMatch && (
-                <CheckCircle2 className="h-3 w-3 text-green-600 ml-1" />
-              )}
+              {hasMonzoMatch && <CheckCircle2 className="h-3 w-3 text-green-600 ml-1" />}
             </Label>
             <Input
               type="date"
@@ -124,19 +122,13 @@ export function VintedPurchaseReviewRow({
               disabled={isExactDuplicate}
               className="w-[140px] h-8 text-sm"
             />
-            {hasMonzoMatch && (
-              <p className="text-xs text-green-600">Matched from Monzo</p>
-            )}
-            {!hasMonzoMatch && (
-              <p className="text-xs text-muted-foreground">No Monzo match</p>
-            )}
+            {hasMonzoMatch && <p className="text-xs text-green-600">Matched from Monzo</p>}
+            {!hasMonzoMatch && <p className="text-xs text-muted-foreground">No Monzo match</p>}
           </div>
 
           {/* Price */}
           <div className="text-right">
-            <span className="font-semibold text-primary text-lg">
-              {formatCurrency(price)}
-            </span>
+            <span className="font-semibold text-primary text-lg">{formatCurrency(price)}</span>
           </div>
         </div>
       </div>

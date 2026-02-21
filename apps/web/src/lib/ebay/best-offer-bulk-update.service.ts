@@ -9,7 +9,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import { EbayTradingClient, EbayTradingApiError } from '@/lib/platform-stock/ebay/ebay-trading.client';
+import {
+  EbayTradingClient,
+  EbayTradingApiError,
+} from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from './ebay-auth.service';
 
 // ============================================================================
@@ -20,18 +23,18 @@ import { EbayAuthService } from './ebay-auth.service';
  * Input for a single listing to update
  */
 export interface ListingInput {
-  itemId: string;           // eBay listing ID
-  currentPrice: number;     // Current BIN price
-  currency: string;         // e.g. "GBP", "USD"
+  itemId: string; // eBay listing ID
+  currentPrice: number; // Current BIN price
+  currency: string; // e.g. "GBP", "USD"
 }
 
 /**
  * Rules for Best Offer auto-accept/decline thresholds
  */
 export interface BestOfferRules {
-  autoDeclinePercent: number;   // e.g. 70 = reject offers below 70%
-  autoAcceptPercent: number;    // e.g. 90 = accept offers at/above 90%
-  enableBestOffer: boolean;     // Whether to enable Best Offer
+  autoDeclinePercent: number; // e.g. 70 = reject offers below 70%
+  autoAcceptPercent: number; // e.g. 90 = accept offers at/above 90%
+  enableBestOffer: boolean; // Whether to enable Best Offer
 }
 
 /**
@@ -119,7 +122,9 @@ export class BestOfferBulkUpdateService {
     onProgress?: BulkUpdateProgressCallback
   ): Promise<BulkUpdateResult> {
     console.log(`[BestOfferBulkUpdate] Starting bulk update for ${listings.length} listings`);
-    console.log(`[BestOfferBulkUpdate] Rules: autoDecline=${rules.autoDeclinePercent}%, autoAccept=${rules.autoAcceptPercent}%, enabled=${rules.enableBestOffer}`);
+    console.log(
+      `[BestOfferBulkUpdate] Rules: autoDecline=${rules.autoDeclinePercent}%, autoAccept=${rules.autoAcceptPercent}%, enabled=${rules.enableBestOffer}`
+    );
 
     // Validate rules
     const validationError = this.validateRules(rules);
@@ -176,7 +181,9 @@ export class BestOfferBulkUpdateService {
             minimumBestOfferPrice: thresholds.autoDeclinePrice,
             bestOfferAutoAcceptPrice: thresholds.autoAcceptPrice,
           });
-          console.log(`[BestOfferBulkUpdate] ✓ Updated ${listing.itemId}: decline=${thresholds.autoDeclinePrice}, accept=${thresholds.autoAcceptPrice}`);
+          console.log(
+            `[BestOfferBulkUpdate] ✓ Updated ${listing.itemId}: decline=${thresholds.autoDeclinePrice}, accept=${thresholds.autoAcceptPrice}`
+          );
         } else {
           const reason = this.categorizeError(result.errorCode, result.errorMessage);
           failed.push({
@@ -189,7 +196,8 @@ export class BestOfferBulkUpdateService {
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const errorCode = error instanceof EbayTradingApiError ? error.errorCode || 'API_ERROR' : 'UNKNOWN';
+        const errorCode =
+          error instanceof EbayTradingApiError ? error.errorCode || 'API_ERROR' : 'UNKNOWN';
 
         failed.push({
           itemId: listing.itemId,
@@ -221,7 +229,9 @@ export class BestOfferBulkUpdateService {
       },
     };
 
-    console.log(`[BestOfferBulkUpdate] Complete: ${successful.length} succeeded, ${failed.length} failed`);
+    console.log(
+      `[BestOfferBulkUpdate] Complete: ${successful.length} succeeded, ${failed.length} failed`
+    );
     return result;
   }
 
@@ -302,9 +312,9 @@ export class BestOfferBulkUpdateService {
           bestOfferAutoAcceptPrice?: number | null;
           minimumBestOfferPrice?: number | null;
         } | null;
-        return ebayData?.bestOfferEnabled === true && (
-          ebayData?.bestOfferAutoAcceptPrice == null ||
-          ebayData?.minimumBestOfferPrice == null
+        return (
+          ebayData?.bestOfferEnabled === true &&
+          (ebayData?.bestOfferAutoAcceptPrice == null || ebayData?.minimumBestOfferPrice == null)
         );
       })
       .map((row) => ({
@@ -341,8 +351,9 @@ export class BestOfferBulkUpdateService {
     currentPrice: number,
     rules: BestOfferRules
   ): { autoDeclinePrice: number; autoAcceptPrice: number } {
-    const autoDeclinePrice = Math.round((currentPrice * (rules.autoDeclinePercent / 100)) * 100) / 100;
-    const autoAcceptPrice = Math.round((currentPrice * (rules.autoAcceptPercent / 100)) * 100) / 100;
+    const autoDeclinePrice =
+      Math.round(currentPrice * (rules.autoDeclinePercent / 100) * 100) / 100;
+    const autoAcceptPrice = Math.round(currentPrice * (rules.autoAcceptPercent / 100) * 100) / 100;
     return { autoDeclinePrice, autoAcceptPrice };
   }
 
@@ -368,7 +379,10 @@ export class BestOfferBulkUpdateService {
   /**
    * Categorize error code into a failure reason
    */
-  private categorizeError(errorCode: string | undefined, errorMessage: string | undefined): FailureReason {
+  private categorizeError(
+    errorCode: string | undefined,
+    errorMessage: string | undefined
+  ): FailureReason {
     const code = errorCode?.toLowerCase() || '';
     const message = errorMessage?.toLowerCase() || '';
 
@@ -378,7 +392,11 @@ export class BestOfferBulkUpdateService {
     }
 
     // Check for category not supported
-    if (message.includes('category') || message.includes('not supported') || code.includes('21919188')) {
+    if (
+      message.includes('category') ||
+      message.includes('not supported') ||
+      code.includes('21919188')
+    ) {
       return 'CATEGORY_NOT_SUPPORTED';
     }
 

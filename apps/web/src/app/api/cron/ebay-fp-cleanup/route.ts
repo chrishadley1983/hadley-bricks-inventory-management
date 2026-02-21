@@ -117,8 +117,14 @@ export async function POST(request: NextRequest) {
     }
 
     await execution.complete(
-      { itemsFlagged: result.itemsFlagged, itemsExcluded: result.itemsExcluded, topReasons: result.topReasons },
-      200, result.itemsScanned, result.errors
+      {
+        itemsFlagged: result.itemsFlagged,
+        itemsExcluded: result.itemsExcluded,
+        topReasons: result.topReasons,
+      },
+      200,
+      result.itemsScanned,
+      result.errors
     );
 
     return NextResponse.json({

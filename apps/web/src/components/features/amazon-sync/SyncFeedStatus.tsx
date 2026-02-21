@@ -1,14 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -179,7 +172,9 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
   const Icon = config.icon;
   const isProcessing = feed.status === 'submitted' || feed.status === 'processing';
   const isVerifying = feed.status === 'done_verifying';
-  const isComplete = !['pending', 'submitted', 'processing', 'done_verifying'].includes(feed.status);
+  const isComplete = !['pending', 'submitted', 'processing', 'done_verifying'].includes(
+    feed.status
+  );
 
   // Auto-poll while processing
   useEffect(() => {
@@ -234,25 +229,17 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
           variant={config.variant}
           className={`flex items-center gap-1.5 ${config.color || ''}`}
         >
-          <Icon
-            className={`h-3.5 w-3.5 ${isProcessing || isVerifying ? 'animate-spin' : ''}`}
-          />
+          <Icon className={`h-3.5 w-3.5 ${isProcessing || isVerifying ? 'animate-spin' : ''}`} />
           {config.label}
         </Badge>
 
-        {feed.is_dry_run && (
-          <Badge variant="outline">Dry Run</Badge>
-        )}
+        {feed.is_dry_run && <Badge variant="outline">Dry Run</Badge>}
 
         {(isComplete || isVerifying) && (
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-green-600">
-              {feed.success_count} success
-            </span>
+            <span className="text-green-600">{feed.success_count} success</span>
             {(feed.warning_count ?? 0) > 0 && (
-              <span className="text-yellow-600">
-                {feed.warning_count} warnings
-              </span>
+              <span className="text-yellow-600">{feed.warning_count} warnings</span>
             )}
             {(feed.error_count ?? 0) > 0 && (
               <span className="text-red-600">{feed.error_count} errors</span>
@@ -267,9 +254,7 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
             onClick={handleManualPoll}
             disabled={isPolling || pollMutation.isPending}
           >
-            <RefreshCw
-              className={`mr-1 h-3.5 w-3.5 ${isPolling ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isPolling ? 'animate-spin' : ''}`} />
             Poll
           </Button>
         )}
@@ -278,10 +263,10 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
       {isProcessing && (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{isPolling ? 'Checking status...' : 'Waiting for Amazon...'}</span>
             <span>
-              {isPolling ? 'Checking status...' : 'Waiting for Amazon...'}
+              Poll {feed.poll_count ?? 0} / {MAX_POLL_ATTEMPTS}
             </span>
-            <span>Poll {feed.poll_count ?? 0} / {MAX_POLL_ATTEMPTS}</span>
           </div>
           <Progress value={pollProgress} className="h-1" />
         </div>
@@ -291,9 +276,7 @@ export function SyncFeedStatus({ feed, showPollButton = false }: SyncFeedStatusP
         <p className="text-xs text-muted-foreground">{config.description}</p>
       )}
 
-      {feed.error_message && (
-        <p className="text-sm text-destructive">{feed.error_message}</p>
-      )}
+      {feed.error_message && <p className="text-sm text-destructive">{feed.error_message}</p>}
     </div>
   );
 }

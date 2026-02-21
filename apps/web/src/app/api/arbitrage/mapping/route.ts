@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
     const mappingService = new MappingService(supabase);
 
     // Validate the set number exists in BrickLink
-    const validation = await mappingService.validateSetNumber(user.id, parsed.data.bricklinkSetNumber);
+    const validation = await mappingService.validateSetNumber(
+      user.id,
+      parsed.data.bricklinkSetNumber
+    );
 
     if (!validation.valid) {
       return NextResponse.json(
@@ -63,26 +66,22 @@ export async function POST(request: NextRequest) {
 
     // Create the mapping
     const arbitrageService = new ArbitrageService(supabase);
-    await arbitrageService.createManualMapping(
-      user.id,
-      parsed.data.asin,
-      validation.setNumber
-    );
+    await arbitrageService.createManualMapping(user.id, parsed.data.asin, validation.setNumber);
 
-    return NextResponse.json({
-      data: {
-        asin: parsed.data.asin,
-        bricklinkSetNumber: validation.setNumber,
-        setName: validation.setName,
+    return NextResponse.json(
+      {
+        data: {
+          asin: parsed.data.asin,
+          bricklinkSetNumber: validation.setNumber,
+          setName: validation.setName,
+        },
+        message: 'Mapping created successfully',
       },
-      message: 'Mapping created successfully',
-    }, { status: 201 });
+      { status: 201 }
+    );
   } catch (error) {
     console.error('[POST /api/arbitrage/mapping] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -121,9 +120,6 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     console.error('[DELETE /api/arbitrage/mapping] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

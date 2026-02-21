@@ -30,10 +30,7 @@ export async function GET(request: NextRequest) {
     const sku = searchParams.get('sku');
 
     if (!sku) {
-      return NextResponse.json(
-        { error: 'SKU parameter is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'SKU parameter is required' }, { status: 400 });
     }
 
     // Get Amazon credentials
@@ -44,10 +41,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!amazonCredentials) {
-      return NextResponse.json(
-        { error: 'Amazon credentials not found' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Amazon credentials not found' }, { status: 400 });
     }
 
     // Query Amazon Listings API
@@ -67,15 +61,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Extract price and quantity
-    const offer = listing.offers?.find(
-      (o) => o.marketplaceId === 'A1F83G8C2ARO7P'
-    );
+    const offer = listing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
     const fulfillment = listing.fulfillmentAvailability?.find(
       (f) => f.fulfillmentChannelCode === 'DEFAULT'
     );
-    const summary = listing.summaries?.find(
-      (s) => s.marketplaceId === 'A1F83G8C2ARO7P'
-    );
+    const summary = listing.summaries?.find((s) => s.marketplaceId === 'A1F83G8C2ARO7P');
 
     return NextResponse.json({
       found: true,

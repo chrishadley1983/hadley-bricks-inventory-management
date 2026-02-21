@@ -118,17 +118,22 @@ export class WorkflowRepository {
   /**
    * Get today's task instances with definition data resolved
    */
-  async getTodaysTasks(userId: string, date: string): Promise<{
+  async getTodaysTasks(
+    userId: string,
+    date: string
+  ): Promise<{
     pending: ResolvedTaskInstance[];
     completed: CompletedTaskSummary[];
   }> {
     // Get instances for today
     const { data: instances, error: instanceError } = await this.supabase
       .from('workflow_task_instances')
-      .select(`
+      .select(
+        `
         *,
         definition:workflow_task_definitions(*)
-      `)
+      `
+      )
       .eq('user_id', userId)
       .eq('scheduled_date', date);
 
@@ -231,7 +236,10 @@ export class WorkflowRepository {
   /**
    * Update a task instance
    */
-  async updateTaskInstance(id: string, input: WorkflowTaskInstanceUpdate): Promise<WorkflowTaskInstance> {
+  async updateTaskInstance(
+    id: string,
+    input: WorkflowTaskInstanceUpdate
+  ): Promise<WorkflowTaskInstance> {
     const { data, error } = await this.supabase
       .from('workflow_task_instances')
       .update(input)

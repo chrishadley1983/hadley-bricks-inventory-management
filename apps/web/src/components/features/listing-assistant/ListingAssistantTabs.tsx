@@ -37,11 +37,31 @@ interface TabConfig {
 }
 
 const tabs: TabConfig[] = [
-  { value: 'create', label: 'Create Listing', icon: <PenLine className="h-4 w-4" aria-hidden="true" /> },
-  { value: 'studio', label: 'Image Studio', icon: <ImageIcon className="h-4 w-4" aria-hidden="true" /> },
-  { value: 'templates', label: 'Templates', icon: <FileText className="h-4 w-4" aria-hidden="true" /> },
-  { value: 'refresh', label: 'Refresh', icon: <RefreshCw className="h-4 w-4" aria-hidden="true" /> },
-  { value: 'optimiser', label: 'Optimiser', icon: <Sparkles className="h-4 w-4" aria-hidden="true" /> },
+  {
+    value: 'create',
+    label: 'Create Listing',
+    icon: <PenLine className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    value: 'studio',
+    label: 'Image Studio',
+    icon: <ImageIcon className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    value: 'templates',
+    label: 'Templates',
+    icon: <FileText className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    value: 'refresh',
+    label: 'Refresh',
+    icon: <RefreshCw className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    value: 'optimiser',
+    label: 'Optimiser',
+    icon: <Sparkles className="h-4 w-4" aria-hidden="true" />,
+  },
   { value: 'history', label: 'History', icon: <History className="h-4 w-4" aria-hidden="true" /> },
 ];
 
@@ -75,11 +95,7 @@ export function ListingAssistantTabs() {
     <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as TabValue)}>
       <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
         {tabs.map((tab) => (
-          <TabsTrigger
-            key={tab.value}
-            value={tab.value}
-            className="flex items-center gap-2"
-          >
+          <TabsTrigger key={tab.value} value={tab.value} className="flex items-center gap-2">
             {tab.icon}
             <span className="hidden sm:inline">{tab.label}</span>
             {tab.value === 'history' && historyCount > 0 && (

@@ -318,7 +318,7 @@ describe('AmazonFeeReconciliationService', () => {
           net_amount: 400,
           total_fees: 40,
           gross_sales_amount: 440,
-          shipping_credit: 2.50,
+          shipping_credit: 2.5,
         },
         {
           amazon_order_id: '206-1234567-1234567',
@@ -327,7 +327,7 @@ describe('AmazonFeeReconciliationService', () => {
           net_amount: 320,
           total_fees: 40,
           gross_sales_amount: 360,
-          shipping_credit: 2.50,
+          shipping_credit: 2.5,
         },
       ];
 
@@ -408,14 +408,18 @@ describe('AmazonFeeReconciliationService', () => {
         not: vi.fn().mockReturnThis(),
         or: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
-        then: vi.fn((resolve) => resolve({ data: null, error: { message: 'DB connection failed' } })),
+        then: vi.fn((resolve) =>
+          resolve({ data: null, error: { message: 'DB connection failed' } })
+        ),
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
 
       const result = await service.reconcileFees(userId);
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('Failed to fetch inventory items page 1: DB connection failed');
+      expect(result.errors).toContain(
+        'Failed to fetch inventory items page 1: DB connection failed'
+      );
     });
 
     it('should handle update errors', async () => {

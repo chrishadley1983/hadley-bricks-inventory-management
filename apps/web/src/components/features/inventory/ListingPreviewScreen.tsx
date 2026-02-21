@@ -18,14 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  CheckCircle2,
-  AlertCircle,
-  Edit3,
-  Eye,
-  Sparkles,
-  AlertTriangle,
-} from 'lucide-react';
+import { CheckCircle2, AlertCircle, Edit3, Eye, Sparkles, AlertTriangle } from 'lucide-react';
 import type { AIGeneratedListing, QualityReviewResult } from '@/lib/ebay/listing-creation.types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -147,15 +140,18 @@ export function ListingPreviewScreen({
 
   // Update contentEditable when entering edit mode OR when the ref becomes available (tab switch)
   // We use a callback ref pattern to handle the tab unmount/remount
-  const setDescriptionRef = useCallback((node: HTMLDivElement | null) => {
-    descriptionRef.current = node;
-    // Only set content on initial mount (empty node), not on re-renders from typing
-    // This prevents cursor jumping to start on every keystroke
-    if (node && isEditing && node.innerHTML === '') {
-      node.innerHTML = editedDescription;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only set initial content, not on every edit
-  }, [isEditing]);
+  const setDescriptionRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      descriptionRef.current = node;
+      // Only set content on initial mount (empty node), not on re-renders from typing
+      // This prevents cursor jumping to start on every keystroke
+      if (node && isEditing && node.innerHTML === '') {
+        node.innerHTML = editedDescription;
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Only set initial content, not on every edit
+    },
+    [isEditing]
+  );
 
   return (
     <div className="space-y-4">
@@ -203,7 +199,12 @@ export function ListingPreviewScreen({
               <div className="grid grid-cols-5 gap-2 text-xs">
                 {Object.entries(qualityReview.breakdown).map(([key, value]) => {
                   // Get max score for each category
-                  const maxScore = key === 'title' || key === 'description' ? 25 : key === 'itemSpecifics' ? 20 : 15;
+                  const maxScore =
+                    key === 'title' || key === 'description'
+                      ? 25
+                      : key === 'itemSpecifics'
+                        ? 20
+                        : 15;
                   // Use percentage threshold (75%) for consistent coloring across categories
                   const isGood = value.score >= maxScore * 0.75;
                   return (
@@ -329,7 +330,9 @@ export function ListingPreviewScreen({
                   />
                 ) : (
                   <div className="p-2 bg-muted rounded-md text-sm">
-                    {editedConditionDescription || <span className="text-muted-foreground italic">No condition description</span>}
+                    {editedConditionDescription || (
+                      <span className="text-muted-foreground italic">No condition description</span>
+                    )}
                   </div>
                 )}
               </div>

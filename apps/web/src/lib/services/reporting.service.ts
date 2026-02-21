@@ -327,12 +327,15 @@ export interface DailyActivityRow {
 export interface MonthlyActivityRow {
   month: string;
   monthLabel: string;
-  platforms: Record<ActivityPlatform, {
-    itemsListed: number;
-    listingValue: number;
-    itemsSold: number;
-    soldValue: number;
-  }>;
+  platforms: Record<
+    ActivityPlatform,
+    {
+      itemsListed: number;
+      listingValue: number;
+      itemsSold: number;
+      soldValue: number;
+    }
+  >;
   totals: {
     itemsListed: number;
     listingValue: number;
@@ -353,12 +356,15 @@ export interface DailyActivityReport {
 
   // Summary totals for the entire period
   summary: {
-    platforms: Record<ActivityPlatform, {
-      totalItemsListed: number;
-      totalListingValue: number;
-      totalItemsSold: number;
-      totalSoldValue: number;
-    }>;
+    platforms: Record<
+      ActivityPlatform,
+      {
+        totalItemsListed: number;
+        totalListingValue: number;
+        totalItemsSold: number;
+        totalSoldValue: number;
+      }
+    >;
     grandTotals: {
       totalItemsListed: number;
       totalListingValue: number;
@@ -541,10 +547,7 @@ export class ReportingService {
         orderCount: number;
       }
     >();
-    const monthlyMap = new Map<
-      string,
-      { revenue: number; profit: number; orderCount: number }
-    >();
+    const monthlyMap = new Map<string, { revenue: number; profit: number; orderCount: number }>();
 
     for (const sale of sales) {
       const revenue = sale.sale_amount || 0;
@@ -666,7 +669,8 @@ export class ReportingService {
         report.previousRevenue = prevRevenue;
         report.previousProfit = prevProfit;
         report.previousMargin = prevMargin;
-        report.revenueChange = prevRevenue > 0 ? ((grossRevenue - prevRevenue) / prevRevenue) * 100 : 0;
+        report.revenueChange =
+          prevRevenue > 0 ? ((grossRevenue - prevRevenue) / prevRevenue) * 100 : 0;
         report.profitChange = prevProfit > 0 ? ((netProfit - prevProfit) / prevProfit) * 100 : 0;
         report.marginChange = profitMargin - prevMargin;
       }
@@ -681,7 +685,9 @@ export class ReportingService {
   async getInventoryValuationReport(userId: string): Promise<InventoryValuationReport> {
     const { data: inventoryData, error } = await this.supabase
       .from('inventory_items')
-      .select('id, set_number, item_name, condition, status, cost, listing_value, purchase_date, created_at')
+      .select(
+        'id, set_number, item_name, condition, status, cost, listing_value, purchase_date, created_at'
+      )
       .eq('user_id', userId)
       .in('status', ['IN STOCK', 'LISTED', 'NOT YET RECEIVED']);
 
@@ -728,9 +734,7 @@ export class ReportingService {
       const baseDate = item.purchase_date
         ? new Date(item.purchase_date)
         : new Date(item.created_at);
-      const daysInStock = Math.floor(
-        (Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const daysInStock = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
 
       topItems.push({
         id: item.id,
@@ -750,7 +754,8 @@ export class ReportingService {
     const top20Items = topItems.slice(0, 20);
 
     const potentialProfit = estimatedSaleValue - totalCostValue;
-    const potentialMargin = estimatedSaleValue > 0 ? (potentialProfit / estimatedSaleValue) * 100 : 0;
+    const potentialMargin =
+      estimatedSaleValue > 0 ? (potentialProfit / estimatedSaleValue) * 100 : 0;
 
     return {
       summary: {
@@ -780,10 +785,15 @@ export class ReportingService {
   /**
    * Get Inventory Aging Report
    */
-  async getInventoryAgingReport(userId: string, includeItems: boolean = false): Promise<InventoryAgingReport> {
+  async getInventoryAgingReport(
+    userId: string,
+    includeItems: boolean = false
+  ): Promise<InventoryAgingReport> {
     const { data: inventoryData, error } = await this.supabase
       .from('inventory_items')
-      .select('id, set_number, item_name, condition, status, cost, listing_value, purchase_date, created_at')
+      .select(
+        'id, set_number, item_name, condition, status, cost, listing_value, purchase_date, created_at'
+      )
       .eq('user_id', userId)
       .in('status', ['IN STOCK', 'LISTED', 'NOT YET RECEIVED']);
 
@@ -795,11 +805,56 @@ export class ReportingService {
 
     // Define age brackets
     const brackets: InventoryAgingReport['brackets'] = [
-      { bracket: '0-30 days', minDays: 0, maxDays: 30, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
-      { bracket: '31-60 days', minDays: 31, maxDays: 60, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
-      { bracket: '61-90 days', minDays: 61, maxDays: 90, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
-      { bracket: '91-180 days', minDays: 91, maxDays: 180, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
-      { bracket: '180+ days', minDays: 181, maxDays: null, itemCount: 0, totalCostValue: 0, potentialRevenueImpact: 0, percentOfTotal: 0, items: [] },
+      {
+        bracket: '0-30 days',
+        minDays: 0,
+        maxDays: 30,
+        itemCount: 0,
+        totalCostValue: 0,
+        potentialRevenueImpact: 0,
+        percentOfTotal: 0,
+        items: [],
+      },
+      {
+        bracket: '31-60 days',
+        minDays: 31,
+        maxDays: 60,
+        itemCount: 0,
+        totalCostValue: 0,
+        potentialRevenueImpact: 0,
+        percentOfTotal: 0,
+        items: [],
+      },
+      {
+        bracket: '61-90 days',
+        minDays: 61,
+        maxDays: 90,
+        itemCount: 0,
+        totalCostValue: 0,
+        potentialRevenueImpact: 0,
+        percentOfTotal: 0,
+        items: [],
+      },
+      {
+        bracket: '91-180 days',
+        minDays: 91,
+        maxDays: 180,
+        itemCount: 0,
+        totalCostValue: 0,
+        potentialRevenueImpact: 0,
+        percentOfTotal: 0,
+        items: [],
+      },
+      {
+        bracket: '180+ days',
+        minDays: 181,
+        maxDays: null,
+        itemCount: 0,
+        totalCostValue: 0,
+        potentialRevenueImpact: 0,
+        percentOfTotal: 0,
+        items: [],
+      },
     ];
 
     let totalItems = 0;
@@ -815,9 +870,7 @@ export class ReportingService {
       const baseDate = item.purchase_date
         ? new Date(item.purchase_date)
         : new Date(item.created_at);
-      const daysInStock = Math.floor(
-        (Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const daysInStock = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
 
       totalItems++;
       totalValue += cost;
@@ -887,15 +940,16 @@ export class ReportingService {
   /**
    * Get Platform Performance Report
    */
-  async getPlatformPerformanceReport(userId: string, dateRange: DateRange): Promise<PlatformPerformanceReport> {
+  async getPlatformPerformanceReport(
+    userId: string,
+    dateRange: DateRange
+  ): Promise<PlatformPerformanceReport> {
     const startDate = this.formatDate(dateRange.startDate);
     const endDate = this.formatDate(dateRange.endDate);
 
     const { data: salesData, error } = await this.supabase
       .from('sales')
-      .select(
-        'sale_date, platform, sale_amount, shipping_charged, platform_fees, gross_profit'
-      )
+      .select('sale_date, platform, sale_amount, shipping_charged, platform_fees, gross_profit')
       .eq('user_id', userId)
       .gte('sale_date', startDate)
       .lte('sale_date', endDate);
@@ -1115,7 +1169,10 @@ export class ReportingService {
         .order('sale_date', { ascending: true });
 
       if (prevSalesData && prevSalesData.length > 0) {
-        const prevDataMap = new Map<string, { revenue: number; profit: number; orderCount: number }>();
+        const prevDataMap = new Map<
+          string,
+          { revenue: number; profit: number; orderCount: number }
+        >();
         const prevSales = prevSalesData as TrendSaleRow[];
 
         for (const sale of prevSales) {
@@ -1174,7 +1231,10 @@ export class ReportingService {
   /**
    * Get Purchase Analysis Report
    */
-  async getPurchaseAnalysisReport(userId: string, dateRange: DateRange): Promise<PurchaseAnalysisReport> {
+  async getPurchaseAnalysisReport(
+    userId: string,
+    dateRange: DateRange
+  ): Promise<PurchaseAnalysisReport> {
     const startDate = this.formatDate(dateRange.startDate);
     const endDate = this.formatDate(dateRange.endDate);
 
@@ -1392,20 +1452,21 @@ export class ReportingService {
   /**
    * Update Report Settings
    */
-  async updateReportSettings(userId: string, settings: Partial<ReportSettings>): Promise<ReportSettings> {
+  async updateReportSettings(
+    userId: string,
+    settings: Partial<ReportSettings>
+  ): Promise<ReportSettings> {
     const current = await this.getReportSettings(userId);
     const updated = { ...current, ...settings };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (this.supabase as any)
-      .from('user_settings')
-      .upsert(
-        {
-          user_id: userId,
-          report_settings: updated,
-        },
-        { onConflict: 'user_id' }
-      );
+    const { error } = await (this.supabase as any).from('user_settings').upsert(
+      {
+        user_id: userId,
+        report_settings: updated,
+      },
+      { onConflict: 'user_id' }
+    );
 
     if (error) {
       throw new Error(`Failed to update settings: ${error.message}`);
@@ -1501,8 +1562,9 @@ export class ReportingService {
       }
 
       // Calculate totals for each month
-      const data: MonthlyActivityRow[] = Array.from(monthMap.values())
-        .sort((a, b) => a.month.localeCompare(b.month));
+      const data: MonthlyActivityRow[] = Array.from(monthMap.values()).sort((a, b) =>
+        a.month.localeCompare(b.month)
+      );
 
       for (const row of data) {
         row.totals = {
@@ -1520,7 +1582,12 @@ export class ReportingService {
           ebay: createEmptyPlatformTotals(),
           bricklink: createEmptyPlatformTotals(),
         },
-        grandTotals: { totalItemsListed: 0, totalListingValue: 0, totalItemsSold: 0, totalSoldValue: 0 },
+        grandTotals: {
+          totalItemsListed: 0,
+          totalListingValue: 0,
+          totalItemsSold: 0,
+          totalSoldValue: 0,
+        },
       };
 
       for (const row of data) {
@@ -1533,8 +1600,14 @@ export class ReportingService {
       }
 
       summary.grandTotals = {
-        totalItemsListed: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsListed, 0),
-        totalListingValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalListingValue, 0),
+        totalItemsListed: platforms.reduce(
+          (sum, p) => sum + summary.platforms[p].totalItemsListed,
+          0
+        ),
+        totalListingValue: platforms.reduce(
+          (sum, p) => sum + summary.platforms[p].totalListingValue,
+          0
+        ),
         totalItemsSold: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsSold, 0),
         totalSoldValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalSoldValue, 0),
       };
@@ -1584,7 +1657,11 @@ export class ReportingService {
       const displayDate = new Date(currentDate);
       dateMap.set(dateStr, {
         date: dateStr,
-        dateLabel: displayDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        dateLabel: displayDate.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }),
         platforms: {
           amazon: createEmptyPlatformData('amazon'),
           ebay: createEmptyPlatformData('ebay'),
@@ -1619,8 +1696,9 @@ export class ReportingService {
     }
 
     // Calculate totals for each day
-    const data: DailyActivityRow[] = Array.from(dateMap.values())
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const data: DailyActivityRow[] = Array.from(dateMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
 
     for (const row of data) {
       row.totals = {
@@ -1638,7 +1716,12 @@ export class ReportingService {
         ebay: createEmptyPlatformTotals(),
         bricklink: createEmptyPlatformTotals(),
       },
-      grandTotals: { totalItemsListed: 0, totalListingValue: 0, totalItemsSold: 0, totalSoldValue: 0 },
+      grandTotals: {
+        totalItemsListed: 0,
+        totalListingValue: 0,
+        totalItemsSold: 0,
+        totalSoldValue: 0,
+      },
     };
 
     for (const row of data) {
@@ -1651,8 +1734,14 @@ export class ReportingService {
     }
 
     summary.grandTotals = {
-      totalItemsListed: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsListed, 0),
-      totalListingValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalListingValue, 0),
+      totalItemsListed: platforms.reduce(
+        (sum, p) => sum + summary.platforms[p].totalItemsListed,
+        0
+      ),
+      totalListingValue: platforms.reduce(
+        (sum, p) => sum + summary.platforms[p].totalListingValue,
+        0
+      ),
       totalItemsSold: platforms.reduce((sum, p) => sum + summary.platforms[p].totalItemsSold, 0),
       totalSoldValue: platforms.reduce((sum, p) => sum + summary.platforms[p].totalSoldValue, 0),
     };
@@ -1679,7 +1768,7 @@ export class ReportingService {
       throw new Error(`Failed to fetch store statuses: ${error.message}`);
     }
 
-    return (data || []).map(row => ({
+    return (data || []).map((row) => ({
       id: row.id,
       date: row.date,
       platform: row.platform as ActivityPlatform,
@@ -1732,7 +1821,7 @@ export class ReportingService {
     userId: string,
     statuses: UpdateStoreStatusInput[]
   ): Promise<StoreStatusRecord[]> {
-    const records = statuses.map(s => ({
+    const records = statuses.map((s) => ({
       user_id: userId,
       date: s.date,
       platform: s.platform,
@@ -1750,7 +1839,7 @@ export class ReportingService {
       throw new Error(`Failed to batch update store statuses: ${error.message}`);
     }
 
-    return (data || []).map(row => ({
+    return (data || []).map((row) => ({
       id: row.id,
       date: row.date,
       platform: row.platform as ActivityPlatform,

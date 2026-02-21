@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
       .select('id');
 
     if (stuckItems && stuckItems.length > 0) {
-      console.log(`[daily-inventory] Reset ${stuckItems.length} stuck PUBLISHING items back to STAGED`);
+      console.log(
+        `[daily-inventory] Reset ${stuckItems.length} stuck PUBLISHING items back to STAGED`
+      );
     }
     results.stuckItemsReset = stuckItems?.length ?? 0;
 
@@ -80,9 +82,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Daily inventory pull failed',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

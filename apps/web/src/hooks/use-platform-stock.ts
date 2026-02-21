@@ -28,8 +28,7 @@ export const platformStockKeys = {
     [...platformStockKeys.all, 'listings', platform, filters, page, pageSize] as const,
   comparison: (platform: string, filters: ComparisonFilters) =>
     [...platformStockKeys.all, 'comparison', platform, filters] as const,
-  imports: (platform: string) =>
-    [...platformStockKeys.all, 'imports', platform] as const,
+  imports: (platform: string) => [...platformStockKeys.all, 'imports', platform] as const,
 };
 
 // ============================================================================
@@ -107,10 +106,7 @@ async function triggerImport(platform: string): Promise<{
   return json.data;
 }
 
-async function fetchImportHistory(
-  platform: string,
-  limit: number = 10
-): Promise<ListingImport[]> {
+async function fetchImportHistory(platform: string, limit: number = 10): Promise<ListingImport[]> {
   const params = new URLSearchParams({
     limit: String(limit),
   });

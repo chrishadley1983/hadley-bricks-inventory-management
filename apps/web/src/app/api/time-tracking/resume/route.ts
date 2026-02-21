@@ -27,17 +27,11 @@ export async function POST() {
       .single();
 
     if (findError || !entry) {
-      return NextResponse.json(
-        { error: 'No active time entry to resume' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active time entry to resume' }, { status: 400 });
     }
 
     if (!entry.is_paused) {
-      return NextResponse.json(
-        { error: 'Time entry is not paused' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Time entry is not paused' }, { status: 400 });
     }
 
     // Calculate how long it was paused

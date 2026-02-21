@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     // Get date range from preset or custom dates
     // If startDate and endDate are provided without a preset, use 'custom' to ensure they're respected
-    const effectivePreset = startDate && endDate && !preset ? 'custom' : (preset || 'this_month');
+    const effectivePreset = startDate && endDate && !preset ? 'custom' : preset || 'this_month';
     const dateRange = reportingService.getDateRangeFromPreset(
       effectivePreset,
       startDate && endDate
@@ -65,11 +65,7 @@ export async function GET(request: NextRequest) {
         : undefined
     );
 
-    const report = await reportingService.getDailyActivityReport(
-      userId,
-      dateRange,
-      granularity
-    );
+    const report = await reportingService.getDailyActivityReport(userId, dateRange, granularity);
 
     return NextResponse.json({ data: report });
   } catch (error) {

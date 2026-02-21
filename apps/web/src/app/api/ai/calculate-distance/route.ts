@@ -78,8 +78,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Distance calculation failed',
-          details:
-            aiError instanceof Error ? aiError.message : 'Unknown AI error',
+          details: aiError instanceof Error ? aiError.message : 'Unknown AI error',
         },
         { status: 422 }
       );

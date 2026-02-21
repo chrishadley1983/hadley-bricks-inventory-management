@@ -149,12 +149,12 @@ export interface EbaySoldPriceResult {
 // ============================================
 
 export interface ImageProcessSettings {
-  brightness: number;   // 0.5 to 2.0, default 1.1
-  contrast: number;     // 0.5 to 2.0, default 1.05
-  saturation: number;   // 0.5 to 2.0, default 1.0
-  sharpness: number;    // 0 to 1, default 0.5
-  padding: number;      // 0.05 to 0.3, default 0.1
-  temperature: number;  // -50 to 50, default 0
+  brightness: number; // 0.5 to 2.0, default 1.1
+  contrast: number; // 0.5 to 2.0, default 1.05
+  saturation: number; // 0.5 to 2.0, default 1.0
+  sharpness: number; // 0 to 1, default 0.5
+  padding: number; // 0.05 to 0.3, default 0.1
+  temperature: number; // -50 to 50, default 0
 }
 
 export interface ImageAnalysisResult {
@@ -167,7 +167,7 @@ export interface StudioImage {
   id: string;
   name: string;
   fileName: string;
-  original: string;      // base64 data URL
+  original: string; // base64 data URL
   processed: string | null;
   settings: ImageProcessSettings;
   analysis: ImageAnalysisResult | null;

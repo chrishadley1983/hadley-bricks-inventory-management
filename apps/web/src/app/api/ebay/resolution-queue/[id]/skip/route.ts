@@ -11,10 +11,7 @@ const SkipSchema = z.object({
  * POST /api/ebay/resolution-queue/[id]/skip
  * Skip a queue item (mark as skipped or no_inventory)
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

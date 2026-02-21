@@ -2,14 +2,7 @@
 
 import { Skeleton } from './skeleton';
 import { Card, CardContent, CardHeader } from './card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from './table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './table';
 
 interface TableSkeletonProps {
   /** Number of columns to render */

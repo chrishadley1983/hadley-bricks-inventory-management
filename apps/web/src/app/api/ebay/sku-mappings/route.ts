@@ -44,10 +44,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (invError || !inventoryItem) {
-      return NextResponse.json(
-        { error: 'Inventory item not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 });
     }
 
     // Create or update the mapping (upsert)
@@ -70,10 +67,7 @@ export async function POST(request: NextRequest) {
 
     if (mappingError) {
       console.error('[POST /api/ebay/sku-mappings] Error:', mappingError);
-      return NextResponse.json(
-        { error: 'Failed to create mapping' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to create mapping' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -117,7 +111,8 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from('ebay_sku_mappings')
-      .select(`
+      .select(
+        `
         *,
         inventory_item:inventory_items(
           id,
@@ -127,7 +122,8 @@ export async function GET(request: NextRequest) {
           status,
           storage_location
         )
-      `)
+      `
+      )
       .eq('user_id', user.id);
 
     if (sku) {
@@ -138,10 +134,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GET /api/ebay/sku-mappings] Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch mappings' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch mappings' }, { status: 500 });
     }
 
     return NextResponse.json({ data: mappings });

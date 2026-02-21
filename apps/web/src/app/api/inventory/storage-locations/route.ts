@@ -42,9 +42,9 @@ export async function GET(_request: NextRequest) {
     }
 
     // 3. Deduplicate and sort (in case of case variations)
-    const locations = [...new Set(data?.map((d) => d.storage_location).filter(Boolean) as string[])].sort(
-      (a, b) => a.localeCompare(b)
-    );
+    const locations = [
+      ...new Set(data?.map((d) => d.storage_location).filter(Boolean) as string[]),
+    ].sort((a, b) => a.localeCompare(b));
 
     console.log(`[GET /api/inventory/storage-locations] Returning ${locations.length} locations`);
 

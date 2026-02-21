@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import {
-  ALL_PLATFORMS,
-  SELLING_PLATFORMS,
-  TARGET_PLATFORMS,
-} from '@hadley-bricks/database';
+import { ALL_PLATFORMS, SELLING_PLATFORMS, TARGET_PLATFORMS } from '@hadley-bricks/database';
 
 /**
  * Schema for all platforms (integration sources)

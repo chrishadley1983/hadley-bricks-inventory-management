@@ -146,7 +146,9 @@ describe('InventoryService', () => {
         condition: 'New' as const,
       };
 
-      mockInventoryRepo.create.mockImplementation((data) => Promise.resolve({ id: 'new-id', ...data }));
+      mockInventoryRepo.create.mockImplementation((data) =>
+        Promise.resolve({ id: 'new-id', ...data })
+      );
 
       await service.create(input);
 
@@ -164,7 +166,9 @@ describe('InventoryService', () => {
         condition: 'Used' as const,
       };
 
-      mockInventoryRepo.create.mockImplementation((data) => Promise.resolve({ id: 'new-id', ...data }));
+      mockInventoryRepo.create.mockImplementation((data) =>
+        Promise.resolve({ id: 'new-id', ...data })
+      );
 
       await service.create(input);
 
@@ -183,7 +187,9 @@ describe('InventoryService', () => {
         sku: 'CUSTOM-SKU-001',
       };
 
-      mockInventoryRepo.create.mockImplementation((data) => Promise.resolve({ id: 'new-id', ...data }));
+      mockInventoryRepo.create.mockImplementation((data) =>
+        Promise.resolve({ id: 'new-id', ...data })
+      );
 
       await service.create(input);
 
@@ -203,7 +209,9 @@ describe('InventoryService', () => {
       ];
 
       mockInventoryRepo.createMany.mockImplementation((data) =>
-        Promise.resolve(data.map((item: { set_number: string }, i: number) => ({ id: `id-${i}`, ...item })))
+        Promise.resolve(
+          data.map((item: { set_number: string }, i: number) => ({ id: `id-${i}`, ...item }))
+        )
       );
 
       const result = await service.createMany(inputs);

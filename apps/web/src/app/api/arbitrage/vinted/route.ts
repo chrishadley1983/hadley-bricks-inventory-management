@@ -141,7 +141,9 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const vintedUrl = searchParams.get('url');
-  const cogThreshold = parseFloat(searchParams.get('cogThreshold') || String(DEFAULT_COG_THRESHOLD));
+  const cogThreshold = parseFloat(
+    searchParams.get('cogThreshold') || String(DEFAULT_COG_THRESHOLD)
+  );
 
   if (!vintedUrl) {
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
@@ -220,7 +222,10 @@ export async function GET(request: NextRequest) {
     if (asins.length > 0) {
       // Get user's Amazon credentials
       const credentialsRepo = new CredentialsRepository(supabase);
-      const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(user.id, 'amazon');
+      const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(
+        user.id,
+        'amazon'
+      );
 
       if (credentials) {
         const amazonClient = new AmazonPricingClient(credentials);

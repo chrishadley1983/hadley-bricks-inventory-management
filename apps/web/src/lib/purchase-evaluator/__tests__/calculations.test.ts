@@ -91,7 +91,7 @@ describe('Purchase Evaluator Calculations', () => {
     it('should include per-order fee of £0.30', () => {
       const result = calculateEbayProfit(100, 50);
 
-      expect(result!.perOrderFee).toBe(0.30);
+      expect(result!.perOrderFee).toBe(0.3);
     });
 
     it('should calculate payment processing fee at 2.5%', () => {
@@ -636,10 +636,7 @@ describe('Purchase Evaluator Calculations', () => {
     });
 
     it('should calculate average COG percentage', () => {
-      const items = [
-        createMockItem({ cogPercent: 40 }),
-        createMockItem({ cogPercent: 60 }),
-      ];
+      const items = [createMockItem({ cogPercent: 40 }), createMockItem({ cogPercent: 60 })];
 
       const result = calculateEvaluationSummary(items);
 
@@ -657,9 +654,7 @@ describe('Purchase Evaluator Calculations', () => {
     });
 
     it('should use unitCost when allocatedCost is null', () => {
-      const items = [
-        createMockItem({ allocatedCost: null, unitCost: 60 }),
-      ];
+      const items = [createMockItem({ allocatedCost: null, unitCost: 60 })];
 
       const result = calculateEvaluationSummary(items);
 
@@ -681,10 +676,7 @@ describe('Purchase Evaluator Calculations', () => {
     });
 
     it('should handle items with null gross profit', () => {
-      const items = [
-        createMockItem({ grossProfit: 30 }),
-        createMockItem({ grossProfit: null }),
-      ];
+      const items = [createMockItem({ grossProfit: 30 }), createMockItem({ grossProfit: null })];
 
       const result = calculateEvaluationSummary(items);
 

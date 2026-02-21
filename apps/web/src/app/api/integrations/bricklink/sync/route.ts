@@ -29,7 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse options
-    let options = { includeFiled: false, fullSync: false, includeItems: true, resetBeforeSync: false, transactionsOnly: false };
+    let options = {
+      includeFiled: false,
+      fullSync: false,
+      includeItems: true,
+      resetBeforeSync: false,
+      transactionsOnly: false,
+    };
     try {
       const body = await request.json();
       const parsed = SyncOptionsSchema.safeParse(body);
@@ -56,10 +62,7 @@ export async function POST(request: NextRequest) {
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
     if (!isConfigured) {
-      return NextResponse.json(
-        { error: 'BrickLink credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'BrickLink credentials not configured' }, { status: 400 });
     }
 
     // Sync transactions (to bricklink_transactions table)

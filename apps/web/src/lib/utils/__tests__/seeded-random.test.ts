@@ -5,11 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  cyrb53,
-  createSeededRandom,
-  createDailySeed,
-} from '../seeded-random';
+import { cyrb53, createSeededRandom, createDailySeed } from '../seeded-random';
 
 describe('Seeded Random Utility', () => {
   describe('cyrb53', () => {

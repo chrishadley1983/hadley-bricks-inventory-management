@@ -53,10 +53,7 @@ export interface BulkDismissResult {
   ids: string[];
 }
 
-export async function fetchReviewQueue(
-  page = 1,
-  pageSize = 50
-): Promise<ReviewQueueResponse> {
+export async function fetchReviewQueue(page = 1, pageSize = 50): Promise<ReviewQueueResponse> {
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));

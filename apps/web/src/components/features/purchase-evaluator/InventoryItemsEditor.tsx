@@ -132,9 +132,7 @@ export function InventoryItemsEditor({ items, onChange }: InventoryItemsEditorPr
                   <span className="text-muted-foreground">#{index + 1}</span>{' '}
                   <span className="font-mono">{item.set_number}</span>
                   {item.item_name && (
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      {item.item_name}
-                    </span>
+                    <span className="ml-2 font-normal text-muted-foreground">{item.item_name}</span>
                   )}
                 </CardTitle>
               </CardHeader>
@@ -143,11 +141,7 @@ export function InventoryItemsEditor({ items, onChange }: InventoryItemsEditorPr
                   {/* Row 1: Set Number (read-only), Item Name, Condition, Status */}
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Set Number</Label>
-                    <Input
-                      value={item.set_number}
-                      disabled
-                      className="bg-muted"
-                    />
+                    <Input value={item.set_number} disabled className="bg-muted" />
                   </div>
 
                   <div className="space-y-1">

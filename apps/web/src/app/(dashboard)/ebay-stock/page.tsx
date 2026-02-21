@@ -44,9 +44,7 @@ export default function EbayStockPage() {
       toast({
         title: 'Import failed',
         description:
-          error instanceof Error
-            ? error.message
-            : 'Failed to import listings from eBay.',
+          error instanceof Error ? error.message : 'Failed to import listings from eBay.',
         variant: 'destructive',
       });
     }
@@ -91,10 +89,7 @@ export default function EbayStockPage() {
         {/* SKU Issues Banner */}
         <SkuIssuesBanner />
 
-        <Tabs
-          value={activeTab}
-          onValueChange={(v: string) => setActiveTab(v as TabValue)}
-        >
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as TabValue)}>
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="listings">eBay Listings</TabsTrigger>
             <TabsTrigger value="comparison">Stock Comparison</TabsTrigger>

@@ -323,7 +323,9 @@ describe('BrickLinkUploadService', () => {
         delete: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
       };
-      mockBuilder.eq.mockReturnValueOnce(mockBuilder).mockResolvedValueOnce({ error: { message: 'Delete failed' } });
+      mockBuilder.eq
+        .mockReturnValueOnce(mockBuilder)
+        .mockResolvedValueOnce({ error: { message: 'Delete failed' } });
       mockSupabase.from.mockReturnValue(mockBuilder);
 
       await expect(service.delete('upload-1')).rejects.toThrow();
@@ -369,9 +371,27 @@ describe('BrickLinkUploadService', () => {
   describe('getSummary', () => {
     it('should calculate summary statistics', async () => {
       const mockUploads = [
-        { id: 'upload-1', upload_date: '2025-01-15', total_quantity: 100, selling_price: 500, cost: 300 },
-        { id: 'upload-2', upload_date: '2025-01-16', total_quantity: 50, selling_price: 250, cost: 150 },
-        { id: 'upload-3', upload_date: '2025-01-14', total_quantity: 75, selling_price: 375, cost: 225 },
+        {
+          id: 'upload-1',
+          upload_date: '2025-01-15',
+          total_quantity: 100,
+          selling_price: 500,
+          cost: 300,
+        },
+        {
+          id: 'upload-2',
+          upload_date: '2025-01-16',
+          total_quantity: 50,
+          selling_price: 250,
+          cost: 150,
+        },
+        {
+          id: 'upload-3',
+          upload_date: '2025-01-14',
+          total_quantity: 75,
+          selling_price: 375,
+          cost: 225,
+        },
       ];
 
       mockSupabase.from.mockReturnValue({
@@ -393,9 +413,27 @@ describe('BrickLinkUploadService', () => {
 
     it('should return recent uploads sorted by date descending', async () => {
       const mockUploads = [
-        { id: 'upload-1', upload_date: '2025-01-14', total_quantity: 100, selling_price: 500, cost: 300 },
-        { id: 'upload-2', upload_date: '2025-01-16', total_quantity: 50, selling_price: 250, cost: 150 },
-        { id: 'upload-3', upload_date: '2025-01-15', total_quantity: 75, selling_price: 375, cost: 225 },
+        {
+          id: 'upload-1',
+          upload_date: '2025-01-14',
+          total_quantity: 100,
+          selling_price: 500,
+          cost: 300,
+        },
+        {
+          id: 'upload-2',
+          upload_date: '2025-01-16',
+          total_quantity: 50,
+          selling_price: 250,
+          cost: 150,
+        },
+        {
+          id: 'upload-3',
+          upload_date: '2025-01-15',
+          total_quantity: 75,
+          selling_price: 375,
+          cost: 225,
+        },
       ];
 
       mockSupabase.from.mockReturnValue({
@@ -436,7 +474,13 @@ describe('BrickLinkUploadService', () => {
 
     it('should handle null cost values', async () => {
       const mockUploads = [
-        { id: 'upload-1', upload_date: '2025-01-15', total_quantity: 100, selling_price: 500, cost: null },
+        {
+          id: 'upload-1',
+          upload_date: '2025-01-15',
+          total_quantity: 100,
+          selling_price: 500,
+          cost: null,
+        },
       ];
 
       mockSupabase.from.mockReturnValue({
@@ -479,11 +523,7 @@ describe('BrickLinkUploadService', () => {
     });
 
     it('should exclude null sources', async () => {
-      const mockSources = [
-        { source: 'Bricqer' },
-        { source: null },
-        { source: 'Manual' },
-      ];
+      const mockSources = [{ source: 'Bricqer' }, { source: null }, { source: 'Manual' }];
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),

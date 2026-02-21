@@ -74,7 +74,9 @@ export class PurchaseImageService {
     purchaseId: string,
     images: PurchaseImageUploadData[]
   ): Promise<PurchaseImageUploadResult[]> {
-    console.log(`[PurchaseImageService] Uploading ${images.length} images for purchase ${purchaseId}`);
+    console.log(
+      `[PurchaseImageService] Uploading ${images.length} images for purchase ${purchaseId}`
+    );
 
     const results: PurchaseImageUploadResult[] = [];
 
@@ -239,14 +241,19 @@ export class PurchaseImageService {
         .eq('purchase_id', purchaseId)
         .eq('user_id', this.userId);
 
-      console.log(`[PurchaseImageService] Deleted ${images.length} images for purchase ${purchaseId}`);
+      console.log(
+        `[PurchaseImageService] Deleted ${images.length} images for purchase ${purchaseId}`
+      );
     }
   }
 
   /**
    * Update image caption
    */
-  async updateCaption(imageId: string, caption: string): Promise<{ success: boolean; error?: string }> {
+  async updateCaption(
+    imageId: string,
+    caption: string
+  ): Promise<{ success: boolean; error?: string }> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (this.supabase as any)
       .from('purchase_images')
@@ -289,7 +296,9 @@ export class PurchaseImageService {
   /**
    * Upload to Supabase storage
    */
-  private async uploadToStorage(image: PurchaseImageUploadData): Promise<PurchaseImageUploadResult> {
+  private async uploadToStorage(
+    image: PurchaseImageUploadData
+  ): Promise<PurchaseImageUploadResult> {
     try {
       // Convert base64 to binary
       const base64Data = image.base64.replace(/^data:image\/\w+;base64,/, '');
@@ -366,7 +375,9 @@ export class PurchaseImageService {
     const estimatedSize = (image.base64.length * 3) / 4;
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (estimatedSize > maxSize) {
-      errors.push(`Image too large: ~${(estimatedSize / 1024 / 1024).toFixed(1)}MB. Maximum is 10MB.`);
+      errors.push(
+        `Image too large: ~${(estimatedSize / 1024 / 1024).toFixed(1)}MB. Maximum is 10MB.`
+      );
     }
 
     return {

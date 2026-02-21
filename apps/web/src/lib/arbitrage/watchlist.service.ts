@@ -94,11 +94,15 @@ export class ArbitrageWatchlistService {
 
     // 1. Get all ASINs ever sold on Amazon (from order_items joined to platform_orders)
     const soldAsins = await this.getSoldAmazonAsins(userId);
-    console.log(`[ArbitrageWatchlistService.refreshWatchlist] Found ${soldAsins.length} sold ASINs`);
+    console.log(
+      `[ArbitrageWatchlistService.refreshWatchlist] Found ${soldAsins.length} sold ASINs`
+    );
 
     // 2. Get retired seeded ASINs with pricing data
     const retiredSeeded = await this.getRetiredSeededWithPricing(userId);
-    console.log(`[ArbitrageWatchlistService.refreshWatchlist] Found ${retiredSeeded.length} retired seeded with pricing`);
+    console.log(
+      `[ArbitrageWatchlistService.refreshWatchlist] Found ${retiredSeeded.length} retired seeded with pricing`
+    );
 
     // Combine both sources into a Map keyed by bricklink_set_number
     const watchlistMap = new Map<string, { asin: string | null; source: WatchlistSource }>();
@@ -171,11 +175,9 @@ export class ArbitrageWatchlistService {
       const BATCH_SIZE = 100;
       for (let i = 0; i < upsertData.length; i += BATCH_SIZE) {
         const batch = upsertData.slice(i, i + BATCH_SIZE);
-        const { error } = await this.supabase
-          .from('arbitrage_watchlist')
-          .upsert(batch, {
-            onConflict: 'user_id,bricklink_set_number',
-          });
+        const { error } = await this.supabase.from('arbitrage_watchlist').upsert(batch, {
+          onConflict: 'user_id,bricklink_set_number',
+        });
 
         if (error) {
           console.error('[ArbitrageWatchlistService.refreshWatchlist] Upsert error:', error);
@@ -197,7 +199,9 @@ export class ArbitrageWatchlistService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[ArbitrageWatchlistService.refreshWatchlist] Completed in ${duration}ms: ${added} added, ${removed} deactivated, ${watchlistMap.size} total`);
+    console.log(
+      `[ArbitrageWatchlistService.refreshWatchlist] Completed in ${duration}ms: ${added} added, ${removed} deactivated, ${watchlistMap.size} total`
+    );
 
     return {
       added,
@@ -345,14 +349,16 @@ export class ArbitrageWatchlistService {
       // Get inventory items that have been sold on Amazon (have an amazon_asin and linked to an order)
       const { data, error } = await this.supabase
         .from('inventory_items')
-        .select(`
+        .select(
+          `
           amazon_asin,
           set_number,
           order_items!inventory_item_id(
             order_id,
             platform_orders!inner(platform)
           )
-        `)
+        `
+        )
         .eq('user_id', userId)
         .not('amazon_asin', 'is', null)
         .not('order_items', 'is', null)
@@ -372,9 +378,7 @@ export class ArbitrageWatchlistService {
         }> | null;
 
         // Check if any order is from Amazon
-        const hasAmazonOrder = orderItems?.some(
-          (oi) => oi.platform_orders?.platform === 'amazon'
-        );
+        const hasAmazonOrder = orderItems?.some((oi) => oi.platform_orders?.platform === 'amazon');
 
         if (item.amazon_asin && hasAmazonOrder && !seenAsins.has(item.amazon_asin)) {
           seenAsins.add(item.amazon_asin);
@@ -413,7 +417,8 @@ export class ArbitrageWatchlistService {
       // 3. Have pricing data (buy_box_price or was_price_90d)
       const { data, error } = await this.supabase
         .from('user_seeded_asin_preferences')
-        .select(`
+        .select(
+          `
           manual_asin_override,
           seeded_asins!inner(
             asin,
@@ -422,7 +427,8 @@ export class ArbitrageWatchlistService {
               us_date_removed
             )
           )
-        `)
+        `
+        )
         .eq('user_id', userId)
         .eq('include_in_sync', true)
         .eq('user_status', 'active')

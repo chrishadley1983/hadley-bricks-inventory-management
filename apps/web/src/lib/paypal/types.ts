@@ -238,13 +238,7 @@ export interface PayPalCredentialsRow {
 }
 
 // Supabase Json type compatibility
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface PayPalTransactionRow {
   id: string;

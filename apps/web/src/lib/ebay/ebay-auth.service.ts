@@ -8,7 +8,12 @@
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EbayTokenResponse } from './types';
-import type { EbayCredentials, EbayCredentialsUpdate, EbayCredentialsInsert, EbayMarketplaceId } from '@hadley-bricks/database';
+import type {
+  EbayCredentials,
+  EbayCredentialsUpdate,
+  EbayCredentialsInsert,
+  EbayMarketplaceId,
+} from '@hadley-bricks/database';
 
 // ============================================================================
 // Constants
@@ -71,9 +76,7 @@ const LISTING_MANAGEMENT_SCOPES = [
 /**
  * Scope required for analytics/traffic data (views)
  */
-const ANALYTICS_SCOPES = [
-  'https://api.ebay.com/oauth/api_scope/sell.analytics.readonly',
-];
+const ANALYTICS_SCOPES = ['https://api.ebay.com/oauth/api_scope/sell.analytics.readonly'];
 
 /**
  * All required scopes for full functionality
@@ -184,9 +187,9 @@ export class EbayAuthService {
   private async exchangeCodeForTokens(code: string): Promise<EbayTokenResponse> {
     const tokenUrl = this.config.sandbox ? EBAY_SANDBOX_TOKEN_URL : EBAY_TOKEN_URL;
 
-    const credentials = Buffer.from(
-      `${this.config.clientId}:${this.config.clientSecret}`
-    ).toString('base64');
+    const credentials = Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString(
+      'base64'
+    );
 
     const response = await fetch(tokenUrl, {
       method: 'POST',
@@ -239,10 +242,7 @@ export class EbayAuthService {
   /**
    * Refresh the access token using the refresh token
    */
-  async refreshAccessToken(
-    userId: string,
-    refreshToken: string
-  ): Promise<EbayCredentials | null> {
+  async refreshAccessToken(userId: string, refreshToken: string): Promise<EbayCredentials | null> {
     try {
       const tokenUrl = this.config.sandbox ? EBAY_SANDBOX_TOKEN_URL : EBAY_TOKEN_URL;
 
@@ -282,9 +282,7 @@ export class EbayAuthService {
 
       const updateData: EbayCredentialsUpdate = {
         access_token: tokens.access_token,
-        access_token_expires_at: new Date(
-          now.getTime() + tokens.expires_in * 1000
-        ).toISOString(),
+        access_token_expires_at: new Date(now.getTime() + tokens.expires_in * 1000).toISOString(),
       };
 
       // Update refresh token if a new one was provided
@@ -390,9 +388,7 @@ export class EbayAuthService {
 
     const currentScopes = credentials.scopes || [];
     const currentScopeSet = new Set(currentScopes);
-    const missingScopes = requiredForRefresh.filter(
-      (scope) => !currentScopeSet.has(scope)
-    );
+    const missingScopes = requiredForRefresh.filter((scope) => !currentScopeSet.has(scope));
 
     return {
       hasScopes: missingScopes.length === 0,
@@ -438,9 +434,7 @@ export class EbayAuthService {
 
     const currentScopes = credentials.scopes || [];
     const currentScopeSet = new Set(currentScopes);
-    const missingScopes = REQUIRED_SCOPES.filter(
-      (scope) => !currentScopeSet.has(scope)
-    );
+    const missingScopes = REQUIRED_SCOPES.filter((scope) => !currentScopeSet.has(scope));
 
     return {
       hasScopes: missingScopes.length === 0,
@@ -461,7 +455,10 @@ export class EbayAuthService {
 
     // Note: Type assertion needed until migration is pushed and types regenerated
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from('ebay_credentials').delete().eq('user_id', userId);
+    const { error } = await (supabase as any)
+      .from('ebay_credentials')
+      .delete()
+      .eq('user_id', userId);
 
     if (error) {
       console.error('[EbayAuthService] Failed to disconnect:', error);

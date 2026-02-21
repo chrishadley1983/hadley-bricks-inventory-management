@@ -17,7 +17,10 @@ const listingPlatformSchema = z
   .nullable()
   .optional()
   .refine(
-    (val) => val === null || val === undefined || SELLING_PLATFORMS.includes(val as typeof SELLING_PLATFORMS[number]),
+    (val) =>
+      val === null ||
+      val === undefined ||
+      SELLING_PLATFORMS.includes(val as (typeof SELLING_PLATFORMS)[number]),
     { message: `listing_platform must be one of: ${SELLING_PLATFORMS.join(', ')}` }
   );
 
@@ -119,23 +122,55 @@ export async function GET(request: NextRequest) {
     }
 
     const {
-      page, pageSize, status, condition, platform, salePlatform, source, linkedLot, purchaseId, search, excludeLinked,
+      page,
+      pageSize,
+      status,
+      condition,
+      platform,
+      salePlatform,
+      source,
+      linkedLot,
+      purchaseId,
+      search,
+      excludeLinked,
       // Numeric ranges
-      costMin, costMax, listingValueMin, listingValueMax,
-      soldGrossMin, soldGrossMax, soldNetMin, soldNetMax, profitMin, profitMax,
-      soldFeesMin, soldFeesMax, soldPostageMin, soldPostageMax,
+      costMin,
+      costMax,
+      listingValueMin,
+      listingValueMax,
+      soldGrossMin,
+      soldGrossMax,
+      soldNetMin,
+      soldNetMax,
+      profitMin,
+      profitMax,
+      soldFeesMin,
+      soldFeesMax,
+      soldPostageMin,
+      soldPostageMax,
       // Date ranges
-      purchaseDateFrom, purchaseDateTo, listingDateFrom, listingDateTo, soldDateFrom, soldDateTo,
+      purchaseDateFrom,
+      purchaseDateTo,
+      listingDateFrom,
+      listingDateTo,
+      soldDateFrom,
+      soldDateTo,
       // Empty filters
-      storageLocationFilter, amazonAsinFilter, linkedLotFilter: linkedLotEmptyFilter, linkedOrderFilter,
-      notesFilter, skuFilter, ebayListingFilter, archiveLocationFilter,
+      storageLocationFilter,
+      amazonAsinFilter,
+      linkedLotFilter: linkedLotEmptyFilter,
+      linkedOrderFilter,
+      notesFilter,
+      skuFilter,
+      ebayListingFilter,
+      archiveLocationFilter,
     } = parsed.data;
 
     // Parse status - can be comma-separated for multiple values
     type InventoryStatus = 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD';
     let statusFilter: InventoryStatus | InventoryStatus[] | undefined;
     if (status) {
-      const statuses = status.split(',').map(s => s.trim()) as InventoryStatus[];
+      const statuses = status.split(',').map((s) => s.trim()) as InventoryStatus[];
       statusFilter = statuses.length === 1 ? statuses[0] : statuses;
     }
 
@@ -153,16 +188,44 @@ export async function GET(request: NextRequest) {
         searchTerm: search,
         excludeLinkedToOrders: excludeLinked,
         // Advanced filters
-        costRange: (costMin !== undefined || costMax !== undefined) ? { min: costMin, max: costMax } : undefined,
-        listingValueRange: (listingValueMin !== undefined || listingValueMax !== undefined) ? { min: listingValueMin, max: listingValueMax } : undefined,
-        soldGrossRange: (soldGrossMin !== undefined || soldGrossMax !== undefined) ? { min: soldGrossMin, max: soldGrossMax } : undefined,
-        soldNetRange: (soldNetMin !== undefined || soldNetMax !== undefined) ? { min: soldNetMin, max: soldNetMax } : undefined,
-        profitRange: (profitMin !== undefined || profitMax !== undefined) ? { min: profitMin, max: profitMax } : undefined,
-        soldFeesRange: (soldFeesMin !== undefined || soldFeesMax !== undefined) ? { min: soldFeesMin, max: soldFeesMax } : undefined,
-        soldPostageRange: (soldPostageMin !== undefined || soldPostageMax !== undefined) ? { min: soldPostageMin, max: soldPostageMax } : undefined,
-        purchaseDateRange: (purchaseDateFrom || purchaseDateTo) ? { from: purchaseDateFrom, to: purchaseDateTo } : undefined,
-        listingDateRange: (listingDateFrom || listingDateTo) ? { from: listingDateFrom, to: listingDateTo } : undefined,
-        soldDateRange: (soldDateFrom || soldDateTo) ? { from: soldDateFrom, to: soldDateTo } : undefined,
+        costRange:
+          costMin !== undefined || costMax !== undefined
+            ? { min: costMin, max: costMax }
+            : undefined,
+        listingValueRange:
+          listingValueMin !== undefined || listingValueMax !== undefined
+            ? { min: listingValueMin, max: listingValueMax }
+            : undefined,
+        soldGrossRange:
+          soldGrossMin !== undefined || soldGrossMax !== undefined
+            ? { min: soldGrossMin, max: soldGrossMax }
+            : undefined,
+        soldNetRange:
+          soldNetMin !== undefined || soldNetMax !== undefined
+            ? { min: soldNetMin, max: soldNetMax }
+            : undefined,
+        profitRange:
+          profitMin !== undefined || profitMax !== undefined
+            ? { min: profitMin, max: profitMax }
+            : undefined,
+        soldFeesRange:
+          soldFeesMin !== undefined || soldFeesMax !== undefined
+            ? { min: soldFeesMin, max: soldFeesMax }
+            : undefined,
+        soldPostageRange:
+          soldPostageMin !== undefined || soldPostageMax !== undefined
+            ? { min: soldPostageMin, max: soldPostageMax }
+            : undefined,
+        purchaseDateRange:
+          purchaseDateFrom || purchaseDateTo
+            ? { from: purchaseDateFrom, to: purchaseDateTo }
+            : undefined,
+        listingDateRange:
+          listingDateFrom || listingDateTo
+            ? { from: listingDateFrom, to: listingDateTo }
+            : undefined,
+        soldDateRange:
+          soldDateFrom || soldDateTo ? { from: soldDateFrom, to: soldDateTo } : undefined,
         storageLocationFilter,
         amazonAsinFilter,
         linkedLotEmptyFilter,

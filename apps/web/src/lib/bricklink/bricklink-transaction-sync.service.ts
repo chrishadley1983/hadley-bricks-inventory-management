@@ -149,11 +149,23 @@ export class BrickLinkTransactionSyncService {
    * Sync transactions from BrickLink API
    * Stores ALL orders (no filtering)
    */
-  async syncTransactions(userId: string, options?: BrickLinkSyncOptions): Promise<BrickLinkSyncResult> {
-    console.log('[BrickLinkTransactionSyncService] Starting transaction sync for user:', userId, 'options:', options);
+  async syncTransactions(
+    userId: string,
+    options?: BrickLinkSyncOptions
+  ): Promise<BrickLinkSyncResult> {
+    console.log(
+      '[BrickLinkTransactionSyncService] Starting transaction sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await createClient();
-    const syncMode: BrickLinkSyncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
+    const syncMode: BrickLinkSyncMode = options?.fromDate
+      ? 'HISTORICAL'
+      : options?.fullSync
+        ? 'FULL'
+        : 'INCREMENTAL';
     console.log('[BrickLinkTransactionSyncService] Sync mode:', syncMode);
 
     // Check for running sync
@@ -215,7 +227,10 @@ export class BrickLinkTransactionSyncService {
       // Get BrickLink client
       console.log('[BrickLinkTransactionSyncService] Getting BrickLink client...');
       const credentialsRepo = new CredentialsRepository(supabase);
-      const credentials = await credentialsRepo.getCredentials<BrickLinkCredentials>(userId, 'bricklink');
+      const credentials = await credentialsRepo.getCredentials<BrickLinkCredentials>(
+        userId,
+        'bricklink'
+      );
 
       if (!credentials) {
         throw new Error('BrickLink credentials not configured');
@@ -242,7 +257,7 @@ export class BrickLinkTransactionSyncService {
       }
 
       // Combine and dedupe (in case of overlap)
-      const orderMap = new Map<number, typeof activeOrders[0]>();
+      const orderMap = new Map<number, (typeof activeOrders)[0]>();
       for (const order of activeOrders) {
         orderMap.set(order.order_id, order);
       }
@@ -287,15 +302,22 @@ export class BrickLinkTransactionSyncService {
       // Transform and upsert orders
       console.log('[BrickLinkTransactionSyncService] Upserting orders to database...');
       const { created, updated } = await this.upsertTransactions(userId, ordersToProcess);
-      console.log('[BrickLinkTransactionSyncService] Upsert complete. Created:', created, 'Updated:', updated);
+      console.log(
+        '[BrickLinkTransactionSyncService] Upsert complete. Created:',
+        created,
+        'Updated:',
+        updated
+      );
 
       // Update sync cursor to newest order date
       const newestDate =
         ordersToProcess.length > 0
-          ? ordersToProcess.reduce((newest, order) => {
-              const orderDate = new Date(order.date_ordered);
-              return orderDate > newest ? orderDate : newest;
-            }, new Date(0)).toISOString()
+          ? ordersToProcess
+              .reduce((newest, order) => {
+                const orderDate = new Date(order.date_ordered);
+                return orderDate > newest ? orderDate : newest;
+              }, new Date(0))
+              .toISOString()
           : new Date().toISOString();
 
       // Update sync config with cursor

@@ -117,7 +117,8 @@ export async function GET() {
 
     const dailyListingCounts = {
       ebay: ebayDailyResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
-      amazon: amazonDailyResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
+      amazon:
+        amazonDailyResult.data?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0,
       bricklink: bricklinkDailyResult.count ?? 0,
       brickowl: brickowlDailyResult.count ?? 0,
     };
@@ -251,7 +252,7 @@ export async function GET() {
 
       history.dailyListedValue.push(
         (dayListedItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
-        (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
+          (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
       );
 
       // Sold value for the day (platform_orders + ebay_orders)
@@ -272,7 +273,7 @@ export async function GET() {
 
       history.dailySoldValue.push(
         (dayOrders?.reduce((sum, order) => sum + (order.total || 0), 0) ?? 0) +
-        (dayEbayOrders?.reduce((sum, order) => sum + (order.total_fee_basis_amount || 0), 0) ?? 0)
+          (dayEbayOrders?.reduce((sum, order) => sum + (order.total_fee_basis_amount || 0), 0) ?? 0)
       );
 
       // BrickLink value for the day (inventory items + uploads)
@@ -285,7 +286,7 @@ export async function GET() {
 
       history.bricklinkWeeklyValue.push(
         (dayBricklinkItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
-        (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
+          (dayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0)
       );
     }
 

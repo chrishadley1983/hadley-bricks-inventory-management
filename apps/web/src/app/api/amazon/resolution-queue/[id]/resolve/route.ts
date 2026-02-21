@@ -11,10 +11,7 @@ const ResolveSchema = z.object({
  * POST /api/amazon/resolution-queue/[id]/resolve
  * Resolve a queue item by selecting inventory item(s)
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

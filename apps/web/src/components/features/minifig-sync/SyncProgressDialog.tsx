@@ -28,7 +28,8 @@ function ResultSummary({ result }: { result: Record<string, unknown> }) {
   if ('itemsProcessed' in result) lines.push({ label: 'Processed', value: result.itemsProcessed });
   if ('itemsCreated' in result) lines.push({ label: 'Created', value: result.itemsCreated });
   if ('itemsUpdated' in result) lines.push({ label: 'Updated', value: result.itemsUpdated });
-  if ('itemsResearched' in result) lines.push({ label: 'Researched', value: result.itemsResearched });
+  if ('itemsResearched' in result)
+    lines.push({ label: 'Researched', value: result.itemsResearched });
   if ('itemsCached' in result) lines.push({ label: 'From cache', value: result.itemsCached });
   if ('itemsStaged' in result) lines.push({ label: 'Staged', value: result.itemsStaged });
   if ('itemsSkipped' in result) lines.push({ label: 'Skipped', value: result.itemsSkipped });
@@ -92,15 +93,23 @@ export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialog
       }}
     >
       <DialogContent
-        onPointerDownOutside={(e: Event) => { if (isStreaming) e.preventDefault(); }}
-        onEscapeKeyDown={(e: KeyboardEvent) => { if (isStreaming) e.preventDefault(); }}
+        onPointerDownOutside={(e: Event) => {
+          if (isStreaming) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e: KeyboardEvent) => {
+          if (isStreaming) e.preventDefault();
+        }}
         className="sm:max-w-md"
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isStreaming && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-            {isComplete && stream.result?.complete === false && <Clock className="h-5 w-5 text-yellow-500" />}
-            {isComplete && stream.result?.complete !== false && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+            {isComplete && stream.result?.complete === false && (
+              <Clock className="h-5 w-5 text-yellow-500" />
+            )}
+            {isComplete && stream.result?.complete !== false && (
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+            )}
             {isError && <AlertCircle className="h-5 w-5 text-destructive" />}
             {title}
           </DialogTitle>
@@ -143,16 +152,12 @@ export function SyncProgressDialog({ open, onClose, stream }: SyncProgressDialog
           {isComplete && stream.result && (
             <div className="space-y-2">
               <ResultSummary result={stream.result} />
-              <p className="text-xs text-muted-foreground">
-                Completed in {formatElapsed(elapsed)}
-              </p>
+              <p className="text-xs text-muted-foreground">Completed in {formatElapsed(elapsed)}</p>
             </div>
           )}
 
           {/* Error message */}
-          {isError && stream.error && (
-            <p className="text-sm text-destructive">{stream.error}</p>
-          )}
+          {isError && stream.error && <p className="text-sm text-destructive">{stream.error}</p>}
         </div>
 
         {/* Footer with close button (only when not streaming) */}

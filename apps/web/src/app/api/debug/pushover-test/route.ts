@@ -19,15 +19,19 @@ export async function GET() {
     }
 
     if (!pushoverService.isEnabled()) {
-      return NextResponse.json({
-        error: 'Pushover not configured',
-        details: 'Missing PUSHOVER_USER_KEY or PUSHOVER_API_TOKEN'
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'Pushover not configured',
+          details: 'Missing PUSHOVER_USER_KEY or PUSHOVER_API_TOKEN',
+        },
+        { status: 400 }
+      );
     }
 
     const result = await pushoverService.send({
       title: '🧪 Test Notification',
-      message: 'Hadley Bricks production deployment is working!\n\nThis is a test notification from your inventory system.',
+      message:
+        'Hadley Bricks production deployment is working!\n\nThis is a test notification from your inventory system.',
       priority: 0,
       sound: 'pushover',
     });
@@ -35,7 +39,7 @@ export async function GET() {
     return NextResponse.json({
       success: result.success,
       error: result.error,
-      message: result.success ? 'Test notification sent!' : 'Failed to send notification'
+      message: result.success ? 'Test notification sent!' : 'Failed to send notification',
     });
   } catch (error) {
     console.error('[GET /api/debug/pushover-test] Error:', error);

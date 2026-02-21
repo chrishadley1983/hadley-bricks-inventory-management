@@ -8,21 +8,12 @@
  */
 
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
@@ -106,9 +97,7 @@ function LoadingState() {
         <p className="text-sm text-muted-foreground">
           AI is reviewing title, description, item specifics, and SEO...
         </p>
-        <p className="text-xs text-muted-foreground">
-          This typically takes 30-60 seconds
-        </p>
+        <p className="text-xs text-muted-foreground">This typically takes 30-60 seconds</p>
       </div>
     </div>
   );
@@ -146,11 +135,7 @@ function ScoreBreakdownSection({ breakdown }: { breakdown: QualityScoreBreakdown
           <BarChart3 className="h-4 w-4 text-blue-500" />
           <span className="font-medium">Score Breakdown</span>
         </div>
-        {isOpen ? (
-          <ChevronUp className="h-4 w-4" />
-        ) : (
-          <ChevronDown className="h-4 w-4" />
-        )}
+        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-3 pt-2">
         {SCORE_CATEGORIES.map(({ key, label, maxScore }) => {
@@ -169,9 +154,7 @@ function ScoreBreakdownSection({ breakdown }: { breakdown: QualityScoreBreakdown
                 value={percentage}
                 className={cn('h-2', getProgressColorClass(item.score, maxScore))}
               />
-              <p className="text-xs text-muted-foreground italic">
-                &quot;{item.feedback}&quot;
-              </p>
+              <p className="text-xs text-muted-foreground italic">&quot;{item.feedback}&quot;</p>
             </div>
           );
         })}
@@ -212,11 +195,7 @@ function ListSection({
             </Badge>
           )}
         </div>
-        {isOpen ? (
-          <ChevronUp className="h-4 w-4" />
-        ) : (
-          <ChevronDown className="h-4 w-4" />
-        )}
+        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-2 pl-6">
         {items.length > 0 ? (
@@ -333,8 +312,7 @@ function ReviewResults({
 
       {/* Footer with timestamp */}
       <p className="text-xs text-muted-foreground text-center">
-        Reviewed by {review.reviewerModel} at{' '}
-        {new Date(review.reviewedAt).toLocaleString()}
+        Reviewed by {review.reviewerModel} at {new Date(review.reviewedAt).toLocaleString()}
       </p>
     </div>
   );

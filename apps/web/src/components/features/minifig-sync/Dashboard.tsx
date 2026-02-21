@@ -45,9 +45,7 @@ function StatCard({ title, value, description, icon: Icon, href }: StatCardProps
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
       </CardContent>
     </Card>
   );
@@ -95,16 +93,17 @@ export function MinifigDashboard() {
 
   if (!data) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        Failed to load dashboard data
-      </div>
+      <div className="text-center py-12 text-muted-foreground">Failed to load dashboard data</div>
     );
   }
 
   const stagedCount = data.countByStatus['STAGED'] ?? 0;
   const publishedCount = data.countByStatus['PUBLISHED'] ?? 0;
-  const soldEbayCount = (data.countByStatus['SOLD_EBAY'] ?? 0) + (data.countByStatus['SOLD_EBAY_PENDING_REMOVAL'] ?? 0);
-  const soldBricqerCount = (data.countByStatus['SOLD_BRICQER'] ?? 0) + (data.countByStatus['SOLD_BRICQER_PENDING_REMOVAL'] ?? 0);
+  const soldEbayCount =
+    (data.countByStatus['SOLD_EBAY'] ?? 0) + (data.countByStatus['SOLD_EBAY_PENDING_REMOVAL'] ?? 0);
+  const soldBricqerCount =
+    (data.countByStatus['SOLD_BRICQER'] ?? 0) +
+    (data.countByStatus['SOLD_BRICQER_PENDING_REMOVAL'] ?? 0);
   const totalSold = soldEbayCount + soldBricqerCount;
 
   return (
@@ -143,7 +142,9 @@ export function MinifigDashboard() {
             <Send className="h-4 w-4 mr-2" />
             Review Queue
             {stagedCount > 0 && (
-              <Badge variant="secondary" className="ml-2">{stagedCount}</Badge>
+              <Badge variant="secondary" className="ml-2">
+                {stagedCount}
+              </Badge>
             )}
           </Link>
         </Button>
@@ -152,7 +153,9 @@ export function MinifigDashboard() {
             <AlertCircle className="h-4 w-4 mr-2" />
             Removal Queue
             {data.pendingRemovals > 0 && (
-              <Badge variant="destructive" className="ml-2">{data.pendingRemovals}</Badge>
+              <Badge variant="destructive" className="ml-2">
+                {data.pendingRemovals}
+              </Badge>
             )}
           </Link>
         </Button>
@@ -181,12 +184,7 @@ export function MinifigDashboard() {
           icon={BarChart3}
           href="/minifigs/review"
         />
-        <StatCard
-          title="Published"
-          value={publishedCount}
-          description="Live on eBay"
-          icon={Send}
-        />
+        <StatCard title="Published" value={publishedCount} description="Live on eBay" icon={Send} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -232,11 +230,7 @@ export function MinifigDashboard() {
         </CardContent>
       </Card>
 
-      <SyncProgressDialog
-        open={dialogOpen}
-        onClose={handleDialogClose}
-        stream={syncStream}
-      />
+      <SyncProgressDialog open={dialogOpen} onClose={handleDialogClose} stream={syncStream} />
     </div>
   );
 }

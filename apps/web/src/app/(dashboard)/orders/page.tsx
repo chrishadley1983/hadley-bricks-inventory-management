@@ -30,13 +30,7 @@ import {
 } from 'lucide-react';
 import { ConfirmOrdersDialog } from '@/components/features/orders/ConfirmOrdersDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -157,7 +151,10 @@ async function fetchAllPlatformStatuses(): Promise<AllPlatformsStatusResponse> {
   return response.json();
 }
 
-async function fetchStatusSummary(days?: string, platform?: string): Promise<StatusSummaryResponse> {
+async function fetchStatusSummary(
+  days?: string,
+  platform?: string
+): Promise<StatusSummaryResponse> {
   const params = new URLSearchParams();
   if (days && days !== 'all') params.set('days', days);
   if (platform) params.set('platform', platform);
@@ -190,7 +187,9 @@ async function fetchEbayStatusSummary(days?: string): Promise<{ data: EbayStatus
   return response.json();
 }
 
-async function fetchEbaySyncLog(): Promise<{ logs: Array<{ started_at: string; status: string }> }> {
+async function fetchEbaySyncLog(): Promise<{
+  logs: Array<{ started_at: string; status: string }>;
+}> {
   const response = await fetch('/api/integrations/ebay/sync');
   if (!response.ok) return { logs: [] };
   return response.json();
@@ -245,7 +244,17 @@ async function fetchEbayOrders(
 }
 
 // Transform eBay order to PlatformOrder-like format for display
-function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder & { order_items?: Array<{ id: string; item_name: string | null; item_number: string | null; inventory_item_id: string | null; legacy_item_id?: string }> } {
+function transformEbayOrderForDisplay(
+  ebayOrder: EbayOrder
+): PlatformOrder & {
+  order_items?: Array<{
+    id: string;
+    item_name: string | null;
+    item_number: string | null;
+    inventory_item_id: string | null;
+    legacy_item_id?: string;
+  }>;
+} {
   // Transform line_items to order_items format for consistent display
   const orderItems = (ebayOrder.line_items || []).map((li) => ({
     id: li.id,
@@ -285,7 +294,15 @@ function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder & { o
     packed_at: null,
     payment_method: null,
     shipped_at: null,
-  } as unknown as PlatformOrder & { order_items?: Array<{ id: string; item_name: string | null; item_number: string | null; inventory_item_id: string | null; legacy_item_id?: string }> };
+  } as unknown as PlatformOrder & {
+    order_items?: Array<{
+      id: string;
+      item_name: string | null;
+      item_number: string | null;
+      inventory_item_id: string | null;
+      legacy_item_id?: string;
+    }>;
+  };
 }
 
 // Backfill types and functions
@@ -314,7 +331,9 @@ async function fetchBackfillStatus(): Promise<BackfillStatusResponse> {
   return response.json();
 }
 
-async function startBackfill(batchSize?: number): Promise<{ data: { progress: BackfillProgress } }> {
+async function startBackfill(
+  batchSize?: number
+): Promise<{ data: { progress: BackfillProgress } }> {
   const response = await fetch('/api/orders/backfill', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -548,11 +567,13 @@ export default function OrdersPage() {
     },
   });
 
-  const itemsNeedingFeeReconciliation = feeReconciliationPreview?.data?.totalItemsNeedingReconciliation || 0;
+  const itemsNeedingFeeReconciliation =
+    feeReconciliationPreview?.data?.totalItemsNeedingReconciliation || 0;
 
   const ebayConnected = ebayConnectionStatus?.isConnected || false;
   const ebayLastSync = ebaySyncLog?.logs?.[0]?.started_at;
-  const ebayUnfulfilledCount = (ebayStatusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Packed || 0);
+  const ebayUnfulfilledCount =
+    (ebayStatusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Packed || 0);
 
   // Backfill state
   const backfillProgress = backfillStatus?.data?.progress;
@@ -562,10 +583,10 @@ export default function OrdersPage() {
   // Compute combined status summary (regular orders + eBay orders)
   // Note: eBay orders are stored in a separate table so we need to add them
   const combinedStatusSummary = {
-    Pending: (statusSummary?.data?.Pending || 0),
+    Pending: statusSummary?.data?.Pending || 0,
     Paid: (statusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Paid || 0),
     Packed: (statusSummary?.data?.Packed || 0) + (ebayStatusSummary?.data?.Packed || 0),
-    Shipped: (statusSummary?.data?.Shipped || 0),
+    Shipped: statusSummary?.data?.Shipped || 0,
     Completed: (statusSummary?.data?.Completed || 0) + (ebayStatusSummary?.data?.Completed || 0),
     Cancelled: (statusSummary?.data?.Cancelled || 0) + (ebayStatusSummary?.data?.Refunded || 0),
   };
@@ -577,9 +598,7 @@ export default function OrdersPage() {
   const totalOrderCount = platformOrdersTotal + ebayOrdersTotal;
 
   const hasAnyPlatformConfigured =
-    bricqerStatus?.isConfigured ||
-    amazonStatus?.isConfigured ||
-    ebayConnected;
+    bricqerStatus?.isConfigured || amazonStatus?.isConfigured || ebayConnected;
 
   const syncMutation = useMutation({
     mutationFn: triggerSync,
@@ -704,7 +723,10 @@ export default function OrdersPage() {
           </div>
           <div className="flex items-center gap-4">
             {/* Timeframe Selector */}
-            <Select value={timeframe} onValueChange={(v: string) => setTimeframe(v as TimeframeOption)}>
+            <Select
+              value={timeframe}
+              onValueChange={(v: string) => setTimeframe(v as TimeframeOption)}
+            >
               <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Timeframe" />
               </SelectTrigger>
@@ -739,9 +761,7 @@ export default function OrdersPage() {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="flex items-center justify-between">
-              <span>
-                No platforms configured. Connect Bricqer, Amazon, or eBay to sync orders.
-              </span>
+              <span>No platforms configured. Connect Bricqer, Amazon, or eBay to sync orders.</span>
               <Link href="/settings/integrations">
                 <Button variant="outline" size="sm">
                   <Settings className="mr-2 h-4 w-4" />
@@ -757,8 +777,8 @@ export default function OrdersPage() {
           <Alert className="bg-green-50 border-green-200">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              Sync complete: {syncMutation.data.data.totalOrdersProcessed} orders processed
-              ({syncMutation.data.data.totalOrdersCreated} new,{' '}
+              Sync complete: {syncMutation.data.data.totalOrdersProcessed} orders processed (
+              {syncMutation.data.data.totalOrdersCreated} new,{' '}
               {syncMutation.data.data.totalOrdersUpdated} updated)
               {syncMutation.data.data.errors.length > 0 && (
                 <span className="text-red-600">
@@ -780,28 +800,30 @@ export default function OrdersPage() {
               <CardTitle className="text-sm font-medium">All Orders</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {totalOrderCount.toLocaleString()}
-              </div>
+              <div className="text-2xl font-bold">{totalOrderCount.toLocaleString()}</div>
             </CardContent>
           </Card>
 
-          {(['Pending', 'Paid', 'Packed', 'Shipped', 'Completed', 'Cancelled'] as const).map((s) => (
-            <Card
-              key={s}
-              className={`cursor-pointer transition-colors ${status === s ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
-              onClick={() => setStatus(status === s ? 'all' : s)}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{s === 'Cancelled' ? 'Cancelled/Refunded' : s}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {combinedStatusSummary[s]?.toLocaleString() || '0'}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {(['Pending', 'Paid', 'Packed', 'Shipped', 'Completed', 'Cancelled'] as const).map(
+            (s) => (
+              <Card
+                key={s}
+                className={`cursor-pointer transition-colors ${status === s ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
+                onClick={() => setStatus(status === s ? 'all' : s)}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {s === 'Cancelled' ? 'Cancelled/Refunded' : s}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {combinedStatusSummary[s]?.toLocaleString() || '0'}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          )}
         </div>
 
         {/* Platform Cards */}
@@ -1148,14 +1170,17 @@ export default function OrdersPage() {
                   )}
 
                   {/* Backfill Complete Message */}
-                  {!isBackfillRunning && backfillProgress && backfillProgress.processed > 0 && ordersNeedingBackfill === 0 && (
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center gap-2 text-xs text-green-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>All order items fetched</span>
+                  {!isBackfillRunning &&
+                    backfillProgress &&
+                    backfillProgress.processed > 0 &&
+                    ordersNeedingBackfill === 0 && (
+                      <div className="pt-2 border-t">
+                        <div className="flex items-center gap-2 text-xs text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>All order items fetched</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </>
               ) : (
                 <>
@@ -1319,9 +1344,7 @@ export default function OrdersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Order History</CardTitle>
-                <CardDescription>
-                  Browse and filter your orders from all platforms
-                </CardDescription>
+                <CardDescription>Browse and filter your orders from all platforms</CardDescription>
               </div>
 
               {/* Bulk Actions */}
@@ -1416,9 +1439,7 @@ export default function OrdersPage() {
                   <TableRow>
                     <TableHead className="w-[40px]">
                       <Checkbox
-                        checked={
-                          orders.length > 0 && selectedOrders.size === orders.length
-                        }
+                        checked={orders.length > 0 && selectedOrders.size === orders.length}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Select all"
                       />
@@ -1442,10 +1463,7 @@ export default function OrdersPage() {
                     </TableRow>
                   ) : orders.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={9}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         {isEbayPlatform
                           ? 'No eBay orders found. Try syncing with eBay.'
                           : 'No orders found. Try syncing with the selected platform.'}
@@ -1470,13 +1488,19 @@ export default function OrdersPage() {
                         <TableCell>
                           {order.platform === 'ebay' ? (
                             <Link href="/orders/ebay">
-                              <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                              <Badge
+                                variant="outline"
+                                className="capitalize cursor-pointer hover:bg-muted"
+                              >
                                 {order.platform}
                               </Badge>
                             </Link>
                           ) : order.platform === 'amazon' ? (
                             <Link href="/orders/amazon">
-                              <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                              <Badge
+                                variant="outline"
+                                className="capitalize cursor-pointer hover:bg-muted"
+                              >
                                 {order.platform}
                               </Badge>
                             </Link>
@@ -1498,19 +1522,35 @@ export default function OrdersPage() {
                         <TableCell>{order.buyer_name || '-'}</TableCell>
                         <TableCell className="max-w-[300px]">
                           {(() => {
-                            const orderWithItems = order as PlatformOrder & { order_items?: Array<{ id: string; item_name?: string | null; item_number?: string | null; inventory_item_id?: string | null; legacy_item_id?: string }> };
+                            const orderWithItems = order as PlatformOrder & {
+                              order_items?: Array<{
+                                id: string;
+                                item_name?: string | null;
+                                item_number?: string | null;
+                                inventory_item_id?: string | null;
+                                legacy_item_id?: string;
+                              }>;
+                            };
                             const items = orderWithItems.order_items || [];
-                            const itemNames = items.map((item) => item.item_name).filter(Boolean).join(', ');
+                            const itemNames = items
+                              .map((item) => item.item_name)
+                              .filter(Boolean)
+                              .join(', ');
                             const linkedItem = items.find((item) => item.inventory_item_id);
                             const firstItem = items[0];
                             // For eBay orders, get legacy_item_id for external link
-                            const ebayItemId = order.platform === 'ebay' && firstItem?.legacy_item_id;
+                            const ebayItemId =
+                              order.platform === 'ebay' && firstItem?.legacy_item_id;
                             // For Amazon orders, item_number contains the ASIN
-                            const amazonAsin = order.platform === 'amazon' && firstItem?.item_number;
+                            const amazonAsin =
+                              order.platform === 'amazon' && firstItem?.item_number;
 
                             return (
                               <div className="flex items-center gap-2">
-                                <span className="truncate text-sm" title={itemNames || order.notes || '-'}>
+                                <span
+                                  className="truncate text-sm"
+                                  title={itemNames || order.notes || '-'}
+                                >
                                   {itemNames || order.notes || '-'}
                                 </span>
                                 {ebayItemId && (
@@ -1570,13 +1610,25 @@ export default function OrdersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={order.platform === 'ebay' ? `/orders/ebay/${order.id}` : `/orders/${order.id}`}>
+                                <Link
+                                  href={
+                                    order.platform === 'ebay'
+                                      ? `/orders/ebay/${order.id}`
+                                      : `/orders/${order.id}`
+                                  }
+                                >
                                   View Details
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
-                                <Link href={order.platform === 'ebay' ? `/orders/ebay/${order.id}` : `/orders/${order.id}`}>
+                                <Link
+                                  href={
+                                    order.platform === 'ebay'
+                                      ? `/orders/ebay/${order.id}`
+                                      : `/orders/${order.id}`
+                                  }
+                                >
                                   Update Status
                                 </Link>
                               </DropdownMenuItem>

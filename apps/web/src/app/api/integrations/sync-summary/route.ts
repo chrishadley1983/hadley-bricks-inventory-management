@@ -43,7 +43,9 @@ export async function GET() {
     // eBay sync logs
     const { data: ebayLogs } = await supabase
       .from('ebay_sync_log')
-      .select('sync_type, status, records_processed, records_created, records_updated, error_message, completed_at')
+      .select(
+        'sync_type, status, records_processed, records_created, records_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false });
@@ -96,7 +98,9 @@ export async function GET() {
     // Amazon sync logs (both ORDERS and TRANSACTIONS)
     const { data: amazonLogs } = await supabase
       .from('amazon_sync_log')
-      .select('sync_type, status, records_processed, records_created, records_updated, error_message, completed_at')
+      .select(
+        'sync_type, status, records_processed, records_created, records_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false });
@@ -150,7 +154,9 @@ export async function GET() {
     // BrickLink sync logs
     const { data: bricklinkLogs } = await supabase
       .from('bricklink_sync_log')
-      .select('sync_mode, status, orders_processed, orders_created, orders_updated, error_message, completed_at')
+      .select(
+        'sync_mode, status, orders_processed, orders_created, orders_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false })
@@ -184,7 +190,9 @@ export async function GET() {
     // BrickOwl sync logs
     const { data: brickowlLogs } = await supabase
       .from('brickowl_sync_log')
-      .select('sync_mode, status, orders_processed, orders_created, orders_updated, error_message, completed_at')
+      .select(
+        'sync_mode, status, orders_processed, orders_created, orders_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false })
@@ -218,7 +226,9 @@ export async function GET() {
     // Monzo sync logs
     const { data: monzoLogs } = await supabase
       .from('monzo_sync_log')
-      .select('status, transactions_processed, transactions_created, transactions_updated, error_message, completed_at')
+      .select(
+        'status, transactions_processed, transactions_created, transactions_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false })
@@ -251,7 +261,9 @@ export async function GET() {
     // PayPal sync logs
     const { data: paypalLogs } = await supabase
       .from('paypal_sync_log')
-      .select('status, transactions_processed, transactions_created, transactions_updated, error_message, completed_at')
+      .select(
+        'status, transactions_processed, transactions_created, transactions_updated, error_message, completed_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false })
@@ -284,7 +296,9 @@ export async function GET() {
     // Stock imports (eBay and Amazon listing imports)
     const { data: stockImportLogs } = await supabase
       .from('platform_listing_imports')
-      .select('platform, status, processed_rows, total_rows, error_message, completed_at, started_at')
+      .select(
+        'platform, status, processed_rows, total_rows, error_message, completed_at, started_at'
+      )
       .eq('user_id', user.id)
       .gte('started_at', tenMinutesAgo)
       .order('started_at', { ascending: false });
@@ -305,7 +319,12 @@ export async function GET() {
         else if (log.status === 'failed') status = 'FAILED';
 
         items.push({
-          platform: platform === 'ebay' ? 'eBay Stock' : platform === 'amazon' ? 'Amazon Stock' : `${platform} Stock`,
+          platform:
+            platform === 'ebay'
+              ? 'eBay Stock'
+              : platform === 'amazon'
+                ? 'Amazon Stock'
+                : `${platform} Stock`,
           type: 'stock',
           status,
           processed: log.processed_rows ?? 0,

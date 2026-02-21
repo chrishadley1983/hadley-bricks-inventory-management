@@ -24,10 +24,7 @@ const UpdateSchema = z.object({
 // GET - Get single item
 // ============================================================================
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ asin: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ asin: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -55,10 +52,7 @@ export async function GET(
     return NextResponse.json({ data: item });
   } catch (error) {
     console.error('[GET /api/arbitrage/[asin]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -111,9 +105,10 @@ export async function PATCH(
       await service.setBlPriceOverride(user.id, asin, override);
       return NextResponse.json({
         data: { success: true, minBlPriceOverride: override },
-        message: override !== null
-          ? `BL price override set to £${override.toFixed(2)}`
-          : 'BL price override cleared',
+        message:
+          override !== null
+            ? `BL price override set to £${override.toFixed(2)}`
+            : 'BL price override cleared',
       });
     } else {
       await service.restoreAsin(user.id, asin);
@@ -124,9 +119,6 @@ export async function PATCH(
     }
   } catch (error) {
     console.error('[PATCH /api/arbitrage/[asin]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

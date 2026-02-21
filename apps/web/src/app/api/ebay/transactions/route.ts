@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, transactionType, fromDate, toDate, search, sortBy, sortOrder } = parsed.data;
+    const { page, pageSize, transactionType, fromDate, toDate, search, sortBy, sortOrder } =
+      parsed.data;
 
     // Build query
     let query = supabase
@@ -145,4 +146,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

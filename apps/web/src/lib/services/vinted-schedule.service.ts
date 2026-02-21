@@ -260,12 +260,14 @@ export class VintedScheduleService {
   private async getConfig(userId: string): Promise<ScannerConfig | null> {
     const { data, error } = await this.supabase
       .from('vinted_scanner_config')
-      .select(`
+      .select(
+        `
         operating_hours_start, operating_hours_end, schedule_version,
         regenerated_seed, regenerated_at,
         daily_nonce, daily_nonce_date, start_variance_mins, end_variance_mins,
         recovery_mode, recovery_rate_percent
-      `)
+      `
+      )
       .eq('user_id', userId)
       .single();
 
@@ -445,9 +447,7 @@ export class VintedScheduleService {
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:00`;
 
     // Filter to only future scans
-    const remainingScans = fullSchedule.scans.filter(
-      (scan) => scan.scheduledTime > currentTime
-    );
+    const remainingScans = fullSchedule.scans.filter((scan) => scan.scheduledTime > currentTime);
 
     return {
       ...fullSchedule,
@@ -513,9 +513,7 @@ export class VintedScheduleService {
     for (let i = 0; i < remainingHours; i++) {
       const hour = startHour + i;
       // First hour starts at startMins, subsequent hours at random minute
-      const minute = i === 0
-        ? startMins % 60
-        : rng.nextInt(0, 55);
+      const minute = i === 0 ? startMins % 60 : rng.nextInt(0, 55);
 
       broadSweepScans.push({
         id: `bs-${dateStr}-${hour.toString().padStart(2, '0')}-regen`,

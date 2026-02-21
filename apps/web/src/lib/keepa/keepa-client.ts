@@ -75,12 +75,12 @@ export interface KeepaImportResult {
  * See: https://keepa.com/#!discuss/t/product-object/116
  */
 export const KEEPA_CSV_INDEX = {
-  AMAZON: 0,        // Amazon price
-  NEW: 1,           // Marketplace new price (lowest new offer)
-  USED: 2,          // Marketplace used price
-  SALES_RANK: 3,    // Sales rank
-  COUNT_NEW: 11,    // New offer count
-  BUY_BOX: 18,      // Buy box price (shipping included)
+  AMAZON: 0, // Amazon price
+  NEW: 1, // Marketplace new price (lowest new offer)
+  USED: 2, // Marketplace used price
+  SALES_RANK: 3, // Sales rank
+  COUNT_NEW: 11, // New offer count
+  BUY_BOX: 18, // Buy box price (shipping included)
 } as const;
 
 /**
@@ -111,9 +111,7 @@ export function keepaPriceToGBP(keepaPrice: number): number | null {
  * Parse Keepa CSV data into daily snapshots.
  * CSV is encoded as: [timestamp1, value1, timestamp2, value2, ...]
  */
-export function parseKeepaCSV(
-  csv: number[] | null
-): { date: string; value: number }[] {
+export function parseKeepaCSV(csv: number[] | null): { date: string; value: number }[] {
   if (!csv || csv.length < 2) return [];
 
   const points: { date: string; value: number }[] = [];
@@ -145,8 +143,8 @@ export class KeepaClient {
    */
   constructor(apiKey?: string, tokensPerMinute?: number) {
     this.apiKey = apiKey || process.env.KEEPA_API_KEY || '';
-    this.tokensPerMinute = tokensPerMinute
-      ?? parseInt(process.env.KEEPA_TOKENS_PER_MINUTE ?? '20', 10);
+    this.tokensPerMinute =
+      tokensPerMinute ?? parseInt(process.env.KEEPA_TOKENS_PER_MINUTE ?? '20', 10);
   }
 
   /**
@@ -166,13 +164,13 @@ export class KeepaClient {
     }
 
     // Filter out invalid ASINs (must be 10 alphanumeric characters)
-    const validAsins = asins.filter(a => /^[A-Z0-9]{10}$/.test(a));
+    const validAsins = asins.filter((a) => /^[A-Z0-9]{10}$/.test(a));
     if (validAsins.length === 0) {
       console.warn(`[Keepa] No valid ASINs in batch: ${asins.join(', ')}`);
       return [];
     }
     if (validAsins.length < asins.length) {
-      const invalid = asins.filter(a => !validAsins.includes(a));
+      const invalid = asins.filter((a) => !validAsins.includes(a));
       console.warn(`[Keepa] Filtered ${invalid.length} invalid ASINs: ${invalid.join(', ')}`);
     }
 
@@ -209,7 +207,9 @@ export class KeepaClient {
       throw new Error(`Keepa API error: ${data.error.message}`);
     }
     if (data.error) {
-      console.warn(`[Keepa] Partial error (${data.products?.length ?? 0} products returned): ${data.error.message}`);
+      console.warn(
+        `[Keepa] Partial error (${data.products?.length ?? 0} products returned): ${data.error.message}`
+      );
     }
 
     return data.products ?? [];
@@ -219,9 +219,7 @@ export class KeepaClient {
    * Extract daily price snapshots from a Keepa product.
    * Returns snapshots with buy box price, sales rank, and offer count.
    */
-  extractSnapshots(
-    product: KeepaProduct
-  ): {
+  extractSnapshots(product: KeepaProduct): {
     date: string;
     buy_box_price: number | null;
     amazon_price: number | null;
@@ -322,10 +320,14 @@ export class KeepaClient {
 
     // Use stats.current for BUY_BOX (avoids triple-format CSV issue) and NEW price
     // Fall back to CSV for sales rank and offer count (standard pair format)
-    const buyBoxRaw = getStatsCurrent(KEEPA_CSV_INDEX.BUY_BOX) ?? getLatestValue(KEEPA_CSV_INDEX.BUY_BOX);
-    const lowestNewRaw = getStatsCurrent(KEEPA_CSV_INDEX.NEW) ?? getLatestValue(KEEPA_CSV_INDEX.NEW);
-    const salesRankRaw = getStatsCurrent(KEEPA_CSV_INDEX.SALES_RANK) ?? getLatestValue(KEEPA_CSV_INDEX.SALES_RANK);
-    const offerCountRaw = getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
+    const buyBoxRaw =
+      getStatsCurrent(KEEPA_CSV_INDEX.BUY_BOX) ?? getLatestValue(KEEPA_CSV_INDEX.BUY_BOX);
+    const lowestNewRaw =
+      getStatsCurrent(KEEPA_CSV_INDEX.NEW) ?? getLatestValue(KEEPA_CSV_INDEX.NEW);
+    const salesRankRaw =
+      getStatsCurrent(KEEPA_CSV_INDEX.SALES_RANK) ?? getLatestValue(KEEPA_CSV_INDEX.SALES_RANK);
+    const offerCountRaw =
+      getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
 
     // 90-day average buy box from stats
     const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
@@ -475,10 +477,7 @@ export class KeepaClient {
   /**
    * Fetch with automatic 429 retry. Waits for token refill and retries up to maxRetries times.
    */
-  private async fetchWithRetry(
-    url: string,
-    maxRetries = 3
-  ): Promise<Response> {
+  private async fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const response = await fetch(url);
 

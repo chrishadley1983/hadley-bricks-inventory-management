@@ -149,9 +149,7 @@ async function fetchImagesAsBase64(urls: string[]): Promise<GeminiImageInput[]> 
 /**
  * Get valid mime type for Gemini
  */
-function getMimeType(
-  contentType: string
-): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
+function getMimeType(contentType: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
   if (contentType.includes('png')) return 'image/png';
   if (contentType.includes('webp')) return 'image/webp';
   if (contentType.includes('gif')) return 'image/gif';

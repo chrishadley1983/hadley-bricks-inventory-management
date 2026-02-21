@@ -128,23 +128,20 @@ export function PhotoUploadInline({
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      const files = e.dataTransfer.files;
-      if (files.length > 0 && fileInputRef.current) {
-        const dt = new DataTransfer();
-        for (let i = 0; i < files.length; i++) {
-          dt.items.add(files[i]);
-        }
-        fileInputRef.current.files = dt.files;
-        fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && fileInputRef.current) {
+      const dt = new DataTransfer();
+      for (let i = 0; i < files.length; i++) {
+        dt.items.add(files[i]);
       }
-    },
-    []
-  );
+      fileInputRef.current.files = dt.files;
+      fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, []);
 
   const hasImages = pendingImages.length > 0;
   const canAddMore = pendingImages.length < maxImages;
@@ -256,7 +253,8 @@ export function PhotoUploadInline({
 
         {pendingImages.length > 0 && (
           <p className="text-xs text-muted-foreground mt-3">
-            {pendingImages.length} photo{pendingImages.length !== 1 ? 's' : ''} will be uploaded when you save
+            {pendingImages.length} photo{pendingImages.length !== 1 ? 's' : ''} will be uploaded
+            when you save
           </p>
         )}
       </CardContent>

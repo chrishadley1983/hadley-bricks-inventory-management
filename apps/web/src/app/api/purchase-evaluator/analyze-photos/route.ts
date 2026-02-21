@@ -12,7 +12,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { analyzePhotos } from '@/lib/purchase-evaluator/photo-analysis.service';
-import type { PhotoAnalysisOptions, AnalysisImageInput } from '@/lib/purchase-evaluator/photo-types';
+import type {
+  PhotoAnalysisOptions,
+  AnalysisImageInput,
+} from '@/lib/purchase-evaluator/photo-types';
 
 // ============================================
 // Request Validation Schema
@@ -111,20 +114,14 @@ export async function POST(request: NextRequest) {
     );
 
     // 7. Return result
-    return NextResponse.json(
-      { data: result },
-      { status: 200 }
-    );
+    return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
     console.error('[POST /api/purchase-evaluator/analyze-photos] Error:', error);
 
     // Handle specific error types
     if (error instanceof Error) {
       if (error.message.includes('ANTHROPIC_API_KEY')) {
-        return NextResponse.json(
-          { error: 'AI service not configured' },
-          { status: 503 }
-        );
+        return NextResponse.json({ error: 'AI service not configured' }, { status: 503 });
       }
 
       if (error.message.includes('rate limit')) {

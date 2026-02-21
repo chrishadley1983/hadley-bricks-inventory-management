@@ -35,9 +35,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/unmapped] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

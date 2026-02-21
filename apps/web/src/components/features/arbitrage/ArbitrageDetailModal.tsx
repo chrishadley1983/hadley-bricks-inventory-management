@@ -3,23 +3,13 @@
 import { useState, useEffect } from 'react';
 import { ExternalLink, Ban, RotateCcw, Save, Info, X } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem } from '@/lib/arbitrage/types';
 import {
@@ -82,7 +72,9 @@ export function ArbitrageDetailModal({
         asin: item.asin,
         override: overrideValue,
       });
-      toast.success(overrideValue ? `Override set to £${overrideValue.toFixed(2)}` : 'Override removed');
+      toast.success(
+        overrideValue ? `Override set to £${overrideValue.toFixed(2)}` : 'Override removed'
+      );
     } catch {
       toast.error('Failed to save override');
     }
@@ -117,13 +109,9 @@ export function ArbitrageDetailModal({
 
   // Calculate profit margin (profit / sale price)
   const profitMarginPercent =
-    profitBreakdown && sellPrice > 0
-      ? (profitBreakdown.totalProfit / sellPrice) * 100
-      : null;
+    profitBreakdown && sellPrice > 0 ? (profitBreakdown.totalProfit / sellPrice) * 100 : null;
 
-  const bricklinkUrl = item.bricklinkSetNumber
-    ? buildBricklinkUrl(item.bricklinkSetNumber)
-    : null;
+  const bricklinkUrl = item.bricklinkSetNumber ? buildBricklinkUrl(item.bricklinkSetNumber) : null;
 
   const amazonUrl = item.amazonUrl ?? `https://www.amazon.co.uk/dp/${item.asin}`;
 
@@ -171,8 +159,8 @@ export function ArbitrageDetailModal({
                       item.seededMatchConfidence && item.seededMatchConfidence >= 95
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : item.seededMatchConfidence && item.seededMatchConfidence >= 85
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
                     )}
                   >
                     Seeded
@@ -192,7 +180,10 @@ export function ArbitrageDetailModal({
                   </Badge>
                 )}
                 {item.itemType === 'seeded' && item.bricksetRrp != null && (
-                  <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200"
+                  >
                     RRP: {formatCurrencyGBP(item.bricksetRrp)}
                   </Badge>
                 )}
@@ -231,9 +222,7 @@ export function ArbitrageDetailModal({
                     label="Buy Box"
                     value={formatCurrencyGBP(item.buyBoxPrice)}
                     subtext={item.buyBoxIsYours ? 'You' : 'Other seller'}
-                    valueClassName={
-                      item.buyBoxIsYours ? 'text-green-600' : 'text-amber-600'
-                    }
+                    valueClassName={item.buyBoxIsYours ? 'text-green-600' : 'text-amber-600'}
                   />
                   <StatCard
                     label="Sales Rank"
@@ -294,8 +283,9 @@ export function ArbitrageDetailModal({
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
                               <p className="text-xs">
-                                Set a minimum BL price to override low prices from sellers with high minimum spend requirements.
-                                COG% will use MAX(actual BL min, override).
+                                Set a minimum BL price to override low prices from sellers with high
+                                minimum spend requirements. COG% will use MAX(actual BL min,
+                                override).
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -341,7 +331,8 @@ export function ArbitrageDetailModal({
                     </div>
                     {item.minBlPriceOverride != null && (
                       <div className="text-[10px] text-amber-600 mt-1">
-                        Effective price: {formatCurrencyGBP(item.effectiveBlPrice)} (override active)
+                        Effective price: {formatCurrencyGBP(item.effectiveBlPrice)} (override
+                        active)
                       </div>
                     )}
                   </div>
@@ -382,9 +373,7 @@ export function ArbitrageDetailModal({
                             : 'text-muted-foreground'
                         )}
                       >
-                        {profitBreakdown
-                          ? formatCurrencyGBP(profitBreakdown.totalProfit)
-                          : '—'}
+                        {profitBreakdown ? formatCurrencyGBP(profitBreakdown.totalProfit) : '—'}
                       </div>
                     </div>
 
@@ -393,33 +382,39 @@ export function ArbitrageDetailModal({
                       <div className="grid grid-cols-3 gap-4 text-right">
                         <div>
                           <div className="text-[10px] text-muted-foreground uppercase">Margin</div>
-                          <div className={cn(
-                            'font-mono text-base font-semibold',
-                            profitMarginPercent !== null && profitMarginPercent >= 25
-                              ? 'text-green-600'
-                              : profitMarginPercent !== null && profitMarginPercent >= 15
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                          )}>
+                          <div
+                            className={cn(
+                              'font-mono text-base font-semibold',
+                              profitMarginPercent !== null && profitMarginPercent >= 25
+                                ? 'text-green-600'
+                                : profitMarginPercent !== null && profitMarginPercent >= 15
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                            )}
+                          >
                             {formatMarginPercent(profitMarginPercent)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted-foreground uppercase">Take Home</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">
+                            Take Home
+                          </div>
                           <div className="font-mono text-base font-semibold">
                             {formatCurrencyGBP(profitBreakdown.netPayout)}
                           </div>
                         </div>
                         <div>
                           <div className="text-[10px] text-muted-foreground uppercase">COG %</div>
-                          <div className={cn(
-                            'font-mono text-base font-semibold',
-                            sellPrice > 0 && (buyPrice / sellPrice) * 100 < 40
-                              ? 'text-green-600'
-                              : sellPrice > 0 && (buyPrice / sellPrice) * 100 <= 50
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                          )}>
+                          <div
+                            className={cn(
+                              'font-mono text-base font-semibold',
+                              sellPrice > 0 && (buyPrice / sellPrice) * 100 < 40
+                                ? 'text-green-600'
+                                : sellPrice > 0 && (buyPrice / sellPrice) * 100 <= 50
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                            )}
+                          >
                             {sellPrice > 0 ? `${((buyPrice / sellPrice) * 100).toFixed(1)}%` : '—'}
                           </div>
                         </div>
@@ -471,9 +466,7 @@ export function ArbitrageDetailModal({
                     {/* Sale price */}
                     <div className="flex justify-between pt-1 border-t">
                       <span>Sale Price (Amazon)</span>
-                      <span className="font-mono font-medium">
-                        {formatCurrencyGBP(sellPrice)}
-                      </span>
+                      <span className="font-mono font-medium">{formatCurrencyGBP(sellPrice)}</span>
                     </div>
 
                     {/* Fees - condensed */}
@@ -515,11 +508,7 @@ export function ArbitrageDetailModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExclude(item.asin)}
-            >
+            <Button variant="outline" size="sm" onClick={() => onExclude(item.asin)}>
               <Ban className="mr-2 h-4 w-4" />
               Exclude
             </Button>
@@ -544,11 +533,7 @@ export function ArbitrageDetailModal({
             </Button>
 
             {bricklinkUrl && (
-              <Button
-                asChild
-                className="bg-orange-600 hover:bg-orange-700"
-                size="sm"
-              >
+              <Button asChild className="bg-orange-600 hover:bg-orange-700" size="sm">
                 <a href={bricklinkUrl} target="_blank" rel="noopener noreferrer">
                   BrickLink
                   <ExternalLink className="ml-2 h-4 w-4" />
@@ -572,12 +557,8 @@ interface StatCardProps {
 function StatCard({ label, value, subtext, valueClassName }: StatCardProps) {
   return (
     <div className="rounded-lg bg-muted/50 p-2 text-center">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-        {label}
-      </div>
-      <div className={cn('font-mono text-base font-bold mt-0.5', valueClassName)}>
-        {value}
-      </div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
+      <div className={cn('font-mono text-base font-bold mt-0.5', valueClassName)}>{value}</div>
       <div className="text-[10px] text-muted-foreground truncate">{subtext}</div>
     </div>
   );

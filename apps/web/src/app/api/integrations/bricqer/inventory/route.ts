@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import {
-  BricqerClient,
-  normalizeInventoryItems,
-  type BricqerCredentials,
-} from '@/lib/bricqer';
+import { BricqerClient, normalizeInventoryItems, type BricqerCredentials } from '@/lib/bricqer';
 import { CredentialsRepository } from '@/lib/repositories';
 
 const QueryParamsSchema = z.object({
@@ -44,10 +40,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!credentials) {
-      return NextResponse.json(
-        { error: 'Bricqer credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Bricqer credentials not configured' }, { status: 400 });
     }
 
     const client = new BricqerClient(credentials);

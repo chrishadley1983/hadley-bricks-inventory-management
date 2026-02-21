@@ -38,7 +38,10 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 import { createClient } from '@/lib/supabase/server';
 import { GET as GetListings } from '../platform-stock/route';
 import { GET as GetComparison } from '../platform-stock/comparison/route';
-import { POST as TriggerImport, GET as GetImportHistory } from '../platform-stock/amazon/import/route';
+import {
+  POST as TriggerImport,
+  GET as GetImportHistory,
+} from '../platform-stock/amazon/import/route';
 
 // Reference mock functions for easier usage
 const mockGetListings = mockServiceMethods.getListings;
@@ -183,9 +186,7 @@ describe('/api/platform-stock API Routes', () => {
       });
       mockGetLatestImport.mockResolvedValue(null);
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock?search=Millennium'
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock?search=Millennium');
       await GetListings(request);
 
       expect(mockGetListings).toHaveBeenCalledWith(
@@ -239,9 +240,7 @@ describe('/api/platform-stock API Routes', () => {
       });
       mockGetLatestImport.mockResolvedValue(null);
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock?hasQuantity=true'
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock?hasQuantity=true');
       await GetListings(request);
 
       expect(mockGetListings).toHaveBeenCalledWith(
@@ -413,10 +412,9 @@ describe('/api/platform-stock API Routes', () => {
     it('should return 401 when not authenticated', async () => {
       vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock/amazon/import',
-        { method: 'POST' }
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock/amazon/import', {
+        method: 'POST',
+      });
       const response = await TriggerImport(request);
 
       expect(response.status).toBe(401);
@@ -426,10 +424,9 @@ describe('/api/platform-stock API Routes', () => {
       vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
       mockTriggerImport.mockResolvedValue(createMockImport());
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock/amazon/import',
-        { method: 'POST' }
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock/amazon/import', {
+        method: 'POST',
+      });
       const response = await TriggerImport(request);
 
       expect(response.status).toBe(201);
@@ -444,10 +441,9 @@ describe('/api/platform-stock API Routes', () => {
         new Error('Amazon credentials not configured for this user')
       );
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock/amazon/import',
-        { method: 'POST' }
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock/amazon/import', {
+        method: 'POST',
+      });
       const response = await TriggerImport(request);
 
       expect(response.status).toBe(400);
@@ -459,10 +455,9 @@ describe('/api/platform-stock API Routes', () => {
       vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
       mockTriggerImport.mockRejectedValue(new Error('Failed to refresh token'));
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock/amazon/import',
-        { method: 'POST' }
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock/amazon/import', {
+        method: 'POST',
+      });
       const response = await TriggerImport(request);
 
       expect(response.status).toBe(401);
@@ -474,10 +469,9 @@ describe('/api/platform-stock API Routes', () => {
       vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
       mockTriggerImport.mockRejectedValue(new Error('Unknown error'));
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/platform-stock/amazon/import',
-        { method: 'POST' }
-      );
+      const request = new NextRequest('http://localhost:3000/api/platform-stock/amazon/import', {
+        method: 'POST',
+      });
       const response = await TriggerImport(request);
 
       expect(response.status).toBe(500);

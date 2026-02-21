@@ -38,8 +38,8 @@ export function DeleteConfirmDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Scenario</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete &quot;{scenarioName}&quot;? This action cannot
-            be undone.
+            Are you sure you want to delete &quot;{scenarioName}&quot;? This action cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

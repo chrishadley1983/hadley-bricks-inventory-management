@@ -32,13 +32,7 @@ import {
   type Opportunity,
   type OpportunityFilters,
 } from '@/hooks/use-vinted-automation';
-import {
-  ExternalLink,
-  ShoppingCart,
-  X,
-  AlertCircle,
-  TrendingUp,
-} from 'lucide-react';
+import { ExternalLink, ShoppingCart, X, AlertCircle, TrendingUp } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -112,13 +106,9 @@ export function OpportunitiesTable() {
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-green-600" />
               Arbitrage Opportunities
-              {activeCount > 0 && (
-                <Badge className="ml-2 bg-green-600">{activeCount} active</Badge>
-              )}
+              {activeCount > 0 && <Badge className="ml-2 bg-green-600">{activeCount} active</Badge>}
             </CardTitle>
-            <CardDescription>
-              Found opportunities sorted by profit potential
-            </CardDescription>
+            <CardDescription>Found opportunities sorted by profit potential</CardDescription>
           </div>
 
           <Select
@@ -147,9 +137,7 @@ export function OpportunitiesTable() {
         {isLoading ? (
           <OpportunitiesTableSkeleton />
         ) : opportunities.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No opportunities found
-          </div>
+          <div className="text-center py-8 text-muted-foreground">No opportunities found</div>
         ) : (
           <Table>
             <TableHeader>
@@ -174,9 +162,7 @@ export function OpportunitiesTable() {
                     opp.status === 'purchased' && 'opacity-60'
                   )}
                 >
-                  <TableCell className="font-mono font-medium">
-                    {opp.set_number}
-                  </TableCell>
+                  <TableCell className="font-mono font-medium">{opp.set_number}</TableCell>
                   <TableCell className="max-w-[200px]">
                     <div className="flex items-center gap-1">
                       <span className="truncate">{opp.set_name || '-'}</span>
@@ -191,9 +177,7 @@ export function OpportunitiesTable() {
                       </a>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(opp.vinted_price)}
-                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(opp.vinted_price)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {formatCurrency(opp.amazon_price)}
@@ -221,9 +205,7 @@ export function OpportunitiesTable() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {getCogBadge(opp.cog_percent)}
-                  </TableCell>
+                  <TableCell className="text-right">{getCogBadge(opp.cog_percent)}</TableCell>
                   <TableCell className="text-right font-medium text-green-600">
                     {formatCurrency(opp.estimated_profit)}
                   </TableCell>

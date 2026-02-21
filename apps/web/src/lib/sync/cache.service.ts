@@ -138,7 +138,9 @@ export class CacheService {
         this.sheetsClient.readSheet(newKitInventoryMapping.sheetName),
         this.sheetsClient.readSheet(usedKitInventoryMapping.sheetName),
       ]);
-      console.log(`[CacheService.syncInventory] Fetched ${newKitData.length} new kit rows, ${usedKitData.length} used kit rows`);
+      console.log(
+        `[CacheService.syncInventory] Fetched ${newKitData.length} new kit rows, ${usedKitData.length} used kit rows`
+      );
 
       // Transform and merge
       const allItems: Record<string, unknown>[] = [];
@@ -184,7 +186,9 @@ export class CacheService {
           .select('*', { count: 'exact', head: true })
           .eq('user_id', this.userId);
 
-        console.log(`[CacheService.syncInventory] Found ${existingCount ?? 0} existing records to delete`);
+        console.log(
+          `[CacheService.syncInventory] Found ${existingCount ?? 0} existing records to delete`
+        );
 
         // Delete existing inventory for this user
         console.log('[CacheService.syncInventory] Deleting existing inventory...');
@@ -204,10 +208,14 @@ export class CacheService {
           .select('*', { count: 'exact', head: true })
           .eq('user_id', this.userId);
 
-        console.log(`[CacheService.syncInventory] After delete: ${remainingCount ?? 0} records remain`);
+        console.log(
+          `[CacheService.syncInventory] After delete: ${remainingCount ?? 0} records remain`
+        );
 
         if (remainingCount && remainingCount > 0) {
-          console.error(`[CacheService.syncInventory] Delete incomplete: ${remainingCount} records remain`);
+          console.error(
+            `[CacheService.syncInventory] Delete incomplete: ${remainingCount} records remain`
+          );
           throw new Error(`Delete incomplete: ${remainingCount} records still exist`);
         }
 

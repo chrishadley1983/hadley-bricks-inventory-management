@@ -161,8 +161,7 @@ export function useSyncOnLoad(
 
     // Check if we should sync
     const isStale =
-      !tableStatus.lastSync ||
-      new Date().getTime() - tableStatus.lastSync.getTime() > staleTtlMs;
+      !tableStatus.lastSync || new Date().getTime() - tableStatus.lastSync.getTime() > staleTtlMs;
 
     console.log(`[useSyncOnLoad] ${tableName}: Checking sync status`, {
       enabled,
@@ -211,7 +210,8 @@ export function useGlobalSyncStatus() {
 
   // Get the oldest last sync time
   const lastSyncTimes = tableStatuses.map((t) => t.lastSync).filter(Boolean) as Date[];
-  const oldestSync = lastSyncTimes.length > 0 ? new Date(Math.min(...lastSyncTimes.map((d) => d.getTime()))) : null;
+  const oldestSync =
+    lastSyncTimes.length > 0 ? new Date(Math.min(...lastSyncTimes.map((d) => d.getTime()))) : null;
 
   return {
     status: overallStatus,

@@ -54,8 +54,14 @@ export async function POST(request: NextRequest) {
     console.log(`[InvestmentRetrain] Complete in ${totalDuration}ms`);
 
     await execution.complete(
-      { historical_calculated: historicalResult.calculated, model_status: trainingResult.status, sets_scored: scoringResult.sets_scored },
-      200, scoringResult.sets_scored, historicalResult.errors
+      {
+        historical_calculated: historicalResult.calculated,
+        model_status: trainingResult.status,
+        sets_scored: scoringResult.sets_scored,
+      },
+      200,
+      scoringResult.sets_scored,
+      historicalResult.errors
     );
 
     return NextResponse.json({
@@ -67,18 +73,19 @@ export async function POST(request: NextRequest) {
         errors: historicalResult.errors,
         duration_ms: historicalResult.duration_ms,
       },
-      model_metrics: trainingResult.status === 'success'
-        ? {
-            status: 'success',
-            metrics: trainingResult.metrics,
-            training_samples: trainingResult.training_samples,
-            holdout_samples: trainingResult.holdout_samples,
-          }
-        : {
-            status: trainingResult.status,
-            available_samples: trainingResult.available_samples,
-            minimum_required: trainingResult.minimum_required,
-          },
+      model_metrics:
+        trainingResult.status === 'success'
+          ? {
+              status: 'success',
+              metrics: trainingResult.metrics,
+              training_samples: trainingResult.training_samples,
+              holdout_samples: trainingResult.holdout_samples,
+            }
+          : {
+              status: trainingResult.status,
+              available_samples: trainingResult.available_samples,
+              minimum_required: trainingResult.minimum_required,
+            },
       sets_scored: scoringResult.sets_scored,
       model_version: trainingResult.model_version ?? scoringResult.model_version,
       duration_ms: totalDuration,
@@ -86,9 +93,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/cron/investment-retrain] Error:', error);
     await execution.fail(error, 500);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

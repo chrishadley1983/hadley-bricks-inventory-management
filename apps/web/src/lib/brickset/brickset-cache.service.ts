@@ -105,17 +105,14 @@ export class BricksetCacheService {
   ): Promise<BricksetSet[]> {
     const limit = options.limit || 50;
 
-    let queryBuilder = this.supabase
-      .from('brickset_sets')
-      .select('*')
-      .limit(limit);
+    let queryBuilder = this.supabase.from('brickset_sets').select('*').limit(limit);
 
     // Search on set name, number, and theme using individual ilike filters
     // Sanitize query by escaping special PostgREST characters
     if (query) {
       const sanitized = query
-        .replace(/[%_]/g, '\\$&')  // Escape SQL wildcards
-        .replace(/[(),]/g, '');    // Remove PostgREST special chars
+        .replace(/[%_]/g, '\\$&') // Escape SQL wildcards
+        .replace(/[(),]/g, ''); // Remove PostgREST special chars
 
       queryBuilder = queryBuilder.or(
         `set_name.ilike.%${sanitized}%,set_number.ilike.%${sanitized}%,theme.ilike.%${sanitized}%`

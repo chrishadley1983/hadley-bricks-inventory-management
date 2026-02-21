@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_VINTED_URL = 'https://www.vinted.co.uk/catalog?search_text=lego&status_ids[]=6&order=newest_first';
+const DEFAULT_VINTED_URL =
+  'https://www.vinted.co.uk/catalog?search_text=lego&status_ids[]=6&order=newest_first';
 
 interface ArbitrageResult {
   setNumber: string;
@@ -354,7 +355,9 @@ export default function VintedArbitragePage() {
                     <TableCell className="text-right text-muted-foreground">
                       {formatCurrency(item.totalCost)}
                     </TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.amazonBuyBox)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(item.amazonBuyBox)}
+                    </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {item.amazonWasPrice ? formatCurrency(item.amazonWasPrice) : '-'}
                     </TableCell>
@@ -418,7 +421,8 @@ export default function VintedArbitragePage() {
           <p className="mt-4 text-sm text-muted-foreground">
             <strong>Formula:</strong> COG% = (Vinted Price + £2.30 shipping) / Amazon Price x 100
             <br />
-            At 40% COG, ~30% profit remains after Amazon FBM fees (~18%) and customer shipping (~12%).
+            At 40% COG, ~30% profit remains after Amazon FBM fees (~18%) and customer shipping
+            (~12%).
           </p>
         </CardContent>
       </Card>

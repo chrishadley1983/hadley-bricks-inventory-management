@@ -19,13 +19,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -148,7 +142,10 @@ async function fetchAmazonStatusSummary(): Promise<{ data: AmazonStatusSummary }
   return response.json();
 }
 
-async function syncAmazonOrders(): Promise<{ success: boolean; results?: { ordersProcessed?: number } }> {
+async function syncAmazonOrders(): Promise<{
+  success: boolean;
+  results?: { ordersProcessed?: number };
+}> {
   const response = await fetch('/api/integrations/amazon/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -192,9 +189,15 @@ export default function AmazonOrdersPage() {
   const [matchFilter, setMatchFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [asinMatcherOpen, setAsinMatcherOpen] = useState(false);
-  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{ asin: string; title: string; orderId: string } | null>(null);
+  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{
+    asin: string;
+    title: string;
+    orderId: string;
+  } | null>(null);
   const [unmatchedItemsDialogOpen, setUnmatchedItemsDialogOpen] = useState(false);
-  const [selectedOrderUnmatchedItems, setSelectedOrderUnmatchedItems] = useState<Array<{ asin: string; title: string; orderId: string }>>([]);
+  const [selectedOrderUnmatchedItems, setSelectedOrderUnmatchedItems] = useState<
+    Array<{ asin: string; title: string; orderId: string }>
+  >([]);
 
   // Handle platform change - redirect to appropriate page
   const handlePlatformChange = (newPlatform: string) => {
@@ -241,10 +244,7 @@ export default function AmazonOrdersPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-            >
+            <Button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
               {syncMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -310,9 +310,7 @@ export default function AmazonOrdersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Order History</CardTitle>
-                <CardDescription>
-                  Browse and manage your Amazon orders
-                </CardDescription>
+                <CardDescription>Browse and manage your Amazon orders</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -357,7 +355,13 @@ export default function AmazonOrdersPage() {
                 </SelectContent>
               </Select>
 
-              <Select value={matchFilter} onValueChange={(value: string) => { setMatchFilter(value); setPage(1); }}>
+              <Select
+                value={matchFilter}
+                onValueChange={(value: string) => {
+                  setMatchFilter(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Match Status" />
                 </SelectTrigger>
@@ -395,10 +399,7 @@ export default function AmazonOrdersPage() {
                     </TableRow>
                   ) : orders.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={9}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         No Amazon orders found. Try syncing your orders.
                       </TableCell>
                     </TableRow>
@@ -410,7 +411,10 @@ export default function AmazonOrdersPage() {
                         </TableCell>
                         <TableCell>
                           <Link href="/orders">
-                            <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                            <Badge
+                              variant="outline"
+                              className="capitalize cursor-pointer hover:bg-muted"
+                            >
                               Amazon
                             </Badge>
                           </Link>
@@ -420,12 +424,26 @@ export default function AmazonOrdersPage() {
                             ? format(new Date(order.order_date), 'MMM d, yyyy')
                             : '-'}
                         </TableCell>
-                        <TableCell>{order.buyer_name || order.buyer_email || 'Amazon Customer'}</TableCell>
+                        <TableCell>
+                          {order.buyer_name || order.buyer_email || 'Amazon Customer'}
+                        </TableCell>
                         <TableCell
                           className="max-w-[200px] truncate text-sm text-muted-foreground"
-                          title={order.items?.map((item) => item.item_name).filter(Boolean).join(', ') || order.notes || '-'}
+                          title={
+                            order.items
+                              ?.map((item) => item.item_name)
+                              .filter(Boolean)
+                              .join(', ') ||
+                            order.notes ||
+                            '-'
+                          }
                         >
-                          {order.items?.map((item) => item.item_name).filter(Boolean).join(', ') || order.notes || '-'}
+                          {order.items
+                            ?.map((item) => item.item_name)
+                            .filter(Boolean)
+                            .join(', ') ||
+                            order.notes ||
+                            '-'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -436,17 +454,34 @@ export default function AmazonOrdersPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const unmatchedItems = order.items
-                                    .filter((item) => item.match_status === 'unmatched' && item.item_number)
-                                    .map((item) => ({ asin: item.item_number!, title: item.item_name || 'Unknown Item', orderId: order.id }));
+                                    .filter(
+                                      (item) =>
+                                        item.match_status === 'unmatched' && item.item_number
+                                    )
+                                    .map((item) => ({
+                                      asin: item.item_number!,
+                                      title: item.item_name || 'Unknown Item',
+                                      orderId: order.id,
+                                    }));
                                   const noAsinItems = order.items
                                     .filter((item) => item.match_status === 'no_asin')
-                                    .map((item) => ({ asin: '', title: item.item_name || 'Unknown Item', orderId: order.id }));
-                                  setSelectedOrderUnmatchedItems([...unmatchedItems, ...noAsinItems]);
+                                    .map((item) => ({
+                                      asin: '',
+                                      title: item.item_name || 'Unknown Item',
+                                      orderId: order.id,
+                                    }));
+                                  setSelectedOrderUnmatchedItems([
+                                    ...unmatchedItems,
+                                    ...noAsinItems,
+                                  ]);
                                   setUnmatchedItemsDialogOpen(true);
                                 }}
                                 className="hover:opacity-80 transition-opacity cursor-pointer"
                               >
-                                <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="text-orange-600 border-orange-300 bg-orange-50 text-xs"
+                                >
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                   {order.match_summary.unmatched} unmatched
                                 </Badge>
@@ -458,17 +493,34 @@ export default function AmazonOrdersPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const unmatchedItems = order.items
-                                    .filter((item) => item.match_status === 'unmatched' && item.item_number)
-                                    .map((item) => ({ asin: item.item_number!, title: item.item_name || 'Unknown Item', orderId: order.id }));
+                                    .filter(
+                                      (item) =>
+                                        item.match_status === 'unmatched' && item.item_number
+                                    )
+                                    .map((item) => ({
+                                      asin: item.item_number!,
+                                      title: item.item_name || 'Unknown Item',
+                                      orderId: order.id,
+                                    }));
                                   const noAsinItems = order.items
                                     .filter((item) => item.match_status === 'no_asin')
-                                    .map((item) => ({ asin: '', title: item.item_name || 'Unknown Item', orderId: order.id }));
-                                  setSelectedOrderUnmatchedItems([...unmatchedItems, ...noAsinItems]);
+                                    .map((item) => ({
+                                      asin: '',
+                                      title: item.item_name || 'Unknown Item',
+                                      orderId: order.id,
+                                    }));
+                                  setSelectedOrderUnmatchedItems([
+                                    ...unmatchedItems,
+                                    ...noAsinItems,
+                                  ]);
                                   setUnmatchedItemsDialogOpen(true);
                                 }}
                                 className="hover:opacity-80 transition-opacity cursor-pointer"
                               >
-                                <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="text-red-600 border-red-300 bg-red-50 text-xs"
+                                >
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                   {order.match_summary.no_asin} No ASIN
                                 </Badge>
@@ -477,7 +529,10 @@ export default function AmazonOrdersPage() {
                             {order.match_summary && (order.match_summary.linked || 0) > 0 && (
                               <>
                                 {order.items
-                                  .filter((item) => item.match_status === 'linked' && item.inventory_item_id)
+                                  .filter(
+                                    (item) =>
+                                      item.match_status === 'linked' && item.inventory_item_id
+                                  )
                                   .map((item) => (
                                     <LinkedInventoryPopover
                                       key={item.id}
@@ -519,9 +574,7 @@ export default function AmazonOrdersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/orders/${order.id}`}>
-                                  View Details
-                                </Link>
+                                <Link href={`/orders/${order.id}`}>View Details</Link>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
@@ -586,40 +639,42 @@ export default function AmazonOrdersPage() {
               <AlertCircle className="h-5 w-5 text-orange-500" />
               Unmatched Items
             </DialogTitle>
-            <DialogDescription>
-              These items need to be linked to inventory
-            </DialogDescription>
+            <DialogDescription>These items need to be linked to inventory</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-2">
-            {selectedOrderUnmatchedItems.filter((item) => item.asin).map((item, i) => (
-              <button
-                key={`asin-${i}`}
-                type="button"
-                className="w-full text-left p-3 rounded-md border hover:bg-muted transition-colors"
-                onClick={() => {
-                  setSelectedItemForMatching(item);
-                  setUnmatchedItemsDialogOpen(false);
-                  setAsinMatcherOpen(true);
-                }}
-              >
-                <div className="font-medium text-sm">{item.title}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  ASIN: <span className="font-mono">{item.asin}</span>
+            {selectedOrderUnmatchedItems
+              .filter((item) => item.asin)
+              .map((item, i) => (
+                <button
+                  key={`asin-${i}`}
+                  type="button"
+                  className="w-full text-left p-3 rounded-md border hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setSelectedItemForMatching(item);
+                    setUnmatchedItemsDialogOpen(false);
+                    setAsinMatcherOpen(true);
+                  }}
+                >
+                  <div className="font-medium text-sm">{item.title}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    ASIN: <span className="font-mono">{item.asin}</span>
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">Click to link to inventory</div>
+                </button>
+              ))}
+            {selectedOrderUnmatchedItems
+              .filter((item) => !item.asin)
+              .map((item, i) => (
+                <div
+                  key={`noasin-${i}`}
+                  className="w-full text-left p-3 rounded-md border bg-gray-50"
+                >
+                  <div className="font-medium text-sm">{item.title}</div>
+                  <div className="text-xs text-orange-600 mt-1">
+                    No ASIN on Amazon order - cannot link to inventory
+                  </div>
                 </div>
-                <div className="text-xs text-blue-600 mt-1">Click to link to inventory</div>
-              </button>
-            ))}
-            {selectedOrderUnmatchedItems.filter((item) => !item.asin).map((item, i) => (
-              <div
-                key={`noasin-${i}`}
-                className="w-full text-left p-3 rounded-md border bg-gray-50"
-              >
-                <div className="font-medium text-sm">{item.title}</div>
-                <div className="text-xs text-orange-600 mt-1">
-                  No ASIN on Amazon order - cannot link to inventory
-                </div>
-              </div>
-            ))}
+              ))}
             {selectedOrderUnmatchedItems.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 All items are matched.

@@ -5,10 +5,7 @@ import { ListingActionsService } from '@/lib/minifig-sync/listing-actions.servic
 
 export const runtime = 'nodejs';
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -34,10 +31,7 @@ export async function GET(
     return NextResponse.json({ data });
   } catch (error) {
     console.error('[GET /api/minifigs/sync/items/:id] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch item' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Failed to fetch item' }, { status: 500 });
   }
 }
 
@@ -45,12 +39,16 @@ const UpdateSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   price: z.number().positive().optional(),
+  condition: z.string().optional(),
+  conditionDescription: z.string().optional(),
+  categoryId: z.string().optional(),
+  aspects: z.record(z.string(), z.array(z.string())).optional(),
+  images: z.array(z.object({ url: z.string(), source: z.string(), type: z.string() })).optional(),
+  bestOfferAutoAccept: z.number().positive().optional(),
+  bestOfferAutoDecline: z.number().positive().optional(),
 });
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -67,7 +65,7 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -80,9 +78,14 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'Failed to update item',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

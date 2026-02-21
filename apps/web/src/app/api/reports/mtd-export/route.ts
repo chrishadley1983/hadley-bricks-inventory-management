@@ -122,7 +122,9 @@ export async function POST(request: NextRequest) {
       // Create ZIP with both files
       const zip = new JSZip();
       const filePrefix =
-        startMonth === endMonth ? `quickfile-${startMonth}` : `quickfile-${startMonth}-to-${endMonth}`;
+        startMonth === endMonth
+          ? `quickfile-${startMonth}`
+          : `quickfile-${startMonth}-to-${endMonth}`;
 
       zip.file(`${filePrefix}-sales.csv`, salesCsv);
       zip.file(`${filePrefix}-expenses.csv`, expensesCsv);
@@ -162,7 +164,10 @@ export async function POST(request: NextRequest) {
       const quickFileService = new QuickFileService(credentials);
 
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('QuickFile connection timed out. Please try again.')), 30000);
+        setTimeout(
+          () => reject(new Error('QuickFile connection timed out. Please try again.')),
+          30000
+        );
       });
 
       try {
@@ -207,17 +212,20 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        if (message.includes('401') || message.toLowerCase().includes('unauthorized') || message.toLowerCase().includes('invalid')) {
+        if (
+          message.includes('401') ||
+          message.toLowerCase().includes('unauthorized') ||
+          message.toLowerCase().includes('invalid')
+        ) {
           return NextResponse.json(
-            { error: 'Invalid QuickFile credentials. Please check your Account Number and API Key.' },
+            {
+              error: 'Invalid QuickFile credentials. Please check your Account Number and API Key.',
+            },
             { status: 401 }
           );
         }
 
-        return NextResponse.json(
-          { error: `QuickFile error: ${message}` },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: `QuickFile error: ${message}` }, { status: 500 });
       }
     }
 

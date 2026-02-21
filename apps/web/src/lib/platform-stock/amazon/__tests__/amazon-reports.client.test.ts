@@ -36,10 +36,11 @@ function createMockCredentials() {
 function createTokenResponse(accessToken: string = 'test-access-token', expiresIn: number = 3600) {
   return {
     ok: true,
-    json: () => Promise.resolve({
-      access_token: accessToken,
-      expires_in: expiresIn,
-    }),
+    json: () =>
+      Promise.resolve({
+        access_token: accessToken,
+        expires_in: expiresIn,
+      }),
   };
 }
 
@@ -138,11 +139,13 @@ describe('AmazonReportsClient', () => {
   describe('getReportStatus', () => {
     it('should return report status', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportId: 'report-123',
-        reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
-        processingStatus: 'IN_PROGRESS',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportId: 'report-123',
+          reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
+          processingStatus: 'IN_PROGRESS',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
@@ -161,11 +164,13 @@ describe('AmazonReportsClient', () => {
   describe('waitForReport', () => {
     it('should return when report is DONE', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportId: 'report-123',
-        processingStatus: 'DONE',
-        reportDocumentId: 'doc-123',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportId: 'report-123',
+          processingStatus: 'DONE',
+          reportDocumentId: 'doc-123',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
@@ -178,49 +183,55 @@ describe('AmazonReportsClient', () => {
 
     it('should throw error when report is CANCELLED', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportId: 'report-123',
-        processingStatus: 'CANCELLED',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportId: 'report-123',
+          processingStatus: 'CANCELLED',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.waitForReport('report-123', 5000, 10)
-      ).rejects.toThrow('Report generation failed with status: CANCELLED');
+      await expect(client.waitForReport('report-123', 5000, 10)).rejects.toThrow(
+        'Report generation failed with status: CANCELLED'
+      );
     });
 
     it('should throw error when report is FATAL', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportId: 'report-123',
-        processingStatus: 'FATAL',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportId: 'report-123',
+          processingStatus: 'FATAL',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.waitForReport('report-123', 5000, 10)
-      ).rejects.toThrow('Report generation failed with status: FATAL');
+      await expect(client.waitForReport('report-123', 5000, 10)).rejects.toThrow(
+        'Report generation failed with status: FATAL'
+      );
     });
 
     it('should throw error on timeout', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
       // Always return IN_PROGRESS
-      mockFetch.mockResolvedValue(createApiResponse({
-        reportId: 'report-123',
-        processingStatus: 'IN_PROGRESS',
-      }));
+      mockFetch.mockResolvedValue(
+        createApiResponse({
+          reportId: 'report-123',
+          processingStatus: 'IN_PROGRESS',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
       // Use very short timeout and poll interval
-      await expect(
-        client.waitForReport('report-123', 50, 10)
-      ).rejects.toThrow('Report generation timed out');
+      await expect(client.waitForReport('report-123', 50, 10)).rejects.toThrow(
+        'Report generation timed out'
+      );
     }, 10000);
   });
 
@@ -231,11 +242,13 @@ describe('AmazonReportsClient', () => {
   describe('getReportDocument', () => {
     it('should return document info with URL', async () => {
       mockFetch.mockResolvedValueOnce(createTokenResponse());
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportDocumentId: 'doc-123',
-        url: 'https://example.com/download/report',
-        compressionAlgorithm: 'GZIP',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportDocumentId: 'doc-123',
+          url: 'https://example.com/download/report',
+          compressionAlgorithm: 'GZIP',
+        })
+      );
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
@@ -277,9 +290,9 @@ describe('AmazonReportsClient', () => {
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.downloadReport('https://example.com/report', false)
-      ).rejects.toThrow('Failed to download report: 404');
+      await expect(client.downloadReport('https://example.com/report', false)).rejects.toThrow(
+        'Failed to download report: 404'
+      );
     });
   });
 
@@ -296,16 +309,20 @@ describe('AmazonReportsClient', () => {
       // Create report
       mockFetch.mockResolvedValueOnce(createApiResponse({ reportId: 'report-123' }));
       // Get report status (DONE)
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportId: 'report-123',
-        processingStatus: 'DONE',
-        reportDocumentId: 'doc-123',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportId: 'report-123',
+          processingStatus: 'DONE',
+          reportDocumentId: 'doc-123',
+        })
+      );
       // Get report document
-      mockFetch.mockResolvedValueOnce(createApiResponse({
-        reportDocumentId: 'doc-123',
-        url: 'https://example.com/download',
-      }));
+      mockFetch.mockResolvedValueOnce(
+        createApiResponse({
+          reportDocumentId: 'doc-123',
+          url: 'https://example.com/download',
+        })
+      );
       // Download report
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -378,9 +395,9 @@ describe('AmazonReportsClient', () => {
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')
-      ).rejects.toThrow('Failed to refresh token: 401');
+      await expect(client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')).rejects.toThrow(
+        'Failed to refresh token: 401'
+      );
     });
 
     it('should throw error on API failure with error message', async () => {
@@ -388,17 +405,18 @@ describe('AmazonReportsClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: () => Promise.resolve({
-          errors: [{ code: 'InternalError', message: 'Internal server error' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            errors: [{ code: 'InternalError', message: 'Internal server error' }],
+          }),
       });
 
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')
-      ).rejects.toThrow('Internal server error');
+      await expect(client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')).rejects.toThrow(
+        'Internal server error'
+      );
     });
 
     it('should handle API errors without parseable error details', async () => {
@@ -412,9 +430,9 @@ describe('AmazonReportsClient', () => {
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')
-      ).rejects.toThrow('Request failed with status 400');
+      await expect(client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')).rejects.toThrow(
+        'Request failed with status 400'
+      );
     });
 
     it('should clear token and throw on 401 response', async () => {
@@ -428,9 +446,9 @@ describe('AmazonReportsClient', () => {
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')
-      ).rejects.toThrow('Invalid or expired access token');
+      await expect(client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')).rejects.toThrow(
+        'Invalid or expired access token'
+      );
     });
 
     it('should clear token and throw on 403 response', async () => {
@@ -444,9 +462,9 @@ describe('AmazonReportsClient', () => {
       const { AmazonReportsClient } = await import('../amazon-reports.client');
       const client = new AmazonReportsClient(credentials);
 
-      await expect(
-        client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')
-      ).rejects.toThrow('Invalid or expired access token');
+      await expect(client.createReport('GET_MERCHANT_LISTINGS_ALL_DATA')).rejects.toThrow(
+        'Invalid or expired access token'
+      );
     });
   });
 

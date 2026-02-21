@@ -117,8 +117,7 @@ export function useDeleteMileage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id }: { id: string; purchaseId?: string | null }) =>
-      deleteMileageEntry(id),
+    mutationFn: ({ id }: { id: string; purchaseId?: string | null }) => deleteMileageEntry(id),
     onSuccess: (_, { id, purchaseId }) => {
       // Remove from detail cache
       queryClient.removeQueries({ queryKey: mileageKeys.detail(id) });

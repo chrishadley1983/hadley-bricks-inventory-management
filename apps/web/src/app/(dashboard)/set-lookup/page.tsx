@@ -12,7 +12,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SetLookupForm, SetDetailsCard, SetLookupEbayModal, SetStockCard, SetStockModal, AmazonOffersModal } from '@/components/features/brickset';
+import {
+  SetLookupForm,
+  SetDetailsCard,
+  SetLookupEbayModal,
+  SetStockCard,
+  SetStockModal,
+  AmazonOffersModal,
+} from '@/components/features/brickset';
 import { PartoutTab } from '@/components/features/set-lookup';
 import type { SetPricingData } from '@/components/features/brickset';
 import type { BricksetSet } from '@/lib/brickset';
@@ -28,10 +35,7 @@ interface LookupResult {
   source: 'api' | 'cache';
 }
 
-async function lookupSet(
-  setNumber: string,
-  forceRefresh: boolean
-): Promise<LookupResult> {
+async function lookupSet(setNumber: string, forceRefresh: boolean): Promise<LookupResult> {
   const params = new URLSearchParams({
     setNumber,
     forceRefresh: String(forceRefresh),
@@ -133,9 +137,7 @@ function RecentLookupCard({ set, onClick }: { set: BricksetSet; onClick: () => v
         <div className="font-medium truncate">{set.setNumber}</div>
         <div className="text-sm text-muted-foreground truncate">{set.setName}</div>
       </div>
-      <div className="text-xs text-muted-foreground">
-        {set.theme}
-      </div>
+      <div className="text-xs text-muted-foreground">{set.theme}</div>
     </button>
   );
 }
@@ -177,11 +179,7 @@ export default function SetLookupPage() {
   const currentSet = lookupMutation.data?.data;
   const { data: pricingData, isLoading: pricingLoading } = useQuery({
     queryKey: ['brickset', 'pricing', currentSet?.setNumber],
-    queryFn: () => fetchSetPricing(
-      currentSet!.setNumber,
-      currentSet!.ean,
-      currentSet!.upc
-    ),
+    queryFn: () => fetchSetPricing(currentSet!.setNumber, currentSet!.ean, currentSet!.upc),
     enabled: !!currentSet,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -189,10 +187,11 @@ export default function SetLookupPage() {
   // Fetch inventory stock data when a set is successfully looked up
   const { data: stockData, isLoading: stockLoading } = useQuery({
     queryKey: ['brickset', 'stock', currentSet?.setNumber],
-    queryFn: () => fetchInventoryStock(
-      currentSet!.setNumber,
-      pricingData?.amazon?.asin // Use ASIN from pricing if available
-    ),
+    queryFn: () =>
+      fetchInventoryStock(
+        currentSet!.setNumber,
+        pricingData?.amazon?.asin // Use ASIN from pricing if available
+      ),
     enabled: !!currentSet,
     staleTime: 1 * 60 * 1000, // 1 minute (stock changes more frequently)
   });
@@ -254,10 +253,7 @@ export default function SetLookupPage() {
             <CardTitle>Look Up Set</CardTitle>
           </CardHeader>
           <CardContent>
-            <SetLookupForm
-              onLookup={handleLookup}
-              isLoading={lookupMutation.isPending}
-            />
+            <SetLookupForm onLookup={handleLookup} isLoading={lookupMutation.isPending} />
           </CardContent>
         </Card>
 
@@ -278,7 +274,9 @@ export default function SetLookupPage() {
         {lookupMutation.isSuccess && lookupMutation.data && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Source: {lookupMutation.data.source === 'api' ? 'Brickset API' : 'Local Cache'}</span>
+              <span>
+                Source: {lookupMutation.data.source === 'api' ? 'Brickset API' : 'Local Cache'}
+              </span>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -368,27 +366,30 @@ export default function SetLookupPage() {
         )}
 
         {/* Recent Lookups */}
-        {!lookupMutation.data && !lookupMutation.isPending && recentLookups && recentLookups.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Recent Lookups
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {recentLookups.map((set) => (
-                  <RecentLookupCard
-                    key={set.id}
-                    set={set}
-                    onClick={() => handleRecentClick(set)}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {!lookupMutation.data &&
+          !lookupMutation.isPending &&
+          recentLookups &&
+          recentLookups.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Recent Lookups
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {recentLookups.map((set) => (
+                    <RecentLookupCard
+                      key={set.id}
+                      set={set}
+                      onClick={() => handleRecentClick(set)}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
       </div>
     </>
   );

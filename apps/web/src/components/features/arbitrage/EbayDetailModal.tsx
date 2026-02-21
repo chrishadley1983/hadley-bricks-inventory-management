@@ -2,20 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, Ban, RotateCcw, Star, X, Undo2, ShoppingCart } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import {
-  TooltipProvider,
-} from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem, EbayListing } from '@/lib/arbitrage/types';
 import {
@@ -25,7 +18,11 @@ import {
   formatMarginPercent,
 } from '@/lib/arbitrage/calculations';
 import { buildEbaySearchUrl, buildEbayItemUrl } from '@/lib/arbitrage/ebay-url';
-import { useExcludedEbayListings, useExcludeEbayListing, useRestoreEbayListing } from '@/hooks/use-arbitrage';
+import {
+  useExcludedEbayListings,
+  useExcludeEbayListing,
+  useRestoreEbayListing,
+} from '@/hooks/use-arbitrage';
 import { AmazonOffersModal } from './AmazonOffersModal';
 
 interface EbayDetailModalProps {
@@ -35,17 +32,14 @@ interface EbayDetailModalProps {
   onExclude: (asin: string, reason?: string) => void;
 }
 
-export function EbayDetailModal({
-  item,
-  isOpen,
-  onClose,
-  onExclude,
-}: EbayDetailModalProps) {
+export function EbayDetailModal({ item, isOpen, onClose, onExclude }: EbayDetailModalProps) {
   // Amazon offers modal state
   const [showAmazonOffers, setShowAmazonOffers] = useState(false);
 
   // Exclusion hooks
-  const { data: excludedListings = [] } = useExcludedEbayListings(item?.bricklinkSetNumber ?? undefined);
+  const { data: excludedListings = [] } = useExcludedEbayListings(
+    item?.bricklinkSetNumber ?? undefined
+  );
   const excludeListingMutation = useExcludeEbayListing();
   const restoreListingMutation = useRestoreEbayListing();
 
@@ -63,9 +57,10 @@ export function EbayDetailModal({
 
   // Filter out excluded listings, sort by totalPrice, and separate them
   const activeListings = useMemo(
-    () => allEbayListings
-      .filter((l) => !excludedItemIds.has(l.itemId))
-      .sort((a, b) => a.totalPrice - b.totalPrice),
+    () =>
+      allEbayListings
+        .filter((l) => !excludedItemIds.has(l.itemId))
+        .sort((a, b) => a.totalPrice - b.totalPrice),
     [allEbayListings, excludedItemIds]
   );
   const excludedListingsInView = useMemo(
@@ -117,9 +112,7 @@ export function EbayDetailModal({
 
   // Calculate profit margin (profit / sale price)
   const profitMarginPercent =
-    profitBreakdown && sellPrice > 0
-      ? (profitBreakdown.totalProfit / sellPrice) * 100
-      : null;
+    profitBreakdown && sellPrice > 0 ? (profitBreakdown.totalProfit / sellPrice) * 100 : null;
 
   const ebaySearchUrl = item.bricklinkSetNumber
     ? buildEbaySearchUrl(item.bricklinkSetNumber)
@@ -188,8 +181,8 @@ export function EbayDetailModal({
                       item.seededMatchConfidence && item.seededMatchConfidence >= 95
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : item.seededMatchConfidence && item.seededMatchConfidence >= 85
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
                     )}
                   >
                     Seeded
@@ -209,7 +202,10 @@ export function EbayDetailModal({
                   </Badge>
                 )}
                 {item.itemType === 'seeded' && item.bricksetRrp != null && (
-                  <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200"
+                  >
                     RRP: {formatCurrencyGBP(item.bricksetRrp)}
                   </Badge>
                 )}
@@ -249,15 +245,17 @@ export function EbayDetailModal({
                     value={formatCurrencyGBP(effectiveAmazonPrice)}
                     subtext={
                       item.buyBoxPrice !== null
-                        ? item.buyBoxIsYours ? 'You' : 'Other seller'
+                        ? item.buyBoxIsYours
+                          ? 'You'
+                          : 'Other seller'
                         : 'No Buy Box'
                     }
                     valueClassName={
                       item.buyBoxIsYours
                         ? 'text-green-600'
                         : item.buyBoxPrice !== null
-                        ? 'text-amber-600'
-                        : 'text-muted-foreground'
+                          ? 'text-amber-600'
+                          : 'text-muted-foreground'
                     }
                   />
                   <StatCard
@@ -265,11 +263,15 @@ export function EbayDetailModal({
                     value={formatCurrencyGBP(item.wasPrice90d)}
                     subtext="90-day median"
                     valueClassName={
-                      item.wasPrice90d && effectiveAmazonPrice && item.wasPrice90d < effectiveAmazonPrice
+                      item.wasPrice90d &&
+                      effectiveAmazonPrice &&
+                      item.wasPrice90d < effectiveAmazonPrice
                         ? 'text-red-600'
-                        : item.wasPrice90d && effectiveAmazonPrice && item.wasPrice90d > effectiveAmazonPrice
-                        ? 'text-green-600'
-                        : undefined
+                        : item.wasPrice90d &&
+                            effectiveAmazonPrice &&
+                            item.wasPrice90d > effectiveAmazonPrice
+                          ? 'text-green-600'
+                          : undefined
                     }
                   />
                   <StatCard
@@ -296,7 +298,8 @@ export function EbayDetailModal({
               {/* eBay Data Section - uses calculated stats from active listings only */}
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  eBay Stock (UK, New){excludedListingsInView.length > 0 && (
+                  eBay Stock (UK, New)
+                  {excludedListingsInView.length > 0 && (
                     <span className="text-[10px] font-normal ml-1">
                       — {excludedListingsInView.length} excluded
                     </span>
@@ -372,9 +375,7 @@ export function EbayDetailModal({
                             : 'text-muted-foreground'
                         )}
                       >
-                        {profitBreakdown
-                          ? formatCurrencyGBP(profitBreakdown.totalProfit)
-                          : '—'}
+                        {profitBreakdown ? formatCurrencyGBP(profitBreakdown.totalProfit) : '—'}
                       </div>
                     </div>
 
@@ -383,33 +384,39 @@ export function EbayDetailModal({
                       <div className="grid grid-cols-3 gap-4 text-right">
                         <div>
                           <div className="text-[10px] text-muted-foreground uppercase">Margin</div>
-                          <div className={cn(
-                            'font-mono text-base font-semibold',
-                            profitMarginPercent !== null && profitMarginPercent >= 25
-                              ? 'text-green-600'
-                              : profitMarginPercent !== null && profitMarginPercent >= 15
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                          )}>
+                          <div
+                            className={cn(
+                              'font-mono text-base font-semibold',
+                              profitMarginPercent !== null && profitMarginPercent >= 25
+                                ? 'text-green-600'
+                                : profitMarginPercent !== null && profitMarginPercent >= 15
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                            )}
+                          >
                             {formatMarginPercent(profitMarginPercent)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted-foreground uppercase">Take Home</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">
+                            Take Home
+                          </div>
                           <div className="font-mono text-base font-semibold">
                             {formatCurrencyGBP(profitBreakdown.netPayout)}
                           </div>
                         </div>
                         <div>
                           <div className="text-[10px] text-muted-foreground uppercase">COG %</div>
-                          <div className={cn(
-                            'font-mono text-base font-semibold',
-                            sellPrice > 0 && (buyPrice / sellPrice) * 100 < 40
-                              ? 'text-green-600'
-                              : sellPrice > 0 && (buyPrice / sellPrice) * 100 <= 50
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                          )}>
+                          <div
+                            className={cn(
+                              'font-mono text-base font-semibold',
+                              sellPrice > 0 && (buyPrice / sellPrice) * 100 < 40
+                                ? 'text-green-600'
+                                : sellPrice > 0 && (buyPrice / sellPrice) * 100 <= 50
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                            )}
+                          >
                             {sellPrice > 0 ? `${((buyPrice / sellPrice) * 100).toFixed(1)}%` : '—'}
                           </div>
                         </div>
@@ -461,9 +468,7 @@ export function EbayDetailModal({
                     {/* Sale price */}
                     <div className="flex justify-between pt-1 border-t">
                       <span>Sale Price (Amazon)</span>
-                      <span className="font-mono font-medium">
-                        {formatCurrencyGBP(sellPrice)}
-                      </span>
+                      <span className="font-mono font-medium">{formatCurrencyGBP(sellPrice)}</span>
                     </div>
 
                     {/* Fees - condensed */}
@@ -498,7 +503,11 @@ export function EbayDetailModal({
             {allEbayListings.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  eBay Listings ({activeListings.length}{excludedListingsInView.length > 0 ? ` / ${excludedListingsInView.length} excluded` : ''})
+                  eBay Listings ({activeListings.length}
+                  {excludedListingsInView.length > 0
+                    ? ` / ${excludedListingsInView.length} excluded`
+                    : ''}
+                  )
                 </h4>
                 <div className="rounded-lg border overflow-hidden">
                   <div className="max-h-[200px] overflow-y-auto">
@@ -513,10 +522,13 @@ export function EbayDetailModal({
                       </thead>
                       <tbody>
                         {activeListings.map((listing, index) => (
-                          <tr key={listing.itemId} className={cn(
-                            'border-t',
-                            index === 0 ? 'bg-green-50/50 dark:bg-green-950/20' : ''
-                          )}>
+                          <tr
+                            key={listing.itemId}
+                            className={cn(
+                              'border-t',
+                              index === 0 ? 'bg-green-50/50 dark:bg-green-950/20' : ''
+                            )}
+                          >
                             <td className="px-3 py-2 whitespace-nowrap w-20">
                               <span className="font-mono font-medium">
                                 {formatCurrencyGBP(listing.totalPrice)}
@@ -529,26 +541,29 @@ export function EbayDetailModal({
                             </td>
                             <td className="px-3 py-2 text-right whitespace-nowrap w-36">
                               <div className="flex items-center justify-end gap-1">
-                                <span className="text-xs text-muted-foreground truncate max-w-[80px]">{listing.seller}</span>
+                                <span className="text-xs text-muted-foreground truncate max-w-[80px]">
+                                  {listing.seller}
+                                </span>
                                 <Star className="h-3 w-3 text-amber-500 fill-amber-500 flex-shrink-0" />
-                                <span className={cn(
-                                  'text-xs flex-shrink-0',
-                                  (listing.sellerFeedback ?? 0) >= 99 ? 'text-green-600' :
-                                  (listing.sellerFeedback ?? 0) >= 95 ? 'text-amber-600' :
-                                  'text-red-600'
-                                )}>
-                                  {listing.sellerFeedback != null ? `${listing.sellerFeedback.toFixed(1)}%` : '—'}
+                                <span
+                                  className={cn(
+                                    'text-xs flex-shrink-0',
+                                    (listing.sellerFeedback ?? 0) >= 99
+                                      ? 'text-green-600'
+                                      : (listing.sellerFeedback ?? 0) >= 95
+                                        ? 'text-amber-600'
+                                        : 'text-red-600'
+                                  )}
+                                >
+                                  {listing.sellerFeedback != null
+                                    ? `${listing.sellerFeedback.toFixed(1)}%`
+                                    : '—'}
                                 </span>
                               </div>
                             </td>
                             <td className="px-3 py-2 text-center w-14">
                               <div className="flex items-center justify-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  asChild
-                                >
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
                                   <a
                                     href={listing.url || buildEbayItemUrl(listing.itemId)}
                                     target="_blank"
@@ -581,25 +596,34 @@ export function EbayDetailModal({
                   <div className="mt-2">
                     <details className="group">
                       <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        Show {excludedListingsInView.length} excluded listing{excludedListingsInView.length !== 1 ? 's' : ''}
+                        Show {excludedListingsInView.length} excluded listing
+                        {excludedListingsInView.length !== 1 ? 's' : ''}
                       </summary>
                       <div className="mt-2 rounded-lg border border-dashed overflow-hidden opacity-60">
                         <table className="w-full text-xs">
                           <tbody>
                             {excludedListingsInView.map((listing) => (
-                              <tr key={listing.itemId} className="border-t first:border-t-0 bg-muted/30">
+                              <tr
+                                key={listing.itemId}
+                                className="border-t first:border-t-0 bg-muted/30"
+                              >
                                 <td className="px-3 py-2 whitespace-nowrap w-20">
                                   <span className="font-mono font-medium line-through">
                                     {formatCurrencyGBP(listing.totalPrice)}
                                   </span>
                                 </td>
                                 <td className="px-3 py-2">
-                                  <div className="truncate text-xs line-through" title={listing.title}>
+                                  <div
+                                    className="truncate text-xs line-through"
+                                    title={listing.title}
+                                  >
                                     {listing.title}
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-right whitespace-nowrap w-36">
-                                  <span className="text-xs text-muted-foreground truncate max-w-[80px]">{listing.seller}</span>
+                                  <span className="text-xs text-muted-foreground truncate max-w-[80px]">
+                                    {listing.seller}
+                                  </span>
                                 </td>
                                 <td className="px-3 py-2 text-center w-14">
                                   <Button
@@ -635,11 +659,7 @@ export function EbayDetailModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExclude(item.asin)}
-            >
+            <Button variant="outline" size="sm" onClick={() => onExclude(item.asin)}>
               <Ban className="mr-2 h-4 w-4" />
               Exclude
             </Button>
@@ -664,11 +684,7 @@ export function EbayDetailModal({
             </Button>
 
             {ebaySearchUrl && (
-              <Button
-                asChild
-                className="bg-purple-600 hover:bg-purple-700"
-                size="sm"
-              >
+              <Button asChild className="bg-purple-600 hover:bg-purple-700" size="sm">
                 <a href={ebaySearchUrl} target="_blank" rel="noopener noreferrer">
                   eBay
                   <ExternalLink className="ml-2 h-4 w-4" />
@@ -699,12 +715,8 @@ interface StatCardProps {
 function StatCard({ label, value, subtext, valueClassName }: StatCardProps) {
   return (
     <div className="rounded-lg bg-muted/50 p-2 text-center">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-        {label}
-      </div>
-      <div className={cn('font-mono text-base font-bold mt-0.5', valueClassName)}>
-        {value}
-      </div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
+      <div className={cn('font-mono text-base font-bold mt-0.5', valueClassName)}>{value}</div>
       <div className="text-[10px] text-muted-foreground truncate">{subtext}</div>
     </div>
   );

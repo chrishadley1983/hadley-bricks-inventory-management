@@ -114,9 +114,10 @@ export class PriceAlertService {
     for (const alert of alerts) {
       const emoji = alert.direction === 'up' ? '📈' : '📉';
       const color = alert.direction === 'up' ? 0x10b981 : 0xef4444; // green / red
-      const changeStr = alert.change_percent > 0
-        ? `+${alert.change_percent.toFixed(1)}%`
-        : `${alert.change_percent.toFixed(1)}%`;
+      const changeStr =
+        alert.change_percent > 0
+          ? `+${alert.change_percent.toFixed(1)}%`
+          : `${alert.change_percent.toFixed(1)}%`;
 
       const embed = {
         title: `${emoji} Price Alert: ${alert.set_number}`,

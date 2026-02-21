@@ -102,9 +102,7 @@ export function ParseStep({
       <Card>
         <CardHeader>
           <CardTitle>Configuration</CardTitle>
-          <CardDescription>
-            Configure evaluation settings before running lookups
-          </CardDescription>
+          <CardDescription>Configure evaluation settings before running lookups</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -122,7 +120,10 @@ export function ParseStep({
             {/* Default platform */}
             <div className="space-y-2">
               <Label htmlFor="platform">Default Selling Platform</Label>
-              <Select value={defaultPlatform} onValueChange={(v: string) => onDefaultPlatformChange(v as TargetPlatform)}>
+              <Select
+                value={defaultPlatform}
+                onValueChange={(v: string) => onDefaultPlatformChange(v as TargetPlatform)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select platform" />
                 </SelectTrigger>
@@ -141,7 +142,9 @@ export function ParseStep({
               <div className="space-y-2">
                 <Select
                   value={costAllocationMethod}
-                  onValueChange={(v: string) => onCostAllocationMethodChange(v as CostAllocationMethod)}
+                  onValueChange={(v: string) =>
+                    onCostAllocationMethodChange(v as CostAllocationMethod)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select method" />
@@ -154,7 +157,8 @@ export function ParseStep({
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {costAllocationMethod === 'per_item' && 'Use costs from imported data'}
-                  {costAllocationMethod === 'proportional' && 'Allocate based on Amazon Buy Box / Was Price ratios'}
+                  {costAllocationMethod === 'proportional' &&
+                    'Allocate based on Amazon Buy Box / Was Price ratios'}
                   {costAllocationMethod === 'equal' && 'Split total cost equally among items'}
                 </p>
               </div>
@@ -175,9 +179,11 @@ export function ParseStep({
                       className="pl-7"
                       placeholder="0.00"
                       value={totalPurchasePrice || ''}
-                      onChange={(e) => onTotalPurchasePriceChange(
-                        e.target.value ? parseFloat(e.target.value) : undefined
-                      )}
+                      onChange={(e) =>
+                        onTotalPurchasePriceChange(
+                          e.target.value ? parseFloat(e.target.value) : undefined
+                        )
+                      }
                     />
                   </div>
                 </div>
@@ -216,9 +222,7 @@ export function ParseStep({
       <Card>
         <CardHeader>
           <CardTitle>Items to Evaluate ({items.length})</CardTitle>
-          <CardDescription>
-            Review and edit items before running lookups
-          </CardDescription>
+          <CardDescription>Review and edit items before running lookups</CardDescription>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[400px] w-full">
@@ -250,7 +254,9 @@ export function ParseStep({
                           min="1"
                           className="w-16 h-8"
                           value={item.quantity || 1}
-                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value) || 1)}
+                          onChange={(e) =>
+                            handleQuantityChange(index, parseInt(e.target.value) || 1)
+                          }
                         />
                       </TableCell>
                       <TableCell>
@@ -265,10 +271,12 @@ export function ParseStep({
                               min="0"
                               className="w-24 h-8 pl-5"
                               value={item.cost ?? ''}
-                              onChange={(e) => handleCostChange(
-                                index,
-                                e.target.value ? parseFloat(e.target.value) : undefined
-                              )}
+                              onChange={(e) =>
+                                handleCostChange(
+                                  index,
+                                  e.target.value ? parseFloat(e.target.value) : undefined
+                                )
+                              }
                             />
                           </div>
                         ) : (
@@ -303,7 +311,11 @@ export function ParseStep({
         </Button>
         <Button
           onClick={onProceed}
-          disabled={items.length === 0 || isLoading || (costAllocationMethod !== 'per_item' && !totalPurchasePrice)}
+          disabled={
+            items.length === 0 ||
+            isLoading ||
+            (costAllocationMethod !== 'per_item' && !totalPurchasePrice)
+          }
         >
           {isLoading ? (
             <>

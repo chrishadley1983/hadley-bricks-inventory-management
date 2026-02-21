@@ -21,7 +21,11 @@ export interface MileageFilters {
 /**
  * Repository for mileage tracking operations
  */
-export class MileageRepository extends BaseRepository<MileageTracking, MileageInsert, MileageUpdate> {
+export class MileageRepository extends BaseRepository<
+  MileageTracking,
+  MileageInsert,
+  MileageUpdate
+> {
   constructor(supabase: SupabaseClient<Database>) {
     super(supabase, 'mileage_tracking');
   }
@@ -146,7 +150,9 @@ export class MileageRepository extends BaseRepository<MileageTracking, MileageIn
   /**
    * Get total mileage for a specific purchase
    */
-  async getTotalForPurchase(purchaseId: string): Promise<{ totalMiles: number; totalAmount: number }> {
+  async getTotalForPurchase(
+    purchaseId: string
+  ): Promise<{ totalMiles: number; totalAmount: number }> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .select('miles_travelled, amount_claimed')
@@ -182,12 +188,13 @@ export class MileageRepository extends BaseRepository<MileageTracking, MileageIn
       throw new Error(`Failed to get mileage summary: ${error.message}`);
     }
 
-    const summary: Record<ExpenseType, { totalMiles: number; totalAmount: number; count: number }> = {
-      mileage: { totalMiles: 0, totalAmount: 0, count: 0 },
-      parking: { totalMiles: 0, totalAmount: 0, count: 0 },
-      toll: { totalMiles: 0, totalAmount: 0, count: 0 },
-      other: { totalMiles: 0, totalAmount: 0, count: 0 },
-    };
+    const summary: Record<ExpenseType, { totalMiles: number; totalAmount: number; count: number }> =
+      {
+        mileage: { totalMiles: 0, totalAmount: 0, count: 0 },
+        parking: { totalMiles: 0, totalAmount: 0, count: 0 },
+        toll: { totalMiles: 0, totalAmount: 0, count: 0 },
+        other: { totalMiles: 0, totalAmount: 0, count: 0 },
+      };
 
     for (const item of data ?? []) {
       const type = (item.expense_type as ExpenseType) || 'other';
@@ -202,7 +209,10 @@ export class MileageRepository extends BaseRepository<MileageTracking, MileageIn
   /**
    * Create a new mileage entry
    */
-  async createEntry(userId: string, input: Omit<MileageInsert, 'user_id'>): Promise<MileageTracking> {
+  async createEntry(
+    userId: string,
+    input: Omit<MileageInsert, 'user_id'>
+  ): Promise<MileageTracking> {
     return this.create({ ...input, user_id: userId });
   }
 

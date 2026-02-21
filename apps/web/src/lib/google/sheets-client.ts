@@ -162,7 +162,11 @@ export class GoogleSheetsClient {
   /**
    * Test the connection to Google Sheets
    */
-  async testConnection(): Promise<{ success: boolean; message: string; spreadsheetTitle?: string }> {
+  async testConnection(): Promise<{
+    success: boolean;
+    message: string;
+    spreadsheetTitle?: string;
+  }> {
     try {
       const client = await this.getClient();
       const response = await client.spreadsheets.get({

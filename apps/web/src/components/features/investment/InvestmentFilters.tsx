@@ -14,11 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Search, X, Filter, ChevronDown } from 'lucide-react';
 import { useInvestmentThemes } from '@/hooks/use-investment';
 import type { InvestmentFilters as Filters } from '@/lib/api/investment';
@@ -78,10 +74,18 @@ export function InvestmentFilters({ filters, onFiltersChange }: InvestmentFilter
   );
 
   const [searchValue, setSearchValue] = useState(filters.search || '');
-  const [minPiecesValue, setMinPiecesValue] = useState(filters.minPieces != null ? String(filters.minPieces) : '');
-  const [maxPiecesValue, setMaxPiecesValue] = useState(filters.maxPieces != null ? String(filters.maxPieces) : '');
-  const [minRrpValue, setMinRrpValue] = useState(filters.minRrp != null ? String(filters.minRrp) : '');
-  const [maxRrpValue, setMaxRrpValue] = useState(filters.maxRrp != null ? String(filters.maxRrp) : '');
+  const [minPiecesValue, setMinPiecesValue] = useState(
+    filters.minPieces != null ? String(filters.minPieces) : ''
+  );
+  const [maxPiecesValue, setMaxPiecesValue] = useState(
+    filters.maxPieces != null ? String(filters.maxPieces) : ''
+  );
+  const [minRrpValue, setMinRrpValue] = useState(
+    filters.minRrp != null ? String(filters.minRrp) : ''
+  );
+  const [maxRrpValue, setMaxRrpValue] = useState(
+    filters.maxRrp != null ? String(filters.maxRrp) : ''
+  );
 
   useEffect(() => {
     setSearchValue(filters.search || '');
@@ -137,7 +141,8 @@ export function InvestmentFilters({ filters, onFiltersChange }: InvestmentFilter
           onValueChange={(value: string) =>
             onFiltersChange({
               ...filters,
-              retirementStatus: value === 'all' ? undefined : value as Filters['retirementStatus'],
+              retirementStatus:
+                value === 'all' ? undefined : (value as Filters['retirementStatus']),
             })
           }
         >
@@ -278,7 +283,9 @@ export function InvestmentFilters({ filters, onFiltersChange }: InvestmentFilter
               <Label className="text-xs text-muted-foreground">RRP</Label>
               <div className="flex items-center gap-2">
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">&pound;</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    &pound;
+                  </span>
                   <Input
                     type="number"
                     placeholder="Min"
@@ -290,7 +297,9 @@ export function InvestmentFilters({ filters, onFiltersChange }: InvestmentFilter
                 </div>
                 <span className="text-muted-foreground">-</span>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">&pound;</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    &pound;
+                  </span>
                   <Input
                     type="number"
                     placeholder="Max"

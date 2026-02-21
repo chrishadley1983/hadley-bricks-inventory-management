@@ -99,7 +99,7 @@ export function BarChart({
         <Tooltip
           formatter={(value: number | undefined, name?: string) => [
             formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0),
-            name ?? ''
+            name ?? '',
           ]}
           labelFormatter={formatXAxis}
           contentStyle={{

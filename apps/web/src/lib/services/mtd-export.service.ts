@@ -82,7 +82,11 @@ export class MtdExportService {
   /**
    * Generate CSV data for a period (start to end month inclusive)
    */
-  async generateCsvData(userId: string, startMonth: string, endMonth?: string): Promise<MtdCsvData> {
+  async generateCsvData(
+    userId: string,
+    startMonth: string,
+    endMonth?: string
+  ): Promise<MtdCsvData> {
     const effectiveEndMonth = endMonth || startMonth;
 
     // Get P&L data for the period
@@ -149,7 +153,10 @@ export class MtdExportService {
         platformTotals.amazon += value;
       } else if (row.transactionType.toLowerCase().includes('bricklink')) {
         platformTotals.bricklink += value;
-      } else if (row.transactionType.toLowerCase().includes('brick owl') || row.transactionType.toLowerCase().includes('brickowl')) {
+      } else if (
+        row.transactionType.toLowerCase().includes('brick owl') ||
+        row.transactionType.toLowerCase().includes('brickowl')
+      ) {
         platformTotals.brickowl += value;
       }
     }
@@ -187,7 +194,10 @@ export class MtdExportService {
     const expenses: MtdExpenseRow[] = [];
 
     // Aggregate expenses by nominal code category
-    const categoryAggregates: Record<string, { total: number; nominalCode: string; description: string; supplier: string }> = {
+    const categoryAggregates: Record<
+      string,
+      { total: number; nominalCode: string; description: string; supplier: string }
+    > = {
       stockPurchase: {
         total: 0,
         nominalCode: QUICKFILE_NOMINAL_CODES.COST_OF_GOODS_SOLD,
@@ -315,7 +325,15 @@ export class MtdExportService {
    * Generate CSV content for sales
    */
   generateSalesCsv(data: MtdCsvData): string {
-    const headers = ['Date', 'Reference', 'Description', 'Net Amount', 'VAT', 'Gross Amount', 'Nominal Code'];
+    const headers = [
+      'Date',
+      'Reference',
+      'Description',
+      'Net Amount',
+      'VAT',
+      'Gross Amount',
+      'Nominal Code',
+    ];
     const rows = data.sales.map((row) => [
       row.date,
       row.reference,
@@ -333,7 +351,16 @@ export class MtdExportService {
    * Generate CSV content for expenses
    */
   generateExpensesCsv(data: MtdCsvData): string {
-    const headers = ['Date', 'Reference', 'Supplier', 'Description', 'Net Amount', 'VAT', 'Gross Amount', 'Nominal Code'];
+    const headers = [
+      'Date',
+      'Reference',
+      'Supplier',
+      'Description',
+      'Net Amount',
+      'VAT',
+      'Gross Amount',
+      'Nominal Code',
+    ];
     const rows = data.expenses.map((row) => [
       row.date,
       row.reference,

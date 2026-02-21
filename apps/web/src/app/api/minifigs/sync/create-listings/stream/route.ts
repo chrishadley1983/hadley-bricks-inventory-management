@@ -52,8 +52,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
               itemsErrored: result.itemsErrored,
               errors: result.errors,
             },
-          }),
-        ),
+          })
+        )
       );
     } catch (error) {
       console.error('[GET /api/minifigs/sync/create-listings/stream] Error:', error);

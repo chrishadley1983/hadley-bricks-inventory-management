@@ -24,7 +24,7 @@ const AMAZON_DST_RATE = 0.02; // 2%
 /**
  * UK VAT rate (non-reclaimable for non-VAT registered sellers)
  */
-const VAT_RATE = 0.20; // 20%
+const VAT_RATE = 0.2; // 20%
 
 /**
  * Combined effective fee rate: 15% × 1.02 × 1.20 = 18.36%
@@ -34,9 +34,9 @@ const AMAZON_EFFECTIVE_FEE_RATE = AMAZON_REFERRAL_FEE_RATE * (1 + AMAZON_DST_RAT
 /**
  * Shipping cost thresholds for FBM
  */
-const SHIPPING_THRESHOLD = 14.00;
-const SHIPPING_COST_LOW = 3.00;  // For items < £14
-const SHIPPING_COST_HIGH = 4.00; // For items >= £14
+const SHIPPING_THRESHOLD = 14.0;
+const SHIPPING_COST_LOW = 3.0; // For items < £14
+const SHIPPING_COST_HIGH = 4.0; // For items >= £14
 
 /**
  * Calculate margin percentage between Amazon sell price and BrickLink buy price
@@ -59,10 +59,7 @@ export function calculateMargin(amazonPrice: number, bricklinkPrice: number): nu
  * @param bricklinkPrice - BrickLink buy price
  * @returns Profit calculation with gross profit and margin percent
  */
-export function calculateProfit(
-  amazonPrice: number,
-  bricklinkPrice: number
-): ProfitCalculation {
+export function calculateProfit(amazonPrice: number, bricklinkPrice: number): ProfitCalculation {
   if (amazonPrice <= 0 || bricklinkPrice <= 0) {
     return { grossProfit: 0, marginPercent: 0 };
   }

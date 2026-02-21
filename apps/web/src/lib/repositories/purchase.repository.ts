@@ -34,7 +34,9 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
     const to = from + pageSize - 1;
 
     // Build the query - include image count from purchase_images
-    let query = this.supabase.from(this.tableName).select('*, purchase_images(count)', { count: 'exact' });
+    let query = this.supabase
+      .from(this.tableName)
+      .select('*, purchase_images(count)', { count: 'exact' });
 
     // Apply filters
     if (filters?.source) {
@@ -72,7 +74,9 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
 
     // Transform data to include image_count as a number
     const transformedData = (data ?? []).map((item) => {
-      const { purchase_images, ...rest } = item as Purchase & { purchase_images: { count: number }[] };
+      const { purchase_images, ...rest } = item as Purchase & {
+        purchase_images: { count: number }[];
+      };
       return {
         ...rest,
         image_count: purchase_images?.[0]?.count ?? 0,
@@ -234,10 +238,7 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
    * @param userId - User ID for defense-in-depth filtering (in addition to RLS)
    */
   async updateBulk(ids: string[], data: PurchaseUpdate, userId?: string): Promise<Purchase[]> {
-    let query = this.supabase
-      .from(this.tableName)
-      .update(data)
-      .in('id', ids);
+    let query = this.supabase.from(this.tableName).update(data).in('id', ids);
 
     // Add user_id filter for defense-in-depth (RLS also enforces this)
     if (userId) {

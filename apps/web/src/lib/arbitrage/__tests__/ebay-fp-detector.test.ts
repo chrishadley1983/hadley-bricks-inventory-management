@@ -27,8 +27,18 @@ function makeListing(overrides: Partial<EbayListing> = {}): EbayListing {
 function makeValidSetNumbers(...extra: string[]): Set<string> {
   // A baseline set of common LEGO set numbers
   return new Set([
-    '75192', '10281', '42115', '60198', '21327', '10276',
-    '75309', '10300', '71043', '31058', '60389', '40585',
+    '75192',
+    '10281',
+    '42115',
+    '60198',
+    '21327',
+    '10276',
+    '75309',
+    '10300',
+    '71043',
+    '31058',
+    '60389',
+    '40585',
     ...extra,
   ]);
 }
@@ -73,7 +83,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars 75192 Millennium Falcon - Brand New Sealed',
         totalPrice: 550,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -91,7 +107,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Creator 3 in 1 Mighty Dinosaurs 31058 New Sealed',
         totalPrice: 10,
       });
-      const { score } = service.scoreListing(listing, '31058', 'Mighty Dinosaurs', 12.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '31058',
+        'Mighty Dinosaurs',
+        12.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -102,7 +124,13 @@ describe('EbayFpDetectorService', () => {
       });
       // "custom" is in the set name - should NOT trigger CUSTOM_MOC
       // because "custom" alone doesn't match "custom build" or "custom moc"
-      const { score } = service.scoreListing(listing, '60389', 'Custom Car Garage', 29.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '60389',
+        'Custom Car Garage',
+        29.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -112,7 +140,13 @@ describe('EbayFpDetectorService', () => {
         totalPrice: 70,
       });
       // "display" alone doesn't match DISPLAY_ACCESSORY - it needs "display stand", "display case" etc.
-      const { score } = service.scoreListing(listing, '75352', "Emperor's Throne Room Diorama", 89.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75352',
+        "Emperor's Throne Room Diorama",
+        89.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -121,7 +155,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars 75192 Millennium Falcon Ultimate Collectors Edition',
         totalPrice: 600,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -140,7 +180,13 @@ describe('EbayFpDetectorService', () => {
         totalPrice: 580,
       });
       // "magazine" not in title - this tests the base case
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -149,7 +195,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Technic 42115 Lamborghini Sián FKP 37 New Sealed',
         totalPrice: 300,
       });
-      const { score } = service.scoreListing(listing, '42115', 'Lamborghini Sián FKP 37', 349.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '42115',
+        'Lamborghini Sián FKP 37',
+        349.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -158,7 +210,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Architecture Statue of Liberty 21042 Brand New',
         totalPrice: 80,
       });
-      const { score } = service.scoreListing(listing, '21042', 'Statue of Liberty', 99.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '21042',
+        'Statue of Liberty',
+        99.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -183,7 +241,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED Light Kit for LEGO 75192 Star Wars Millennium Falcon USB Powered',
         totalPrice: 25,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(true);
     });
 
@@ -201,7 +265,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED Kit LEGO Technic 42115 Lamborghini',
         totalPrice: 20,
       });
-      const { signals } = service.scoreListing(listing, '42115', 'Lamborghini Sián FKP 37', 349.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '42115',
+        'Lamborghini Sián FKP 37',
+        349.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(true);
     });
 
@@ -210,7 +280,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Light Kit LEGO 75192 Millennium Falcon',
         totalPrice: 30,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(true);
     });
 
@@ -228,7 +304,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO City 60198 Freight Train Light Up New Sealed',
         totalPrice: 120,
       });
-      const { signals } = service.scoreListing(listing, '60198', 'Freight Train', 149.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '60198',
+        'Freight Train',
+        149.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(false);
     });
   });
@@ -243,7 +325,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Display Stand Premium Oak Finish',
         totalPrice: 45,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
     });
 
@@ -261,7 +349,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Minifigure Display Frame 75192 Theme',
         totalPrice: 15,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
     });
 
@@ -270,7 +364,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Wall Mount Bracket for LEGO Star Wars 75192',
         totalPrice: 20,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
     });
 
@@ -279,7 +379,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Name Plate Engraved',
         totalPrice: 12,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
     });
 
@@ -288,7 +394,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Dust Cover Clear Protective',
         totalPrice: 25,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
     });
 
@@ -297,7 +409,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75352 Display Diorama Emperor Throne Room',
         totalPrice: 70,
       });
-      const { signals } = service.scoreListing(listing, '75352', "Emperor's Throne Room Diorama", 89.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75352',
+        "Emperor's Throne Room Diorama",
+        89.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(false);
     });
 
@@ -321,7 +439,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED Light Kit for LEGO 75192 Millennium Falcon',
         totalPrice: 25,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
 
@@ -330,7 +454,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Compatible With LEGO 75192 Building Blocks Set',
         totalPrice: 35,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
 
@@ -339,7 +469,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Motor Compatible For LEGO Technic 42115',
         totalPrice: 15,
       });
-      const { signals } = service.scoreListing(listing, '42115', 'Lamborghini Sián FKP 37', 349.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '42115',
+        'Lamborghini Sián FKP 37',
+        349.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
 
@@ -348,7 +484,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Battery Box Motor Fits LEGO Technic 42115',
         totalPrice: 10,
       });
-      const { signals } = service.scoreListing(listing, '42115', 'Lamborghini Sián FKP 37', 349.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '42115',
+        'Lamborghini Sián FKP 37',
+        349.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
 
@@ -357,7 +499,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Replacement Sticker Sheet LEGO 75192 Millennium Falcon',
         totalPrice: 5,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
 
@@ -366,7 +514,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars 75192 Millennium Falcon New Sealed',
         totalPrice: 550,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(false);
     });
   });
@@ -381,7 +535,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Job Lot 5kg Mixed Star Wars City Bricks',
         totalPrice: 40,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(true);
     });
 
@@ -390,7 +550,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Joblot Mixed Minifigures Sets Bricks',
         totalPrice: 30,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(true);
     });
 
@@ -399,7 +565,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Bulk Lot Mixed Sets & Pieces 3kg',
         totalPrice: 25,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(true);
     });
 
@@ -408,7 +580,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Mixed Lot Star Wars Sets and Minifigures',
         totalPrice: 50,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(true);
     });
 
@@ -417,7 +595,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon + Gift Bundle',
         totalPrice: 600,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(false);
     });
 
@@ -426,7 +610,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon New Sealed - A Lot of Pieces!',
         totalPrice: 550,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(false);
     });
   });
@@ -441,7 +631,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO MOC Star Wars Diorama Custom Build 75192',
         totalPrice: 80,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'CUSTOM_MOC')).toBe(true);
     });
 
@@ -450,7 +646,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Custom Build Medieval Castle Based on 10305',
         totalPrice: 100,
       });
-      const { signals } = service.scoreListing(listing, '10305', 'Lion Knights Castle', 349.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '10305',
+        'Lion Knights Castle',
+        349.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'CUSTOM_MOC')).toBe(true);
     });
 
@@ -459,7 +661,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Custom MOC LEGO Star Wars Scene',
         totalPrice: 60,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'CUSTOM_MOC')).toBe(true);
     });
 
@@ -469,7 +677,13 @@ describe('EbayFpDetectorService', () => {
         totalPrice: 25,
       });
       // "Custom Car" should NOT match "custom build" or "custom moc"
-      const { signals } = service.scoreListing(listing, '60389', 'Custom Car Garage', 29.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '60389',
+        'Custom Car Garage',
+        29.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'CUSTOM_MOC')).toBe(false);
     });
 
@@ -478,7 +692,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Custom Delivery Fast Shipping',
         totalPrice: 580,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'CUSTOM_MOC')).toBe(false);
     });
   });
@@ -511,7 +731,13 @@ describe('EbayFpDetectorService', () => {
         title: '2x LEGO Star Wars 75192 Millennium Falcon',
         totalPrice: 1100,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'MULTI_QUANTITY')).toBe(true);
     });
 
@@ -520,7 +746,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Creator 3 in 1 Mighty Dinosaurs 31058 New Sealed',
         totalPrice: 10,
       });
-      const { signals } = service.scoreListing(listing, '31058', 'Mighty Dinosaurs', 12.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '31058',
+        'Mighty Dinosaurs',
+        12.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'MULTI_QUANTITY')).toBe(false);
     });
 
@@ -529,7 +761,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon x1 New Sealed',
         totalPrice: 550,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'MULTI_QUANTITY')).toBe(false);
     });
   });
@@ -544,7 +782,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Annual 2024 with Mini Figure',
         totalPrice: 8,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
     });
 
@@ -553,7 +797,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO City Activity Book with Mini Set 60198',
         totalPrice: 6,
       });
-      const { signals } = service.scoreListing(listing, '60198', 'Freight Train', 149.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '60198',
+        'Freight Train',
+        149.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
     });
 
@@ -562,7 +812,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Magazine Issue 42 with 75192 Mini Build',
         totalPrice: 5,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
     });
 
@@ -571,7 +827,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Encyclopedia Updated Edition 2024',
         totalPrice: 15,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
     });
 
@@ -580,7 +842,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Ultimate Guide to Building 2024 Edition',
         totalPrice: 12,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
     });
 
@@ -604,7 +872,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Technic 42146 Sticker Sheet',
         totalPrice: 9.14,
       });
-      const { signals } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '42146',
+        'Liebherr Crawler Crane LR 13000',
+        599.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -613,7 +887,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Decal Sheet LEGO Star Wars 75192',
         totalPrice: 5,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -631,7 +911,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Art Print Millennium Falcon 75192',
         totalPrice: 15,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -640,7 +926,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Wall Sticker Bedroom Decor 75192',
         totalPrice: 8,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -649,7 +941,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Vinyl Sticker LEGO Star Wars 75192 Custom',
         totalPrice: 4,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -658,7 +956,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75280 Sticker Set Replacement',
         totalPrice: 3.08,
       });
-      const { signals } = service.scoreListing(listing, '75280', '501st Legion Clone Troopers', 99.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75280',
+        '501st Legion Clone Troopers',
+        99.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(true);
     });
 
@@ -667,7 +971,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Technic 42146 Liebherr Crane New Sealed with Sticker',
         totalPrice: 400,
       });
-      const { signals } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '42146',
+        'Liebherr Crawler Crane LR 13000',
+        599.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(false);
     });
 
@@ -676,7 +986,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon New Sealed Free Postage',
         totalPrice: 550,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'STICKER_POSTER')).toBe(false);
     });
 
@@ -685,7 +1001,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Technic 42146 Sticker Sheet',
         totalPrice: 9.14,
       });
-      const { score } = service.scoreListing(listing, '42146', 'Liebherr Crawler Crane LR 13000', 599.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '42146',
+        'Liebherr Crawler Crane LR 13000',
+        599.99,
+        validSets
+      );
       // VERY_LOW_COG (35) + STICKER_POSTER (25) + PRICE_ANOMALY (20) = 80
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
@@ -711,7 +1033,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Ex Display',
         totalPrice: 450,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'INCOMPLETE_INDICATORS')).toBe(true);
     });
 
@@ -720,7 +1048,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Ex-Display Model',
         totalPrice: 400,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'INCOMPLETE_INDICATORS')).toBe(true);
     });
 
@@ -738,7 +1072,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Unsealed But Complete',
         totalPrice: 500,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'INCOMPLETE_INDICATORS')).toBe(true);
     });
 
@@ -756,7 +1096,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Box Only No Set Included',
         totalPrice: 20,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'INCOMPLETE_INDICATORS')).toBe(true);
     });
 
@@ -765,7 +1111,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon Damaged Box',
         totalPrice: 480,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'INCOMPLETE_INDICATORS')).toBe(true);
     });
   });
@@ -780,7 +1132,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED Light Kit for LEGO 75192 Millennium Falcon USB',
         totalPrice: 25,
       });
-      const { score, signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score, signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(true);
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
@@ -791,7 +1149,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Acrylic Display Case for LEGO 10281 Bonsai Tree',
         totalPrice: 35,
       });
-      const { score, signals } = service.scoreListing(listing, '10281', 'Bonsai Tree', 49.99, validSets);
+      const { score, signals } = service.scoreListing(
+        listing,
+        '10281',
+        'Bonsai Tree',
+        49.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'DISPLAY_ACCESSORY')).toBe(true);
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
@@ -802,7 +1166,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO MOC Medieval Village Custom Build Detailed',
         totalPrice: 80,
       });
-      const { score } = service.scoreListing(listing, '10305', 'Lion Knights Castle', 349.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '10305',
+        'Lion Knights Castle',
+        349.99,
+        validSets
+      );
       // CUSTOM_MOC (30) + MISSING_SET_NUMBER (15) + NAME_MISMATCH (25) = 70
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
@@ -812,7 +1182,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Job Lot Mixed Brick Pieces 3kg',
         totalPrice: 25,
       });
-      const { score, signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score, signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BUNDLE_LOT')).toBe(true);
       // BUNDLE_LOT (25) + PARTS_PIECES_KEYWORDS (20) + MISSING_SET_NUMBER (15) + NAME_MISMATCH (25) = 85
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
@@ -823,7 +1199,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Annual 2024 with Mini Figure',
         totalPrice: 8,
       });
-      const { score, signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score, signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'BOOK_MAGAZINE')).toBe(true);
       // BOOK_MAGAZINE (25) + MISSING_SET_NUMBER (15) + NAME_MISMATCH (25) + PRICE_ANOMALY (20) + LOW_COG (25) = capped 100
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
@@ -834,7 +1216,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED Light Kit for LEGO MOC Custom Build Job Lot Instructions Only',
         totalPrice: 5,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBe(100);
     });
   });
@@ -846,7 +1234,13 @@ describe('EbayFpDetectorService', () => {
   describe('edge cases', () => {
     it('should handle empty title', () => {
       const listing = makeListing({ title: '' });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(typeof score).toBe('number');
     });
 
@@ -855,7 +1249,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Millennium Falcon New Sealed',
         totalPrice: 550,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', null, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        null,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 
@@ -882,7 +1282,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LED LIGHT KIT FOR LEGO 75192 MILLENNIUM FALCON',
         totalPrice: 25,
       });
-      const { signals } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { signals } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(signals.some((s) => s.signal === 'LED_LIGHT_KIT')).toBe(true);
       expect(signals.some((s) => s.signal === 'THIRD_PARTY_PRODUCT')).toBe(true);
     });
@@ -898,7 +1304,13 @@ describe('EbayFpDetectorService', () => {
         title: 'USB Powered LED Light Kit LEGO Technic 42115 Lamborghini Sián',
         totalPrice: 18,
       });
-      const { score } = service.scoreListing(listing, '42115', 'Lamborghini Sián FKP 37', 349.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '42115',
+        'Lamborghini Sián FKP 37',
+        349.99,
+        validSets
+      );
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
 
@@ -907,7 +1319,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Display Stand Efferman Premium Build',
         totalPrice: 40,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       // DISPLAY_ACCESSORY (25) + NAME_MISMATCH (25) = 50
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
@@ -917,7 +1335,13 @@ describe('EbayFpDetectorService', () => {
         title: 'Building Blocks Compatible With LEGO 75192 Star Wars Falcon',
         totalPrice: 60,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
 
@@ -926,7 +1350,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO Star Wars Magazine Issue 99 with Exclusive Minifigure',
         totalPrice: 6,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
     });
 
@@ -944,7 +1374,13 @@ describe('EbayFpDetectorService', () => {
         title: 'LEGO 75192 Star Wars Millennium Falcon New Sealed From My Collection',
         totalPrice: 580,
       });
-      const { score } = service.scoreListing(listing, '75192', 'Millennium Falcon', 649.99, validSets);
+      const { score } = service.scoreListing(
+        listing,
+        '75192',
+        'Millennium Falcon',
+        649.99,
+        validSets
+      );
       expect(score).toBeLessThan(DEFAULT_THRESHOLD);
     });
 

@@ -7,20 +7,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { NegotiationScoringService, MIN_DISCOUNT_PERCENTAGE } from '@/lib/ebay/negotiation-scoring.service';
+import {
+  NegotiationScoringService,
+  MIN_DISCOUNT_PERCENTAGE,
+} from '@/lib/ebay/negotiation-scoring.service';
 
-const UpdateRuleSchema = z.object({
-  minScore: z.number().min(0).max(100),
-  maxScore: z.number().min(0).max(100),
-  discountPercentage: z.number().min(MIN_DISCOUNT_PERCENTAGE).max(50),
-}).refine((data) => data.minScore <= data.maxScore, {
-  message: 'minScore must be less than or equal to maxScore',
-});
+const UpdateRuleSchema = z
+  .object({
+    minScore: z.number().min(0).max(100),
+    maxScore: z.number().min(0).max(100),
+    discountPercentage: z.number().min(MIN_DISCOUNT_PERCENTAGE).max(50),
+  })
+  .refine((data) => data.minScore <= data.maxScore, {
+    message: 'minScore must be less than or equal to maxScore',
+  });
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

@@ -111,7 +111,14 @@ export class KeepaPricingSyncService {
     const missingAsins = await this.getSeededAsinsWithoutPricing();
 
     if (missingAsins.length === 0) {
-      onProgress?.({ type: 'complete', processed: 0, total: 0, upserted: 0, skipped: 0, failed: 0 });
+      onProgress?.({
+        type: 'complete',
+        processed: 0,
+        total: 0,
+        upserted: 0,
+        skipped: 0,
+        failed: 0,
+      });
       return { upserted: 0, skipped: 0, failed: 0, total: 0 };
     }
 
@@ -173,7 +180,10 @@ export class KeepaPricingSyncService {
               );
 
             if (upsertError) {
-              console.error(`[KeepaPricingSync] Upsert error for ${product.asin}:`, upsertError.message);
+              console.error(
+                `[KeepaPricingSync] Upsert error for ${product.asin}:`,
+                upsertError.message
+              );
               failed++;
             } else {
               upserted++;

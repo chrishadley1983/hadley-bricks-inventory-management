@@ -6,10 +6,7 @@ import { OrderRepository } from '@/lib/repositories';
  * GET /api/orders/[id]
  * Get a single order with items
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

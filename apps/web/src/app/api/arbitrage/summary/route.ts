@@ -55,9 +55,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: stats });
   } catch (error) {
     console.error('[GET /api/arbitrage/summary] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

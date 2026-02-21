@@ -4,9 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { amazonTransactionSyncService } from '@/lib/amazon';
 
 const HistoricalImportSchema = z.object({
-  fromDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
 });
 
 /**
@@ -41,25 +39,18 @@ export async function POST(request: NextRequest) {
     const fromDateISO = new Date(`${fromDate}T00:00:00.000Z`).toISOString();
 
     // Perform the historical import
-    const result = await amazonTransactionSyncService.performHistoricalImport(
-      user.id,
-      fromDateISO
-    );
+    const result = await amazonTransactionSyncService.performHistoricalImport(user.id, fromDateISO);
 
     return NextResponse.json({
       success: result.transactions.success,
       result: result.transactions,
     });
   } catch (error) {
-    console.error(
-      '[POST /api/integrations/amazon/transactions/sync/historical] Error:',
-      error
-    );
+    console.error('[POST /api/integrations/amazon/transactions/sync/historical] Error:', error);
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : 'Historical import failed',
+        error: error instanceof Error ? error.message : 'Historical import failed',
       },
       { status: 500 }
     );

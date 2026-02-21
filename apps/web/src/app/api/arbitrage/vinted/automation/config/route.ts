@@ -13,7 +13,9 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { withApiKeyAuth } from '@/lib/middleware/vinted-api-auth';
 import type { ConfigResponse } from '@/types/vinted-automation';
 
-export async function GET(request: NextRequest): Promise<NextResponse<ConfigResponse | { error: string }>> {
+export async function GET(
+  request: NextRequest
+): Promise<NextResponse<ConfigResponse | { error: string }>> {
   return withApiKeyAuth<ConfigResponse>(request, async (userId) => {
     try {
       // Use service role client since API key auth bypasses RLS
@@ -57,7 +59,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<ConfigResp
 
       const scansToday = scanStats?.length ?? 0;
       // Use actual opportunities (listings that meet COG threshold), not raw listings
-      const opportunitiesToday = scanStats?.reduce((sum, s) => sum + (s.opportunities_found ?? 0), 0) ?? 0;
+      const opportunitiesToday =
+        scanStats?.reduce((sum, s) => sum + (s.opportunities_found ?? 0), 0) ?? 0;
 
       const response: ConfigResponse = {
         enabled: config.enabled,

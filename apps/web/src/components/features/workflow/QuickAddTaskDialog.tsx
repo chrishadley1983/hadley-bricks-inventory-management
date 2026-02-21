@@ -20,11 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Loader2, CalendarIcon } from 'lucide-react';
 import { useCreateTask } from '@/hooks/use-workflow';
@@ -36,14 +32,7 @@ interface QuickAddTaskDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const categories = [
-  'Shipping',
-  'Listing',
-  'Sourcing',
-  'Admin',
-  'Development',
-  'Other',
-];
+const categories = ['Shipping', 'Listing', 'Sourcing', 'Admin', 'Development', 'Other'];
 
 const priorities = [
   { value: '1', label: 'Critical', color: 'text-red-500' },
@@ -207,17 +196,11 @@ export function QuickAddTaskDialog({ open, onOpenChange }: QuickAddTaskDialogPro
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={createTask.isPending}>
-              {createTask.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
+              {createTask.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Add Task
             </Button>
           </DialogFooter>

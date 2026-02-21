@@ -79,7 +79,8 @@ export function LinkPurchaseDialog({
         <DialogHeader>
           <DialogTitle>Link to Purchase</DialogTitle>
           <DialogDescription>
-            Select a purchase to link this upload to. Purchases closest to the upload date are shown first.
+            Select a purchase to link this upload to. Purchases closest to the upload date are shown
+            first.
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +121,13 @@ export function LinkPurchaseDialog({
                       key={purchase.id}
                       variant="ghost"
                       className="w-full justify-start h-auto py-3 px-3"
-                      onClick={() => handleSelect({ id: purchase.id, cost: purchase.cost, source: purchase.source })}
+                      onClick={() =>
+                        handleSelect({
+                          id: purchase.id,
+                          cost: purchase.cost,
+                          source: purchase.source,
+                        })
+                      }
                     >
                       <div className="flex flex-col items-start gap-1 text-left w-full">
                         <div className="flex items-center justify-between w-full">

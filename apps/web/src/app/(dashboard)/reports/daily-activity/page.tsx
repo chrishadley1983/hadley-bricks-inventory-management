@@ -5,13 +5,7 @@ import { useState, Fragment } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download, Loader2, Calendar, BarChart3, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -339,9 +333,7 @@ export default function DailyActivityReportPage() {
             {/* Main Data Table */}
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {granularity === 'daily' ? 'Daily' : 'Monthly'} Activity
-                </CardTitle>
+                <CardTitle>{granularity === 'daily' ? 'Daily' : 'Monthly'} Activity</CardTitle>
                 <CardDescription>
                   Listings and sales per platform
                   {granularity === 'daily' && ' with store status tracking'}
@@ -419,7 +411,9 @@ export default function DailyActivityReportPage() {
                             {visiblePlatforms.map((platform) => {
                               const platformData = row.platforms[platform];
                               return (
-                                <Fragment key={`${isDailyRow(row) ? row.date : row.month}-${platform}`}>
+                                <Fragment
+                                  key={`${isDailyRow(row) ? row.date : row.month}-${platform}`}
+                                >
                                   <TableCell className="text-right border-l tabular-nums">
                                     {platformData.itemsListed > 0 ? platformData.itemsListed : '-'}
                                   </TableCell>

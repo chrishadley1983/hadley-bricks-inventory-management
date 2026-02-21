@@ -27,10 +27,7 @@ Return only a JSON object with these fields:
 /**
  * Create the user message for calculating distance
  */
-export function createCalculateDistanceMessage(
-  fromPostcode: string,
-  toPostcode: string
-): string {
+export function createCalculateDistanceMessage(fromPostcode: string, toPostcode: string): string {
   return `Estimate the driving distance between these UK postcodes:
 
 From: ${fromPostcode}

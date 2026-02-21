@@ -156,16 +156,16 @@ export class ListingCreationService {
       // Step 3: Analyze photos to detect box and instructions
       const photoAnalysis = await this.executeStep('photos', onProgress, async () => {
         // Get photo URLs from request (already uploaded at this point)
-        const photoUrls = request.photos
-          .filter(isListingImageUrl)
-          .map((img) => img.url);
+        const photoUrls = request.photos.filter(isListingImageUrl).map((img) => img.url);
 
         if (photoUrls.length === 0) {
           console.log('[ListingCreationService] No photos to analyze for box/instructions');
           return null;
         }
 
-        console.log(`[ListingCreationService] Analyzing ${photoUrls.length} photos for box/instructions...`);
+        console.log(
+          `[ListingCreationService] Analyzing ${photoUrls.length} photos for box/instructions...`
+        );
         return analyzeListingPhotos(photoUrls);
       });
 
@@ -205,7 +205,10 @@ export class ListingCreationService {
           {
             style: request.descriptionStyle,
             template: template
-              ? { content: template.content, type: template.type as 'lego_used' | 'lego_new' | 'general' | 'custom' }
+              ? {
+                  content: template.content,
+                  type: template.type as 'lego_used' | 'lego_new' | 'general' | 'custom',
+                }
               : undefined,
             price: request.price,
           },
@@ -247,7 +250,8 @@ export class ListingCreationService {
         }
 
         // Apply suggestions if there are any issues or suggestions to improve
-        const hasImprovements = initialReview.issues.length > 0 || initialReview.suggestions.length > 0;
+        const hasImprovements =
+          initialReview.issues.length > 0 || initialReview.suggestions.length > 0;
 
         if (hasImprovements) {
           console.log('[ListingCreationService] Applying suggestions to improve listing...');
@@ -290,9 +294,7 @@ export class ListingCreationService {
       // The client will call continueFromPreview() after user confirms
       const previewResult = await this.executeStep('preview', onProgress, async () => {
         // Get photo URLs for preview (images are already uploaded at this point)
-        const photoUrls = request.photos
-          .filter(isListingImageUrl)
-          .map((img) => img.url);
+        const photoUrls = request.photos.filter(isListingImageUrl).map((img) => img.url);
 
         // If we have a preview callback, send preview and save session
         if (this.onPreviewCallback) {
@@ -318,7 +320,9 @@ export class ListingCreationService {
             photoUrls,
           };
 
-          console.log(`[ListingCreationService] Sending preview with quality score: ${qualityReview?.score ?? 'null'}/100 (${qualityReview?.grade ?? 'N/A'})`);
+          console.log(
+            `[ListingCreationService] Sending preview with quality score: ${qualityReview?.score ?? 'null'}/100 (${qualityReview?.grade ?? 'N/A'})`
+          );
           this.onPreviewCallback(previewData);
 
           // Return special marker to indicate we're pausing for preview
@@ -331,7 +335,9 @@ export class ListingCreationService {
 
       // If preview was sent and waiting for confirmation, return null
       if (!previewResult.confirmed) {
-        console.log(`[ListingCreationService] Preview sent, waiting for confirmation. Session: ${previewResult.sessionId}`);
+        console.log(
+          `[ListingCreationService] Preview sent, waiting for confirmation. Session: ${previewResult.sessionId}`
+        );
         return null;
       }
 
@@ -348,7 +354,9 @@ export class ListingCreationService {
           // Upload any remaining base64 images (legacy fallback)
           let uploadedUrls: string[] = [];
           if (base64Images.length > 0) {
-            console.log(`[ListingCreationService] Uploading ${base64Images.length} base64 images (legacy mode)`);
+            console.log(
+              `[ListingCreationService] Uploading ${base64Images.length} base64 images (legacy mode)`
+            );
             const imagesToUpload: ImageUploadData[] = base64Images.map((p) => ({
               id: p.id,
               base64: p.base64,
@@ -366,7 +374,9 @@ export class ListingCreationService {
             throw new Error('No images available for listing');
           }
 
-          console.log(`[ListingCreationService] Total images: ${allUrls.length} (${preUploadedUrls.length} pre-uploaded, ${uploadedUrls.length} just uploaded)`);
+          console.log(
+            `[ListingCreationService] Total images: ${allUrls.length} (${preUploadedUrls.length} pre-uploaded, ${uploadedUrls.length} just uploaded)`
+          );
           return allUrls;
         });
       } else {
@@ -443,7 +453,10 @@ export class ListingCreationService {
       const failedStep = this.steps.find((s) => s.status === 'failed')?.id ?? 'unknown';
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-      console.error(`[ListingCreationService] Listing creation failed at step ${failedStep}:`, error);
+      console.error(
+        `[ListingCreationService] Listing creation failed at step ${failedStep}:`,
+        error
+      );
 
       // Clean up uploaded images on failure
       if (imageUrls.length > 0) {
@@ -659,7 +672,9 @@ export class ListingCreationService {
     }
 
     // Step 3: Fall back to AI knowledge if Brickset data is missing or insufficient
-    console.log('[ListingCreationService] Brickset data insufficient, falling back to AI knowledge');
+    console.log(
+      '[ListingCreationService] Brickset data insufficient, falling back to AI knowledge'
+    );
     try {
       const aiData = await this.fetchAIResearchData(setNumber, bricksetData);
       return aiData;
@@ -723,7 +738,9 @@ export class ListingCreationService {
     // Consider data sufficient if we have name, theme, and pieces
     const sufficient = hasSetName && hasTheme && hasPieces;
 
-    console.log(`[ListingCreationService] Research data check: name=${hasSetName}, theme=${hasTheme}, pieces=${hasPieces}, sufficient=${sufficient}`);
+    console.log(
+      `[ListingCreationService] Research data check: name=${hasSetName}, theme=${hasTheme}, pieces=${hasPieces}, sufficient=${sufficient}`
+    );
 
     return sufficient;
   }
@@ -842,7 +859,8 @@ Return JSON with these fields (omit any you're not confident about):
     }
 
     // Determine if set is retired based on availability
-    const retired = set.availability === 'Retired' ||
+    const retired =
+      set.availability === 'Retired' ||
       Boolean(set.LEGOCom?.UK?.dateLastAvailable && set.LEGOCom.UK.dateLastAvailable !== '');
 
     console.log(`[ListingCreationService] Brickset data transformed:`, {
@@ -918,7 +936,11 @@ Return JSON with these fields (omit any you're not confident about):
     listing: AIGeneratedListing,
     imageUrls: string[],
     request: ListingCreationRequest,
-    defaultPolicies: { fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string }
+    defaultPolicies: {
+      fulfillmentPolicyId?: string;
+      paymentPolicyId?: string;
+      returnPolicyId?: string;
+    }
   ): Promise<{ offerId: string; listingId: string; sku: string }> {
     // Get access token
     const accessToken = await this.authService.getAccessToken(this.userId);
@@ -945,7 +967,9 @@ Return JSON with these fields (omit any you're not confident about):
     // Use the inventory item's condition directly (not AI-generated)
     // For LEGO categories, eBay only supports NEW or USED
     const ebayCondition = this.mapConditionToEbayEnum(item.condition);
-    console.log(`[ListingCreationService] Condition mapping: "${item.condition}" -> "${ebayCondition}"`);
+    console.log(
+      `[ListingCreationService] Condition mapping: "${item.condition}" -> "${ebayCondition}"`
+    );
 
     const inventoryItemRequest = {
       product: {
@@ -964,7 +988,10 @@ Return JSON with these fields (omit any you're not confident about):
     };
 
     console.log('[ListingCreationService] Creating inventory item with SKU:', sku);
-    console.log('[ListingCreationService] Inventory item request:', JSON.stringify(inventoryItemRequest, null, 2));
+    console.log(
+      '[ListingCreationService] Inventory item request:',
+      JSON.stringify(inventoryItemRequest, null, 2)
+    );
 
     await adapter.createOrReplaceInventoryItem(sku, inventoryItemRequest);
 
@@ -972,10 +999,8 @@ Return JSON with these fields (omit any you're not confident about):
     const policyIds = {
       fulfillmentPolicyId:
         request.policyOverrides?.fulfillmentPolicyId ?? defaultPolicies.fulfillmentPolicyId,
-      paymentPolicyId:
-        request.policyOverrides?.paymentPolicyId ?? defaultPolicies.paymentPolicyId,
-      returnPolicyId:
-        request.policyOverrides?.returnPolicyId ?? defaultPolicies.returnPolicyId,
+      paymentPolicyId: request.policyOverrides?.paymentPolicyId ?? defaultPolicies.paymentPolicyId,
+      returnPolicyId: request.policyOverrides?.returnPolicyId ?? defaultPolicies.returnPolicyId,
     };
 
     if (!policyIds.fulfillmentPolicyId || !policyIds.paymentPolicyId || !policyIds.returnPolicyId) {
@@ -1026,7 +1051,10 @@ Return JSON with these fields (omit any you're not confident about):
           : undefined,
     };
 
-    console.log('[ListingCreationService] Creating offer with request:', JSON.stringify(offerRequest, null, 2));
+    console.log(
+      '[ListingCreationService] Creating offer with request:',
+      JSON.stringify(offerRequest, null, 2)
+    );
 
     const offerResponse = await adapter.createOffer(offerRequest);
 
@@ -1118,7 +1146,7 @@ Return JSON with these fields (omit any you're not confident about):
 
     // Check if this is a comma-separated list
     if (value.includes(',')) {
-      const items = value.split(',').map(item => item.trim());
+      const items = value.split(',').map((item) => item.trim());
       let result = '';
 
       for (const item of items) {
@@ -1297,7 +1325,10 @@ Return JSON with these fields (omit any you're not confident about):
       if (locations.length > 0) {
         // Use first available location
         const existingLocation = locations[0];
-        console.log('[ListingCreationService] Using existing location:', existingLocation.merchantLocationKey);
+        console.log(
+          '[ListingCreationService] Using existing location:',
+          existingLocation.merchantLocationKey
+        );
         return existingLocation.merchantLocationKey;
       }
     } catch {
@@ -1323,7 +1354,10 @@ Return JSON with these fields (omit any you're not confident about):
       return DEFAULT_LOCATION_KEY;
     } catch (createError) {
       // Location might already exist (race condition or previous attempt)
-      console.log('[ListingCreationService] Error creating location, may already exist:', createError);
+      console.log(
+        '[ListingCreationService] Error creating location, may already exist:',
+        createError
+      );
       return DEFAULT_LOCATION_KEY;
     }
   }
@@ -1416,7 +1450,10 @@ Return JSON with these fields (omit any you're not confident about):
       .eq('user_id', this.userId);
 
     if (updateError) {
-      console.error('[ListingCreationService] Failed to update audit with quality review failure:', updateError);
+      console.error(
+        '[ListingCreationService] Failed to update audit with quality review failure:',
+        updateError
+      );
     }
   }
 
@@ -1435,7 +1472,12 @@ Return JSON with these fields (omit any you're not confident about):
     qualityReviewError: string | undefined,
     qualityLoopIterations: number,
     research: ListingResearchData | null,
-    policies: { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] },
+    policies: {
+      defaults: Record<string, string | undefined>;
+      fulfillment: unknown[];
+      payment: unknown[];
+      return: unknown[];
+    },
     photoUrls: string[]
   ): Promise<string> {
     // First, delete any existing preview session for this user+inventory_item
@@ -1482,7 +1524,12 @@ Return JSON with these fields (omit any you're not confident about):
     qualityReview: QualityReviewResult | null;
     qualityLoopIterations: number;
     research: ListingResearchData | null;
-    policies: { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] };
+    policies: {
+      defaults: Record<string, string | undefined>;
+      fulfillment: unknown[];
+      payment: unknown[];
+      return: unknown[];
+    };
     photoUrls: string[];
   } | null> {
     const { data, error } = await this.supabase
@@ -1495,7 +1542,10 @@ Return JSON with these fields (omit any you're not confident about):
       .single();
 
     if (error || !data) {
-      console.error('[ListingCreationService] Preview session not found or expired:', error?.message);
+      console.error(
+        '[ListingCreationService] Preview session not found or expired:',
+        error?.message
+      );
       return null;
     }
 
@@ -1505,7 +1555,12 @@ Return JSON with these fields (omit any you're not confident about):
       qualityReview: data.quality_review as unknown as QualityReviewResult | null,
       qualityLoopIterations: data.quality_loop_iterations,
       research: data.research_data as unknown as ListingResearchData | null,
-      policies: data.policies_data as unknown as { defaults: Record<string, string | undefined>; fulfillment: unknown[]; payment: unknown[]; return: unknown[] },
+      policies: data.policies_data as unknown as {
+        defaults: Record<string, string | undefined>;
+        fulfillment: unknown[];
+        payment: unknown[];
+        return: unknown[];
+      },
       photoUrls: data.photo_urls,
     };
   }
@@ -1693,7 +1748,10 @@ Return JSON with these fields (omit any you're not confident about):
       const failedStep = this.steps.find((s) => s.status === 'failed')?.id ?? 'unknown';
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-      console.error(`[ListingCreationService] continueFromPreview failed at step ${failedStep}:`, error);
+      console.error(
+        `[ListingCreationService] continueFromPreview failed at step ${failedStep}:`,
+        error
+      );
 
       return {
         success: false,
@@ -1710,7 +1768,15 @@ Return JSON with these fields (omit any you're not confident about):
    * Steps 1-7 are marked as complete, 8-11 are pending
    */
   private initializeStepsForPhase2(): void {
-    const phase1Steps = ['validate', 'research', 'photos', 'policies', 'generate', 'review', 'preview'];
+    const phase1Steps = [
+      'validate',
+      'research',
+      'photos',
+      'policies',
+      'generate',
+      'review',
+      'preview',
+    ];
 
     const allStepDefs: Array<{ id: string; name: string }> = [
       { id: 'validate', name: 'Validating inventory data' },

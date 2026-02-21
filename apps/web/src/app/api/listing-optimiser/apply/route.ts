@@ -68,10 +68,7 @@ export async function POST(request: NextRequest) {
     const service = getListingOptimiserService();
     const initSuccess = await service.init(user.id);
     if (!initSuccess) {
-      return NextResponse.json(
-        { error: 'Failed to initialise eBay connection' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to initialise eBay connection' }, { status: 500 });
     }
 
     // 5. Apply the change

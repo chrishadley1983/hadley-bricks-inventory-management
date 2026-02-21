@@ -35,11 +35,15 @@ export async function POST() {
 
       try {
         // Update status to running
-        await arbitrageService.updateSyncStatus(user.id, 'bricklink_pricing', { status: 'running' });
+        await arbitrageService.updateSyncStatus(user.id, 'bricklink_pricing', {
+          status: 'running',
+        });
 
         // Send initial message
         await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ type: 'start', message: 'Starting BrickLink pricing sync...' })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'start', message: 'Starting BrickLink pricing sync...' })}\n\n`
+          )
         );
 
         // Run sync with progress callback

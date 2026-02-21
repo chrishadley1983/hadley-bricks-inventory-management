@@ -95,11 +95,13 @@ export class EbayArbitrageSyncService {
     if (options.includeSeeded !== false) {
       const { data: seededData, error: seededError } = await this.supabase
         .from('user_seeded_asin_preferences')
-        .select(`
+        .select(
+          `
           seeded_asins!inner(
             brickset_sets!inner(set_number)
           )
-        `)
+        `
+        )
         .eq('user_id', userId)
         .eq('include_in_sync', true)
         .eq('user_status', 'active');
@@ -114,7 +116,9 @@ export class EbayArbitrageSyncService {
           })
           .filter((s): s is string => s !== null && s !== undefined);
 
-        console.log(`[EbayArbitrageSyncService.syncPricing] Found ${seededSetNumbers.length} seeded set numbers to sync`);
+        console.log(
+          `[EbayArbitrageSyncService.syncPricing] Found ${seededSetNumbers.length} seeded set numbers to sync`
+        );
       }
     }
 
@@ -150,24 +154,22 @@ export class EbayArbitrageSyncService {
             const snapshot = this.calculateSnapshot(setNumber, processedListings);
 
             // Store in database
-            const { error: insertError } = await this.supabase
-              .from('ebay_pricing')
-              .upsert(
-                {
-                  set_number: setNumber,
-                  snapshot_date: today,
-                  country_code: 'GB',
-                  condition: 'NEW',
-                  min_price: snapshot.minPrice,
-                  avg_price: snapshot.avgPrice,
-                  max_price: snapshot.maxPrice,
-                  total_listings: snapshot.totalListings,
-                  listings_json: snapshot.listings as unknown as Json,
-                },
-                {
-                  onConflict: 'set_number,snapshot_date,country_code,condition',
-                }
-              );
+            const { error: insertError } = await this.supabase.from('ebay_pricing').upsert(
+              {
+                set_number: setNumber,
+                snapshot_date: today,
+                country_code: 'GB',
+                condition: 'NEW',
+                min_price: snapshot.minPrice,
+                avg_price: snapshot.avgPrice,
+                max_price: snapshot.maxPrice,
+                total_listings: snapshot.totalListings,
+                listings_json: snapshot.listings as unknown as Json,
+              },
+              {
+                onConflict: 'set_number,snapshot_date,country_code,condition',
+              }
+            );
 
             if (insertError) {
               console.error(
@@ -244,12 +246,19 @@ export class EbayArbitrageSyncService {
     userId: string,
     options: { offset: number; limit: number }
   ): Promise<{ processed: number; failed: number; updated: number; setNumbers: string[] }> {
-    console.log(`[EbayArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`);
+    console.log(
+      `[EbayArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`
+    );
     const startTime = Date.now();
 
     // Get batch from watchlist (ordered by oldest sync time first)
     const watchlistService = new ArbitrageWatchlistService(this.supabase);
-    const watchlistBatch = await watchlistService.getWatchlistBatch(userId, 'ebay', options.offset, options.limit);
+    const watchlistBatch = await watchlistService.getWatchlistBatch(
+      userId,
+      'ebay',
+      options.offset,
+      options.limit
+    );
 
     if (watchlistBatch.length === 0) {
       console.log('[EbayArbitrageSyncService.syncPricingBatch] No items to process in this batch');
@@ -257,7 +266,9 @@ export class EbayArbitrageSyncService {
     }
 
     const setNumbers = watchlistBatch.map((item) => item.bricklinkSetNumber);
-    console.log(`[EbayArbitrageSyncService.syncPricingBatch] Processing ${setNumbers.length} set numbers`);
+    console.log(
+      `[EbayArbitrageSyncService.syncPricingBatch] Processing ${setNumbers.length} set numbers`
+    );
 
     let updated = 0;
     let failed = 0;
@@ -287,24 +298,22 @@ export class EbayArbitrageSyncService {
             const snapshot = this.calculateSnapshot(setNumber, processedListings);
 
             // Store in database
-            const { error: insertError } = await this.supabase
-              .from('ebay_pricing')
-              .upsert(
-                {
-                  set_number: setNumber,
-                  snapshot_date: today,
-                  country_code: 'GB',
-                  condition: 'NEW',
-                  min_price: snapshot.minPrice,
-                  avg_price: snapshot.avgPrice,
-                  max_price: snapshot.maxPrice,
-                  total_listings: snapshot.totalListings,
-                  listings_json: snapshot.listings as unknown as Json,
-                },
-                {
-                  onConflict: 'set_number,snapshot_date,country_code,condition',
-                }
-              );
+            const { error: insertError } = await this.supabase.from('ebay_pricing').upsert(
+              {
+                set_number: setNumber,
+                snapshot_date: today,
+                country_code: 'GB',
+                condition: 'NEW',
+                min_price: snapshot.minPrice,
+                avg_price: snapshot.avgPrice,
+                max_price: snapshot.maxPrice,
+                total_listings: snapshot.totalListings,
+                listings_json: snapshot.listings as unknown as Json,
+              },
+              {
+                onConflict: 'set_number,snapshot_date,country_code,condition',
+              }
+            );
 
             if (insertError) {
               console.error(
@@ -366,10 +375,7 @@ export class EbayArbitrageSyncService {
     const searchResult = await client.searchLegoSet(setNumber, 50);
 
     // Process and filter results
-    const processedListings = this.processListings(
-      searchResult.itemSummaries ?? [],
-      setNumber
-    );
+    const processedListings = this.processListings(searchResult.itemSummaries ?? [], setNumber);
 
     // Calculate aggregates
     const snapshot = this.calculateSnapshot(setNumber, processedListings);
@@ -398,9 +404,7 @@ export class EbayArbitrageSyncService {
   /**
    * Get latest eBay pricing for a set
    */
-  async getLatestPricing(
-    setNumber: string
-  ): Promise<{
+  async getLatestPricing(setNumber: string): Promise<{
     minPrice: number | null;
     avgPrice: number | null;
     maxPrice: number | null;
@@ -435,10 +439,7 @@ export class EbayArbitrageSyncService {
   /**
    * Process eBay listings - filter invalid ones and extract data
    */
-  private processListings(
-    items: EbayItemSummary[],
-    setNumber: string
-  ): ProcessedEbayListing[] {
+  private processListings(items: EbayItemSummary[], setNumber: string): ProcessedEbayListing[] {
     return items
       .filter((item) => isValidLegoListing(item.title, setNumber))
       .map((item) => {

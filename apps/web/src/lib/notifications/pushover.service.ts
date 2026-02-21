@@ -75,9 +75,7 @@ export class PushoverService {
     this.enabled = !!(this.userKey && this.apiToken);
 
     if (!this.enabled) {
-      console.log(
-        '[PushoverService] Disabled - missing PUSHOVER_USER_KEY or PUSHOVER_API_TOKEN'
-      );
+      console.log('[PushoverService] Disabled - missing PUSHOVER_USER_KEY or PUSHOVER_API_TOKEN');
     }
   }
 
@@ -180,8 +178,7 @@ export class PushoverService {
    * Uses high priority (1) for excellent deals (<30% COG)
    */
   async sendVintedOpportunity(params: VintedOpportunityParams): Promise<void> {
-    const { setNumber, setName, vintedPrice, amazonPrice, cogPercent, profit, vintedUrl } =
-      params;
+    const { setNumber, setName, vintedPrice, amazonPrice, cogPercent, profit, vintedUrl } = params;
 
     // High priority for excellent opportunities (<30% COG)
     const priority = cogPercent < 30 ? 1 : 0;

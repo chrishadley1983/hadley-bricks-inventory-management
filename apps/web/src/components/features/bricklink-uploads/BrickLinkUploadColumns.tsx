@@ -44,7 +44,9 @@ function formatCondition(condition: string | null): string {
   return condition === 'N' ? 'New' : 'Used';
 }
 
-export function getBrickLinkUploadColumns({ onDelete }: ColumnsProps = {}): ColumnDef<BrickLinkUpload>[] {
+export function getBrickLinkUploadColumns({
+  onDelete,
+}: ColumnsProps = {}): ColumnDef<BrickLinkUpload>[] {
   return [
     {
       accessorKey: 'upload_date',
@@ -216,10 +218,7 @@ export function getBrickLinkUploadColumns({ onDelete }: ColumnsProps = {}): Colu
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {onDelete && (
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={() => onDelete(upload.id)}
-                >
+                <DropdownMenuItem className="text-destructive" onClick={() => onDelete(upload.id)}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
                 </DropdownMenuItem>

@@ -166,7 +166,12 @@ export interface AmazonOrder {
   MarketplaceId: string;
   ShipmentServiceLevelCategory?: string;
   EasyShipShipmentStatus?: string;
-  OrderType?: 'StandardOrder' | 'LongLeadTimeOrder' | 'Preorder' | 'BackOrder' | 'SourcingOnDemandOrder';
+  OrderType?:
+    | 'StandardOrder'
+    | 'LongLeadTimeOrder'
+    | 'Preorder'
+    | 'BackOrder'
+    | 'SourcingOnDemandOrder';
   EarliestShipDate?: string;
   LatestShipDate?: string;
   EarliestDeliveryDate?: string;
@@ -389,10 +394,7 @@ export type AmazonTransactionType =
 /**
  * Transaction status from Finances API
  */
-export type AmazonFinancialTransactionStatus =
-  | 'RELEASED'
-  | 'DEFERRED'
-  | 'DEFERRED_RELEASED';
+export type AmazonFinancialTransactionStatus = 'RELEASED' | 'DEFERRED' | 'DEFERRED_RELEASED';
 
 /**
  * Money amount from Finances API

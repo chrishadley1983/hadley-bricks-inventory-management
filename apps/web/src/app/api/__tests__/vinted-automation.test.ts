@@ -88,7 +88,9 @@ describe('Vinted Automation API', () => {
 
     // AUTH1: All /automation/* endpoints validate X-Api-Key header
     it('should require X-Api-Key header', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config');
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config'
+      );
 
       const response = await getConfig(request);
       const body = await response.json();
@@ -99,9 +101,12 @@ describe('Vinted Automation API', () => {
 
     // AUTH4: Invalid API key returns 401
     it('should return 401 for invalid API key', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config', {
-        headers: { 'X-Api-Key': 'invalid-key' },
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config',
+        {
+          headers: { 'X-Api-Key': 'invalid-key' },
+        }
+      );
 
       const response = await getConfig(request);
 
@@ -109,9 +114,12 @@ describe('Vinted Automation API', () => {
     });
 
     it('should accept valid API key', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config', {
-        headers: { 'X-Api-Key': validApiKey },
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config',
+        {
+          headers: { 'X-Api-Key': validApiKey },
+        }
+      );
 
       const response = await getConfig(request);
 
@@ -154,9 +162,12 @@ describe('Vinted Automation API', () => {
 
     // CFG1: Returns scanner configuration
     it('should return scanner configuration', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config', {
-        headers: { 'X-Api-Key': validApiKey },
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config',
+        {
+          headers: { 'X-Api-Key': validApiKey },
+        }
+      );
 
       const response = await getConfig(request);
       const body = await response.json();
@@ -175,9 +186,12 @@ describe('Vinted Automation API', () => {
 
     // CFG2: Returns config version
     it('should include config version', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config', {
-        headers: { 'X-Api-Key': validApiKey },
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config',
+        {
+          headers: { 'X-Api-Key': validApiKey },
+        }
+      );
 
       const response = await getConfig(request);
       const body = await response.json();
@@ -187,9 +201,12 @@ describe('Vinted Automation API', () => {
 
     // CFG3: Returns schedule version
     it('should include schedule version', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/config', {
-        headers: { 'X-Api-Key': validApiKey },
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/config',
+        {
+          headers: { 'X-Api-Key': validApiKey },
+        }
+      );
 
       const response = await getConfig(request);
       const body = await response.json();
@@ -234,16 +251,19 @@ describe('Vinted Automation API', () => {
 
     // HB1: Accepts heartbeat POST
     it('should accept heartbeat request', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/heartbeat', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          machineId: 'DESKTOP-ABC123',
-          status: 'running',
-          scansToday: 10,
-          opportunitiesToday: 2,
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/heartbeat',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            machineId: 'DESKTOP-ABC123',
+            status: 'running',
+            scansToday: 10,
+            opportunitiesToday: 2,
+          }),
+        }
+      );
 
       const response = await postHeartbeat(request);
 
@@ -252,16 +272,19 @@ describe('Vinted Automation API', () => {
 
     // HB2: Returns current versions
     it('should return current config and schedule versions', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/heartbeat', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          machineId: 'DESKTOP-ABC123',
-          status: 'running',
-          scansToday: 0,
-          opportunitiesToday: 0,
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/heartbeat',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            machineId: 'DESKTOP-ABC123',
+            status: 'running',
+            scansToday: 0,
+            opportunitiesToday: 0,
+          }),
+        }
+      );
 
       const response = await postHeartbeat(request);
       const body = await response.json();
@@ -272,14 +295,17 @@ describe('Vinted Automation API', () => {
 
     // HB3: Validates heartbeat schema
     it('should reject invalid heartbeat data', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/heartbeat', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Missing required fields
-          status: 'invalid-status',
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/heartbeat',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            // Missing required fields
+            status: 'invalid-status',
+          }),
+        }
+      );
 
       const response = await postHeartbeat(request);
 
@@ -290,16 +316,19 @@ describe('Vinted Automation API', () => {
     it.each(['running', 'paused', 'error', 'outside_hours'])(
       'should accept status "%s"',
       async (status) => {
-        const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/heartbeat', {
-          method: 'POST',
-          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            machineId: 'DESKTOP-ABC123',
-            status,
-            scansToday: 0,
-            opportunitiesToday: 0,
-          }),
-        });
+        const request = new NextRequest(
+          'http://localhost:3000/api/arbitrage/vinted/automation/heartbeat',
+          {
+            method: 'POST',
+            headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              machineId: 'DESKTOP-ABC123',
+              status,
+              scansToday: 0,
+              opportunitiesToday: 0,
+            }),
+          }
+        );
 
         const response = await postHeartbeat(request);
 
@@ -345,14 +374,17 @@ describe('Vinted Automation API', () => {
 
     // PROC1: Validates request body with Zod
     it('should validate process request body', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/process', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Invalid - missing required fields
-          scanType: 'invalid',
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/process',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            // Invalid - missing required fields
+            scanType: 'invalid',
+          }),
+        }
+      );
 
       const response = await postProcess(request);
 
@@ -361,20 +393,23 @@ describe('Vinted Automation API', () => {
 
     // PROC2: Accepts valid scan result
     it('should accept valid scan result', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/process', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scanId: 'bs-2026-01-21-08',
-          scanType: 'broad_sweep',
-          result: {
-            success: true,
-            captchaDetected: false,
-            listings: [],
-            pagesScanned: 5,
-          },
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/process',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scanId: 'bs-2026-01-21-08',
+            scanType: 'broad_sweep',
+            result: {
+              success: true,
+              captchaDetected: false,
+              listings: [],
+              pagesScanned: 5,
+            },
+          }),
+        }
+      );
 
       const response = await postProcess(request);
 
@@ -383,32 +418,35 @@ describe('Vinted Automation API', () => {
 
     // PROC3: Accepts scan with listings
     it('should process scan with listings', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/process', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scanId: 'wl-2026-01-21-001',
-          scanType: 'watchlist',
-          setNumber: '75192',
-          result: {
-            success: true,
-            captchaDetected: false,
-            listings: [
-              {
-                url: 'https://www.vinted.co.uk/items/12345',
-                title: 'LEGO 75192 Millennium Falcon',
-                price: 450.0,
-                currency: 'GBP',
-                sellerName: 'testuser',
-                sellerRating: 4.8,
-                listedAt: new Date().toISOString(),
-                imageUrl: 'https://images.vinted.net/12345.jpg',
-              },
-            ],
-            pagesScanned: 3,
-          },
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/process',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scanId: 'wl-2026-01-21-001',
+            scanType: 'watchlist',
+            setNumber: '75192',
+            result: {
+              success: true,
+              captchaDetected: false,
+              listings: [
+                {
+                  url: 'https://www.vinted.co.uk/items/12345',
+                  title: 'LEGO 75192 Millennium Falcon',
+                  price: 450.0,
+                  currency: 'GBP',
+                  sellerName: 'testuser',
+                  sellerRating: 4.8,
+                  listedAt: new Date().toISOString(),
+                  imageUrl: 'https://images.vinted.net/12345.jpg',
+                },
+              ],
+              pagesScanned: 3,
+            },
+          }),
+        }
+      );
 
       const response = await postProcess(request);
 
@@ -417,21 +455,24 @@ describe('Vinted Automation API', () => {
 
     // PROC4: Handles CAPTCHA detection
     it('should handle CAPTCHA detected result', async () => {
-      const request = new NextRequest('http://localhost:3000/api/arbitrage/vinted/automation/process', {
-        method: 'POST',
-        headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scanId: 'bs-2026-01-21-10',
-          scanType: 'broad_sweep',
-          result: {
-            success: false,
-            captchaDetected: true,
-            listings: [],
-            pagesScanned: 0,
-            error: 'CAPTCHA detected',
-          },
-        }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/arbitrage/vinted/automation/process',
+        {
+          method: 'POST',
+          headers: { 'X-Api-Key': validApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scanId: 'bs-2026-01-21-10',
+            scanType: 'broad_sweep',
+            result: {
+              success: false,
+              captchaDetected: true,
+              listings: [],
+              pagesScanned: 0,
+              error: 'CAPTCHA detected',
+            },
+          }),
+        }
+      );
 
       const response = await postProcess(request);
 

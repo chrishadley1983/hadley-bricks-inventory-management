@@ -61,7 +61,10 @@ export async function GET(request: NextRequest) {
 
     if (!result.success) {
       const errorUrl = new URL('/settings/integrations', baseUrl);
-      errorUrl.searchParams.set('google_calendar_error', result.error || 'Failed to connect Google Calendar');
+      errorUrl.searchParams.set(
+        'google_calendar_error',
+        result.error || 'Failed to connect Google Calendar'
+      );
       return NextResponse.redirect(errorUrl);
     }
 

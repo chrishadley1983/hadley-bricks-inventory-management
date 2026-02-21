@@ -79,12 +79,16 @@ export class AmazonArbitrageSyncService {
     const reportsClient = createAmazonReportsClient(credentials);
 
     // Fetch merchant listings report
-    console.log('[AmazonArbitrageSyncService.syncInventoryAsins] Fetching merchant listings report...');
+    console.log(
+      '[AmazonArbitrageSyncService.syncInventoryAsins] Fetching merchant listings report...'
+    );
     const reportContent = await reportsClient.fetchMerchantListingsReport([UK_MARKETPLACE_ID]);
 
     // Parse TSV report
     const rawInventoryItems = this.parseMerchantListingsReport(reportContent);
-    console.log(`[AmazonArbitrageSyncService.syncInventoryAsins] Parsed ${rawInventoryItems.length} inventory items`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncInventoryAsins] Parsed ${rawInventoryItems.length} inventory items`
+    );
 
     // Deduplicate by ASIN - keep first occurrence (same ASIN may have multiple SKUs)
     const seenAsins = new Set<string>();
@@ -96,7 +100,9 @@ export class AmazonArbitrageSyncService {
       return true;
     });
     const total = inventoryItems.length;
-    console.log(`[AmazonArbitrageSyncService.syncInventoryAsins] After deduplication: ${total} unique ASINs`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncInventoryAsins] After deduplication: ${total} unique ASINs`
+    );
 
     let added = 0;
     let updated = 0;
@@ -134,11 +140,9 @@ export class AmazonArbitrageSyncService {
       const existingSet = new Set(existing?.map((e) => e.asin) ?? []);
 
       // Upsert all items
-      const { error } = await this.supabase
-        .from('tracked_asins')
-        .upsert(upsertData, {
-          onConflict: 'user_id,asin',
-        });
+      const { error } = await this.supabase.from('tracked_asins').upsert(upsertData, {
+        onConflict: 'user_id,asin',
+      });
 
       if (error) {
         console.error('[AmazonArbitrageSyncService.syncInventoryAsins] Upsert error:', error);
@@ -159,7 +163,9 @@ export class AmazonArbitrageSyncService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[AmazonArbitrageSyncService.syncInventoryAsins] Completed in ${duration}ms: ${added} added, ${updated} updated`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncInventoryAsins] Completed in ${duration}ms: ${added} added, ${updated} updated`
+    );
 
     // Update sync status
     await this.updateSyncStatus(userId, 'inventory_asins', {
@@ -208,10 +214,12 @@ export class AmazonArbitrageSyncService {
     if (options.includeSeeded !== false) {
       const { data: seededData, error: seededError } = await this.supabase
         .from('user_seeded_asin_preferences')
-        .select(`
+        .select(
+          `
           seeded_asins!inner(asin),
           manual_asin_override
-        `)
+        `
+        )
         .eq('user_id', userId)
         .eq('include_in_sync', true)
         .eq('user_status', 'active');
@@ -224,7 +232,9 @@ export class AmazonArbitrageSyncService {
           })
           .filter((a): a is { asin: string } => a.asin !== null && a.asin !== undefined);
 
-        console.log(`[AmazonArbitrageSyncService.syncPricing] Found ${seededAsins.length} seeded ASINs to sync`);
+        console.log(
+          `[AmazonArbitrageSyncService.syncPricing] Found ${seededAsins.length} seeded ASINs to sync`
+        );
       }
     }
 
@@ -268,7 +278,10 @@ export class AmazonArbitrageSyncService {
           // Wait for competitive summary rate limit (30 sec) before next batch
           await this.delay(COMPETITIVE_SUMMARY_DELAY);
         } catch (summaryErr) {
-          console.warn(`[AmazonArbitrageSyncService.syncPricing] Could not fetch competitive summary:`, summaryErr);
+          console.warn(
+            `[AmazonArbitrageSyncService.syncPricing] Could not fetch competitive summary:`,
+            summaryErr
+          );
           // Continue without summary data - we'll use basic pricing only
         }
 
@@ -314,13 +327,19 @@ export class AmazonArbitrageSyncService {
           });
 
         if (insertError) {
-          console.error(`[AmazonArbitrageSyncService.syncPricing] Error storing pricing:`, insertError);
+          console.error(
+            `[AmazonArbitrageSyncService.syncPricing] Error storing pricing:`,
+            insertError
+          );
           failed += batch.length;
         } else {
           updated += pricingData.length;
         }
       } catch (err) {
-        console.error(`[AmazonArbitrageSyncService.syncPricing] Error processing batch ${batchIndex}:`, err);
+        console.error(
+          `[AmazonArbitrageSyncService.syncPricing] Error processing batch ${batchIndex}:`,
+          err
+        );
         failed += batch.length;
         // Still respect rate limits on error
         await this.delay(COMPETITIVE_PRICING_DELAY);
@@ -332,7 +351,9 @@ export class AmazonArbitrageSyncService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[AmazonArbitrageSyncService.syncPricing] Completed in ${duration}ms: ${updated} updated, ${failed} failed`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncPricing] Completed in ${duration}ms: ${updated} updated, ${failed} failed`
+    );
 
     // Update sync status
     await this.updateSyncStatus(userId, 'amazon_pricing', {
@@ -433,9 +454,8 @@ export class AmazonArbitrageSyncService {
       errorMessage?: string;
     }
   ): Promise<void> {
-    await this.supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    await this.supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: userId,
         job_type: jobType,
         status: data.status,
@@ -445,9 +465,11 @@ export class AmazonArbitrageSyncService {
         items_processed: data.itemsProcessed,
         items_failed: data.itemsFailed,
         error_message: data.errorMessage ?? null,
-      }, {
+      },
+      {
         onConflict: 'user_id,job_type',
-      });
+      }
+    );
   }
 
   /**
@@ -486,7 +508,9 @@ export class AmazonArbitrageSyncService {
       limit: number;
     }
   ): Promise<{ processed: number; failed: number; updated: number }> {
-    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`
+    );
     const startTime = Date.now();
 
     const credentials = await this.getCredentials(userId);
@@ -515,7 +539,9 @@ export class AmazonArbitrageSyncService {
       page++;
     }
 
-    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${trackedAsins.length} tracked ASINs`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${trackedAsins.length} tracked ASINs`
+    );
 
     // Get seeded ASINs if enabled (with pagination)
     const seededAsins: { asin: string }[] = [];
@@ -526,17 +552,22 @@ export class AmazonArbitrageSyncService {
       while (hasMore) {
         const { data: seededData, error: seededError } = await this.supabase
           .from('user_seeded_asin_preferences')
-          .select(`
+          .select(
+            `
             seeded_asins!inner(asin),
             manual_asin_override
-          `)
+          `
+          )
           .eq('user_id', userId)
           .eq('include_in_sync', true)
           .eq('user_status', 'active')
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (seededError) {
-          console.error('[AmazonArbitrageSyncService.syncPricingBatch] Error fetching seeded ASINs:', seededError);
+          console.error(
+            '[AmazonArbitrageSyncService.syncPricingBatch] Error fetching seeded ASINs:',
+            seededError
+          );
           break;
         }
 
@@ -552,7 +583,9 @@ export class AmazonArbitrageSyncService {
         page++;
       }
 
-      console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${seededAsins.length} seeded ASINs`);
+      console.log(
+        `[AmazonArbitrageSyncService.syncPricingBatch] Fetched ${seededAsins.length} seeded ASINs`
+      );
     }
 
     // Create quantity lookup map from tracked ASINs
@@ -562,28 +595,32 @@ export class AmazonArbitrageSyncService {
     }
 
     // Combine and deduplicate ASINs
-    const allAsins = [
-      ...trackedAsins.map((a) => a.asin),
-      ...seededAsins.map((a) => a.asin),
-    ];
+    const allAsins = [...trackedAsins.map((a) => a.asin), ...seededAsins.map((a) => a.asin)];
     const uniqueAsins = [...new Set(allAsins)];
 
     // Apply offset and limit to get the batch we need to process
     const batchAsins = uniqueAsins.slice(options.offset, options.offset + options.limit);
 
     if (batchAsins.length === 0) {
-      console.log('[AmazonArbitrageSyncService.syncPricingBatch] No ASINs to process in this batch');
+      console.log(
+        '[AmazonArbitrageSyncService.syncPricingBatch] No ASINs to process in this batch'
+      );
       return { processed: 0, failed: 0, updated: 0 };
     }
 
-    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${uniqueAsins.length})`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncPricingBatch] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${uniqueAsins.length})`
+    );
 
     let updated = 0;
     let failed = 0;
     const today = new Date().toISOString().split('T')[0];
 
     // Process in batches (max 20 ASINs per request)
-    const batches = this.chunkArray(batchAsins.map(asin => ({ asin })), BATCH_SIZE);
+    const batches = this.chunkArray(
+      batchAsins.map((asin) => ({ asin })),
+      BATCH_SIZE
+    );
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
@@ -603,7 +640,10 @@ export class AmazonArbitrageSyncService {
           // Wait for competitive summary rate limit (30 sec) before next batch
           await this.delay(COMPETITIVE_SUMMARY_DELAY);
         } catch (summaryErr) {
-          console.warn(`[AmazonArbitrageSyncService.syncPricingBatch] Could not fetch competitive summary:`, summaryErr);
+          console.warn(
+            `[AmazonArbitrageSyncService.syncPricingBatch] Could not fetch competitive summary:`,
+            summaryErr
+          );
         }
 
         // Create lookup map for summary data
@@ -647,20 +687,28 @@ export class AmazonArbitrageSyncService {
           });
 
         if (insertError) {
-          console.error(`[AmazonArbitrageSyncService.syncPricingBatch] Error storing pricing:`, insertError);
+          console.error(
+            `[AmazonArbitrageSyncService.syncPricingBatch] Error storing pricing:`,
+            insertError
+          );
           failed += batch.length;
         } else {
           updated += pricingData.length;
         }
       } catch (err) {
-        console.error(`[AmazonArbitrageSyncService.syncPricingBatch] Error processing batch ${batchIndex}:`, err);
+        console.error(
+          `[AmazonArbitrageSyncService.syncPricingBatch] Error processing batch ${batchIndex}:`,
+          err
+        );
         failed += batch.length;
         await this.delay(COMPETITIVE_PRICING_DELAY);
       }
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[AmazonArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`);
+    console.log(
+      `[AmazonArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`
+    );
 
     return { processed: batchAsins.length, failed, updated };
   }

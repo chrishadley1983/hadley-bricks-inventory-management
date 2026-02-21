@@ -343,12 +343,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate totals
-    const totalEstimatedProfit = totalExpectedRevenue > 0
-      ? Math.round(totalExpectedRevenue * 0.85 - totalInvested)
-      : null;
-    const overallRoi = totalInvested > 0 && totalEstimatedProfit
-      ? Math.round((totalEstimatedProfit / totalInvested) * 100)
-      : null;
+    const totalEstimatedProfit =
+      totalExpectedRevenue > 0 ? Math.round(totalExpectedRevenue * 0.85 - totalInvested) : null;
+    const overallRoi =
+      totalInvested > 0 && totalEstimatedProfit
+        ? Math.round((totalEstimatedProfit / totalInvested) * 100)
+        : null;
 
     // If all items failed and nothing was skipped, return error
     if (created.length === 0 && failed.length > 0 && skipped.length === 0) {

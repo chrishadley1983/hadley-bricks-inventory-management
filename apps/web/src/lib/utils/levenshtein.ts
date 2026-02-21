@@ -126,9 +126,7 @@ export function extractSetNumber(title: string): string | null {
 export function isLegoProduct(title: string): boolean {
   const lowerTitle = title.toLowerCase();
   return (
-    lowerTitle.includes('lego') ||
-    lowerTitle.includes('brick') ||
-    /\b\d{4,6}-?\d?\b/.test(title) // Has set number pattern
+    lowerTitle.includes('lego') || lowerTitle.includes('brick') || /\b\d{4,6}-?\d?\b/.test(title) // Has set number pattern
   );
 }
 

@@ -193,7 +193,9 @@ describe('AmazonBackfillService', () => {
         order: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
         update: vi.fn().mockReturnThis(),
-        then: vi.fn((resolve) => resolve({ data: [{ id: 'order-1', platform_order_id: 'AMZ-001' }], error: null })),
+        then: vi.fn((resolve) =>
+          resolve({ data: [{ id: 'order-1', platform_order_id: 'AMZ-001' }], error: null })
+        ),
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
       mockAmazonClient.getOrderItems.mockResolvedValue([]);
@@ -323,7 +325,9 @@ describe('AmazonBackfillService', () => {
         order: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
         update: vi.fn().mockReturnThis(),
-        then: vi.fn((resolve) => resolve({ data: [{ id: 'order-1', platform_order_id: 'AMZ-001' }], error: null })),
+        then: vi.fn((resolve) =>
+          resolve({ data: [{ id: 'order-1', platform_order_id: 'AMZ-001' }], error: null })
+        ),
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
       mockAmazonClient.getOrderItems.mockResolvedValue([]);

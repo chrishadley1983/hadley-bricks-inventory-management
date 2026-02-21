@@ -177,10 +177,7 @@ describe('SheetsWriteService', () => {
     it('should format date correctly in row data', async () => {
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
-      await service.writeInventory(
-        { ...inventoryData, purchase_date: '2025-01-15' },
-        'create'
-      );
+      await service.writeInventory({ ...inventoryData, purchase_date: '2025-01-15' }, 'create');
 
       const rowData = mockSheetsClient.appendRow.mock.calls[0][1];
       // Find the purchase_date column value (should be formatted as DD/MM/YYYY)
@@ -190,10 +187,7 @@ describe('SheetsWriteService', () => {
     it('should handle null dates', async () => {
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
-      await service.writeInventory(
-        { ...inventoryData, purchase_date: null },
-        'create'
-      );
+      await service.writeInventory({ ...inventoryData, purchase_date: null }, 'create');
 
       expect(mockSheetsClient.appendRow).toHaveBeenCalled();
     });
@@ -260,12 +254,7 @@ describe('SheetsWriteService', () => {
 
     it('should generate ID and append row for create operation', async () => {
       // readRange returns array of arrays: [[header], [value1], [value2], ...]
-      mockSheetsClient.readRange.mockResolvedValue([
-        ['ID'],
-        ['P0001'],
-        ['P0002'],
-        ['P0003'],
-      ]);
+      mockSheetsClient.readRange.mockResolvedValue([['ID'], ['P0001'], ['P0002'], ['P0003']]);
       mockSheetsClient.appendRow.mockResolvedValue(undefined);
 
       const result = await service.writePurchase(purchaseData, 'create');

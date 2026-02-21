@@ -26,19 +26,24 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { useTemplates, useGenerateListing, useCreateListing, useSettings } from '@/hooks/listing-assistant';
+import {
+  useTemplates,
+  useGenerateListing,
+  useCreateListing,
+  useSettings,
+} from '@/hooks/listing-assistant';
 import { RichTextEditor, HtmlSourceEditor } from '../shared/RichTextEditor';
 import { ImageUpload, type UploadedImage } from '../generator/ImageUpload';
 import { EbaySoldItemsDisplay } from '../generator/EbaySoldItemsDisplay';
 import { InventoryImportModal } from '../generator/InventoryImportModal';
 import { LISTING_TONES, CONDITION_COLORS } from '@/lib/listing-assistant/constants';
-import type { ListingTone, ListingCondition, GenerateListingResponse } from '@/lib/listing-assistant/types';
+import type {
+  ListingTone,
+  ListingCondition,
+  GenerateListingResponse,
+} from '@/lib/listing-assistant/types';
 import type { InventoryItem } from '@hadley-bricks/database';
 
 interface GeneratorTabProps {
@@ -72,7 +77,9 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
 
   // Import modal state
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importedInventoryId, setImportedInventoryId] = useState<string | null>(inventoryItemId || null);
+  const [importedInventoryId, setImportedInventoryId] = useState<string | null>(
+    inventoryItemId || null
+  );
 
   // Set defaults from settings
   useEffect(() => {
@@ -256,11 +263,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
                 Enter the item information and let AI generate a professional listing.
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportModalOpen(true)}
-            >
+            <Button variant="outline" size="sm" onClick={() => setImportModalOpen(true)}>
               <Package className="mr-2 h-4 w-4" />
               Import from Inventory
             </Button>
@@ -281,10 +284,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
           {/* Image Upload */}
           <div className="space-y-2">
             <Label>Product Images (Optional)</Label>
-            <ImageUpload
-              value={images}
-              onChange={setImages}
-            />
+            <ImageUpload value={images} onChange={setImages} />
           </div>
 
           {/* Template & Condition Row */}
@@ -385,9 +385,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
       <Card>
         <CardHeader>
           <CardTitle>Generated Listing</CardTitle>
-          <CardDescription>
-            Review and edit the generated listing before saving.
-          </CardDescription>
+          <CardDescription>Review and edit the generated listing before saving.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!result ? (
@@ -415,9 +413,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
                 <Badge variant="outline" className="text-sm">
                   {result.priceRange}
                 </Badge>
-                <Badge className={CONDITION_COLORS[condition]}>
-                  {condition}
-                </Badge>
+                <Badge className={CONDITION_COLORS[condition]}>{condition}</Badge>
               </div>
 
               {/* eBay Sold Items */}
@@ -425,9 +421,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
                 <Collapsible open={soldItemsOpen} onOpenChange={setSoldItemsOpen}>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm" className="w-full justify-between">
-                      <span>
-                        eBay Sold Prices ({result.ebaySoldItems.length} items)
-                      </span>
+                      <span>eBay Sold Prices ({result.ebaySoldItems.length} items)</span>
                       {soldItemsOpen ? (
                         <ChevronUp className="h-4 w-4" />
                       ) : (
@@ -445,11 +439,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Description</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowHtml(!showHtml)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setShowHtml(!showHtml)}>
                     {showHtml ? (
                       <>
                         <Eye className="mr-2 h-4 w-4" />
@@ -481,11 +471,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
 
               {/* Actions */}
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleCopyHtml}
-                >
+                <Button variant="outline" className="flex-1" onClick={handleCopyHtml}>
                   {copied ? (
                     <>
                       <Check className="mr-2 h-4 w-4" />
@@ -498,11 +484,7 @@ export function GeneratorTab({ inventoryItemId }: GeneratorTabProps) {
                     </>
                   )}
                 </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending}
-                >
+                <Button className="flex-1" onClick={handleSave} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? (
                     'Saving...'
                   ) : (

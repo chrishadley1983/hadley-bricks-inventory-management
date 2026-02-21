@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
     const isNewDay = currentSyncDate !== today;
     const cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
 
-    console.log(`[Cron EbayPricing] Starting sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`);
+    console.log(
+      `[Cron EbayPricing] Starting sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`
+    );
 
     // Get total watchlist count
     const totalWatchlist = await watchlistService.getWatchlistCount(DEFAULT_USER_ID);
@@ -82,16 +84,17 @@ export async function POST(request: NextRequest) {
 
     // If cursor is 0 and it's a new sync, send start notification
     if (cursorPosition === 0) {
-      console.log(`[Cron EbayPricing] Starting new daily sync - ${totalWatchlist} items in watchlist, limit ${DAILY_LIMIT}`);
+      console.log(
+        `[Cron EbayPricing] Starting new daily sync - ${totalWatchlist} items in watchlist, limit ${DAILY_LIMIT}`
+      );
       await discordService.sendSyncStatus({
         title: '🔄 eBay Pricing Sync Started',
         message: `Daily pricing sync started\n${Math.min(totalWatchlist, DAILY_LIMIT)} items to process`,
       });
 
       // Update status to running
-      await supabase
-        .from('arbitrage_sync_status')
-        .upsert({
+      await supabase.from('arbitrage_sync_status').upsert(
+        {
           user_id: DEFAULT_USER_ID,
           job_type: JOB_TYPE,
           status: 'running',
@@ -102,7 +105,9 @@ export async function POST(request: NextRequest) {
           items_failed: 0,
           last_run_at: new Date().toISOString(),
           error_message: null,
-        }, { onConflict: 'user_id,job_type' });
+        },
+        { onConflict: 'user_id,job_type' }
+      );
     }
 
     // Calculate how many items to process in this batch
@@ -120,21 +125,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Run the sync service with cursor
-    const result = await ebayService.syncPricingBatch(
-      DEFAULT_USER_ID,
-      {
-        offset: cursorPosition,
-        limit: batchLimit,
-      }
-    );
+    const result = await ebayService.syncPricingBatch(DEFAULT_USER_ID, {
+      offset: cursorPosition,
+      limit: batchLimit,
+    });
 
     const newCursorPosition = cursorPosition + result.processed;
     const isComplete = newCursorPosition >= DAILY_LIMIT || result.processed === 0;
 
     // Update sync status
-    const { error: updateError } = await supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    const { error: updateError } = await supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: DEFAULT_USER_ID,
         job_type: JOB_TYPE,
         status: isComplete ? 'completed' : 'running',
@@ -146,18 +147,23 @@ export async function POST(request: NextRequest) {
         last_run_at: new Date().toISOString(),
         last_success_at: isComplete ? new Date().toISOString() : syncStatus?.last_success_at,
         last_run_duration_ms: Date.now() - startTime,
-      }, { onConflict: 'user_id,job_type' });
+      },
+      { onConflict: 'user_id,job_type' }
+    );
 
     if (updateError) {
       console.error('[Cron EbayPricing] Failed to update sync status:', updateError);
     }
 
     const duration = Date.now() - startTime;
-    const durationStr = duration > 60000
-      ? `${Math.round(duration / 60000)} min`
-      : `${Math.round(duration / 1000)} sec`;
+    const durationStr =
+      duration > 60000
+        ? `${Math.round(duration / 60000)} min`
+        : `${Math.round(duration / 1000)} sec`;
 
-    console.log(`[Cron EbayPricing] Batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${DAILY_LIMIT} (${durationStr})`);
+    console.log(
+      `[Cron EbayPricing] Batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${DAILY_LIMIT} (${durationStr})`
+    );
 
     // Send completion notification if done for the day
     if (isComplete) {
@@ -177,7 +183,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await execution.complete({ complete: isComplete, cursorPosition: newCursorPosition }, 200, result.processed, result.failed);
+    await execution.complete(
+      { complete: isComplete, cursorPosition: newCursorPosition },
+      200,
+      result.processed,
+      result.failed
+    );
 
     return NextResponse.json({
       success: true,
@@ -200,16 +211,17 @@ export async function POST(request: NextRequest) {
 
     // Update status with error
     const supabase = createServiceRoleClient();
-    await supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    await supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: DEFAULT_USER_ID,
         job_type: JOB_TYPE,
         status: 'failed',
         error_message: errorMsg,
         last_run_at: new Date().toISOString(),
         last_run_duration_ms: duration,
-      }, { onConflict: 'user_id,job_type' });
+      },
+      { onConflict: 'user_id,job_type' }
+    );
 
     // Send failure notification
     await discordService.sendAlert({

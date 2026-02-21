@@ -143,9 +143,11 @@ export class ListingGenerationService {
   /**
    * Validate item specifics are complete
    */
-  validateItemSpecifics(
-    specifics: GeneratedListingResponse['itemSpecifics']
-  ): { valid: boolean; missing: string[]; warnings: string[] } {
+  validateItemSpecifics(specifics: GeneratedListingResponse['itemSpecifics']): {
+    valid: boolean;
+    missing: string[];
+    warnings: string[];
+  } {
     const required = ['Brand', 'LEGO Theme', 'LEGO Set Number', 'MPN'];
     const recommended = ['Piece Count', 'Age Level'];
 

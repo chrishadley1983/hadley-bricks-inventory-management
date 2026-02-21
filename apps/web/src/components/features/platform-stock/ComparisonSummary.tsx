@@ -65,12 +65,8 @@ function SummaryCard({
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">
-          {new Intl.NumberFormat('en-GB').format(value)}
-        </div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
+        <div className="text-2xl font-bold">{new Intl.NumberFormat('en-GB').format(value)}</div>
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
       </CardContent>
     </Card>
   );

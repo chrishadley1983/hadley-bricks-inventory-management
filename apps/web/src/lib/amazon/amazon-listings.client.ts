@@ -11,10 +11,7 @@
  */
 
 import type { AmazonCredentials } from './types';
-import type {
-  ListingsFeedPatch,
-  ListingsValidationResult,
-} from './amazon-sync.types';
+import type { ListingsFeedPatch, ListingsValidationResult } from './amazon-sync.types';
 
 // ============================================================================
 // CONSTANTS
@@ -206,9 +203,7 @@ export class AmazonListingsClient {
     }>,
     marketplaceId: string
   ): Promise<ListingsValidationResult[]> {
-    console.log(
-      `[AmazonListingsClient] Validating ${items.length} listings...`
-    );
+    console.log(`[AmazonListingsClient] Validating ${items.length} listings...`);
 
     const results: ListingsValidationResult[] = [];
 
@@ -226,9 +221,7 @@ export class AmazonListingsClient {
     }
 
     const validCount = results.filter((r) => r.status === 'VALID').length;
-    console.log(
-      `[AmazonListingsClient] Validation complete: ${validCount}/${items.length} valid`
-    );
+    console.log(`[AmazonListingsClient] Validation complete: ${validCount}/${items.length} valid`);
 
     return results;
   }
@@ -313,7 +306,8 @@ export class AmazonListingsClient {
     const actualQuantity = fulfillment?.quantity;
 
     const priceMatch =
-      actualPrice !== undefined && !isNaN(actualPrice) &&
+      actualPrice !== undefined &&
+      !isNaN(actualPrice) &&
       Math.abs(actualPrice - expectedPrice) < 0.01;
     const quantityMatch = actualQuantity === expectedQuantity;
 
@@ -370,7 +364,9 @@ export class AmazonListingsClient {
         return [];
       }
 
-      console.log(`[AmazonListingsClient] Found ${response.items.length} existing listing(s) for ASIN: ${asin}`);
+      console.log(
+        `[AmazonListingsClient] Found ${response.items.length} existing listing(s) for ASIN: ${asin}`
+      );
 
       // Extract SKU, price, and quantity from each listing
       const results = response.items.map((item) => {
@@ -462,7 +458,8 @@ export class AmazonListingsClient {
 
       // Log validation issues if status is not successful
       if (response.status === 'INVALID' || response.status === 'ERROR') {
-        console.error(`[AmazonListingsClient] Price update issues for SKU ${sku}:`,
+        console.error(
+          `[AmazonListingsClient] Price update issues for SKU ${sku}:`,
           JSON.stringify(response.issues, null, 2)
         );
       }
@@ -496,11 +493,7 @@ export class AmazonListingsClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET' | 'PATCH',
-    body?: unknown
-  ): Promise<T> {
+  private async request<T>(path: string, method: 'GET' | 'PATCH', body?: unknown): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -528,9 +521,7 @@ export class AmazonListingsClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
-      console.warn(
-        `[AmazonListingsClient] Rate limited, waiting ${waitTime / 1000}s...`
-      );
+      console.warn(`[AmazonListingsClient] Rate limited, waiting ${waitTime / 1000}s...`);
       await this.sleep(waitTime);
       return this.request<T>(path, method, body);
     }
@@ -623,8 +614,6 @@ export class AmazonListingsClient {
 /**
  * Factory function to create an Amazon Listings client
  */
-export function createAmazonListingsClient(
-  credentials: AmazonCredentials
-): AmazonListingsClient {
+export function createAmazonListingsClient(credentials: AmazonCredentials): AmazonListingsClient {
   return new AmazonListingsClient(credentials);
 }

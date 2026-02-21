@@ -53,7 +53,6 @@ export interface ImportSummary {
   skippedInventoryItems: number;
 }
 
-
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check
@@ -105,7 +104,10 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     if (purchaseError || !createdPurchases) {
-      console.error('[POST /api/purchases/import-vinted] Batch purchase insert failed:', purchaseError);
+      console.error(
+        '[POST /api/purchases/import-vinted] Batch purchase insert failed:',
+        purchaseError
+      );
       return NextResponse.json(
         { error: `Failed to create purchases: ${purchaseError?.message}` },
         { status: 500 }
@@ -126,9 +128,7 @@ export async function POST(request: NextRequest) {
     if (setNumbersToEnrich.length > 0) {
       try {
         const serviceClient = createServiceRoleClient();
-        const normalizedNumbers = setNumbersToEnrich.map((n) =>
-          n.includes('-') ? n : `${n}-1`
-        );
+        const normalizedNumbers = setNumbersToEnrich.map((n) => (n.includes('-') ? n : `${n}-1`));
 
         const { data: bricksetSets } = await serviceClient
           .from('brickset_sets')
@@ -144,7 +144,10 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
-        console.error('[POST /api/purchases/import-vinted] Brickset enrichment failed (non-fatal):', err);
+        console.error(
+          '[POST /api/purchases/import-vinted] Brickset enrichment failed (non-fatal):',
+          err
+        );
       }
     }
 
@@ -211,7 +214,10 @@ export async function POST(request: NextRequest) {
         .select('id');
 
       if (inventoryError) {
-        console.error('[POST /api/purchases/import-vinted] Batch inventory insert failed:', inventoryError);
+        console.error(
+          '[POST /api/purchases/import-vinted] Batch inventory insert failed:',
+          inventoryError
+        );
         // Purchases were created, but inventory items failed - continue with partial success
       } else {
         createdInventoryItems = inventoryData || [];
@@ -225,18 +231,20 @@ export async function POST(request: NextRequest) {
 
       // Find matching inventory item by purchase index
       const inventoryIndex = inventoryInserts.findIndex((i) => i.purchaseIndex === index);
-      const inventoryItemId = inventoryIndex >= 0 && createdInventoryItems[inventoryIndex]
-        ? createdInventoryItems[inventoryIndex].id
-        : null;
+      const inventoryItemId =
+        inventoryIndex >= 0 && createdInventoryItems[inventoryIndex]
+          ? createdInventoryItems[inventoryIndex].id
+          : null;
 
       return {
         purchaseId,
         inventoryItemId: isSkipped ? null : inventoryItemId,
         title: purchaseData.title,
         success: true,
-        error: !isSkipped && !inventoryItemId && inventoryInserts.length > 0
-          ? 'Inventory item creation failed'
-          : undefined,
+        error:
+          !isSkipped && !inventoryItemId && inventoryInserts.length > 0
+            ? 'Inventory item creation failed'
+            : undefined,
       };
     });
 
@@ -265,9 +273,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[POST /api/purchases/import-vinted] Error:', error);
-    return NextResponse.json(
-      { error: 'Import failed. Please try again.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Import failed. Please try again.' }, { status: 500 });
   }
 }

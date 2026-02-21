@@ -30,7 +30,7 @@ export class OrderPollService {
 
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string,
+    private userId: string
   ) {
     this.jobTracker = new MinifigJobTracker(supabase, userId);
   }
@@ -68,7 +68,7 @@ export class OrderPollService {
       const dateFilter = lastCursor
         ? EbayApiAdapter.buildOrderDateFilter(lastCursor)
         : EbayApiAdapter.buildOrderDateFilter(
-            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
           );
 
       // Fetch orders
@@ -81,7 +81,15 @@ export class OrderPollService {
       let latestDate = lastCursor || '';
 
       // Pre-fetch all sync items into a Map for O(1) lookup (CR-010)
-      const syncItemsByBricqerId = new Map<string, { id: string; listing_status: string | null; name: string | null; bricklink_id: string | null }>();
+      const syncItemsByBricqerId = new Map<
+        string,
+        {
+          id: string;
+          listing_status: string | null;
+          name: string | null;
+          bricklink_id: string | null;
+        }
+      >();
       const pageSize = 1000;
       let page = 0;
       let hasMore = true;
@@ -101,7 +109,10 @@ export class OrderPollService {
       for (const order of orders) {
         // Track latest order date for cursor update (compare as Date objects for timezone safety)
         const orderDate = order.creationDate || order.lastModifiedDate || '';
-        if (orderDate && (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())) {
+        if (
+          orderDate &&
+          (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())
+        ) {
           latestDate = orderDate;
         }
 
@@ -130,8 +141,7 @@ export class OrderPollService {
             }
 
             // Create removal queue entry (F49)
-            const salePrice =
-              item.total?.value || item.lineItemCost?.value || '0';
+            const salePrice = item.total?.value || item.lineItemCost?.value || '0';
             const orderId = order.orderId || '';
             const orderUrl = `https://www.ebay.co.uk/sh/ord/details?orderid=${encodeURIComponent(orderId)}`;
 
@@ -150,7 +160,7 @@ export class OrderPollService {
                   order_url: orderUrl,
                   status: 'PENDING',
                 },
-                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true },
+                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true }
               )
               .select('id');
 
@@ -160,16 +170,28 @@ export class OrderPollService {
 
               // Use name from pre-fetched map (CR-011)
               const syncItemName = syncItem.name || syncItem.bricklink_id || 'Unknown Minifig';
-              discordService.send('alerts', {
-                title: '🔔 Minifig Sold on eBay',
-                description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
-                color: DiscordColors.GREEN,
-                fields: [
-                  { name: 'Platform', value: 'eBay', inline: true },
-                  { name: 'Sale Price', value: `£${parseFloat(salePrice).toFixed(2)}`, inline: true },
-                  { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
-                ],
-              }).catch(() => { /* non-blocking */ });
+              discordService
+                .send('alerts', {
+                  title: '🔔 Minifig Sold on eBay',
+                  description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
+                  color: DiscordColors.GREEN,
+                  fields: [
+                    { name: 'Platform', value: 'eBay', inline: true },
+                    {
+                      name: 'Sale Price',
+                      value: `£${parseFloat(salePrice).toFixed(2)}`,
+                      inline: true,
+                    },
+                    {
+                      name: 'Action',
+                      value: '[Review Removal](/minifigs/removals)',
+                      inline: false,
+                    },
+                  ],
+                })
+                .catch(() => {
+                  /* non-blocking */
+                });
 
               // Update sync item status (F50)
               await this.supabase
@@ -234,11 +256,10 @@ export class OrderPollService {
 
       // Get Bricqer credentials
       const credentialsRepo = new CredentialsRepository(this.supabase);
-      const credentials =
-        await credentialsRepo.getCredentials<BricqerCredentials>(
-          this.userId,
-          'bricqer',
-        );
+      const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(
+        this.userId,
+        'bricqer'
+      );
 
       if (!credentials) {
         throw new Error('Bricqer credentials not configured');
@@ -256,7 +277,14 @@ export class OrderPollService {
       let latestDate = lastCursor || '';
 
       // Get all published sync items for matching — build a map by bricqer_item_id for O(1) lookup
-      const publishedItems: Array<{ id: string; bricqer_item_id: string; bricklink_id: string | null; listing_status: string | null; ebay_offer_id: string | null; name: string | null }> = [];
+      const publishedItems: Array<{
+        id: string;
+        bricqer_item_id: string;
+        bricklink_id: string | null;
+        listing_status: string | null;
+        ebay_offer_id: string | null;
+        name: string | null;
+      }> = [];
       const pageSize = 1000;
       let page = 0;
       let hasMore = true;
@@ -273,13 +301,14 @@ export class OrderPollService {
       }
 
       // Build lookup map by bricqer_item_id for accurate matching (C3)
-      const publishedByBricqerId = new Map(
-        publishedItems.map((si) => [si.bricqer_item_id, si]),
-      );
+      const publishedByBricqerId = new Map(publishedItems.map((si) => [si.bricqer_item_id, si]));
 
       for (const order of orders) {
         const orderDate = order.created || order.created_at || '';
-        if (orderDate && (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())) {
+        if (
+          orderDate &&
+          (!latestDate || new Date(orderDate).getTime() > new Date(latestDate).getTime())
+        ) {
           latestDate = orderDate;
         }
 
@@ -294,14 +323,13 @@ export class OrderPollService {
         for (const orderItem of orderItems) {
           // Match by bricqer_item_id for accurate per-item matching (C3)
           // Fall back to bricklink_id if bricqer_item_id not available on order item
-          const itemId = (orderItem as unknown as Record<string, unknown>).inventory_item_id || orderItem.id;
+          const itemId =
+            (orderItem as unknown as Record<string, unknown>).inventory_item_id || orderItem.id;
           let matchingItem = itemId ? publishedByBricqerId.get(String(itemId)) : undefined;
 
           // Fallback: try matching by bricklink_id (less accurate for duplicates)
           if (!matchingItem && orderItem.bricklink_id) {
-            matchingItem = publishedItems.find(
-              (si) => si.bricklink_id === orderItem.bricklink_id,
-            );
+            matchingItem = publishedItems.find((si) => si.bricklink_id === orderItem.bricklink_id);
           }
           if (!matchingItem) continue;
 
@@ -310,9 +338,7 @@ export class OrderPollService {
           try {
             // Create removal queue entry (F52)
             const price =
-              typeof orderItem.price === 'string'
-                ? parseFloat(orderItem.price)
-                : orderItem.price;
+              typeof orderItem.price === 'string' ? parseFloat(orderItem.price) : orderItem.price;
 
             // Upsert to prevent duplicates on re-poll (M7)
             const { data: inserted } = await this.supabase
@@ -328,7 +354,7 @@ export class OrderPollService {
                   order_id: String(order.id),
                   status: 'PENDING',
                 },
-                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true },
+                { onConflict: 'minifig_sync_id,order_id', ignoreDuplicates: true }
               )
               .select('id');
 
@@ -337,17 +363,26 @@ export class OrderPollService {
               removalEntriesCreated++;
 
               // Discord notification (F60) — use name from pre-fetched map (CR-011)
-              const syncItemName = matchingItem.name || matchingItem.bricklink_id || 'Unknown Minifig';
-              discordService.send('alerts', {
-                title: '🔔 Minifig Sold on Bricqer',
-                description: `**${syncItemName}** sold for £${(price ?? 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
-                color: DiscordColors.GREEN,
-                fields: [
-                  { name: 'Platform', value: 'Bricqer', inline: true },
-                  { name: 'Sale Price', value: `£${(price ?? 0).toFixed(2)}`, inline: true },
-                  { name: 'Action', value: '[Review Removal](/minifigs/removals)', inline: false },
-                ],
-              }).catch(() => { /* non-blocking */ });
+              const syncItemName =
+                matchingItem.name || matchingItem.bricklink_id || 'Unknown Minifig';
+              discordService
+                .send('alerts', {
+                  title: '🔔 Minifig Sold on Bricqer',
+                  description: `**${syncItemName}** sold for £${(price ?? 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
+                  color: DiscordColors.GREEN,
+                  fields: [
+                    { name: 'Platform', value: 'Bricqer', inline: true },
+                    { name: 'Sale Price', value: `£${(price ?? 0).toFixed(2)}`, inline: true },
+                    {
+                      name: 'Action',
+                      value: '[Review Removal](/minifigs/removals)',
+                      inline: false,
+                    },
+                  ],
+                })
+                .catch(() => {
+                  /* non-blocking */
+                });
 
               // Update sync item status (F53)
               await this.supabase
@@ -392,5 +427,4 @@ export class OrderPollService {
       throw err;
     }
   }
-
 }

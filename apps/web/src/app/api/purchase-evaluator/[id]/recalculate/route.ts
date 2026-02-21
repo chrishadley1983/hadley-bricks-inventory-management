@@ -12,10 +12,7 @@ import { PurchaseEvaluatorService } from '@/lib/purchase-evaluator/evaluator.ser
  * POST /api/purchase-evaluator/[id]/recalculate
  * Recalculate cost allocation based on current Amazon prices
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

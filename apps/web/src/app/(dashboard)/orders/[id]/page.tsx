@@ -23,13 +23,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -152,11 +146,7 @@ function formatCurrency(amount: number | null, currency?: string | null): string
   }).format(amount);
 }
 
-export default function OrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   usePerfPage('OrderDetailPage');
   const { id } = use(params);
   const queryClient = useQueryClient();
@@ -278,16 +268,13 @@ export default function OrderDetailPage({
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold">Order #{order.platform_order_id}</h2>
-              <Badge className={getStatusColor(order.status)}>
-                {order.status || 'Unknown'}
-              </Badge>
+              <Badge className={getStatusColor(order.status)}>{order.status || 'Unknown'}</Badge>
             </div>
             <div className="text-muted-foreground mt-1 flex items-center">
               <Badge variant="outline" className="capitalize mr-2">
                 {order.platform}
               </Badge>
-              {order.order_date &&
-                format(new Date(order.order_date), 'MMMM d, yyyy \'at\' h:mm a')}
+              {order.order_date && format(new Date(order.order_date), "MMMM d, yyyy 'at' h:mm a")}
             </div>
           </div>
 
@@ -313,9 +300,7 @@ export default function OrderDetailPage({
                 <History className="h-5 w-5" />
                 Order Status Workflow
               </CardTitle>
-              <CardDescription>
-                Manage the order fulfillment process
-              </CardDescription>
+              <CardDescription>Manage the order fulfillment process</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Status Progression */}
@@ -337,16 +322,14 @@ export default function OrderDetailPage({
                             isActive
                               ? config.color
                               : isPast && !isCancelled
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-500'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-500'
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5" />
                           {config.label}
                         </div>
-                        {index < 4 && (
-                          <ChevronRight className="h-4 w-4 text-gray-400 mx-1" />
-                        )}
+                        {index < 4 && <ChevronRight className="h-4 w-4 text-gray-400 mx-1" />}
                       </div>
                     );
                   }
@@ -406,14 +389,14 @@ export default function OrderDetailPage({
                               <span className="mx-1">→</span>
                             </>
                           )}
-                          <Badge className={STATUS_CONFIG[entry.status as OrderStatus]?.color || ''}>
+                          <Badge
+                            className={STATUS_CONFIG[entry.status as OrderStatus]?.color || ''}
+                          >
                             {entry.status}
                           </Badge>
                         </span>
                         {entry.notes && (
-                          <span className="ml-2 text-muted-foreground italic">
-                            {entry.notes}
-                          </span>
+                          <span className="ml-2 text-muted-foreground italic">{entry.notes}</span>
                         )}
                       </div>
                     ))}
@@ -486,9 +469,7 @@ export default function OrderDetailPage({
             <CardContent className="space-y-2">
               <div>
                 <p className="text-sm text-muted-foreground">Tracking Number</p>
-                <p className="font-medium font-mono">
-                  {order.tracking_number || 'Not provided'}
-                </p>
+                <p className="font-medium font-mono">{order.tracking_number || 'Not provided'}</p>
               </div>
             </CardContent>
           </Card>
@@ -505,15 +486,15 @@ export default function OrderDetailPage({
               <div>
                 <p className="text-sm text-muted-foreground">Order Date</p>
                 <p className="font-medium">
-                  {order.order_date
-                    ? format(new Date(order.order_date), 'MMMM d, yyyy')
-                    : '-'}
+                  {order.order_date ? format(new Date(order.order_date), 'MMMM d, yyyy') : '-'}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Last Synced</p>
                 <p className="font-medium">
-                  {order.synced_at ? format(new Date(order.synced_at), 'MMMM d, yyyy \'at\' h:mm a') : '-'}
+                  {order.synced_at
+                    ? format(new Date(order.synced_at), "MMMM d, yyyy 'at' h:mm a")
+                    : '-'}
                 </p>
               </div>
             </CardContent>
@@ -546,7 +527,10 @@ export default function OrderDetailPage({
                   {order.items && order.items.length > 0 ? (
                     <div className="space-y-3">
                       {order.items.map((item, index) => (
-                        <div key={item.id || index} className="flex items-start justify-between gap-4 py-2 border-b last:border-0">
+                        <div
+                          key={item.id || index}
+                          className="flex items-start justify-between gap-4 py-2 border-b last:border-0"
+                        >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="font-medium">{item.item_name || 'Unknown Item'}</p>
@@ -557,7 +541,10 @@ export default function OrderDetailPage({
                                   rel="noopener noreferrer"
                                   title="View linked inventory item"
                                 >
-                                  <Badge variant="outline" className="text-xs text-green-600 border-green-300 bg-green-50 hover:bg-green-100 cursor-pointer">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs text-green-600 border-green-300 bg-green-50 hover:bg-green-100 cursor-pointer"
+                                  >
                                     <ExternalLink className="h-3 w-3 mr-1" />
                                     Linked
                                   </Badge>
@@ -566,7 +553,8 @@ export default function OrderDetailPage({
                             </div>
                             {item.item_number && (
                               <p className="text-sm text-muted-foreground font-mono">
-                                {order.platform === 'amazon' ? 'ASIN: ' : 'SKU: '}{item.item_number}
+                                {order.platform === 'amazon' ? 'ASIN: ' : 'SKU: '}
+                                {item.item_number}
                               </p>
                             )}
                             {item.condition && (
@@ -634,9 +622,7 @@ export default function OrderDetailPage({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ship Order</DialogTitle>
-            <DialogDescription>
-              Add tracking information for this shipment.
-            </DialogDescription>
+            <DialogDescription>Add tracking information for this shipment.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">

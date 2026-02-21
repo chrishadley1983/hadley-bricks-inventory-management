@@ -31,10 +31,7 @@ export async function POST() {
     const latestImport = await service.getLatestImport();
 
     if (latestImport?.status === 'processing') {
-      return NextResponse.json(
-        { error: 'An import is already in progress' },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: 'An import is already in progress' }, { status: 409 });
     }
 
     // 3. Trigger import

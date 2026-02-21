@@ -46,11 +46,12 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 // ── Sync Items ─────────────────────────────────────────
 
 export async function fetchMinifigSyncItems(
-  filters?: MinifigSyncFilters,
+  filters?: MinifigSyncFilters
 ): Promise<MinifigSyncItem[]> {
   const params = new URLSearchParams();
   if (filters?.listingStatus) params.set('listingStatus', filters.listingStatus);
-  if (filters?.meetsThreshold !== undefined) params.set('meetsThreshold', String(filters.meetsThreshold));
+  if (filters?.meetsThreshold !== undefined)
+    params.set('meetsThreshold', String(filters.meetsThreshold));
   if (filters?.search) params.set('search', filters.search);
   return apiFetch<MinifigSyncItem[]>(`/api/minifigs/sync/items?${params.toString()}`);
 }
@@ -142,9 +143,22 @@ export async function fetchMinifigDashboard(): Promise<MinifigDashboardData> {
 
 // ── Item Updates ──────────────────────────────────────
 
+export interface SyncItemUpdateData {
+  title?: string;
+  description?: string;
+  price?: number;
+  condition?: string;
+  conditionDescription?: string;
+  categoryId?: string;
+  aspects?: Record<string, string[]>;
+  images?: Array<{ url: string; source: string; type: string }>;
+  bestOfferAutoAccept?: number;
+  bestOfferAutoDecline?: number;
+}
+
 export async function updateSyncItem(
   id: string,
-  data: { title?: string; description?: string; price?: number },
+  data: SyncItemUpdateData
 ): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>(`/api/minifigs/sync/items/${id}`, {
     method: 'PATCH',

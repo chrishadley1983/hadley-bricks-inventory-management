@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`[API /platform-stock/comparison] Authenticated user: ${user.id}, email: ${user.email}`);
+    console.log(
+      `[API /platform-stock/comparison] Authenticated user: ${user.id}, email: ${user.email}`
+    );
 
     const { searchParams } = new URL(request.url);
 
@@ -53,7 +55,9 @@ export async function GET(request: NextRequest) {
         .is('amazon_asin', null)
         .limit(10);
 
-      console.log(`[DEBUG] User ${user.id} missing ASIN query: error=${debugError?.message || 'none'}, count=${debugData?.length || 0}`);
+      console.log(
+        `[DEBUG] User ${user.id} missing ASIN query: error=${debugError?.message || 'none'}, count=${debugData?.length || 0}`
+      );
       if (debugData && debugData.length > 0) {
         console.log(`[DEBUG] First item:`, JSON.stringify(debugData[0]));
       }
@@ -78,8 +82,7 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/platform-stock/comparison] Error:', error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : 'Internal server error',
+        error: error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500 }
     );

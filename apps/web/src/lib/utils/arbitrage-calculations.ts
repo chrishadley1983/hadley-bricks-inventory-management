@@ -67,10 +67,7 @@ export function calculateTotalCost(
  * @param amazonPrice - Amazon selling price
  * @returns COG% rounded to 1 decimal place, or null if prices invalid
  */
-export function calculateCogPercent(
-  totalCost: number,
-  amazonPrice: number | null
-): number | null {
+export function calculateCogPercent(totalCost: number, amazonPrice: number | null): number | null {
   if (!amazonPrice || amazonPrice <= 0 || totalCost < 0) {
     return null;
   }
@@ -113,10 +110,7 @@ export function calculateProfit(
  * @param totalCost - Total acquisition cost
  * @returns ROI% rounded to 1 decimal place, or null if invalid
  */
-export function calculateRoi(
-  profit: number | null,
-  totalCost: number
-): number | null {
+export function calculateRoi(profit: number | null, totalCost: number): number | null {
   if (profit === null || totalCost <= 0) {
     return null;
   }

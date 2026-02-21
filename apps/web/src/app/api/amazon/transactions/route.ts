@@ -45,9 +45,7 @@ interface EnrichedAmazonTransaction extends AmazonTransactionRow {
  * Deduplicate transactions - prefer RELEASED over DEFERRED for same order+type
  * This prevents double-counting when both DEFERRED and RELEASED exist for the same sale
  */
-function deduplicateTransactions<T extends AmazonTransactionRow>(
-  transactions: T[]
-): T[] {
+function deduplicateTransactions<T extends AmazonTransactionRow>(transactions: T[]): T[] {
   const transactionMap = new Map<string, T>();
 
   for (const tx of transactions) {
@@ -61,10 +59,7 @@ function deduplicateTransactions<T extends AmazonTransactionRow>(
       transactionMap.set(key, tx);
     } else {
       // Prefer RELEASED over DEFERRED
-      if (
-        tx.transaction_status === 'RELEASED' &&
-        existing.transaction_status === 'DEFERRED'
-      ) {
+      if (tx.transaction_status === 'RELEASED' && existing.transaction_status === 'DEFERRED') {
         transactionMap.set(key, tx);
       }
       // If both are same status, keep the more recent one
@@ -166,14 +161,8 @@ export async function GET(request: NextRequest) {
         .range(fetchOffset, fetchOffset + fetchPageSize - 1);
 
       if (fetchError) {
-        console.error(
-          '[GET /api/amazon/transactions] Fetch error:',
-          fetchError
-        );
-        return NextResponse.json(
-          { error: 'Failed to fetch transactions' },
-          { status: 500 }
-        );
+        console.error('[GET /api/amazon/transactions] Fetch error:', fetchError);
+        return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
       }
 
       allTransactions.push(...(data as AmazonTransactionRow[]));
@@ -222,17 +211,12 @@ export async function GET(request: NextRequest) {
           .in('platform_order_id', batchOrderIds);
 
         if (ordersError) {
-          console.error(
-            '[GET /api/amazon/transactions] Orders fetch error:',
-            ordersError
-          );
+          console.error('[GET /api/amazon/transactions] Orders fetch error:', ordersError);
           // Continue without order enrichment rather than failing
         } else if (orders) {
           for (const order of orders) {
             // Get the first order item for product name and ASIN
-            const firstItem = Array.isArray(order.order_items)
-              ? order.order_items[0]
-              : null;
+            const firstItem = Array.isArray(order.order_items) ? order.order_items[0] : null;
 
             orderDataMap.set(order.platform_order_id, {
               purchase_date: order.order_date,
@@ -245,20 +229,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Enrich transactions with order data
-    const enrichedTransactions: EnrichedAmazonTransaction[] = dedupedTransactions.map(
-      (tx) => {
-        const orderData = tx.amazon_order_id
-          ? orderDataMap.get(tx.amazon_order_id)
-          : null;
+    const enrichedTransactions: EnrichedAmazonTransaction[] = dedupedTransactions.map((tx) => {
+      const orderData = tx.amazon_order_id ? orderDataMap.get(tx.amazon_order_id) : null;
 
-        return {
-          ...tx,
-          purchase_date: orderData?.purchase_date ?? null,
-          product_name: orderData?.product_name ?? null,
-          order_asin: orderData?.order_asin ?? null,
-        };
-      }
-    );
+      return {
+        ...tx,
+        purchase_date: orderData?.purchase_date ?? null,
+        product_name: orderData?.product_name ?? null,
+        order_asin: orderData?.order_asin ?? null,
+      };
+    });
 
     // Apply date filtering using purchase_date (with fallback to posted_date)
     // This must be done after enrichment since purchase_date comes from platform_orders
@@ -287,8 +267,7 @@ export async function GET(request: NextRequest) {
         const bDate = b.purchase_date || b.posted_date;
         comparison = new Date(aDate).getTime() - new Date(bDate).getTime();
       } else if (sortBy === 'posted_date') {
-        comparison =
-          new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime();
+        comparison = new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime();
       } else if (sortBy === 'total_amount') {
         comparison = (a.total_amount || 0) - (b.total_amount || 0);
       } else if (sortBy === 'item_title') {
@@ -316,14 +295,14 @@ export async function GET(request: NextRequest) {
 
     for (const tx of filteredTransactions) {
       typeCounts[tx.transaction_type] = (typeCounts[tx.transaction_type] || 0) + 1;
-      statusCounts[tx.transaction_status || 'null'] = (statusCounts[tx.transaction_status || 'null'] || 0) + 1;
+      statusCounts[tx.transaction_status || 'null'] =
+        (statusCounts[tx.transaction_status || 'null'] || 0) + 1;
 
       if (tx.transaction_type === 'Shipment') {
         shipmentCount++;
         // Use gross_sales_amount if available, otherwise calculate from net + fees
         const gross =
-          tx.gross_sales_amount ??
-          (tx.total_amount || 0) + Math.abs(tx.total_fees || 0);
+          tx.gross_sales_amount ?? (tx.total_amount || 0) + Math.abs(tx.total_fees || 0);
         totalSales += gross;
         totalFees += Math.abs(tx.total_fees || 0);
       } else if (tx.transaction_type === 'Refund') {
@@ -369,10 +348,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch transactions',
+        error: error instanceof Error ? error.message : 'Failed to fetch transactions',
       },
       { status: 500 }
     );

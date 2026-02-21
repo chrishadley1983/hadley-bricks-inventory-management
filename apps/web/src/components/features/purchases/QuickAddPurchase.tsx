@@ -110,10 +110,7 @@ export function QuickAddPurchase({ onSuccess }: QuickAddPurchaseProps) {
             disabled={parseMutation.isPending}
           />
           <div className="flex gap-2">
-            <Button
-              onClick={handleParse}
-              disabled={!input.trim() || parseMutation.isPending}
-            >
+            <Button onClick={handleParse} disabled={!input.trim() || parseMutation.isPending}>
               {parseMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

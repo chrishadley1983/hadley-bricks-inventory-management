@@ -85,16 +85,10 @@ export function WeeklyInsightsPanel() {
           Weekly Insights
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setWeekOffset((w) => w + 1)}
-          >
+          <Button variant="ghost" size="icon" onClick={() => setWeekOffset((w) => w + 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium min-w-[100px] text-center">
-            {getWeekLabel()}
-          </span>
+          <span className="text-sm font-medium min-w-[100px] text-center">{getWeekLabel()}</span>
           <Button
             variant="ghost"
             size="icon"
@@ -197,9 +191,7 @@ export function WeeklyInsightsPanel() {
                   >
                     {insights.productivity.score}
                   </span>
-                  <span className="text-xs text-muted-foreground ml-1">
-                    / 100
-                  </span>
+                  <span className="text-xs text-muted-foreground ml-1">/ 100</span>
                   <p className="text-xs text-muted-foreground">
                     {getProductivityLabel(insights.productivity.score)}
                   </p>
@@ -223,9 +215,7 @@ export function WeeklyInsightsPanel() {
               {/* Pomodoro average */}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Daily Pomodoros (avg)</span>
-                <span className="font-medium">
-                  {insights.pomodoro.averagePerDay.toFixed(1)}
-                </span>
+                <span className="font-medium">{insights.pomodoro.averagePerDay.toFixed(1)}</span>
               </div>
             </div>
           </div>
@@ -244,9 +234,7 @@ export function WeeklyInsightsPanel() {
                 <p className="text-xs text-muted-foreground">Completed</p>
               </div>
               <div>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(insights.pickups.totalSpent)}
-                </p>
+                <p className="text-2xl font-bold">{formatCurrency(insights.pickups.totalSpent)}</p>
                 <p className="text-xs text-muted-foreground">Spent</p>
               </div>
               <div>

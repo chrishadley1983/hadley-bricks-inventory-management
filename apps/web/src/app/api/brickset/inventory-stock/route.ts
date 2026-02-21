@@ -91,13 +91,17 @@ export async function GET(request: NextRequest) {
     // Normalize set number (remove variant suffix for search)
     const baseSetNumber = setNumber.split('-')[0];
 
-    console.log(`[GET /api/brickset/inventory-stock] Searching for set: ${baseSetNumber}, asin: ${asin || 'none'}`);
+    console.log(
+      `[GET /api/brickset/inventory-stock] Searching for set: ${baseSetNumber}, asin: ${asin || 'none'}`
+    );
 
     // Build query to search by set_number OR amazon_asin
     // Use ilike for set_number to match variants (e.g., 75192, 75192-1)
     let query = supabase
       .from('inventory_items')
-      .select('id, set_number, item_name, condition, status, cost, listing_value, listing_platform, listing_date, sold_price, sold_date, sold_platform, storage_location, sku, amazon_asin')
+      .select(
+        'id, set_number, item_name, condition, status, cost, listing_value, listing_platform, listing_date, sold_price, sold_date, sold_platform, storage_location, sku, amazon_asin'
+      )
       .eq('user_id', userId);
 
     // Search by set number (with variants) OR by ASIN if provided
@@ -139,9 +143,7 @@ export async function GET(request: NextRequest) {
     const currentStockItems = transformedItems.filter(
       (item) => item.status === 'BACKLOG' || item.status === 'LISTED'
     );
-    const soldStockItems = transformedItems.filter(
-      (item) => item.status === 'SOLD'
-    );
+    const soldStockItems = transformedItems.filter((item) => item.status === 'SOLD');
 
     const summary: InventoryStockSummary = {
       currentStock: {
@@ -157,7 +159,9 @@ export async function GET(request: NextRequest) {
       items: transformedItems,
     };
 
-    console.log(`[GET /api/brickset/inventory-stock] Found ${transformedItems.length} items (${summary.currentStock.total} current, ${summary.soldStock.total} sold)`);
+    console.log(
+      `[GET /api/brickset/inventory-stock] Found ${transformedItems.length} items (${summary.currentStock.total} current, ${summary.soldStock.total} sold)`
+    );
 
     return NextResponse.json({
       data: summary,

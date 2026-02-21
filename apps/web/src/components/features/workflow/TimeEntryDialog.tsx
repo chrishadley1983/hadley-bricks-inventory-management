@@ -42,7 +42,14 @@ import {
   type TimeEntry,
 } from '@/hooks/use-time-tracking';
 
-const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
+const CATEGORIES: TimeCategory[] = [
+  'Development',
+  'Listing',
+  'Shipping',
+  'Sourcing',
+  'Admin',
+  'Other',
+];
 
 export type TimeEntryDialogMode = 'add' | 'edit' | 'duplicate';
 
@@ -88,16 +95,8 @@ export function TimeEntryDialog({ open, onOpenChange, mode, entry }: TimeEntryDi
             ? format(new Date(entry.startedAt), 'yyyy-MM-dd')
             : format(new Date(), 'yyyy-MM-dd')
         );
-        setStartTime(
-          entry.startedAt
-            ? format(new Date(entry.startedAt), 'HH:mm')
-            : '09:00'
-        );
-        setEndTime(
-          entry.endedAt
-            ? format(new Date(entry.endedAt), 'HH:mm')
-            : '10:00'
-        );
+        setStartTime(entry.startedAt ? format(new Date(entry.startedAt), 'HH:mm') : '09:00');
+        setEndTime(entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '10:00');
         // For duplicate, add a note prefix
         setNotes(
           mode === 'duplicate'
@@ -153,7 +152,7 @@ export function TimeEntryDialog({ open, onOpenChange, mode, entry }: TimeEntryDi
     } catch (error) {
       toast({
         title: error instanceof Error ? error.message : 'Failed to save entry',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     }
   };
@@ -162,26 +161,35 @@ export function TimeEntryDialog({ open, onOpenChange, mode, entry }: TimeEntryDi
 
   const getTitle = () => {
     switch (mode) {
-      case 'add': return 'Add Manual Entry';
-      case 'edit': return 'Edit Entry';
-      case 'duplicate': return 'Duplicate Entry';
+      case 'add':
+        return 'Add Manual Entry';
+      case 'edit':
+        return 'Edit Entry';
+      case 'duplicate':
+        return 'Duplicate Entry';
     }
   };
 
   const getDescription = () => {
     switch (mode) {
-      case 'add': return 'Create a manual time entry for work you forgot to track.';
-      case 'edit': return 'Update this time entry.';
-      case 'duplicate': return 'Create a copy of this time entry.';
+      case 'add':
+        return 'Create a manual time entry for work you forgot to track.';
+      case 'edit':
+        return 'Update this time entry.';
+      case 'duplicate':
+        return 'Create a copy of this time entry.';
     }
   };
 
   const getSubmitLabel = () => {
     if (isPending) return 'Saving...';
     switch (mode) {
-      case 'add': return 'Add Entry';
-      case 'edit': return 'Update';
-      case 'duplicate': return 'Create Copy';
+      case 'add':
+        return 'Add Entry';
+      case 'edit':
+        return 'Update';
+      case 'duplicate':
+        return 'Create Copy';
     }
   };
 
@@ -301,7 +309,7 @@ export function DeleteTimeEntryDialog({ open, onOpenChange, entry }: DeleteTimeE
     } catch (error) {
       toast({
         title: error instanceof Error ? error.message : 'Failed to delete entry',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     }
   };
@@ -315,7 +323,8 @@ export function DeleteTimeEntryDialog({ open, onOpenChange, entry }: DeleteTimeE
             Are you sure you want to delete this time entry? This action cannot be undone.
             {entry && (
               <span className="mt-2 block text-sm">
-                <strong>{entry.category}</strong> - {entry.startedAt ? format(new Date(entry.startedAt), 'dd MMM yyyy HH:mm') : ''}
+                <strong>{entry.category}</strong> -{' '}
+                {entry.startedAt ? format(new Date(entry.startedAt), 'dd MMM yyyy HH:mm') : ''}
                 {entry.durationSeconds && ` (${formatDuration(entry.durationSeconds)})`}
               </span>
             )}

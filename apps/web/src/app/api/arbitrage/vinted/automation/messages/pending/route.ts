@@ -53,14 +53,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<any>> {
     }
 
     // Filter out messages that exceeded max attempts
-    const eligible = (pending ?? []).filter(m => m.attempts < m.max_attempts);
+    const eligible = (pending ?? []).filter((m) => m.attempts < m.max_attempts);
 
     if (eligible.length === 0) {
       return NextResponse.json({ messages: [] });
     }
 
     // 3. Mark them as in_progress
-    const ids = eligible.map(m => m.id);
+    const ids = eligible.map((m) => m.id);
     const now = new Date().toISOString();
 
     await supabase
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<any>> {
       .in('id', ids);
 
     // 4. Return messages (without max_attempts - scanner doesn't need it)
-    const messages: PendingMessage[] = eligible.map(m => ({
+    const messages: PendingMessage[] = eligible.map((m) => ({
       id: m.id,
       seller_username: m.seller_username,
       message_text: m.message_text,

@@ -134,7 +134,12 @@ export class BricqerBatchSyncService {
    * Sync batches from Bricqer API
    */
   async syncBatches(userId: string, options?: BatchSyncOptions): Promise<BatchSyncResult> {
-    console.log('[BricqerBatchSyncService] Starting batch sync for user:', userId, 'options:', options);
+    console.log(
+      '[BricqerBatchSyncService] Starting batch sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await createClient();
     const syncMode: BatchSyncMode = options?.fullSync ? 'FULL' : 'INCREMENTAL';
@@ -198,7 +203,10 @@ export class BricqerBatchSyncService {
       // Get Bricqer client
       console.log('[BricqerBatchSyncService] Getting Bricqer client...');
       const credentialsRepo = new CredentialsRepository(supabase);
-      const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(userId, 'bricqer');
+      const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(
+        userId,
+        'bricqer'
+      );
 
       if (!credentials) {
         throw new Error('Bricqer credentials not configured');
@@ -209,11 +217,13 @@ export class BricqerBatchSyncService {
 
       // Fetch batches and purchases from Bricqer
       console.log('[BricqerBatchSyncService] Fetching batches and purchases from Bricqer API...');
-      const [batches, purchases] = await Promise.all([
-        client.getBatches(),
-        client.getPurchases(),
-      ]);
-      console.log('[BricqerBatchSyncService] Fetched batches:', batches.length, 'purchases:', purchases.length);
+      const [batches, purchases] = await Promise.all([client.getBatches(), client.getPurchases()]);
+      console.log(
+        '[BricqerBatchSyncService] Fetched batches:',
+        batches.length,
+        'purchases:',
+        purchases.length
+      );
 
       // Create purchase lookup map for cost data
       const purchaseMap = new Map<number, BricqerPurchase>();
@@ -225,7 +235,10 @@ export class BricqerBatchSyncService {
       let batchesToProcess = batches;
       if (activatedOnly) {
         batchesToProcess = batches.filter((batch) => batch.activated);
-        console.log('[BricqerBatchSyncService] Filtered to activated batches:', batchesToProcess.length);
+        console.log(
+          '[BricqerBatchSyncService] Filtered to activated batches:',
+          batchesToProcess.length
+        );
       }
 
       // Transform and upsert batches
@@ -235,7 +248,14 @@ export class BricqerBatchSyncService {
         batchesToProcess,
         purchaseMap
       );
-      console.log('[BricqerBatchSyncService] Upsert complete. Created:', created, 'Updated:', updated, 'Skipped:', skipped);
+      console.log(
+        '[BricqerBatchSyncService] Upsert complete. Created:',
+        created,
+        'Updated:',
+        updated,
+        'Skipped:',
+        skipped
+      );
 
       // Update sync config
       await supabase.from('bricklink_upload_sync_config').upsert(

@@ -132,7 +132,8 @@ export async function fetchInvestmentSets(
   if (filters?.theme) params.set('theme', filters.theme);
   if (filters?.minYear != null) params.set('minYear', String(filters.minYear));
   if (filters?.maxYear != null) params.set('maxYear', String(filters.maxYear));
-  if (filters?.retiringWithinMonths != null) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.retiringWithinMonths != null)
+    params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
   if (filters?.minPieces != null) params.set('minPieces', String(filters.minPieces));
   if (filters?.maxPieces != null) params.set('maxPieces', String(filters.maxPieces));
   if (filters?.minRrp != null) params.set('minRrp', String(filters.minRrp));
@@ -155,9 +156,7 @@ export async function fetchInvestmentSets(
   return response.json();
 }
 
-export async function fetchInvestmentSetDetail(
-  setNumber: string
-): Promise<InvestmentSetDetail> {
+export async function fetchInvestmentSetDetail(setNumber: string): Promise<InvestmentSetDetail> {
   const response = await fetch(`/api/investment/${encodeURIComponent(setNumber)}`);
 
   if (!response.ok) {
@@ -168,9 +167,7 @@ export async function fetchInvestmentSetDetail(
   return response.json();
 }
 
-export async function fetchPriceHistory(
-  setNumber: string
-): Promise<PriceHistoryResponse> {
+export async function fetchPriceHistory(setNumber: string): Promise<PriceHistoryResponse> {
   const response = await fetch(`/api/investment/${encodeURIComponent(setNumber)}/price-history`);
 
   if (!response.ok) {
@@ -197,13 +194,12 @@ interface PredictionsResponse {
   totalPages: number;
 }
 
-export async function fetchPredictions(
-  filters?: PredictionsFilters
-): Promise<PredictionsResponse> {
+export async function fetchPredictions(filters?: PredictionsFilters): Promise<PredictionsResponse> {
   const params = new URLSearchParams();
 
   if (filters?.minScore != null) params.set('minScore', String(filters.minScore));
-  if (filters?.retiringWithinMonths != null) params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
+  if (filters?.retiringWithinMonths != null)
+    params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
   if (filters?.theme) params.set('theme', filters.theme);
   if (filters?.page != null) params.set('page', String(filters.page));
   if (filters?.pageSize != null) params.set('pageSize', String(filters.pageSize));
@@ -218,9 +214,7 @@ export async function fetchPredictions(
   return response.json();
 }
 
-export async function fetchSetPrediction(
-  setNumber: string
-): Promise<InvestmentPrediction | null> {
+export async function fetchSetPrediction(setNumber: string): Promise<InvestmentPrediction | null> {
   const response = await fetch(`/api/investment/predictions/${encodeURIComponent(setNumber)}`);
 
   if (!response.ok) {

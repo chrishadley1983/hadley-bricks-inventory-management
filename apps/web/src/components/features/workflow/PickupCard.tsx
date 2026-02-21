@@ -1,6 +1,15 @@
 'use client';
 
-import { MapPin, Clock, Banknote, MoreHorizontal, CheckCircle, XCircle, Pencil, Trash2 } from 'lucide-react';
+import {
+  MapPin,
+  Clock,
+  Banknote,
+  MoreHorizontal,
+  CheckCircle,
+  XCircle,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -66,9 +75,7 @@ export function PickupCard({
           </div>
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">
-          <Badge variant={getStatusColor(pickup.status)}>
-            {pickup.status || 'scheduled'}
-          </Badge>
+          <Badge variant={getStatusColor(pickup.status)}>{pickup.status || 'scheduled'}</Badge>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -87,18 +94,12 @@ export function PickupCard({
                 Edit
               </DropdownMenuItem>
               {isScheduled && (
-                <DropdownMenuItem
-                  onClick={() => onCancel?.(pickup)}
-                  className="text-amber-600"
-                >
+                <DropdownMenuItem onClick={() => onCancel?.(pickup)} className="text-amber-600">
                   <XCircle className="h-4 w-4 mr-2" />
                   Cancel
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem
-                onClick={() => onDelete?.(pickup)}
-                className="text-destructive"
-              >
+              <DropdownMenuItem onClick={() => onDelete?.(pickup)} className="text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </DropdownMenuItem>
@@ -122,13 +123,9 @@ export function PickupCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h4 className="font-medium truncate">{pickup.title}</h4>
-              <Badge variant={getStatusColor(pickup.status)}>
-                {pickup.status || 'scheduled'}
-              </Badge>
+              <Badge variant={getStatusColor(pickup.status)}>{pickup.status || 'scheduled'}</Badge>
               {isCompleted && pickup.outcome && (
-                <Badge variant={getOutcomeColor(pickup.outcome)}>
-                  {pickup.outcome}
-                </Badge>
+                <Badge variant={getOutcomeColor(pickup.outcome)}>{pickup.outcome}</Badge>
               )}
             </div>
 
@@ -169,9 +166,7 @@ export function PickupCard({
             </div>
 
             {pickup.notes && (
-              <p className="text-xs text-muted-foreground mt-2 italic">
-                {pickup.notes}
-              </p>
+              <p className="text-xs text-muted-foreground mt-2 italic">{pickup.notes}</p>
             )}
           </div>
 
@@ -193,18 +188,12 @@ export function PickupCard({
                 Edit Details
               </DropdownMenuItem>
               {isScheduled && (
-                <DropdownMenuItem
-                  onClick={() => onCancel?.(pickup)}
-                  className="text-amber-600"
-                >
+                <DropdownMenuItem onClick={() => onCancel?.(pickup)} className="text-amber-600">
                   <XCircle className="h-4 w-4 mr-2" />
                   Cancel Pickup
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem
-                onClick={() => onDelete?.(pickup)}
-                className="text-destructive"
-              >
+              <DropdownMenuItem onClick={() => onDelete?.(pickup)} className="text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </DropdownMenuItem>

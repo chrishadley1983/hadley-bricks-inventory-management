@@ -65,9 +65,7 @@ interface HistoricalImportResult {
  * @param options.enabled - Whether to fetch status (default: true)
  * @returns Object with sync status, actions, and loading states
  */
-export function useAmazonTransactionSync(
-  options: { enabled?: boolean } = {}
-) {
+export function useAmazonTransactionSync(options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
 
@@ -117,30 +115,25 @@ export function useAmazonTransactionSync(
   });
 
   // Historical import mutation
-  const historicalImportMutation = useMutation<
-    HistoricalImportResult,
-    Error,
-    { fromDate: string }
-  >({
-    mutationFn: async ({ fromDate }) => {
-      const response = await fetch(
-        '/api/integrations/amazon/transactions/sync/historical',
-        {
+  const historicalImportMutation = useMutation<HistoricalImportResult, Error, { fromDate: string }>(
+    {
+      mutationFn: async ({ fromDate }) => {
+        const response = await fetch('/api/integrations/amazon/transactions/sync/historical', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fromDate }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Historical import failed');
         }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Historical import failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['amazon', 'transactions'] });
-    },
-  });
+        return response.json();
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['amazon', 'transactions'] });
+      },
+    }
+  );
 
   // Check if sync is needed (no cursor or never synced)
   const needsSync = useCallback((): boolean => {
@@ -155,8 +148,7 @@ export function useAmazonTransactionSync(
     ? new Date(syncData.lastSync.completedAt).toISOString()
     : undefined;
 
-  const hasCompletedHistoricalImport =
-    !!syncData?.config?.historical_import_completed_at;
+  const hasCompletedHistoricalImport = !!syncData?.config?.historical_import_completed_at;
 
   return {
     // Status
@@ -184,8 +176,7 @@ export function useAmazonTransactionSync(
 
     // Actions
     triggerSync: (fullSync = false) => syncMutation.mutate({ fullSync }),
-    triggerHistoricalImport: (fromDate: string) =>
-      historicalImportMutation.mutate({ fromDate }),
+    triggerHistoricalImport: (fromDate: string) => historicalImportMutation.mutate({ fromDate }),
     refetchStatus,
 
     // Computed

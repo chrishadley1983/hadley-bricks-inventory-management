@@ -13,19 +13,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem, ArbitrageSortField, SortDirection } from '@/lib/arbitrage/types';
-import {
-  formatCurrencyGBP,
-  formatSalesRank,
-  isOpportunity,
-} from '@/lib/arbitrage/calculations';
+import { formatCurrencyGBP, formatSalesRank, isOpportunity } from '@/lib/arbitrage/calculations';
 import { AmazonOffersModal } from './AmazonOffersModal';
 
 type ArbitrageTableMode = 'bricklink' | 'ebay';
@@ -73,13 +64,13 @@ function SortableHeader({
     >
       <div className="flex items-center gap-1">
         {label}
-        {isActive && direction && (
-          direction === 'asc' ? (
+        {isActive &&
+          direction &&
+          (direction === 'asc' ? (
             <ChevronUp className="h-4 w-4 text-primary" />
           ) : (
             <ChevronDown className="h-4 w-4 text-primary" />
-          )
-        )}
+          ))}
       </div>
     </TableHead>
   );
@@ -216,7 +207,14 @@ interface ArbitrageTableRowProps {
   onOffersClick: () => void;
 }
 
-function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersClick }: ArbitrageTableRowProps) {
+function ArbitrageTableRow({
+  item,
+  minMargin,
+  maxCog,
+  mode,
+  onClick,
+  onOffersClick,
+}: ArbitrageTableRowProps) {
   // Use the appropriate COG % based on mode
   const cogValue = mode === 'ebay' ? item.ebayCogPercent : item.cogPercent;
 
@@ -262,12 +260,12 @@ function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersCli
                       <Badge
                         variant="outline"
                         className={cn(
-                          "text-[10px] px-1.5",
+                          'text-[10px] px-1.5',
                           item.seededMatchConfidence && item.seededMatchConfidence >= 95
-                            ? "bg-green-50 text-green-700 border-green-200"
+                            ? 'bg-green-50 text-green-700 border-green-200'
                             : item.seededMatchConfidence && item.seededMatchConfidence >= 85
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
                         )}
                       >
                         Seeded
@@ -307,12 +305,8 @@ function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersCli
 
       {/* Your Price */}
       <TableCell>
-        <div className="font-mono font-semibold">
-          {formatCurrencyGBP(item.yourPrice)}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Qty: {item.yourQty ?? 0}
-        </div>
+        <div className="font-mono font-semibold">{formatCurrencyGBP(item.yourPrice)}</div>
+        <div className="text-xs text-muted-foreground">Qty: {item.yourQty ?? 0}</div>
       </TableCell>
 
       {/* Buy Box / Effective Price */}
@@ -323,21 +317,24 @@ function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersCli
             item.buyBoxIsYours
               ? 'text-green-600'
               : hasBuyBox
-              ? 'text-amber-600'
-              : effectivePrice
-              ? 'text-muted-foreground'
-              : ''
+                ? 'text-amber-600'
+                : effectivePrice
+                  ? 'text-muted-foreground'
+                  : ''
           )}
         >
           {formatCurrencyGBP(effectivePrice)}
         </div>
         <div
-          className={cn(
-            'text-xs',
-            item.buyBoxIsYours ? 'text-green-600' : 'text-muted-foreground'
-          )}
+          className={cn('text-xs', item.buyBoxIsYours ? 'text-green-600' : 'text-muted-foreground')}
         >
-          {item.buyBoxIsYours ? 'You (Buy Box)' : hasBuyBox ? 'Buy Box' : effectivePrice ? 'Lowest Offer' : '—'}
+          {item.buyBoxIsYours
+            ? 'You (Buy Box)'
+            : hasBuyBox
+              ? 'Buy Box'
+              : effectivePrice
+                ? 'Lowest Offer'
+                : '—'}
         </div>
       </TableCell>
 
@@ -368,18 +365,14 @@ function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersCli
 
       {/* Was Price */}
       <TableCell>
-        <div className="font-mono text-muted-foreground">
-          {formatCurrencyGBP(item.wasPrice90d)}
-        </div>
+        <div className="font-mono text-muted-foreground">{formatCurrencyGBP(item.wasPrice90d)}</div>
         <div className="text-xs text-muted-foreground">90-day median</div>
       </TableCell>
 
       {/* Rank */}
       <TableCell>
         <div className="font-mono text-sm">{formatSalesRank(item.salesRank)}</div>
-        <div className="text-xs text-muted-foreground">
-          {item.salesRankCategory ?? '—'}
-        </div>
+        <div className="text-xs text-muted-foreground">{item.salesRankCategory ?? '—'}</div>
       </TableCell>
 
       {/* Source Min Price (BL or eBay) */}
@@ -413,8 +406,8 @@ function ArbitrageTableRow({ item, minMargin, maxCog, mode, onClick, onOffersCli
             cogValue != null && cogValue <= maxCog
               ? 'text-green-600'
               : cogValue != null && cogValue > 70
-              ? 'text-red-600'
-              : 'text-muted-foreground'
+                ? 'text-red-600'
+                : 'text-muted-foreground'
           )}
         >
           {cogValue != null ? `${cogValue.toFixed(1)}%` : '—'}
@@ -487,15 +480,33 @@ function ArbitrageTableSkeleton() {
                   </div>
                 </div>
               </TableCell>
-              <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell><Skeleton className="h-6 w-10" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-14" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-14" /></TableCell>
-              <TableCell><Skeleton className="h-6 w-10" /></TableCell>
-              <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-6 w-10" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-14" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-14" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-6 w-10" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-8 w-8 rounded" />
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

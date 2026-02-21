@@ -38,13 +38,7 @@ export function Widget({
         {icon && <div className="h-4 w-4 text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <WidgetLoading />
-        ) : error ? (
-          <WidgetError message={error.message} />
-        ) : (
-          children
-        )}
+        {isLoading ? <WidgetLoading /> : error ? <WidgetError message={error.message} /> : children}
       </CardContent>
     </Card>
   );
@@ -117,10 +111,7 @@ export function StatWidget({
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
             {trend && (
               <p
-                className={cn(
-                  'mt-1 text-xs',
-                  trend.isPositive ? 'text-green-600' : 'text-red-600'
-                )}
+                className={cn('mt-1 text-xs', trend.isPositive ? 'text-green-600' : 'text-red-600')}
               >
                 {trend.isPositive ? '+' : ''}
                 {trend.value}% from last month

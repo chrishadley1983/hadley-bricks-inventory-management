@@ -36,7 +36,11 @@ import { emailService } from '@/lib/email';
 import { discordService } from '@/lib/notifications';
 
 // Re-export constants
-export { UK_MARKETPLACE_ID, DEFAULT_PRODUCT_TYPE, PRODUCT_TYPE_CACHE_TTL_DAYS } from './amazon-sync.types';
+export {
+  UK_MARKETPLACE_ID,
+  DEFAULT_PRODUCT_TYPE,
+  PRODUCT_TYPE_CACHE_TTL_DAYS,
+} from './amazon-sync.types';
 import {
   DEFAULT_PRODUCT_TYPE,
   PRODUCT_TYPE_CACHE_TTL_DAYS,
@@ -106,7 +110,10 @@ export class AmazonSyncService {
    * @param skipConflictCheck - If true, skips price conflict validation (use after user confirms)
    * @returns Result with either the created queue item or price conflict info
    */
-  async addToQueue(inventoryItemId: string, skipConflictCheck: boolean = false): Promise<AddToQueueResult> {
+  async addToQueue(
+    inventoryItemId: string,
+    skipConflictCheck: boolean = false
+  ): Promise<AddToQueueResult> {
     console.log('\n========================================');
     console.log('[AmazonSyncService] ADD TO QUEUE - START');
     console.log('========================================');
@@ -146,8 +153,13 @@ export class AmazonSyncService {
     // 3. Validate status - only BACKLOG items can be added to sync queue
     const status = inventoryItem.status?.toUpperCase();
     if (status !== 'BACKLOG') {
-      console.error(`[AmazonSyncService] ERROR: Invalid status '${inventoryItem.status}' - only Backlog items allowed`);
-      return { success: false, error: `Only items with Backlog status can be added to the sync queue (current status: ${inventoryItem.status || 'none'})` };
+      console.error(
+        `[AmazonSyncService] ERROR: Invalid status '${inventoryItem.status}' - only Backlog items allowed`
+      );
+      return {
+        success: false,
+        error: `Only items with Backlog status can be added to the sync queue (current status: ${inventoryItem.status || 'none'})`,
+      };
     }
 
     const localPrice = inventoryItem.listing_value;
@@ -155,9 +167,7 @@ export class AmazonSyncService {
 
     // 4. Look up Amazon listing from local cache to get seller SKU
     console.log('[AmazonSyncService] Checking local platform_listings cache...');
-    const cachedListing = await this.getLatestAmazonListing(
-      inventoryItem.amazon_asin
-    );
+    const cachedListing = await this.getLatestAmazonListing(inventoryItem.amazon_asin);
 
     // Determine the Amazon SKU - use existing listing SKU or generate a new one
     let amazonSku: string;
@@ -180,29 +190,29 @@ export class AmazonSyncService {
       const credentials = await this.getAmazonCredentials();
       if (credentials) {
         const listingsClient = new AmazonListingsClient(credentials);
-        const liveListing = await listingsClient.getListing(
-          amazonSku,
-          'A1F83G8C2ARO7P',
-          ['offers', 'fulfillmentAvailability']
-        );
+        const liveListing = await listingsClient.getListing(amazonSku, 'A1F83G8C2ARO7P', [
+          'offers',
+          'fulfillmentAvailability',
+        ]);
 
         console.log('[AmazonSyncService] Amazon API Response:');
         console.log(JSON.stringify(liveListing, null, 2));
 
         if (liveListing) {
           // Extract live price from Amazon
-          const offer = liveListing.offers?.find(
-            (o) => o.marketplaceId === 'A1F83G8C2ARO7P'
-          );
+          const offer = liveListing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
           console.log('[AmazonSyncService] Offer found:');
           console.log(JSON.stringify(offer, null, 2));
 
           if (offer?.price?.amount) {
             // Amazon API returns price as string, parse to number
-            amazonPrice = typeof offer.price.amount === 'string'
-              ? parseFloat(offer.price.amount)
-              : offer.price.amount;
-            console.log(`[AmazonSyncService] Extracted price from offer.price.amount: £${amazonPrice}`);
+            amazonPrice =
+              typeof offer.price.amount === 'string'
+                ? parseFloat(offer.price.amount)
+                : offer.price.amount;
+            console.log(
+              `[AmazonSyncService] Extracted price from offer.price.amount: £${amazonPrice}`
+            );
           } else {
             console.log('[AmazonSyncService] No price found in offer.price.amount');
           }
@@ -216,7 +226,9 @@ export class AmazonSyncService {
 
           if (fulfillment?.quantity !== undefined) {
             amazonQuantity = fulfillment.quantity;
-            console.log(`[AmazonSyncService] Extracted quantity from fulfillment: ${amazonQuantity}`);
+            console.log(
+              `[AmazonSyncService] Extracted quantity from fulfillment: ${amazonQuantity}`
+            );
           } else {
             console.log('[AmazonSyncService] No quantity found in fulfillment');
           }
@@ -224,13 +236,17 @@ export class AmazonSyncService {
           console.log('[AmazonSyncService] ----------------------------------------');
           console.log(`[AmazonSyncService] LIVE Amazon data summary for ${amazonSku}:`);
           console.log(`  - Live Price: ${amazonPrice !== null ? `£${amazonPrice}` : 'NOT FOUND'}`);
-          console.log(`  - Live Quantity: ${amazonQuantity !== null ? amazonQuantity : 'NOT FOUND'}`);
+          console.log(
+            `  - Live Quantity: ${amazonQuantity !== null ? amazonQuantity : 'NOT FOUND'}`
+          );
           console.log('[AmazonSyncService] ----------------------------------------');
         } else {
           console.log('[AmazonSyncService] WARNING: No live listing data returned from Amazon API');
         }
       } else {
-        console.log('[AmazonSyncService] WARNING: No Amazon credentials found, skipping live data fetch');
+        console.log(
+          '[AmazonSyncService] WARNING: No Amazon credentials found, skipping live data fetch'
+        );
       }
 
       // 4b. Check if local price differs from existing Amazon price
@@ -255,7 +271,9 @@ export class AmazonSyncService {
     } else {
       // No local cache entry found - BUT we should check Amazon API first
       // This handles cases where SKU was created via the app but not yet cached
-      console.log('[AmazonSyncService] No local cache entry found - checking Amazon API for existing listings...');
+      console.log(
+        '[AmazonSyncService] No local cache entry found - checking Amazon API for existing listings...'
+      );
 
       const credentials = await this.getAmazonCredentials();
       if (credentials) {
@@ -270,9 +288,12 @@ export class AmazonSyncService {
           const existingListing = existingListings[0]; // Use first found listing
           amazonSku = existingListing.sku;
           // Parse price - API may return string or number
-          amazonPrice = existingListing.price !== undefined
-            ? (typeof existingListing.price === 'string' ? parseFloat(existingListing.price) : existingListing.price)
-            : null;
+          amazonPrice =
+            existingListing.price !== undefined
+              ? typeof existingListing.price === 'string'
+                ? parseFloat(existingListing.price)
+                : existingListing.price
+              : null;
           amazonQuantity = existingListing.quantity ?? null;
           isNewSku = false; // This is NOT a new SKU - we found it on Amazon
           console.log(`[AmazonSyncService] FOUND EXISTING LISTING ON AMAZON!`);
@@ -286,7 +307,11 @@ export class AmazonSyncService {
           // since we query Amazon directly when the cache is empty.
 
           // Check for price conflict with existing Amazon listing
-          if (!skipConflictCheck && amazonPrice !== null && Math.abs(amazonPrice - localPrice) > 0.01) {
+          if (
+            !skipConflictCheck &&
+            amazonPrice !== null &&
+            Math.abs(amazonPrice - localPrice) > 0.01
+          ) {
             console.error('[AmazonSyncService] PRICE CONFLICT DETECTED (from API lookup)!');
             console.error(`  - Local Price: £${localPrice.toFixed(2)}`);
             console.error(`  - Amazon Price: £${amazonPrice.toFixed(2)}`);
@@ -307,14 +332,18 @@ export class AmazonSyncService {
           // No existing listing found on Amazon - generate new SKU
           amazonSku = this.generateSellerSku(inventoryItem.amazon_asin);
           isNewSku = true; // Mark as new SKU - will use UPDATE operation
-          console.log(`[AmazonSyncService] No existing listing on Amazon - generating new SKU: ${amazonSku}`);
+          console.log(
+            `[AmazonSyncService] No existing listing on Amazon - generating new SKU: ${amazonSku}`
+          );
           console.log('[AmazonSyncService] This will be treated as a NEW listing (isNewSku=true)');
         }
       } else {
         // No credentials - fall back to generating new SKU
         amazonSku = this.generateSellerSku(inventoryItem.amazon_asin);
         isNewSku = true;
-        console.log('[AmazonSyncService] No Amazon credentials - generating new SKU (treating as new)');
+        console.log(
+          '[AmazonSyncService] No Amazon credentials - generating new SKU (treating as new)'
+        );
       }
     }
 
@@ -327,7 +356,9 @@ export class AmazonSyncService {
       .eq('asin', inventoryItem.amazon_asin);
 
     if (!skipConflictCheck && existingQueueItems && existingQueueItems.length > 0) {
-      console.log(`[AmazonSyncService] Found ${existingQueueItems.length} other items in queue with same ASIN`);
+      console.log(
+        `[AmazonSyncService] Found ${existingQueueItems.length} other items in queue with same ASIN`
+      );
       const conflictingItem = existingQueueItems.find(
         (item) => Math.abs(item.local_price - localPrice) > 0.01
       );
@@ -361,20 +392,19 @@ export class AmazonSyncService {
 
     // 6. Create queue entry
     console.log('[AmazonSyncService] Creating queue entry...');
-    const queueItem: Database['public']['Tables']['amazon_sync_queue']['Insert'] =
-      {
-        user_id: this.userId,
-        inventory_item_id: inventoryItemId,
-        sku: inventoryItem.sku || inventoryItem.amazon_asin,
-        asin: inventoryItem.amazon_asin,
-        local_price: localPrice,
-        local_quantity: 1,
-        amazon_sku: amazonSku,
-        amazon_price: amazonPrice,
-        amazon_quantity: amazonQuantity,
-        product_type: productType,
-        is_new_sku: isNewSku,
-      };
+    const queueItem: Database['public']['Tables']['amazon_sync_queue']['Insert'] = {
+      user_id: this.userId,
+      inventory_item_id: inventoryItemId,
+      sku: inventoryItem.sku || inventoryItem.amazon_asin,
+      asin: inventoryItem.amazon_asin,
+      local_price: localPrice,
+      local_quantity: 1,
+      amazon_sku: amazonSku,
+      amazon_price: amazonPrice,
+      amazon_quantity: amazonQuantity,
+      product_type: productType,
+      is_new_sku: isNewSku,
+    };
 
     console.log('[AmazonSyncService] Queue entry to insert:');
     console.log(JSON.stringify(queueItem, null, 2));
@@ -397,14 +427,19 @@ export class AmazonSyncService {
 
     if (!data) {
       console.error('[AmazonSyncService] ERROR: Insert returned no data');
-      return { success: false, error: 'Insert returned no data - RLS may be blocking the operation' };
+      return {
+        success: false,
+        error: 'Insert returned no data - RLS may be blocking the operation',
+      };
     }
 
     console.log('[AmazonSyncService] Queue entry created successfully:');
     console.log(`  - Queue ID: ${data.id}`);
     console.log(`  - Amazon SKU: ${data.amazon_sku}`);
     console.log(`  - Local Price: £${data.local_price}`);
-    console.log(`  - Amazon Price: ${data.amazon_price !== null ? `£${data.amazon_price}` : 'null'}`);
+    console.log(
+      `  - Amazon Price: ${data.amazon_price !== null ? `£${data.amazon_price}` : 'null'}`
+    );
     console.log(`  - Amazon Quantity: ${data.amazon_quantity}`);
     console.log(`  - Is New SKU: ${data.is_new_sku}`);
     console.log('========================================');
@@ -420,7 +455,10 @@ export class AmazonSyncService {
    * Note: Bulk operations skip conflict checking - use for items with confirmed prices only.
    * For individual items where user interaction may be needed, use addToQueue directly.
    */
-  async addBulkToQueue(inventoryItemIds: string[], skipConflictCheck: boolean = true): Promise<{
+  async addBulkToQueue(
+    inventoryItemIds: string[],
+    skipConflictCheck: boolean = true
+  ): Promise<{
     added: number;
     skipped: number;
     errors: string[];
@@ -526,14 +564,9 @@ export class AmazonSyncService {
           storage_location: inv.storage_location,
           listing_value: inv.listing_value,
         },
-        priceDifference:
-          item.amazon_price !== null
-            ? item.local_price - item.amazon_price
-            : null,
+        priceDifference: item.amazon_price !== null ? item.local_price - item.amazon_price : null,
         quantityDifference:
-          item.amazon_quantity !== null
-            ? item.local_quantity - item.amazon_quantity
-            : null,
+          item.amazon_quantity !== null ? item.local_quantity - item.amazon_quantity : null,
       } as QueueItemWithDetails;
     });
   }
@@ -579,9 +612,7 @@ export class AmazonSyncService {
           totalQuantity: existingAmazonQty + queueQty,
           inventoryItemIds: [item.inventory_item_id],
           queueItemIds: [item.id],
-          itemNames: item.inventoryItem.item_name
-            ? [item.inventoryItem.item_name]
-            : [],
+          itemNames: item.inventoryItem.item_name ? [item.inventoryItem.item_name] : [],
           productType: item.product_type || DEFAULT_PRODUCT_TYPE,
           isNewSku: item.is_new_sku ?? false,
         });
@@ -623,9 +654,7 @@ export class AmazonSyncService {
     // 1. Get credentials
     const credentials = await this.getAmazonCredentials();
     if (!credentials) {
-      throw new Error(
-        'Amazon credentials not configured. Please set up Amazon integration first.'
-      );
+      throw new Error('Amazon credentials not configured. Please set up Amazon integration first.');
     }
 
     // 2. Get aggregated queue items
@@ -636,10 +665,7 @@ export class AmazonSyncService {
     }
 
     // 3. Create feed record
-    const feed = await this.createFeedRecord(
-      aggregatedItems.length,
-      dryRun
-    );
+    const feed = await this.createFeedRecord(aggregatedItems.length, dryRun);
 
     try {
       // 4. Build feed payload
@@ -647,7 +673,8 @@ export class AmazonSyncService {
 
       // Update feed with request payload
       await this.updateFeedRecord(feed.id, {
-        request_payload: payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
+        request_payload:
+          payload as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['request_payload'],
       });
 
       // 5. Create feed items
@@ -656,18 +683,13 @@ export class AmazonSyncService {
       if (dryRun) {
         // 6a. Validate using Listings API
         const listingsClient = new AmazonListingsClient(credentials);
-        const validationResults = await this.validateItems(
-          listingsClient,
-          aggregatedItems
-        );
+        const validationResults = await this.validateItems(listingsClient, aggregatedItems);
 
         // Update feed items with validation results
         await this.updateFeedItemsWithValidation(feed.id, validationResults);
 
         // Mark feed as done
-        const successCount = validationResults.filter(
-          (r) => r.status === 'VALID'
-        ).length;
+        const successCount = validationResults.filter((r) => r.status === 'VALID').length;
         const errorCount = validationResults.length - successCount;
 
         await this.updateFeedRecord(feed.id, {
@@ -701,10 +723,12 @@ export class AmazonSyncService {
         });
 
         // Send Discord notification for feed submitted
-        discordService.sendSyncStatus({
-          title: '🔄 Amazon Sync Submitted',
-          message: `Feed submitted to Amazon\n${aggregatedItems.length} item(s)`,
-        }).catch(() => {});
+        discordService
+          .sendSyncStatus({
+            title: '🔄 Amazon Sync Submitted',
+            message: `Feed submitted to Amazon\n${aggregatedItems.length} item(s)`,
+          })
+          .catch(() => {});
 
         return await this.getFeed(feed.id);
       }
@@ -717,11 +741,13 @@ export class AmazonSyncService {
       });
 
       // Send Discord notification for feed error
-      discordService.sendSyncStatus({
-        title: '🔴 Amazon Sync Failed',
-        message: `Feed submission failed\n${error instanceof Error ? error.message : 'Unknown error'}`,
-        success: false,
-      }).catch(() => {});
+      discordService
+        .sendSyncStatus({
+          title: '🔴 Amazon Sync Failed',
+          message: `Feed submission failed\n${error instanceof Error ? error.message : 'Unknown error'}`,
+          success: false,
+        })
+        .catch(() => {});
 
       throw error;
     }
@@ -776,14 +802,18 @@ export class AmazonSyncService {
     const newSkuItems = aggregatedItems.filter((item) => item.isNewSku);
     const existingSkuItems = aggregatedItems.filter((item) => !item.isNewSku);
 
-    console.log(`[AmazonSyncService] Two-phase: ${newSkuItems.length} new SKUs, ${existingSkuItems.length} existing SKUs`);
+    console.log(
+      `[AmazonSyncService] Two-phase: ${newSkuItems.length} new SKUs, ${existingSkuItems.length} existing SKUs`
+    );
     console.log('[AmazonSyncService] Phase 1: Submitting price-only feed for all items');
 
     // Send sync started notification (fire-and-forget to not block sync)
-    discordService.sendSyncStatus({
-      title: '🔄 Amazon Sync Started',
-      message: `Two-phase sync started\n${aggregatedItems.length} item(s) to process${newSkuItems.length > 0 ? ` (${newSkuItems.length} new SKU)` : ''}`,
-    }).catch(() => {}); // Ignore notification failures
+    discordService
+      .sendSyncStatus({
+        title: '🔄 Amazon Sync Started',
+        message: `Two-phase sync started\n${aggregatedItems.length} item(s) to process${newSkuItems.length > 0 ? ` (${newSkuItems.length} new SKU)` : ''}`,
+      })
+      .catch(() => {}); // Ignore notification failures
 
     const priceFeed = await this.submitPriceOnlyFeed(aggregatedItems, credentials, dryRun);
 
@@ -854,7 +884,11 @@ export class AmazonSyncService {
 
     if (elapsed > timeout && step !== 'complete' && step !== 'failed') {
       const elapsedMin = Math.round(elapsed / 60000);
-      return this.failTwoPhaseSync(feedId, userEmail, `Timeout: Two-phase sync exceeded ${elapsedMin} minute limit`);
+      return this.failTwoPhaseSync(
+        feedId,
+        userEmail,
+        `Timeout: Two-phase sync exceeded ${elapsedMin} minute limit`
+      );
     }
 
     // Process based on current step
@@ -878,7 +912,9 @@ export class AmazonSyncService {
           isComplete: true,
           message: 'Two-phase sync completed successfully',
           priceFeed: await this.getFeed(feedId),
-          quantityFeed: feed.quantity_feed_id ? await this.getFeed(feed.quantity_feed_id) : undefined,
+          quantityFeed: feed.quantity_feed_id
+            ? await this.getFeed(feed.quantity_feed_id)
+            : undefined,
         };
 
       case 'failed':
@@ -900,7 +936,10 @@ export class AmazonSyncService {
   /**
    * Process price feed polling step
    */
-  private async processPricePollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+  private async processPricePollingStep(
+    feedId: string,
+    userEmail: string
+  ): Promise<TwoPhaseStepResult> {
     // Poll Amazon for price feed status
     const feed = await this.pollFeedStatus(feedId);
 
@@ -923,7 +962,12 @@ export class AmazonSyncService {
 
     if (feed.status === 'error' || (feed.error_count ?? 0) > 0) {
       // Price feed rejected
-      return this.failTwoPhaseSync(feedId, userEmail, feed.error_message || 'Price feed rejected by Amazon', 'price');
+      return this.failTwoPhaseSync(
+        feedId,
+        userEmail,
+        feed.error_message || 'Price feed rejected by Amazon',
+        'price'
+      );
     }
 
     if (feed.status === 'done' || feed.status === 'done_verifying') {
@@ -956,7 +1000,10 @@ export class AmazonSyncService {
    * The queue is unreliable between phases: items are cleared after Phase 1
    * completes, and new items may be added by the user in between.
    */
-  private async processPriceVerificationStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+  private async processPriceVerificationStep(
+    feedId: string,
+    userEmail: string
+  ): Promise<TwoPhaseStepResult> {
     // Always reconstruct from Phase 1 feed items - the queue may have changed between phases
     console.log('[AmazonSyncService] Reconstructing items from Phase 1 feed items');
     const feedItems = await this.getFeedItems(feedId);
@@ -993,7 +1040,9 @@ export class AmazonSyncService {
 
     for (const item of aggregatedItems) {
       try {
-        const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', ['offers']);
+        const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
+          'offers',
+        ]);
 
         if (!listing) {
           allVerified = false;
@@ -1006,9 +1055,14 @@ export class AmazonSyncService {
 
         const offer = listing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
         // Amazon API returns amount as string despite type definition - coerce to number
-        const livePrice = offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
+        const livePrice =
+          offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
 
-        if (livePrice === undefined || isNaN(livePrice) || Math.abs(livePrice - item.price) > 0.01) {
+        if (
+          livePrice === undefined ||
+          isNaN(livePrice) ||
+          Math.abs(livePrice - item.price) > 0.01
+        ) {
           allVerified = false;
           failedSkus.push(item.amazonSku);
           console.log(
@@ -1028,7 +1082,9 @@ export class AmazonSyncService {
     if (!allVerified) {
       // Still waiting - check if we've exceeded timeout
       const feed = await this.getFeedWithTwoPhaseState(feedId);
-      const startedAt = feed?.two_phase_started_at ? new Date(feed.two_phase_started_at).getTime() : Date.now();
+      const startedAt = feed?.two_phase_started_at
+        ? new Date(feed.two_phase_started_at).getTime()
+        : Date.now();
       const elapsed = Date.now() - startedAt;
 
       if (elapsed > TWO_PHASE_DEFAULTS.priceVerificationTimeout) {
@@ -1086,7 +1142,10 @@ export class AmazonSyncService {
   /**
    * Process quantity feed polling step
    */
-  private async processQuantityPollingStep(feedId: string, userEmail: string): Promise<TwoPhaseStepResult> {
+  private async processQuantityPollingStep(
+    feedId: string,
+    userEmail: string
+  ): Promise<TwoPhaseStepResult> {
     const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
     const quantityFeedId = priceFeed?.quantity_feed_id;
 
@@ -1144,7 +1203,9 @@ export class AmazonSyncService {
 
     // Fallback: If queue is empty, reconstruct from feed items
     if (aggregatedItems.length === 0) {
-      console.log('[AmazonSyncService] Queue empty in completeTwoPhaseSync - reconstructing from feed items');
+      console.log(
+        '[AmazonSyncService] Queue empty in completeTwoPhaseSync - reconstructing from feed items'
+      );
       const feedItems = await this.getFeedItems(feedId);
 
       aggregatedItems = feedItems.map((item) => ({
@@ -1176,7 +1237,9 @@ export class AmazonSyncService {
 
     // Send success notifications
     const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
-    const startedAt = priceFeed?.two_phase_started_at ? new Date(priceFeed.two_phase_started_at).getTime() : Date.now();
+    const startedAt = priceFeed?.two_phase_started_at
+      ? new Date(priceFeed.two_phase_started_at).getTime()
+      : Date.now();
     const verificationDuration = Date.now() - startedAt;
 
     // Get item details - try to enrich with inventory data
@@ -1191,7 +1254,10 @@ export class AmazonSyncService {
 
       if (inventoryItems) {
         inventoryMap = new Map(
-          inventoryItems.map((inv) => [inv.id, { set_number: inv.set_number, item_name: inv.item_name }])
+          inventoryItems.map((inv) => [
+            inv.id,
+            { set_number: inv.set_number, item_name: inv.item_name },
+          ])
         );
       }
     }
@@ -1269,7 +1335,12 @@ export class AmazonSyncService {
       feedId,
       itemCount: aggregatedItems.length,
       reason,
-      phase: phase === 'price' ? 'price_rejected' : phase === 'quantity' ? 'quantity_rejected' : 'price_verification',
+      phase:
+        phase === 'price'
+          ? 'price_rejected'
+          : phase === 'quantity'
+            ? 'quantity_rejected'
+            : 'price_verification',
     });
 
     return {
@@ -1611,11 +1682,9 @@ export class AmazonSyncService {
 
     // Submit to Amazon
     const feedsClient = new AmazonFeedsClient(credentials);
-    const { feedId, feedDocumentId } = await feedsClient.submitFeed(
-      payload,
-      'JSON_LISTINGS_FEED',
-      ['A1F83G8C2ARO7P']
-    );
+    const { feedId, feedDocumentId } = await feedsClient.submitFeed(payload, 'JSON_LISTINGS_FEED', [
+      'A1F83G8C2ARO7P',
+    ]);
 
     await this.updateFeedRecord(feed.id, {
       amazon_feed_id: feedId,
@@ -1707,10 +1776,7 @@ export class AmazonSyncService {
       throw new Error('Feed not found');
     }
 
-    if (
-      feed.status !== 'submitted' &&
-      feed.status !== 'processing'
-    ) {
+    if (feed.status !== 'submitted' && feed.status !== 'processing') {
       return feed;
     }
 
@@ -1728,16 +1794,13 @@ export class AmazonSyncService {
     const feedsClient = new AmazonFeedsClient(credentials);
     const status = await feedsClient.getFeedStatus(feed.amazon_feed_id);
 
-    console.log(
-      `[AmazonSyncService] Poll result: ${status.processingStatus}`
-    );
+    console.log(`[AmazonSyncService] Poll result: ${status.processingStatus}`);
 
     // Update feed record
-    const updates: Database['public']['Tables']['amazon_sync_feeds']['Update'] =
-      {
-        last_poll_at: new Date().toISOString(),
-        poll_count: (feed.poll_count ?? 0) + 1,
-      };
+    const updates: Database['public']['Tables']['amazon_sync_feeds']['Update'] = {
+      last_poll_at: new Date().toISOString(),
+      poll_count: (feed.poll_count ?? 0) + 1,
+    };
 
     if (status.processingStatus === 'DONE') {
       updates.amazon_result_document_id = status.resultFeedDocumentId || null;
@@ -1747,17 +1810,13 @@ export class AmazonSyncService {
       let hasItemsNeedingVerification = false;
       if (status.resultFeedDocumentId) {
         try {
-          const result = await feedsClient.getFeedResult(
-            status.resultFeedDocumentId
-          );
+          const result = await feedsClient.getFeedResult(status.resultFeedDocumentId);
           const processResult = await this.processFeedResult(feedId, result);
           hasItemsNeedingVerification = processResult.hasItemsNeedingVerification;
-          updates.result_payload = result as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['result_payload'];
+          updates.result_payload =
+            result as unknown as Database['public']['Tables']['amazon_sync_feeds']['Update']['result_payload'];
         } catch (error) {
-          console.error(
-            '[AmazonSyncService] Failed to process feed result:',
-            error
-          );
+          console.error('[AmazonSyncService] Failed to process feed result:', error);
         }
       }
 
@@ -1767,9 +1826,7 @@ export class AmazonSyncService {
       updates.success_count = items.filter(
         (i) => i.status === 'success' || i.status === 'accepted'
       ).length;
-      updates.warning_count = items.filter(
-        (i) => i.status === 'warning'
-      ).length;
+      updates.warning_count = items.filter((i) => i.status === 'warning').length;
       updates.error_count = items.filter((i) => i.status === 'error').length;
 
       // Set feed status based on whether price verification is needed
@@ -1780,10 +1837,12 @@ export class AmazonSyncService {
         console.log('[AmazonSyncService] Feed has new SKUs - status set to done_verifying');
 
         // Discord notification - feed processed, now verifying prices
-        discordService.sendSyncStatus({
-          title: '🔍 Amazon Sync Verifying',
-          message: `Feed processed by Amazon\n${updates.success_count} ok, ${updates.error_count} errors\nVerifying prices on listing...`,
-        }).catch(() => {});
+        discordService
+          .sendSyncStatus({
+            title: '🔍 Amazon Sync Verifying',
+            message: `Feed processed by Amazon\n${updates.success_count} ok, ${updates.error_count} errors\nVerifying prices on listing...`,
+          })
+          .catch(() => {});
       } else {
         // All items are existing SKUs or had errors - no verification needed
         updates.status = 'done';
@@ -1791,17 +1850,21 @@ export class AmazonSyncService {
         // Discord notification - feed complete (no verification needed)
         const totalItems = (updates.success_count ?? 0) + (updates.error_count ?? 0);
         if (updates.error_count && updates.error_count > 0) {
-          discordService.sendSyncStatus({
-            title: '⚠️ Amazon Sync Complete (with errors)',
-            message: `${updates.success_count} ok, ${updates.error_count} errors out of ${totalItems} items`,
-            success: false,
-          }).catch(() => {});
+          discordService
+            .sendSyncStatus({
+              title: '⚠️ Amazon Sync Complete (with errors)',
+              message: `${updates.success_count} ok, ${updates.error_count} errors out of ${totalItems} items`,
+              success: false,
+            })
+            .catch(() => {});
         } else {
-          discordService.sendSyncStatus({
-            title: '✅ Amazon Sync Complete',
-            message: `${updates.success_count} item(s) updated successfully`,
-            success: true,
-          }).catch(() => {});
+          discordService
+            .sendSyncStatus({
+              title: '✅ Amazon Sync Complete',
+              message: `${updates.success_count} item(s) updated successfully`,
+              success: true,
+            })
+            .catch(() => {});
         }
       }
 
@@ -1815,15 +1878,14 @@ export class AmazonSyncService {
         successfulAsins.includes(a.asin.trim())
       );
       if (successfulAggregated.length > 0) {
-        console.log(`[AmazonSyncService] Clearing ${successfulAggregated.length} successful items from queue`);
+        console.log(
+          `[AmazonSyncService] Clearing ${successfulAggregated.length} successful items from queue`
+        );
         await this.clearQueueForFeed(successfulAggregated);
       }
     } else if (status.processingStatus === 'IN_PROGRESS') {
       updates.status = 'processing';
-    } else if (
-      status.processingStatus === 'CANCELLED' ||
-      status.processingStatus === 'FATAL'
-    ) {
+    } else if (status.processingStatus === 'CANCELLED' || status.processingStatus === 'FATAL') {
       updates.status = status.processingStatus.toLowerCase() as FeedStatus;
       updates.completed_at = new Date().toISOString();
     }
@@ -1870,7 +1932,9 @@ export class AmazonSyncService {
 
     // Only verify feeds in done_verifying status
     if (feed.status !== 'done_verifying') {
-      console.log(`[AmazonSyncService] Feed ${feedId} is not in done_verifying status (${feed.status})`);
+      console.log(
+        `[AmazonSyncService] Feed ${feedId} is not in done_verifying status (${feed.status})`
+      );
       return {
         feed,
         allVerified: feed.status === 'verified',
@@ -1886,7 +1950,9 @@ export class AmazonSyncService {
     const elapsedMin = Math.round(elapsed / 60000);
 
     if (elapsed > VERIFICATION_TIMEOUT_MS) {
-      console.log(`[AmazonSyncService] Verification timeout for feed ${feedId} (${elapsedMin} min)`);
+      console.log(
+        `[AmazonSyncService] Verification timeout for feed ${feedId} (${elapsedMin} min)`
+      );
       // Mark as verification failed
       await this.updateFeedRecord(feedId, {
         status: 'verification_failed',
@@ -1903,11 +1969,13 @@ export class AmazonSyncService {
         .eq('status', 'accepted');
 
       // Discord notification - verification timed out
-      discordService.sendSyncStatus({
-        title: '⚠️ Amazon Sync Verification Timeout',
-        message: `Price verification timed out after ${elapsedMin} minutes\nFeed: ${feedId.slice(0, 8)}`,
-        success: false,
-      }).catch(() => {});
+      discordService
+        .sendSyncStatus({
+          title: '⚠️ Amazon Sync Verification Timeout',
+          message: `Price verification timed out after ${elapsedMin} minutes\nFeed: ${feedId.slice(0, 8)}`,
+          success: false,
+        })
+        .catch(() => {});
 
       return {
         feed: (await this.getFeed(feedId))!,
@@ -1959,14 +2027,15 @@ export class AmazonSyncService {
       try {
         console.log(`[AmazonSyncService] Checking price for SKU: ${item.amazon_sku}`);
 
-        const listing = await listingsClient.getListing(
-          item.amazon_sku,
-          'A1F83G8C2ARO7P',
-          ['offers', 'fulfillmentAvailability']
-        );
+        const listing = await listingsClient.getListing(item.amazon_sku, 'A1F83G8C2ARO7P', [
+          'offers',
+          'fulfillmentAvailability',
+        ]);
 
         if (!listing) {
-          console.warn(`[AmazonSyncService] getListing returned null for ${item.amazon_sku} - API call may have failed`);
+          console.warn(
+            `[AmazonSyncService] getListing returned null for ${item.amazon_sku} - API call may have failed`
+          );
           allVerified = false;
           itemResults.push({
             sku: item.amazon_sku,
@@ -1980,18 +2049,20 @@ export class AmazonSyncService {
         }
 
         // Extract the offer price - Amazon API returns amount as string despite type definition
-        const offer = listing.offers?.find(
-          (o) => o.marketplaceId === 'A1F83G8C2ARO7P'
-        );
+        const offer = listing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
         const rawAmount = offer?.price?.amount;
         const verifiedPrice = rawAmount !== undefined ? Number(rawAmount) : null;
 
         // Check if price matches (within 0.01 tolerance)
         const submittedPrice = Number(item.submitted_price);
-        const priceMatches = verifiedPrice !== null && !isNaN(verifiedPrice) &&
+        const priceMatches =
+          verifiedPrice !== null &&
+          !isNaN(verifiedPrice) &&
           Math.abs(verifiedPrice - submittedPrice) < 0.01;
 
-        console.log(`[AmazonSyncService] SKU ${item.amazon_sku}: submitted=${submittedPrice}, verified=${verifiedPrice}, matches=${priceMatches} (raw: ${rawAmount}, type: ${typeof rawAmount})`);
+        console.log(
+          `[AmazonSyncService] SKU ${item.amazon_sku}: submitted=${submittedPrice}, verified=${verifiedPrice}, matches=${priceMatches} (raw: ${rawAmount}, type: ${typeof rawAmount})`
+        );
 
         itemResults.push({
           sku: item.amazon_sku,
@@ -2049,12 +2120,14 @@ export class AmazonSyncService {
 
       // Discord notification - prices verified (single-phase feeds only; two-phase has its own notifications)
       if (feed.sync_mode !== 'two_phase') {
-        const verifiedCount = itemResults.filter(r => r.priceMatches).length;
-        discordService.sendSyncStatus({
-          title: '✅ Amazon Sync Verified',
-          message: `All ${verifiedCount} price(s) confirmed live on Amazon`,
-          success: true,
-        }).catch(() => {});
+        const verifiedCount = itemResults.filter((r) => r.priceMatches).length;
+        discordService
+          .sendSyncStatus({
+            title: '✅ Amazon Sync Verified',
+            message: `All ${verifiedCount} price(s) confirmed live on Amazon`,
+            success: true,
+          })
+          .catch(() => {});
       }
     } else {
       console.log(`[AmazonSyncService] Some items still pending verification for feed ${feedId}`);
@@ -2147,7 +2220,10 @@ export class AmazonSyncService {
 
       if (inventoryItems) {
         inventoryMap = new Map(
-          inventoryItems.map((inv) => [inv.id, { set_number: inv.set_number, item_name: inv.item_name }])
+          inventoryItems.map((inv) => [
+            inv.id,
+            { set_number: inv.set_number, item_name: inv.item_name },
+          ])
         );
       }
     }
@@ -2170,7 +2246,7 @@ export class AmazonSyncService {
       return {
         ...item,
         setNumbers: [...new Set(setNumbers)], // Dedupe
-        itemNames: [...new Set(itemNames)],   // Dedupe
+        itemNames: [...new Set(itemNames)], // Dedupe
       };
     });
 
@@ -2236,10 +2312,7 @@ export class AmazonSyncService {
    * - purchasable_offer: Our selling price
    * - fulfillment_availability: Quantity in stock
    */
-  private buildFeedPayload(
-    items: AggregatedQueueItem[],
-    sellerId: string
-  ): ListingsFeedPayload {
+  private buildFeedPayload(items: AggregatedQueueItem[], sellerId: string): ListingsFeedPayload {
     console.log('\n========================================');
     console.log('[AmazonSyncService] BUILD FEED PAYLOAD');
     console.log('========================================');
@@ -2325,9 +2398,14 @@ export class AmazonSyncService {
     // This allows testing different payload structures to fix the price=0 issue
     const purchasableOffer = buildPurchasableOffer(item.price);
 
-    console.log(`[AmazonSyncService] buildAttributes - Using variation: ${PRICE_PAYLOAD_VARIATION}`);
+    console.log(
+      `[AmazonSyncService] buildAttributes - Using variation: ${PRICE_PAYLOAD_VARIATION}`
+    );
     console.log(`[AmazonSyncService] buildAttributes - Price value: ${item.price}`);
-    console.log(`[AmazonSyncService] buildAttributes - purchasable_offer:`, JSON.stringify(purchasableOffer, null, 2));
+    console.log(
+      `[AmazonSyncService] buildAttributes - purchasable_offer:`,
+      JSON.stringify(purchasableOffer, null, 2)
+    );
 
     return {
       // CRITICAL: Link to existing ASIN - tells Amazon we're selling an existing product
@@ -2375,7 +2453,10 @@ export class AmazonSyncService {
 
     console.log(`[AmazonSyncService] buildPatches - Using variation: ${PRICE_PAYLOAD_VARIATION}`);
     console.log(`[AmazonSyncService] buildPatches - Price value: ${item.price}`);
-    console.log(`[AmazonSyncService] buildPatches - purchasable_offer:`, JSON.stringify(purchasableOffer, null, 2));
+    console.log(
+      `[AmazonSyncService] buildPatches - purchasable_offer:`,
+      JSON.stringify(purchasableOffer, null, 2)
+    );
 
     return [
       {
@@ -2424,14 +2505,12 @@ export class AmazonSyncService {
     results: ListingsValidationResult[]
   ): Promise<void> {
     for (const result of results) {
-      const status: FeedItemStatus =
-        result.status === 'VALID' ? 'success' : 'error';
+      const status: FeedItemStatus = result.status === 'VALID' ? 'success' : 'error';
 
-      const updates: Database['public']['Tables']['amazon_sync_feed_items']['Update'] =
-        {
-          status,
-          amazon_result_code: result.status,
-        };
+      const updates: Database['public']['Tables']['amazon_sync_feed_items']['Update'] = {
+        status,
+        amazon_result_code: result.status,
+      };
 
       if (result.issues && result.issues.length > 0) {
         const errors = result.issues.filter((i) => i.severity === 'ERROR');
@@ -2440,11 +2519,13 @@ export class AmazonSyncService {
         if (errors.length > 0) {
           updates.error_code = errors[0].code;
           updates.error_message = errors[0].message;
-          updates.error_details = errors as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['error_details'];
+          updates.error_details =
+            errors as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['error_details'];
         }
 
         if (warnings.length > 0) {
-          updates.warnings = warnings as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['warnings'];
+          updates.warnings =
+            warnings as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['warnings'];
           if (status === 'success') {
             updates.status = 'warning';
           }
@@ -2502,8 +2583,8 @@ export class AmazonSyncService {
     // Update each feed item based on the result
     for (const feedItem of feedItems) {
       const issues = issuesBySku.get(feedItem.amazon_sku) || [];
-      const errors = issues.filter(i => i.severity === 'ERROR');
-      const warnings = issues.filter(i => i.severity === 'WARNING');
+      const errors = issues.filter((i) => i.severity === 'ERROR');
+      const warnings = issues.filter((i) => i.severity === 'WARNING');
 
       let status: FeedItemStatus;
       if (errors.length > 0) {
@@ -2516,34 +2597,41 @@ export class AmazonSyncService {
         if (feedItem.is_new_sku) {
           status = 'accepted';
           hasItemsNeedingVerification = true;
-          console.log(`[AmazonSyncService] Feed item ${feedItem.amazon_sku} is new SKU - needs price verification`);
+          console.log(
+            `[AmazonSyncService] Feed item ${feedItem.amazon_sku} is new SKU - needs price verification`
+          );
         } else {
           status = 'success';
         }
       }
 
-      const updates: Database['public']['Tables']['amazon_sync_feed_items']['Update'] =
-        {
-          status,
-          amazon_result_code: status === 'accepted' || status === 'success' ? 'ACCEPTED' : status === 'warning' ? 'WARNING' : 'ERROR',
-        };
+      const updates: Database['public']['Tables']['amazon_sync_feed_items']['Update'] = {
+        status,
+        amazon_result_code:
+          status === 'accepted' || status === 'success'
+            ? 'ACCEPTED'
+            : status === 'warning'
+              ? 'WARNING'
+              : 'ERROR',
+      };
 
       if (errors.length > 0) {
         updates.error_code = errors[0].code;
         updates.error_message = errors[0].message;
-        updates.error_details = errors as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['error_details'];
+        updates.error_details =
+          errors as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['error_details'];
       }
 
       if (warnings.length > 0) {
-        updates.warnings = warnings as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['warnings'];
+        updates.warnings =
+          warnings as unknown as Database['public']['Tables']['amazon_sync_feed_items']['Update']['warnings'];
       }
 
-      console.log(`[AmazonSyncService] Updating feed item ${feedItem.amazon_sku} to status: ${status}`);
+      console.log(
+        `[AmazonSyncService] Updating feed item ${feedItem.amazon_sku} to status: ${status}`
+      );
 
-      await this.supabase
-        .from('amazon_sync_feed_items')
-        .update(updates)
-        .eq('id', feedItem.id);
+      await this.supabase.from('amazon_sync_feed_items').update(updates).eq('id', feedItem.id);
 
       // Collect successful/accepted inventory item IDs for status update
       // Note: For 'accepted' items, we set LISTED now but price might not be visible yet
@@ -2572,10 +2660,10 @@ export class AmazonSyncService {
    * - listing_date: current timestamp
    * - listing_platform: 'amazon'
    */
-  private async updateInventoryItemsAsListed(
-    inventoryItemIds: string[]
-  ): Promise<void> {
-    console.log(`[AmazonSyncService] Updating ${inventoryItemIds.length} inventory items to LISTED status`);
+  private async updateInventoryItemsAsListed(inventoryItemIds: string[]): Promise<void> {
+    console.log(
+      `[AmazonSyncService] Updating ${inventoryItemIds.length} inventory items to LISTED status`
+    );
 
     const { error } = await this.supabase
       .from('inventory_items')
@@ -2591,7 +2679,9 @@ export class AmazonSyncService {
       console.error('[AmazonSyncService] Failed to update inventory items:', error);
       // Don't throw - this is a secondary operation, the feed sync was still successful
     } else {
-      console.log(`[AmazonSyncService] Successfully updated ${inventoryItemIds.length} inventory items to LISTED`);
+      console.log(
+        `[AmazonSyncService] Successfully updated ${inventoryItemIds.length} inventory items to LISTED`
+      );
     }
   }
 
@@ -2647,12 +2737,9 @@ export class AmazonSyncService {
   /**
    * Create feed items for each aggregated ASIN
    */
-  private async createFeedItems(
-    feedId: string,
-    items: AggregatedQueueItem[]
-  ): Promise<void> {
-    const feedItems: Database['public']['Tables']['amazon_sync_feed_items']['Insert'][] =
-      items.map((item) => ({
+  private async createFeedItems(feedId: string, items: AggregatedQueueItem[]): Promise<void> {
+    const feedItems: Database['public']['Tables']['amazon_sync_feed_items']['Insert'][] = items.map(
+      (item) => ({
         user_id: this.userId,
         feed_id: feedId,
         asin: item.asin,
@@ -2662,11 +2749,10 @@ export class AmazonSyncService {
         inventory_item_ids: item.inventoryItemIds,
         status: 'pending',
         is_new_sku: item.isNewSku, // Track if this needs price verification
-      }));
+      })
+    );
 
-    const { error } = await this.supabase
-      .from('amazon_sync_feed_items')
-      .insert(feedItems);
+    const { error } = await this.supabase.from('amazon_sync_feed_items').insert(feedItems);
 
     if (error) {
       throw new Error(`Failed to create feed items: ${error.message}`);
@@ -2676,9 +2762,7 @@ export class AmazonSyncService {
   /**
    * Clear queue items for successfully submitted feed
    */
-  private async clearQueueForFeed(
-    items: AggregatedQueueItem[]
-  ): Promise<void> {
+  private async clearQueueForFeed(items: AggregatedQueueItem[]): Promise<void> {
     const queueItemIds = items.flatMap((i) => i.queueItemIds);
 
     if (queueItemIds.length === 0) {
@@ -2704,18 +2788,13 @@ export class AmazonSyncService {
    * Get Amazon credentials for the user
    */
   private async getAmazonCredentials(): Promise<AmazonCredentials | null> {
-    return this.credentialsRepo.getCredentials<AmazonCredentials>(
-      this.userId,
-      'amazon'
-    );
+    return this.credentialsRepo.getCredentials<AmazonCredentials>(this.userId, 'amazon');
   }
 
   /**
    * Get the latest Amazon listing for an ASIN
    */
-  private async getLatestAmazonListing(
-    asin: string
-  ): Promise<PlatformListingRow | null> {
+  private async getLatestAmazonListing(asin: string): Promise<PlatformListingRow | null> {
     const { data, error } = await this.supabase
       .from('platform_listings')
       .select('*')
@@ -2771,24 +2850,27 @@ export class AmazonSyncService {
    * 4. Cache the result for future use
    * 5. Return product type or default fallback
    */
-  private async getProductTypeForAsin(
-    asin: string,
-    marketplaceId: string
-  ): Promise<string> {
+  private async getProductTypeForAsin(asin: string, marketplaceId: string): Promise<string> {
     console.log(`[AmazonSyncService] Getting product type for ASIN: ${asin}`);
 
     // 1. Check cache first
     const cachedEntry = await this.getCachedProductType(asin, marketplaceId);
 
     // Only use cache if fresh AND has a product type (skip null entries to re-fetch)
-    if (cachedEntry && cachedEntry.product_type && this.isCacheFresh(cachedEntry.fetched_at, PRODUCT_TYPE_CACHE_TTL_DAYS)) {
+    if (
+      cachedEntry &&
+      cachedEntry.product_type &&
+      this.isCacheFresh(cachedEntry.fetched_at, PRODUCT_TYPE_CACHE_TTL_DAYS)
+    ) {
       console.log(`[AmazonSyncService] Cache hit for ${asin}: ${cachedEntry.product_type}`);
       return cachedEntry.product_type;
     }
 
     // Log if we're skipping a null cache entry
     if (cachedEntry && !cachedEntry.product_type) {
-      console.log(`[AmazonSyncService] Cache entry for ${asin} has null product_type, re-fetching from API`);
+      console.log(
+        `[AmazonSyncService] Cache entry for ${asin} has null product_type, re-fetching from API`
+      );
     }
 
     // 2. Cache miss or stale - call Amazon Catalog API
@@ -2871,15 +2953,14 @@ export class AmazonSyncService {
       title: result.title,
       brand: result.brand,
       fetched_at: new Date().toISOString(),
-      raw_response: result.raw as unknown as Database['public']['Tables']['amazon_product_cache']['Insert']['raw_response'],
+      raw_response:
+        result.raw as unknown as Database['public']['Tables']['amazon_product_cache']['Insert']['raw_response'],
     };
 
     // Upsert - update if exists, insert if not
-    const { error } = await this.supabase
-      .from('amazon_product_cache')
-      .upsert(cacheEntry, {
-        onConflict: 'user_id,asin,marketplace_id',
-      });
+    const { error } = await this.supabase.from('amazon_product_cache').upsert(cacheEntry, {
+      onConflict: 'user_id,asin,marketplace_id',
+    });
 
     if (error) {
       console.error(`[AmazonSyncService] Failed to cache product type:`, error);
@@ -2899,5 +2980,4 @@ export class AmazonSyncService {
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
     return diffDays < ttlDays;
   }
-
 }

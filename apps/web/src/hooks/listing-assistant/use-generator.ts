@@ -15,9 +15,7 @@ import type {
 // API Functions
 // ============================================
 
-async function generateListing(
-  input: GenerateListingRequest
-): Promise<GenerateListingResponse> {
+async function generateListing(input: GenerateListingRequest): Promise<GenerateListingResponse> {
   const response = await fetch('/api/listing-assistant/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

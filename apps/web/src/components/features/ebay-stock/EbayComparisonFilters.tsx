@@ -18,10 +18,7 @@ interface EbayComparisonFiltersProps {
   onFiltersChange: (filters: EbayComparisonFiltersType) => void;
 }
 
-export function EbayComparisonFilters({
-  filters,
-  onFiltersChange,
-}: EbayComparisonFiltersProps) {
+export function EbayComparisonFilters({ filters, onFiltersChange }: EbayComparisonFiltersProps) {
   const debouncedSearch = useDebouncedCallback((value: string) => {
     onFiltersChange({ ...filters, search: value || undefined });
   }, 300);

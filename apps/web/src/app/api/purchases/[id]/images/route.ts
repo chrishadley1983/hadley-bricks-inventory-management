@@ -11,24 +11,24 @@ import { createClient } from '@/lib/supabase/server';
 import { PurchaseImageService } from '@/lib/services/purchase-image.service';
 
 const ImageUploadSchema = z.object({
-  images: z.array(
-    z.object({
-      id: z.string(),
-      base64: z.string().min(100),
-      mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
-      filename: z.string(),
-    })
-  ).min(1).max(10),
+  images: z
+    .array(
+      z.object({
+        id: z.string(),
+        base64: z.string().min(100),
+        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+        filename: z.string(),
+      })
+    )
+    .min(1)
+    .max(10),
 });
 
 /**
  * GET /api/purchases/[id]/images
  * Get all images for a purchase
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: purchaseId } = await params;
     const supabase = await createClient();
@@ -70,10 +70,7 @@ export async function GET(
  * POST /api/purchases/[id]/images
  * Upload images for a purchase
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: purchaseId } = await params;
     const supabase = await createClient();
@@ -115,11 +112,14 @@ export async function POST(
     const successCount = results.filter((r) => r.success).length;
     const failedCount = results.filter((r) => !r.success).length;
 
-    return NextResponse.json({
-      success: successCount > 0,
-      message: `${successCount} image(s) uploaded successfully${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
-      results,
-    }, { status: successCount > 0 ? 201 : 400 });
+    return NextResponse.json(
+      {
+        success: successCount > 0,
+        message: `${successCount} image(s) uploaded successfully${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+        results,
+      },
+      { status: successCount > 0 ? 201 : 400 }
+    );
   } catch (error) {
     console.error('[POST /api/purchases/[id]/images] Error:', error);
     return NextResponse.json(

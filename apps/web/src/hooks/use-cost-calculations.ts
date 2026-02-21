@@ -6,10 +6,7 @@
  */
 
 import { useMemo } from 'react';
-import {
-  calculateAll,
-  calculateComparisonDeltas,
-} from '@/lib/services/cost-calculations';
+import { calculateAll, calculateComparisonDeltas } from '@/lib/services/cost-calculations';
 import type {
   CostModelScenarioFormData,
   CalculatedResults,

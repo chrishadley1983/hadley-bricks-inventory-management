@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EbayTransactionSyncService, ebayTransactionSyncService } from '../ebay-transaction-sync.service';
+import {
+  EbayTransactionSyncService,
+  ebayTransactionSyncService,
+} from '../ebay-transaction-sync.service';
 import type { EbayTransactionResponse, EbayPayoutResponse } from '../types';
 
 // Mock dependencies
@@ -75,7 +78,9 @@ describe('EbayTransactionSyncService', () => {
   let service: EbayTransactionSyncService;
   const testUserId = 'test-user-123';
 
-  const createMockTransaction = (overrides: Partial<EbayTransactionResponse> = {}): EbayTransactionResponse => ({
+  const createMockTransaction = (
+    overrides: Partial<EbayTransactionResponse> = {}
+  ): EbayTransactionResponse => ({
     transactionId: 'tx-123',
     transactionType: 'SALE',
     transactionStatus: 'FUNDS_AVAILABLE_FOR_PAYOUT',
@@ -91,7 +96,10 @@ describe('EbayTransactionSyncService', () => {
         lineItemId: 'li-123',
         feeBasisAmount: { value: '100.00', currency: 'GBP' },
         marketplaceFees: [
-          { feeType: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: { value: '0.30', currency: 'GBP' } },
+          {
+            feeType: 'FINAL_VALUE_FEE_FIXED_PER_ORDER',
+            amount: { value: '0.30', currency: 'GBP' },
+          },
           { feeType: 'FINAL_VALUE_FEE', amount: { value: '4.70', currency: 'GBP' } },
         ],
       },
@@ -114,15 +122,17 @@ describe('EbayTransactionSyncService', () => {
     ...overrides,
   });
 
-  const createMockFromChain = (options: {
-    runningSync?: boolean;
-    syncLogCreated?: boolean;
-    syncLogId?: string;
-    syncConfig?: { transactions_date_cursor?: string; payouts_date_cursor?: string } | null;
-    existingTransactionIds?: string[];
-    existingPayoutIds?: string[];
-    upsertError?: boolean;
-  } = {}) => {
+  const createMockFromChain = (
+    options: {
+      runningSync?: boolean;
+      syncLogCreated?: boolean;
+      syncLogId?: string;
+      syncConfig?: { transactions_date_cursor?: string; payouts_date_cursor?: string } | null;
+      existingTransactionIds?: string[];
+      existingPayoutIds?: string[];
+      upsertError?: boolean;
+    } = {}
+  ) => {
     const {
       runningSync = false,
       syncLogCreated = true,
@@ -142,14 +152,16 @@ describe('EbayTransactionSyncService', () => {
       }),
       eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnValue({
-        data: existingTransactionIds.length > 0
-          ? existingTransactionIds.map(id => ({ ebay_transaction_id: id }))
-          : existingPayoutIds.length > 0
-            ? existingPayoutIds.map(id => ({ ebay_payout_id: id }))
-            : [],
+        data:
+          existingTransactionIds.length > 0
+            ? existingTransactionIds.map((id) => ({ ebay_transaction_id: id }))
+            : existingPayoutIds.length > 0
+              ? existingPayoutIds.map((id) => ({ ebay_payout_id: id }))
+              : [],
         error: null,
       }),
-      single: vi.fn()
+      single: vi
+        .fn()
         .mockResolvedValueOnce({ data: runningSync ? { id: 'running-sync' } : null, error: null })
         .mockResolvedValueOnce({
           data: syncLogCreated ? { id: syncLogId } : null,
@@ -436,7 +448,8 @@ describe('EbayTransactionSyncService', () => {
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null })
           .mockResolvedValueOnce({ data: null, error: { message: 'Insert failed' } }),
       };
@@ -622,12 +635,18 @@ describe('EbayTransactionSyncService', () => {
 
       const result = await service.performHistoricalImport(testUserId, '2023-01-01');
 
-      expect(syncTransactionsSpy).toHaveBeenCalledWith(testUserId, expect.objectContaining({
-        fromDate: '2023-01-01',
-      }));
-      expect(syncPayoutsSpy).toHaveBeenCalledWith(testUserId, expect.objectContaining({
-        fromDate: '2023-01-01',
-      }));
+      expect(syncTransactionsSpy).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          fromDate: '2023-01-01',
+        })
+      );
+      expect(syncPayoutsSpy).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          fromDate: '2023-01-01',
+        })
+      );
       expect(result.transactions.success).toBe(true);
       expect(result.payouts.success).toBe(true);
 
@@ -664,10 +683,13 @@ describe('EbayTransactionSyncService', () => {
 
       await service.performHistoricalImport(testUserId, '2023-01-01');
 
-      expect(syncTransactionsSpy).toHaveBeenCalledWith(testUserId, expect.objectContaining({
-        fromDate: '2023-01-01',
-        toDate: expect.any(String),
-      }));
+      expect(syncTransactionsSpy).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          fromDate: '2023-01-01',
+          toDate: expect.any(String),
+        })
+      );
 
       syncTransactionsSpy.mockRestore();
       syncPayoutsSpy.mockRestore();
@@ -769,7 +791,16 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({ data: { status: 'COMPLETED', completed_at: '2024-01-15T10:00:00Z', records_processed: 100 }, error: null }),
+                      single: vi
+                        .fn()
+                        .mockResolvedValue({
+                          data: {
+                            status: 'COMPLETED',
+                            completed_at: '2024-01-15T10:00:00Z',
+                            records_processed: 100,
+                          },
+                          error: null,
+                        }),
                     }),
                   }),
                 }),
@@ -786,7 +817,16 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({ data: { status: 'COMPLETED', completed_at: '2024-01-15T10:00:00Z', records_processed: 20 }, error: null }),
+                      single: vi
+                        .fn()
+                        .mockResolvedValue({
+                          data: {
+                            status: 'COMPLETED',
+                            completed_at: '2024-01-15T10:00:00Z',
+                            records_processed: 20,
+                          },
+                          error: null,
+                        }),
                     }),
                   }),
                 }),
@@ -799,7 +839,12 @@ describe('EbayTransactionSyncService', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { auto_sync_enabled: true, historical_import_completed_at: '2024-01-01' }, error: null }),
+              single: vi
+                .fn()
+                .mockResolvedValue({
+                  data: { auto_sync_enabled: true, historical_import_completed_at: '2024-01-01' },
+                  error: null,
+                }),
             }),
           }),
         };
@@ -823,7 +868,9 @@ describe('EbayTransactionSyncService', () => {
           return {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ data: [{ sync_type: 'TRANSACTIONS' }], error: null }),
+                eq: vi
+                  .fn()
+                  .mockResolvedValue({ data: [{ sync_type: 'TRANSACTIONS' }], error: null }),
               }),
             }),
           };
@@ -904,7 +951,16 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({ data: { status: 'COMPLETED', completed_at: completedAt, records_processed: 100 }, error: null }),
+                      single: vi
+                        .fn()
+                        .mockResolvedValue({
+                          data: {
+                            status: 'COMPLETED',
+                            completed_at: completedAt,
+                            records_processed: 100,
+                          },
+                          error: null,
+                        }),
                     }),
                   }),
                 }),
@@ -921,7 +977,16 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({ data: { status: 'FAILED', completed_at: completedAt, records_processed: 0 }, error: null }),
+                      single: vi
+                        .fn()
+                        .mockResolvedValue({
+                          data: {
+                            status: 'FAILED',
+                            completed_at: completedAt,
+                            records_processed: 0,
+                          },
+                          error: null,
+                        }),
                     }),
                   }),
                 }),
@@ -1096,7 +1161,10 @@ describe('EbayTransactionSyncService', () => {
             lineItemId: 'li-1',
             feeBasisAmount: { value: '100.00', currency: 'GBP' },
             marketplaceFees: [
-              { feeType: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: { value: '0.30', currency: 'GBP' } },
+              {
+                feeType: 'FINAL_VALUE_FEE_FIXED_PER_ORDER',
+                amount: { value: '0.30', currency: 'GBP' },
+              },
               { feeType: 'FINAL_VALUE_FEE', amount: { value: '12.70', currency: 'GBP' } },
               { feeType: 'REGULATORY_OPERATING_FEE', amount: { value: '0.24', currency: 'GBP' } },
               { feeType: 'INTERNATIONAL_FEE', amount: { value: '1.50', currency: 'GBP' } },
@@ -1145,12 +1213,12 @@ describe('EbayTransactionSyncService', () => {
     });
 
     it('should calculate gross amount for CREDIT transactions', () => {
-      const netAmount = 95.00;
-      const totalFees = 5.00;
+      const netAmount = 95.0;
+      const totalFees = 5.0;
       const bookingEntry = 'CREDIT';
 
       const grossAmount = bookingEntry === 'CREDIT' ? netAmount + totalFees : netAmount;
-      expect(grossAmount).toBe(100.00);
+      expect(grossAmount).toBe(100.0);
     });
 
     it('should handle DEBIT booking entries', () => {
@@ -1262,7 +1330,7 @@ describe('EbayTransactionSyncService', () => {
       const delayMs = 150;
       const startTime = Date.now();
 
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
 
       const elapsed = Date.now() - startTime;
       expect(elapsed).toBeGreaterThanOrEqual(delayMs - 10); // Allow some tolerance

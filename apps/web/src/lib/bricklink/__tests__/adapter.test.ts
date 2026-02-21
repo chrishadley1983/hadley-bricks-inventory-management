@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeOrder, normalizeOrders, calculateOrderStats } from '../adapter';
-import type {
-  BrickLinkOrderDetail,
-  BrickLinkOrderItem,
-  NormalizedOrder,
-} from '../types';
+import type { BrickLinkOrderDetail, BrickLinkOrderItem, NormalizedOrder } from '../types';
 
 describe('BrickLink Adapter', () => {
   // Helper to create mock BrickLink order
@@ -42,9 +38,7 @@ describe('BrickLink Adapter', () => {
   });
 
   // Helper to create mock BrickLink order item
-  const createMockItem = (
-    overrides: Partial<BrickLinkOrderItem> = {}
-  ): BrickLinkOrderItem => ({
+  const createMockItem = (overrides: Partial<BrickLinkOrderItem> = {}): BrickLinkOrderItem => ({
     inventory_id: 123456,
     item: {
       no: '3001',
@@ -139,18 +133,15 @@ describe('BrickLink Adapter', () => {
         ['NRS', 'Non-Responding Seller'],
         ['NSS', 'Non-Shipping Seller'],
         ['CANCELLED', 'Cancelled'],
-      ])(
-        'should normalize status %s to %s',
-        (brickLinkStatus, expectedStatus) => {
-          const order = createMockOrder({
-            status: brickLinkStatus as BrickLinkOrderDetail['status'],
-          });
+      ])('should normalize status %s to %s', (brickLinkStatus, expectedStatus) => {
+        const order = createMockOrder({
+          status: brickLinkStatus as BrickLinkOrderDetail['status'],
+        });
 
-          const result = normalizeOrder(order);
+        const result = normalizeOrder(order);
 
-          expect(result.status).toBe(expectedStatus);
-        }
-      );
+        expect(result.status).toBe(expectedStatus);
+      });
 
       it('should pass through unknown statuses as-is', () => {
         const order = createMockOrder({
@@ -301,7 +292,9 @@ describe('BrickLink Adapter', () => {
         const order = createMockOrder();
         const items = [
           createMockItem({ item: { no: '3001', name: 'Part 1', type: 'PART', category_id: 1 } }),
-          createMockItem({ item: { no: 'sw0001', name: 'Minifig 1', type: 'MINIFIG', category_id: 2 } }),
+          createMockItem({
+            item: { no: 'sw0001', name: 'Minifig 1', type: 'MINIFIG', category_id: 2 },
+          }),
           createMockItem({ item: { no: '75192-1', name: 'Set 1', type: 'SET', category_id: 3 } }),
         ];
 
@@ -439,9 +432,7 @@ describe('BrickLink Adapter', () => {
   });
 
   describe('calculateOrderStats', () => {
-    const createNormalizedOrder = (
-      overrides: Partial<NormalizedOrder> = {}
-    ): NormalizedOrder => ({
+    const createNormalizedOrder = (overrides: Partial<NormalizedOrder> = {}): NormalizedOrder => ({
       platformOrderId: '1',
       platform: 'bricklink',
       orderDate: new Date(),
@@ -486,13 +477,40 @@ describe('BrickLink Adapter', () => {
       const orders = [
         createNormalizedOrder({
           items: [
-            { itemNumber: '1', itemName: 'A', itemType: 'PART', quantity: 5, condition: 'New', unitPrice: 1, totalPrice: 5, currency: 'GBP' },
-            { itemNumber: '2', itemName: 'B', itemType: 'PART', quantity: 3, condition: 'New', unitPrice: 1, totalPrice: 3, currency: 'GBP' },
+            {
+              itemNumber: '1',
+              itemName: 'A',
+              itemType: 'PART',
+              quantity: 5,
+              condition: 'New',
+              unitPrice: 1,
+              totalPrice: 5,
+              currency: 'GBP',
+            },
+            {
+              itemNumber: '2',
+              itemName: 'B',
+              itemType: 'PART',
+              quantity: 3,
+              condition: 'New',
+              unitPrice: 1,
+              totalPrice: 3,
+              currency: 'GBP',
+            },
           ],
         }),
         createNormalizedOrder({
           items: [
-            { itemNumber: '3', itemName: 'C', itemType: 'SET', quantity: 1, condition: 'New', unitPrice: 10, totalPrice: 10, currency: 'GBP' },
+            {
+              itemNumber: '3',
+              itemName: 'C',
+              itemType: 'SET',
+              quantity: 1,
+              condition: 'New',
+              unitPrice: 10,
+              totalPrice: 10,
+              currency: 'GBP',
+            },
           ],
         }),
       ];

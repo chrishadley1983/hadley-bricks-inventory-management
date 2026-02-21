@@ -22,10 +22,7 @@ const UpdateStatusSchema = z.object({
  * GET /api/orders/[id]/status
  * Get status history for an order
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -49,7 +46,12 @@ export async function GET(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const orderData = order as { id: string; user_id: string; status: string | null; internal_status: string | null };
+    const orderData = order as {
+      id: string;
+      user_id: string;
+      status: string | null;
+      internal_status: string | null;
+    };
     if (orderData.user_id !== user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -58,7 +60,9 @@ export async function GET(
     const history = await statusService.getStatusHistory(id);
 
     // Get effective status and allowed transitions
-    const effectiveStatus = statusService.getEffectiveStatus(orderData as Parameters<typeof statusService.getEffectiveStatus>[0]);
+    const effectiveStatus = statusService.getEffectiveStatus(
+      orderData as Parameters<typeof statusService.getEffectiveStatus>[0]
+    );
     const allowedTransitions = statusService.getAllowedNextStatuses(effectiveStatus);
 
     return NextResponse.json({
@@ -79,10 +83,7 @@ export async function GET(
  * POST /api/orders/[id]/status
  * Update order status
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

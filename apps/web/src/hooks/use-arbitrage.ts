@@ -64,15 +64,19 @@ export const arbitrageKeys = {
   excluded: () => [...arbitrageKeys.all, 'excluded'] as const,
   unmapped: () => [...arbitrageKeys.all, 'unmapped'] as const,
   syncStatus: () => [...arbitrageKeys.all, 'sync-status'] as const,
-  summary: (minMargin?: number, maxCog?: number) => [...arbitrageKeys.all, 'summary', minMargin, maxCog] as const,
-  ebayExclusions: (setNumber?: string) => [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
+  summary: (minMargin?: number, maxCog?: number) =>
+    [...arbitrageKeys.all, 'summary', minMargin, maxCog] as const,
+  ebayExclusions: (setNumber?: string) =>
+    [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
 };
 
 // ============================================================================
 // FETCH FUNCTIONS
 // ============================================================================
 
-async function fetchArbitrageData(filters?: ArbitrageFilterOptions): Promise<ArbitrageDataResponse> {
+async function fetchArbitrageData(
+  filters?: ArbitrageFilterOptions
+): Promise<ArbitrageDataResponse> {
   const params = new URLSearchParams();
 
   if (filters?.minMargin !== undefined) params.set('minMargin', String(filters.minMargin));
@@ -189,7 +193,10 @@ async function restoreAsin(asin: string): Promise<void> {
   }
 }
 
-async function setBlPriceOverride(input: { asin: string; override: number | null }): Promise<{ minBlPriceOverride: number | null }> {
+async function setBlPriceOverride(input: {
+  asin: string;
+  override: number | null;
+}): Promise<{ minBlPriceOverride: number | null }> {
   const response = await fetch(`/api/arbitrage/${input.asin}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -637,7 +644,9 @@ export function useExcludeEbayListing() {
     },
     onSuccess: (_, variables) => {
       // Invalidate eBay exclusions, lists, and all item queries so modal refreshes
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions(variables.setNumber) });
+      queryClient.invalidateQueries({
+        queryKey: arbitrageKeys.ebayExclusions(variables.setNumber),
+      });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.items() });
     },
@@ -666,7 +675,9 @@ export function useRestoreEbayListing() {
     },
     onSuccess: (_, variables) => {
       // Invalidate eBay exclusions, lists, and all item queries so modal refreshes
-      queryClient.invalidateQueries({ queryKey: arbitrageKeys.ebayExclusions(variables.setNumber) });
+      queryClient.invalidateQueries({
+        queryKey: arbitrageKeys.ebayExclusions(variables.setNumber),
+      });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.items() });
     },

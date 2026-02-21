@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  isValidLegoListing,
-  getListingRejectionReason,
-} from '../ebay-listing-validator';
+import { isValidLegoListing, getListingRejectionReason } from '../ebay-listing-validator';
 
 describe('eBay Listing Validator', () => {
   // ============================================
@@ -73,7 +70,9 @@ describe('eBay Listing Validator', () => {
       });
 
       it('should reject listing with undefined set number', () => {
-        expect(isValidLegoListing('LEGO Star Wars 75192', undefined as unknown as string)).toBe(false);
+        expect(isValidLegoListing('LEGO Star Wars 75192', undefined as unknown as string)).toBe(
+          false
+        );
       });
 
       it('should reject knockoff brand listings (Lepin)', () => {
@@ -177,7 +176,9 @@ describe('eBay Listing Validator', () => {
     });
 
     it('should accept listing with emoji', () => {
-      expect(isValidLegoListing('LEGO Star Wars 75192 Millennium Falcon ✨ NEW', '75192')).toBe(true);
+      expect(isValidLegoListing('LEGO Star Wars 75192 Millennium Falcon ✨ NEW', '75192')).toBe(
+        true
+      );
     });
 
     // Invalid real listings

@@ -13,14 +13,7 @@ interface InsightCardProps {
   className?: string;
 }
 
-export function InsightCard({
-  title,
-  value,
-  subtitle,
-  trend,
-  icon,
-  className,
-}: InsightCardProps) {
+export function InsightCard({ title, value, subtitle, trend, icon, className }: InsightCardProps) {
   const getTrendIcon = () => {
     if (trend === undefined || trend === null) return null;
     if (trend > 0) return <TrendingUp className="h-3 w-3" />;
@@ -38,12 +31,8 @@ export function InsightCard({
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        {icon && (
-          <div className="text-muted-foreground">{icon}</div>
-        )}
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        {icon && <div className="text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline gap-2">
@@ -55,9 +44,7 @@ export function InsightCard({
             </span>
           )}
         </div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
       </CardContent>
     </Card>
   );

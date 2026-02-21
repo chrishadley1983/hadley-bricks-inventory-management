@@ -24,7 +24,8 @@ const TopPicksSkeleton = () => (
 );
 
 const TopPicksContent = dynamic(
-  () => import('@/components/features/investment/TopPicks').then((mod) => ({ default: mod.TopPicks })),
+  () =>
+    import('@/components/features/investment/TopPicks').then((mod) => ({ default: mod.TopPicks })),
   { ssr: false, loading: () => <TopPicksSkeleton /> }
 );
 

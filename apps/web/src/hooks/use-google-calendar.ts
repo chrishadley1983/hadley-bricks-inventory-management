@@ -50,7 +50,9 @@ async function disconnectGoogleCalendar(): Promise<void> {
   }
 }
 
-async function syncPickupToCalendar(pickupId: string): Promise<{ eventId: string; message: string }> {
+async function syncPickupToCalendar(
+  pickupId: string
+): Promise<{ eventId: string; message: string }> {
   const response = await fetch(`/api/pickups/${pickupId}/calendar`, {
     method: 'POST',
   });

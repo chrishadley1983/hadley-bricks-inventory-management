@@ -64,10 +64,7 @@ export function isGmailConfigured(): boolean {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getHeader(
-  headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
-  name: string,
-): string {
+function getHeader(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
   return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? '';
 }
 
@@ -141,10 +138,7 @@ function htmlToText(html: string): string {
  * Search Gmail messages.
  * Returns [] if credentials are not configured.
  */
-export async function searchEmails(
-  query: string,
-  limit = 50,
-): Promise<GmailSearchResult[]> {
+export async function searchEmails(query: string, limit = 50): Promise<GmailSearchResult[]> {
   const gmail = getGmailClient();
   if (!gmail) return [];
 

@@ -22,7 +22,18 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Settings2, ChevronLeft, ChevronRight, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, Check, X, Pencil } from 'lucide-react';
+import {
+  Settings2,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  Check,
+  X,
+  Pencil,
+} from 'lucide-react';
 import { useEbayListings, useUpdateEbayPrice } from '@/hooks/use-ebay-stock';
 import { useToast } from '@/hooks/use-toast';
 import { EbayListingsFilters } from './EbayListingsFilters';
@@ -172,7 +183,7 @@ export function EbayListingsView() {
     return <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />;
   };
 
-  const renderSortableHeader = (column: typeof columns[number], className?: string) => {
+  const renderSortableHeader = (column: (typeof columns)[number], className?: string) => {
     if (!column.sortable) {
       return <TableHead className={className}>{column.label}</TableHead>;
     }
@@ -243,7 +254,11 @@ export function EbayListingsView() {
   }, []);
 
   const handleDialogConfirm = useCallback(
-    async (params: { updateBestOffer: boolean; autoAcceptPercent: number; minOfferPercent: number }) => {
+    async (params: {
+      updateBestOffer: boolean;
+      autoAcceptPercent: number;
+      minOfferPercent: number;
+    }) => {
       if (!dialogState) return;
 
       try {
@@ -451,13 +466,16 @@ export function EbayListingsView() {
                   <TableRow>
                     {visibleColumns.has('sku') && renderSortableHeader(columns[0])}
                     {visibleColumns.has('itemId') && renderSortableHeader(columns[1])}
-                    {visibleColumns.has('title') && renderSortableHeader(columns[2], 'min-w-[200px]')}
-                    {visibleColumns.has('quantity') && renderSortableHeader(columns[3], 'text-right')}
+                    {visibleColumns.has('title') &&
+                      renderSortableHeader(columns[2], 'min-w-[200px]')}
+                    {visibleColumns.has('quantity') &&
+                      renderSortableHeader(columns[3], 'text-right')}
                     {visibleColumns.has('price') && renderSortableHeader(columns[4], 'text-center')}
                     {visibleColumns.has('status') && renderSortableHeader(columns[5])}
                     {visibleColumns.has('condition') && renderSortableHeader(columns[6])}
                     {visibleColumns.has('listingType') && renderSortableHeader(columns[7])}
-                    {visibleColumns.has('watchers') && renderSortableHeader(columns[8], 'text-right')}
+                    {visibleColumns.has('watchers') &&
+                      renderSortableHeader(columns[8], 'text-right')}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -467,9 +485,7 @@ export function EbayListingsView() {
                       <TableRow key={listing.id}>
                         {visibleColumns.has('sku') && (
                           <TableCell className="font-mono text-sm">
-                            {listing.platformSku || (
-                              <span className="text-destructive">Empty</span>
-                            )}
+                            {listing.platformSku || <span className="text-destructive">Empty</span>}
                           </TableCell>
                         )}
                         {visibleColumns.has('itemId') && (
@@ -519,9 +535,7 @@ export function EbayListingsView() {
                           </TableCell>
                         )}
                         {visibleColumns.has('watchers') && (
-                          <TableCell className="text-right">
-                            {ebayData.watchers ?? '-'}
-                          </TableCell>
+                          <TableCell className="text-right">{ebayData.watchers ?? '-'}</TableCell>
                         )}
                       </TableRow>
                     );
@@ -549,9 +563,7 @@ export function EbayListingsView() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setPage((p) => Math.min(pagination.totalPages, p + 1))
-                    }
+                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                     disabled={pagination.page >= pagination.totalPages}
                   >
                     Next

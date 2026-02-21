@@ -127,7 +127,10 @@ export class BricksetApiClient {
       requestParams.extendedData = '1';
     }
 
-    const response = await this.request<BricksetApiResponse<BricksetApiSet[]>>('getSets', requestParams);
+    const response = await this.request<BricksetApiResponse<BricksetApiSet[]>>(
+      'getSets',
+      requestParams
+    );
 
     return {
       status: response.status,
@@ -177,7 +180,9 @@ export class BricksetApiClient {
   /**
    * Get subthemes for a specific theme
    */
-  async getSubthemes(theme: string): Promise<{ subtheme: string; setCount: number; yearFrom: number; yearTo: number }[]> {
+  async getSubthemes(
+    theme: string
+  ): Promise<{ subtheme: string; setCount: number; yearFrom: number; yearTo: number }[]> {
     const response = await this.request<{
       status: string;
       subthemes?: { subtheme: string; setCount: number; yearFrom: number; yearTo: number }[];

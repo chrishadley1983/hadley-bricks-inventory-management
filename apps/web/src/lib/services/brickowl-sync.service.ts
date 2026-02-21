@@ -186,10 +186,12 @@ export class BrickOwlSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
       items_count: normalized.items.length,
-      raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      raw_data:
+        normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 
     // Upsert order
@@ -240,10 +242,12 @@ export class BrickOwlSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
       items_count: normalized.items.length,
-      raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      raw_data:
+        normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 
     const savedOrder = await this.orderRepo.upsert(orderInsert);

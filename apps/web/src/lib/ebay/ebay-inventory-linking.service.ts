@@ -175,7 +175,9 @@ export class EbayInventoryLinkingService {
       // Get order with line items
       const { data: order, error: orderError } = await this.supabase
         .from('ebay_orders')
-        .select('id, user_id, ebay_order_id, creation_date, order_fulfilment_status, order_payment_status')
+        .select(
+          'id, user_id, ebay_order_id, creation_date, order_fulfilment_status, order_payment_status'
+        )
         .eq('id', orderId)
         .eq('user_id', this.userId)
         .single();
@@ -211,7 +213,11 @@ export class EbayInventoryLinkingService {
 
         if (matchResult.status === 'matched' && matchResult.inventoryId) {
           // Pre-link successful - link line item to inventory but DON'T mark as sold
-          await this.linkLineItemToInventory(lineItem.id, matchResult.inventoryId, matchResult.method!);
+          await this.linkLineItemToInventory(
+            lineItem.id,
+            matchResult.inventoryId,
+            matchResult.method!
+          );
           result.autoLinked++;
         } else {
           // Add to resolution queue for manual pre-linking
@@ -292,7 +298,9 @@ export class EbayInventoryLinkingService {
 
       // For pre-linked items, check which inventory items still need to be marked SOLD
       if (preLinkedItems.length > 0) {
-        const preLinkedInventoryIds = preLinkedItems.map((li: EbayOrderLineItem) => li.inventory_item_id);
+        const preLinkedInventoryIds = preLinkedItems.map(
+          (li: EbayOrderLineItem) => li.inventory_item_id
+        );
         const { data: inventoryItems } = await this.supabase
           .from('inventory_items')
           .select('id, status')
@@ -300,7 +308,9 @@ export class EbayInventoryLinkingService {
           .eq('user_id', this.userId)
           .neq('status', 'SOLD');
 
-        const unsoldInventoryIds = new Set((inventoryItems || []).map((ii: { id: string }) => ii.id));
+        const unsoldInventoryIds = new Set(
+          (inventoryItems || []).map((ii: { id: string }) => ii.id)
+        );
 
         for (const lineItem of preLinkedItems) {
           if (unsoldInventoryIds.has(lineItem.inventory_item_id)) {
@@ -323,7 +333,11 @@ export class EbayInventoryLinkingService {
           // Auto-link successful
           const netSale = await this.calculateNetSale(order.ebay_order_id, lineItem);
           await this.markInventoryAsSold(matchResult.inventoryId, lineItem, order, netSale);
-          await this.linkLineItemToInventory(lineItem.id, matchResult.inventoryId, matchResult.method!);
+          await this.linkLineItemToInventory(
+            lineItem.id,
+            matchResult.inventoryId,
+            matchResult.method!
+          );
           result.autoLinked++;
         } else {
           // Add to resolution queue
@@ -377,7 +391,12 @@ export class EbayInventoryLinkingService {
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
-    const allFulfilledOrders: Array<{ id: string; ebay_order_id: string; creation_date: string; type: 'fulfilled' }> = [];
+    const allFulfilledOrders: Array<{
+      id: string;
+      ebay_order_id: string;
+      creation_date: string;
+      type: 'fulfilled';
+    }> = [];
 
     while (hasMore) {
       const { data: orders, error } = await this.supabase
@@ -385,7 +404,9 @@ export class EbayInventoryLinkingService {
         .select('id, ebay_order_id, creation_date')
         .eq('user_id', this.userId)
         .eq('order_fulfilment_status', 'FULFILLED')
-        .or('inventory_link_status.is.null,inventory_link_status.eq.pre_linked,inventory_link_status.eq.partial')
+        .or(
+          'inventory_link_status.is.null,inventory_link_status.eq.pre_linked,inventory_link_status.eq.partial'
+        )
         .order('creation_date', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -394,13 +415,25 @@ export class EbayInventoryLinkingService {
         break;
       }
 
-      allFulfilledOrders.push(...(orders || []).map((o: { id: string; ebay_order_id: string; creation_date: string }) => ({ ...o, type: 'fulfilled' as const })));
+      allFulfilledOrders.push(
+        ...(orders || []).map(
+          (o: { id: string; ebay_order_id: string; creation_date: string }) => ({
+            ...o,
+            type: 'fulfilled' as const,
+          })
+        )
+      );
       hasMore = (orders?.length || 0) === pageSize;
       page++;
     }
 
     // Also get PAID orders if requested
-    const allPaidOrders: Array<{ id: string; ebay_order_id: string; creation_date: string; type: 'paid' }> = [];
+    const allPaidOrders: Array<{
+      id: string;
+      ebay_order_id: string;
+      creation_date: string;
+      type: 'paid';
+    }> = [];
     if (options.includePaid) {
       page = 0;
       hasMore = true;
@@ -421,7 +454,14 @@ export class EbayInventoryLinkingService {
           break;
         }
 
-        allPaidOrders.push(...(orders || []).map((o: { id: string; ebay_order_id: string; creation_date: string }) => ({ ...o, type: 'paid' as const })));
+        allPaidOrders.push(
+          ...(orders || []).map(
+            (o: { id: string; ebay_order_id: string; creation_date: string }) => ({
+              ...o,
+              type: 'paid' as const,
+            })
+          )
+        );
         hasMore = (orders?.length || 0) === pageSize;
         page++;
       }
@@ -430,15 +470,18 @@ export class EbayInventoryLinkingService {
     // Combine and process all orders
     const allOrders = [...allFulfilledOrders, ...allPaidOrders];
 
-    console.log(`[EbayInventoryLinking] Processing ${allFulfilledOrders.length} fulfilled + ${allPaidOrders.length} paid orders`);
+    console.log(
+      `[EbayInventoryLinking] Processing ${allFulfilledOrders.length} fulfilled + ${allPaidOrders.length} paid orders`
+    );
 
     const totalOrders = allOrders.length;
 
     for (const order of allOrders) {
       // Use appropriate processor based on order type
-      const linkingResult = order.type === 'paid'
-        ? await this.processPaidOrder(order.id)
-        : await this.processFulfilledOrder(order.id);
+      const linkingResult =
+        order.type === 'paid'
+          ? await this.processPaidOrder(order.id)
+          : await this.processFulfilledOrder(order.id);
 
       result.ordersProcessed++;
       result.totalAutoLinked += linkingResult.autoLinked;
@@ -463,7 +506,9 @@ export class EbayInventoryLinkingService {
       }
 
       if (linkingResult.errors.length > 0) {
-        result.errors.push(...linkingResult.errors.map(e => `Order ${order.ebay_order_id}: ${e}`));
+        result.errors.push(
+          ...linkingResult.errors.map((e) => `Order ${order.ebay_order_id}: ${e}`)
+        );
       }
     }
 
@@ -555,7 +600,9 @@ export class EbayInventoryLinkingService {
   private async findBySku(sku: string): Promise<InventoryItem[]> {
     const query = this.supabase
       .from('inventory_items')
-      .select('id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id')
+      .select(
+        'id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id'
+      )
       .eq('user_id', this.userId)
       .eq('sku', sku)
       .in('status', this.getValidStatuses())
@@ -564,8 +611,9 @@ export class EbayInventoryLinkingService {
     const { data } = await query;
 
     // Filter out SOLD items that already have an ebay_line_item_id
-    return (data || []).filter((item: InventoryItem & { ebay_line_item_id?: string }) =>
-      item.status !== 'SOLD' || !item.ebay_line_item_id
+    return (data || []).filter(
+      (item: InventoryItem & { ebay_line_item_id?: string }) =>
+        item.status !== 'SOLD' || !item.ebay_line_item_id
     );
   }
 
@@ -576,15 +624,18 @@ export class EbayInventoryLinkingService {
   private async findBySetNumber(setNumber: string): Promise<InventoryItem[]> {
     const { data } = await this.supabase
       .from('inventory_items')
-      .select('id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id')
+      .select(
+        'id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id'
+      )
       .eq('user_id', this.userId)
       .eq('set_number', setNumber)
       .in('status', this.getValidStatuses())
       .order('purchase_date', { ascending: true }); // FIFO
 
     // Filter out SOLD items that already have an ebay_line_item_id
-    return (data || []).filter((item: InventoryItem & { ebay_line_item_id?: string }) =>
-      item.status !== 'SOLD' || !item.ebay_line_item_id
+    return (data || []).filter(
+      (item: InventoryItem & { ebay_line_item_id?: string }) =>
+        item.status !== 'SOLD' || !item.ebay_line_item_id
     );
   }
 
@@ -602,7 +653,9 @@ export class EbayInventoryLinkingService {
 
     const { data } = await this.supabase
       .from('inventory_items')
-      .select('id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id')
+      .select(
+        'id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status, ebay_line_item_id'
+      )
       .eq('user_id', this.userId)
       .in('status', this.getValidStatuses())
       .ilike('item_name', `%${searchTerm}%`)
@@ -610,8 +663,9 @@ export class EbayInventoryLinkingService {
       .limit(20);
 
     // Filter out SOLD items that already have an ebay_line_item_id
-    return (data || []).filter((item: InventoryItem & { ebay_line_item_id?: string }) =>
-      item.status !== 'SOLD' || !item.ebay_line_item_id
+    return (data || []).filter(
+      (item: InventoryItem & { ebay_line_item_id?: string }) =>
+        item.status !== 'SOLD' || !item.ebay_line_item_id
     );
   }
 
@@ -664,7 +718,10 @@ export class EbayInventoryLinkingService {
   /**
    * Rank candidates by relevance using FIFO and other factors
    */
-  private rankCandidates(candidates: InventoryItem[], lineItem: EbayOrderLineItem): RankedCandidate[] {
+  private rankCandidates(
+    candidates: InventoryItem[],
+    lineItem: EbayOrderLineItem
+  ): RankedCandidate[] {
     return candidates
       .map((item) => {
         const { score, reasons } = this.calculateScore(item, lineItem);
@@ -786,7 +843,11 @@ export class EbayInventoryLinkingService {
     ) {
       return 'new';
     }
-    if (lowerTitle.includes('used') || lowerTitle.includes('opened') || lowerTitle.includes('built')) {
+    if (
+      lowerTitle.includes('used') ||
+      lowerTitle.includes('opened') ||
+      lowerTitle.includes('built')
+    ) {
       return 'used';
     }
     return null;
@@ -835,7 +896,10 @@ export class EbayInventoryLinkingService {
   /**
    * Calculate net sale amount from transaction data
    */
-  async calculateNetSale(ebayOrderId: string, lineItem: EbayOrderLineItem): Promise<NetSaleCalculation> {
+  async calculateNetSale(
+    ebayOrderId: string,
+    lineItem: EbayOrderLineItem
+  ): Promise<NetSaleCalculation> {
     // Get transaction for this order
     const { data: transaction } = await this.supabase
       .from('ebay_transactions')
@@ -1099,7 +1163,9 @@ export class EbayInventoryLinkingService {
       .eq('status', 'pending');
 
     const totalItems = lineItems?.length || 0;
-    const linkedItems = lineItems?.filter((li: { inventory_item_id: string | null }) => li.inventory_item_id !== null).length || 0;
+    const linkedItems =
+      lineItems?.filter((li: { inventory_item_id: string | null }) => li.inventory_item_id !== null)
+        .length || 0;
     const pendingItems = pendingQueue?.length || 0;
 
     let status: 'pending' | 'partial' | 'complete' | 'skipped';
@@ -1150,9 +1216,17 @@ export class EbayInventoryLinkingService {
     type OrderWithLinkStatus = { inventory_link_status: string | null };
     const stats = {
       totalFulfilledOrders: orders?.length || 0,
-      linkedOrders: orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'complete').length || 0,
-      partialOrders: orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'partial').length || 0,
-      pendingOrders: orders?.filter((o: OrderWithLinkStatus) => !o.inventory_link_status || o.inventory_link_status === 'pending').length || 0,
+      linkedOrders:
+        orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'complete').length ||
+        0,
+      partialOrders:
+        orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'partial').length ||
+        0,
+      pendingOrders:
+        orders?.filter(
+          (o: OrderWithLinkStatus) =>
+            !o.inventory_link_status || o.inventory_link_status === 'pending'
+        ).length || 0,
       pendingQueueItems: pendingQueueItems || 0,
     };
 

@@ -12,10 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -62,10 +59,7 @@ export async function POST(
 
     if (updateError) {
       console.error('[reset-ebay] Failed to update inventory item:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to reset inventory item' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to reset inventory item' }, { status: 500 });
     }
 
     console.log('[reset-ebay] Reset complete for item:', id);

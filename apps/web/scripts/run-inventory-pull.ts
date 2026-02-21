@@ -46,6 +46,27 @@ async function main() {
       console.log(`  ${err.item || 'unknown'}: ${err.error}`);
     }
   }
+
+  // Verify pricing
+  console.log('\n=== Sample Pricing Verification ===');
+  const { data: samples } = await supabase
+    .from('minifig_sync_items')
+    .select('name, bricqer_price, recommended_price')
+    .eq('user_id', DEFAULT_USER_ID)
+    .not('recommended_price', 'is', null)
+    .order('bricqer_price', { ascending: true })
+    .limit(10);
+
+  if (samples) {
+    console.log('  Name                           | Bricqer | Recommended');
+    console.log('  ' + '-'.repeat(60));
+    for (const s of samples) {
+      const name = (s.name || '').slice(0, 30).padEnd(30);
+      const bp = (s.bricqer_price ?? 0).toFixed(2).padStart(6);
+      const rp = (s.recommended_price ?? 0).toFixed(2).padStart(6);
+      console.log(`  ${name} | £${bp} | £${rp}`);
+    }
+  }
 }
 
 main().catch((err) => {

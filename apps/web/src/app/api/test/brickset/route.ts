@@ -29,10 +29,13 @@ export async function GET(request: NextRequest) {
     const apiKey = await credentialsService.getApiKey(user.id);
 
     if (!apiKey) {
-      return NextResponse.json({
-        error: 'Brickset API key not configured',
-        configured: false,
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'Brickset API key not configured',
+          configured: false,
+        },
+        { status: 400 }
+      );
     }
 
     console.log('[TEST /api/test/brickset] Testing API with set:', setNumber);
@@ -47,10 +50,13 @@ export async function GET(request: NextRequest) {
     console.log('[TEST /api/test/brickset] Key valid:', keyValid);
 
     if (!keyValid) {
-      return NextResponse.json({
-        error: 'API key is invalid',
-        keyValid: false,
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'API key is invalid',
+          keyValid: false,
+        },
+        { status: 400 }
+      );
     }
 
     // Now try to get the set
@@ -58,11 +64,14 @@ export async function GET(request: NextRequest) {
     const apiSet = await client.getSetByNumber(setNumber);
 
     if (!apiSet) {
-      return NextResponse.json({
-        error: 'Set not found',
-        keyValid: true,
-        setNumber,
-      }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: 'Set not found',
+          keyValid: true,
+          setNumber,
+        },
+        { status: 404 }
+      );
     }
 
     // Test upsert if requested
@@ -92,7 +101,12 @@ export async function GET(request: NextRequest) {
         upsertResult = { error: error.message, code: error.code, details: error.details };
       } else {
         console.log('[TEST /api/test/brickset] Upsert success, EAN in DB:', data?.ean);
-        upsertResult = { success: true, ean: data?.ean, upc: data?.upc, lastFetchedAt: data?.last_fetched_at };
+        upsertResult = {
+          success: true,
+          ean: data?.ean,
+          upc: data?.upc,
+          lastFetchedAt: data?.last_fetched_at,
+        };
       }
     }
 
@@ -117,9 +131,12 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[TEST /api/test/brickset] Error:', error);
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 }
+    );
   }
 }

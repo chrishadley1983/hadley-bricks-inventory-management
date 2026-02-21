@@ -99,9 +99,9 @@ describe('CredentialsRepository', () => {
         error: { code: 'DB_ERROR', message: 'Database error' },
       });
 
-      await expect(
-        repository.getCredentials('user-1', 'bricklink')
-      ).rejects.toThrow('Failed to get credentials: Database error');
+      await expect(repository.getCredentials('user-1', 'bricklink')).rejects.toThrow(
+        'Failed to get credentials: Database error'
+      );
     });
 
     it('should return null when credentials_encrypted is null', async () => {
@@ -131,9 +131,9 @@ describe('CredentialsRepository', () => {
         error: null,
       });
 
-      await expect(
-        repository.getCredentials('user-1', 'bricklink')
-      ).rejects.toThrow('Failed to decrypt credentials');
+      await expect(repository.getCredentials('user-1', 'bricklink')).rejects.toThrow(
+        'Failed to decrypt credentials'
+      );
     });
   });
 
@@ -197,9 +197,9 @@ describe('CredentialsRepository', () => {
         error: { message: 'Delete failed' },
       });
 
-      await expect(
-        repository.deleteCredentials('user-1', 'bricklink')
-      ).rejects.toThrow('Failed to delete credentials: Delete failed');
+      await expect(repository.deleteCredentials('user-1', 'bricklink')).rejects.toThrow(
+        'Failed to delete credentials: Delete failed'
+      );
     });
   });
 
@@ -234,20 +234,16 @@ describe('CredentialsRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(
-        repository.hasCredentials('user-1', 'bricklink')
-      ).rejects.toThrow('Failed to check credentials: Query failed');
+      await expect(repository.hasCredentials('user-1', 'bricklink')).rejects.toThrow(
+        'Failed to check credentials: Query failed'
+      );
     });
   });
 
   describe('getConfiguredPlatforms', () => {
     it('should return list of configured platforms', async () => {
       mockSupabase.setNextResponse({
-        data: [
-          { platform: 'bricklink' },
-          { platform: 'amazon' },
-          { platform: 'ebay' },
-        ],
+        data: [{ platform: 'bricklink' }, { platform: 'amazon' }, { platform: 'ebay' }],
         error: null,
       });
 
@@ -284,9 +280,9 @@ describe('CredentialsRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(
-        repository.getConfiguredPlatforms('user-1')
-      ).rejects.toThrow('Failed to get configured platforms: Query failed');
+      await expect(repository.getConfiguredPlatforms('user-1')).rejects.toThrow(
+        'Failed to get configured platforms: Query failed'
+      );
     });
   });
 

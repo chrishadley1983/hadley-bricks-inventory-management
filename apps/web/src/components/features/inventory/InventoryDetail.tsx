@@ -3,8 +3,28 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pencil, Trash2, Package, Calendar, MapPin, DollarSign, ShoppingCart, Archive, Store, RotateCcw, Eye } from 'lucide-react';
-import { useInventoryItem, useDeleteInventory, useUpdateInventory, usePurchase, usePerf, usePerfQuery } from '@/hooks';
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Package,
+  Calendar,
+  MapPin,
+  DollarSign,
+  ShoppingCart,
+  Archive,
+  Store,
+  RotateCcw,
+  Eye,
+} from 'lucide-react';
+import {
+  useInventoryItem,
+  useDeleteInventory,
+  useUpdateInventory,
+  usePurchase,
+  usePerf,
+  usePerfQuery,
+} from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -119,7 +139,9 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
                 </Link>
               </Button>
               <h1 className="text-2xl font-bold">{item.item_name || `Set ${item.set_number}`}</h1>
-              <Badge variant={item.status ? STATUS_VARIANTS[item.status] || 'outline' : 'outline'}>{item.status || '-'}</Badge>
+              <Badge variant={item.status ? STATUS_VARIANTS[item.status] || 'outline' : 'outline'}>
+                {item.status || '-'}
+              </Badge>
             </div>
             <p className="text-muted-foreground">Set #{item.set_number}</p>
           </div>
@@ -128,7 +150,9 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
             <Button
               variant="default"
               onClick={() => setShowCreateListingModal(true)}
-              disabled={item.status === 'LISTED' || item.status === 'SOLD' || !!item.ebay_listing_id}
+              disabled={
+                item.status === 'LISTED' || item.status === 'SOLD' || !!item.ebay_listing_id
+              }
             >
               <Store className="mr-2 h-4 w-4" />
               Create eBay Listing
@@ -142,20 +166,14 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
             />
             {/* View eBay Listing button - only show if item has eBay listing */}
             {item.ebay_listing_id && (
-              <Button
-                variant="outline"
-                onClick={() => setShowListingDetailsDialog(true)}
-              >
+              <Button variant="outline" onClick={() => setShowListingDetailsDialog(true)}>
                 <Eye className="mr-2 h-4 w-4" />
                 View eBay Listing
               </Button>
             )}
             {/* Reset eBay Listing button - only show if item has eBay listing */}
             {item.ebay_listing_id && (
-              <Button
-                variant="outline"
-                onClick={() => setShowResetEbayDialog(true)}
-              >
+              <Button variant="outline" onClick={() => setShowResetEbayDialog(true)}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset eBay
               </Button>
@@ -213,7 +231,10 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <DetailRow label="Purchase Cost" value={item.cost ? formatCurrency(item.cost) : '-'} />
+              <DetailRow
+                label="Purchase Cost"
+                value={item.cost ? formatCurrency(item.cost) : '-'}
+              />
               <DetailRow
                 label="Listing Value"
                 value={item.listing_value ? formatCurrency(item.listing_value) : '-'}
@@ -310,15 +331,15 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
                 />
                 <DetailRow
                   label="Postage Received"
-                  value={item.sold_postage_received ? formatCurrency(item.sold_postage_received) : '-'}
+                  value={
+                    item.sold_postage_received ? formatCurrency(item.sold_postage_received) : '-'
+                  }
                 />
                 <DetailRow
                   label="Fees"
                   value={
                     item.sold_fees_amount ? (
-                      <span className="text-red-600">
-                        -{formatCurrency(item.sold_fees_amount)}
-                      </span>
+                      <span className="text-red-600">-{formatCurrency(item.sold_fees_amount)}</span>
                     ) : (
                       '-'
                     )
@@ -405,18 +426,16 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
           <DialogHeader>
             <DialogTitle>Reset eBay Listing</DialogTitle>
             <DialogDescription>
-              This will clear the eBay listing ID and URL from this item and reset its status to BACKLOG.
-              The listing on eBay will NOT be affected - you must end it manually if needed.
+              This will clear the eBay listing ID and URL from this item and reset its status to
+              BACKLOG. The listing on eBay will NOT be affected - you must end it manually if
+              needed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowResetEbayDialog(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleResetEbayListing}
-              disabled={updateMutation.isPending}
-            >
+            <Button onClick={handleResetEbayListing} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? 'Resetting...' : 'Reset'}
             </Button>
           </DialogFooter>
@@ -462,13 +481,7 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   );
 }
 
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between">
       <dt className="text-sm text-muted-foreground">{label}</dt>

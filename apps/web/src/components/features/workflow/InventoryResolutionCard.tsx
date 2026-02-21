@@ -75,7 +75,9 @@ export function InventoryResolutionCard({ className }: InventoryResolutionCardPr
           <div className="flex items-center gap-3">
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                hasIssues ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'
+                hasIssues
+                  ? 'bg-amber-100 dark:bg-amber-900/30'
+                  : 'bg-green-100 dark:bg-green-900/30'
               }`}
             >
               {hasIssues ? (
@@ -88,12 +90,20 @@ export function InventoryResolutionCard({ className }: InventoryResolutionCardPr
               <p className="font-medium text-sm">Inventory Resolution</p>
               <div className="text-xs text-muted-foreground space-y-0.5">
                 <p>
-                  <span className={pendingReview > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                  <span
+                    className={
+                      pendingReview > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''
+                    }
+                  >
                     {pendingReview} Pending Review
                   </span>
                 </p>
                 <p>
-                  <span className={unlinkedSince2026 > 0 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                  <span
+                    className={
+                      unlinkedSince2026 > 0 ? 'text-red-600 dark:text-red-400 font-medium' : ''
+                    }
+                  >
                     {unlinkedSince2026} Unlinked since Jan 2026
                   </span>
                 </p>

@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -58,7 +61,8 @@ export async function GET(request: NextRequest) {
       };
     } catch (tradingError) {
       result.tradingApiSuccess = false;
-      result.tradingApiError = tradingError instanceof Error ? tradingError.message : 'Unknown error';
+      result.tradingApiError =
+        tradingError instanceof Error ? tradingError.message : 'Unknown error';
       return NextResponse.json(result);
     }
 
@@ -74,9 +78,9 @@ export async function GET(request: NextRequest) {
     result.inventoryUrl = inventoryUrl;
 
     const fetchHeaders: Record<string, string> = {
-      'Authorization': `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
       'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
     };
 
@@ -98,10 +102,14 @@ export async function GET(request: NextRequest) {
         product: {
           title: listing.title,
           description: listing.description,
-          aspects: listing.itemSpecifics?.reduce((acc: Record<string, string[]>, spec: { name: string; value: string }) => {
-            acc[spec.name] = [spec.value];
-            return acc;
-          }, {} as Record<string, string[]>) || {},
+          aspects:
+            listing.itemSpecifics?.reduce(
+              (acc: Record<string, string[]>, spec: { name: string; value: string }) => {
+                acc[spec.name] = [spec.value];
+                return acc;
+              },
+              {} as Record<string, string[]>
+            ) || {},
           imageUrls: listing.pictureUrls || [],
         },
         condition: conditionEnum,
@@ -176,10 +184,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('[Debug] Error:', error);
-    return NextResponse.json({
-      ...result,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        ...result,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 }
+    );
   }
 }

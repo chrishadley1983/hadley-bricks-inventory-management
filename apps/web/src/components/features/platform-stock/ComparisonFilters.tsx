@@ -29,10 +29,7 @@ const discrepancyOptions: { value: DiscrepancyType | 'all'; label: string }[] = 
   { value: 'match', label: 'Matched' },
 ];
 
-export function ComparisonFiltersComponent({
-  filters,
-  onFiltersChange,
-}: ComparisonFiltersProps) {
+export function ComparisonFiltersComponent({ filters, onFiltersChange }: ComparisonFiltersProps) {
   const debouncedSearch = useDebouncedCallback((value: string) => {
     onFiltersChange({ ...filters, search: value || undefined });
   }, 300);
@@ -55,8 +52,7 @@ export function ComparisonFiltersComponent({
     onFiltersChange({});
   };
 
-  const hasActiveFilters =
-    filters.search || filters.discrepancyType || filters.hideZeroQuantities;
+  const hasActiveFilters = filters.search || filters.discrepancyType || filters.hideZeroQuantities;
 
   // Only show the hide zeros toggle when filtering by 'match'
   const showHideZerosToggle = filters.discrepancyType === 'match';
@@ -71,10 +67,7 @@ export function ComparisonFiltersComponent({
         />
       </div>
 
-      <Select
-        value={filters.discrepancyType || 'all'}
-        onValueChange={handleDiscrepancyChange}
-      >
+      <Select value={filters.discrepancyType || 'all'} onValueChange={handleDiscrepancyChange}>
         <SelectTrigger className="w-[180px]">
           <SelectValue placeholder="Filter by status" />
         </SelectTrigger>

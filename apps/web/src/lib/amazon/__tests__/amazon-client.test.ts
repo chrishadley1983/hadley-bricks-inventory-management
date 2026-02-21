@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  AmazonClient,
-  AmazonApiError,
-  AmazonRateLimitError,
-  AmazonAuthError,
-} from '../client';
+import { AmazonClient, AmazonApiError, AmazonRateLimitError, AmazonAuthError } from '../client';
 import type { AmazonCredentials, AmazonOrder } from '../types';
 
 // Mock global fetch
@@ -338,9 +333,7 @@ describe('AmazonClient', () => {
         json: () => Promise.resolve({ errors: [{ message: 'Order not found' }] }),
       });
 
-      await expect(testClient.getOrder('nonexistent-order')).rejects.toThrow(
-        AmazonApiError
-      );
+      await expect(testClient.getOrder('nonexistent-order')).rejects.toThrow(AmazonApiError);
     });
   });
 
@@ -363,9 +356,7 @@ describe('AmazonClient', () => {
         json: () =>
           Promise.resolve({
             payload: {
-              OrderItems: [
-                { OrderItemId: 'item-1', SellerSKU: 'SKU-1', QuantityOrdered: 1 },
-              ],
+              OrderItems: [{ OrderItemId: 'item-1', SellerSKU: 'SKU-1', QuantityOrdered: 1 }],
               NextToken: 'next-token',
             },
           }),
@@ -379,9 +370,7 @@ describe('AmazonClient', () => {
         json: () =>
           Promise.resolve({
             payload: {
-              OrderItems: [
-                { OrderItemId: 'item-2', SellerSKU: 'SKU-2', QuantityOrdered: 2 },
-              ],
+              OrderItems: [{ OrderItemId: 'item-2', SellerSKU: 'SKU-2', QuantityOrdered: 2 }],
             },
           }),
       });
@@ -420,9 +409,7 @@ describe('AmazonClient', () => {
             json: () =>
               Promise.resolve({
                 payload: {
-                  OrderItems: [
-                    { OrderItemId: 'item-1', SellerSKU: 'SKU-1', QuantityOrdered: 1 },
-                  ],
+                  OrderItems: [{ OrderItemId: 'item-1', SellerSKU: 'SKU-1', QuantityOrdered: 1 }],
                 },
               }),
           });
@@ -601,9 +588,9 @@ describe('AmazonClient', () => {
         json: () => Promise.resolve({ errors: [{ message: 'Unauthorized' }] }),
       });
 
-      await expect(
-        testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })
-      ).rejects.toThrow(AmazonAuthError);
+      await expect(testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })).rejects.toThrow(
+        AmazonAuthError
+      );
     });
 
     it('should throw AmazonAuthError on 403', async () => {
@@ -624,9 +611,9 @@ describe('AmazonClient', () => {
         json: () => Promise.resolve({ errors: [{ message: 'Forbidden' }] }),
       });
 
-      await expect(
-        testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })
-      ).rejects.toThrow(AmazonAuthError);
+      await expect(testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })).rejects.toThrow(
+        AmazonAuthError
+      );
     });
 
     it('should throw AmazonRateLimitError on 429 response', async () => {
@@ -714,9 +701,9 @@ describe('AmazonClient', () => {
           }),
       });
 
-      await expect(
-        testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })
-      ).rejects.toThrow('Internal server error; Please try again');
+      await expect(testClient.getOrders({ CreatedAfter: '2024-01-01T00:00:00Z' })).rejects.toThrow(
+        'Internal server error; Please try again'
+      );
     });
   });
 

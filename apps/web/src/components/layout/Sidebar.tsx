@@ -91,9 +91,6 @@ const navSections: NavSection[] = [
       { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
       { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
       { href: '/minifigs', label: 'Minifig Sync', icon: CloudUpload },
-      { href: '/minifigs/items', label: 'Minifig Items', icon: Package },
-      { href: '/minifigs/review', label: 'Minifig Review', icon: CloudUpload },
-      { href: '/minifigs/removals', label: 'Minifig Removals', icon: Layers },
     ],
   },
   {
@@ -109,9 +106,7 @@ const navSections: NavSection[] = [
     id: 'admin',
     title: 'Admin',
     defaultOpen: false,
-    items: [
-      { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
-    ],
+    items: [{ href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 }],
   },
 ];
 
@@ -120,9 +115,7 @@ export function Sidebar() {
 
   // Check if any item in a section is active
   const isSectionActive = (items: NavItem[]) => {
-    return items.some(
-      (item) => pathname === item.href || pathname.startsWith(item.href + '/')
-    );
+    return items.some((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
   };
 
   // Initialize section open states - open if has active item or defaultOpen
@@ -179,10 +172,7 @@ export function Sidebar() {
         <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
           <span className={cn(hasActiveItem && 'text-foreground')}>{section.title}</span>
           <ChevronDown
-            className={cn(
-              'h-4 w-4 transition-transform duration-200',
-              isOpen && 'rotate-180'
-            )}
+            className={cn('h-4 w-4 transition-transform duration-200', isOpen && 'rotate-180')}
           />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-1 pt-1">

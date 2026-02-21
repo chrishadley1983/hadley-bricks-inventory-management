@@ -11,11 +11,7 @@ import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client
 import { EbayAnalyticsClient } from './ebay-analytics.client';
 import { ebayAuthService } from './ebay-auth.service';
 import type { ParsedEbayListing, AddFixedPriceItemRequest } from '@/lib/platform-stock/ebay/types';
-import {
-  rowToRefreshJob,
-  rowToRefreshJobItem,
-  calculateListingAge,
-} from './listing-refresh.types';
+import { rowToRefreshJob, rowToRefreshJobItem, calculateListingAge } from './listing-refresh.types';
 import type {
   EligibleListing,
   EligibleListingFilters,
@@ -145,10 +141,7 @@ export class EbayListingRefreshService {
         if (filters?.minPrice !== undefined && listing.price < filters.minPrice) return false;
         if (filters?.condition && listing.ebayData.condition !== filters.condition) return false;
         if (filters?.hasWatchers && listing.ebayData.watchers === 0) return false;
-        if (
-          filters?.minWatchers !== undefined &&
-          listing.ebayData.watchers < filters.minWatchers
-        ) {
+        if (filters?.minWatchers !== undefined && listing.ebayData.watchers < filters.minWatchers) {
           return false;
         }
         if (
@@ -235,7 +228,9 @@ export class EbayListingRefreshService {
         }
       );
 
-      console.log(`[EbayListingRefreshService] Analytics API returned views for ${viewsData.size} listings`);
+      console.log(
+        `[EbayListingRefreshService] Analytics API returned views for ${viewsData.size} listings`
+      );
 
       // Update listings with views data
       for (let i = 0; i < listings.length; i++) {
@@ -275,7 +270,9 @@ export class EbayListingRefreshService {
    */
   private parseToEligibleListing(listing: ParsedEbayListing): EligibleListing {
     const startDate = new Date(listing.ebayData.listingStartDate);
-    const endDate = listing.ebayData.listingEndDate ? new Date(listing.ebayData.listingEndDate) : null;
+    const endDate = listing.ebayData.listingEndDate
+      ? new Date(listing.ebayData.listingEndDate)
+      : null;
     const now = new Date();
     const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
     const endsWithin12Hours = endDate ? endDate <= twelveHoursFromNow : false;
@@ -775,8 +772,7 @@ export class EbayListingRefreshService {
           shippingCostPaidBy: cachedData.shippingCostPaidBy || undefined,
 
           // Item specifics
-          itemSpecifics:
-            cachedData.itemSpecifics.length > 0 ? cachedData.itemSpecifics : undefined,
+          itemSpecifics: cachedData.itemSpecifics.length > 0 ? cachedData.itemSpecifics : undefined,
 
           // Location
           location: cachedData.location || undefined,
@@ -821,14 +817,18 @@ export class EbayListingRefreshService {
 
     // Update job to completed
     const completedAt = new Date();
-    await this.updateJobStatus(jobId, errors.length > 0 && createdCount === 0 ? 'failed' : 'completed', {
-      completedAt,
-      fetchedCount,
-      endedCount,
-      createdCount,
-      failedCount,
-      skippedCount,
-    });
+    await this.updateJobStatus(
+      jobId,
+      errors.length > 0 && createdCount === 0 ? 'failed' : 'completed',
+      {
+        completedAt,
+        fetchedCount,
+        endedCount,
+        createdCount,
+        failedCount,
+        skippedCount,
+      }
+    );
 
     return {
       success: errors.length === 0 || createdCount > 0,
@@ -969,8 +969,7 @@ export class EbayListingRefreshService {
       fetched_count: items.filter((i) =>
         ['fetched', 'ending', 'ended', 'creating', 'created'].includes(i.status)
       ).length,
-      ended_count: items.filter((i) => ['ended', 'creating', 'created'].includes(i.status))
-        .length,
+      ended_count: items.filter((i) => ['ended', 'creating', 'created'].includes(i.status)).length,
       created_count: items.filter((i) => i.status === 'created').length,
     };
 

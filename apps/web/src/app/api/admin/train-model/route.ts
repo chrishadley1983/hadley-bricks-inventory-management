@@ -28,13 +28,16 @@ export async function POST(request: NextRequest) {
     const result = await trainingService.train();
 
     if (result.status === 'insufficient_data') {
-      return NextResponse.json({
-        status: 'insufficient_data',
-        available_samples: result.available_samples,
-        minimum_required: result.minimum_required,
-        message: `Need at least ${result.minimum_required} training samples, only ${result.available_samples} available`,
-        duration_ms: result.duration_ms,
-      }, { status: 200 });
+      return NextResponse.json(
+        {
+          status: 'insufficient_data',
+          available_samples: result.available_samples,
+          minimum_required: result.minimum_required,
+          message: `Need at least ${result.minimum_required} training samples, only ${result.available_samples} available`,
+          duration_ms: result.duration_ms,
+        },
+        { status: 200 }
+      );
     }
 
     return NextResponse.json({
@@ -48,9 +51,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/admin/train-model] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

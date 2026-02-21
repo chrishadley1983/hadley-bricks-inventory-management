@@ -29,7 +29,8 @@ async function internalFetch(path: string): Promise<Response> {
   // Use production URL to avoid Vercel deployment protection on preview URLs
   const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    : process.env.APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   return fetch(`${baseUrl}${path}`, {
     headers: {
@@ -48,10 +49,7 @@ interface EnrichedItem {
 }
 
 /** Enrich a single item with ASIN, name (from ASIN title or Brickset), and Amazon pricing */
-async function enrichItem(
-  setNumber: string,
-  condition: 'New' | 'Used'
-): Promise<EnrichedItem> {
+async function enrichItem(setNumber: string, condition: 'New' | 'Used'): Promise<EnrichedItem> {
   let setName = setNumber; // Fallback to set number, never use bundle name
   let amazonAsin: string | undefined;
   let listPrice: number | undefined;
@@ -101,19 +99,29 @@ async function enrichItem(
         const asinPricing = pricingData.data?.[amazonAsin];
         listPrice = asinPricing?.buyBoxPrice ?? asinPricing?.lowestNewPrice;
       } else {
-        console.warn(`[enrichItem] Amazon pricing failed for ${amazonAsin}: ${pricingResponse.status}`);
+        console.warn(
+          `[enrichItem] Amazon pricing failed for ${amazonAsin}: ${pricingResponse.status}`
+        );
       }
     } catch (err) {
       console.warn(`[enrichItem] Amazon pricing error for ${amazonAsin}:`, err);
     }
   }
 
-  return { set_number: setNumber, condition, set_name: setName, amazon_asin: amazonAsin, list_price: listPrice };
+  return {
+    set_number: setNumber,
+    condition,
+    set_name: setName,
+    amazon_asin: amazonAsin,
+    list_price: listPrice,
+  };
 }
 
 /** Allocate total cost across items proportionally by list_price, or equal split as fallback */
 function allocateCosts(enrichedItems: EnrichedItem[], totalCost: number): number[] {
-  const allHavePricing = enrichedItems.every((item) => item.list_price != null && item.list_price > 0);
+  const allHavePricing = enrichedItems.every(
+    (item) => item.list_price != null && item.list_price > 0
+  );
 
   if (allHavePricing) {
     const totalListPrice = enrichedItems.reduce((sum, item) => sum + (item.list_price ?? 0), 0);
@@ -128,10 +136,7 @@ function allocateCosts(enrichedItems: EnrichedItem[], totalCost: number): number
   return enrichedItems.map(() => perItem);
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -200,12 +205,14 @@ export async function POST(
         cost: totalCost,
         payment_method: emailRecord.source === 'Vinted' ? 'Vinted Wallet' : 'PayPal',
         purchase_date: purchaseDate,
-        short_description: items.length === 1
-          ? `${enrichedItems[0].set_number} ${enrichedItems[0].set_name}`
-          : `Bundle: ${setNumberList}`,
-        description: items.length === 1
-          ? `${enrichedItems[0].set_name} from ${sellerUsername}`
-          : `${setNameList} from ${sellerUsername}`,
+        short_description:
+          items.length === 1
+            ? `${enrichedItems[0].set_number} ${enrichedItems[0].set_name}`
+            : `Bundle: ${setNumberList}`,
+        description:
+          items.length === 1
+            ? `${enrichedItems[0].set_name} from ${sellerUsername}`
+            : `${setNameList} from ${sellerUsername}`,
         reference: emailRecord.order_reference,
       })
       .select('id')
@@ -285,7 +292,9 @@ export async function POST(
         }
         await serviceSupabase.from('purchases').delete().eq('id', purchase.id);
         return NextResponse.json(
-          { error: `Failed to create inventory for ${enriched.set_number}: ${inventoryError?.message}` },
+          {
+            error: `Failed to create inventory for ${enriched.set_number}: ${inventoryError?.message}`,
+          },
           { status: 500 }
         );
       }

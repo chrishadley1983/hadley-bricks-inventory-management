@@ -7,7 +7,16 @@ import { getInventoryColumns, COLUMN_DISPLAY_NAMES } from './InventoryColumns';
 import { InventoryFilters } from './InventoryFilters';
 import { BulkEditDialog } from './BulkEditDialog';
 import { PriceConflictDialog } from '../amazon-sync/PriceConflictDialog';
-import { useInventoryList, useDeleteInventory, useCreateInventory, useUpdateInventory, useBulkUpdateInventory, useBulkDeleteInventory, usePerf, usePerfQuery } from '@/hooks';
+import {
+  useInventoryList,
+  useDeleteInventory,
+  useCreateInventory,
+  useUpdateInventory,
+  useBulkUpdateInventory,
+  useBulkDeleteInventory,
+  usePerf,
+  usePerfQuery,
+} from '@/hooks';
 import { useAddToSyncQueue, type PriceConflict } from '@/hooks/use-amazon-sync';
 import { useToast } from '@/hooks/use-toast';
 import type { InventoryFilters as Filters } from '@/lib/api';
@@ -73,153 +82,169 @@ export function InventoryTable() {
     setBulkDeleteIds([]);
   };
 
-  const handleBulkDuplicate = useCallback(async (rows: InventoryItem[]) => {
-    for (const row of rows) {
-      // Create a copy of the item data for duplication
-      await createMutation.mutateAsync({
-        set_number: row.set_number,
-        item_name: row.item_name ? `${row.item_name} (Copy)` : null,
-        condition: row.condition,
-        status: row.status,
-        source: row.source,
-        purchase_date: row.purchase_date,
-        cost: row.cost,
-        listing_date: row.listing_date,
-        listing_value: row.listing_value,
-        storage_location: row.storage_location,
-        sku: null, // Clear the SKU since it should be unique
-        linked_lot: row.linked_lot,
-        amazon_asin: row.amazon_asin,
-        listing_platform: row.listing_platform,
-        notes: row.notes,
-      });
-    }
-  }, [createMutation]);
+  const handleBulkDuplicate = useCallback(
+    async (rows: InventoryItem[]) => {
+      for (const row of rows) {
+        // Create a copy of the item data for duplication
+        await createMutation.mutateAsync({
+          set_number: row.set_number,
+          item_name: row.item_name ? `${row.item_name} (Copy)` : null,
+          condition: row.condition,
+          status: row.status,
+          source: row.source,
+          purchase_date: row.purchase_date,
+          cost: row.cost,
+          listing_date: row.listing_date,
+          listing_value: row.listing_value,
+          storage_location: row.storage_location,
+          sku: null, // Clear the SKU since it should be unique
+          linked_lot: row.linked_lot,
+          amazon_asin: row.amazon_asin,
+          listing_platform: row.listing_platform,
+          notes: row.notes,
+        });
+      }
+    },
+    [createMutation]
+  );
 
-  const handleBulkEdit = useCallback((rows: InventoryItem[]) => {
-    // Navigate to edit page for single item
-    if (rows.length === 1) {
-      router.push(`/inventory/${rows[0].id}/edit`);
-    }
-  }, [router]);
+  const handleBulkEdit = useCallback(
+    (rows: InventoryItem[]) => {
+      // Navigate to edit page for single item
+      if (rows.length === 1) {
+        router.push(`/inventory/${rows[0].id}/edit`);
+      }
+    },
+    [router]
+  );
 
-  const handleInlineUpdate = useCallback(async (id: string, data: Partial<InventoryItem>) => {
-    await updateMutation.mutateAsync({ id, data });
-  }, [updateMutation]);
+  const handleInlineUpdate = useCallback(
+    async (id: string, data: Partial<InventoryItem>) => {
+      await updateMutation.mutateAsync({ id, data });
+    },
+    [updateMutation]
+  );
 
   const handleOpenBulkEdit = useCallback((rows: InventoryItem[]) => {
     setBulkEditItems(rows);
   }, []);
 
-  const handleAddToAmazonSync = useCallback(async (item: InventoryItem) => {
-    if (!item.amazon_asin) {
-      toast({
-        title: 'Cannot add to sync',
-        description: 'This item does not have an Amazon ASIN.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    try {
-      const result = await addToSyncQueueMutation.mutateAsync({ inventoryItemId: item.id });
-
-      // Check for price conflict
-      if (result.priceConflict) {
-        setPendingConflicts([result.priceConflict]);
-        return;
-      }
-
-      toast({
-        title: 'Added to sync queue',
-        description: `${item.set_number} has been added to the Amazon sync queue.`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to add to queue',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
-      });
-    }
-  }, [addToSyncQueueMutation, toast]);
-
-  const handleBulkAddToAmazonSync = useCallback(async (rows: InventoryItem[]) => {
-    const itemsWithAsin = rows.filter(row => row.amazon_asin);
-    if (itemsWithAsin.length === 0) {
-      toast({
-        title: 'No eligible items',
-        description: 'None of the selected items have an Amazon ASIN.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    try {
-      const result = await addToSyncQueueMutation.mutateAsync({
-        inventoryItemIds: itemsWithAsin.map(item => item.id),
-      });
-      const skippedCount = rows.length - itemsWithAsin.length;
-
-      // Check for price conflicts - queue all of them to resolve one by one
-      if (result.priceConflicts && result.priceConflicts.length > 0) {
-        const conflictCount = result.priceConflicts.length;
-        // Queue all conflicts to resolve sequentially
-        setPendingConflicts(result.priceConflicts);
-
-        // Show a toast about what's happening
-        if (result.added && result.added > 0) {
-          toast({
-            title: 'Partial success',
-            description: `${result.added} item(s) added. Resolving ${conflictCount} price conflict(s)...`,
-          });
-        } else {
-          toast({
-            title: 'Price conflicts detected',
-            description: `Resolving ${conflictCount} price conflict(s)...`,
-          });
-        }
-        return;
-      }
-
-      // Check if all items failed with other errors
-      if (result.added === 0 && result.errors && result.errors.length > 0) {
+  const handleAddToAmazonSync = useCallback(
+    async (item: InventoryItem) => {
+      if (!item.amazon_asin) {
         toast({
-          title: 'Failed to add to queue',
-          description: result.errors[0].split(': ')[1] || result.errors[0],
+          title: 'Cannot add to sync',
+          description: 'This item does not have an Amazon ASIN.',
           variant: 'destructive',
         });
         return;
       }
+      try {
+        const result = await addToSyncQueueMutation.mutateAsync({ inventoryItemId: item.id });
 
-      let description = `${result.added} item(s) added to Amazon sync queue.`;
-      if (skippedCount > 0) {
-        description += ` ${skippedCount} item(s) skipped (no ASIN).`;
+        // Check for price conflict
+        if (result.priceConflict) {
+          setPendingConflicts([result.priceConflict]);
+          return;
+        }
+
+        toast({
+          title: 'Added to sync queue',
+          description: `${item.set_number} has been added to the Amazon sync queue.`,
+        });
+      } catch (error) {
+        toast({
+          title: 'Failed to add to queue',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'destructive',
+        });
       }
-      if (result.skipped) {
-        description += ` ${result.skipped} already in queue.`;
+    },
+    [addToSyncQueueMutation, toast]
+  );
+
+  const handleBulkAddToAmazonSync = useCallback(
+    async (rows: InventoryItem[]) => {
+      const itemsWithAsin = rows.filter((row) => row.amazon_asin);
+      if (itemsWithAsin.length === 0) {
+        toast({
+          title: 'No eligible items',
+          description: 'None of the selected items have an Amazon ASIN.',
+          variant: 'destructive',
+        });
+        return;
       }
-      if (result.errors && result.errors.length > 0) {
-        description += ` ${result.errors.length} failed.`;
+      try {
+        const result = await addToSyncQueueMutation.mutateAsync({
+          inventoryItemIds: itemsWithAsin.map((item) => item.id),
+        });
+        const skippedCount = rows.length - itemsWithAsin.length;
+
+        // Check for price conflicts - queue all of them to resolve one by one
+        if (result.priceConflicts && result.priceConflicts.length > 0) {
+          const conflictCount = result.priceConflicts.length;
+          // Queue all conflicts to resolve sequentially
+          setPendingConflicts(result.priceConflicts);
+
+          // Show a toast about what's happening
+          if (result.added && result.added > 0) {
+            toast({
+              title: 'Partial success',
+              description: `${result.added} item(s) added. Resolving ${conflictCount} price conflict(s)...`,
+            });
+          } else {
+            toast({
+              title: 'Price conflicts detected',
+              description: `Resolving ${conflictCount} price conflict(s)...`,
+            });
+          }
+          return;
+        }
+
+        // Check if all items failed with other errors
+        if (result.added === 0 && result.errors && result.errors.length > 0) {
+          toast({
+            title: 'Failed to add to queue',
+            description: result.errors[0].split(': ')[1] || result.errors[0],
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        let description = `${result.added} item(s) added to Amazon sync queue.`;
+        if (skippedCount > 0) {
+          description += ` ${skippedCount} item(s) skipped (no ASIN).`;
+        }
+        if (result.skipped) {
+          description += ` ${result.skipped} already in queue.`;
+        }
+        if (result.errors && result.errors.length > 0) {
+          description += ` ${result.errors.length} failed.`;
+        }
+        const addedCount = result.added ?? 0;
+        toast({
+          title: addedCount > 0 ? 'Added to sync queue' : 'No items added',
+          description,
+          variant: addedCount > 0 ? 'default' : 'destructive',
+        });
+      } catch (error) {
+        toast({
+          title: 'Failed to add to queue',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'destructive',
+        });
       }
-      const addedCount = result.added ?? 0;
-      toast({
-        title: addedCount > 0 ? 'Added to sync queue' : 'No items added',
-        description,
-        variant: addedCount > 0 ? 'default' : 'destructive',
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to add to queue',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
-      });
-    }
-  }, [addToSyncQueueMutation, toast]);
+    },
+    [addToSyncQueueMutation, toast]
+  );
 
   const columns = useMemo(
-    () => getInventoryColumns({
-      onDelete: (id) => setDeleteId(id),
-      onAddToAmazonSync: handleAddToAmazonSync,
-      onUpdate: handleInlineUpdate,
-    }),
+    () =>
+      getInventoryColumns({
+        onDelete: (id) => setDeleteId(id),
+        onAddToAmazonSync: handleAddToAmazonSync,
+        onUpdate: handleInlineUpdate,
+      }),
     [handleAddToAmazonSync, handleInlineUpdate]
   );
 

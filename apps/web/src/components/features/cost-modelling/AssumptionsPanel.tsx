@@ -16,12 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle } from 'lucide-react';
 import type { CostModelScenarioFormData } from '@/types/cost-modelling';
 
@@ -34,25 +29,23 @@ interface AssumptionsPanelProps {
 }
 
 export function AssumptionsPanel({ data, onChange, disabled, compact }: AssumptionsPanelProps) {
-  const handleNumberChange = (field: keyof CostModelScenarioFormData) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = parseFloat(e.target.value);
-    // E4: Prevent negative values
-    if (!isNaN(value) && value >= 0) {
-      onChange({ [field]: value });
-    }
-  };
+  const handleNumberChange =
+    (field: keyof CostModelScenarioFormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = parseFloat(e.target.value);
+      // E4: Prevent negative values
+      if (!isNaN(value) && value >= 0) {
+        onChange({ [field]: value });
+      }
+    };
 
-  const handlePercentChange = (field: keyof CostModelScenarioFormData) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    // Convert percentage input (e.g., "18.3") to decimal (0.183)
-    const value = parseFloat(e.target.value) / 100;
-    if (!isNaN(value) && value >= 0 && value <= 1) {
-      onChange({ [field]: value });
-    }
-  };
+  const handlePercentChange =
+    (field: keyof CostModelScenarioFormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Convert percentage input (e.g., "18.3") to decimal (0.183)
+      const value = parseFloat(e.target.value) / 100;
+      if (!isNaN(value) && value >= 0 && value <= 1) {
+        onChange({ [field]: value });
+      }
+    };
 
   return (
     <Card>
@@ -61,7 +54,10 @@ export function AssumptionsPanel({ data, onChange, disabled, compact }: Assumpti
       </CardHeader>
       <CardContent>
         <TooltipProvider>
-          <Accordion type="multiple" defaultValue={compact ? [] : ['sales', 'fees', 'cog', 'fixed', 'vat', 'tax']}>
+          <Accordion
+            type="multiple"
+            defaultValue={compact ? [] : ['sales', 'fees', 'cog', 'fixed', 'vat', 'tax']}
+          >
             {/* Sales Volume Section - F9 */}
             <AccordionItem value="sales">
               <AccordionTrigger>Sales Volume & Pricing</AccordionTrigger>
@@ -377,7 +373,11 @@ export function AssumptionsPanel({ data, onChange, disabled, compact }: Assumpti
                       min={0}
                       step={0.01}
                       prefix="£"
-                      tooltip={data.isVatRegistered ? 'Will use VAT accountant cost when VAT registered' : undefined}
+                      tooltip={
+                        data.isVatRegistered
+                          ? 'Will use VAT accountant cost when VAT registered'
+                          : undefined
+                      }
                       disabled={disabled}
                     />
                     <InputWithLabel

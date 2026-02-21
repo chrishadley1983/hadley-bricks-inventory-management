@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  DiscordService,
-  DiscordColors,
-  type DiscordChannel,
-} from '../discord.service';
+import { DiscordService, DiscordColors, type DiscordChannel } from '../discord.service';
 
 // Mock fetch
 const mockFetch = vi.fn();

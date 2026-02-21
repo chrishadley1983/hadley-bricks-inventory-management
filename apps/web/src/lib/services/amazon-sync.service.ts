@@ -171,15 +171,24 @@ export class AmazonSyncService {
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
         queryParams.LastUpdatedAfter = ninetyDaysAgo.toISOString();
-        console.log('[AmazonSyncService] Full sync - fetching orders updated since:', ninetyDaysAgo.toISOString());
+        console.log(
+          '[AmazonSyncService] Full sync - fetching orders updated since:',
+          ninetyDaysAgo.toISOString()
+        );
       } else if (options.createdAfter) {
         // Explicit date provided - use it
         queryParams.CreatedAfter = options.createdAfter.toISOString();
-        console.log('[AmazonSyncService] Using explicit createdAfter:', options.createdAfter.toISOString());
+        console.log(
+          '[AmazonSyncService] Using explicit createdAfter:',
+          options.createdAfter.toISOString()
+        );
       } else if (options.updatedAfter) {
         // Explicit updatedAfter provided - use it for incremental sync
         queryParams.LastUpdatedAfter = options.updatedAfter.toISOString();
-        console.log('[AmazonSyncService] Using explicit updatedAfter:', options.updatedAfter.toISOString());
+        console.log(
+          '[AmazonSyncService] Using explicit updatedAfter:',
+          options.updatedAfter.toISOString()
+        );
       } else {
         // No explicit date - check for most recent sync timestamp in database
         const mostRecentSyncDate = await this.getMostRecentSyncDate(userId);
@@ -197,7 +206,10 @@ export class AmazonSyncService {
           const ninetyDaysAgo = new Date();
           ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
           queryParams.CreatedAfter = ninetyDaysAgo.toISOString();
-          console.log('[AmazonSyncService] No existing orders, using 90-day default:', ninetyDaysAgo.toISOString());
+          console.log(
+            '[AmazonSyncService] No existing orders, using 90-day default:',
+            ninetyDaysAgo.toISOString()
+          );
         }
       }
 
@@ -237,18 +249,16 @@ export class AmazonSyncService {
           const orderId = orderSummary.AmazonOrderId;
 
           // Check if order already exists
-          const existing = await this.orderRepo.findByPlatformOrderId(
-            userId,
-            'amazon',
-            orderId
-          );
+          const existing = await this.orderRepo.findByPlatformOrderId(userId, 'amazon', orderId);
 
           // Log status changes for debugging
           if (existing) {
             const amazonStatus = orderSummary.OrderStatus;
             const existingStatus = existing.status;
             if (amazonStatus !== existingStatus) {
-              console.log(`[AmazonSyncService] Order ${orderId} status change: ${existingStatus} -> ${amazonStatus}`);
+              console.log(
+                `[AmazonSyncService] Order ${orderId} status change: ${existingStatus} -> ${amazonStatus}`
+              );
             }
           }
 
@@ -318,7 +328,9 @@ export class AmazonSyncService {
       );
       if (existing && existing.items_count === 0) {
         needsItemsBackfill = true;
-        console.log(`[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`);
+        console.log(
+          `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`
+        );
       }
     }
 
@@ -330,7 +342,9 @@ export class AmazonSyncService {
       const items = await client.getOrderItems(orderId);
       normalized = normalizeOrder(orderSummary, items);
       if (needsItemsForDispatch && !includeItems) {
-        console.log(`[AmazonSyncService] Fetched items for dispatch order ${orderId} (status: ${orderSummary.OrderStatus})`);
+        console.log(
+          `[AmazonSyncService] Fetched items for dispatch order ${orderId} (status: ${orderSummary.OrderStatus})`
+        );
       }
     } else {
       // Just use summary data
@@ -363,7 +377,8 @@ export class AmazonSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       items_count: normalized.items.length,
       dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
@@ -391,8 +406,10 @@ export class AmazonSyncService {
         // Amazon-specific fields stored in raw_data if needed
       }));
 
-      console.log(`[AmazonSyncService] Saving ${itemInserts.length} items for order ${normalized.platformOrderId}:`,
-        itemInserts.map(i => ({ asin: i.item_number, title: i.item_name?.substring(0, 50) })));
+      console.log(
+        `[AmazonSyncService] Saving ${itemInserts.length} items for order ${normalized.platformOrderId}:`,
+        itemInserts.map((i) => ({ asin: i.item_number, title: i.item_name?.substring(0, 50) }))
+      );
       await this.orderRepo.replaceOrderItems(savedOrder.id, itemInserts);
     } else if (shouldFetchItems) {
       console.log(`[AmazonSyncService] Order ${normalized.platformOrderId} has no items to save`);
@@ -436,7 +453,8 @@ export class AmazonSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       items_count: normalized.items.length,
       dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
@@ -489,13 +507,13 @@ export class AmazonSyncService {
     const stats = await this.orderRepo.getStats(userId, 'amazon');
 
     // Get most recent synced_at
-    const { data } = await this.supabase
+    const { data } = (await this.supabase
       .from('platform_orders')
       .select('synced_at')
       .eq('user_id', userId)
       .eq('platform', 'amazon')
       .order('synced_at', { ascending: false })
-      .limit(1) as { data: { synced_at: string }[] | null };
+      .limit(1)) as { data: { synced_at: string }[] | null };
 
     const lastSyncedAt = data?.[0]?.synced_at ? new Date(data[0].synced_at) : null;
 

@@ -56,9 +56,7 @@ function StockCount({
         </div>
       ) : (
         <>
-          <div className={`text-3xl font-bold text-${accentColor}-600 mb-2`}>
-            {total}
-          </div>
+          <div className={`text-3xl font-bold text-${accentColor}-600 mb-2`}>{total}</div>
           <div className="flex gap-2">
             <Badge variant="default" className="text-xs">
               {newCount} New
@@ -68,9 +66,7 @@ function StockCount({
             </Badge>
           </div>
           {isClickable && (
-            <div className={`text-xs text-${accentColor}-600 mt-2`}>
-              Click for details
-            </div>
+            <div className={`text-xs text-${accentColor}-600 mt-2`}>Click for details</div>
           )}
         </>
       )}

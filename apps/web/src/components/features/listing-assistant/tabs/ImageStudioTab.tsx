@@ -31,12 +31,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import {
-  processImage,
-  generateFilename,
-} from '@/lib/listing-assistant/image-processing';
+import { processImage, generateFilename } from '@/lib/listing-assistant/image-processing';
 import { useImageProcessor } from '@/hooks/listing-assistant';
-import { SLIDER_CONFIG, IMAGE_PRESETS, EBAY_OPTIMIZE_SETTINGS } from '@/lib/listing-assistant/constants';
+import {
+  SLIDER_CONFIG,
+  IMAGE_PRESETS,
+  EBAY_OPTIMIZE_SETTINGS,
+} from '@/lib/listing-assistant/constants';
 import { cn } from '@/lib/utils';
 
 export function ImageStudioTab() {
@@ -69,7 +70,8 @@ export function ImageStudioTab() {
     if (!('showDirectoryPicker' in window)) {
       toast({
         title: 'Not supported',
-        description: 'Your browser does not support folder selection. Images will be downloaded to your default downloads folder.',
+        description:
+          'Your browser does not support folder selection. Images will be downloaded to your default downloads folder.',
         variant: 'destructive',
       });
       // Fallback to regular download
@@ -84,12 +86,12 @@ export function ImageStudioTab() {
 
     try {
       // Request folder access
-      const dirHandle = await (window as Window & { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker();
+      const dirHandle = await (
+        window as Window & { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
+      ).showDirectoryPicker();
 
       setIsSaving(true);
-      const imagesToSave = saveMode === 'single' && selectedImage
-        ? [selectedImage]
-        : images;
+      const imagesToSave = saveMode === 'single' && selectedImage ? [selectedImage] : images;
 
       let savedCount = 0;
       for (let i = 0; i < imagesToSave.length; i++) {
@@ -145,9 +147,7 @@ export function ImageStudioTab() {
   const handleFileDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith('image/')
-      );
+      const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
       if (files.length > 0) {
         addImages(files);
       }
@@ -194,9 +194,7 @@ export function ImageStudioTab() {
       >
         <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="mt-4 text-lg font-semibold">Image Studio</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Drop images here or click to upload
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">Drop images here or click to upload</p>
         <p className="text-xs text-muted-foreground mt-1">
           Optimize your product photos with brightness, contrast, and AI analysis
         </p>
@@ -220,12 +218,7 @@ export function ImageStudioTab() {
                 <Button variant="ghost" size="sm" onClick={handleFileSelect}>
                   <Upload className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAll}
-                  disabled={images.length === 0}
-                >
+                <Button variant="ghost" size="sm" onClick={clearAll} disabled={images.length === 0}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
@@ -331,9 +324,7 @@ export function ImageStudioTab() {
               </div>
             )}
             {selectedImage && (
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Click image to zoom
-              </p>
+              <p className="text-xs text-muted-foreground text-center mt-2">Click image to zoom</p>
             )}
 
             {/* AI Analysis Results */}
@@ -356,7 +347,9 @@ export function ImageStudioTab() {
                   )}
                   <div>
                     <span className="font-medium">Filename:</span>
-                    <p className="text-muted-foreground">{selectedImage.analysis.suggestedFilename}</p>
+                    <p className="text-muted-foreground">
+                      {selectedImage.analysis.suggestedFilename}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -402,12 +395,14 @@ export function ImageStudioTab() {
                 : `Save ${images.length} Image${images.length !== 1 ? 's' : ''}`}
             </DialogTitle>
             <DialogDescription>
-              Choose a folder on your computer to save the processed {saveMode === 'single' ? 'image' : 'images'}.
+              Choose a folder on your computer to save the processed{' '}
+              {saveMode === 'single' ? 'image' : 'images'}.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground mb-4">
-              Click the button below to select a folder. Your browser will ask for permission to save files.
+              Click the button below to select a folder. Your browser will ask for permission to
+              save files.
             </p>
             {saveMode === 'all' && images.length > 1 && (
               <div className="bg-muted rounded-md p-3 text-sm">
@@ -419,9 +414,7 @@ export function ImageStudioTab() {
                     </li>
                   ))}
                   {images.length > 5 && (
-                    <li className="text-muted-foreground/70">
-                      ...and {images.length - 5} more
-                    </li>
+                    <li className="text-muted-foreground/70">...and {images.length - 5} more</li>
                   )}
                 </ul>
               </div>
@@ -457,9 +450,7 @@ export function ImageStudioTab() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Adjustments</CardTitle>
-            <CardDescription className="text-xs">
-              Fine-tune your image settings
-            </CardDescription>
+            <CardDescription className="text-xs">Fine-tune your image settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedImage ? (
@@ -472,7 +463,8 @@ export function ImageStudioTab() {
                     applyPreset(selectedId!, EBAY_OPTIMIZE_SETTINGS);
                     toast({
                       title: 'Optimised for eBay',
-                      description: 'Settings adjusted for eBay best practices. Review the sliders to fine-tune.',
+                      description:
+                        'Settings adjusted for eBay best practices. Review the sliders to fine-tune.',
                     });
                   }}
                 >
@@ -480,7 +472,8 @@ export function ImageStudioTab() {
                   Optimise for eBay
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  One-click professional photo optimization: brightness, contrast, sharpness, and temperature
+                  One-click professional photo optimization: brightness, contrast, sharpness, and
+                  temperature
                 </p>
 
                 {/* Quick Actions */}
@@ -540,11 +533,7 @@ export function ImageStudioTab() {
                   >
                     High Contrast
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => resetSettings(selectedId!)}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => resetSettings(selectedId!)}>
                     <RotateCcw className="mr-1 h-3 w-3" />
                     Reset
                   </Button>

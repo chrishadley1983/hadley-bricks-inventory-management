@@ -13,7 +13,11 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { ArbitrageFilterOptions, ArbitrageShowFilter, ArbitrageSortField } from '@/lib/arbitrage/types';
+import type {
+  ArbitrageFilterOptions,
+  ArbitrageShowFilter,
+  ArbitrageSortField,
+} from '@/lib/arbitrage/types';
 import { SHOW_FILTER_OPTIONS, SORT_OPTIONS } from '@/lib/arbitrage/types';
 
 interface ArbitrageFiltersProps {
@@ -257,19 +261,28 @@ export function ArbitrageFilters({
         {seededCount !== undefined && seededCount > 0 && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Seeded</span>
-            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-mono">
+            <Badge
+              variant="outline"
+              className="bg-purple-50 text-purple-700 border-purple-200 font-mono"
+            >
               {seededCount}
             </Badge>
           </div>
         )}
-        {inventoryCount !== undefined && inventoryCount > 0 && seededCount !== undefined && seededCount > 0 && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Inventory</span>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-mono">
-              {inventoryCount}
-            </Badge>
-          </div>
-        )}
+        {inventoryCount !== undefined &&
+          inventoryCount > 0 &&
+          seededCount !== undefined &&
+          seededCount > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Inventory</span>
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-200 font-mono"
+              >
+                {inventoryCount}
+              </Badge>
+            </div>
+          )}
       </div>
     </div>
   );

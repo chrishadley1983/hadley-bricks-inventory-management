@@ -118,10 +118,7 @@ function generateMonthRange(startMonth: string, endMonth: string): string[] {
   let currentYear = startYear;
   let currentMonth = startMonthNum;
 
-  while (
-    currentYear < endYear ||
-    (currentYear === endYear && currentMonth <= endMonthNum)
-  ) {
+  while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonthNum)) {
     months.push(`${currentYear}-${String(currentMonth).padStart(2, '0')}`);
     currentMonth++;
     if (currentMonth > 12) {
@@ -177,7 +174,11 @@ async function queryEbayGrossSales(
   const pageSize = 1000;
   let page = 0;
   let hasMore = true;
-  const allData: { transaction_date: string; gross_transaction_amount: number | null; ebay_order_id: string | null }[] = [];
+  const allData: {
+    transaction_date: string;
+    gross_transaction_amount: number | null;
+    ebay_order_id: string | null;
+  }[] = [];
 
   while (hasMore) {
     const { data, error } = await supabase
@@ -211,7 +212,9 @@ async function queryEbayGrossSales(
     monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_transaction_amount || 0));
   }
 
-  console.log(`[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded (${page} pages)`);
+  console.log(
+    `[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded (${page} pages)`
+  );
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
     month,
@@ -275,7 +278,15 @@ async function queryBrickLinkGrossSales(
 ): Promise<MonthlyAggregation[]> {
   // BrickLink stores statuses in UPPERCASE
   // PURGED = orders older than 6 months that have been archived by BrickLink
-  const completedStatuses = ['COMPLETED', 'RECEIVED', 'SHIPPED', 'PACKED', 'READY', 'PAID', 'PURGED'];
+  const completedStatuses = [
+    'COMPLETED',
+    'RECEIVED',
+    'SHIPPED',
+    'PACKED',
+    'READY',
+    'PAID',
+    'PURGED',
+  ];
 
   // Paginate to handle Supabase's 1000 row limit
   const pageSize = 1000;
@@ -509,7 +520,9 @@ async function queryMonzoByCategory(
 
   // Debug logging for Postage
   if (localCategory === 'Postage') {
-    console.log(`[P&L] Postage query: ${startDate} to ${endDate}, found ${allData.length} records (${page} pages)`);
+    console.log(
+      `[P&L] Postage query: ${startDate} to ${endDate}, found ${allData.length} records (${page} pages)`
+    );
     if (allData.length > 0) {
       console.log(`[P&L] Sample Postage record:`, allData[0]);
     }
@@ -830,7 +843,13 @@ async function queryEbayFixedFees(
   endDate: string
 ): Promise<MonthlyAggregation[]> {
   // Use the paginated helper for SALE transaction fees
-  return queryEbaySaleFeesByType(supabase, userId, startDate, endDate, 'FINAL_VALUE_FEE_FIXED_PER_ORDER');
+  return queryEbaySaleFeesByType(
+    supabase,
+    userId,
+    startDate,
+    endDate,
+    'FINAL_VALUE_FEE_FIXED_PER_ORDER'
+  );
 }
 
 /**
@@ -886,7 +905,6 @@ async function queryEbayShopFee(
     total,
   }));
 }
-
 
 /**
  * Query Lego Stock Purchases (from Monzo 'Lego Stock' category)
@@ -1045,10 +1063,7 @@ async function queryHomeCostsUseOfHome(
     return [];
   }
 
-  const months = generateMonthRange(
-    startDate.substring(0, 7),
-    endDate.substring(0, 7)
-  );
+  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
 
   const monthMap = new Map<string, number>();
 
@@ -1093,10 +1108,7 @@ async function queryHomeCostsPhoneBroadband(
     return [];
   }
 
-  const months = generateMonthRange(
-    startDate.substring(0, 7),
-    endDate.substring(0, 7)
-  );
+  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
 
   const monthMap = new Map<string, number>();
 
@@ -1141,10 +1153,7 @@ async function queryHomeCostsInsurance(
     return [];
   }
 
-  const months = generateMonthRange(
-    startDate.substring(0, 7),
-    endDate.substring(0, 7)
-  );
+  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
 
   const monthMap = new Map<string, number>();
 
@@ -1541,7 +1550,11 @@ export class ProfitLossReportService {
       const total = Object.values(monthlyValues).reduce((sum, val) => sum + val, 0);
 
       // Skip zero rows if option is set
-      if (!options.includeZeroRows && total === 0 && Object.values(monthlyValues).every((v) => v === 0)) {
+      if (
+        !options.includeZeroRows &&
+        total === 0 &&
+        Object.values(monthlyValues).every((v) => v === 0)
+      ) {
         continue;
       }
 

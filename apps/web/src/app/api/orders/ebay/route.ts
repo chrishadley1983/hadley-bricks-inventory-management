@@ -117,9 +117,7 @@ export async function GET(request: NextRequest) {
 
     // Apply search filter
     if (search) {
-      query = query.or(
-        `ebay_order_id.ilike.%${search}%,buyer_username.ilike.%${search}%`
-      );
+      query = query.or(`ebay_order_id.ilike.%${search}%,buyer_username.ilike.%${search}%`);
     }
 
     // Apply sorting
@@ -138,17 +136,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GET /api/orders/ebay] Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch eBay orders' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch eBay orders' }, { status: 500 });
     }
 
     // Get all SKUs from line items to check for matches
-    const allSkus = (orders || [])
-      .flatMap((order: { line_items?: Array<{ sku: string | null }> }) =>
+    const allSkus = (orders || []).flatMap(
+      (order: { line_items?: Array<{ sku: string | null }> }) =>
         (order.line_items || []).map((li) => li.sku).filter(Boolean)
-      ) as string[];
+    ) as string[];
 
     // Fetch SKU mappings for this user
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,18 +162,13 @@ export async function GET(request: NextRequest) {
         .select('sku')
         .eq('user_id', user.id)
         .in('sku', allSkus);
-      matchedInventorySkus = new Set(
-        (inventoryMatches || []).map((i: { sku: string }) => i.sku)
-      );
+      matchedInventorySkus = new Set((inventoryMatches || []).map((i: { sku: string }) => i.sku));
     }
 
     // Transform orders to include mapped status and match info
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const transformedOrders = (orders || []).map((order: any) => {
-      const uiStatus = mapEbayStatusToUI(
-        order.order_fulfilment_status,
-        order.order_payment_status
-      );
+      const uiStatus = mapEbayStatusToUI(order.order_fulfilment_status, order.order_payment_status);
 
       // Check match status for each line item
       const lineItemsWithMatch = (order.line_items || []).map((li: { sku: string | null }) => {

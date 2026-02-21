@@ -13,10 +13,7 @@ const updateEntrySchema = z.object({
  * PATCH /api/time-tracking/entries/[id]
  * Update an existing time entry
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -81,10 +78,7 @@ export async function PATCH(
       const durationSeconds = Math.floor((end.getTime() - start.getTime()) / 1000);
 
       if (durationSeconds < 0) {
-        return NextResponse.json(
-          { error: 'End time must be after start time' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
       }
 
       updates.duration_seconds = durationSeconds;
@@ -144,10 +138,7 @@ export async function DELETE(
     }
 
     // Delete entry
-    const { error } = await supabase
-      .from('time_entries')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('time_entries').delete().eq('id', id);
 
     if (error) {
       console.error('[DELETE /api/time-tracking/entries/[id]] Error:', error);

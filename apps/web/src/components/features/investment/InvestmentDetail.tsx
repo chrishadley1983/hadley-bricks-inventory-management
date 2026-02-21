@@ -24,7 +24,10 @@ interface InvestmentDetailProps {
   setNumber: string;
 }
 
-const RETIREMENT_STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+const RETIREMENT_STATUS_VARIANTS: Record<
+  string,
+  'default' | 'secondary' | 'outline' | 'destructive'
+> = {
   available: 'default',
   retiring_soon: 'destructive',
   retired: 'secondary',
@@ -69,7 +72,9 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
     return (
       <div className="rounded-lg border p-6 text-center">
         <h3 className="font-semibold">Set not found</h3>
-        <p className="text-muted-foreground">This LEGO set does not exist in the investment tracker.</p>
+        <p className="text-muted-foreground">
+          This LEGO set does not exist in the investment tracker.
+        </p>
         <Button asChild variant="outline" className="mt-4">
           <Link href="/investment">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -80,9 +85,10 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
     );
   }
 
-  const discount = set.pricing?.buy_box_price && set.uk_retail_price
-    ? ((set.uk_retail_price - set.pricing.buy_box_price) / set.uk_retail_price) * 100
-    : null;
+  const discount =
+    set.pricing?.buy_box_price && set.uk_retail_price
+      ? ((set.uk_retail_price - set.pricing.buy_box_price) / set.uk_retail_price) * 100
+      : null;
 
   return (
     <div className="space-y-6">
@@ -134,11 +140,19 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Buy Box Price</div>
             <div className="text-2xl font-bold">
-              {set.pricing?.buy_box_price != null ? formatCurrency(set.pricing.buy_box_price) : '\u2014'}
+              {set.pricing?.buy_box_price != null
+                ? formatCurrency(set.pricing.buy_box_price)
+                : '\u2014'}
             </div>
             {discount != null && (
-              <div className={`text-sm flex items-center gap-1 ${discount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {discount > 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
+              <div
+                className={`text-sm flex items-center gap-1 ${discount > 0 ? 'text-green-600' : 'text-red-600'}`}
+              >
+                {discount > 0 ? (
+                  <TrendingDown className="h-3 w-3" />
+                ) : (
+                  <TrendingUp className="h-3 w-3" />
+                )}
                 {Math.abs(discount).toFixed(1)}% {discount > 0 ? 'below' : 'above'} RRP
               </div>
             )}
@@ -156,7 +170,9 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Offers</div>
             <div className="text-2xl font-bold">
-              {set.pricing?.offer_count != null ? set.pricing.offer_count.toLocaleString() : '\u2014'}
+              {set.pricing?.offer_count != null
+                ? set.pricing.offer_count.toLocaleString()
+                : '\u2014'}
             </div>
           </CardContent>
         </Card>
@@ -208,7 +224,9 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
               label="Exclusivity"
               value={
                 set.exclusivity_tier && set.exclusivity_tier !== 'none' ? (
-                  <Badge variant="secondary" className="capitalize">{set.exclusivity_tier}</Badge>
+                  <Badge variant="secondary" className="capitalize">
+                    {set.exclusivity_tier}
+                  </Badge>
                 ) : (
                   '\u2014'
                 )
@@ -245,24 +263,30 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
               <>
                 <DetailRow
                   label="Buy Box Price"
-                  value={set.pricing?.buy_box_price != null ? formatCurrency(set.pricing.buy_box_price) : '\u2014'}
+                  value={
+                    set.pricing?.buy_box_price != null
+                      ? formatCurrency(set.pricing.buy_box_price)
+                      : '\u2014'
+                  }
                 />
                 <DetailRow
                   label="Was Price (90d)"
-                  value={set.pricing?.was_price != null ? formatCurrency(set.pricing.was_price) : '\u2014'}
+                  value={
+                    set.pricing?.was_price != null
+                      ? formatCurrency(set.pricing.was_price)
+                      : '\u2014'
+                  }
                 />
                 <DetailRow
                   label="Lowest Offer"
-                  value={set.pricing?.lowest_offer_price != null ? formatCurrency(set.pricing.lowest_offer_price) : '\u2014'}
+                  value={
+                    set.pricing?.lowest_offer_price != null
+                      ? formatCurrency(set.pricing.lowest_offer_price)
+                      : '\u2014'
+                  }
                 />
-                <DetailRow
-                  label="Sales Rank"
-                  value={set.pricing?.sales_rank?.toLocaleString()}
-                />
-                <DetailRow
-                  label="Offer Count"
-                  value={set.pricing?.offer_count?.toLocaleString()}
-                />
+                <DetailRow label="Sales Rank" value={set.pricing?.sales_rank?.toLocaleString()} />
+                <DetailRow label="Offer Count" value={set.pricing?.offer_count?.toLocaleString()} />
                 <DetailRow
                   label="Last Updated"
                   value={formatDate(set.pricing?.latest_snapshot_date)}
@@ -300,7 +324,10 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
               label="Confidence"
               value={
                 set.retirement_confidence ? (
-                  <Badge variant={CONFIDENCE_VARIANTS[set.retirement_confidence] || 'outline'} className="capitalize">
+                  <Badge
+                    variant={CONFIDENCE_VARIANTS[set.retirement_confidence] || 'outline'}
+                    className="capitalize"
+                  >
                     {set.retirement_confidence}
                   </Badge>
                 ) : (
@@ -319,7 +346,10 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
                         {source.expected_retirement_date && (
                           <span>{formatDate(source.expected_retirement_date)}</span>
                         )}
-                        <Badge variant={CONFIDENCE_VARIANTS[source.confidence] || 'outline'} className="capitalize text-xs">
+                        <Badge
+                          variant={CONFIDENCE_VARIANTS[source.confidence] || 'outline'}
+                          className="capitalize text-xs"
+                        >
                           {source.confidence}
                         </Badge>
                       </div>
@@ -382,7 +412,9 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
                   <div className="text-sm text-muted-foreground">1-Year Predicted Appreciation</div>
                   {set.prediction.predicted_1yr_appreciation != null ? (
                     <>
-                      <div className={`text-2xl font-bold ${set.prediction.predicted_1yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div
+                        className={`text-2xl font-bold ${set.prediction.predicted_1yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                      >
                         {set.prediction.predicted_1yr_appreciation > 0 ? '+' : ''}
                         {set.prediction.predicted_1yr_appreciation.toFixed(1)}%
                       </div>
@@ -400,7 +432,9 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
                   <div className="text-sm text-muted-foreground">3-Year Predicted Appreciation</div>
                   {set.prediction.predicted_3yr_appreciation != null ? (
                     <>
-                      <div className={`text-2xl font-bold ${set.prediction.predicted_3yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div
+                        className={`text-2xl font-bold ${set.prediction.predicted_3yr_appreciation >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                      >
                         {set.prediction.predicted_3yr_appreciation > 0 ? '+' : ''}
                         {set.prediction.predicted_3yr_appreciation.toFixed(1)}%
                       </div>
@@ -437,8 +471,8 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground py-4">
-              Prediction not available for this set. The scoring pipeline has not yet been run,
-              or this set is not eligible for scoring.
+              Prediction not available for this set. The scoring pipeline has not yet been run, or
+              this set is not eligible for scoring.
             </p>
           )}
         </CardContent>
@@ -473,7 +507,8 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
                   };
                   if (point.buy_box_price != null) mapped.buy_box_price = point.buy_box_price;
                   if (point.was_price_90d != null) mapped.was_price_90d = point.was_price_90d;
-                  if (point.lowest_offer_price != null) mapped.lowest_offer_price = point.lowest_offer_price;
+                  if (point.lowest_offer_price != null)
+                    mapped.lowest_offer_price = point.lowest_offer_price;
                   if (point.sales_rank != null) mapped.sales_rank = point.sales_rank;
                   if (priceHistory.rrp != null) mapped.rrp = priceHistory.rrp;
                   return mapped;
@@ -507,13 +542,7 @@ export function InvestmentDetail({ setNumber }: InvestmentDetailProps) {
   );
 }
 
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between">
       <dt className="text-sm text-muted-foreground">{label}</dt>

@@ -46,7 +46,7 @@ describe('MileageService', () => {
 
     it('should calculate mileage cost with custom rate', () => {
       const result = service.calculateMileageCost(25, 0.5);
-      expect(result).toBe(12.50);
+      expect(result).toBe(12.5);
     });
 
     it('should round to 2 decimal places', () => {
@@ -179,7 +179,7 @@ describe('MileageService', () => {
         trackingDate: '2025-01-15',
         destinationPostcode: 'SW1A 1AA',
         milesTravelled: 25,
-        amountClaimed: 15.00,
+        amountClaimed: 15.0,
         reason: 'Collection trip',
         expenseType: 'mileage' as ExpenseType,
       };
@@ -187,7 +187,7 @@ describe('MileageService', () => {
       const mockEntry = {
         id: 'mileage-123',
         miles_travelled: 25,
-        amount_claimed: 15.00,
+        amount_claimed: 15.0,
       };
       mockMileageRepo.createEntry.mockResolvedValue(mockEntry);
 
@@ -198,7 +198,7 @@ describe('MileageService', () => {
         tracking_date: '2025-01-15',
         destination_postcode: 'SW1A 1AA',
         miles_travelled: 25,
-        amount_claimed: 15.00,
+        amount_claimed: 15.0,
         reason: 'Collection trip',
         expense_type: 'mileage',
         notes: null,
@@ -240,7 +240,7 @@ describe('MileageService', () => {
         expenseType: 'mileage' as ExpenseType,
       };
 
-      const mockEntry = { id: 'mileage-123', amount_claimed: 50.00 };
+      const mockEntry = { id: 'mileage-123', amount_claimed: 50.0 };
       mockMileageRepo.createEntry.mockResolvedValue(mockEntry);
 
       await service.createMileageEntry(userId, input, 0.5);
@@ -250,7 +250,7 @@ describe('MileageService', () => {
         tracking_date: '2025-01-15',
         destination_postcode: 'SW1A 1AA',
         miles_travelled: 100,
-        amount_claimed: 50.00,
+        amount_claimed: 50.0,
         reason: 'Long trip',
         expense_type: 'mileage',
         notes: null,
@@ -272,7 +272,7 @@ describe('MileageService', () => {
     });
 
     it('should recalculate amount when miles changed for mileage type', async () => {
-      const mockEntry = { id: 'mileage-123', miles_travelled: 30, amount_claimed: 13.50 };
+      const mockEntry = { id: 'mileage-123', miles_travelled: 30, amount_claimed: 13.5 };
       mockMileageRepo.updateEntry.mockResolvedValue(mockEntry);
 
       await service.updateMileageEntry('mileage-123', userId, {
@@ -283,22 +283,22 @@ describe('MileageService', () => {
       expect(mockMileageRepo.updateEntry).toHaveBeenCalledWith('mileage-123', userId, {
         miles_travelled: 30,
         expense_type: 'mileage',
-        amount_claimed: 13.50,
+        amount_claimed: 13.5,
       });
     });
 
     it('should not recalculate when amount is explicitly provided', async () => {
-      const mockEntry = { id: 'mileage-123', amount_claimed: 20.00 };
+      const mockEntry = { id: 'mileage-123', amount_claimed: 20.0 };
       mockMileageRepo.updateEntry.mockResolvedValue(mockEntry);
 
       await service.updateMileageEntry('mileage-123', userId, {
         milesTravelled: 30,
-        amountClaimed: 20.00,
+        amountClaimed: 20.0,
       });
 
       expect(mockMileageRepo.updateEntry).toHaveBeenCalledWith('mileage-123', userId, {
         miles_travelled: 30,
-        amount_claimed: 20.00,
+        amount_claimed: 20.0,
       });
     });
   });
@@ -329,7 +329,7 @@ describe('MileageService', () => {
     it('should return entries with summary', async () => {
       const entries = [
         { id: '1', expense_type: 'mileage', miles_travelled: 25, amount_claimed: 11.25 },
-        { id: '2', expense_type: 'parking', miles_travelled: 0, amount_claimed: 5.00 },
+        { id: '2', expense_type: 'parking', miles_travelled: 0, amount_claimed: 5.0 },
       ];
       mockMileageRepo.findByPurchaseId.mockResolvedValue(entries);
 
@@ -338,7 +338,7 @@ describe('MileageService', () => {
       expect(result.entries).toHaveLength(2);
       expect(result.totalMiles).toBe(25);
       expect(result.totalMileageCost).toBe(11.25);
-      expect(result.totalOtherCosts).toBe(5.00);
+      expect(result.totalOtherCosts).toBe(5.0);
       expect(result.totalCost).toBe(16.25);
     });
 
@@ -379,7 +379,7 @@ describe('MileageService', () => {
 
   describe('getTotalsForPeriod', () => {
     it('should delegate to repository', async () => {
-      const mockResult = { totalMiles: 100, totalAmount: 45.00 };
+      const mockResult = { totalMiles: 100, totalAmount: 45.0 };
       mockMileageRepo.getTotalForPeriod.mockResolvedValue(mockResult);
 
       const result = await service.getTotalsForPeriod(userId, '2025-01-01', '2025-01-31');
@@ -391,10 +391,10 @@ describe('MileageService', () => {
   describe('getSummaryByType', () => {
     it('should delegate to repository', async () => {
       const mockResult = {
-        mileage: { totalMiles: 100, totalAmount: 45.00, count: 4 },
-        parking: { totalMiles: 0, totalAmount: 15.00, count: 3 },
+        mileage: { totalMiles: 100, totalAmount: 45.0, count: 4 },
+        parking: { totalMiles: 0, totalAmount: 15.0, count: 3 },
         toll: { totalMiles: 0, totalAmount: 0, count: 0 },
-        other: { totalMiles: 0, totalAmount: 10.00, count: 2 },
+        other: { totalMiles: 0, totalAmount: 10.0, count: 2 },
       };
       mockMileageRepo.getSummaryByType.mockResolvedValue(mockResult);
 

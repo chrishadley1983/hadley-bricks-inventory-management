@@ -59,10 +59,7 @@ function getMarketplaceName(marketplaceId: string): string {
 /**
  * Normalize a single order item
  */
-function normalizeOrderItem(
-  item: AmazonOrderItem,
-  currency: string
-): NormalizedAmazonOrderItem {
+function normalizeOrderItem(item: AmazonOrderItem, currency: string): NormalizedAmazonOrderItem {
   const unitPrice = parseAmount(item.ItemPrice) / (item.QuantityOrdered || 1);
   const totalPrice = parseAmount(item.ItemPrice);
 

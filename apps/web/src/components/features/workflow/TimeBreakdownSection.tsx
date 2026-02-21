@@ -5,14 +5,26 @@ import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useTimeSummary, formatDuration, getCategoryColor, type TimeCategory } from '@/hooks/use-time-tracking';
+import {
+  useTimeSummary,
+  formatDuration,
+  getCategoryColor,
+  type TimeCategory,
+} from '@/hooks/use-time-tracking';
 import { TimeEntryDialog } from './TimeEntryDialog';
 
 interface TimeBreakdownSectionProps {
   className?: string;
 }
 
-const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
+const CATEGORIES: TimeCategory[] = [
+  'Development',
+  'Listing',
+  'Shipping',
+  'Sourcing',
+  'Admin',
+  'Other',
+];
 
 export function TimeBreakdownSection({ className }: TimeBreakdownSectionProps) {
   const { data: summary, isLoading, isError } = useTimeSummary();
@@ -100,11 +112,7 @@ export function TimeBreakdownSection({ className }: TimeBreakdownSectionProps) {
             View full log
             <ArrowRight className="h-3 w-3" />
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAddDialogOpen(true)}
-          >
+          <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(true)}>
             <Plus className="mr-1 h-3 w-3" />
             Add Entry
           </Button>
@@ -157,9 +165,7 @@ function TimeBar({ data, total }: TimeBarProps) {
             }}
             title={`${category}: ${formatDuration(seconds)} (${Math.round(percentage)}%)`}
           >
-            {percentage > 10 && (
-              <span className="truncate px-1">{category.slice(0, 3)}</span>
-            )}
+            {percentage > 10 && <span className="truncate px-1">{category.slice(0, 3)}</span>}
           </div>
         );
       })}

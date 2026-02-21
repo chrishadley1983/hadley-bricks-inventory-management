@@ -20,10 +20,7 @@ export {
   type CatalogItemResponse,
   type ProductTypeResult,
 } from './amazon-catalog.client';
-export {
-  AmazonFeedsClient,
-  createAmazonFeedsClient,
-} from './amazon-feeds.client';
+export { AmazonFeedsClient, createAmazonFeedsClient } from './amazon-feeds.client';
 export {
   AmazonPricingClient,
   createAmazonPricingClient,

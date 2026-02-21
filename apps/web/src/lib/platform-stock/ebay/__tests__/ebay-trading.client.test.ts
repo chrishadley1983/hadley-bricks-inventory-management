@@ -24,46 +24,48 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 // TEST HELPERS
 // ============================================================================
 
-function createGetSellerListResponse(options: {
-  items?: Array<{
-    ItemID: string;
-    Title: string;
-    SKU?: string;
-    Quantity?: number;
-    QuantityAvailable?: number;
-    SellingStatus?: {
-      CurrentPrice?: { '#text': string; '@_currencyID': string };
-      ListingStatus?: string;
-      QuantitySold?: number;
-    };
-    ListingDetails?: {
-      StartTime?: string;
-      EndTime?: string;
-      ViewItemURL?: string;
-    };
-    ConditionDisplayName?: string;
-    ConditionID?: number;
-    ListingType?: string;
-    PictureDetails?: { GalleryURL?: string };
-    BestOfferEnabled?: boolean | string;
-    BestOfferDetails?: {
-      BestOfferAutoAcceptPrice?: { '#text': string };
-      MinimumBestOfferPrice?: { '#text': string };
-    };
-    PrimaryCategory?: { CategoryID?: string; CategoryName?: string };
-    WatchCount?: number;
-    HitCount?: number;
-  }>;
-  totalEntries?: number;
-  totalPages?: number;
-  ack?: 'Success' | 'Failure' | 'Warning';
-  errors?: Array<{
-    ErrorCode?: string;
-    ShortMessage?: string;
-    LongMessage?: string;
-    SeverityCode?: 'Error' | 'Warning';
-  }>;
-} = {}) {
+function createGetSellerListResponse(
+  options: {
+    items?: Array<{
+      ItemID: string;
+      Title: string;
+      SKU?: string;
+      Quantity?: number;
+      QuantityAvailable?: number;
+      SellingStatus?: {
+        CurrentPrice?: { '#text': string; '@_currencyID': string };
+        ListingStatus?: string;
+        QuantitySold?: number;
+      };
+      ListingDetails?: {
+        StartTime?: string;
+        EndTime?: string;
+        ViewItemURL?: string;
+      };
+      ConditionDisplayName?: string;
+      ConditionID?: number;
+      ListingType?: string;
+      PictureDetails?: { GalleryURL?: string };
+      BestOfferEnabled?: boolean | string;
+      BestOfferDetails?: {
+        BestOfferAutoAcceptPrice?: { '#text': string };
+        MinimumBestOfferPrice?: { '#text': string };
+      };
+      PrimaryCategory?: { CategoryID?: string; CategoryName?: string };
+      WatchCount?: number;
+      HitCount?: number;
+    }>;
+    totalEntries?: number;
+    totalPages?: number;
+    ack?: 'Success' | 'Failure' | 'Warning';
+    errors?: Array<{
+      ErrorCode?: string;
+      ShortMessage?: string;
+      LongMessage?: string;
+      SeverityCode?: 'Error' | 'Warning';
+    }>;
+  } = {}
+) {
   const {
     items = [],
     totalEntries = items.length,
@@ -75,18 +77,28 @@ function createGetSellerListResponse(options: {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <GetSellerListResponse xmlns="urn:ebay:apis:eBLBaseComponents">
   <Ack>${ack}</Ack>
-  ${errors.length > 0 ? `<Errors>${errors.map(e => `
+  ${
+    errors.length > 0
+      ? `<Errors>${errors
+          .map(
+            (e) => `
     <ErrorCode>${e.ErrorCode || ''}</ErrorCode>
     <ShortMessage>${e.ShortMessage || ''}</ShortMessage>
     <LongMessage>${e.LongMessage || ''}</LongMessage>
     <SeverityCode>${e.SeverityCode || 'Error'}</SeverityCode>
-  `).join('')}</Errors>` : ''}
+  `
+          )
+          .join('')}</Errors>`
+      : ''
+  }
   <PaginationResult>
     <TotalNumberOfEntries>${totalEntries}</TotalNumberOfEntries>
     <TotalNumberOfPages>${totalPages}</TotalNumberOfPages>
   </PaginationResult>
   <ItemArray>
-    ${items.map(item => `
+    ${items
+      .map(
+        (item) => `
     <Item>
       <ItemID>${item.ItemID}</ItemID>
       <Title>${item.Title}</Title>
@@ -99,49 +111,73 @@ function createGetSellerListResponse(options: {
       ${item.WatchCount !== undefined ? `<WatchCount>${item.WatchCount}</WatchCount>` : ''}
       ${item.HitCount !== undefined ? `<HitCount>${item.HitCount}</HitCount>` : ''}
       ${item.BestOfferEnabled !== undefined ? `<BestOfferEnabled>${item.BestOfferEnabled}</BestOfferEnabled>` : ''}
-      ${item.SellingStatus ? `
+      ${
+        item.SellingStatus
+          ? `
       <SellingStatus>
         ${item.SellingStatus.CurrentPrice ? `<CurrentPrice currencyID="${item.SellingStatus.CurrentPrice['@_currencyID']}">${item.SellingStatus.CurrentPrice['#text']}</CurrentPrice>` : ''}
         ${item.SellingStatus.ListingStatus ? `<ListingStatus>${item.SellingStatus.ListingStatus}</ListingStatus>` : ''}
         ${item.SellingStatus.QuantitySold !== undefined ? `<QuantitySold>${item.SellingStatus.QuantitySold}</QuantitySold>` : ''}
-      </SellingStatus>` : ''}
-      ${item.ListingDetails ? `
+      </SellingStatus>`
+          : ''
+      }
+      ${
+        item.ListingDetails
+          ? `
       <ListingDetails>
         ${item.ListingDetails.StartTime ? `<StartTime>${item.ListingDetails.StartTime}</StartTime>` : ''}
         ${item.ListingDetails.EndTime ? `<EndTime>${item.ListingDetails.EndTime}</EndTime>` : ''}
         ${item.ListingDetails.ViewItemURL ? `<ViewItemURL>${item.ListingDetails.ViewItemURL}</ViewItemURL>` : ''}
-      </ListingDetails>` : ''}
-      ${item.PrimaryCategory ? `
+      </ListingDetails>`
+          : ''
+      }
+      ${
+        item.PrimaryCategory
+          ? `
       <PrimaryCategory>
         ${item.PrimaryCategory.CategoryID ? `<CategoryID>${item.PrimaryCategory.CategoryID}</CategoryID>` : ''}
         ${item.PrimaryCategory.CategoryName ? `<CategoryName>${item.PrimaryCategory.CategoryName}</CategoryName>` : ''}
-      </PrimaryCategory>` : ''}
-      ${item.PictureDetails ? `
+      </PrimaryCategory>`
+          : ''
+      }
+      ${
+        item.PictureDetails
+          ? `
       <PictureDetails>
         ${item.PictureDetails.GalleryURL ? `<GalleryURL>${item.PictureDetails.GalleryURL}</GalleryURL>` : ''}
-      </PictureDetails>` : ''}
-      ${item.BestOfferDetails ? `
+      </PictureDetails>`
+          : ''
+      }
+      ${
+        item.BestOfferDetails
+          ? `
       <BestOfferDetails>
         ${item.BestOfferDetails.BestOfferAutoAcceptPrice ? `<BestOfferAutoAcceptPrice>${item.BestOfferDetails.BestOfferAutoAcceptPrice['#text']}</BestOfferAutoAcceptPrice>` : ''}
         ${item.BestOfferDetails.MinimumBestOfferPrice ? `<MinimumBestOfferPrice>${item.BestOfferDetails.MinimumBestOfferPrice['#text']}</MinimumBestOfferPrice>` : ''}
-      </BestOfferDetails>` : ''}
+      </BestOfferDetails>`
+          : ''
+      }
     </Item>
-    `).join('')}
+    `
+      )
+      .join('')}
   </ItemArray>
 </GetSellerListResponse>`;
 }
 
-function createMockItem(overrides: Partial<{
-  ItemID: string;
-  Title: string;
-  SKU: string;
-  QuantityAvailable: number;
-  CurrentPrice: number;
-  Currency: string;
-  ListingStatus: string;
-  ConditionDisplayName: string;
-  ListingType: string;
-}> = {}) {
+function createMockItem(
+  overrides: Partial<{
+    ItemID: string;
+    Title: string;
+    SKU: string;
+    QuantityAvailable: number;
+    CurrentPrice: number;
+    Currency: string;
+    ListingStatus: string;
+    ConditionDisplayName: string;
+    ListingType: string;
+  }> = {}
+) {
   return {
     ItemID: overrides.ItemID ?? '123456789012',
     Title: overrides.Title ?? 'Test LEGO Set',

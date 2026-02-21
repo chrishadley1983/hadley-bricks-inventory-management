@@ -165,7 +165,8 @@ export class OrderStatusService {
         if (shipping.carrier) updateData.shipping_carrier = shipping.carrier;
         if (shipping.trackingNumber) updateData.tracking_number = shipping.trackingNumber;
         if (shipping.method) updateData.shipping_method = shipping.method;
-        if (shipping.actualCost !== undefined) updateData.shipping_cost_actual = shipping.actualCost;
+        if (shipping.actualCost !== undefined)
+          updateData.shipping_cost_actual = shipping.actualCost;
       }
     } else if (newStatus === 'Completed') {
       updateData.completed_at = now;
@@ -389,7 +390,10 @@ export class OrderStatusService {
         throw new Error(`Failed to get status summary: ${error.message}`);
       }
 
-      const orders = (data || []) as Array<{ internal_status: string | null; status: string | null }>;
+      const orders = (data || []) as Array<{
+        internal_status: string | null;
+        status: string | null;
+      }>;
       for (const order of orders) {
         // Use internal_status if set, otherwise normalize the raw status field
         const status = order.internal_status

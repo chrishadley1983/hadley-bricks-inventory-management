@@ -300,13 +300,16 @@ describe('Report hooks', () => {
 
       const { result } = renderHook(() => useUpdateReportSettings(), { wrapper: createWrapper() });
 
-      result.current.mutate({ mileageRate: 0.50, businessName: 'New Name' });
+      result.current.mutate({ mileageRate: 0.5, businessName: 'New Name' });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/reports/settings', expect.objectContaining({
-        method: 'PUT',
-      }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/reports/settings',
+        expect.objectContaining({
+          method: 'PUT',
+        })
+      );
     });
 
     it('should handle update error', async () => {
@@ -317,7 +320,7 @@ describe('Report hooks', () => {
 
       const { result } = renderHook(() => useUpdateReportSettings(), { wrapper: createWrapper() });
 
-      result.current.mutate({ mileageRate: 0.50 });
+      result.current.mutate({ mileageRate: 0.5 });
 
       await waitFor(() => expect(result.current.isError).toBe(true));
 

@@ -544,9 +544,9 @@ describe('Listings Service', () => {
         }),
       });
 
-      await expect(
-        updateListing(testUserId, 'listing-123', { title: 'Test' })
-      ).rejects.toThrow('Failed to update listing');
+      await expect(updateListing(testUserId, 'listing-123', { title: 'Test' })).rejects.toThrow(
+        'Failed to update listing'
+      );
     });
   });
 
@@ -638,9 +638,7 @@ describe('Listings Service', () => {
         }),
       });
 
-      await expect(getListingCounts(testUserId)).rejects.toThrow(
-        'Failed to get listing counts'
-      );
+      await expect(getListingCounts(testUserId)).rejects.toThrow('Failed to get listing counts');
     });
   });
 });

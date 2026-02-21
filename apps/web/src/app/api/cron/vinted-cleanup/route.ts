@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     results.tasks = {
-      ...results.tasks as Record<string, unknown>,
+      ...(results.tasks as Record<string, unknown>),
       expireOpportunities: {
         success: !expireError,
         count: expiredOpps?.length ?? 0,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     results.tasks = {
-      ...results.tasks as Record<string, unknown>,
+      ...(results.tasks as Record<string, unknown>),
       deleteScanLogs: {
         success: !logError,
         count: deletedLogs?.length ?? 0,
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     results.tasks = {
-      ...results.tasks as Record<string, unknown>,
+      ...(results.tasks as Record<string, unknown>),
       deleteOldOpportunities: {
         success: !deleteOppError,
         count: deletedOpps?.length ?? 0,
@@ -161,10 +161,8 @@ export async function POST(request: NextRequest) {
         .gte('updated_at', yesterday.toISOString())
         .lt('updated_at', today.toISOString());
 
-      const nearMissesFound = nearMisses?.reduce(
-        (sum, s) => sum + (s.near_miss_found || 0),
-        0
-      ) || 0;
+      const nearMissesFound =
+        nearMisses?.reduce((sum, s) => sum + (s.near_miss_found || 0), 0) || 0;
 
       // Send daily summary via Discord
       await discordService.sendVintedDailySummary({
@@ -175,7 +173,7 @@ export async function POST(request: NextRequest) {
       });
 
       results.tasks = {
-        ...results.tasks as Record<string, unknown>,
+        ...(results.tasks as Record<string, unknown>),
         dailySummary: {
           success: true,
           broadSweeps,
@@ -186,7 +184,7 @@ export async function POST(request: NextRequest) {
       };
     } else {
       results.tasks = {
-        ...results.tasks as Record<string, unknown>,
+        ...(results.tasks as Record<string, unknown>),
         dailySummary: {
           success: true,
           skipped: true,

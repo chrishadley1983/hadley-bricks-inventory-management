@@ -500,7 +500,7 @@ describe('ReportingService', () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             single: vi.fn().mockResolvedValue({
-              data: { report_settings: { mileageRate: 0.50, businessName: 'Test Business' } },
+              data: { report_settings: { mileageRate: 0.5, businessName: 'Test Business' } },
               error: null,
             }),
           }),
@@ -509,7 +509,7 @@ describe('ReportingService', () => {
 
       const result = await service.getReportSettings(testUserId);
 
-      expect(result.mileageRate).toBe(0.50);
+      expect(result.mileageRate).toBe(0.5);
       expect(result.businessName).toBe('Test Business');
       expect(result.defaultCurrency).toBe('GBP'); // Default value
     });

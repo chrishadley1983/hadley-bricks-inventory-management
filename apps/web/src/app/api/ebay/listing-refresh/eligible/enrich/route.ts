@@ -69,9 +69,10 @@ export async function POST(request: NextRequest) {
           // Ensure dates are serialized as ISO strings for JSON transport
           const serializedListings = enrichedListings.map((listing) => ({
             ...listing,
-            listingStartDate: listing.listingStartDate instanceof Date
-              ? listing.listingStartDate.toISOString()
-              : listing.listingStartDate,
+            listingStartDate:
+              listing.listingStartDate instanceof Date
+                ? listing.listingStartDate.toISOString()
+                : listing.listingStartDate,
           })) as unknown as EligibleListing[];
 
           sendEvent({

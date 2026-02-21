@@ -93,7 +93,9 @@ export class InvestmentScoringService {
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('brickset_sets')
-        .select('set_number, theme, pieces, minifigs, uk_retail_price, year_from, exclusivity_tier, is_licensed, is_ucs, is_modular, has_amazon_listing, retirement_status, expected_retirement_date, amazon_asin')
+        .select(
+          'set_number, theme, pieces, minifigs, uk_retail_price, year_from, exclusivity_tier, is_licensed, is_ucs, is_modular, has_amazon_listing, retirement_status, expected_retirement_date, amazon_asin'
+        )
         .in('retirement_status' as string, ['available', 'retiring_soon'])
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -116,11 +118,21 @@ export class InvestmentScoringService {
 
           const prediction = useFallback
             ? this.scoreFallback(set, themeAvgs, demandData)
-            : this.scoreWithModel(set, modelData!.model, modelData!.normContext, modelData!.modelVersion, themeAvgs, demandData);
+            : this.scoreWithModel(
+                set,
+                modelData!.model,
+                modelData!.normContext,
+                modelData!.modelVersion,
+                themeAvgs,
+                demandData
+              );
 
           predictions.push(prediction);
         } catch (err) {
-          console.error(`[Scoring] Error scoring ${(row as Record<string, unknown>).set_number}:`, err);
+          console.error(
+            `[Scoring] Error scoring ${(row as Record<string, unknown>).set_number}:`,
+            err
+          );
           errors++;
         }
       }
@@ -129,25 +141,23 @@ export class InvestmentScoringService {
       if (predictions.length > 0) {
         for (let i = 0; i < predictions.length; i += 500) {
           const chunk = predictions.slice(i, i + 500);
-          const { error: upsertError } = await this.supabase
-            .from('investment_predictions')
-            .upsert(
-              chunk.map((p) => ({
-                set_num: p.set_num,
-                investment_score: p.investment_score,
-                predicted_1yr_appreciation: p.predicted_1yr_appreciation,
-                predicted_3yr_appreciation: p.predicted_3yr_appreciation,
-                predicted_1yr_price_gbp: p.predicted_1yr_price_gbp,
-                predicted_3yr_price_gbp: p.predicted_3yr_price_gbp,
-                confidence: p.confidence,
-                risk_factors: p.risk_factors,
-                amazon_viable: p.amazon_viable,
-                model_version: p.model_version,
-                scored_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })) as unknown as Record<string, unknown>[],
-              { onConflict: 'set_num' }
-            );
+          const { error: upsertError } = await this.supabase.from('investment_predictions').upsert(
+            chunk.map((p) => ({
+              set_num: p.set_num,
+              investment_score: p.investment_score,
+              predicted_1yr_appreciation: p.predicted_1yr_appreciation,
+              predicted_3yr_appreciation: p.predicted_3yr_appreciation,
+              predicted_1yr_price_gbp: p.predicted_1yr_price_gbp,
+              predicted_3yr_price_gbp: p.predicted_3yr_price_gbp,
+              confidence: p.confidence,
+              risk_factors: p.risk_factors,
+              amazon_viable: p.amazon_viable,
+              model_version: p.model_version,
+              scored_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })) as unknown as Record<string, unknown>[],
+            { onConflict: 'set_num' }
+          );
 
           if (upsertError) {
             console.error('[Scoring] Upsert error:', upsertError.message);
@@ -167,7 +177,9 @@ export class InvestmentScoringService {
       modelData.model.dispose();
     }
 
-    console.log(`[Scoring] Complete: ${setsScored} scored, ${errors} errors, fallback=${useFallback}`);
+    console.log(
+      `[Scoring] Complete: ${setsScored} scored, ${errors} errors, fallback=${useFallback}`
+    );
 
     return {
       sets_scored: setsScored,
@@ -218,11 +230,11 @@ export class InvestmentScoringService {
 
     // Composite score: weighted average * 9 + 1 (to get 1-10 range)
     const composite =
-      mlFactor * 0.40 +
-      themeFactor * 0.20 +
+      mlFactor * 0.4 +
+      themeFactor * 0.2 +
       exclusivityFactor * 0.15 +
       demandFactor * 0.15 +
-      timingFactor * 0.10;
+      timingFactor * 0.1;
 
     const score = Math.round((composite * 9 + 1) * 10) / 10; // 1 decimal place
     const clampedScore = Math.min(Math.max(score, 1.0), 10.0);
@@ -268,10 +280,7 @@ export class InvestmentScoringService {
 
     // Without ML, redistribute ML weight (40%) to other factors
     const composite =
-      themeFactor * 0.35 +
-      exclusivityFactor * 0.25 +
-      demandFactor * 0.25 +
-      timingFactor * 0.15;
+      themeFactor * 0.35 + exclusivityFactor * 0.25 + demandFactor * 0.25 + timingFactor * 0.15;
 
     const score = Math.round((composite * 9 + 1) * 10) / 10;
     const clampedScore = Math.min(Math.max(score, 1.0), 10.0);
@@ -309,21 +318,16 @@ export class InvestmentScoringService {
   /**
    * Get normalised demand factor from sales rank and offer count.
    */
-  private getDemandFactor(
-    demand: { salesRank: number; offerCount: number } | undefined
-  ): number {
+  private getDemandFactor(demand: { salesRank: number; offerCount: number } | undefined): number {
     if (!demand) return 0.5; // Neutral if no data
 
     // Lower sales rank = higher demand (log scale)
     // Typical LEGO ranks: 1000-500000
-    const rankFactor = demand.salesRank > 0
-      ? 1 - Math.min(Math.log10(demand.salesRank) / 6, 1)
-      : 0.5;
+    const rankFactor =
+      demand.salesRank > 0 ? 1 - Math.min(Math.log10(demand.salesRank) / 6, 1) : 0.5;
 
     // Fewer offers = less competition = slightly better
-    const offerFactor = demand.offerCount > 0
-      ? Math.max(1 - demand.offerCount / 50, 0)
-      : 0.5;
+    const offerFactor = demand.offerCount > 0 ? Math.max(1 - demand.offerCount / 50, 0) : 0.5;
 
     return rankFactor * 0.7 + offerFactor * 0.3;
   }

@@ -27,17 +27,11 @@ export async function POST() {
       .single();
 
     if (findError || !entry) {
-      return NextResponse.json(
-        { error: 'No active time entry to pause' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active time entry to pause' }, { status: 400 });
     }
 
     if (entry.is_paused) {
-      return NextResponse.json(
-        { error: 'Time entry is already paused' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Time entry is already paused' }, { status: 400 });
     }
 
     // Update entry to paused state

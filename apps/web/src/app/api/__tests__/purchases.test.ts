@@ -169,9 +169,7 @@ describe('Purchases API Routes', () => {
         totalPages: 1,
       });
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/purchases?source=eBay'
-      );
+      const request = new NextRequest('http://localhost:3000/api/purchases?source=eBay');
       const response = await GET(request);
 
       expect(response.status).toBe(200);
@@ -234,9 +232,7 @@ describe('Purchases API Routes', () => {
         totalPages: 0,
       });
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/purchases?search=Millennium'
-      );
+      const request = new NextRequest('http://localhost:3000/api/purchases?search=Millennium');
       const response = await GET(request);
 
       expect(response.status).toBe(200);
@@ -265,16 +261,14 @@ describe('Purchases API Routes', () => {
         totalPages: 5,
       });
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/purchases?page=2&pageSize=20'
-      );
+      const request = new NextRequest('http://localhost:3000/api/purchases?page=2&pageSize=20');
       const response = await GET(request);
 
       expect(response.status).toBe(200);
-      expect(mockPurchaseService.getAll).toHaveBeenCalledWith(
-        expect.any(Object),
-        { page: 2, pageSize: 20 }
-      );
+      expect(mockPurchaseService.getAll).toHaveBeenCalledWith(expect.any(Object), {
+        page: 2,
+        pageSize: 20,
+      });
     });
 
     it('should return 400 for invalid query parameters', async () => {

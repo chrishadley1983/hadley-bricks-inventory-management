@@ -41,10 +41,7 @@ const ConvertEvaluationSchema = z.object({
  * POST /api/purchase-evaluator/[id]/convert
  * Convert an evaluation to a purchase and inventory items
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: evaluationId } = await params;
 
