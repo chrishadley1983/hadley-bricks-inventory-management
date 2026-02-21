@@ -17,9 +17,11 @@ import { createClient } from '@/lib/supabase/server';
 const MAX_IMAGES_PER_BATCH = 5;
 
 /**
- * Maximum base64 size per image (after compression, ~500KB should be plenty)
+ * Maximum binary size per image.
+ * Vercel body limit is 4.5MB; base64 adds ~33%, so ~3MB binary keeps
+ * a single-image request well within limits. eBay accepts up to 12MB.
  */
-const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
 
 /**
  * Validation schema for image upload request
