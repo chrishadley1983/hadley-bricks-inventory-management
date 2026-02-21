@@ -100,9 +100,10 @@ export class ListingStagingService {
         this.ebayAuth
       );
       const policies = await policiesService.getPolicies();
-      const defaultFulfillment = policies.fulfillment[0];
-      const defaultPayment = policies.payment[0];
-      const defaultReturn = policies.return[0];
+      // Use the smart defaults from identifyDefaults() which prefers returnsAccepted policies
+      const defaultFulfillment = policies.fulfillment.find((p) => p.id === policies.defaults.fulfillmentPolicyId) || policies.fulfillment[0];
+      const defaultPayment = policies.payment.find((p) => p.id === policies.defaults.paymentPolicyId) || policies.payment[0];
+      const defaultReturn = policies.return.find((p) => p.id === policies.defaults.returnPolicyId) || policies.return[0];
 
       if (!defaultFulfillment || !defaultPayment || !defaultReturn) {
         throw new Error(
