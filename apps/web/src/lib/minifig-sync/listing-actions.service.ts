@@ -422,10 +422,10 @@ export class ListingActionsService {
     if (!item.ebay_sku) return;
 
     try {
-      const currentItem = await adapter.getInventoryItem(item.ebay_sku);
+      const rawItem = await adapter.getInventoryItem(item.ebay_sku);
       // Strip read-only fields that eBay returns in GET but rejects in PUT
-      delete currentItem.sku;
-      delete currentItem.locale;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { sku: _s, locale: _l, groupIds: _g, inventoryItemGroupKeys: _k, ...currentItem } = rawItem as Record<string, unknown> & typeof rawItem;
 
       // Overwrite with DB values
       if (item.name) currentItem.product.title = item.ebay_title || item.name;
@@ -444,8 +444,8 @@ export class ListingActionsService {
       await adapter.createOrReplaceInventoryItem(item.ebay_sku, currentItem);
       console.log(`[ListingActionsService] Synced inventory item to eBay for SKU ${item.ebay_sku}`);
     } catch (err) {
-      console.error('[ListingActionsService] syncInventoryItemToEbay failed:', err instanceof Error ? err.message : err);
-      throw new Error(`Failed to sync inventory item to eBay: ${err instanceof Error ? err.message : err}`);
+      // Don't block publishing — the staging version is still valid
+      console.warn('[ListingActionsService] syncInventoryItemToEbay failed (non-fatal):', err instanceof Error ? err.message : err);
     }
   }
 
