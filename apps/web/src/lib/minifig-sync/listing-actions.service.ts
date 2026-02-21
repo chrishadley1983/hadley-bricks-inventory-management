@@ -73,6 +73,9 @@ export class ListingActionsService {
     const adapter = sharedAdapter ?? (await this.getEbayAdapter());
 
     try {
+      // Ensure offer has merchantLocationKey (may be missing for offers created before this fix)
+      await this.ensureMerchantLocation(adapter, item.ebay_offer_id);
+
       // Publish the offer (F42) — this is the ONLY place publish is called (I2)
       const publishResult = await adapter.publishOffer(item.ebay_offer_id);
 
@@ -390,6 +393,51 @@ export class ListingActionsService {
     }
 
     return data as MinifigSyncItem;
+  }
+
+  /**
+   * Ensure the offer has a merchantLocationKey set (backfill for pre-fix offers).
+   * Gets the existing offer, checks if merchantLocationKey is present,
+   * and updates it if missing.
+   */
+  private async ensureMerchantLocation(
+    adapter: EbayApiAdapter,
+    offerId: string
+  ): Promise<void> {
+    try {
+      const offer = await adapter.getOffer(offerId);
+      if (offer.merchantLocationKey) return; // Already set
+
+      // Get or create merchant location
+      let locationKey: string;
+      try {
+        const locationsResponse = await adapter.getInventoryLocations();
+        const locations = locationsResponse.locations || [];
+        if (locations.length > 0) {
+          locationKey = locations[0].merchantLocationKey;
+        } else {
+          // Create default location
+          locationKey = 'HADLEY_BRICKS_DEFAULT';
+          await adapter.createInventoryLocation(locationKey, {
+            location: {
+              address: { city: 'London', postalCode: 'EC1A 1BB', country: 'GB' },
+            },
+            locationTypes: ['WAREHOUSE'],
+            name: 'Hadley Bricks Default Location',
+            merchantLocationStatus: 'ENABLED',
+          });
+        }
+      } catch {
+        locationKey = 'HADLEY_BRICKS_DEFAULT';
+      }
+
+      // Update the offer with the location key
+      await adapter.updateOffer(offerId, { merchantLocationKey: locationKey });
+      console.log(`[ListingActionsService] Backfilled merchantLocationKey=${locationKey} on offer ${offerId}`);
+    } catch (err) {
+      console.warn('[ListingActionsService] ensureMerchantLocation failed:', err instanceof Error ? err.message : err);
+      // Don't throw — let publishOffer proceed and surface the real error if any
+    }
   }
 
   private async getEbayAdapter(): Promise<EbayApiAdapter> {

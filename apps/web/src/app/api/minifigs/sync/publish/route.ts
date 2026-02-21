@@ -39,12 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to publish listing',
-        details:
-          process.env.NODE_ENV === 'development'
-            ? error instanceof Error
-              ? error.message
-              : String(error)
-            : undefined,
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

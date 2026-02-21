@@ -581,6 +581,7 @@ export interface EbayOfferResponse {
     listingStatus: string;
     soldQuantity?: number;
   };
+  merchantLocationKey?: string;
   status?: string;
   statusReason?: string;
 }
