@@ -79,7 +79,10 @@ export function SingleListingReview() {
   const handleUpdate = useCallback(
     async (id: string, data: SyncItemUpdateData) => {
       try {
-        await updateMutation.mutateAsync({ id, data });
+        const result = await updateMutation.mutateAsync({ id, data });
+        if (result?.ebayWarnings?.length) {
+          result.ebayWarnings.forEach((w) => toast.warning(w));
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to update');
       }
