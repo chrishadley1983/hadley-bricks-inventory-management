@@ -73,8 +73,8 @@ export class ListingActionsService {
     const adapter = sharedAdapter ?? (await this.getEbayAdapter());
 
     try {
-      // Ensure offer has merchantLocationKey (may be missing for offers created before this fix)
-      await this.ensureMerchantLocation(adapter, item.ebay_offer_id);
+      // Ensure offer is publishable (backfill missing fields from pre-fix offers)
+      await this.ensureOfferPublishable(adapter, item.ebay_offer_id);
 
       // Publish the offer (F42) — this is the ONLY place publish is called (I2)
       const publishResult = await adapter.publishOffer(item.ebay_offer_id);
@@ -396,46 +396,89 @@ export class ListingActionsService {
   }
 
   /**
-   * Ensure the offer has a merchantLocationKey set (backfill for pre-fix offers).
-   * Gets the existing offer, checks if merchantLocationKey is present,
-   * and updates it if missing.
+   * Ensure the offer is publishable by backfilling missing/invalid fields.
+   * Handles offers created before fixes for merchantLocationKey and return policy.
+   * eBay's Update Offer API requires the FULL offer body (PUT, not PATCH).
    */
-  private async ensureMerchantLocation(
+  private async ensureOfferPublishable(
     adapter: EbayApiAdapter,
     offerId: string
   ): Promise<void> {
     try {
       const offer = await adapter.getOffer(offerId);
-      if (offer.merchantLocationKey) return; // Already set
+      let needsUpdate = false;
 
-      // Get or create merchant location
-      let locationKey: string;
-      try {
-        const locationsResponse = await adapter.getInventoryLocations();
-        const locations = locationsResponse.locations || [];
-        if (locations.length > 0) {
-          locationKey = locations[0].merchantLocationKey;
-        } else {
-          // Create default location
+      // Strip read-only fields for the update body
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { offerId: _, status, statusReason, listing, soldQuantity, ...updatableFields } = offer;
+
+      // 1. Ensure merchantLocationKey is set (provides Item.Country)
+      if (!offer.merchantLocationKey) {
+        let locationKey: string;
+        try {
+          const locationsResponse = await adapter.getInventoryLocations();
+          const locations = locationsResponse.locations || [];
+          locationKey = locations.length > 0
+            ? locations[0].merchantLocationKey
+            : 'HADLEY_BRICKS_DEFAULT';
+
+          if (locations.length === 0) {
+            await adapter.createInventoryLocation(locationKey, {
+              location: {
+                address: { city: 'London', postalCode: 'EC1A 1BB', country: 'GB' },
+              },
+              locationTypes: ['WAREHOUSE'],
+              name: 'Hadley Bricks Default Location',
+              merchantLocationStatus: 'ENABLED',
+            });
+          }
+        } catch {
           locationKey = 'HADLEY_BRICKS_DEFAULT';
-          await adapter.createInventoryLocation(locationKey, {
-            location: {
-              address: { city: 'London', postalCode: 'EC1A 1BB', country: 'GB' },
-            },
-            locationTypes: ['WAREHOUSE'],
-            name: 'Hadley Bricks Default Location',
-            merchantLocationStatus: 'ENABLED',
-          });
         }
-      } catch {
-        locationKey = 'HADLEY_BRICKS_DEFAULT';
+
+        updatableFields.merchantLocationKey = locationKey;
+        needsUpdate = true;
+        console.log(`[ListingActionsService] Backfilling merchantLocationKey=${locationKey} on offer ${offerId}`);
       }
 
-      // Update the offer with the location key
-      await adapter.updateOffer(offerId, { merchantLocationKey: locationKey });
-      console.log(`[ListingActionsService] Backfilled merchantLocationKey=${locationKey} on offer ${offerId}`);
+      // 2. Ensure return policy accepts returns (eBay rejects "No Returns" for many categories)
+      if (offer.listingPolicies?.returnPolicyId) {
+        try {
+          const returnPolicies = await adapter.getReturnPolicies();
+          const policies = returnPolicies.returnPolicies || [];
+          const currentPolicy = policies.find(
+            (p) => p.returnPolicyId === offer.listingPolicies!.returnPolicyId
+          );
+
+          if (currentPolicy && !currentPolicy.returnsAccepted) {
+            // Find a policy that accepts returns
+            const validPolicy = policies.find((p) => p.returnsAccepted);
+            if (validPolicy) {
+              updatableFields.listingPolicies = {
+                ...updatableFields.listingPolicies!,
+                returnPolicyId: validPolicy.returnPolicyId,
+              };
+              needsUpdate = true;
+              console.log(
+                `[ListingActionsService] Replacing return policy ${currentPolicy.returnPolicyId} (no returns) with ${validPolicy.returnPolicyId} (${validPolicy.name}) on offer ${offerId}`
+              );
+            }
+          }
+        } catch (err) {
+          console.warn('[ListingActionsService] Return policy check failed:', err instanceof Error ? err.message : err);
+        }
+      }
+
+      // Apply updates if needed
+      if (needsUpdate) {
+        await adapter.updateOffer(offerId, {
+          ...updatableFields,
+          format: updatableFields.format as 'FIXED_PRICE' | 'AUCTION',
+        });
+        console.log(`[ListingActionsService] Updated offer ${offerId} for publishability`);
+      }
     } catch (err) {
-      console.warn('[ListingActionsService] ensureMerchantLocation failed:', err instanceof Error ? err.message : err);
+      console.warn('[ListingActionsService] ensureOfferPublishable failed:', err instanceof Error ? err.message : err);
       // Don't throw — let publishOffer proceed and surface the real error if any
     }
   }
