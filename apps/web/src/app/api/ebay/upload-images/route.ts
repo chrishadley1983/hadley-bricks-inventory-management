@@ -19,7 +19,7 @@ const MAX_IMAGES_PER_BATCH = 5;
 /**
  * Maximum base64 size per image (after compression, ~500KB should be plenty)
  */
-const MAX_IMAGE_SIZE_BYTES = 500 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 /**
  * Validation schema for image upload request

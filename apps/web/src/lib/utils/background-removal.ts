@@ -37,7 +37,12 @@ export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
   const finalH = padBottom - padTop;
 
   // Make it square by centering the content in a square canvas
-  const side = Math.max(finalW, finalH);
+  // Cap at 1200px to keep file size manageable for upload
+  const rawSide = Math.max(finalW, finalH);
+  const side = Math.min(rawSide, 1200);
+  const scale = side / rawSide;
+  const scaledW = Math.round(finalW * scale);
+  const scaledH = Math.round(finalH * scale);
   const outCanvas = document.createElement('canvas');
   outCanvas.width = side;
   outCanvas.height = side;
@@ -47,9 +52,9 @@ export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
   outCtx.fillStyle = '#ffffff';
   outCtx.fillRect(0, 0, side, side);
 
-  // Center the cropped region
-  const offsetX = Math.round((side - finalW) / 2);
-  const offsetY = Math.round((side - finalH) / 2);
+  // Center the cropped region (scaled to fit)
+  const offsetX = Math.round((side - scaledW) / 2);
+  const offsetY = Math.round((side - scaledH) / 2);
   outCtx.drawImage(
     canvas,
     padLeft,
@@ -58,8 +63,8 @@ export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
     finalH,
     offsetX,
     offsetY,
-    finalW,
-    finalH
+    scaledW,
+    scaledH
   );
 
   return new Promise<Blob>((resolve, reject) => {
@@ -69,7 +74,7 @@ export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
         else reject(new Error('Failed to export canvas to JPEG'));
       },
       'image/jpeg',
-      0.92
+      0.85
     );
   });
 }
