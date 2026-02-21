@@ -36,12 +36,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: result });
   } catch (error) {
     console.error('[POST /api/minifigs/sync/publish] Error:', error);
+
+    // Surface eBay-specific errors so the user sees what actually failed
+    let details = error instanceof Error ? error.message : String(error);
+    let statusCode = 500;
+
+    // EbayApiError has structured error info
+    if (error && typeof error === 'object' && 'statusCode' in error) {
+      const ebayError = error as { statusCode: number; errors?: Array<{ message?: string; parameters?: Array<{ name: string; value: string }> }> };
+      statusCode = ebayError.statusCode >= 400 && ebayError.statusCode < 600 ? ebayError.statusCode : 500;
+      if (ebayError.errors?.length) {
+        details = ebayError.errors
+          .map((e) => {
+            let msg = e.message || '';
+            if (e.parameters?.length) {
+              msg += ' [' + e.parameters.map((p) => `${p.name}=${p.value}`).join(', ') + ']';
+            }
+            return msg;
+          })
+          .join('; ');
+      }
+    }
+
     return NextResponse.json(
       {
         error: 'Failed to publish listing',
-        details: error instanceof Error ? error.message : String(error),
+        details,
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }
