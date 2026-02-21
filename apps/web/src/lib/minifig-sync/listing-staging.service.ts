@@ -259,8 +259,9 @@ export class ListingStagingService {
     // Map AI-generated item specifics to eBay aspects format
     const aspects = this.mapItemSpecificsToAspects(generated.itemSpecifics);
 
-    // Map condition ID to eBay condition enum
-    const conditionEnum = genService.mapConditionIdToEnum(generated.conditionId);
+    // Minifig category (19003) only allows NEW or USED on eBay
+    const conditionEnum: 'NEW' | 'USED' =
+      generated.conditionId === 1000 ? 'NEW' : 'USED';
 
     // Create inventory item (F37)
     const inventoryItem: EbayInventoryItem = {

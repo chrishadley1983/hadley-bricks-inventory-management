@@ -420,6 +420,7 @@ export type EbayConditionEnum =
   | 'VERY_GOOD_REFURBISHED'
   | 'GOOD_REFURBISHED'
   | 'SELLER_REFURBISHED'
+  | 'USED'
   | 'USED_EXCELLENT'
   | 'USED_VERY_GOOD'
   | 'USED_GOOD'
