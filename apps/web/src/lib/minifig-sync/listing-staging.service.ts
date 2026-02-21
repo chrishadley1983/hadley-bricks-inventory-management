@@ -79,6 +79,15 @@ export class ListingStagingService {
         userId: this.userId,
       });
 
+      // Ensure merchant location exists (required for publishing offers)
+      await onProgress?.({
+        type: 'stage',
+        stage: 'policies',
+        message: 'Checking merchant location...',
+      });
+      const merchantLocationKey = await this.getOrCreateMerchantLocation(ebayAdapter);
+      console.log('[ListingStagingService] Using merchant location:', merchantLocationKey);
+
       // Get business policies
       await onProgress?.({
         type: 'stage',
@@ -153,6 +162,7 @@ export class ListingStagingService {
             fulfillmentPolicyId: defaultFulfillment.id,
             paymentPolicyId: defaultPayment.id,
             returnPolicyId: defaultReturn.id,
+            merchantLocationKey,
           });
           itemsStaged++;
         } catch (err) {
@@ -222,6 +232,7 @@ export class ListingStagingService {
       fulfillmentPolicyId: string;
       paymentPolicyId: string;
       returnPolicyId: string;
+      merchantLocationKey: string;
     }
   ): Promise<void> {
     const sku = buildSku(item.bricqer_item_id, item.storage_location); // I1: HB-MF-{bricqer_item_id}-{storage}
@@ -311,6 +322,7 @@ export class ListingStagingService {
       availableQuantity: 1,
       categoryId: generated.categoryId || EBAY_MINIFIG_CATEGORY_ID,
       listingDescription: generated.description,
+      merchantLocationKey: policyIds.merchantLocationKey,
       listingPolicies: {
         fulfillmentPolicyId: policyIds.fulfillmentPolicyId,
         paymentPolicyId: policyIds.paymentPolicyId,
@@ -465,5 +477,51 @@ export class ListingStagingService {
     }
 
     return images;
+  }
+
+  /**
+   * Get or create a default merchant location (required by eBay for publishing offers).
+   * Mirrors ListingCreationService.getOrCreateMerchantLocation().
+   */
+  private async getOrCreateMerchantLocation(adapter: EbayApiAdapter): Promise<string> {
+    const DEFAULT_LOCATION_KEY = 'HADLEY_BRICKS_DEFAULT';
+
+    try {
+      const locationsResponse = await adapter.getInventoryLocations();
+      const locations = locationsResponse.locations || [];
+
+      if (locations.length > 0) {
+        console.log(
+          '[ListingStagingService] Using existing location:',
+          locations[0].merchantLocationKey
+        );
+        return locations[0].merchantLocationKey;
+      }
+    } catch {
+      console.log('[ListingStagingService] No existing locations found, creating default');
+    }
+
+    try {
+      await adapter.createInventoryLocation(DEFAULT_LOCATION_KEY, {
+        location: {
+          address: {
+            city: 'London',
+            postalCode: 'EC1A 1BB',
+            country: 'GB',
+          },
+        },
+        locationTypes: ['WAREHOUSE'],
+        name: 'Hadley Bricks Default Location',
+        merchantLocationStatus: 'ENABLED',
+      });
+      console.log('[ListingStagingService] Created default location:', DEFAULT_LOCATION_KEY);
+      return DEFAULT_LOCATION_KEY;
+    } catch (createError) {
+      console.log(
+        '[ListingStagingService] Error creating location, may already exist:',
+        createError
+      );
+      return DEFAULT_LOCATION_KEY;
+    }
   }
 }
