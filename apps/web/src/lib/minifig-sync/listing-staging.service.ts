@@ -11,9 +11,10 @@ import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService, EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.service';
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
+import { ListingGenerationService } from '@/lib/ebay/listing-generation.service';
+import type { AIGeneratedListing } from '@/lib/ebay/listing-creation.types';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
-import { generateDescription } from './description-generator';
 import { buildSku } from './types';
 import type { MinifigSyncItem } from './types';
 import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
@@ -89,9 +90,6 @@ export class ListingStagingService {
         );
       }
 
-      // Get Rebrickable API key for description generation
-      const rebrickableApiKey = process.env.REBRICKABLE_API_KEY ?? '';
-
       // Query qualifying items (F36) — paginated (M1)
       await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Loading qualifying items...' });
       const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
@@ -145,7 +143,6 @@ export class ListingStagingService {
               paymentPolicyId: defaultPayment.id,
               returnPolicyId: defaultReturn.id,
             },
-            rebrickableApiKey,
           );
           itemsStaged++;
         } catch (err) {
@@ -197,41 +194,57 @@ export class ListingStagingService {
       paymentPolicyId: string;
       returnPolicyId: string;
     },
-    rebrickableApiKey: string,
   ): Promise<void> {
     const sku = buildSku(item.bricqer_item_id); // I1: HB-MF-{bricqer_item_id}
     const price = Number(item.recommended_price);
     const autoAccept = Number(item.best_offer_auto_accept) || Math.round(price * 0.95 * 100) / 100;
     const autoDecline = Number(item.best_offer_auto_decline) || Math.round(price * 0.75 * 100) / 100;
 
-    // Generate description (F34, E7 fallback)
-    const description = await generateDescription({
-      name: item.name || item.bricklink_id || 'LEGO Minifigure',
-      bricklinkId: item.bricklink_id!,
-      conditionNotes: item.condition_notes,
-      rebrickableApiKey,
-    });
+    // Generate AI-optimized listing content via Claude
+    const genService = new ListingGenerationService();
+    let generated: Awaited<ReturnType<ListingGenerationService['generateListing']>>;
+    try {
+      generated = await genService.generateListing(
+        {
+          setNumber: item.bricklink_id!,
+          setName: item.name || undefined,
+          condition: 'Used',
+          conditionNotes: item.condition_notes || undefined,
+          pieceCount: 1,
+          minifigureCount: 1,
+        },
+        { style: 'Standard', price },
+      );
+    } catch (err) {
+      console.warn(
+        `[ListingStagingService] AI generation failed for ${item.bricklink_id}, skipping:`,
+        err instanceof Error ? err.message : err,
+      );
+      throw err;
+    }
 
     // Get image URLs from stored images
     const imageUrls = this.getImageUrls(item);
 
+    // Map AI-generated item specifics to eBay aspects format
+    const aspects = this.mapItemSpecificsToAspects(generated.itemSpecifics);
+
+    // Map condition ID to eBay condition enum
+    const conditionEnum = genService.mapConditionIdToEnum(generated.conditionId);
+
     // Create inventory item (F37)
     const inventoryItem: EbayInventoryItem = {
       product: {
-        title: `LEGO ${item.name || item.bricklink_id} Minifigure - Used`,
-        description,
+        title: generated.title,
+        description: generated.description,
         imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        aspects: {
-          Brand: ['LEGO'],
-          Type: ['Minifigure'],
-          'LEGO Set Number': item.bricklink_id
-            ? [item.bricklink_id]
-            : [],
-        },
+        aspects,
       },
-      condition: 'USED_EXCELLENT',
+      condition: conditionEnum,
       conditionDescription:
-        item.condition_notes || 'Used minifigure in excellent condition',
+        generated.conditionDescription ||
+        item.condition_notes ||
+        'Used minifigure in excellent condition',
       availability: {
         shipToLocationAvailability: {
           quantity: 1,
@@ -247,8 +260,8 @@ export class ListingStagingService {
       marketplaceId: 'EBAY_GB',
       format: 'FIXED_PRICE',
       availableQuantity: 1,
-      categoryId: EBAY_MINIFIG_CATEGORY_ID,
-      listingDescription: description,
+      categoryId: generated.categoryId || EBAY_MINIFIG_CATEGORY_ID,
+      listingDescription: generated.description,
       listingPolicies: {
         fulfillmentPolicyId: policyIds.fulfillmentPolicyId,
         paymentPolicyId: policyIds.paymentPolicyId,
@@ -276,19 +289,42 @@ export class ListingStagingService {
     const createOfferResponse = await ebayAdapter.createOffer(offer);
 
     // Update sync item to STAGED (F39) — NO publish call (I2)
-    const ebayTitle = `LEGO ${item.name || item.bricklink_id} Minifigure - Used`;
     await this.supabase
       .from('minifig_sync_items')
       .update({
         listing_status: 'STAGED',
         ebay_sku: sku,
         ebay_offer_id: createOfferResponse.offerId,
-        ebay_title: ebayTitle,
-        ebay_description: description,
+        ebay_title: generated.title,
+        ebay_description: generated.description,
         updated_at: new Date().toISOString(),
       })
       .eq('id', item.id)
       .eq('user_id', this.userId);
+  }
+
+  /**
+   * Map AI-generated item specifics to eBay aspects format.
+   * Truncates values exceeding eBay's 65-character limit.
+   * Adds Country/Region of Manufacture for LEGO items.
+   */
+  private mapItemSpecificsToAspects(
+    specifics: AIGeneratedListing['itemSpecifics'],
+  ): Record<string, string[]> {
+    const aspects: Record<string, string[]> = {};
+
+    for (const [key, value] of Object.entries(specifics)) {
+      if (value !== undefined && value !== null && value !== '') {
+        const truncated = value.length > 65 ? value.substring(0, 62) + '...' : value;
+        aspects[key] = [truncated];
+      }
+    }
+
+    if (specifics.Brand?.toUpperCase() === 'LEGO') {
+      aspects['Country/Region of Manufacture'] = ['Denmark'];
+    }
+
+    return aspects;
   }
 
   /**
