@@ -409,14 +409,8 @@ export class ListingActionsService {
       let needsUpdate = false;
 
       // Strip read-only fields for the update body
-      const {
-        offerId: _id,
-        status: _status,
-        statusReason: _reason,
-        listing: _listing,
-        soldQuantity: _sold,
-        ...updatableFields
-      } = offer;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { offerId: _, status, statusReason, listing, soldQuantity, ...updatableFields } = offer;
 
       // 1. Ensure merchantLocationKey is set (provides Item.Country)
       if (!offer.merchantLocationKey) {
