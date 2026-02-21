@@ -27,6 +27,7 @@
     "sheets:test": "npm run sheets:test --workspace=apps/web"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@reduxjs/toolkit": "^2.11.2"
   }
 }

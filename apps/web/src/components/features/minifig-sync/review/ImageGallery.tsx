@@ -4,9 +4,10 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Upload, X, Loader2, ZoomIn } from 'lucide-react';
+import { Upload, X, Loader2, ZoomIn, Sparkles } from 'lucide-react';
 import { compressImage } from '@/lib/utils/image-compression';
 import type { SourcedImage } from '@/lib/minifig-sync/types';
+import { PhotoEnhanceDialog } from './PhotoEnhanceDialog';
 
 interface ImageGalleryProps {
   images: SourcedImage[];
@@ -30,6 +31,8 @@ function getSourceLabel(source: string): string {
       return 'Bricqer';
     case 'uploaded':
       return 'Uploaded';
+    case 'enhanced':
+      return 'Enhanced';
     default:
       return source;
   }
@@ -44,6 +47,8 @@ function getSourceBadgeVariant(source: string): 'default' | 'secondary' | 'outli
       return 'secondary';
     case 'uploaded':
       return 'secondary';
+    case 'enhanced':
+      return 'default';
     default:
       return 'outline';
   }
@@ -58,6 +63,7 @@ export function ImageGallery({
 }: ImageGalleryProps) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEnhanceOpen, setIsEnhanceOpen] = useState(false);
 
   const handleDelete = useCallback(
     (index: number) => {
@@ -135,26 +141,37 @@ export function ImageGallery({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-muted-foreground">Images ({images.length})</span>
-        <label
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border cursor-pointer hover:bg-muted transition-colors ${
-            isUploading ? 'pointer-events-none opacity-50' : ''
-          }`}
-        >
-          {isUploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Upload className="h-3.5 w-3.5" />
-          )}
-          Upload
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            className="hidden"
-            onChange={handleUpload}
-            disabled={isUploading || isUpdating}
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border cursor-pointer hover:bg-muted transition-colors"
+            onClick={() => setIsEnhanceOpen(true)}
+            disabled={isUpdating}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Enhance
+          </button>
+          <label
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border cursor-pointer hover:bg-muted transition-colors ${
+              isUploading ? 'pointer-events-none opacity-50' : ''
+            }`}
+          >
+            {isUploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
+            Upload
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={handleUpload}
+              disabled={isUploading || isUpdating}
+            />
+          </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -219,6 +236,16 @@ export function ImageGallery({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Photo Enhance Dialog */}
+      <PhotoEnhanceDialog
+        open={isEnhanceOpen}
+        onOpenChange={setIsEnhanceOpen}
+        itemId={itemId}
+        onEnhanced={(enhanced) => {
+          onImagesChange([...images, enhanced]);
+        }}
+      />
     </div>
   );
 }
