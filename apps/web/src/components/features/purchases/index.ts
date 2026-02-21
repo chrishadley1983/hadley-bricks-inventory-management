@@ -14,6 +14,9 @@ export { PurchaseProfitabilityHoverCard } from './PurchaseProfitabilityHoverCard
 export { VintedImportButton } from './VintedImportButton';
 export { VintedImportModal } from './VintedImportModal';
 export { VintedPurchaseReviewRow, type VintedPurchaseReviewData } from './VintedPurchaseReviewRow';
-export { VintedInventoryReviewCard, type InventoryItemReviewData } from './VintedInventoryReviewCard';
+export {
+  VintedInventoryReviewCard,
+  type InventoryItemReviewData,
+} from './VintedInventoryReviewCard';
 export { ReviewQueueTable } from './ReviewQueueTable';
 export { getReviewQueueColumns, REVIEW_COLUMN_DISPLAY_NAMES } from './ReviewQueueColumns';

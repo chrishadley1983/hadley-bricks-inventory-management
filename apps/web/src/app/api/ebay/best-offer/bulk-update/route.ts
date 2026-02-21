@@ -28,23 +28,24 @@ import {
 // Validation Schema
 // ============================================================================
 
-const BulkUpdateSchema = z.object({
-  autoDeclinePercent: z
-    .number()
-    .min(0, 'Auto-decline percent must be at least 0')
-    .max(100, 'Auto-decline percent must be at most 100'),
-  autoAcceptPercent: z
-    .number()
-    .min(0, 'Auto-accept percent must be at least 0')
-    .max(100, 'Auto-accept percent must be at most 100'),
-  enableBestOffer: z.boolean(),
-  filter: z.enum(['all', 'without_best_offer', 'missing_thresholds']).optional().default('all'),
-  itemIds: z.array(z.string()).optional(),
-  dryRun: z.boolean().optional().default(false),
-}).refine(
-  (data) => data.autoDeclinePercent < data.autoAcceptPercent,
-  { message: 'Auto-decline percent must be less than auto-accept percent' }
-);
+const BulkUpdateSchema = z
+  .object({
+    autoDeclinePercent: z
+      .number()
+      .min(0, 'Auto-decline percent must be at least 0')
+      .max(100, 'Auto-decline percent must be at most 100'),
+    autoAcceptPercent: z
+      .number()
+      .min(0, 'Auto-accept percent must be at least 0')
+      .max(100, 'Auto-accept percent must be at most 100'),
+    enableBestOffer: z.boolean(),
+    filter: z.enum(['all', 'without_best_offer', 'missing_thresholds']).optional().default('all'),
+    itemIds: z.array(z.string()).optional(),
+    dryRun: z.boolean().optional().default(false),
+  })
+  .refine((data) => data.autoDeclinePercent < data.autoAcceptPercent, {
+    message: 'Auto-decline percent must be less than auto-accept percent',
+  });
 
 // ============================================================================
 // POST Handler
@@ -77,7 +78,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { autoDeclinePercent, autoAcceptPercent, enableBestOffer, filter, itemIds, dryRun } = parsed.data;
+    const { autoDeclinePercent, autoAcceptPercent, enableBestOffer, filter, itemIds, dryRun } =
+      parsed.data;
 
     // 3. Create service
     const service = createBestOfferBulkUpdateService(supabase, user.id);
@@ -122,8 +124,10 @@ export async function POST(request: NextRequest) {
     // 5. If dry run, return preview of what would be updated
     if (dryRun) {
       const preview = listings.map((listing) => {
-        const autoDeclinePrice = Math.round((listing.currentPrice * (autoDeclinePercent / 100)) * 100) / 100;
-        const autoAcceptPrice = Math.round((listing.currentPrice * (autoAcceptPercent / 100)) * 100) / 100;
+        const autoDeclinePrice =
+          Math.round(listing.currentPrice * (autoDeclinePercent / 100) * 100) / 100;
+        const autoAcceptPrice =
+          Math.round(listing.currentPrice * (autoAcceptPercent / 100) * 100) / 100;
         return {
           itemId: listing.itemId,
           currentPrice: listing.currentPrice,
@@ -151,16 +155,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Execute bulk update
-    console.log(`[POST /api/ebay/best-offer/bulk-update] Starting update for ${listings.length} listings`);
-
-    const result = await service.bulkUpdateBestOfferThresholds(
-      listings,
-      {
-        autoDeclinePercent,
-        autoAcceptPercent,
-        enableBestOffer,
-      }
+    console.log(
+      `[POST /api/ebay/best-offer/bulk-update] Starting update for ${listings.length} listings`
     );
+
+    const result = await service.bulkUpdateBestOfferThresholds(listings, {
+      autoDeclinePercent,
+      autoAcceptPercent,
+      enableBestOffer,
+    });
 
     // 7. Return response
     return NextResponse.json({

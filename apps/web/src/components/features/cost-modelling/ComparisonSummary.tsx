@@ -78,7 +78,11 @@ export function ComparisonSummary({ deltas }: ComparisonSummaryProps) {
                     <span
                       className={cn(
                         'inline-flex items-center gap-1',
-                        row.isBetter ? 'text-green-600' : row.percentChange === 0 ? '' : 'text-red-600'
+                        row.isBetter
+                          ? 'text-green-600'
+                          : row.percentChange === 0
+                            ? ''
+                            : 'text-red-600'
                       )}
                     >
                       {row.percentChange > 0 ? '+' : ''}
@@ -105,9 +109,7 @@ export function ComparisonSummary({ deltas }: ComparisonSummaryProps) {
             <div className="w-3 h-3 bg-amber-100 dark:bg-amber-950 rounded" />
             <span>Change &gt;10%</span>
           </div>
-          <div className="flex items-center gap-1 text-green-600">
-            Green = B is better
-          </div>
+          <div className="flex items-center gap-1 text-green-600">Green = B is better</div>
         </div>
       </CardContent>
     </Card>

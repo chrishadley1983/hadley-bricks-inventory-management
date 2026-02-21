@@ -61,7 +61,9 @@ export async function POST(
     console.log(`[POST /api/sync/${table}] User-Agent: ${request.headers.get('user-agent')}`);
     console.log(`[POST /api/sync/${table}] Referer: ${request.headers.get('referer')}`);
     console.log(`[POST /api/sync/${table}] Origin: ${request.headers.get('origin')}`);
-    console.log(`[POST /api/sync/${table}] X-Forwarded-For: ${request.headers.get('x-forwarded-for')}`);
+    console.log(
+      `[POST /api/sync/${table}] X-Forwarded-For: ${request.headers.get('x-forwarded-for')}`
+    );
     console.log(`[POST /api/sync/${table}] Content-Type: ${request.headers.get('content-type')}`);
 
     // Log stack trace to see what triggered this
@@ -135,10 +137,7 @@ export async function POST(
         errorMessage: result.error,
         durationMs,
       });
-      return NextResponse.json(
-        { error: result.error || 'Sync failed' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: result.error || 'Sync failed' }, { status: 500 });
     }
 
     // Log successful sync
@@ -197,10 +196,7 @@ export async function GET(
     // Get Sheets client
     const sheetsClient = getSheetsClient();
     if (!sheetsClient) {
-      return NextResponse.json(
-        { error: 'Google Sheets not configured' },
-        { status: 503 }
-      );
+      return NextResponse.json({ error: 'Google Sheets not configured' }, { status: 503 });
     }
 
     // Create cache service

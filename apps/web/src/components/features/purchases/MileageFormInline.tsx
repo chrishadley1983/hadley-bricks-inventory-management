@@ -225,7 +225,8 @@ export function MileageFormInline({
         {pendingEntries.length > 0 && (
           <div className="space-y-2">
             {pendingEntries.map((entry) => {
-              const TypeIcon = EXPENSE_TYPES.find((t) => t.value === entry.expenseType)?.icon || Car;
+              const TypeIcon =
+                EXPENSE_TYPES.find((t) => t.value === entry.expenseType)?.icon || Car;
               return (
                 <div
                   key={entry.id}
@@ -274,9 +275,7 @@ export function MileageFormInline({
         )}
 
         {!showForm && pendingEntries.length === 0 && (
-          <p className="text-center text-muted-foreground py-4">
-            No mileage or expenses added yet
-          </p>
+          <p className="text-center text-muted-foreground py-4">No mileage or expenses added yet</p>
         )}
 
         {/* Add/Edit Form */}
@@ -386,7 +385,8 @@ export function MileageFormInline({
               {expenseType === 'mileage' && !homeAddress && (
                 <Alert>
                   <AlertDescription>
-                    Set your home address in Report Settings to enable automatic distance calculation.
+                    Set your home address in Report Settings to enable automatic distance
+                    calculation.
                   </AlertDescription>
                 </Alert>
               )}

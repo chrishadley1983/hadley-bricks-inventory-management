@@ -31,11 +31,7 @@ import {
 } from '@/components/ui/table';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import {
-  useCreateHomeCost,
-  useUpdateHomeCost,
-  useDeleteHomeCost,
-} from '@/hooks/use-home-costs';
+import { useCreateHomeCost, useUpdateHomeCost, useDeleteHomeCost } from '@/hooks/use-home-costs';
 import { MonthPicker } from './MonthPicker';
 import type { HomeCost, PhoneBroadbandPreset } from '@/types/home-costs';
 import { PHONE_BROADBAND_PRESETS, calculatePhoneBroadbandClaimable } from '@/types/home-costs';
@@ -254,22 +250,17 @@ export function PhoneBroadbandTab({ existingCosts, isLoading }: PhoneBroadbandTa
             {existingCosts.map((cost) => (
               <TableRow key={cost.id}>
                 <TableCell>{cost.description}</TableCell>
-                <TableCell className="text-right">
-                  £{(cost.monthlyCost ?? 0).toFixed(2)}
-                </TableCell>
+                <TableCell className="text-right">£{(cost.monthlyCost ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="text-right">{cost.businessPercent}%</TableCell>
                 <TableCell className="text-right">
-                  £{calculatePhoneBroadbandClaimable(
+                  £
+                  {calculatePhoneBroadbandClaimable(
                     cost.monthlyCost ?? 0,
                     cost.businessPercent ?? 0
                   ).toFixed(2)}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditDialog(cost)}
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(cost)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </TableCell>

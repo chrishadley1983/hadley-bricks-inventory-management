@@ -50,12 +50,7 @@ export type AmazonReportType =
   | 'GET_MERCHANT_LISTINGS_DATA_BACK_COMPAT';
 
 /** Report processing status */
-export type ReportProcessingStatus =
-  | 'CANCELLED'
-  | 'DONE'
-  | 'FATAL'
-  | 'IN_PROGRESS'
-  | 'IN_QUEUE';
+export type ReportProcessingStatus = 'CANCELLED' | 'DONE' | 'FATAL' | 'IN_PROGRESS' | 'IN_QUEUE';
 
 /** Create report request body */
 export interface CreateReportRequest {
@@ -136,10 +131,7 @@ export class AmazonReportsClient {
    * @param marketplaceIds - Optional marketplace IDs (defaults to credentials)
    * @returns Report ID for tracking
    */
-  async createReport(
-    reportType: AmazonReportType,
-    marketplaceIds?: string[]
-  ): Promise<string> {
+  async createReport(reportType: AmazonReportType, marketplaceIds?: string[]): Promise<string> {
     const body: CreateReportRequest = {
       reportType,
       marketplaceIds: marketplaceIds || this.credentials.marketplaceIds,
@@ -162,10 +154,7 @@ export class AmazonReportsClient {
    * @returns Report status including processing state and document ID if ready
    */
   async getReportStatus(reportId: string): Promise<ReportStatusResponse> {
-    return this.request<ReportStatusResponse>(
-      `${REPORTS_API_PATH}/reports/${reportId}`,
-      'GET'
-    );
+    return this.request<ReportStatusResponse>(`${REPORTS_API_PATH}/reports/${reportId}`, 'GET');
   }
 
   /**
@@ -189,33 +178,22 @@ export class AmazonReportsClient {
     while (Date.now() - startTime < maxWaitMs) {
       const status = await this.getReportStatus(reportId);
 
-      console.log(
-        `[AmazonReportsClient] Report status: ${status.processingStatus}`
-      );
+      console.log(`[AmazonReportsClient] Report status: ${status.processingStatus}`);
 
       if (status.processingStatus === 'DONE') {
-        console.log(
-          `[AmazonReportsClient] Report ready: ${status.reportDocumentId}`
-        );
+        console.log(`[AmazonReportsClient] Report ready: ${status.reportDocumentId}`);
         return status;
       }
 
-      if (
-        status.processingStatus === 'CANCELLED' ||
-        status.processingStatus === 'FATAL'
-      ) {
-        throw new Error(
-          `Report generation failed with status: ${status.processingStatus}`
-        );
+      if (status.processingStatus === 'CANCELLED' || status.processingStatus === 'FATAL') {
+        throw new Error(`Report generation failed with status: ${status.processingStatus}`);
       }
 
       // Wait before next poll
       await this.sleep(pollIntervalMs);
     }
 
-    throw new Error(
-      `Report generation timed out after ${maxWaitMs / 1000} seconds`
-    );
+    throw new Error(`Report generation timed out after ${maxWaitMs / 1000} seconds`);
   }
 
   /**
@@ -224,9 +202,7 @@ export class AmazonReportsClient {
    * @param reportDocumentId - Document ID from completed report
    * @returns Document info including download URL and compression type
    */
-  async getReportDocument(
-    reportDocumentId: string
-  ): Promise<ReportDocumentResponse> {
+  async getReportDocument(reportDocumentId: string): Promise<ReportDocumentResponse> {
     return this.request<ReportDocumentResponse>(
       `${REPORTS_API_PATH}/documents/${reportDocumentId}`,
       'GET'
@@ -240,13 +216,8 @@ export class AmazonReportsClient {
    * @param isCompressed - Whether the content is GZIP compressed
    * @returns Raw report content (TSV/CSV string)
    */
-  async downloadReport(
-    documentUrl: string,
-    isCompressed: boolean
-  ): Promise<string> {
-    console.log(
-      `[AmazonReportsClient] Downloading report (compressed: ${isCompressed})...`
-    );
+  async downloadReport(documentUrl: string, isCompressed: boolean): Promise<string> {
+    console.log(`[AmazonReportsClient] Downloading report (compressed: ${isCompressed})...`);
 
     const response = await fetch(documentUrl);
 
@@ -270,10 +241,7 @@ export class AmazonReportsClient {
    * @param marketplaceIds - Optional marketplace IDs
    * @returns Raw report content
    */
-  async fetchReport(
-    reportType: AmazonReportType,
-    marketplaceIds?: string[]
-  ): Promise<string> {
+  async fetchReport(reportType: AmazonReportType, marketplaceIds?: string[]): Promise<string> {
     // 1. Request report
     const reportId = await this.createReport(reportType, marketplaceIds);
 
@@ -293,9 +261,7 @@ export class AmazonReportsClient {
       document.compressionAlgorithm === 'GZIP'
     );
 
-    console.log(
-      `[AmazonReportsClient] Report downloaded: ${content.length} characters`
-    );
+    console.log(`[AmazonReportsClient] Report downloaded: ${content.length} characters`);
 
     return content;
   }
@@ -335,11 +301,7 @@ export class AmazonReportsClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body?: unknown
-  ): Promise<T> {
+  private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -383,9 +345,7 @@ export class AmazonReportsClient {
           errors?: AmazonApiError[];
         };
         if (errorData.errors && errorData.errors.length > 0) {
-          errorMessage = errorData.errors
-            .map((e) => e.message)
-            .join('; ');
+          errorMessage = errorData.errors.map((e) => e.message).join('; ');
         }
       } catch {
         // Ignore JSON parse errors
@@ -443,10 +403,7 @@ export class AmazonReportsClient {
       expiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
     };
 
-    console.log(
-      '[AmazonReportsClient] Token refreshed, expires at:',
-      this.tokenData.expiresAt
-    );
+    console.log('[AmazonReportsClient] Token refreshed, expires at:', this.tokenData.expiresAt);
 
     return this.tokenData.accessToken;
   }
@@ -470,9 +427,7 @@ export class AmazonReportsClient {
       // Use native DecompressionStream API (available in modern browsers/Node 18+)
       const stream = new DecompressionStream('gzip');
       const decompressedStream = new Response(data).body!.pipeThrough(stream);
-      const decompressedBuffer = await new Response(
-        decompressedStream
-      ).arrayBuffer();
+      const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
       return new TextDecoder().decode(decompressedBuffer);
     } catch (error) {
       console.error('[AmazonReportsClient] Decompression failed:', error);
@@ -484,8 +439,6 @@ export class AmazonReportsClient {
 /**
  * Factory function to create an Amazon Reports client
  */
-export function createAmazonReportsClient(
-  credentials: AmazonCredentials
-): AmazonReportsClient {
+export function createAmazonReportsClient(credentials: AmazonCredentials): AmazonReportsClient {
   return new AmazonReportsClient(credentials);
 }

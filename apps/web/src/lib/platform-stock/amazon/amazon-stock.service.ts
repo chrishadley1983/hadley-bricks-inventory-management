@@ -66,9 +66,7 @@ export class AmazonStockService extends PlatformStockService {
     // 1. Get Amazon credentials
     const credentials = await this.getAmazonCredentials();
     if (!credentials) {
-      throw new Error(
-        'Amazon credentials not configured. Please set up Amazon integration first.'
-      );
+      throw new Error('Amazon credentials not configured. Please set up Amazon integration first.');
     }
 
     // 2. Create import record
@@ -81,19 +79,14 @@ export class AmazonStockService extends PlatformStockService {
       const client = new AmazonReportsClient(credentials);
 
       console.log('[AmazonStockService] Requesting report from Amazon...');
-      const reportContent = await client.fetchMerchantListingsReport(
-        credentials.marketplaceIds
-      );
+      const reportContent = await client.fetchMerchantListingsReport(credentials.marketplaceIds);
 
       // 4. Parse report
       console.log('[AmazonStockService] Parsing report...');
       const parseResult = parseAmazonListingsReport(reportContent);
 
       if (parseResult.errors.length > 0) {
-        console.warn(
-          '[AmazonStockService] Parse errors:',
-          parseResult.errors.slice(0, 5)
-        );
+        console.warn('[AmazonStockService] Parse errors:', parseResult.errors.slice(0, 5));
       }
 
       // 5. Delete old listings
@@ -101,9 +94,7 @@ export class AmazonStockService extends PlatformStockService {
       await this.deleteOldListings();
 
       // 6. Insert new listings
-      console.log(
-        `[AmazonStockService] Inserting ${parseResult.listings.length} listings...`
-      );
+      console.log(`[AmazonStockService] Inserting ${parseResult.listings.length} listings...`);
 
       const listingRows: PlatformListingInsert[] = parseResult.listings.map((listing) => ({
         user_id: this.userId,
@@ -134,9 +125,7 @@ export class AmazonStockService extends PlatformStockService {
         completed_at: new Date().toISOString(),
       });
 
-      console.log(
-        `[AmazonStockService] Import complete: ${inserted} listings imported`
-      );
+      console.log(`[AmazonStockService] Import complete: ${inserted} listings imported`);
 
       const importRecord = await this.getImportStatus(importId);
       return importRecord!;
@@ -144,8 +133,7 @@ export class AmazonStockService extends PlatformStockService {
       // Mark import as failed
       await this.updateImportRecord(importId, {
         status: 'failed',
-        error_message:
-          error instanceof Error ? error.message : 'Unknown error',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
         completed_at: new Date().toISOString(),
       });
 
@@ -217,7 +205,9 @@ export class AmazonStockService extends PlatformStockService {
       missingAsinBySetNumber.set(item.setNumber, existing);
     }
 
-    console.log(`[AmazonStockService] Missing ASIN grouped into ${missingAsinBySetNumber.size} unique set numbers`);
+    console.log(
+      `[AmazonStockService] Missing ASIN grouped into ${missingAsinBySetNumber.size} unique set numbers`
+    );
 
     // Add missing ASIN items to comparison map with special key prefix
     for (const [setNumber, items] of missingAsinBySetNumber) {
@@ -249,10 +239,14 @@ export class AmazonStockService extends PlatformStockService {
         quantityDifference: -items.length, // All are missing from platform
         priceDifference: null,
       });
-      console.log(`[AmazonStockService] Added missing ASIN entry for set ${setNumber} with ${items.length} items`);
+      console.log(
+        `[AmazonStockService] Added missing ASIN entry for set ${setNumber} with ${items.length} items`
+      );
     }
 
-    console.log(`[AmazonStockService] Comparison map size after adding missing ASIN: ${comparisonMap.size}`);
+    console.log(
+      `[AmazonStockService] Comparison map size after adding missing ASIN: ${comparisonMap.size}`
+    );
 
     // Process inventory items
     for (const item of inventoryItems) {
@@ -310,8 +304,7 @@ export class AmazonStockService extends PlatformStockService {
 
     // Calculate discrepancy types and differences
     for (const comparison of comparisonMap.values()) {
-      comparison.quantityDifference =
-        comparison.platformQuantity - comparison.inventoryQuantity;
+      comparison.quantityDifference = comparison.platformQuantity - comparison.inventoryQuantity;
 
       // Skip items that already have missing_asin type - don't overwrite
       if (comparison.discrepancyType === 'missing_asin') {
@@ -331,28 +324,18 @@ export class AmazonStockService extends PlatformStockService {
         comparison.discrepancyType = 'quantity_mismatch';
 
         // Calculate price difference if we have both prices
-        if (
-          comparison.platformPrice !== null &&
-          comparison.inventoryItems.length > 0
-        ) {
-          const avgInventoryPrice =
-            comparison.inventoryTotalValue / comparison.inventoryQuantity;
-          comparison.priceDifference =
-            comparison.platformPrice - avgInventoryPrice;
+        if (comparison.platformPrice !== null && comparison.inventoryItems.length > 0) {
+          const avgInventoryPrice = comparison.inventoryTotalValue / comparison.inventoryQuantity;
+          comparison.priceDifference = comparison.platformPrice - avgInventoryPrice;
         }
       } else {
         // Both have stock but quantities differ
         comparison.discrepancyType = 'quantity_mismatch';
 
         // Calculate price difference if we have both prices
-        if (
-          comparison.platformPrice !== null &&
-          comparison.inventoryItems.length > 0
-        ) {
-          const avgInventoryPrice =
-            comparison.inventoryTotalValue / comparison.inventoryQuantity;
-          comparison.priceDifference =
-            comparison.platformPrice - avgInventoryPrice;
+        if (comparison.platformPrice !== null && comparison.inventoryItems.length > 0) {
+          const avgInventoryPrice = comparison.inventoryTotalValue / comparison.inventoryQuantity;
+          comparison.priceDifference = comparison.platformPrice - avgInventoryPrice;
         }
       }
       // inventory_only is set during inventory processing for items not on platform
@@ -363,9 +346,7 @@ export class AmazonStockService extends PlatformStockService {
 
     // Apply filters
     if (filters.discrepancyType && filters.discrepancyType !== 'all') {
-      comparisons = comparisons.filter(
-        (c) => c.discrepancyType === filters.discrepancyType
-      );
+      comparisons = comparisons.filter((c) => c.discrepancyType === filters.discrepancyType);
     }
 
     if (filters.search) {
@@ -394,9 +375,7 @@ export class AmazonStockService extends PlatformStockService {
     };
 
     comparisons.sort((a, b) => {
-      const orderDiff =
-        discrepancyOrder[a.discrepancyType] -
-        discrepancyOrder[b.discrepancyType];
+      const orderDiff = discrepancyOrder[a.discrepancyType] - discrepancyOrder[b.discrepancyType];
       if (orderDiff !== 0) return orderDiff;
       return (a.platformTitle || '').localeCompare(b.platformTitle || '');
     });
@@ -409,33 +388,28 @@ export class AmazonStockService extends PlatformStockService {
       totalPlatformListings: listings.length,
       totalPlatformQuantity: listings.reduce((sum, l) => sum + l.quantity, 0),
       totalInventoryItems: inventoryItems.length + missingAsinItems.length,
-      matchedItems: allComparisons.filter((c) => c.discrepancyType === 'match')
+      matchedItems: allComparisons.filter((c) => c.discrepancyType === 'match').length,
+      platformOnlyItems: allComparisons.filter((c) => c.discrepancyType === 'platform_only').length,
+      inventoryOnlyItems: allComparisons.filter((c) => c.discrepancyType === 'inventory_only')
         .length,
-      platformOnlyItems: allComparisons.filter(
-        (c) => c.discrepancyType === 'platform_only'
-      ).length,
-      inventoryOnlyItems: allComparisons.filter(
-        (c) => c.discrepancyType === 'inventory_only'
-      ).length,
-      quantityMismatches: allComparisons.filter(
-        (c) => c.discrepancyType === 'quantity_mismatch'
-      ).length,
-      priceMismatches: allComparisons.filter(
-        (c) => c.discrepancyType === 'price_mismatch'
-      ).length,
-      missingAsinItems: allComparisons.filter(
-        (c) => c.discrepancyType === 'missing_asin'
-      ).length,
+      quantityMismatches: allComparisons.filter((c) => c.discrepancyType === 'quantity_mismatch')
+        .length,
+      priceMismatches: allComparisons.filter((c) => c.discrepancyType === 'price_mismatch').length,
+      missingAsinItems: allComparisons.filter((c) => c.discrepancyType === 'missing_asin').length,
       lastImportAt: latestImport?.completedAt || null,
     };
 
     console.log(
       `[AmazonStockService] Comparison complete: ${comparisons.length} items after filters`
     );
-    console.log(`[AmazonStockService] Summary: missingAsinItems=${summary.missingAsinItems}, allComparisons count=${allComparisons.length}`);
+    console.log(
+      `[AmazonStockService] Summary: missingAsinItems=${summary.missingAsinItems}, allComparisons count=${allComparisons.length}`
+    );
 
     // Debug: count missing_asin items
-    const missingAsinCount = allComparisons.filter((c) => c.discrepancyType === 'missing_asin').length;
+    const missingAsinCount = allComparisons.filter(
+      (c) => c.discrepancyType === 'missing_asin'
+    ).length;
     console.log(`[AmazonStockService] Direct count of missing_asin: ${missingAsinCount}`);
 
     return { comparisons, summary };
@@ -450,15 +424,9 @@ export class AmazonStockService extends PlatformStockService {
    */
   private async getAmazonCredentials(): Promise<AmazonCredentials | null> {
     try {
-      return await this.credentialsRepo.getCredentials<AmazonCredentials>(
-        this.userId,
-        'amazon'
-      );
+      return await this.credentialsRepo.getCredentials<AmazonCredentials>(this.userId, 'amazon');
     } catch (error) {
-      console.error(
-        '[AmazonStockService] Error fetching credentials:',
-        error
-      );
+      console.error('[AmazonStockService] Error fetching credentials:', error);
       return null;
     }
   }
@@ -491,7 +459,9 @@ export class AmazonStockService extends PlatformStockService {
         .not('amazon_asin', 'is', null)
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      console.log(`[AmazonStockService] Inventory WITH ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`);
+      console.log(
+        `[AmazonStockService] Inventory WITH ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`
+      );
 
       if (error) {
         throw new Error(`Failed to fetch inventory items: ${error.message}`);
@@ -548,7 +518,9 @@ export class AmazonStockService extends PlatformStockService {
         .is('amazon_asin', null)
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      console.log(`[AmazonStockService] Missing ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`);
+      console.log(
+        `[AmazonStockService] Missing ASIN query page ${page}: error=${error?.message || 'none'}, count=${data?.length || 0}`
+      );
       if (data && data.length > 0) {
         console.log(`[AmazonStockService] First item:`, JSON.stringify(data[0]));
       }

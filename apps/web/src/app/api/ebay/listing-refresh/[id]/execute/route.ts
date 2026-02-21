@@ -9,10 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.service';
 import type { RefreshProgressEvent, RefreshResult } from '@/lib/ebay/listing-refresh.types';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

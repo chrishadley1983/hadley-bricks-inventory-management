@@ -53,9 +53,7 @@ export function ErrorFallback({ error, reset }: ErrorFallbackProps) {
             </Button>
           </div>
           {error.digest && (
-            <p className="text-xs text-center text-muted-foreground">
-              Error ID: {error.digest}
-            </p>
+            <p className="text-xs text-center text-muted-foreground">Error ID: {error.digest}</p>
           )}
         </CardContent>
       </Card>

@@ -17,15 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Loader2,
-  Search,
-  CheckCircle2,
-  Package,
-  MapPin,
-  AlertTriangle,
-  Link2,
-} from 'lucide-react';
+import { Loader2, Search, CheckCircle2, Package, MapPin, AlertTriangle, Link2 } from 'lucide-react';
 
 interface InventoryItem {
   id: string;
@@ -155,7 +147,8 @@ export function EbaySkuMatcherDialog({
             Link eBay Item to Inventory
           </DialogTitle>
           <DialogDescription>
-            Search for an inventory item to link to this eBay SKU. Future orders with this SKU will automatically match.
+            Search for an inventory item to link to this eBay SKU. Future orders with this SKU will
+            automatically match.
           </DialogDescription>
         </DialogHeader>
 
@@ -241,7 +234,10 @@ export function EbaySkuMatcherDialog({
                               </Badge>
                             )}
                             {item.status === 'SOLD' && item.sold_platform && (
-                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-orange-600 border-orange-300"
+                              >
                                 {item.sold_platform}
                               </Badge>
                             )}

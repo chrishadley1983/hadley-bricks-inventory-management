@@ -45,13 +45,15 @@ export class AsinLinkageService {
       // Fetch seeded_asins joined with brickset_sets to get the set's current amazon_asin
       const { data, error } = await this.supabase
         .from('seeded_asins')
-        .select(`
+        .select(
+          `
           id,
           asin,
           match_confidence,
           discovery_status,
           brickset_set_id
-        `)
+        `
+        )
         .eq('discovery_status', 'found')
         .not('asin', 'is', null)
         .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -85,16 +87,14 @@ export class AsinLinkageService {
       if (updates.length > 0) {
         for (let i = 0; i < updates.length; i += 500) {
           const chunk = updates.slice(i, i + 500);
-          const { error: upsertError } = await this.supabase
-            .from('brickset_sets')
-            .upsert(
-              chunk.map((u) => ({
-                id: u.id,
-                amazon_asin: u.amazon_asin,
-                has_amazon_listing: u.has_amazon_listing,
-              })),
-              { onConflict: 'id' }
-            );
+          const { error: upsertError } = await this.supabase.from('brickset_sets').upsert(
+            chunk.map((u) => ({
+              id: u.id,
+              amazon_asin: u.amazon_asin,
+              has_amazon_listing: u.has_amazon_listing,
+            })),
+            { onConflict: 'id' }
+          );
 
           if (upsertError) {
             console.error('[AsinLinkage] Upsert error:', upsertError.message);

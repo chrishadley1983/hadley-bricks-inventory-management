@@ -105,7 +105,9 @@ describe('ProfitService', () => {
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
 
-      await expect(service.getMetrics(userId)).rejects.toThrow('Failed to get profit metrics: DB error');
+      await expect(service.getMetrics(userId)).rejects.toThrow(
+        'Failed to get profit metrics: DB error'
+      );
     });
 
     it('should handle null values in sales data', async () => {
@@ -139,9 +141,36 @@ describe('ProfitService', () => {
   describe('getDailyProfitSummary', () => {
     it('should return daily profit grouped by date', async () => {
       const mockSales = [
-        { sale_date: '2025-01-15', sale_amount: 100, shipping_charged: 5, platform_fees: 15, cost_of_goods: 50, shipping_cost: 3, other_costs: 2, gross_profit: 35 },
-        { sale_date: '2025-01-15', sale_amount: 80, shipping_charged: 5, platform_fees: 12, cost_of_goods: 40, shipping_cost: 3, other_costs: 0, gross_profit: 30 },
-        { sale_date: '2025-01-16', sale_amount: 200, shipping_charged: 10, platform_fees: 30, cost_of_goods: 100, shipping_cost: 5, other_costs: 5, gross_profit: 70 },
+        {
+          sale_date: '2025-01-15',
+          sale_amount: 100,
+          shipping_charged: 5,
+          platform_fees: 15,
+          cost_of_goods: 50,
+          shipping_cost: 3,
+          other_costs: 2,
+          gross_profit: 35,
+        },
+        {
+          sale_date: '2025-01-15',
+          sale_amount: 80,
+          shipping_charged: 5,
+          platform_fees: 12,
+          cost_of_goods: 40,
+          shipping_cost: 3,
+          other_costs: 0,
+          gross_profit: 30,
+        },
+        {
+          sale_date: '2025-01-16',
+          sale_amount: 200,
+          shipping_charged: 10,
+          platform_fees: 30,
+          cost_of_goods: 100,
+          shipping_cost: 5,
+          other_costs: 5,
+          gross_profit: 70,
+        },
       ];
 
       const mockBuilder = {
@@ -161,12 +190,12 @@ describe('ProfitService', () => {
 
       expect(result).toHaveLength(2);
 
-      const day1 = result.find(d => d.date === '2025-01-15');
+      const day1 = result.find((d) => d.date === '2025-01-15');
       expect(day1?.sales).toBe(2);
       expect(day1?.revenue).toBe(190); // (100+5) + (80+5)
       expect(day1?.profit).toBe(65); // 35 + 30
 
-      const day2 = result.find(d => d.date === '2025-01-16');
+      const day2 = result.find((d) => d.date === '2025-01-16');
       expect(day2?.sales).toBe(1);
       expect(day2?.revenue).toBe(210); // 200 + 10
       expect(day2?.profit).toBe(70);
@@ -174,7 +203,16 @@ describe('ProfitService', () => {
 
     it('should calculate margin correctly', async () => {
       const mockSales = [
-        { sale_date: '2025-01-15', sale_amount: 100, shipping_charged: 0, platform_fees: 10, cost_of_goods: 50, shipping_cost: 0, other_costs: 0, gross_profit: 40 },
+        {
+          sale_date: '2025-01-15',
+          sale_amount: 100,
+          shipping_charged: 0,
+          platform_fees: 10,
+          cost_of_goods: 50,
+          shipping_cost: 0,
+          other_costs: 0,
+          gross_profit: 40,
+        },
       ];
 
       const mockBuilder = {
@@ -199,8 +237,26 @@ describe('ProfitService', () => {
   describe('getMonthlyProfitSummary', () => {
     it('should return monthly profit for all 12 months', async () => {
       const mockSales = [
-        { sale_date: '2025-01-15', sale_amount: 100, shipping_charged: 5, platform_fees: 15, cost_of_goods: 50, shipping_cost: 3, other_costs: 2, gross_profit: 35 },
-        { sale_date: '2025-03-20', sale_amount: 200, shipping_charged: 10, platform_fees: 30, cost_of_goods: 100, shipping_cost: 5, other_costs: 5, gross_profit: 70 },
+        {
+          sale_date: '2025-01-15',
+          sale_amount: 100,
+          shipping_charged: 5,
+          platform_fees: 15,
+          cost_of_goods: 50,
+          shipping_cost: 3,
+          other_costs: 2,
+          gross_profit: 35,
+        },
+        {
+          sale_date: '2025-03-20',
+          sale_amount: 200,
+          shipping_charged: 10,
+          platform_fees: 30,
+          cost_of_goods: 100,
+          shipping_cost: 5,
+          other_costs: 5,
+          gross_profit: 70,
+        },
       ];
 
       const mockBuilder = {
@@ -232,9 +288,36 @@ describe('ProfitService', () => {
   describe('getPlatformBreakdown', () => {
     it('should return profit breakdown by platform', async () => {
       const mockSales = [
-        { platform: 'amazon', sale_amount: 100, shipping_charged: 5, platform_fees: 15, cost_of_goods: 50, shipping_cost: 3, other_costs: 2, gross_profit: 35 },
-        { platform: 'amazon', sale_amount: 80, shipping_charged: 5, platform_fees: 12, cost_of_goods: 40, shipping_cost: 3, other_costs: 0, gross_profit: 30 },
-        { platform: 'ebay', sale_amount: 200, shipping_charged: 10, platform_fees: 30, cost_of_goods: 100, shipping_cost: 5, other_costs: 5, gross_profit: 70 },
+        {
+          platform: 'amazon',
+          sale_amount: 100,
+          shipping_charged: 5,
+          platform_fees: 15,
+          cost_of_goods: 50,
+          shipping_cost: 3,
+          other_costs: 2,
+          gross_profit: 35,
+        },
+        {
+          platform: 'amazon',
+          sale_amount: 80,
+          shipping_charged: 5,
+          platform_fees: 12,
+          cost_of_goods: 40,
+          shipping_cost: 3,
+          other_costs: 0,
+          gross_profit: 30,
+        },
+        {
+          platform: 'ebay',
+          sale_amount: 200,
+          shipping_charged: 10,
+          platform_fees: 30,
+          cost_of_goods: 100,
+          shipping_cost: 5,
+          other_costs: 5,
+          gross_profit: 70,
+        },
       ];
 
       const mockBuilder = {
@@ -251,18 +334,27 @@ describe('ProfitService', () => {
       expect(result).toHaveLength(2);
 
       // Results are sorted by profit descending
-      const ebay = result.find(p => p.platform === 'ebay');
+      const ebay = result.find((p) => p.platform === 'ebay');
       expect(ebay?.sales).toBe(1);
       expect(ebay?.profit).toBe(70);
 
-      const amazon = result.find(p => p.platform === 'amazon');
+      const amazon = result.find((p) => p.platform === 'amazon');
       expect(amazon?.sales).toBe(2);
       expect(amazon?.profit).toBe(65);
     });
 
     it('should handle sales with no platform', async () => {
       const mockSales = [
-        { platform: null, sale_amount: 100, shipping_charged: 0, platform_fees: 10, cost_of_goods: 50, shipping_cost: 0, other_costs: 0, gross_profit: 40 },
+        {
+          platform: null,
+          sale_amount: 100,
+          shipping_charged: 0,
+          platform_fees: 10,
+          cost_of_goods: 50,
+          shipping_cost: 0,
+          other_costs: 0,
+          gross_profit: 40,
+        },
       ];
 
       const mockBuilder = {
@@ -281,8 +373,24 @@ describe('ProfitService', () => {
   describe('getRolling12MonthTurnover', () => {
     it('should return total revenue for last 12 months', async () => {
       const mockSales = [
-        { sale_amount: 1000, shipping_charged: 50, platform_fees: 100, cost_of_goods: 500, shipping_cost: 30, other_costs: 20, gross_profit: 400 },
-        { sale_amount: 2000, shipping_charged: 100, platform_fees: 200, cost_of_goods: 1000, shipping_cost: 50, other_costs: 50, gross_profit: 800 },
+        {
+          sale_amount: 1000,
+          shipping_charged: 50,
+          platform_fees: 100,
+          cost_of_goods: 500,
+          shipping_cost: 30,
+          other_costs: 20,
+          gross_profit: 400,
+        },
+        {
+          sale_amount: 2000,
+          shipping_charged: 100,
+          platform_fees: 200,
+          cost_of_goods: 1000,
+          shipping_cost: 50,
+          other_costs: 50,
+          gross_profit: 800,
+        },
       ];
 
       const mockBuilder = {
@@ -304,12 +412,28 @@ describe('ProfitService', () => {
     it('should compare current year with previous year', async () => {
       // Mock for current year
       const currentYearSales = [
-        { sale_amount: 1000, shipping_charged: 50, platform_fees: 100, cost_of_goods: 500, shipping_cost: 30, other_costs: 20, gross_profit: 400 },
+        {
+          sale_amount: 1000,
+          shipping_charged: 50,
+          platform_fees: 100,
+          cost_of_goods: 500,
+          shipping_cost: 30,
+          other_costs: 20,
+          gross_profit: 400,
+        },
       ];
 
       // Mock for previous year
       const previousYearSales = [
-        { sale_amount: 800, shipping_charged: 40, platform_fees: 80, cost_of_goods: 400, shipping_cost: 25, other_costs: 15, gross_profit: 320 },
+        {
+          sale_amount: 800,
+          shipping_charged: 40,
+          platform_fees: 80,
+          cost_of_goods: 400,
+          shipping_cost: 25,
+          other_costs: 15,
+          gross_profit: 320,
+        },
       ];
 
       let callCount = 0;
@@ -325,7 +449,10 @@ describe('ProfitService', () => {
           } else {
             resolve({ data: previousYearSales, error: null });
           }
-          return Promise.resolve({ data: callCount <= 1 ? currentYearSales : previousYearSales, error: null });
+          return Promise.resolve({
+            data: callCount <= 1 ? currentYearSales : previousYearSales,
+            error: null,
+          });
         }),
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
@@ -358,9 +485,27 @@ describe('ProfitService', () => {
   describe('getTopProfitableItems', () => {
     it('should return top items sorted by profit', async () => {
       const mockItems = [
-        { item_number: '75192', item_name: 'Millennium Falcon', quantity: 2, total_price: 1500, unit_cost: 600 },
-        { item_number: '76139', item_name: '1989 Batmobile', quantity: 1, total_price: 300, unit_cost: 200 },
-        { item_number: '10276', item_name: 'Colosseum', quantity: 1, total_price: 600, unit_cost: 400 },
+        {
+          item_number: '75192',
+          item_name: 'Millennium Falcon',
+          quantity: 2,
+          total_price: 1500,
+          unit_cost: 600,
+        },
+        {
+          item_number: '76139',
+          item_name: '1989 Batmobile',
+          quantity: 1,
+          total_price: 300,
+          unit_cost: 200,
+        },
+        {
+          item_number: '10276',
+          item_name: 'Colosseum',
+          quantity: 1,
+          total_price: 600,
+          unit_cost: 400,
+        },
       ];
 
       const mockBuilder = {
@@ -392,9 +537,27 @@ describe('ProfitService', () => {
 
     it('should limit results to specified count', async () => {
       const mockItems = [
-        { item_number: '75192', item_name: 'Millennium Falcon', quantity: 1, total_price: 1000, unit_cost: 600 },
-        { item_number: '76139', item_name: '1989 Batmobile', quantity: 1, total_price: 300, unit_cost: 200 },
-        { item_number: '10276', item_name: 'Colosseum', quantity: 1, total_price: 600, unit_cost: 400 },
+        {
+          item_number: '75192',
+          item_name: 'Millennium Falcon',
+          quantity: 1,
+          total_price: 1000,
+          unit_cost: 600,
+        },
+        {
+          item_number: '76139',
+          item_name: '1989 Batmobile',
+          quantity: 1,
+          total_price: 300,
+          unit_cost: 200,
+        },
+        {
+          item_number: '10276',
+          item_name: 'Colosseum',
+          quantity: 1,
+          total_price: 600,
+          unit_cost: 400,
+        },
       ];
 
       const mockBuilder = {
@@ -411,8 +574,20 @@ describe('ProfitService', () => {
 
     it('should aggregate multiple sales of same item', async () => {
       const mockItems = [
-        { item_number: '75192', item_name: 'Millennium Falcon', quantity: 1, total_price: 800, unit_cost: 600 },
-        { item_number: '75192', item_name: 'Millennium Falcon', quantity: 1, total_price: 850, unit_cost: 600 },
+        {
+          item_number: '75192',
+          item_name: 'Millennium Falcon',
+          quantity: 1,
+          total_price: 800,
+          unit_cost: 600,
+        },
+        {
+          item_number: '75192',
+          item_name: 'Millennium Falcon',
+          quantity: 1,
+          total_price: 850,
+          unit_cost: 600,
+        },
       ];
 
       const mockBuilder = {
@@ -433,7 +608,13 @@ describe('ProfitService', () => {
 
     it('should calculate margin correctly', async () => {
       const mockItems = [
-        { item_number: '75192', item_name: 'Millennium Falcon', quantity: 1, total_price: 1000, unit_cost: 600 },
+        {
+          item_number: '75192',
+          item_name: 'Millennium Falcon',
+          quantity: 1,
+          total_price: 1000,
+          unit_cost: 600,
+        },
       ];
 
       const mockBuilder = {

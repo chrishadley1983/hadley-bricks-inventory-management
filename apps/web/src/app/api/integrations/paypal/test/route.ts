@@ -21,18 +21,12 @@ export async function POST() {
     const result = await paypalAuthService.testConnection(user.id);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: 'Connection successful' });
   } catch (error) {
     console.error('[POST /api/integrations/paypal/test] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Connection test failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Connection test failed' }, { status: 500 });
   }
 }

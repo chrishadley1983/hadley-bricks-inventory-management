@@ -81,13 +81,16 @@ export async function GET(request: NextRequest) {
     // Normalize set number (remove variant suffix for search)
     const baseSetNumber = setNumber.split('-')[0];
 
-    console.log(`[GET /api/brickset/ebay-listings] Searching for ${condition} set: ${baseSetNumber}`);
+    console.log(
+      `[GET /api/brickset/ebay-listings] Searching for ${condition} set: ${baseSetNumber}`
+    );
 
     // Fetch eBay listings based on condition
     const ebayClient = getEbayBrowseClient();
-    const results = condition === 'used'
-      ? await ebayClient.searchLegoSetUsed(baseSetNumber, 50)
-      : await ebayClient.searchLegoSet(baseSetNumber, 50);
+    const results =
+      condition === 'used'
+        ? await ebayClient.searchLegoSetUsed(baseSetNumber, 50)
+        : await ebayClient.searchLegoSet(baseSetNumber, 50);
 
     if (!results.itemSummaries || results.itemSummaries.length === 0) {
       return NextResponse.json({
@@ -136,12 +139,17 @@ export async function GET(request: NextRequest) {
     const prices = listings.map((l) => l.totalPrice).filter((p) => p > 0);
     const stats = {
       minPrice: prices.length > 0 ? Math.min(...prices) : null,
-      avgPrice: prices.length > 0 ? Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100 : null,
+      avgPrice:
+        prices.length > 0
+          ? Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100
+          : null,
       maxPrice: prices.length > 0 ? Math.max(...prices) : null,
       listingCount: prices.length,
     };
 
-    console.log(`[GET /api/brickset/ebay-listings] Found ${listings.length} listings for set ${baseSetNumber}`);
+    console.log(
+      `[GET /api/brickset/ebay-listings] Found ${listings.length} listings for set ${baseSetNumber}`
+    );
 
     return NextResponse.json({
       data: {

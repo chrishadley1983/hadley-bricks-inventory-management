@@ -3,20 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Package,
-  MapPin,
-  Calendar,
-  TrendingUp,
-  ExternalLink,
-} from 'lucide-react';
+import { Package, MapPin, Calendar, TrendingUp, ExternalLink } from 'lucide-react';
 
 interface LinkedInventoryItem {
   id: string;
@@ -63,7 +53,10 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function calculateProfit(item: LinkedInventoryItem): { amount: number | null; percentage: number | null } {
+function calculateProfit(item: LinkedInventoryItem): {
+  amount: number | null;
+  percentage: number | null;
+} {
   if (!item.cost || !item.sold_net_amount) {
     return { amount: null, percentage: null };
   }
@@ -86,9 +79,7 @@ export function LinkedInventoryPopover({ inventoryItemId, children }: LinkedInve
 
   return (
     <HoverCard openDelay={200} closeDelay={100} open={isOpen} onOpenChange={setIsOpen}>
-      <HoverCardTrigger asChild>
-        {children}
-      </HoverCardTrigger>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent className="w-80" side="top" align="start">
         {isLoading ? (
           <div className="space-y-3">
@@ -152,7 +143,9 @@ export function LinkedInventoryPopover({ inventoryItemId, children }: LinkedInve
                 <div>
                   <div className="text-xs text-muted-foreground">Fees</div>
                   <div className="font-medium text-red-600">
-                    {formatCurrency(item.sold_fees_amount ? -Math.abs(item.sold_fees_amount) : null)}
+                    {formatCurrency(
+                      item.sold_fees_amount ? -Math.abs(item.sold_fees_amount) : null
+                    )}
                   </div>
                 </div>
                 <div>
@@ -166,16 +159,23 @@ export function LinkedInventoryPopover({ inventoryItemId, children }: LinkedInve
             {profit.amount !== null && (
               <div className="flex items-center justify-between pt-2 border-t">
                 <div className="flex items-center gap-1.5">
-                  <TrendingUp className={`h-4 w-4 ${profit.amount >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                  <TrendingUp
+                    className={`h-4 w-4 ${profit.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  />
                   <span className="text-xs text-muted-foreground">Profit</span>
                 </div>
                 <div className="text-right">
-                  <span className={`font-semibold ${profit.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span
+                    className={`font-semibold ${profit.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
                     {formatCurrency(profit.amount)}
                   </span>
                   {profit.percentage !== null && (
-                    <span className={`text-xs ml-1 ${profit.percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ({profit.percentage >= 0 ? '+' : ''}{profit.percentage.toFixed(0)}%)
+                    <span
+                      className={`text-xs ml-1 ${profit.percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                    >
+                      ({profit.percentage >= 0 ? '+' : ''}
+                      {profit.percentage.toFixed(0)}%)
                     </span>
                   )}
                 </div>
@@ -191,9 +191,7 @@ export function LinkedInventoryPopover({ inventoryItemId, children }: LinkedInve
             )}
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground">
-            Unable to load inventory details
-          </div>
+          <div className="text-sm text-muted-foreground">Unable to load inventory details</div>
         )}
       </HoverCardContent>
     </HoverCard>

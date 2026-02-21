@@ -67,9 +67,7 @@ const EXCLUSIVITY_MAP: Record<string, number> = {
 /**
  * Fetch training samples from the database: retired sets with historical appreciation.
  */
-export async function fetchTrainingSamples(
-  supabase: SupabaseClient
-): Promise<TrainingSample[]> {
+export async function fetchTrainingSamples(supabase: SupabaseClient): Promise<TrainingSample[]> {
   const samples: TrainingSample[] = [];
 
   // Fetch theme averages once (outside pagination loop)
@@ -134,7 +132,8 @@ export async function fetchTrainingSamples(
         },
         labels: {
           actual_1yr_appreciation: h.actual_1yr_appreciation as number,
-          actual_3yr_appreciation: (h.actual_3yr_appreciation as number | null) ?? (h.actual_1yr_appreciation as number),
+          actual_3yr_appreciation:
+            (h.actual_3yr_appreciation as number | null) ?? (h.actual_1yr_appreciation as number),
         },
       });
     }
@@ -159,7 +158,9 @@ async function fetchSetData(
     const chunk = setNums.slice(i, i + 100);
     const { data, error } = await supabase
       .from('brickset_sets')
-      .select('set_number, theme, pieces, minifigs, uk_retail_price, year_from, exclusivity_tier, is_licensed, is_ucs, is_modular, has_amazon_listing')
+      .select(
+        'set_number, theme, pieces, minifigs, uk_retail_price, year_from, exclusivity_tier, is_licensed, is_ucs, is_modular, has_amazon_listing'
+      )
       .in('set_number', chunk);
 
     if (error) {
@@ -167,7 +168,7 @@ async function fetchSetData(
       continue;
     }
 
-    for (const row of (data ?? [])) {
+    for (const row of data ?? []) {
       const r = row as unknown as Record<string, unknown>;
       map.set(r.set_number as string, r);
     }
@@ -181,9 +182,7 @@ async function fetchSetData(
  * Exported for reuse by scoring.service.ts.
  * Paginates both historical and set data to avoid the 1000-row limit.
  */
-export async function fetchThemeAverages(
-  supabase: SupabaseClient
-): Promise<Map<string, number>> {
+export async function fetchThemeAverages(supabase: SupabaseClient): Promise<Map<string, number>> {
   const themeAvgs = new Map<string, number>();
 
   // Paginate investment_historical to get all appreciation data
@@ -263,12 +262,19 @@ export function buildNormContext(samples: TrainingSample[]): FeatureNormContext 
   // Build theme encoding from all unique themes
   const themes = [...new Set(samples.map((s) => s.features.theme))].sort();
   const themeEncoding: Record<string, number> = {};
-  themes.forEach((t, i) => { themeEncoding[t] = i; });
+  themes.forEach((t, i) => {
+    themeEncoding[t] = i;
+  });
 
   // Numeric features to normalise
   const numericFeatureNames = [
-    'piece_count', 'minifig_count', 'rrp_gbp', 'price_per_piece',
-    'set_age_years', 'avg_sales_rank', 'theme_historical_avg_appreciation',
+    'piece_count',
+    'minifig_count',
+    'rrp_gbp',
+    'price_per_piece',
+    'set_age_years',
+    'avg_sales_rank',
+    'theme_historical_avg_appreciation',
   ];
 
   const numericStats: Record<string, NormStats> = {};
@@ -276,7 +282,7 @@ export function buildNormContext(samples: TrainingSample[]): FeatureNormContext 
   for (const name of numericFeatureNames) {
     const values = samples.map((s) => {
       const v = s.features[name as keyof RawFeatures];
-      return typeof v === 'number' ? v : (v === null ? 0 : 0);
+      return typeof v === 'number' ? v : v === null ? 0 : 0;
     });
 
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
@@ -290,7 +296,10 @@ export function buildNormContext(samples: TrainingSample[]): FeatureNormContext 
     ...numericFeatureNames,
     'theme_encoded',
     'exclusivity_encoded',
-    'is_licensed', 'is_ucs', 'is_modular', 'has_amazon_listing',
+    'is_licensed',
+    'is_ucs',
+    'is_modular',
+    'has_amazon_listing',
   ];
 
   return {
@@ -304,10 +313,7 @@ export function buildNormContext(samples: TrainingSample[]): FeatureNormContext 
 /**
  * Convert raw features to a normalised numeric vector.
  */
-export function featuresToVector(
-  features: RawFeatures,
-  ctx: FeatureNormContext
-): number[] {
+export function featuresToVector(features: RawFeatures, ctx: FeatureNormContext): number[] {
   const normalise = (name: string, value: number): number => {
     const stats = ctx.numeric_stats[name];
     if (!stats) return value;
@@ -323,7 +329,8 @@ export function featuresToVector(
     normalise('avg_sales_rank', features.avg_sales_rank ?? 0),
     normalise('theme_historical_avg_appreciation', features.theme_historical_avg_appreciation),
     // Theme encoding (normalised to 0-1 range)
-    (ctx.theme_encoding[features.theme] ?? 0) / Math.max(Object.keys(ctx.theme_encoding).length - 1, 1),
+    (ctx.theme_encoding[features.theme] ?? 0) /
+      Math.max(Object.keys(ctx.theme_encoding).length - 1, 1),
     // Exclusivity encoding (normalised to 0-1)
     (ctx.exclusivity_encoding[features.exclusivity_tier] ?? 0) / 3,
     // Boolean features (0 or 1)

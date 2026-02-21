@@ -334,9 +334,9 @@ describe('Templates Service', () => {
         }),
       });
 
-      await expect(
-        updateTemplate(testUserId, 'template-123', { name: 'Test' })
-      ).rejects.toThrow('Failed to update template');
+      await expect(updateTemplate(testUserId, 'template-123', { name: 'Test' })).rejects.toThrow(
+        'Failed to update template'
+      );
     });
   });
 
@@ -476,9 +476,7 @@ describe('Templates Service', () => {
     it('should include all default template types', async () => {
       const insertMock = vi.fn().mockReturnValue({
         select: vi.fn().mockResolvedValue({
-          data: DEFAULT_TEMPLATES.map((t, i) =>
-            createMockTemplate({ id: `t-${i}`, ...t })
-          ),
+          data: DEFAULT_TEMPLATES.map((t, i) => createMockTemplate({ id: `t-${i}`, ...t })),
           error: null,
         }),
       });
@@ -527,10 +525,7 @@ describe('Templates Service', () => {
 
   describe('ensureTemplates', () => {
     it('should return existing templates if user has them', async () => {
-      const existingTemplates = [
-        createMockTemplate({ id: '1' }),
-        createMockTemplate({ id: '2' }),
-      ];
+      const existingTemplates = [createMockTemplate({ id: '1' }), createMockTemplate({ id: '2' })];
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnValue({

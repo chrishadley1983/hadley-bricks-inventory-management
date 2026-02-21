@@ -1,6 +1,13 @@
 'use client';
 
-import { PieChart as RechartsPieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface DataPoint {
   name: string;
@@ -61,11 +68,16 @@ export function PieChart({
           labelLine={true}
         >
           {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+            />
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: number | undefined) => [formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0)]}
+          formatter={(value: number | undefined) => [
+            formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0),
+          ]}
           contentStyle={{
             backgroundColor: 'hsl(var(--background))',
             border: '1px solid hsl(var(--border))',

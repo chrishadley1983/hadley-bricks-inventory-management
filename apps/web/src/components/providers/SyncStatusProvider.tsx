@@ -58,8 +58,7 @@ export function SyncStatusProvider({
     }
 
     // Check if data is stale
-    const isStale =
-      !lastSync || new Date().getTime() - lastSync.getTime() > staleTtlMs;
+    const isStale = !lastSync || new Date().getTime() - lastSync.getTime() > staleTtlMs;
 
     if (isStale && !isSyncing) {
       syncAll();

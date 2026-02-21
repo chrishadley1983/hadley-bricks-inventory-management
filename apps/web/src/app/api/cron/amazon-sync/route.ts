@@ -65,7 +65,9 @@ export async function POST(request: NextRequest) {
     // Find all feeds that need processing (across all users)
     const { data: feeds, error: feedsError } = await supabase
       .from('amazon_sync_feeds')
-      .select('id, user_id, two_phase_step, two_phase_user_email, two_phase_started_at, amazon_feed_id')
+      .select(
+        'id, user_id, two_phase_step, two_phase_user_email, two_phase_started_at, amazon_feed_id'
+      )
       .eq('sync_mode', 'two_phase')
       .in('two_phase_step', PROCESSABLE_STEPS)
       .order('two_phase_started_at', { ascending: true })
@@ -102,7 +104,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`[Cron AmazonSync] Found ${feeds?.length ?? 0} two-phase + ${verifyFeeds?.length ?? 0} single-phase verify feed(s)`);
+    console.log(
+      `[Cron AmazonSync] Found ${feeds?.length ?? 0} two-phase + ${verifyFeeds?.length ?? 0} single-phase verify feed(s)`
+    );
 
     const results: Array<{
       feedId: string;
@@ -141,9 +145,7 @@ export async function POST(request: NextRequest) {
           message: result.message,
         });
 
-        console.log(
-          `[Cron AmazonSync] Feed ${feed.id}: ${result.status} - ${result.message}`
-        );
+        console.log(`[Cron AmazonSync] Feed ${feed.id}: ${result.status} - ${result.message}`);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error(`[Cron AmazonSync] Error processing feed ${feed.id}:`, error);
@@ -180,7 +182,7 @@ export async function POST(request: NextRequest) {
           isComplete: result.allVerified || result.feed.status === 'verification_failed',
           message: result.allVerified
             ? 'All prices verified'
-            : `Verification pending (${result.itemResults.filter(r => r.priceMatches).length}/${result.itemResults.length} verified)`,
+            : `Verification pending (${result.itemResults.filter((r) => r.priceMatches).length}/${result.itemResults.length} verified)`,
         });
 
         console.log(
@@ -211,7 +213,12 @@ export async function POST(request: NextRequest) {
       `[Cron AmazonSync] Complete: ${feeds.length} processed, ${completed} completed, ${errors} errors (${duration}ms)`
     );
 
-    await execution.complete({ feedsCompleted: completed, feedsWithErrors: errors }, 200, feeds.length, errors);
+    await execution.complete(
+      { feedsCompleted: completed, feedsWithErrors: errors },
+      200,
+      feeds.length,
+      errors
+    );
 
     return NextResponse.json({
       success: true,

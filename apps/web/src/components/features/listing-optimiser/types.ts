@@ -6,7 +6,10 @@ import type { OptimiserListing } from '@/lib/ebay/listing-optimiser.service';
 import type { ListingAnalysisResponse } from '@/lib/ai/prompts/analyse-listing';
 import type { PricingAnalysisResult } from '@/lib/ebay/ebay-finding.client';
 
-export type { OptimiserListing, ListingOptimiserSummary } from '@/lib/ebay/listing-optimiser.service';
+export type {
+  OptimiserListing,
+  ListingOptimiserSummary,
+} from '@/lib/ebay/listing-optimiser.service';
 export type { ListingAnalysisResponse, ListingSuggestion } from '@/lib/ai/prompts/analyse-listing';
 
 /**

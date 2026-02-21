@@ -124,9 +124,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     {
       accessorKey: 'colourName',
       header: 'Colour',
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.colourName}</span>
-      ),
+      cell: ({ row }) => <span className="text-sm">{row.original.colourName}</span>,
     },
     {
       accessorKey: 'quantity',
@@ -140,13 +138,11 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <span className="font-medium">{row.original.quantity}</span>
-      ),
+      cell: ({ row }) => <span className="font-medium">{row.original.quantity}</span>,
     },
     {
       id: 'price',
-      accessorFn: (row) => condition === 'new' ? row.priceNew : row.priceUsed,
+      accessorFn: (row) => (condition === 'new' ? row.priceNew : row.priceUsed),
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -157,11 +153,12 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => formatCurrency(condition === 'new' ? row.original.priceNew : row.original.priceUsed),
+      cell: ({ row }) =>
+        formatCurrency(condition === 'new' ? row.original.priceNew : row.original.priceUsed),
     },
     {
       id: 'total',
-      accessorFn: (row) => condition === 'new' ? row.totalNew : row.totalUsed,
+      accessorFn: (row) => (condition === 'new' ? row.totalNew : row.totalUsed),
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -180,7 +177,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     },
     {
       id: 'sellThroughRate',
-      accessorFn: (row) => condition === 'new' ? row.sellThroughRateNew : row.sellThroughRateUsed,
+      accessorFn: (row) => (condition === 'new' ? row.sellThroughRateNew : row.sellThroughRateUsed),
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -191,11 +188,14 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => formatPercentage(condition === 'new' ? row.original.sellThroughRateNew : row.original.sellThroughRateUsed),
+      cell: ({ row }) =>
+        formatPercentage(
+          condition === 'new' ? row.original.sellThroughRateNew : row.original.sellThroughRateUsed
+        ),
     },
     {
       id: 'stockAvailable',
-      accessorFn: (row) => condition === 'new' ? row.stockAvailableNew : row.stockAvailableUsed,
+      accessorFn: (row) => (condition === 'new' ? row.stockAvailableNew : row.stockAvailableUsed),
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -206,11 +206,13 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (condition === 'new' ? row.original.stockAvailableNew : row.original.stockAvailableUsed) ?? '-',
+      cell: ({ row }) =>
+        (condition === 'new' ? row.original.stockAvailableNew : row.original.stockAvailableUsed) ??
+        '-',
     },
     {
       id: 'timesSold',
-      accessorFn: (row) => condition === 'new' ? row.timesSoldNew : row.timesSoldUsed,
+      accessorFn: (row) => (condition === 'new' ? row.timesSoldNew : row.timesSoldUsed),
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -221,7 +223,8 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (condition === 'new' ? row.original.timesSoldNew : row.original.timesSoldUsed) ?? '-',
+      cell: ({ row }) =>
+        (condition === 'new' ? row.original.timesSoldNew : row.original.timesSoldUsed) ?? '-',
     },
     {
       id: 'cache',

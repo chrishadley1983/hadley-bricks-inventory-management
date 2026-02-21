@@ -19,11 +19,17 @@ export async function POST(
   return withApiKeyAuth<HeartbeatResponse>(request, async (userId) => {
     try {
       const body = await request.json();
-      console.log('[POST /api/arbitrage/vinted/automation/heartbeat] Request body:', JSON.stringify(body));
+      console.log(
+        '[POST /api/arbitrage/vinted/automation/heartbeat] Request body:',
+        JSON.stringify(body)
+      );
       const parsed = HeartbeatRequestSchema.safeParse(body);
 
       if (!parsed.success) {
-        console.error('[POST /api/arbitrage/vinted/automation/heartbeat] Validation error:', JSON.stringify(parsed.error.flatten()));
+        console.error(
+          '[POST /api/arbitrage/vinted/automation/heartbeat] Validation error:',
+          JSON.stringify(parsed.error.flatten())
+        );
         return NextResponse.json(
           { error: 'Invalid request body', details: parsed.error.flatten() },
           { status: 400 }
@@ -52,7 +58,10 @@ export async function POST(
         .single();
 
       if (updateError) {
-        console.error('[POST /api/arbitrage/vinted/automation/heartbeat] Update error:', updateError);
+        console.error(
+          '[POST /api/arbitrage/vinted/automation/heartbeat] Update error:',
+          updateError
+        );
         return NextResponse.json({ error: 'Failed to update heartbeat' }, { status: 500 });
       }
 

@@ -166,7 +166,10 @@ export class AmazonInventoryLinkingService {
    * Process a shipped Amazon order - attempt to link all items to inventory
    * Automatically detects mode based on whether inventory_item_id is populated
    */
-  async processShippedOrder(orderId: string, options: ProcessingOptions = {}): Promise<LinkingResult> {
+  async processShippedOrder(
+    orderId: string,
+    options: ProcessingOptions = {}
+  ): Promise<LinkingResult> {
     // Set includeSold flag from options
     this.includeSold = options.includeSold || false;
 
@@ -183,7 +186,9 @@ export class AmazonInventoryLinkingService {
       // Get order
       const { data: order, error: orderError } = await this.supabase
         .from('platform_orders')
-        .select('id, user_id, platform, platform_order_id, order_date, status, internal_status, fulfilled_at, shipped_at, total')
+        .select(
+          'id, user_id, platform, platform_order_id, order_date, status, internal_status, fulfilled_at, shipped_at, total'
+        )
         .eq('id', orderId)
         .eq('user_id', this.userId)
         .eq('platform', 'amazon')
@@ -197,7 +202,9 @@ export class AmazonInventoryLinkingService {
       // Get order items that haven't been Amazon-linked yet
       const { data: orderItems, error: itemsError } = await this.supabase
         .from('order_items')
-        .select('id, order_id, item_number, item_name, quantity, total_price, unit_price, inventory_item_id, amazon_linked_at')
+        .select(
+          'id, order_id, item_number, item_name, quantity, total_price, unit_price, inventory_item_id, amazon_linked_at'
+        )
         .eq('order_id', orderId)
         .is('amazon_linked_at', null);
 
@@ -216,13 +223,20 @@ export class AmazonInventoryLinkingService {
         result.orderItemsProcessed++;
 
         // Determine mode: if inventory_item_id is set, use picklist mode
-        const mode = options.mode === 'auto' || !options.mode
-          ? (orderItem.inventory_item_id ? 'picklist' : 'non_picklist')
-          : options.mode;
+        const mode =
+          options.mode === 'auto' || !options.mode
+            ? orderItem.inventory_item_id
+              ? 'picklist'
+              : 'non_picklist'
+            : options.mode;
 
         const matchResult = await this.matchOrderItemToInventory(orderItem, order, mode);
 
-        if (matchResult.status === 'matched' && matchResult.inventoryIds && matchResult.inventoryIds.length > 0) {
+        if (
+          matchResult.status === 'matched' &&
+          matchResult.inventoryIds &&
+          matchResult.inventoryIds.length > 0
+        ) {
           // Auto-link successful
           const netSale = await this.calculateNetSale(
             order.platform_order_id,
@@ -230,12 +244,7 @@ export class AmazonInventoryLinkingService {
             orderItem.quantity
           );
 
-          await this.markInventoryAsSold(
-            matchResult.inventoryIds,
-            orderItem,
-            order,
-            netSale
-          );
+          await this.markInventoryAsSold(matchResult.inventoryIds, orderItem, order, netSale);
 
           await this.linkOrderItemToInventory(
             orderItem.id,
@@ -342,7 +351,9 @@ export class AmazonInventoryLinkingService {
       }
 
       if (linkingResult.errors.length > 0) {
-        result.errors.push(...linkingResult.errors.map(e => `Order ${order.platform_order_id}: ${e}`));
+        result.errors.push(
+          ...linkingResult.errors.map((e) => `Order ${order.platform_order_id}: ${e}`)
+        );
       }
     }
 
@@ -392,7 +403,10 @@ export class AmazonInventoryLinkingService {
         // For multi-quantity with picklist, we need to find additional items
         if (quantity > 1) {
           const additionalItems = await this.findByAsin(asin, quantity - 1);
-          const allInventoryIds = [orderItem.inventory_item_id, ...additionalItems.map(i => i.id)];
+          const allInventoryIds = [
+            orderItem.inventory_item_id,
+            ...additionalItems.map((i) => i.id),
+          ];
 
           if (allInventoryIds.length < quantity) {
             // Not enough inventory
@@ -461,7 +475,7 @@ export class AmazonInventoryLinkingService {
     return {
       status: 'matched',
       method: 'auto_asin',
-      inventoryIds: selectedItems.map(i => i.id),
+      inventoryIds: selectedItems.map((i) => i.id),
       confidence: 1.0,
     };
   }
@@ -498,7 +512,9 @@ export class AmazonInventoryLinkingService {
 
     const { data } = await this.supabase
       .from('inventory_items')
-      .select('id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id')
+      .select(
+        'id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id'
+      )
       .eq('user_id', this.userId)
       .eq('amazon_asin', asin)
       .ilike('listing_platform', '%amazon%') // Case-insensitive match for AMAZON/amazon
@@ -522,7 +538,9 @@ export class AmazonInventoryLinkingService {
 
     const { data } = await this.supabase
       .from('inventory_items')
-      .select('id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id')
+      .select(
+        'id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id'
+      )
       .eq('user_id', this.userId)
       .eq('set_number', setNumber)
       .in('status', this.getValidStatuses())
@@ -549,15 +567,17 @@ export class AmazonInventoryLinkingService {
     // Fall back to title search
     const { data } = await this.supabase
       .from('inventory_items')
-      .select('id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id')
+      .select(
+        'id, amazon_asin, set_number, item_name, condition, storage_location, listing_value, listing_platform, cost, purchase_date, created_at, status, amazon_order_item_id'
+      )
       .eq('user_id', this.userId)
       .in('status', this.getValidStatuses())
       .ilike('item_name', `%${query}%`)
       .order('created_at', { ascending: true })
       .limit(20);
 
-    return (data || []).filter((item: InventoryItem) =>
-      item.status !== 'SOLD' || !item.amazon_order_item_id
+    return (data || []).filter(
+      (item: InventoryItem) => item.status !== 'SOLD' || !item.amazon_order_item_id
     );
   }
 
@@ -684,7 +704,9 @@ export class AmazonInventoryLinkingService {
     // Get transaction for this order + ASIN
     const { data: transaction } = await this.supabase
       .from('amazon_transactions')
-      .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+      .select(
+        'gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee'
+      )
       .eq('user_id', this.userId)
       .eq('amazon_order_id', amazonOrderId)
       .eq('asin', asin)
@@ -695,7 +717,9 @@ export class AmazonInventoryLinkingService {
       // Try without ASIN filter (some transactions might not have ASIN)
       const { data: orderTransaction } = await this.supabase
         .from('amazon_transactions')
-        .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+        .select(
+          'gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee'
+        )
         .eq('user_id', this.userId)
         .eq('amazon_order_id', amazonOrderId)
         .eq('transaction_type', 'Shipment')
@@ -721,7 +745,9 @@ export class AmazonInventoryLinkingService {
         grossAmount: perItemGross,
         feesAmount: perItemFees,
         netAmount: perItemNet,
-        referralFee: orderTransaction.referral_fee ? orderTransaction.referral_fee / quantity : null,
+        referralFee: orderTransaction.referral_fee
+          ? orderTransaction.referral_fee / quantity
+          : null,
         fbaFee: this.calculateFbaFee(orderTransaction) / quantity,
         status: 'calculated',
       };
@@ -795,7 +821,9 @@ export class AmazonInventoryLinkingService {
         throw new Error(`Failed to mark inventory ${inventoryId} as sold: ${error.message}`);
       }
       if (count === 0) {
-        console.warn(`[AmazonInventoryLinking] No rows updated for inventory ${inventoryId} - may not exist or wrong user`);
+        console.warn(
+          `[AmazonInventoryLinking] No rows updated for inventory ${inventoryId} - may not exist or wrong user`
+        );
       }
     }
   }
@@ -819,10 +847,14 @@ export class AmazonInventoryLinkingService {
       .eq('id', orderItemId);
 
     if (error) {
-      throw new Error(`Failed to link order item ${orderItemId} to inventory ${inventoryId}: ${error.message}`);
+      throw new Error(
+        `Failed to link order item ${orderItemId} to inventory ${inventoryId}: ${error.message}`
+      );
     }
     if (count === 0) {
-      throw new Error(`No rows updated when linking order item ${orderItemId} - item may not exist`);
+      throw new Error(
+        `No rows updated when linking order item ${orderItemId} - item may not exist`
+      );
     }
   }
 
@@ -916,7 +948,8 @@ export class AmazonInventoryLinkingService {
 
     if (alreadyLinked && alreadyLinked.length > 0) {
       const linkedOrders = alreadyLinked.map(
-        (item: { platform_orders: { platform_order_id: string } }) => item.platform_orders.platform_order_id
+        (item: { platform_orders: { platform_order_id: string } }) =>
+          item.platform_orders.platform_order_id
       );
       return {
         success: false,
@@ -1000,7 +1033,9 @@ export class AmazonInventoryLinkingService {
       .eq('status', 'pending');
 
     const totalItems = orderItems?.length || 0;
-    const linkedItems = orderItems?.filter((oi: { amazon_linked_at: string | null }) => oi.amazon_linked_at !== null).length || 0;
+    const linkedItems =
+      orderItems?.filter((oi: { amazon_linked_at: string | null }) => oi.amazon_linked_at !== null)
+        .length || 0;
     const pendingItems = pendingQueue?.length || 0;
 
     let status: 'pending' | 'partial' | 'complete' | 'skipped';
@@ -1051,9 +1086,17 @@ export class AmazonInventoryLinkingService {
     type OrderWithLinkStatus = { inventory_link_status: string | null };
     const stats = {
       totalShippedOrders: orders?.length || 0,
-      linkedOrders: orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'complete').length || 0,
-      partialOrders: orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'partial').length || 0,
-      pendingOrders: orders?.filter((o: OrderWithLinkStatus) => !o.inventory_link_status || o.inventory_link_status === 'pending').length || 0,
+      linkedOrders:
+        orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'complete').length ||
+        0,
+      partialOrders:
+        orders?.filter((o: OrderWithLinkStatus) => o.inventory_link_status === 'partial').length ||
+        0,
+      pendingOrders:
+        orders?.filter(
+          (o: OrderWithLinkStatus) =>
+            !o.inventory_link_status || o.inventory_link_status === 'pending'
+        ).length || 0,
       pendingQueueItems: pendingQueueItems || 0,
     };
 
@@ -1112,7 +1155,9 @@ export class AmazonInventoryLinkingService {
         if (item.amazon_asin) {
           const { data } = await this.supabase
             .from('amazon_transactions')
-            .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+            .select(
+              'gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee'
+            )
             .eq('user_id', this.userId)
             .eq('amazon_order_id', item.sold_order_id)
             .eq('asin', item.amazon_asin)
@@ -1125,7 +1170,9 @@ export class AmazonInventoryLinkingService {
         if (!transaction) {
           const { data } = await this.supabase
             .from('amazon_transactions')
-            .select('gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee')
+            .select(
+              'gross_sales_amount, total_fees, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee'
+            )
             .eq('user_id', this.userId)
             .eq('amazon_order_id', item.sold_order_id)
             .eq('transaction_type', 'Shipment')
@@ -1156,14 +1203,20 @@ export class AmazonInventoryLinkingService {
           result.errors.push(`Failed to update item ${item.id}: ${updateError.message}`);
         } else {
           result.updated++;
-          console.log(`[AmazonFeeBackfill] Updated item ${item.id} with fees: ${transaction.total_fees}`);
+          console.log(
+            `[AmazonFeeBackfill] Updated item ${item.id} with fees: ${transaction.total_fees}`
+          );
         }
       } catch (err) {
-        result.errors.push(`Error processing item ${item.id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        result.errors.push(
+          `Error processing item ${item.id}: ${err instanceof Error ? err.message : 'Unknown error'}`
+        );
       }
     }
 
-    console.log(`[AmazonFeeBackfill] Complete: ${result.updated} updated, ${result.stillPending} still pending`);
+    console.log(
+      `[AmazonFeeBackfill] Complete: ${result.updated} updated, ${result.stillPending} still pending`
+    );
     return result;
   }
 
@@ -1219,7 +1272,9 @@ export class AmazonInventoryLinkingService {
       return result;
     }
 
-    console.log(`[AutoCompleteOldOrders] Found ${orders.length} orders to auto-complete (>${daysOld} days old)`);
+    console.log(
+      `[AutoCompleteOldOrders] Found ${orders.length} orders to auto-complete (>${daysOld} days old)`
+    );
 
     const now = new Date().toISOString();
 
@@ -1238,13 +1293,19 @@ export class AmazonInventoryLinkingService {
           .eq('user_id', this.userId);
 
         if (updateError) {
-          result.errors.push(`Failed to complete order ${order.platform_order_id}: ${updateError.message}`);
+          result.errors.push(
+            `Failed to complete order ${order.platform_order_id}: ${updateError.message}`
+          );
         } else {
           result.completed++;
-          console.log(`[AutoCompleteOldOrders] Completed order ${order.platform_order_id} (${order.order_date})`);
+          console.log(
+            `[AutoCompleteOldOrders] Completed order ${order.platform_order_id} (${order.order_date})`
+          );
         }
       } catch (err) {
-        result.errors.push(`Error processing order ${order.platform_order_id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        result.errors.push(
+          `Error processing order ${order.platform_order_id}: ${err instanceof Error ? err.message : 'Unknown error'}`
+        );
       }
     }
 

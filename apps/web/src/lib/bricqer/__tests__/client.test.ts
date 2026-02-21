@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  BricqerClient,
-  BricqerApiError,
-  BricqerRateLimitError,
-  BricqerAuthError,
-} from '../client';
+import { BricqerClient, BricqerApiError, BricqerRateLimitError, BricqerAuthError } from '../client';
 import type { BricqerCredentials } from '../types';
 
 // Mock fetch globally
@@ -203,12 +198,13 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: [
-            { id: 1, order_number: 'BQ-001', status: 'READY' },
-            { id: 2, order_number: 'BQ-002', status: 'SHIPPED' },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            results: [
+              { id: 1, order_number: 'BQ-001', status: 'READY' },
+              { id: 2, order_number: 'BQ-002', status: 'SHIPPED' },
+            ],
+          }),
       });
 
       const orders = await client.getOrders();
@@ -226,10 +222,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, order_number: 'BQ-001' },
-          { id: 2, order_number: 'BQ-002' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, order_number: 'BQ-001' },
+            { id: 2, order_number: 'BQ-002' },
+          ]),
       });
 
       const orders = await client.getOrders();
@@ -340,9 +337,10 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: Array(100).fill({ id: 1, order_number: 'BQ-001' }),
-        }),
+        json: () =>
+          Promise.resolve({
+            results: Array(100).fill({ id: 1, order_number: 'BQ-001' }),
+          }),
       });
 
       // Second page - partial results (end of data)
@@ -350,9 +348,10 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: [{ id: 101, order_number: 'BQ-101' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            results: [{ id: 101, order_number: 'BQ-101' }],
+          }),
       });
 
       const orders = await client.getAllOrders();
@@ -398,12 +397,13 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          id: 123,
-          order_number: 'BQ-123',
-          status: 'READY',
-          items: [],
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            order_number: 'BQ-123',
+            status: 'READY',
+            items: [],
+          }),
       });
 
       const order = await client.getOrder(123);
@@ -456,10 +456,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, name: 'Item 1', quantity: 2 },
-          { id: 2, name: 'Item 2', quantity: 5 },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Item 1', quantity: 2 },
+            { id: 2, name: 'Item 2', quantity: 5 },
+          ]),
       });
 
       const items = await client.getOrderItems(123);
@@ -476,9 +477,10 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          items: [{ id: 1, name: 'Item 1' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            items: [{ id: 1, name: 'Item 1' }],
+          }),
       });
 
       const items = await client.getOrderItems(123);
@@ -500,10 +502,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          id: 123,
-          items: [{ id: 1, name: 'Item from order' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            items: [{ id: 1, name: 'Item from order' }],
+          }),
       });
 
       const items = await client.getOrderItems(123);
@@ -519,11 +522,12 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          id: 123,
-          order_number: 'BQ-123',
-          items: [{ id: 1, name: 'Item 1' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            order_number: 'BQ-123',
+            items: [{ id: 1, name: 'Item 1' }],
+          }),
       });
 
       const result = await client.getOrderWithItems(123);
@@ -538,10 +542,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          id: 123,
-          order_number: 'BQ-123',
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            order_number: 'BQ-123',
+          }),
       });
 
       // Items request
@@ -584,12 +589,13 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: [
-            { id: 1, definitionId: 100, quantity: 5 },
-            { id: 2, definitionId: 200, quantity: 10 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            results: [
+              { id: 1, definitionId: 100, quantity: 5 },
+              { id: 2, definitionId: 200, quantity: 10 },
+            ],
+          }),
       });
 
       const items = await client.getInventoryItems();
@@ -633,10 +639,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: Array(100).fill({ id: 1 }),
-          next: 'http://next-page',
-        }),
+        json: () =>
+          Promise.resolve({
+            results: Array(100).fill({ id: 1 }),
+            next: 'http://next-page',
+          }),
       });
 
       // Second page
@@ -644,10 +651,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: [{ id: 101 }],
-          next: null,
-        }),
+        json: () =>
+          Promise.resolve({
+            results: [{ id: 101 }],
+            next: null,
+          }),
       });
 
       const items = await client.getAllInventoryItems();
@@ -663,11 +671,12 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          id: 123,
-          definitionId: 100,
-          quantity: 5,
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            definitionId: 100,
+            quantity: 5,
+          }),
       });
 
       const item = await client.getInventoryItem(123);
@@ -686,10 +695,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, name: 'Shelf A' },
-          { id: 2, name: 'Shelf B' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Shelf A' },
+            { id: 2, name: 'Shelf B' },
+          ]),
       });
 
       const locations = await client.getStorageLocations();
@@ -706,9 +716,10 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          results: [{ id: 1, name: 'Shelf A' }],
-        }),
+        json: () =>
+          Promise.resolve({
+            results: [{ id: 1, name: 'Shelf A' }],
+          }),
       });
 
       const locations = await client.getStorageLocations();
@@ -723,10 +734,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, name: 'Red' },
-          { id: 2, name: 'Blue' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Red' },
+            { id: 2, name: 'Blue' },
+          ]),
       });
 
       const colors = await client.getColors();
@@ -745,10 +757,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, totalQuantity: 100 },
-          { id: 2, totalQuantity: 50 },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, totalQuantity: 100 },
+            { id: 2, totalQuantity: 50 },
+          ]),
       });
 
       const batches = await client.getBatches();
@@ -783,10 +796,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, supplier: 'Supplier A' },
-          { id: 2, supplier: 'Supplier B' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, supplier: 'Supplier A' },
+            { id: 2, supplier: 'Supplier B' },
+          ]),
       });
 
       const purchases = await client.getPurchases();
@@ -806,10 +820,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          page: { count: 500 },
-          results: [],
-        }),
+        json: () =>
+          Promise.resolve({
+            page: { count: 500 },
+            results: [],
+          }),
       });
 
       // Storage request
@@ -817,11 +832,12 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([
-          { id: 1, name: 'Shelf A' },
-          { id: 2, name: 'Shelf B' },
-          { id: 3, name: 'Shelf C' },
-        ]),
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Shelf A' },
+            { id: 2, name: 'Shelf B' },
+            { id: 3, name: 'Shelf C' },
+          ]),
       });
 
       const stats = await client.getInventoryStats();
@@ -835,10 +851,11 @@ describe('BricqerClient', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve({
-          count: 250,
-          results: [],
-        }),
+        json: () =>
+          Promise.resolve({
+            count: 250,
+            results: [],
+          }),
       });
 
       mockFetch.mockResolvedValueOnce({

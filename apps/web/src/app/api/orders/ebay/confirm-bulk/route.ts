@@ -84,10 +84,7 @@ export async function POST(request: NextRequest) {
 
     const successCount = results.filter((r) => r.success).length;
     const failedCount = results.filter((r) => !r.success).length;
-    const totalInventoryUpdated = results.reduce(
-      (sum, r) => sum + (r.inventoryUpdated || 0),
-      0
-    );
+    const totalInventoryUpdated = results.reduce((sum, r) => sum + (r.inventoryUpdated || 0), 0);
 
     return NextResponse.json({
       success: failedCount === 0,

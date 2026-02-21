@@ -26,9 +26,7 @@ export function ImportStatusBanner({
     return (
       <Alert className={cn('border-blue-200 bg-blue-50 dark:bg-blue-950/20', className)}>
         <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-        <AlertTitle className="text-blue-800 dark:text-blue-400">
-          Importing listings...
-        </AlertTitle>
+        <AlertTitle className="text-blue-800 dark:text-blue-400">Importing listings...</AlertTitle>
         <AlertDescription className="text-blue-700 dark:text-blue-300">
           {importMessage}
         </AlertDescription>
@@ -42,9 +40,7 @@ export function ImportStatusBanner({
       return (
         <Alert className={cn('border-blue-200 bg-blue-50 dark:bg-blue-950/20', className)}>
           <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-          <AlertTitle className="text-blue-800 dark:text-blue-400">
-            Import in progress
-          </AlertTitle>
+          <AlertTitle className="text-blue-800 dark:text-blue-400">Import in progress</AlertTitle>
           <AlertDescription className="text-blue-700 dark:text-blue-300">
             Processing {importData.processedRows || 0} of {importData.totalRows || '?'} listings...
           </AlertDescription>
@@ -75,9 +71,7 @@ export function ImportStatusBanner({
       return (
         <Alert className={cn('border-green-200 bg-green-50 dark:bg-green-950/20', className)}>
           <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertTitle className="text-green-800 dark:text-green-400">
-            Import complete
-          </AlertTitle>
+          <AlertTitle className="text-green-800 dark:text-green-400">Import complete</AlertTitle>
           <AlertDescription className="text-green-700 dark:text-green-300">
             {importData.processedRows ?? 0} listings imported at {completedAt}
             {(importData.errorCount ?? 0) > 0 && ` (${importData.errorCount} skipped)`}
@@ -90,9 +84,7 @@ export function ImportStatusBanner({
       return (
         <Alert className={cn('border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20', className)}>
           <Clock className="h-4 w-4 text-yellow-600" />
-          <AlertTitle className="text-yellow-800 dark:text-yellow-400">
-            Import pending
-          </AlertTitle>
+          <AlertTitle className="text-yellow-800 dark:text-yellow-400">Import pending</AlertTitle>
           <AlertDescription className="text-yellow-700 dark:text-yellow-300">
             Import is queued and will start shortly.
           </AlertDescription>
@@ -113,9 +105,7 @@ interface LastImportInfoProps {
 export function LastImportInfo({ import: importData, className }: LastImportInfoProps) {
   if (!importData || importData.status !== 'completed') {
     return (
-      <span className={cn('text-sm text-muted-foreground', className)}>
-        No previous import
-      </span>
+      <span className={cn('text-sm text-muted-foreground', className)}>No previous import</span>
     );
   }
 

@@ -17,8 +17,37 @@ import { ArbitrageService } from '@/lib/arbitrage';
 const FilterParamsSchema = z.object({
   minMargin: z.coerce.number().min(0).max(100).optional().default(30),
   maxCog: z.coerce.number().min(0).max(100).optional().default(50),
-  show: z.enum(['all', 'opportunities', 'ebay_opportunities', 'with_ebay_data', 'no_ebay_data', 'in_stock', 'zero_qty', 'pending_review', 'inventory', 'seeded']).optional().default('all'),
-  sortField: z.enum(['margin', 'cog', 'bl_price', 'your_price', 'buy_box', 'was_price', 'sales_rank', 'name', 'ebay_margin', 'ebay_price', 'bl_lots']).optional().default('margin'),
+  show: z
+    .enum([
+      'all',
+      'opportunities',
+      'ebay_opportunities',
+      'with_ebay_data',
+      'no_ebay_data',
+      'in_stock',
+      'zero_qty',
+      'pending_review',
+      'inventory',
+      'seeded',
+    ])
+    .optional()
+    .default('all'),
+  sortField: z
+    .enum([
+      'margin',
+      'cog',
+      'bl_price',
+      'your_price',
+      'buy_box',
+      'was_price',
+      'sales_rank',
+      'name',
+      'ebay_margin',
+      'ebay_price',
+      'bl_lots',
+    ])
+    .optional()
+    .default('margin'),
   sortDirection: z.enum(['asc', 'desc']).optional().default('desc'),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),
@@ -77,9 +106,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: result });
   } catch (error) {
     console.error('[GET /api/arbitrage] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

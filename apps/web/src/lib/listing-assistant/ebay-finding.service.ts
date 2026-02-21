@@ -17,7 +17,10 @@ import type { EbaySoldItem } from './types';
 export async function getEbaySoldPrices(
   query: string,
   condition: 'New' | 'Used'
-): Promise<{ items: EbaySoldItem[]; stats: { min: number | null; avg: number | null; max: number | null } }> {
+): Promise<{
+  items: EbaySoldItem[];
+  stats: { min: number | null; avg: number | null; max: number | null };
+}> {
   try {
     const client = getEbayFindingClient();
 

@@ -341,9 +341,21 @@ export class PurchaseProfitabilityService {
         realisedFees += fees;
         realisedCost += effectiveCost;
 
-        itemDetail.soldGrossAmount = hasSaleData ? item.sold_gross_amount : (hasListingValue ? item.listing_value : null);
-        itemDetail.soldFeesAmount = hasSaleData ? item.sold_fees_amount : (hasListingValue ? fees : null);
-        itemDetail.soldNetAmount = hasSaleData ? item.sold_net_amount : (hasListingValue ? net : null);
+        itemDetail.soldGrossAmount = hasSaleData
+          ? item.sold_gross_amount
+          : hasListingValue
+            ? item.listing_value
+            : null;
+        itemDetail.soldFeesAmount = hasSaleData
+          ? item.sold_fees_amount
+          : hasListingValue
+            ? fees
+            : null;
+        itemDetail.soldNetAmount = hasSaleData
+          ? item.sold_net_amount
+          : hasListingValue
+            ? net
+            : null;
         itemDetail.soldProfit = hasCost ? profit : null;
         itemDetail.soldMarginPercent = gross > 0 && hasCost ? (profit / gross) * 100 : null;
       } else if (hasListingValue) {
@@ -361,7 +373,8 @@ export class PurchaseProfitabilityService {
         itemDetail.listingPlatform = item.listing_platform;
         itemDetail.estimatedFees = estFees;
         itemDetail.projectedProfit = hasCost ? projProfit : null;
-        itemDetail.projectedMarginPercent = listingVal > 0 && hasCost ? (projProfit / listingVal) * 100 : null;
+        itemDetail.projectedMarginPercent =
+          listingVal > 0 && hasCost ? (projProfit / listingVal) * 100 : null;
       } else {
         unlistedItems++;
         if (!isSold) itemsWithNoListingValue++;
@@ -451,7 +464,8 @@ export class PurchaseProfitabilityService {
 
       // Profit = Revenue - Fees - Cost
       const uploadItemRealisedProfit = realisedRev - realisedFeesPortion - realisedCostPortion;
-      const uploadItemUnrealisedProfit = unrealisedRev - unrealisedFeesPortion - unrealisedCostPortion;
+      const uploadItemUnrealisedProfit =
+        unrealisedRev - unrealisedFeesPortion - unrealisedCostPortion;
       const uploadItemTotalProfit = sellingPrice - fees - cost;
       const marginPercent = sellingPrice > 0 ? (uploadItemTotalProfit / sellingPrice) * 100 : null;
 
@@ -482,17 +496,22 @@ export class PurchaseProfitabilityService {
     }
 
     // Calculate aggregate upload profits (with fees)
-    const uploadRealisedFeesPortion = uploadTotalFees * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
-    const uploadUnrealisedFeesPortion = uploadTotalFees * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
-    const uploadRealisedCostPortion = uploadTotalCost * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
-    const uploadUnrealisedCostPortion = uploadTotalCost * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadRealisedFeesPortion =
+      uploadTotalFees * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadUnrealisedFeesPortion =
+      uploadTotalFees * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadRealisedCostPortion =
+      uploadTotalCost * (uploadRealisedRevenue / (uploadTotalSellingPrice || 1));
+    const uploadUnrealisedCostPortion =
+      uploadTotalCost * (uploadUnrealisedRevenue / (uploadTotalSellingPrice || 1));
 
-    const uploadRealisedProfit = uploadRealisedRevenue - uploadRealisedFeesPortion - uploadRealisedCostPortion;
-    const uploadUnrealisedProfit = uploadUnrealisedRevenue - uploadUnrealisedFeesPortion - uploadUnrealisedCostPortion;
+    const uploadRealisedProfit =
+      uploadRealisedRevenue - uploadRealisedFeesPortion - uploadRealisedCostPortion;
+    const uploadUnrealisedProfit =
+      uploadUnrealisedRevenue - uploadUnrealisedFeesPortion - uploadUnrealisedCostPortion;
     const uploadTotalProfit = uploadTotalSellingPrice - uploadTotalFees - uploadTotalCost;
-    const uploadMarginPercent = uploadTotalSellingPrice > 0
-      ? (uploadTotalProfit / uploadTotalSellingPrice) * 100
-      : null;
+    const uploadMarginPercent =
+      uploadTotalSellingPrice > 0 ? (uploadTotalProfit / uploadTotalSellingPrice) * 100 : null;
 
     // =========================================================================
     // Combined totals (inventory items + uploads)
@@ -503,9 +522,10 @@ export class PurchaseProfitabilityService {
     const combinedUnrealisedProfit = unrealisedProfit + uploadUnrealisedProfit;
     const combinedTotalProjectedRevenue = totalProjectedRevenue + uploadTotalSellingPrice;
     const combinedTotalProjectedProfit = totalProjectedProfit + uploadTotalProfit;
-    const combinedMarginPercent = combinedTotalProjectedRevenue > 0
-      ? (combinedTotalProjectedProfit / combinedTotalProjectedRevenue) * 100
-      : null;
+    const combinedMarginPercent =
+      combinedTotalProjectedRevenue > 0
+        ? (combinedTotalProjectedProfit / combinedTotalProjectedRevenue) * 100
+        : null;
 
     return {
       // Counts

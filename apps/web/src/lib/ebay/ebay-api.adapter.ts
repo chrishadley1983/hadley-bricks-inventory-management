@@ -267,10 +267,9 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/account/resources/fulfillment_policy/methods/getFulfillmentPolicies
    */
   async getFulfillmentPolicies(): Promise<EbayFulfillmentPoliciesResponse> {
-    return this.request<EbayFulfillmentPoliciesResponse>(
-      `${ACCOUNT_API_PATH}/fulfillment_policy`,
-      { params: { marketplace_id: this.marketplaceId } }
-    );
+    return this.request<EbayFulfillmentPoliciesResponse>(`${ACCOUNT_API_PATH}/fulfillment_policy`, {
+      params: { marketplace_id: this.marketplaceId },
+    });
   }
 
   /**
@@ -278,10 +277,9 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/account/resources/payment_policy/methods/getPaymentPolicies
    */
   async getPaymentPolicies(): Promise<EbayPaymentPoliciesResponse> {
-    return this.request<EbayPaymentPoliciesResponse>(
-      `${ACCOUNT_API_PATH}/payment_policy`,
-      { params: { marketplace_id: this.marketplaceId } }
-    );
+    return this.request<EbayPaymentPoliciesResponse>(`${ACCOUNT_API_PATH}/payment_policy`, {
+      params: { marketplace_id: this.marketplaceId },
+    });
   }
 
   /**
@@ -289,10 +287,9 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/account/resources/return_policy/methods/getReturnPolicies
    */
   async getReturnPolicies(): Promise<EbayReturnPoliciesResponse> {
-    return this.request<EbayReturnPoliciesResponse>(
-      `${ACCOUNT_API_PATH}/return_policy`,
-      { params: { marketplace_id: this.marketplaceId } }
-    );
+    return this.request<EbayReturnPoliciesResponse>(`${ACCOUNT_API_PATH}/return_policy`, {
+      params: { marketplace_id: this.marketplaceId },
+    });
   }
 
   // ============================================================================
@@ -306,20 +303,23 @@ export class EbayApiAdapter {
   async createOrReplaceInventoryItem(sku: string, item: EbayInventoryItem): Promise<void> {
     // Log the request body for debugging - helps identify problematic fields
     console.log('[EbayApiAdapter] createOrReplaceInventoryItem - SKU:', sku);
-    console.log('[EbayApiAdapter] createOrReplaceInventoryItem - Request body keys:', Object.keys(item));
-    console.log('[EbayApiAdapter] createOrReplaceInventoryItem - Full body:', JSON.stringify(item, null, 2));
-
-    await this.request<void>(
-      `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`,
-      {
-        method: 'PUT',
-        body: item,
-        headers: {
-          'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
-        },
-      }
+    console.log(
+      '[EbayApiAdapter] createOrReplaceInventoryItem - Request body keys:',
+      Object.keys(item)
     );
+    console.log(
+      '[EbayApiAdapter] createOrReplaceInventoryItem - Full body:',
+      JSON.stringify(item, null, 2)
+    );
+
+    await this.request<void>(`${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`, {
+      method: 'PUT',
+      body: item,
+      headers: {
+        'Content-Language': 'en-GB',
+        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+      },
+    });
   }
 
   /**
@@ -337,10 +337,9 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/inventory_item/methods/deleteInventoryItem
    */
   async deleteInventoryItem(sku: string): Promise<void> {
-    await this.request<void>(
-      `${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`,
-      { method: 'DELETE' }
-    );
+    await this.request<void>(`${INVENTORY_API_PATH}/inventory_item/${encodeURIComponent(sku)}`, {
+      method: 'DELETE',
+    });
   }
 
   /**
@@ -348,17 +347,14 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/createOffer
    */
   async createOffer(offer: EbayOfferRequest): Promise<EbayCreateOfferResponse> {
-    return this.request<EbayCreateOfferResponse>(
-      `${INVENTORY_API_PATH}/offer`,
-      {
-        method: 'POST',
-        body: offer,
-        headers: {
-          'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
-        },
-      }
-    );
+    return this.request<EbayCreateOfferResponse>(`${INVENTORY_API_PATH}/offer`, {
+      method: 'POST',
+      body: offer,
+      headers: {
+        'Content-Language': 'en-GB',
+        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+      },
+    });
   }
 
   /**
@@ -432,21 +428,21 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/location/methods/getInventoryLocations
    */
   async getInventoryLocations(): Promise<{ locations: EbayInventoryLocation[] }> {
-    return this.request<{ locations: EbayInventoryLocation[] }>(
-      `${INVENTORY_API_PATH}/location`,
-      {
-        headers: {
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
-        },
-      }
-    );
+    return this.request<{ locations: EbayInventoryLocation[] }>(`${INVENTORY_API_PATH}/location`, {
+      headers: {
+        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+      },
+    });
   }
 
   /**
    * Create or update a merchant inventory location
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/location/methods/createInventoryLocation
    */
-  async createInventoryLocation(merchantLocationKey: string, location: EbayInventoryLocationInput): Promise<void> {
+  async createInventoryLocation(
+    merchantLocationKey: string,
+    location: EbayInventoryLocationInput
+  ): Promise<void> {
     await this.request<void>(
       `${INVENTORY_API_PATH}/location/${encodeURIComponent(merchantLocationKey)}`,
       {
@@ -493,9 +489,7 @@ export class EbayApiAdapter {
   /**
    * Fetch all orders using pagination
    */
-  async getAllOrders(
-    params?: Omit<EbayOrderFetchParams, 'offset'>
-  ): Promise<EbayOrderResponse[]> {
+  async getAllOrders(params?: Omit<EbayOrderFetchParams, 'offset'>): Promise<EbayOrderResponse[]> {
     const allOrders: EbayOrderResponse[] = [];
     let offset = 0;
     const limit = params?.limit || 50;
@@ -682,9 +676,7 @@ export class EbayApiAdapter {
 
     // IMPORTANT: Signed requests MUST use apiz.ebay.com, not api.ebay.com
     // The regular api.ebay.com endpoint returns 404 for signed requests
-    const baseUrlForRequest = options.requiresSignature
-      ? EBAY_SIGNED_API_BASE_URL
-      : this.baseUrl;
+    const baseUrlForRequest = options.requiresSignature ? EBAY_SIGNED_API_BASE_URL : this.baseUrl;
     const url = new URL(`${baseUrlForRequest}${path}`);
 
     // Add query parameters
@@ -758,7 +750,9 @@ export class EbayApiAdapter {
         // Handle rate limiting
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After');
-          const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY_MS * (attempt + 1);
+          const delayMs = retryAfter
+            ? parseInt(retryAfter, 10) * 1000
+            : RETRY_DELAY_MS * (attempt + 1);
           console.warn(`[EbayApiAdapter] Rate limited, retrying after ${delayMs}ms`);
           await this.delay(delayMs);
           continue;
@@ -771,8 +765,11 @@ export class EbayApiAdapter {
           console.error(`[EbayApiAdapter] Error response:`, JSON.stringify(errorResponse, null, 2));
 
           // Check if this is a signature error - provide more helpful message
-          const errorMessage = errorResponse?.errors?.[0]?.message || `HTTP ${response.status}: ${response.statusText}`;
-          const isSignatureError = errorMessage.toLowerCase().includes('signature') ||
+          const errorMessage =
+            errorResponse?.errors?.[0]?.message ||
+            `HTTP ${response.status}: ${response.statusText}`;
+          const isSignatureError =
+            errorMessage.toLowerCase().includes('signature') ||
             errorMessage.toLowerCase().includes('x-ebay-signature-key');
 
           if (isSignatureError && !signedHeaders) {
@@ -783,11 +780,7 @@ export class EbayApiAdapter {
             );
           }
 
-          throw new EbayApiError(
-            errorMessage,
-            response.status,
-            errorResponse?.errors
-          );
+          throw new EbayApiError(errorMessage, response.status, errorResponse?.errors);
         }
 
         // Handle 204 No Content responses (e.g., createOrReplaceInventoryItem)

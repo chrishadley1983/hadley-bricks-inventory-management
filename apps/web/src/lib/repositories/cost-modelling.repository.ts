@@ -75,7 +75,10 @@ export function packageCostToFormData(cost: PackageCost): PackageCostFormData {
 export function formDataToScenario(
   formData: CostModelScenarioFormData,
   userId: string
-): Omit<CostModelScenario, 'id' | 'created_at' | 'updated_at' | 'draft_data' | 'draft_updated_at' | 'package_costs'> {
+): Omit<
+  CostModelScenario,
+  'id' | 'created_at' | 'updated_at' | 'draft_data' | 'draft_updated_at' | 'package_costs'
+> {
   return {
     user_id: userId,
     name: formData.name,
@@ -220,45 +223,45 @@ export class CostModellingRepository {
         scenario_id: scenarioId,
         package_type: 'large_parcel_amazon',
         postage: 3.95,
-        cardboard: 0.50,
-        bubble_wrap: 0.30,
-        lego_card: 0.00,
-        business_card: 0.00,
+        cardboard: 0.5,
+        bubble_wrap: 0.3,
+        lego_card: 0.0,
+        business_card: 0.0,
       },
       {
         scenario_id: scenarioId,
         package_type: 'small_parcel_amazon',
         postage: 3.35,
-        cardboard: 0.30,
-        bubble_wrap: 0.20,
-        lego_card: 0.00,
-        business_card: 0.00,
+        cardboard: 0.3,
+        bubble_wrap: 0.2,
+        lego_card: 0.0,
+        business_card: 0.0,
       },
       {
         scenario_id: scenarioId,
         package_type: 'large_letter_amazon',
         postage: 1.55,
         cardboard: 0.15,
-        bubble_wrap: 0.10,
-        lego_card: 0.00,
-        business_card: 0.00,
+        bubble_wrap: 0.1,
+        lego_card: 0.0,
+        business_card: 0.0,
       },
       {
         scenario_id: scenarioId,
         package_type: 'large_parcel_ebay',
         postage: 3.95,
-        cardboard: 0.50,
-        bubble_wrap: 0.30,
-        lego_card: 0.10,
+        cardboard: 0.5,
+        bubble_wrap: 0.3,
+        lego_card: 0.1,
         business_card: 0.05,
       },
       {
         scenario_id: scenarioId,
         package_type: 'small_parcel_ebay',
         postage: 3.35,
-        cardboard: 0.30,
-        bubble_wrap: 0.20,
-        lego_card: 0.10,
+        cardboard: 0.3,
+        bubble_wrap: 0.2,
+        lego_card: 0.1,
         business_card: 0.05,
       },
       {
@@ -266,15 +269,13 @@ export class CostModellingRepository {
         package_type: 'large_letter_ebay',
         postage: 1.55,
         cardboard: 0.15,
-        bubble_wrap: 0.10,
-        lego_card: 0.10,
+        bubble_wrap: 0.1,
+        lego_card: 0.1,
         business_card: 0.05,
       },
     ];
 
-    const { error } = await this.supabase
-      .from('cost_model_package_costs')
-      .insert(defaultCosts);
+    const { error } = await this.supabase.from('cost_model_package_costs').insert(defaultCosts);
 
     if (error) {
       throw new Error(`Failed to create package costs: ${error.message}`);
@@ -295,37 +296,58 @@ export class CostModellingRepository {
 
     if (formData.name !== undefined) updateData.name = formData.name;
     if (formData.description !== undefined) updateData.description = formData.description;
-    if (formData.blSalesPerMonth !== undefined) updateData.bl_sales_per_month = formData.blSalesPerMonth;
-    if (formData.blAvgSaleValue !== undefined) updateData.bl_avg_sale_value = formData.blAvgSaleValue;
-    if (formData.blAvgPostageCost !== undefined) updateData.bl_avg_postage_cost = formData.blAvgPostageCost;
-    if (formData.amazonSalesPerMonth !== undefined) updateData.amazon_sales_per_month = formData.amazonSalesPerMonth;
-    if (formData.amazonAvgSaleValue !== undefined) updateData.amazon_avg_sale_value = formData.amazonAvgSaleValue;
-    if (formData.amazonAvgPostageCost !== undefined) updateData.amazon_avg_postage_cost = formData.amazonAvgPostageCost;
-    if (formData.ebaySalesPerMonth !== undefined) updateData.ebay_sales_per_month = formData.ebaySalesPerMonth;
-    if (formData.ebayAvgSaleValue !== undefined) updateData.ebay_avg_sale_value = formData.ebayAvgSaleValue;
-    if (formData.ebayAvgPostageCost !== undefined) updateData.ebay_avg_postage_cost = formData.ebayAvgPostageCost;
+    if (formData.blSalesPerMonth !== undefined)
+      updateData.bl_sales_per_month = formData.blSalesPerMonth;
+    if (formData.blAvgSaleValue !== undefined)
+      updateData.bl_avg_sale_value = formData.blAvgSaleValue;
+    if (formData.blAvgPostageCost !== undefined)
+      updateData.bl_avg_postage_cost = formData.blAvgPostageCost;
+    if (formData.amazonSalesPerMonth !== undefined)
+      updateData.amazon_sales_per_month = formData.amazonSalesPerMonth;
+    if (formData.amazonAvgSaleValue !== undefined)
+      updateData.amazon_avg_sale_value = formData.amazonAvgSaleValue;
+    if (formData.amazonAvgPostageCost !== undefined)
+      updateData.amazon_avg_postage_cost = formData.amazonAvgPostageCost;
+    if (formData.ebaySalesPerMonth !== undefined)
+      updateData.ebay_sales_per_month = formData.ebaySalesPerMonth;
+    if (formData.ebayAvgSaleValue !== undefined)
+      updateData.ebay_avg_sale_value = formData.ebayAvgSaleValue;
+    if (formData.ebayAvgPostageCost !== undefined)
+      updateData.ebay_avg_postage_cost = formData.ebayAvgPostageCost;
     if (formData.blFeeRate !== undefined) updateData.bl_fee_rate = formData.blFeeRate;
     if (formData.amazonFeeRate !== undefined) updateData.amazon_fee_rate = formData.amazonFeeRate;
     if (formData.ebayFeeRate !== undefined) updateData.ebay_fee_rate = formData.ebayFeeRate;
     if (formData.blCogPercent !== undefined) updateData.bl_cog_percent = formData.blCogPercent;
-    if (formData.amazonCogPercent !== undefined) updateData.amazon_cog_percent = formData.amazonCogPercent;
-    if (formData.ebayCogPercent !== undefined) updateData.ebay_cog_percent = formData.ebayCogPercent;
+    if (formData.amazonCogPercent !== undefined)
+      updateData.amazon_cog_percent = formData.amazonCogPercent;
+    if (formData.ebayCogPercent !== undefined)
+      updateData.ebay_cog_percent = formData.ebayCogPercent;
     if (formData.fixedShopify !== undefined) updateData.fixed_shopify = formData.fixedShopify;
-    if (formData.fixedEbayStore !== undefined) updateData.fixed_ebay_store = formData.fixedEbayStore;
-    if (formData.fixedSellerTools !== undefined) updateData.fixed_seller_tools = formData.fixedSellerTools;
+    if (formData.fixedEbayStore !== undefined)
+      updateData.fixed_ebay_store = formData.fixedEbayStore;
+    if (formData.fixedSellerTools !== undefined)
+      updateData.fixed_seller_tools = formData.fixedSellerTools;
     if (formData.fixedAmazon !== undefined) updateData.fixed_amazon = formData.fixedAmazon;
     if (formData.fixedStorage !== undefined) updateData.fixed_storage = formData.fixedStorage;
-    if (formData.annualAccountantCost !== undefined) updateData.annual_accountant_cost = formData.annualAccountantCost;
-    if (formData.annualMiscCosts !== undefined) updateData.annual_misc_costs = formData.annualMiscCosts;
-    if (formData.isVatRegistered !== undefined) updateData.is_vat_registered = formData.isVatRegistered;
+    if (formData.annualAccountantCost !== undefined)
+      updateData.annual_accountant_cost = formData.annualAccountantCost;
+    if (formData.annualMiscCosts !== undefined)
+      updateData.annual_misc_costs = formData.annualMiscCosts;
+    if (formData.isVatRegistered !== undefined)
+      updateData.is_vat_registered = formData.isVatRegistered;
     if (formData.vatFlatRate !== undefined) updateData.vat_flat_rate = formData.vatFlatRate;
-    if (formData.accountantCostIfVat !== undefined) updateData.accountant_cost_if_vat = formData.accountantCostIfVat;
-    if (formData.targetAnnualProfit !== undefined) updateData.target_annual_profit = formData.targetAnnualProfit;
-    if (formData.personalAllowance !== undefined) updateData.personal_allowance = formData.personalAllowance;
+    if (formData.accountantCostIfVat !== undefined)
+      updateData.accountant_cost_if_vat = formData.accountantCostIfVat;
+    if (formData.targetAnnualProfit !== undefined)
+      updateData.target_annual_profit = formData.targetAnnualProfit;
+    if (formData.personalAllowance !== undefined)
+      updateData.personal_allowance = formData.personalAllowance;
     if (formData.incomeTaxRate !== undefined) updateData.income_tax_rate = formData.incomeTaxRate;
     if (formData.niRate !== undefined) updateData.ni_rate = formData.niRate;
-    if (formData.legoPartsPercent !== undefined) updateData.lego_parts_percent = formData.legoPartsPercent;
-    if (formData.legoPartsPercentBl !== undefined) updateData.lego_parts_percent_bl = formData.legoPartsPercentBl;
+    if (formData.legoPartsPercent !== undefined)
+      updateData.lego_parts_percent = formData.legoPartsPercent;
+    if (formData.legoPartsPercentBl !== undefined)
+      updateData.lego_parts_percent_bl = formData.legoPartsPercentBl;
 
     const { data, error } = await this.supabase
       .from('cost_model_scenarios')
@@ -351,10 +373,7 @@ export class CostModellingRepository {
    * Update package costs for a scenario
    * Uses upsert for batch update (single DB call instead of N calls)
    */
-  async updatePackageCosts(
-    scenarioId: string,
-    costs: PackageCostFormData[]
-  ): Promise<void> {
+  async updatePackageCosts(scenarioId: string, costs: PackageCostFormData[]): Promise<void> {
     const upsertData = costs.map((cost) => ({
       scenario_id: scenarioId,
       package_type: cost.packageType,
@@ -479,11 +498,7 @@ export class CostModellingRepository {
    * Save draft data for auto-save
    * F47: Auto-saved every 30 seconds
    */
-  async saveDraft(
-    id: string,
-    userId: string,
-    draftData: CostModelScenarioFormData
-  ): Promise<void> {
+  async saveDraft(id: string, userId: string, draftData: CostModelScenarioFormData): Promise<void> {
     const { error } = await this.supabase
       .from('cost_model_scenarios')
       .update({

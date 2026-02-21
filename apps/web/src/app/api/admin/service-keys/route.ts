@@ -15,7 +15,10 @@ import { z } from 'zod';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1).max(100),
-  permissions: z.array(z.enum(['read', 'write', 'admin'])).min(1).default(['read']),
+  permissions: z
+    .array(z.enum(['read', 'write', 'admin']))
+    .min(1)
+    .default(['read']),
   expiresInDays: z.number().int().min(1).max(365).optional(),
 });
 
@@ -79,10 +82,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('[POST /api/admin/service-keys] Insert error:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to create API key' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });
     }
 
     // Return the key - THIS IS THE ONLY TIME THE FULL KEY IS SHOWN
@@ -130,15 +130,14 @@ export async function GET(_request: NextRequest) {
     const serviceClient = createServiceRoleClient();
     const { data: keys, error: queryError } = await serviceClient
       .from('service_api_keys')
-      .select('id, name, key_prefix, permissions, created_at, last_used_at, expires_at, revoked_at, created_by')
+      .select(
+        'id, name, key_prefix, permissions, created_at, last_used_at, expires_at, revoked_at, created_by'
+      )
       .order('created_at', { ascending: false });
 
     if (queryError) {
       console.error('[GET /api/admin/service-keys] Query error:', queryError);
-      return NextResponse.json(
-        { error: 'Failed to fetch API keys' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch API keys' }, { status: 500 });
     }
 
     // Mark expired/revoked keys
@@ -158,10 +157,7 @@ export async function GET(_request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/admin/service-keys] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -213,10 +209,7 @@ export async function DELETE(request: NextRequest) {
         );
       }
       console.error('[DELETE /api/admin/service-keys] Update error:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to revoke API key' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to revoke API key' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -226,9 +219,6 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     console.error('[DELETE /api/admin/service-keys] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

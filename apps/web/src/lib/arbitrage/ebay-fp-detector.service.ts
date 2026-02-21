@@ -66,8 +66,7 @@ const DISPLAY_ACCESSORY_KEYWORDS =
   /\b(display\s+stand|display\s+case|display\s+frame|display\s+plaque|name\s*plate|wall\s+mount|acrylic\s+case|acrylic\s+display|dust\s+cover)\b/i;
 const THIRD_PARTY_KEYWORDS =
   /\b(for\s+lego|compatible\s+with|compatible\s+for|fits\s+lego|to\s+fit\s+lego|replacement\s+sticker)\b/i;
-const BUNDLE_LOT_KEYWORDS =
-  /\b(job\s*lot|bulk\s+lot|bundle\s+lot|joblot|mixed\s+lot)\b/i;
+const BUNDLE_LOT_KEYWORDS = /\b(job\s*lot|bulk\s+lot|bundle\s+lot|joblot|mixed\s+lot)\b/i;
 const CUSTOM_MOC_KEYWORDS = /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creation)\b/i;
 const MULTI_QUANTITY_PATTERN = /\bx\s*[2-9]\b|\b[2-9]\s*x\s+(?!.*\bin[- ]1\b)/i;
 const BOOK_MAGAZINE_KEYWORDS =
@@ -191,7 +190,9 @@ export class EbayFpDetectorService {
       offset += pageSize;
     }
 
-    console.log(`[EbayFpDetector] Loaded ${totalCount} existing exclusions across ${excludedBySet.size} sets`);
+    console.log(
+      `[EbayFpDetector] Loaded ${totalCount} existing exclusions across ${excludedBySet.size} sets`
+    );
     this.excludedBySet = excludedBySet;
     return excludedBySet;
   }
@@ -278,7 +279,10 @@ export class EbayFpDetectorService {
 
     // 6. Instructions/manual only
     if (INSTRUCTIONS_KEYWORDS.test(title)) {
-      if (/\b(only|just|booklet|vgc|good\s+condition)\b/i.test(title) || /\b(?:for|from)\s+\d{4,5}\b/i.test(title)) {
+      if (
+        /\b(only|just|booklet|vgc|good\s+condition)\b/i.test(title) ||
+        /\b(?:for|from)\s+\d{4,5}\b/i.test(title)
+      ) {
         score += SIGNAL_WEIGHTS.INSTRUCTIONS_ONLY;
         signals.push({
           signal: 'INSTRUCTIONS_ONLY',
@@ -300,9 +304,7 @@ export class EbayFpDetectorService {
         }
 
         // Check if any are DIFFERENT valid LEGO set numbers
-        const differentSets = titleNumbers.filter(
-          (n) => validSetNumbers.has(n) && n !== setNumber
-        );
+        const differentSets = titleNumbers.filter((n) => validSetNumbers.has(n) && n !== setNumber);
 
         if (differentSets.length > 0) {
           // CRITICAL: Title has DIFFERENT valid LEGO set number!
@@ -535,7 +537,7 @@ export class EbayFpDetectorService {
     }
 
     // 28. Min-to-avg price ratio check
-    if (avgPrice && avgPrice > 0 && totalPrice > 0 && totalPrice / avgPrice < 0.10) {
+    if (avgPrice && avgPrice > 0 && totalPrice > 0 && totalPrice / avgPrice < 0.1) {
       score += SIGNAL_WEIGHTS.MIN_TO_AVG_RATIO;
       signals.push({
         signal: 'MIN_TO_AVG_RATIO',
@@ -648,15 +650,13 @@ export class EbayFpDetectorService {
         }
 
         // Get per-set exclusion list
-        const setExcludedIds = excludedBySet.get(item.bricklink_set_number ?? '') ?? new Set<string>();
+        const setExcludedIds =
+          excludedBySet.get(item.bricklink_set_number ?? '') ?? new Set<string>();
 
         // Compute average price across listings for this item
-        const prices = listings
-          .map((l) => l.totalPrice ?? l.price ?? 0)
-          .filter((p) => p > 0);
-        const avgPrice = prices.length > 0
-          ? prices.reduce((sum, p) => sum + p, 0) / prices.length
-          : null;
+        const prices = listings.map((l) => l.totalPrice ?? l.price ?? 0).filter((p) => p > 0);
+        const avgPrice =
+          prices.length > 0 ? prices.reduce((sum, p) => sum + p, 0) / prices.length : null;
 
         // Score each listing
         for (const listing of listings) {

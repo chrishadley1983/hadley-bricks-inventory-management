@@ -25,10 +25,7 @@ export async function GET(
       .single();
 
     if (setError || !rawSet) {
-      return NextResponse.json(
-        { error: 'Set not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Set not found' }, { status: 404 });
     }
 
     const set = rawSet as unknown as Record<string, unknown>;
@@ -46,16 +43,15 @@ export async function GET(
     // Fetch price history
     const { data: history, error: historyError } = await supabase
       .from('amazon_arbitrage_pricing')
-      .select('snapshot_date, buy_box_price, was_price_90d, lowest_offer_price, sales_rank, offer_count')
+      .select(
+        'snapshot_date, buy_box_price, was_price_90d, lowest_offer_price, sales_rank, offer_count'
+      )
       .eq('asin', amazonAsin)
       .order('snapshot_date', { ascending: true });
 
     if (historyError) {
       console.error('[GET /api/investment/[setNumber]/price-history] Error:', historyError.message);
-      return NextResponse.json(
-        { error: 'Failed to fetch price history' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch price history' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -65,9 +61,6 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/investment/[setNumber]/price-history] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

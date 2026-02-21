@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate the start of the requested week
     const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() + mondayOffset - (weekOffset * 7));
+    weekStart.setDate(today.getDate() + mondayOffset - weekOffset * 7);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
 
@@ -123,7 +123,8 @@ export async function GET(request: NextRequest) {
     const categoryMinutes: Record<string, number> = {};
     timeEntries.forEach((entry) => {
       const category = entry.category || 'other';
-      categoryMinutes[category] = (categoryMinutes[category] || 0) + (entry.duration_seconds || 0) / 60;
+      categoryMinutes[category] =
+        (categoryMinutes[category] || 0) + (entry.duration_seconds || 0) / 60;
     });
 
     // Category colors (match the default config)
@@ -175,10 +176,7 @@ export async function GET(request: NextRequest) {
     // Process listings data
     const listings = listingsResult.data || [];
     const listingsCreated = listings.length;
-    const listedValue = listings.reduce(
-      (sum, item) => sum + (item.listing_value || 0),
-      0
-    );
+    const listedValue = listings.reduce((sum, item) => sum + (item.listing_value || 0), 0);
 
     // Process orders data
     const orders = ordersResult.data || [];
@@ -188,14 +186,8 @@ export async function GET(request: NextRequest) {
     // Process pickups data
     const pickups = pickupsResult.data || [];
     const pickupsCompleted = pickups.length;
-    const totalSpent = pickups.reduce(
-      (sum, pickup) => sum + (pickup.final_amount_paid || 0),
-      0
-    );
-    const totalMileage = pickups.reduce(
-      (sum, pickup) => sum + (pickup.mileage || 0),
-      0
-    );
+    const totalSpent = pickups.reduce((sum, pickup) => sum + (pickup.final_amount_paid || 0), 0);
+    const totalMileage = pickups.reduce((sum, pickup) => sum + (pickup.mileage || 0), 0);
 
     // Calculate productivity score (simplified)
     // Based on: pomodoro completion rate, time tracked consistency, listings vs target
@@ -204,7 +196,7 @@ export async function GET(request: NextRequest) {
     const listingRate = Math.min(listingsCreated / 50, 1); // Assume 50 listings/week target
 
     const productivityScore = Math.round(
-      ((pomodoroRate * 0.3 + timeRate * 0.4 + listingRate * 0.3) * 100)
+      (pomodoroRate * 0.3 + timeRate * 0.4 + listingRate * 0.3) * 100
     );
 
     // Find best day and most productive hour
@@ -222,8 +214,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const bestDay =
-      Object.entries(dayMinutes).sort(([, a], [, b]) => b - a)[0]?.[0] || 'Monday';
+    const bestDay = Object.entries(dayMinutes).sort(([, a], [, b]) => b - a)[0]?.[0] || 'Monday';
 
     const mostProductiveHour =
       Object.entries(hourMinutes).sort(([, a], [, b]) => b - a)[0]?.[0] || '9';

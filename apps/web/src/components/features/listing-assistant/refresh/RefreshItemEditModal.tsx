@@ -21,7 +21,10 @@ interface RefreshItemEditModalProps {
   item: RefreshJobItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (itemId: string, updates: { title?: string; price?: number; quantity?: number }) => Promise<void>;
+  onSave: (
+    itemId: string,
+    updates: { title?: string; price?: number; quantity?: number }
+  ) => Promise<void>;
   onApprove: (itemId: string) => Promise<void>;
   onSkip: (itemId: string) => Promise<void>;
   isSaving?: boolean;
@@ -61,9 +64,7 @@ export function RefreshItemEditModal({
     const originalPrice = String(item.modifiedPrice ?? item.originalPrice ?? '');
     const originalQty = String(item.modifiedQuantity ?? item.originalQuantity ?? '');
 
-    setHasChanges(
-      title !== originalTitle || price !== originalPrice || quantity !== originalQty
-    );
+    setHasChanges(title !== originalTitle || price !== originalPrice || quantity !== originalQty);
   }, [title, price, quantity, item]);
 
   const handleSaveAndApprove = async () => {
@@ -118,9 +119,7 @@ export function RefreshItemEditModal({
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{item.originalCondition || 'Unknown'}</Badge>
                 {item.originalCategoryName && (
-                  <span className="text-sm text-muted-foreground">
-                    {item.originalCategoryName}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{item.originalCategoryName}</span>
                 )}
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -148,9 +147,7 @@ export function RefreshItemEditModal({
                 maxLength={80}
                 disabled={isSaving}
               />
-              <p className="text-xs text-muted-foreground">
-                {title.length}/80 characters
-              </p>
+              <p className="text-xs text-muted-foreground">{title.length}/80 characters</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -195,19 +192,11 @@ export function RefreshItemEditModal({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            onClick={handleSkip}
-            disabled={isSaving}
-          >
+          <Button variant="outline" onClick={handleSkip} disabled={isSaving}>
             Skip This Listing
           </Button>
           <div className="flex-1" />
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
           <Button onClick={handleSaveAndApprove} disabled={isSaving}>

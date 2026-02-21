@@ -11,9 +11,7 @@ interface EligibleListingsResponse {
   error?: string;
 }
 
-async function fetchEligibleListings(
-  filters?: EligibleListingFilters
-): Promise<EligibleListing[]> {
+async function fetchEligibleListings(filters?: EligibleListingFilters): Promise<EligibleListing[]> {
   const params = new URLSearchParams();
 
   if (filters?.minAge !== undefined) {

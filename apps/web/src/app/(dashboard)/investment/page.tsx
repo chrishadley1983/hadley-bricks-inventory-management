@@ -9,7 +9,8 @@ const Header = dynamic(
 );
 
 const InvestmentTable = dynamic(
-  () => import('@/components/features/investment').then((mod) => ({ default: mod.InvestmentTable })),
+  () =>
+    import('@/components/features/investment').then((mod) => ({ default: mod.InvestmentTable })),
   { ssr: false, loading: () => <TableSkeleton columns={8} rows={10} /> }
 );
 

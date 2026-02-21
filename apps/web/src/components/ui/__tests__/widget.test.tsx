@@ -59,25 +59,13 @@ describe('StatWidget', () => {
   });
 
   it('shows positive trend', () => {
-    render(
-      <StatWidget
-        title="Sales"
-        value="£100"
-        trend={{ value: 15, isPositive: true }}
-      />
-    );
+    render(<StatWidget title="Sales" value="£100" trend={{ value: 15, isPositive: true }} />);
 
     expect(screen.getByText('+15% from last month')).toBeInTheDocument();
   });
 
   it('shows negative trend', () => {
-    render(
-      <StatWidget
-        title="Sales"
-        value="£100"
-        trend={{ value: -10, isPositive: false }}
-      />
-    );
+    render(<StatWidget title="Sales" value="£100" trend={{ value: -10, isPositive: false }} />);
 
     expect(screen.getByText('-10% from last month')).toBeInTheDocument();
   });

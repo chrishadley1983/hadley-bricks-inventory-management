@@ -115,7 +115,9 @@ export function OptimiserFilters({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Avg Score:</span>
-            <Badge variant={summary.averageScore && summary.averageScore >= 70 ? 'default' : 'secondary'}>
+            <Badge
+              variant={summary.averageScore && summary.averageScore >= 70 ? 'default' : 'secondary'}
+            >
               {summary.averageScore?.toFixed(1) || '-'}
             </Badge>
           </div>
@@ -153,10 +155,7 @@ export function OptimiserFilters({
         {/* Quality Grade filter */}
         <div className="flex items-center gap-2">
           <Label className="text-sm text-muted-foreground">Grade:</Label>
-          <Select
-            value={filters.qualityGrade || 'all'}
-            onValueChange={handleGradeChange}
-          >
+          <Select value={filters.qualityGrade || 'all'} onValueChange={handleGradeChange}>
             <SelectTrigger className="w-[100px]">
               <SelectValue />
             </SelectTrigger>
@@ -175,10 +174,7 @@ export function OptimiserFilters({
         {/* Reviewed status filter */}
         <div className="flex items-center gap-2">
           <Label className="text-sm text-muted-foreground">Status:</Label>
-          <Select
-            value={filters.reviewedStatus || 'all'}
-            onValueChange={handleReviewedChange}
-          >
+          <Select value={filters.reviewedStatus || 'all'} onValueChange={handleReviewedChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -209,24 +205,15 @@ export function OptimiserFilters({
         {/* Actions */}
         <div className="ml-auto flex items-center gap-3">
           {selectedCount > 0 && (
-            <span className="text-sm text-muted-foreground">
-              {selectedCount} selected
-            </span>
+            <span className="text-sm text-muted-foreground">{selectedCount} selected</span>
           )}
           {onSync && (
-            <Button
-              variant="outline"
-              onClick={onSync}
-              disabled={isSyncing}
-            >
+            <Button variant="outline" onClick={onSync} disabled={isSyncing}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
               {isSyncing ? 'Syncing...' : 'Sync eBay'}
             </Button>
           )}
-          <Button
-            onClick={onAnalyse}
-            disabled={selectedCount === 0 || isAnalysing}
-          >
+          <Button onClick={onAnalyse} disabled={selectedCount === 0 || isAnalysing}>
             {isAnalysing ? (
               <>
                 <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

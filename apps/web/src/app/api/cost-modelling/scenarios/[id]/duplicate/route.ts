@@ -12,10 +12,7 @@ import { CostModellingRepository } from '@/lib/repositories/cost-modelling.repos
  * Creates a copy of the scenario with "Copy of [name]"
  * F44: Returns new scenario
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -46,9 +43,6 @@ export async function POST(
       );
     }
 
-    return NextResponse.json(
-      { error: 'Failed to duplicate scenario' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to duplicate scenario' }, { status: 500 });
   }
 }

@@ -89,7 +89,9 @@ export async function GET(request: NextRequest) {
       let viewQuery = supabase
         .from('seeded_asins_with_sets')
         .select('*', { count: 'exact' })
-        .or(`amazon_title.ilike.%${search}%,set_number.ilike.%${search}%,set_name.ilike.%${search}%`)
+        .or(
+          `amazon_title.ilike.%${search}%,set_number.ilike.%${search}%,set_name.ilike.%${search}%`
+        )
         .order('created_at', { ascending: false });
 
       // Apply filters
@@ -229,14 +231,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`[GET /api/arbitrage/seeded] Page: ${page}, Search: ${search || 'none'}, Results: ${(data as unknown[])?.length ?? 0}, Total: ${totalCount}`);
+    console.log(
+      `[GET /api/arbitrage/seeded] Page: ${page}, Search: ${search || 'none'}, Results: ${(data as unknown[])?.length ?? 0}, Total: ${totalCount}`
+    );
 
     if (error) {
       console.error('[GET /api/arbitrage/seeded] Query error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch seeded ASINs' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch seeded ASINs' }, { status: 500 });
     }
 
     // Transform response - define expected row shape from query/view
@@ -330,7 +331,9 @@ export async function GET(request: NextRequest) {
         ? items.filter((item) => item.userPreference?.includeInSync === true)
         : items;
 
-    console.log(`[GET /api/arbitrage/seeded] Returning ${filteredItems.length} items (raw: ${items.length})`);
+    console.log(
+      `[GET /api/arbitrage/seeded] Returning ${filteredItems.length} items (raw: ${items.length})`
+    );
 
     return NextResponse.json({
       items: filteredItems,
@@ -341,10 +344,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/seeded] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -391,10 +391,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[POST /api/arbitrage/seeded] Upsert error:', error);
-      return NextResponse.json(
-        { error: 'Failed to update preferences' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to update preferences' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -404,10 +401,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/arbitrage/seeded] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -469,10 +463,7 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       console.error('[PATCH /api/arbitrage/seeded] Upsert error:', error);
-      return NextResponse.json(
-        { error: 'Failed to update preference' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to update preference' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -488,9 +479,6 @@ export async function PATCH(request: NextRequest) {
     });
   } catch (error) {
     console.error('[PATCH /api/arbitrage/seeded] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

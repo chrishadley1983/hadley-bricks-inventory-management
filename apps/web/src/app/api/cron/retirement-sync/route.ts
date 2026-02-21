@@ -59,9 +59,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Send Discord notification
     await discordService.sendSyncStatus({
-      title: allSuccess
-        ? 'Retirement Sync Complete'
-        : 'Retirement Sync Partial',
+      title: allSuccess ? 'Retirement Sync Complete' : 'Retirement Sync Partial',
       message: [
         '**Sources:**',
         sourcesSummary,
@@ -94,14 +92,10 @@ export async function POST(request: NextRequest) {
       duration_ms: duration,
     });
   } catch (error) {
-    const errorMsg =
-      error instanceof Error ? error.message : 'Unknown error';
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     const duration = Date.now() - startTime;
 
-    console.error(
-      `[Cron RetirementSync] Failed after ${duration}ms:`,
-      error
-    );
+    console.error(`[Cron RetirementSync] Failed after ${duration}ms:`, error);
     await execution.fail(error, 500);
 
     try {
@@ -111,10 +105,7 @@ export async function POST(request: NextRequest) {
         priority: 'high',
       });
     } catch (discordError) {
-      console.error(
-        '[Cron RetirementSync] Failed to send Discord alert:',
-        discordError
-      );
+      console.error('[Cron RetirementSync] Failed to send Discord alert:', discordError);
     }
 
     return NextResponse.json(

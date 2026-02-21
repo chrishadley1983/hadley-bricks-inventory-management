@@ -32,7 +32,6 @@ export interface SignedRequestHeaders {
   'Signature-Input': string;
 }
 
-
 // ============================================================================
 // Constants
 // ============================================================================
@@ -76,7 +75,11 @@ export class EbaySignatureService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[EbaySignatureService] Failed to get client credentials token:', response.status, errorText);
+        console.error(
+          '[EbaySignatureService] Failed to get client credentials token:',
+          response.status,
+          errorText
+        );
         return null;
       }
 
@@ -183,7 +186,10 @@ export class EbaySignatureService {
 
       console.log('[EbaySignatureService] Signing key created:', keyData.signingKeyId);
       console.log('[EbaySignatureService] Expiration timestamp:', keyData.expirationTime);
-      console.log('[EbaySignatureService] Private key format:', keyData.privateKey.substring(0, 50) + '...');
+      console.log(
+        '[EbaySignatureService] Private key format:',
+        keyData.privateKey.substring(0, 50) + '...'
+      );
 
       // Convert Unix timestamp (seconds) to ISO string
       // eBay returns timestamps in seconds, JavaScript Date uses milliseconds
@@ -371,7 +377,7 @@ export class EbaySignatureService {
     // eBay's signature validation expects only the pathname
     const signatureComponents = {
       method: method.toUpperCase(),
-      path: parsedUrl.pathname,  // Do NOT include query params
+      path: parsedUrl.pathname, // Do NOT include query params
       authority: parsedUrl.host,
     };
 
@@ -475,7 +481,10 @@ export class EbaySignatureService {
   /**
    * Regenerate signing keys - deletes existing and creates new ones
    */
-  async regenerateSigningKeys(userId: string, accessToken: string): Promise<EbaySigningKeys | null> {
+  async regenerateSigningKeys(
+    userId: string,
+    accessToken: string
+  ): Promise<EbaySigningKeys | null> {
     console.log('[EbaySignatureService] Regenerating signing keys for user:', userId);
     await this.deleteSigningKeys(userId);
     return this.createSigningKeys(userId, accessToken);

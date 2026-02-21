@@ -27,10 +27,7 @@ export async function GET() {
     );
 
     if (!credentials) {
-      return NextResponse.json(
-        { error: 'Bricqer credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Bricqer credentials not configured' }, { status: 400 });
     }
 
     const client = new BricqerClient(credentials);

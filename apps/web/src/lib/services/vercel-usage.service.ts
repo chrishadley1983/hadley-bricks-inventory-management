@@ -107,21 +107,51 @@ const HOBBY_LIMITS: HobbyLimit[] = [
   { name: 'Fast Data Transfer', key: 'fastDataTransferGb', limit: 100, unit: 'GB' },
   { name: 'Fast Origin Transfer', key: 'fastOriginTransferGb', limit: 10, unit: 'GB' },
   { name: 'Edge Requests', key: 'edgeRequests', limit: 1_000_000, unit: 'requests' },
-  { name: 'Edge Request CPU Duration', key: 'edgeRequestCpuDurationSeconds', limit: 3600, unit: 'seconds' },
+  {
+    name: 'Edge Request CPU Duration',
+    key: 'edgeRequestCpuDurationSeconds',
+    limit: 3600,
+    unit: 'seconds',
+  },
   { name: 'Microfrontends Routing', key: 'microfrontendsRouting', limit: 50_000, unit: 'requests' },
   // ISR
   { name: 'ISR Reads', key: 'isrReads', limit: 1_000_000, unit: 'reads' },
   { name: 'ISR Writes', key: 'isrWrites', limit: 200_000, unit: 'writes' },
   // Vercel Functions
-  { name: 'Function Invocations', key: 'functionInvocations', limit: 1_000_000, unit: 'invocations' },
+  {
+    name: 'Function Invocations',
+    key: 'functionInvocations',
+    limit: 1_000_000,
+    unit: 'invocations',
+  },
   { name: 'Function Duration', key: 'functionDurationGbHours', limit: 100, unit: 'GB-Hrs' },
-  { name: 'Fluid Provisioned Memory', key: 'fluidProvisionedMemoryGbHours', limit: 360, unit: 'GB-Hrs' },
+  {
+    name: 'Fluid Provisioned Memory',
+    key: 'fluidProvisionedMemoryGbHours',
+    limit: 360,
+    unit: 'GB-Hrs',
+  },
   { name: 'Fluid Active CPU', key: 'fluidActiveCpuSeconds', limit: 14_400, unit: 'seconds' },
-  { name: 'Edge Function Execution Units', key: 'edgeFnExecutionUnits', limit: 500_000, unit: 'units' },
-  { name: 'Edge Middleware Invocations', key: 'edgeMiddlewareInvocations', limit: 1_000_000, unit: 'invocations' },
+  {
+    name: 'Edge Function Execution Units',
+    key: 'edgeFnExecutionUnits',
+    limit: 500_000,
+    unit: 'units',
+  },
+  {
+    name: 'Edge Middleware Invocations',
+    key: 'edgeMiddlewareInvocations',
+    limit: 1_000_000,
+    unit: 'invocations',
+  },
   // Storage
   { name: 'Blob Data Storage', key: 'blobDataStorageGb', limit: 1, unit: 'GB' },
-  { name: 'Blob Simple Operations', key: 'blobSimpleOperations', limit: 10_000, unit: 'operations' },
+  {
+    name: 'Blob Simple Operations',
+    key: 'blobSimpleOperations',
+    limit: 10_000,
+    unit: 'operations',
+  },
   // Build (v2 API — not on dashboard usage page)
   { name: 'Build Minutes', key: 'buildMinutes', limit: 6000, unit: 'minutes' },
   { name: 'Deployments', key: 'deployments', limit: 100, unit: 'per day' },
@@ -215,7 +245,10 @@ export class VercelUsageService {
           );
         }
       } catch (error) {
-        console.warn('[VercelUsageService] v2 API fetch failed, falling back to scraped data:', error);
+        console.warn(
+          '[VercelUsageService] v2 API fetch failed, falling back to scraped data:',
+          error
+        );
       }
     } else {
       console.log('[VercelUsageService] No VERCEL_API_TOKEN — using scraped data only');
@@ -333,8 +366,7 @@ export class VercelUsageService {
 
         const value = Number(row.value);
         metric.current = value;
-        metric.usedPercent =
-          metric.limit > 0 ? Math.round((value / metric.limit) * 1000) / 10 : 0;
+        metric.usedPercent = metric.limit > 0 ? Math.round((value / metric.limit) * 1000) / 10 : 0;
         metric.status = VercelUsageService.calculateRag(metric.usedPercent);
         metric.currentFormatted = VercelUsageService.formatValue(value, metric.unit);
         mergedCount++;
@@ -345,7 +377,7 @@ export class VercelUsageService {
 
       console.log(
         `[VercelUsageService] Merged ${mergedCount}/${data.length} scraped metrics ` +
-        `(scraped ${(ageMs / 3600000).toFixed(1)}h ago)`
+          `(scraped ${(ageMs / 3600000).toFixed(1)}h ago)`
       );
     } catch (err) {
       // Non-fatal — metrics keep v2 API values (or 0)
@@ -370,7 +402,12 @@ export class VercelUsageService {
     }
 
     const fmt = (d: Date) =>
-      d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      d.toLocaleDateString('en-GB', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
 
     return {
       start,
@@ -444,7 +481,7 @@ export class VercelUsageService {
 
     console.log(
       `[VercelUsageService] v2 API aggregated: ${reqDays.length} request days, ${buildDays.length} build days, ` +
-      `${totalFnInvocations} invocations, ${manualData.buildMinutes.toFixed(0)} build mins`
+        `${totalFnInvocations} invocations, ${manualData.buildMinutes.toFixed(0)} build mins`
     );
 
     const metrics = this.buildMetrics(manualData);

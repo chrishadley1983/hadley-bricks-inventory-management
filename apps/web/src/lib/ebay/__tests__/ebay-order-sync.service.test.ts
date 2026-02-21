@@ -121,7 +121,8 @@ describe('EbayOrderSyncService', () => {
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null }) // No running sync
           .mockResolvedValueOnce({ data: { id: 'sync-log-id' }, error: null }), // Sync log created
       };
@@ -135,7 +136,8 @@ describe('EbayOrderSyncService', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ data: null, error: null }),
       };
-      mockSupabase.from.mockReturnValueOnce(mockSelectChain)
+      mockSupabase.from
+        .mockReturnValueOnce(mockSelectChain)
         .mockReturnValueOnce(mockSelectChain)
         .mockReturnValueOnce(mockUpdateChain);
 
@@ -188,7 +190,8 @@ describe('EbayOrderSyncService', () => {
         insert: vi.fn().mockReturnThis(),
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null }) // No running sync
           .mockResolvedValueOnce({ data: { id: 'sync-log-id' }, error: null }), // Created log
       };
@@ -207,7 +210,8 @@ describe('EbayOrderSyncService', () => {
         insert: vi.fn().mockReturnThis(),
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null })
           .mockResolvedValueOnce({ data: { id: 'sync-log-id' }, error: null }),
       };
@@ -215,7 +219,7 @@ describe('EbayOrderSyncService', () => {
 
       const result = await service.syncOrders(testUserId, {
         fromDate: '2023-01-01T00:00:00Z',
-        toDate: '2023-12-31T23:59:59Z'
+        toDate: '2023-12-31T23:59:59Z',
       });
 
       expect(result.syncType).toBe('HISTORICAL');
@@ -243,10 +247,13 @@ describe('EbayOrderSyncService', () => {
 
       const result = await service.performHistoricalImport(testUserId, '2023-01-01T00:00:00Z');
 
-      expect(syncOrdersSpy).toHaveBeenCalledWith(testUserId, expect.objectContaining({
-        fromDate: '2023-01-01T00:00:00Z',
-        enrichTransactions: true,
-      }));
+      expect(syncOrdersSpy).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          fromDate: '2023-01-01T00:00:00Z',
+          enrichTransactions: true,
+        })
+      );
       expect(result.syncType).toBe('HISTORICAL');
     });
 
@@ -269,10 +276,13 @@ describe('EbayOrderSyncService', () => {
 
       await service.performHistoricalImport(testUserId, '2023-01-01T00:00:00Z');
 
-      expect(syncOrdersSpy).toHaveBeenCalledWith(testUserId, expect.objectContaining({
-        fromDate: '2023-01-01T00:00:00Z',
-        toDate: expect.any(String),
-      }));
+      expect(syncOrdersSpy).toHaveBeenCalledWith(
+        testUserId,
+        expect.objectContaining({
+          fromDate: '2023-01-01T00:00:00Z',
+          toDate: expect.any(String),
+        })
+      );
     });
   });
 
@@ -319,7 +329,8 @@ describe('EbayOrderSyncService', () => {
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null }) // No running sync
           .mockResolvedValueOnce({ data: null, error: { message: 'Insert failed' } }), // Log creation failed
       };
@@ -808,7 +819,8 @@ describe('EbayOrderSyncService', () => {
         insert: vi.fn().mockReturnThis(),
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: null }) // No running sync
           .mockResolvedValueOnce({ data: { id: 'sync-log-id' }, error: null }), // Sync log created
       };

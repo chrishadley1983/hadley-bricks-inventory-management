@@ -181,7 +181,8 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending || createMileageMutation.isPending;
+  const isSubmitting =
+    createMutation.isPending || updateMutation.isPending || createMileageMutation.isPending;
 
   return (
     <Form {...form}>
@@ -189,7 +190,9 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={mode === 'edit' && initialData ? `/purchases/${initialData.id}` : '/purchases'}>
+            <Link
+              href={mode === 'edit' && initialData ? `/purchases/${initialData.id}` : '/purchases'}
+            >
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -234,9 +237,7 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
                     <FormControl>
                       <Input placeholder="e.g., 3 Star Wars sets from eBay" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      A brief description of what was purchased
-                    </FormDescription>
+                    <FormDescription>A brief description of what was purchased</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -324,9 +325,7 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
                     <FormControl>
                       <Input placeholder="e.g., Order ID, Receipt number" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Optional reference number for tracking
-                    </FormDescription>
+                    <FormDescription>Optional reference number for tracking</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -361,18 +360,12 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
             onEntriesChange={setPendingMileageEntries}
           />
         ) : (
-          <MileageSection
-            purchaseId={initialData?.id}
-            purchaseDate={form.watch('purchase_date')}
-          />
+          <MileageSection purchaseId={initialData?.id} purchaseDate={form.watch('purchase_date')} />
         )}
 
         {/* Photos Section */}
         {mode === 'create' ? (
-          <PhotoUploadInline
-            pendingImages={pendingImages}
-            onImagesChange={setPendingImages}
-          />
+          <PhotoUploadInline pendingImages={pendingImages} onImagesChange={setPendingImages} />
         ) : (
           <PurchaseImages purchaseId={initialData!.id} />
         )}
@@ -380,7 +373,9 @@ export function PurchaseForm({ mode, initialData, onSuccess }: PurchaseFormProps
         {/* Form Actions */}
         <div className="flex justify-end gap-4">
           <Button variant="outline" type="button" asChild>
-            <Link href={mode === 'edit' && initialData ? `/purchases/${initialData.id}` : '/purchases'}>
+            <Link
+              href={mode === 'edit' && initialData ? `/purchases/${initialData.id}` : '/purchases'}
+            >
               Cancel
             </Link>
           </Button>

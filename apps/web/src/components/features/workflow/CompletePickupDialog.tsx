@@ -16,11 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import {
-  useCompletePickup,
-  type StockPickup,
-  type CompletePickupInput,
-} from '@/hooks/use-pickups';
+import { useCompletePickup, type StockPickup, type CompletePickupInput } from '@/hooks/use-pickups';
 
 interface CompletePickupDialogProps {
   open: boolean;
@@ -51,11 +47,7 @@ const OUTCOMES = [
   },
 ] as const;
 
-export function CompletePickupDialog({
-  open,
-  onOpenChange,
-  pickup,
-}: CompletePickupDialogProps) {
+export function CompletePickupDialog({ open, onOpenChange, pickup }: CompletePickupDialogProps) {
   const { toast } = useToast();
   const completePickup = useCompletePickup();
 
@@ -114,9 +106,7 @@ export function CompletePickupDialog({
             <CheckCircle className="h-5 w-5" />
             Complete Pickup
           </DialogTitle>
-          <DialogDescription>
-            Record the outcome of: {pickup.title}
-          </DialogDescription>
+          <DialogDescription>Record the outcome of: {pickup.title}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -134,19 +124,11 @@ export function CompletePickupDialog({
               className="space-y-2"
             >
               {OUTCOMES.map((outcome) => (
-                <div
-                  key={outcome.value}
-                  className="flex items-start space-x-3 space-y-0"
-                >
+                <div key={outcome.value} className="flex items-start space-x-3 space-y-0">
                   <RadioGroupItem value={outcome.value} id={outcome.value} />
-                  <Label
-                    htmlFor={outcome.value}
-                    className="font-normal cursor-pointer"
-                  >
+                  <Label htmlFor={outcome.value} className="font-normal cursor-pointer">
                     <span className="font-medium">{outcome.label}</span>
-                    <p className="text-xs text-muted-foreground">
-                      {outcome.description}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{outcome.description}</p>
                   </Label>
                 </div>
               ))}
@@ -189,9 +171,7 @@ export function CompletePickupDialog({
           <div className="space-y-2">
             <Label htmlFor="mileage">
               Round Trip Mileage
-              <span className="text-muted-foreground font-normal ml-1">
-                (for expense tracking)
-              </span>
+              <span className="text-muted-foreground font-normal ml-1">(for expense tracking)</span>
             </Label>
             <div className="relative">
               <Input
@@ -202,10 +182,7 @@ export function CompletePickupDialog({
                 placeholder="0"
                 value={formData.mileage ?? ''}
                 onChange={(e) =>
-                  updateField(
-                    'mileage',
-                    e.target.value ? parseFloat(e.target.value) : null
-                  )
+                  updateField('mileage', e.target.value ? parseFloat(e.target.value) : null)
                 }
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
@@ -214,8 +191,7 @@ export function CompletePickupDialog({
             </div>
             {formData.mileage && (
               <p className="text-xs text-muted-foreground">
-                Mileage cost: £{(formData.mileage * 0.45).toFixed(2)} (at £0.45/mile
-                HMRC rate)
+                Mileage cost: £{(formData.mileage * 0.45).toFixed(2)} (at £0.45/mile HMRC rate)
               </p>
             )}
           </div>
@@ -227,19 +203,13 @@ export function CompletePickupDialog({
               id="completion_notes"
               placeholder="Any notes about this pickup..."
               value={formData.completion_notes || ''}
-              onChange={(e) =>
-                updateField('completion_notes', e.target.value || null)
-              }
+              onChange={(e) => updateField('completion_notes', e.target.value || null)}
               rows={3}
             />
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={completePickup.isPending}>

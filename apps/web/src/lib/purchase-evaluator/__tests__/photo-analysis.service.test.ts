@@ -59,15 +59,9 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should analyze images with Claude Opus as default primary model', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { extractSetNumbersWithGemini } = await import(
-        '../../ai/gemini-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { extractSetNumbersWithGemini } = await import('../../ai/gemini-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       // Mock Claude Opus response
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
@@ -118,9 +112,7 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos([
-        { base64: 'imagedata', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'imagedata', mediaType: 'image/jpeg' }]);
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].setNumber).toBe('75192');
@@ -129,15 +121,10 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should use Gemini as primary model when configured', async () => {
-      const { analyzePhotosWithGemini, isGeminiConfigured } = await import(
-        '../../ai/gemini-client'
-      );
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { analyzePhotosWithGemini, isGeminiConfigured } =
+        await import('../../ai/gemini-client');
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       (isGeminiConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
 
@@ -188,19 +175,18 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos(
-        [{ base64: 'data', mediaType: 'image/jpeg' }],
-        { primaryModel: 'gemini', useGeminiVerification: true, useBrickognize: true }
-      );
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }], {
+        primaryModel: 'gemini',
+        useGeminiVerification: true,
+        useBrickognize: true,
+      });
 
       expect(result.modelsUsed).toContain('gemini');
       expect(analyzePhotosWithGemini).toHaveBeenCalled();
     });
 
     it('should include processing time in result', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -213,9 +199,7 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       expect(result.processingTimeMs).toBeDefined();
       expect(typeof result.processingTimeMs).toBe('number');
@@ -223,12 +207,8 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should pass listing description to primary model', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { createPhotoLotUserMessage } = await import(
-        '../../ai/prompts/evaluate-photo-lot'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { createPhotoLotUserMessage } = await import('../../ai/prompts/evaluate-photo-lot');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -247,10 +227,7 @@ describe('Photo Analysis Service', () => {
         listingDescription: 'Selling my sealed sets',
       });
 
-      expect(createPhotoLotUserMessage).toHaveBeenCalledWith(
-        1,
-        'Selling my sealed sets'
-      );
+      expect(createPhotoLotUserMessage).toHaveBeenCalledWith(1, 'Selling my sealed sets');
     });
   });
 
@@ -260,15 +237,9 @@ describe('Photo Analysis Service', () => {
 
   describe('model verification', () => {
     it('should boost confidence when models agree', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { extractSetNumbersWithGemini } = await import(
-        '../../ai/gemini-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { extractSetNumbersWithGemini } = await import('../../ai/gemini-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       // Claude identifies 75192
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
@@ -317,9 +288,7 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       // Base confidence 0.8 + 0.15 agreement bonus + 0.05 verification = 0.95 (capped at 1.0)
       expect(result.items[0].confidenceScore).toBeGreaterThan(0.8);
@@ -327,15 +296,9 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should flag items when models disagree', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { extractSetNumbersWithGemini } = await import(
-        '../../ai/gemini-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { extractSetNumbersWithGemini } = await import('../../ai/gemini-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       // Claude identifies 75192
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
@@ -384,9 +347,7 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       expect(result.items[0].modelsAgree).toBe(false);
       expect(result.items[0].needsReview).toBe(true);
@@ -396,15 +357,9 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should skip Gemini verification when disabled', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { extractSetNumbersWithGemini } = await import(
-        '../../ai/gemini-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { extractSetNumbersWithGemini } = await import('../../ai/gemini-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -437,12 +392,9 @@ describe('Photo Analysis Service', () => {
 
   describe('Brickognize integration', () => {
     it('should enhance minifig items with Brickognize matches', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { identifyAllItemsFromImages, getMinifigMatches } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { identifyAllItemsFromImages, getMinifigMatches } =
+        await import('../../brickognize/client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -488,21 +440,15 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       expect(result.items[0].minifigId).toBe('sw0001');
       expect(result.items[0].brickognizeMatches).toBeDefined();
     });
 
     it('should skip Brickognize when disabled', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -524,12 +470,8 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should handle Brickognize errors gracefully', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
@@ -570,9 +512,7 @@ describe('Photo Analysis Service', () => {
       const { analyzePhotos } = await import('../photo-analysis.service');
 
       // Should not throw - error is handled gracefully
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       expect(result.items).toHaveLength(1);
     });
@@ -584,9 +524,7 @@ describe('Photo Analysis Service', () => {
 
   describe('error handling', () => {
     it('should throw error when primary analysis fails', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
 
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
         new Error('Claude API unavailable')
@@ -594,15 +532,14 @@ describe('Photo Analysis Service', () => {
 
       const { analyzePhotos } = await import('../photo-analysis.service');
 
-      await expect(
-        analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }])
-      ).rejects.toThrow('Claude Opus analysis failed');
+      await expect(analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }])).rejects.toThrow(
+        'Claude Opus analysis failed'
+      );
     });
 
     it('should throw error when Gemini primary fails and is required', async () => {
-      const { isGeminiConfigured, analyzePhotosWithGemini } = await import(
-        '../../ai/gemini-client'
-      );
+      const { isGeminiConfigured, analyzePhotosWithGemini } =
+        await import('../../ai/gemini-client');
 
       (isGeminiConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
       (analyzePhotosWithGemini as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -637,12 +574,8 @@ describe('Photo Analysis Service', () => {
     });
 
     it('should continue analysis when verification fails', async () => {
-      const { sendMessageWithImagesForJSON } = await import(
-        '../../ai/claude-client'
-      );
-      const { identifyAllItemsFromImages } = await import(
-        '../../brickognize/client'
-      );
+      const { sendMessageWithImagesForJSON } = await import('../../ai/claude-client');
+      const { identifyAllItemsFromImages } = await import('../../brickognize/client');
 
       let callCount = 0;
       (sendMessageWithImagesForJSON as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -683,9 +616,7 @@ describe('Photo Analysis Service', () => {
       const { analyzePhotos } = await import('../photo-analysis.service');
 
       // Should not throw - verification failure is handled gracefully
-      const result = await analyzePhotos([
-        { base64: 'data', mediaType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotos([{ base64: 'data', mediaType: 'image/jpeg' }]);
 
       expect(result.items).toHaveLength(1);
     });
@@ -704,7 +635,3 @@ describe('Photo Analysis Service', () => {
     });
   });
 });
-
-
-
-

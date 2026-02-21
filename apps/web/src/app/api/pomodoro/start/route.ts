@@ -54,10 +54,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (existingSession) {
-      return NextResponse.json(
-        { error: 'Session already in progress' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Session already in progress' }, { status: 400 });
     }
 
     // Get today's session count

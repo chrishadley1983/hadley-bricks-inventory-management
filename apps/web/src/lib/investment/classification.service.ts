@@ -52,22 +52,11 @@ const LICENSED_THEMES = [
   'Fortnite',
 ];
 
-const UCS_PATTERNS = [
-  /ultimate collector/i,
-  /\bUCS\b/,
-  /Ultimate Collector Series/i,
-];
+const UCS_PATTERNS = [/ultimate collector/i, /\bUCS\b/, /Ultimate Collector Series/i];
 
-const MODULAR_PATTERNS = [
-  /modular build/i,
-  /modular house/i,
-];
+const MODULAR_PATTERNS = [/modular build/i, /modular house/i];
 
-const LEGO_EXCLUSIVE_AVAILABILITY = [
-  'LEGO exclusive',
-  'LEGO.com exclusive',
-  'Exclusive',
-];
+const LEGO_EXCLUSIVE_AVAILABILITY = ['LEGO exclusive', 'LEGO.com exclusive', 'Exclusive'];
 
 export interface ClassificationResult {
   total_classified: number;
@@ -124,7 +113,13 @@ export class InvestmentClassificationService {
         break;
       }
 
-      const updates: { id: string; is_licensed: boolean; is_ucs: boolean; is_modular: boolean; exclusivity_tier: string }[] = [];
+      const updates: {
+        id: string;
+        is_licensed: boolean;
+        is_ucs: boolean;
+        is_modular: boolean;
+        exclusivity_tier: string;
+      }[] = [];
 
       for (const set of sets) {
         const override = set.classification_override as Record<string, unknown> | null;
@@ -136,12 +131,15 @@ export class InvestmentClassificationService {
         const autoExclusivity = this.detectExclusivity(set.availability);
 
         // Apply overrides
-        const isLicensed = override?.is_licensed !== undefined ? Boolean(override.is_licensed) : autoLicensed;
+        const isLicensed =
+          override?.is_licensed !== undefined ? Boolean(override.is_licensed) : autoLicensed;
         const isUcs = override?.is_ucs !== undefined ? Boolean(override.is_ucs) : autoUcs;
-        const isModular = override?.is_modular !== undefined ? Boolean(override.is_modular) : autoModular;
-        const exclusivityTier = override?.exclusivity_tier !== undefined
-          ? String(override.exclusivity_tier)
-          : autoExclusivity;
+        const isModular =
+          override?.is_modular !== undefined ? Boolean(override.is_modular) : autoModular;
+        const exclusivityTier =
+          override?.exclusivity_tier !== undefined
+            ? String(override.exclusivity_tier)
+            : autoExclusivity;
 
         if (override && Object.keys(override).length > 0) {
           overridesPreserved++;
@@ -164,18 +162,16 @@ export class InvestmentClassificationService {
       // Batch update in chunks of 500
       for (let i = 0; i < updates.length; i += 500) {
         const chunk = updates.slice(i, i + 500);
-        const { error: updateError } = await this.supabase
-          .from('brickset_sets')
-          .upsert(
-            chunk.map((u) => ({
-              id: u.id,
-              is_licensed: u.is_licensed,
-              is_ucs: u.is_ucs,
-              is_modular: u.is_modular,
-              exclusivity_tier: u.exclusivity_tier,
-            })),
-            { onConflict: 'id' }
-          );
+        const { error: updateError } = await this.supabase.from('brickset_sets').upsert(
+          chunk.map((u) => ({
+            id: u.id,
+            is_licensed: u.is_licensed,
+            is_ucs: u.is_ucs,
+            is_modular: u.is_modular,
+            exclusivity_tier: u.exclusivity_tier,
+          })),
+          { onConflict: 'id' }
+        );
 
         if (updateError) {
           console.error('[Classification] Update error:', updateError.message);
@@ -218,11 +214,18 @@ export class InvestmentClassificationService {
     return UCS_PATTERNS.some((pattern) => pattern.test(text));
   }
 
-  private detectModular(theme: string | null, subtheme: string | null, setName: string | null): boolean {
+  private detectModular(
+    theme: string | null,
+    subtheme: string | null,
+    setName: string | null
+  ): boolean {
     const text = `${theme ?? ''} ${subtheme ?? ''} ${setName ?? ''}`;
     if (MODULAR_PATTERNS.some((pattern) => pattern.test(text))) return true;
     // Creator Expert / Icons modulars
-    if ((theme === 'Creator Expert' || theme === 'Icons') && subtheme?.toLowerCase().includes('modular')) {
+    if (
+      (theme === 'Creator Expert' || theme === 'Icons') &&
+      subtheme?.toLowerCase().includes('modular')
+    ) {
       return true;
     }
     return false;
@@ -230,13 +233,18 @@ export class InvestmentClassificationService {
 
   private detectExclusivity(availability: string | null): string {
     if (!availability) return 'standard';
-    if (LEGO_EXCLUSIVE_AVAILABILITY.some((a) => availability.toLowerCase().includes(a.toLowerCase()))) {
+    if (
+      LEGO_EXCLUSIVE_AVAILABILITY.some((a) => availability.toLowerCase().includes(a.toLowerCase()))
+    ) {
       return 'lego_exclusive';
     }
     if (availability.toLowerCase().includes('retailer exclusive')) {
       return 'retailer_exclusive';
     }
-    if (availability.toLowerCase().includes('event') || availability.toLowerCase().includes('convention')) {
+    if (
+      availability.toLowerCase().includes('event') ||
+      availability.toLowerCase().includes('convention')
+    ) {
       return 'event_exclusive';
     }
     return 'standard';

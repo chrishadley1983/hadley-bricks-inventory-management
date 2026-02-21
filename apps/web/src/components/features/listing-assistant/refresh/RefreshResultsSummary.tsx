@@ -21,9 +21,8 @@ interface RefreshResultsSummaryProps {
  * Summary of refresh operation results
  */
 export function RefreshResultsSummary({ result, onDismiss }: RefreshResultsSummaryProps) {
-  const successRate = result.totalProcessed > 0
-    ? Math.round((result.createdCount / result.totalProcessed) * 100)
-    : 0;
+  const successRate =
+    result.totalProcessed > 0 ? Math.round((result.createdCount / result.totalProcessed) * 100) : 0;
 
   return (
     <Card className={result.success ? 'border-green-200' : 'border-amber-200'}>
@@ -44,8 +43,8 @@ export function RefreshResultsSummary({ result, onDismiss }: RefreshResultsSumma
           </Button>
         </div>
         <CardDescription>
-          {result.createdCount} of {result.totalProcessed} listings refreshed successfully
-          ({successRate}% success rate)
+          {result.createdCount} of {result.totalProcessed} listings refreshed successfully (
+          {successRate}% success rate)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

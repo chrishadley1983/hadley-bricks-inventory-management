@@ -49,14 +49,7 @@ const priorityLabels: Record<number, string> = {
   4: 'Low',
 };
 
-export function TaskCard({
-  task,
-  onStart,
-  onComplete,
-  onSkip,
-  onDefer,
-  isLoading,
-}: TaskCardProps) {
+export function TaskCard({ task, onStart, onComplete, onSkip, onDefer, isLoading }: TaskCardProps) {
   const [deferCalendarOpen, setDeferCalendarOpen] = useState(false);
 
   const isInProgress = task.status === 'in_progress';
@@ -86,7 +79,10 @@ export function TaskCard({
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {/* Priority dot */}
             <div
-              className={cn('w-3 h-3 rounded-full mt-1.5 flex-shrink-0', priorityColors[task.priority] || priorityColors[3])}
+              className={cn(
+                'w-3 h-3 rounded-full mt-1.5 flex-shrink-0',
+                priorityColors[task.priority] || priorityColors[3]
+              )}
               title={priorityLabels[task.priority] || 'Regular'}
             />
 
@@ -121,12 +117,24 @@ export function TaskCard({
               {hasResolutionStats && task.resolutionStats ? (
                 <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                   <p>
-                    <span className={task.resolutionStats.pendingReview > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                    <span
+                      className={
+                        task.resolutionStats.pendingReview > 0
+                          ? 'text-amber-600 dark:text-amber-400 font-medium'
+                          : ''
+                      }
+                    >
                       {task.resolutionStats.pendingReview} Pending Review
                     </span>
                   </p>
                   <p>
-                    <span className={task.resolutionStats.unlinkedSince2026 > 0 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                    <span
+                      className={
+                        task.resolutionStats.unlinkedSince2026 > 0
+                          ? 'text-red-600 dark:text-red-400 font-medium'
+                          : ''
+                      }
+                    >
                       {task.resolutionStats.unlinkedSince2026} Unlinked since Jan 2026
                     </span>
                   </p>

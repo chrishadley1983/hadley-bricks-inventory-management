@@ -254,10 +254,7 @@ describe('Reverse Calculations', () => {
       const result = calculateLotMaxPurchasePrice(items, 30);
       const singleResult = calculateMaxPurchasePriceBoth(100, 100, 30);
 
-      expect(result.totalMaxPurchasePrice).toBeCloseTo(
-        singleResult.recommendedMaxPrice * 3,
-        2
-      );
+      expect(result.totalMaxPurchasePrice).toBeCloseTo(singleResult.recommendedMaxPrice * 3, 2);
     });
 
     it('should handle items without pricing', () => {
@@ -296,9 +293,7 @@ describe('Reverse Calculations', () => {
     });
 
     it('should round total to 2 decimal places', () => {
-      const items = [
-        { amazonSellPrice: 99.99, ebaySellPrice: 99.99, quantity: 1 },
-      ];
+      const items = [{ amazonSellPrice: 99.99, ebaySellPrice: 99.99, quantity: 1 }];
 
       const result = calculateLotMaxPurchasePrice(items, 33);
 
@@ -560,13 +555,7 @@ describe('Reverse Calculations', () => {
     });
 
     it('should round values to 2 decimal places', () => {
-      const result = calculateAuctionMaxBidFromRevenue(
-        999.99,
-        199.99,
-        10.5,
-        32.94,
-        49.99
-      );
+      const result = calculateAuctionMaxBidFromRevenue(999.99, 199.99, 10.5, 32.94, 49.99);
 
       expect(result.maxBid.toString()).toMatch(/^\d+\.?\d{0,2}$/);
       expect(result.commission.toString()).toMatch(/^\d+\.?\d{0,2}$/);

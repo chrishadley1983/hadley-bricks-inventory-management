@@ -6,12 +6,7 @@ import { ExternalLink, Calendar, Clock, MessageSquare } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EngagementBadge } from './EngagementPopover';
 import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
 
@@ -78,13 +73,19 @@ export function EligibleListingsTable({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge variant="outline" className="h-5 px-1.5 text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700">
+                      <Badge
+                        variant="outline"
+                        className="h-5 px-1.5 text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700"
+                      >
                         <MessageSquare className="h-3 w-3 mr-0.5" />
                         {row.original.pendingOfferCount}
                       </Badge>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{row.original.pendingOfferCount} pending offer{row.original.pendingOfferCount > 1 ? 's' : ''}</p>
+                      <p>
+                        {row.original.pendingOfferCount} pending offer
+                        {row.original.pendingOfferCount > 1 ? 's' : ''}
+                      </p>
                       <p className="text-xs text-muted-foreground">Title changes blocked</p>
                     </TooltipContent>
                   </Tooltip>
@@ -94,7 +95,10 @@ export function EligibleListingsTable({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge variant="outline" className="h-5 px-1.5 text-xs bg-red-50 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700">
+                      <Badge
+                        variant="outline"
+                        className="h-5 px-1.5 text-xs bg-red-50 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
+                      >
                         <Clock className="h-3 w-3 mr-0.5" />
                         &lt;12h
                       </Badge>
@@ -120,7 +124,9 @@ export function EligibleListingsTable({
         header: 'Price',
         cell: ({ row }) => (
           <div>
-            <p className="font-medium">{formatCurrency(row.original.price, row.original.currency)}</p>
+            <p className="font-medium">
+              {formatCurrency(row.original.price, row.original.currency)}
+            </p>
             {row.original.bestOfferEnabled && (
               <Badge variant="secondary" className="text-xs mt-1">
                 Best Offer
@@ -143,9 +149,7 @@ export function EligibleListingsTable({
                   </span>
                 </div>
               </TooltipTrigger>
-              <TooltipContent>
-                Listed: {formatDate(row.original.listingStartDate)}
-              </TooltipContent>
+              <TooltipContent>Listed: {formatDate(row.original.listingStartDate)}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ),
@@ -171,9 +175,7 @@ export function EligibleListingsTable({
         accessorKey: 'condition',
         header: 'Condition',
         cell: ({ row }) =>
-          row.original.condition && (
-            <Badge variant="outline">{row.original.condition}</Badge>
-          ),
+          row.original.condition && <Badge variant="outline">{row.original.condition}</Badge>,
       },
       {
         id: 'actions',

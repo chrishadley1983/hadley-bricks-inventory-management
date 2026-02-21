@@ -15,14 +15,7 @@ const SyncOptionsSchema = z.object({
   updatedAfter: z.string().datetime().optional(),
   statuses: z
     .array(
-      z.enum([
-        'Pending',
-        'Unshipped',
-        'PartiallyShipped',
-        'Shipped',
-        'Canceled',
-        'Unfulfillable',
-      ])
+      z.enum(['Pending', 'Unshipped', 'PartiallyShipped', 'Shipped', 'Canceled', 'Unfulfillable'])
     )
     .optional(),
   merchantFulfilledOnly: z.boolean().optional(),
@@ -59,10 +52,7 @@ export async function POST(request: NextRequest) {
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
     if (!isConfigured) {
-      return NextResponse.json(
-        { error: 'Amazon integration not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Amazon integration not configured' }, { status: 400 });
     }
 
     // Convert string dates to Date objects
@@ -133,7 +123,10 @@ export async function POST(request: NextRequest) {
         autoCompleteResult = await linkingService.autoCompleteOldOrders(14);
         console.log('[POST /api/integrations/amazon/sync] Auto-complete done:', autoCompleteResult);
       } catch (autoCompleteError) {
-        console.error('[POST /api/integrations/amazon/sync] Auto-complete error:', autoCompleteError);
+        console.error(
+          '[POST /api/integrations/amazon/sync] Auto-complete error:',
+          autoCompleteError
+        );
       }
     }
 

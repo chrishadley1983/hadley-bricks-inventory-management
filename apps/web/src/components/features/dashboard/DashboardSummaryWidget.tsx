@@ -11,7 +11,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Loader2, TrendingUp, Calendar, Target } from 'lucide-react';
-import { useProfitLossReport, useDailyActivityReport, useReportSettings } from '@/hooks/use-reports';
+import {
+  useProfitLossReport,
+  useDailyActivityReport,
+  useReportSettings,
+} from '@/hooks/use-reports';
 import { formatCurrency, cn } from '@/lib/utils';
 
 // Default target if settings haven't loaded yet
@@ -83,16 +87,10 @@ export function DashboardSummaryWidget() {
   const dailyTarget = settings?.dailyListingTarget || DEFAULT_DAILY_TARGET;
 
   // Fetch P&L report for last 12 months
-  const { data: annualReport, isLoading: annualLoading } = useProfitLossReport(
-    last12Months,
-    false
-  );
+  const { data: annualReport, isLoading: annualLoading } = useProfitLossReport(last12Months, false);
 
   // Fetch P&L report for current month
-  const { data: monthReport, isLoading: monthLoading } = useProfitLossReport(
-    currentMonth,
-    false
-  );
+  const { data: monthReport, isLoading: monthLoading } = useProfitLossReport(currentMonth, false);
 
   // Fetch daily activity for today
   const { data: todayActivity, isLoading: todayLoading } = useDailyActivityReport(
@@ -109,19 +107,13 @@ export function DashboardSummaryWidget() {
   // Calculate annual turnover (sum of Income category across all months)
   const annualTurnover = useMemo(() => {
     if (!annualReport?.categoryTotals?.Income) return 0;
-    return Object.values(annualReport.categoryTotals.Income).reduce(
-      (sum, val) => sum + val,
-      0
-    );
+    return Object.values(annualReport.categoryTotals.Income).reduce((sum, val) => sum + val, 0);
   }, [annualReport]);
 
   // Calculate this month turnover
   const monthTurnover = useMemo(() => {
     if (!monthReport?.categoryTotals?.Income) return 0;
-    return Object.values(monthReport.categoryTotals.Income).reduce(
-      (sum, val) => sum + val,
-      0
-    );
+    return Object.values(monthReport.categoryTotals.Income).reduce((sum, val) => sum + val, 0);
   }, [monthReport]);
 
   // Calculate this month profit (grand total)

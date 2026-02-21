@@ -102,10 +102,7 @@ export class AmazonTransactionSyncService {
   /**
    * Sync transactions from Amazon Finances API
    */
-  async syncTransactions(
-    userId: string,
-    options?: AmazonSyncOptions
-  ): Promise<AmazonSyncResult> {
+  async syncTransactions(userId: string, options?: AmazonSyncOptions): Promise<AmazonSyncResult> {
     console.log(
       '[AmazonTransactionSyncService] Starting transaction sync for user:',
       userId,
@@ -114,11 +111,7 @@ export class AmazonTransactionSyncService {
     );
     const startedAt = new Date();
     const supabase = await createClient();
-    const syncMode = options?.fromDate
-      ? 'HISTORICAL'
-      : options?.fullSync
-        ? 'FULL'
-        : 'INCREMENTAL';
+    const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[AmazonTransactionSyncService] Sync mode:', syncMode);
 
     // Check for running sync
@@ -131,9 +124,7 @@ export class AmazonTransactionSyncService {
       .single();
 
     if (runningSync) {
-      console.log(
-        '[AmazonTransactionSyncService] A sync is already running, skipping'
-      );
+      console.log('[AmazonTransactionSyncService] A sync is already running, skipping');
       return {
         success: false,
         syncType: syncMode,
@@ -163,10 +154,7 @@ export class AmazonTransactionSyncService {
       .single();
 
     if (logError) {
-      console.error(
-        '[AmazonTransactionSyncService] Failed to create sync log:',
-        logError
-      );
+      console.error('[AmazonTransactionSyncService] Failed to create sync log:', logError);
       throw new Error('Failed to start sync');
     }
     console.log('[AmazonTransactionSyncService] Sync log created:', syncLog.id);
@@ -176,9 +164,7 @@ export class AmazonTransactionSyncService {
       console.log('[AmazonTransactionSyncService] Getting Amazon credentials...');
       const credentials = await this.getCredentials(userId);
       if (!credentials) {
-        throw new Error(
-          'No Amazon credentials found. Please connect Amazon in settings.'
-        );
+        throw new Error('No Amazon credentials found. Please connect Amazon in settings.');
       }
       console.log('[AmazonTransactionSyncService] Credentials obtained');
 
@@ -220,21 +206,13 @@ export class AmazonTransactionSyncService {
         fromDate = '2025-01-01T00:00:00.000Z';
       }
 
-      console.log(
-        '[AmazonTransactionSyncService] Date range:',
-        fromDate,
-        'to',
-        toDate
-      );
+      console.log('[AmazonTransactionSyncService] Date range:', fromDate, 'to', toDate);
 
       // Fetch all transactions (handles 180-day chunking automatically)
       console.log(
         '[AmazonTransactionSyncService] Starting to fetch transactions from Amazon API...'
       );
-      const allTransactions = await financesClient.getTransactionsInDateRange(
-        fromDate,
-        toDate
-      );
+      const allTransactions = await financesClient.getTransactionsInDateRange(fromDate, toDate);
 
       console.log(
         '[AmazonTransactionSyncService] Total transactions fetched:',
@@ -242,13 +220,8 @@ export class AmazonTransactionSyncService {
       );
 
       // Upsert transactions
-      console.log(
-        '[AmazonTransactionSyncService] Upserting transactions to database...'
-      );
-      const { created, updated } = await this.upsertTransactions(
-        userId,
-        allTransactions
-      );
+      console.log('[AmazonTransactionSyncService] Upserting transactions to database...');
+      const { created, updated } = await this.upsertTransactions(userId, allTransactions);
       console.log(
         '[AmazonTransactionSyncService] Upsert complete. Created:',
         created,
@@ -306,8 +279,7 @@ export class AmazonTransactionSyncService {
       };
     } catch (error) {
       const completedAt = new Date();
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       console.error('[AmazonTransactionSyncService] Sync failed:', error);
 
@@ -457,9 +429,7 @@ export class AmazonTransactionSyncService {
         lastSync: lastTxSync
           ? {
               status: lastTxSync.status,
-              completedAt: lastTxSync.completed_at
-                ? new Date(lastTxSync.completed_at)
-                : undefined,
+              completedAt: lastTxSync.completed_at ? new Date(lastTxSync.completed_at) : undefined,
               recordsProcessed: lastTxSync.records_processed || 0,
             }
           : undefined,
@@ -477,22 +447,14 @@ export class AmazonTransactionSyncService {
   /**
    * Get Amazon credentials for user
    */
-  private async getCredentials(
-    userId: string
-  ): Promise<AmazonCredentials | null> {
+  private async getCredentials(userId: string): Promise<AmazonCredentials | null> {
     try {
       const supabase = await createClient();
       const credentialsRepo = new CredentialsRepository(supabase);
-      const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(
-        userId,
-        'amazon'
-      );
+      const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(userId, 'amazon');
       return credentials;
     } catch (error) {
-      console.error(
-        '[AmazonTransactionSyncService] Error getting credentials:',
-        error
-      );
+      console.error('[AmazonTransactionSyncService] Error getting credentials:', error);
       return null;
     }
   }
@@ -500,9 +462,7 @@ export class AmazonTransactionSyncService {
   /**
    * Extract fees from nested breakdowns structure
    */
-  private extractFees(
-    breakdowns?: AmazonTransactionBreakdown[]
-  ): Record<string, number> {
+  private extractFees(breakdowns?: AmazonTransactionBreakdown[]): Record<string, number> {
     const fees: Record<string, number> = {};
     let otherFees = 0;
 
@@ -591,8 +551,7 @@ export class AmazonTransactionSyncService {
       // Keep the most recent version if duplicates exist
       if (
         !transactionMap.has(txId) ||
-        new Date(tx.postedDate) >
-          new Date(transactionMap.get(txId)!.postedDate)
+        new Date(tx.postedDate) > new Date(transactionMap.get(txId)!.postedDate)
       ) {
         transactionMap.set(txId, tx);
       }
@@ -613,100 +572,89 @@ export class AmazonTransactionSyncService {
         uniqueTransactions.map(([id]) => id)
       );
 
-    const existingIds = new Set(
-      existingTransactions?.map((t) => t.amazon_transaction_id) || []
-    );
+    const existingIds = new Set(existingTransactions?.map((t) => t.amazon_transaction_id) || []);
 
     // Transform transactions
-    const transactionRows: TransactionRow[] = uniqueTransactions.map(
-      ([txId, tx]) => {
-        // Extract fees from breakdowns
-        const fees = this.extractFees(tx.breakdowns);
-        // Only sum NEGATIVE values as fees (deductions from the sale)
-        // Positive values are credits (shipping credit, gift wrap credit, etc.)
-        const totalFees = Object.values(fees).reduce(
-          (sum, fee) => sum + (fee < 0 ? Math.abs(fee) : 0),
-          0
-        );
+    const transactionRows: TransactionRow[] = uniqueTransactions.map(([txId, tx]) => {
+      // Extract fees from breakdowns
+      const fees = this.extractFees(tx.breakdowns);
+      // Only sum NEGATIVE values as fees (deductions from the sale)
+      // Positive values are credits (shipping credit, gift wrap credit, etc.)
+      const totalFees = Object.values(fees).reduce(
+        (sum, fee) => sum + (fee < 0 ? Math.abs(fee) : 0),
+        0
+      );
 
-        // Get order ID from related identifiers
-        const orderId =
-          tx.relatedIdentifiers?.find(
-            (id) => id.relatedIdentifierName === 'ORDER_ID'
-          )?.relatedIdentifierValue || null;
+      // Get order ID from related identifiers
+      const orderId =
+        tx.relatedIdentifiers?.find((id) => id.relatedIdentifierName === 'ORDER_ID')
+          ?.relatedIdentifierValue || null;
 
-        const sellerOrderId =
-          tx.relatedIdentifiers?.find(
-            (id) => id.relatedIdentifierName === 'SELLER_ORDER_ID'
-          )?.relatedIdentifierValue || null;
+      const sellerOrderId =
+        tx.relatedIdentifiers?.find((id) => id.relatedIdentifierName === 'SELLER_ORDER_ID')
+          ?.relatedIdentifierValue || null;
 
-        // Get context info (ASIN, SKU, etc.)
-        const context = tx.contexts?.[0];
-        const asin = context?.asin || null;
-        const sku = context?.sku || null;
-        const quantity = context?.quantityShipped || null;
-        const storeName = context?.storeName || null;
-        const fulfillmentChannel = context?.fulfillmentNetwork || null;
+      // Get context info (ASIN, SKU, etc.)
+      const context = tx.contexts?.[0];
+      const asin = context?.asin || null;
+      const sku = context?.sku || null;
+      const quantity = context?.quantityShipped || null;
+      const storeName = context?.storeName || null;
+      const fulfillmentChannel = context?.fulfillmentNetwork || null;
 
-        // Parse amounts
-        const totalAmount = parseFloat(tx.totalAmount.currencyAmount);
+      // Parse amounts
+      const totalAmount = parseFloat(tx.totalAmount.currencyAmount);
 
-        // Calculate gross amount (for sales, this is what buyer paid)
-        // totalAmount from Finances API is the net payout after Amazon takes fees
-        // gross = net + actual_fees_deducted
-        // Credits (shipping_credit, gift_wrap_credit) are ADDED to your payout, not deducted
-        // So gross = net + fees_deducted (only negative breakdown amounts)
-        const grossAmount =
-          tx.transactionType === 'Shipment' ? totalAmount + totalFees : null;
+      // Calculate gross amount (for sales, this is what buyer paid)
+      // totalAmount from Finances API is the net payout after Amazon takes fees
+      // gross = net + actual_fees_deducted
+      // Credits (shipping_credit, gift_wrap_credit) are ADDED to your payout, not deducted
+      // So gross = net + fees_deducted (only negative breakdown amounts)
+      const grossAmount = tx.transactionType === 'Shipment' ? totalAmount + totalFees : null;
 
-        return {
-          user_id: userId,
-          amazon_transaction_id: txId,
-          amazon_order_id: orderId,
-          seller_order_id: sellerOrderId,
-          marketplace_id: tx.sellingPartnerMetadata?.marketplaceId || null,
-          transaction_type: tx.transactionType,
-          transaction_status: tx.transactionStatus || null,
-          posted_date: tx.postedDate,
-          description: tx.description || null,
-          total_amount: totalAmount,
-          currency: tx.totalAmount.currencyCode,
-          referral_fee: fees.referral_fee || null,
-          fba_fulfillment_fee: fees.fba_fulfillment_fee || null,
-          fba_per_unit_fee: fees.fba_per_unit_fee || null,
-          fba_weight_fee: fees.fba_weight_fee || null,
-          fba_inventory_storage_fee: fees.fba_inventory_storage_fee || null,
-          shipping_credit: fees.shipping_credit || null,
-          shipping_credit_tax: fees.shipping_credit_tax || null,
-          promotional_rebate: fees.promotional_rebate || null,
-          sales_tax_collected: fees.sales_tax_collected || null,
-          marketplace_facilitator_tax: fees.marketplace_facilitator_tax || null,
-          gift_wrap_credit: fees.gift_wrap_credit || null,
-          other_fees: fees.other_fees || null,
-          gross_sales_amount: grossAmount,
-          net_amount: totalAmount,
-          total_fees: totalFees > 0 ? totalFees : null,
-          item_title: null, // Not available in Finances API
-          asin,
-          seller_sku: sku,
-          quantity,
-          fulfillment_channel: fulfillmentChannel,
-          store_name: storeName,
-          buyer_name: null, // Not available in Finances API
-          buyer_email: null, // Not available in Finances API
-          breakdowns: tx.breakdowns
-            ? JSON.parse(JSON.stringify(tx.breakdowns))
-            : null,
-          contexts: tx.contexts
-            ? JSON.parse(JSON.stringify(tx.contexts))
-            : null,
-          related_identifiers: tx.relatedIdentifiers
-            ? JSON.parse(JSON.stringify(tx.relatedIdentifiers))
-            : null,
-          raw_response: JSON.parse(JSON.stringify(tx)),
-        };
-      }
-    );
+      return {
+        user_id: userId,
+        amazon_transaction_id: txId,
+        amazon_order_id: orderId,
+        seller_order_id: sellerOrderId,
+        marketplace_id: tx.sellingPartnerMetadata?.marketplaceId || null,
+        transaction_type: tx.transactionType,
+        transaction_status: tx.transactionStatus || null,
+        posted_date: tx.postedDate,
+        description: tx.description || null,
+        total_amount: totalAmount,
+        currency: tx.totalAmount.currencyCode,
+        referral_fee: fees.referral_fee || null,
+        fba_fulfillment_fee: fees.fba_fulfillment_fee || null,
+        fba_per_unit_fee: fees.fba_per_unit_fee || null,
+        fba_weight_fee: fees.fba_weight_fee || null,
+        fba_inventory_storage_fee: fees.fba_inventory_storage_fee || null,
+        shipping_credit: fees.shipping_credit || null,
+        shipping_credit_tax: fees.shipping_credit_tax || null,
+        promotional_rebate: fees.promotional_rebate || null,
+        sales_tax_collected: fees.sales_tax_collected || null,
+        marketplace_facilitator_tax: fees.marketplace_facilitator_tax || null,
+        gift_wrap_credit: fees.gift_wrap_credit || null,
+        other_fees: fees.other_fees || null,
+        gross_sales_amount: grossAmount,
+        net_amount: totalAmount,
+        total_fees: totalFees > 0 ? totalFees : null,
+        item_title: null, // Not available in Finances API
+        asin,
+        seller_sku: sku,
+        quantity,
+        fulfillment_channel: fulfillmentChannel,
+        store_name: storeName,
+        buyer_name: null, // Not available in Finances API
+        buyer_email: null, // Not available in Finances API
+        breakdowns: tx.breakdowns ? JSON.parse(JSON.stringify(tx.breakdowns)) : null,
+        contexts: tx.contexts ? JSON.parse(JSON.stringify(tx.contexts)) : null,
+        related_identifiers: tx.relatedIdentifiers
+          ? JSON.parse(JSON.stringify(tx.relatedIdentifiers))
+          : null,
+        raw_response: JSON.parse(JSON.stringify(tx)),
+      };
+    });
 
     // Upsert in batches
     let created = 0;
@@ -715,19 +663,13 @@ export class AmazonTransactionSyncService {
     for (let i = 0; i < transactionRows.length; i += BATCH_SIZE) {
       const batch = transactionRows.slice(i, i + BATCH_SIZE);
 
-      const { error } = await supabase.from('amazon_transactions').upsert(
-        batch,
-        {
-          onConflict: 'user_id,amazon_transaction_id',
-          ignoreDuplicates: false,
-        }
-      );
+      const { error } = await supabase.from('amazon_transactions').upsert(batch, {
+        onConflict: 'user_id,amazon_transaction_id',
+        ignoreDuplicates: false,
+      });
 
       if (error) {
-        console.error(
-          '[AmazonTransactionSyncService] Failed to upsert transactions:',
-          error
-        );
+        console.error('[AmazonTransactionSyncService] Failed to upsert transactions:', error);
         throw new Error('Failed to save transactions');
       }
 

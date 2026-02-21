@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { paypalTransactionSyncService } from '@/lib/paypal';
 
 const HistoricalSyncSchema = z.object({
-  fromDate: z.string().refine(
-    (date) => !isNaN(Date.parse(date)),
-    { message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-01)' }
-  ),
+  fromDate: z
+    .string()
+    .refine((date) => !isNaN(Date.parse(date)), {
+      message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-01)',
+    }),
 });
 
 /**
@@ -41,10 +42,7 @@ export async function POST(request: NextRequest) {
     // Validate date is not in the future
     const fromDateObj = new Date(fromDate);
     if (fromDateObj > new Date()) {
-      return NextResponse.json(
-        { error: 'From date cannot be in the future' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'From date cannot be in the future' }, { status: 400 });
     }
 
     // PayPal typically allows up to 3 years of history

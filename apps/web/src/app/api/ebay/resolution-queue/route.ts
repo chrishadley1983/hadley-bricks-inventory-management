@@ -21,7 +21,8 @@ export async function GET() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: queueItems, error } = await (supabase as any)
       .from('ebay_inventory_resolution_queue')
-      .select(`
+      .select(
+        `
         id,
         sku,
         title,
@@ -38,17 +39,15 @@ export async function GET() {
           ebay_order_id,
           buyer_username
         )
-      `)
+      `
+      )
       .eq('user_id', user.id)
       .eq('status', 'pending')
       .order('order_date', { ascending: false });
 
     if (error) {
       console.error('[GET /api/ebay/resolution-queue] Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch resolution queue' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch resolution queue' }, { status: 500 });
     }
 
     // Get stats

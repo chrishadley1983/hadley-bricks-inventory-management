@@ -56,8 +56,8 @@ export function LinkUploadDialog({
     if (!uploadsData?.data) return [];
     if (!purchaseDate) {
       // No purchase date - just sort by upload date ascending
-      return [...uploadsData.data].sort((a, b) =>
-        new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime()
+      return [...uploadsData.data].sort(
+        (a, b) => new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime()
       );
     }
 
@@ -66,14 +66,14 @@ export function LinkUploadDialog({
     // Filter out uploads before purchase date unless toggle is on
     let filtered = uploadsData.data;
     if (!showPriorUploads) {
-      filtered = uploadsData.data.filter(upload =>
-        new Date(upload.upload_date).getTime() >= purchaseTime
+      filtered = uploadsData.data.filter(
+        (upload) => new Date(upload.upload_date).getTime() >= purchaseTime
       );
     }
 
     // Sort by date ascending (earliest first from purchase date)
-    return [...filtered].sort((a, b) =>
-      new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime()
+    return [...filtered].sort(
+      (a, b) => new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime()
     );
   }, [uploadsData?.data, purchaseDate, showPriorUploads]);
 
@@ -81,8 +81,8 @@ export function LinkUploadDialog({
   const hiddenCount = useMemo(() => {
     if (!uploadsData?.data || !purchaseDate || showPriorUploads) return 0;
     const purchaseTime = new Date(purchaseDate).getTime();
-    return uploadsData.data.filter(upload =>
-      new Date(upload.upload_date).getTime() < purchaseTime
+    return uploadsData.data.filter(
+      (upload) => new Date(upload.upload_date).getTime() < purchaseTime
     ).length;
   }, [uploadsData?.data, purchaseDate, showPriorUploads]);
 
@@ -98,7 +98,8 @@ export function LinkUploadDialog({
         <DialogHeader>
           <DialogTitle>Link BrickLink Upload</DialogTitle>
           <DialogDescription>
-            Select an unlinked upload to associate with this purchase. Uploads are sorted by date, showing those on or after the purchase date.
+            Select an unlinked upload to associate with this purchase. Uploads are sorted by date,
+            showing those on or after the purchase date.
           </DialogDescription>
         </DialogHeader>
 
@@ -164,7 +165,10 @@ export function LinkUploadDialog({
                           <span className="font-medium flex items-center gap-2">
                             <Calendar className="h-3 w-3" />
                             {formatDate(upload.upload_date)}
-                            <Badge variant={upload.condition === 'N' ? 'default' : 'secondary'} className="text-xs">
+                            <Badge
+                              variant={upload.condition === 'N' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
                               {upload.condition === 'N' ? 'New' : 'Used'}
                             </Badge>
                           </span>

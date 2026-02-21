@@ -36,7 +36,9 @@ interface SyncLog {
  * @param options.autoSync - Whether to trigger auto-sync when due (default: false)
  * @returns Object with sync status, actions, and loading states
  */
-export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSync?: boolean } = {}) {
+export function useBrickLinkTransactionSync(
+  options: { enabled?: boolean; autoSync?: boolean } = {}
+) {
   const { enabled = true, autoSync = false } = options;
   const queryClient = useQueryClient();
   const hasAttemptedAutoSync = useRef(false);
@@ -62,7 +64,11 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
   });
 
   // Manual sync mutation
-  const syncMutation = useMutation<BrickLinkSyncResult, Error, { fullSync?: boolean; resetBeforeSync?: boolean; transactionsOnly?: boolean }>({
+  const syncMutation = useMutation<
+    BrickLinkSyncResult,
+    Error,
+    { fullSync?: boolean; resetBeforeSync?: boolean; transactionsOnly?: boolean }
+  >({
     mutationFn: async ({ fullSync = false, resetBeforeSync = false, transactionsOnly = true }) => {
       const response = await fetch('/api/integrations/bricklink/sync', {
         method: 'POST',
@@ -139,17 +145,18 @@ export function useBrickLinkTransactionSync(options: { enabled?: boolean; autoSy
   }, [autoSync, isLoadingConnection, shouldAutoSync, syncMutation]);
 
   // Get logs from connection status
-  const logs: SyncLog[] = connectionStatus?.recentLogs?.map((log) => ({
-    id: log.id,
-    syncMode: log.syncMode,
-    status: log.status,
-    startedAt: log.startedAt,
-    completedAt: log.completedAt,
-    ordersProcessed: log.ordersProcessed,
-    ordersCreated: log.ordersCreated,
-    ordersUpdated: log.ordersUpdated,
-    error: log.error,
-  })) ?? [];
+  const logs: SyncLog[] =
+    connectionStatus?.recentLogs?.map((log) => ({
+      id: log.id,
+      syncMode: log.syncMode,
+      status: log.status,
+      startedAt: log.startedAt,
+      completedAt: log.completedAt,
+      ordersProcessed: log.ordersProcessed,
+      ordersCreated: log.ordersCreated,
+      ordersUpdated: log.ordersUpdated,
+      error: log.error,
+    })) ?? [];
 
   // Computed values
   const lastSyncTime = connectionStatus?.lastSyncAt;

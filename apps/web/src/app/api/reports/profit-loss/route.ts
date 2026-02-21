@@ -5,8 +5,14 @@ import { validateAuth } from '@/lib/api/validate-auth';
 import { ProfitLossReportService } from '@/lib/services/profit-loss-report.service';
 
 const QueryParamsSchema = z.object({
-  startMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
-  endMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  startMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  endMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
   startDate: z.string().optional(), // For backwards compatibility - will convert to month
   endDate: z.string().optional(), // For backwards compatibility - will convert to month
   includeZeroRows: z

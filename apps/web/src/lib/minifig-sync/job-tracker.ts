@@ -5,7 +5,7 @@ import type { MinifigJobType, JobStatus, MinifigSyncJob } from './types';
 export class MinifigJobTracker {
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string,
+    private userId: string
   ) {}
 
   async start(jobType: MinifigJobType): Promise<string> {
@@ -34,7 +34,7 @@ export class MinifigJobTracker {
       itemsCreated: number;
       itemsUpdated: number;
       itemsErrored: number;
-    },
+    }
   ): Promise<void> {
     const { error } = await this.supabase
       .from('minifig_sync_jobs')
@@ -62,14 +62,15 @@ export class MinifigJobTracker {
       itemsCreated?: number;
       itemsUpdated?: number;
       itemsErrored?: number;
-    },
+    }
   ): Promise<void> {
     const { error } = await this.supabase
       .from('minifig_sync_jobs')
       .update({
         status: 'FAILED' as JobStatus,
         completed_at: new Date().toISOString(),
-        error_log: errorLog as unknown as Database['public']['Tables']['minifig_sync_jobs']['Update']['error_log'],
+        error_log:
+          errorLog as unknown as Database['public']['Tables']['minifig_sync_jobs']['Update']['error_log'],
         items_processed: counts?.itemsProcessed ?? 0,
         items_created: counts?.itemsCreated ?? 0,
         items_updated: counts?.itemsUpdated ?? 0,
@@ -106,7 +107,7 @@ export class MinifigJobTracker {
       itemsCreated: number;
       itemsUpdated: number;
       itemsErrored: number;
-    },
+    }
   ): Promise<void> {
     const { error } = await this.supabase
       .from('minifig_sync_jobs')

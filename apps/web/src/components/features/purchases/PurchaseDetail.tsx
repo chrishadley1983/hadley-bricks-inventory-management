@@ -21,8 +21,16 @@ import {
   ExternalLink,
   Unlink,
 } from 'lucide-react';
-import { usePurchase, useDeletePurchase, useInventoryList, usePurchaseProfitability } from '@/hooks';
-import { useBrickLinkUploadsByPurchase, useUpdateBrickLinkUpload } from '@/hooks/use-bricklink-uploads';
+import {
+  usePurchase,
+  useDeletePurchase,
+  useInventoryList,
+  usePurchaseProfitability,
+} from '@/hooks';
+import {
+  useBrickLinkUploadsByPurchase,
+  useUpdateBrickLinkUpload,
+} from '@/hooks/use-bricklink-uploads';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,11 +47,7 @@ import { MileageSection } from './MileageSection';
 import { PurchaseImages } from './PurchaseImages';
 import { PurchaseProfitability } from './PurchaseProfitability';
 import { LinkUploadDialog } from './LinkUploadDialog';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 
 interface PurchaseDetailProps {
@@ -62,19 +66,14 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
   const { data: profitabilityData } = usePurchaseProfitability(id);
 
   // Fetch linked inventory items by purchase_id foreign key
-  const { data: inventoryData } = useInventoryList(
-    { purchaseId: id },
-    { page: 1, pageSize: 50 }
-  );
+  const { data: inventoryData } = useInventoryList({ purchaseId: id }, { page: 1, pageSize: 50 });
 
   // Fetch linked BrickLink uploads
   const { data: uploadsData } = useBrickLinkUploadsByPurchase(id);
   const updateUploadMutation = useUpdateBrickLinkUpload();
 
   // Create a map of item profitability data for quick lookup
-  const itemProfitMap = new Map(
-    profitabilityData?.items?.map((item) => [item.id, item]) ?? []
-  );
+  const itemProfitMap = new Map(profitabilityData?.items?.map((item) => [item.id, item]) ?? []);
 
   const handleDelete = async () => {
     await deleteMutation.mutateAsync(id);
@@ -193,10 +192,7 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                 <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
                   <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full pt-3 border-t">
                     <ChevronDown
-                      className={cn(
-                        'h-4 w-4 transition-transform',
-                        notesOpen && 'rotate-180'
-                      )}
+                      className={cn('h-4 w-4 transition-transform', notesOpen && 'rotate-180')}
                     />
                     Notes & Reference
                   </CollapsibleTrigger>
@@ -253,9 +249,7 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                   const profitData = itemProfitMap.get(item.id);
                   const isSold = item.status?.toUpperCase() === 'SOLD';
                   const hasListing = item.listing_value && item.listing_value > 0;
-                  const profit = isSold
-                    ? profitData?.soldProfit
-                    : profitData?.projectedProfit;
+                  const profit = isSold ? profitData?.soldProfit : profitData?.projectedProfit;
                   const margin = isSold
                     ? profitData?.soldMarginPercent
                     : profitData?.projectedMarginPercent;
@@ -311,9 +305,7 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                         ) : hasListing && item.listing_value ? (
                           <div className="text-right">
                             <p className="text-xs text-muted-foreground">Listed</p>
-                            <p className="font-medium">
-                              {formatCurrency(item.listing_value)}
-                            </p>
+                            <p className="font-medium">{formatCurrency(item.listing_value)}</p>
                           </div>
                         ) : null}
 
@@ -345,7 +337,8 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                                   margin >= 0 ? 'text-green-600' : 'text-red-600'
                                 )}
                               >
-                                {margin >= 0 ? '+' : ''}{margin.toFixed(0)}%
+                                {margin >= 0 ? '+' : ''}
+                                {margin.toFixed(0)}%
                               </p>
                             )}
                           </div>
@@ -354,10 +347,7 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                         {/* Status Badge */}
                         <Badge
                           variant={isSold ? 'default' : hasListing ? 'secondary' : 'outline'}
-                          className={cn(
-                            'min-w-[70px] justify-center',
-                            isSold && 'bg-green-600'
-                          )}
+                          className={cn('min-w-[70px] justify-center', isSold && 'bg-green-600')}
                         >
                           {item.status || 'Unknown'}
                         </Badge>
@@ -395,9 +385,8 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                 <div className="space-y-2">
                   {uploadsData.data.map((upload) => {
                     const profit = (upload.selling_price ?? 0) - (upload.cost ?? 0);
-                    const marginPercent = upload.selling_price > 0
-                      ? (profit / upload.selling_price) * 100
-                      : 0;
+                    const marginPercent =
+                      upload.selling_price > 0 ? (profit / upload.selling_price) * 100 : 0;
 
                     return (
                       <div
@@ -465,7 +454,8 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                                   marginPercent >= 0 ? 'text-green-600' : 'text-red-600'
                                 )}
                               >
-                                {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(0)}%
+                                {marginPercent >= 0 ? '+' : ''}
+                                {marginPercent.toFixed(0)}%
                               </p>
                             </div>
                           )}
@@ -488,11 +478,16 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
                 {/* Summary */}
                 <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
                   <span>
-                    {uploadsData.data.length} upload{uploadsData.data.length !== 1 ? 's' : ''} &middot;{' '}
-                    {uploadsData.data.reduce((sum, u) => sum + u.total_quantity, 0).toLocaleString()} parts
+                    {uploadsData.data.length} upload{uploadsData.data.length !== 1 ? 's' : ''}{' '}
+                    &middot;{' '}
+                    {uploadsData.data
+                      .reduce((sum, u) => sum + u.total_quantity, 0)
+                      .toLocaleString()}{' '}
+                    parts
                   </span>
                   <span className="font-medium text-foreground">
-                    Total Value: {formatCurrency(uploadsData.data.reduce((sum, u) => sum + u.selling_price, 0))}
+                    Total Value:{' '}
+                    {formatCurrency(uploadsData.data.reduce((sum, u) => sum + u.selling_price, 0))}
                   </span>
                 </div>
               </>
@@ -530,12 +525,16 @@ export function PurchaseDetail({ id }: PurchaseDetailProps) {
       </Dialog>
 
       {/* Unlink Upload Confirmation Dialog */}
-      <Dialog open={!!uploadToUnlink} onOpenChange={(open: boolean) => !open && setUploadToUnlink(null)}>
+      <Dialog
+        open={!!uploadToUnlink}
+        onOpenChange={(open: boolean) => !open && setUploadToUnlink(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Unlink Upload</DialogTitle>
             <DialogDescription>
-              Are you sure you want to unlink this upload from the purchase? The upload will no longer contribute to this purchase&apos;s profitability calculations.
+              Are you sure you want to unlink this upload from the purchase? The upload will no
+              longer contribute to this purchase&apos;s profitability calculations.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

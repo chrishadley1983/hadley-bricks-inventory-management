@@ -185,9 +185,15 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                       <TableCell className="text-right">{row.salesPerDay.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.cogPerItem)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.salePrice)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.salePriceExcPostage)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.turnoverPerDay)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cogBudgetPerDay)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.salePriceExcPostage)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.turnoverPerDay)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.cogBudgetPerDay)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -220,9 +226,15 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                       <TableCell className="text-right">{row.salesPerWeek.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.cogPerItem)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.salePrice)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.salePriceExcPostage)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.turnoverPerWeek)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cogBudgetPerWeek)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.salePriceExcPostage)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.turnoverPerWeek)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.cogBudgetPerWeek)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -255,9 +267,15 @@ export function SummaryViewTabs({ calculations, data }: SummaryViewTabsProps) {
                       <TableCell className="text-right">{row.salesPerMonth.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.cogPerItem)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.salePrice)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.salePriceExcPostage)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.turnoverPerMonth)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cogBudgetPerMonth)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.salePriceExcPostage)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.turnoverPerMonth)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(row.cogBudgetPerMonth)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

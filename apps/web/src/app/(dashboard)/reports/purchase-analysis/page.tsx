@@ -5,13 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download, Loader2, ShoppingBag, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -82,23 +76,23 @@ export default function PurchaseAnalysisReportPage() {
   };
 
   // Prepare chart data
-  const roiChartData = report?.purchases
-    .slice(0, 10)
-    .map((p) => ({
+  const roiChartData =
+    report?.purchases.slice(0, 10).map((p) => ({
       name: p.description.substring(0, 15),
       roi: p.roi,
       profit: p.profit,
       color: p.roi >= 0 ? '#10b981' : '#ef4444',
     })) || [];
 
-  const sourceData = report?.bySource?.map((s, i) => {
-    const sourceColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-    return {
-      name: s.source,
-      value: s.totalSpent,
-      color: sourceColors[i % sourceColors.length],
-    };
-  }) || [];
+  const sourceData =
+    report?.bySource?.map((s, i) => {
+      const sourceColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+      return {
+        name: s.source,
+        value: s.totalSpent,
+        color: sourceColors[i % sourceColors.length],
+      };
+    }) || [];
 
   return (
     <>
@@ -114,9 +108,7 @@ export default function PurchaseAnalysisReportPage() {
             </Link>
             <div>
               <h1 className="text-2xl font-bold">Purchase Analysis</h1>
-              <p className="text-muted-foreground">
-                ROI tracking per purchase with mileage costs
-              </p>
+              <p className="text-muted-foreground">ROI tracking per purchase with mileage costs</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -240,9 +232,7 @@ export default function PurchaseAnalysisReportPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Performance by Source</CardTitle>
-                  <CardDescription>
-                    ROI breakdown by purchase source
-                  </CardDescription>
+                  <CardDescription>ROI breakdown by purchase source</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -296,9 +286,7 @@ export default function PurchaseAnalysisReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Purchase Details</CardTitle>
-                <CardDescription>
-                  Complete breakdown of all purchases with ROI
-                </CardDescription>
+                <CardDescription>Complete breakdown of all purchases with ROI</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="max-h-[500px] overflow-auto">
@@ -319,9 +307,7 @@ export default function PurchaseAnalysisReportPage() {
                     <TableBody>
                       {report?.purchases.map((purchase) => (
                         <TableRow key={purchase.id}>
-                          <TableCell className="font-medium">
-                            {formatDate(purchase.date)}
-                          </TableCell>
+                          <TableCell className="font-medium">{formatDate(purchase.date)}</TableCell>
                           <TableCell className="max-w-[150px] truncate">
                             {purchase.description}
                           </TableCell>

@@ -44,9 +44,10 @@ export function BrickLinkUploadSummary({ uploads }: BrickLinkUploadSummaryProps)
       label: 'Value',
       value: formatCurrency(totalValue),
       icon: TrendingUp,
-      subtext: totalCost > 0
-        ? `${profitMargin >= 0 ? '+' : ''}${profitMargin.toFixed(0)}% margin`
-        : 'listing value',
+      subtext:
+        totalCost > 0
+          ? `${profitMargin >= 0 ? '+' : ''}${profitMargin.toFixed(0)}% margin`
+          : 'listing value',
       highlight: totalCost > 0,
       positive: profitMargin >= 0,
     },
@@ -63,7 +64,9 @@ export function BrickLinkUploadSummary({ uploads }: BrickLinkUploadSummaryProps)
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
                   <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className={`text-xs ${stat.highlight ? (stat.positive ? 'text-green-600' : 'text-red-600') : 'text-muted-foreground'}`}>
+                  <p
+                    className={`text-xs ${stat.highlight ? (stat.positive ? 'text-green-600' : 'text-red-600') : 'text-muted-foreground'}`}
+                  >
                     {stat.subtext}
                   </p>
                 </div>

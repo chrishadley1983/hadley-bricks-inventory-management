@@ -36,8 +36,7 @@ const createMockClient = () => {
         const userId = currentFilters['user_id'];
         if (id) {
           const index = mockData.findIndex(
-            (item) =>
-              item.id === id && (!userId || item.user_id === userId)
+            (item) => item.id === id && (!userId || item.user_id === userId)
           );
           if (index !== -1) {
             mockData[index] = { ...mockData[index], ...(data as Record<string, unknown>) };
@@ -50,8 +49,7 @@ const createMockClient = () => {
         const userId = currentFilters['user_id'];
         if (id) {
           const index = mockData.findIndex(
-            (item) =>
-              item.id === id && (!userId || item.user_id === userId)
+            (item) => item.id === id && (!userId || item.user_id === userId)
           );
           if (index !== -1) {
             mockData.splice(index, 1);
@@ -277,11 +275,7 @@ describe('MileageRepository', () => {
         expense_type: 'mileage',
       });
 
-      const result = await repository.findByDateRange(
-        userId,
-        '2025-01-01',
-        '2025-01-31'
-      );
+      const result = await repository.findByDateRange(userId, '2025-01-01', '2025-01-31');
 
       expect(result.data).toBeDefined();
     });
@@ -301,14 +295,10 @@ describe('MileageRepository', () => {
         user_id: userId,
         tracking_date: '2025-01-20',
         miles_travelled: 30,
-        amount_claimed: 13.50,
+        amount_claimed: 13.5,
       });
 
-      const result = await repository.getTotalForPeriod(
-        userId,
-        '2025-01-01',
-        '2025-01-31'
-      );
+      const result = await repository.getTotalForPeriod(userId, '2025-01-01', '2025-01-31');
 
       expect(result.totalMiles).toBe(55);
       expect(result.totalAmount).toBe(24.75);
@@ -328,7 +318,7 @@ describe('MileageRepository', () => {
         user_id: userId,
         tracking_date: '2025-01-15',
         miles_travelled: 0,
-        amount_claimed: 5.00,
+        amount_claimed: 5.0,
         expense_type: 'parking',
       });
 
@@ -343,11 +333,7 @@ describe('MileageRepository', () => {
     });
 
     it('should return zeros when no entries found', async () => {
-      const result = await repository.getTotalForPeriod(
-        userId,
-        '2025-01-01',
-        '2025-01-31'
-      );
+      const result = await repository.getTotalForPeriod(userId, '2025-01-01', '2025-01-31');
 
       expect(result.totalMiles).toBe(0);
       expect(result.totalAmount).toBe(0);
@@ -367,7 +353,7 @@ describe('MileageRepository', () => {
         id: 'mileage-2',
         purchase_id: purchaseId,
         miles_travelled: 30,
-        amount_claimed: 13.50,
+        amount_claimed: 13.5,
       });
 
       const result = await repository.getTotalForPurchase(purchaseId);
@@ -393,14 +379,10 @@ describe('MileageRepository', () => {
         tracking_date: '2025-01-15',
         expense_type: 'parking',
         miles_travelled: 0,
-        amount_claimed: 5.00,
+        amount_claimed: 5.0,
       });
 
-      const result = await repository.getSummaryByType(
-        userId,
-        '2025-01-01',
-        '2025-01-31'
-      );
+      const result = await repository.getSummaryByType(userId, '2025-01-01', '2025-01-31');
 
       expect(result.mileage).toBeDefined();
       expect(result.parking).toBeDefined();
@@ -409,11 +391,7 @@ describe('MileageRepository', () => {
     });
 
     it('should initialize all expense types with zeros', async () => {
-      const result = await repository.getSummaryByType(
-        userId,
-        '2025-01-01',
-        '2025-01-31'
-      );
+      const result = await repository.getSummaryByType(userId, '2025-01-01', '2025-01-31');
 
       expect(result.mileage).toEqual({ totalMiles: 0, totalAmount: 0, count: 0 });
       expect(result.parking).toEqual({ totalMiles: 0, totalAmount: 0, count: 0 });
@@ -454,7 +432,7 @@ describe('MileageRepository', () => {
 
       const result = await repository.updateEntry(mileageId, userId, {
         miles_travelled: 30,
-        amount_claimed: 13.50,
+        amount_claimed: 13.5,
       });
 
       expect(mockClient.from).toHaveBeenCalledWith('mileage_tracking');
@@ -469,8 +447,9 @@ describe('MileageRepository', () => {
       });
 
       // Should throw error since user doesn't match
-      await expect(repository.updateEntry(mileageId, userId, { miles_travelled: 30 }))
-        .rejects.toThrow('Failed to update mileage entry');
+      await expect(
+        repository.updateEntry(mileageId, userId, { miles_travelled: 30 })
+      ).rejects.toThrow('Failed to update mileage entry');
     });
   });
 

@@ -84,9 +84,7 @@ describe('Purchase Evaluator API Routes', () => {
     });
 
     it('should return 500 on service error', async () => {
-      mockServiceMethods.getEvaluations.mockRejectedValue(
-        new Error('Database error')
-      );
+      mockServiceMethods.getEvaluations.mockRejectedValue(new Error('Database error'));
 
       const { GET } = await import('../purchase-evaluator/route');
       const response = await GET();
@@ -269,9 +267,7 @@ describe('Purchase Evaluator API Routes', () => {
       });
 
       const { GET } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1'
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1');
 
       const response = await GET(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -288,9 +284,7 @@ describe('Purchase Evaluator API Routes', () => {
       mockServiceMethods.getEvaluation.mockResolvedValue(mockEvaluation);
 
       const { GET } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1'
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1');
 
       const response = await GET(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -304,9 +298,7 @@ describe('Purchase Evaluator API Routes', () => {
       mockServiceMethods.getEvaluation.mockResolvedValue(null);
 
       const { GET } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/non-existent'
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/non-existent');
 
       const response = await GET(request, {
         params: Promise.resolve({ id: 'non-existent' }),
@@ -330,13 +322,10 @@ describe('Purchase Evaluator API Routes', () => {
       });
 
       const { PATCH } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ name: 'Updated Name' }),
-        }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'Updated Name' }),
+      });
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -354,17 +343,14 @@ describe('Purchase Evaluator API Routes', () => {
       mockServiceMethods.updateEvaluation.mockResolvedValue(mockUpdated);
 
       const { PATCH } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        {
-          method: 'PATCH',
-          body: JSON.stringify({
-            name: 'Updated Name',
-            defaultPlatform: 'ebay',
-            status: 'saved',
-          }),
-        }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'Updated Name',
+          defaultPlatform: 'ebay',
+          status: 'saved',
+        }),
+      });
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -375,13 +361,10 @@ describe('Purchase Evaluator API Routes', () => {
 
     it('should return 400 for invalid status', async () => {
       const { PATCH } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ status: 'invalid_status' }),
-        }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'invalid_status' }),
+      });
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -401,10 +384,9 @@ describe('Purchase Evaluator API Routes', () => {
       });
 
       const { DELETE } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        { method: 'DELETE' }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'DELETE',
+      });
 
       const response = await DELETE(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
@@ -415,32 +397,25 @@ describe('Purchase Evaluator API Routes', () => {
       mockServiceMethods.deleteEvaluation.mockResolvedValue(undefined);
 
       const { DELETE } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        { method: 'DELETE' }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'DELETE',
+      });
 
       const response = await DELETE(request, { params: Promise.resolve({ id: 'eval-1' }) });
 
       expect(response.status).toBe(200);
       const body = await response.json();
       expect(body.success).toBe(true);
-      expect(mockServiceMethods.deleteEvaluation).toHaveBeenCalledWith(
-        'user-123',
-        'eval-1'
-      );
+      expect(mockServiceMethods.deleteEvaluation).toHaveBeenCalledWith('user-123', 'eval-1');
     });
 
     it('should return 500 on service error', async () => {
-      mockServiceMethods.deleteEvaluation.mockRejectedValue(
-        new Error('Delete failed')
-      );
+      mockServiceMethods.deleteEvaluation.mockRejectedValue(new Error('Delete failed'));
 
       const { DELETE } = await import('../purchase-evaluator/[id]/route');
-      const request = new NextRequest(
-        'http://localhost/api/purchase-evaluator/eval-1',
-        { method: 'DELETE' }
-      );
+      const request = new NextRequest('http://localhost/api/purchase-evaluator/eval-1', {
+        method: 'DELETE',
+      });
 
       const response = await DELETE(request, { params: Promise.resolve({ id: 'eval-1' }) });
 

@@ -32,11 +32,14 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (!mapping) {
-      return NextResponse.json({
-        error: 'No mapping found for ASIN',
-        asin,
-        suggestion: 'Check asin_bricklink_mapping table'
-      }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: 'No mapping found for ASIN',
+          asin,
+          suggestion: 'Check asin_bricklink_mapping table',
+        },
+        { status: 404 }
+      );
     }
 
     const setNumber = mapping.bricklink_set_number;
@@ -75,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     // Analyze the price_detail array from global response
     const details = globalPriceGuide.price_detail ?? [];
-    const countryCodes = [...new Set(details.map(d => d.seller_country_code))];
+    const countryCodes = [...new Set(details.map((d) => d.seller_country_code))];
 
     return NextResponse.json({
       asin,

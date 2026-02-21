@@ -34,9 +34,7 @@ describe('MonzoApiService', () => {
       const { monzoAuthService } = await import('../monzo-auth.service');
       vi.mocked(monzoAuthService.getAccessToken).mockResolvedValue(null);
 
-      await expect(service.fetchTransactions('user-123')).rejects.toThrow(
-        'No valid access token'
-      );
+      await expect(service.fetchTransactions('user-123')).rejects.toThrow('No valid access token');
     });
 
     it('should throw error when no account ID', async () => {
@@ -44,9 +42,7 @@ describe('MonzoApiService', () => {
       vi.mocked(monzoAuthService.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(monzoAuthService.getAccountId).mockResolvedValue(null);
 
-      await expect(service.fetchTransactions('user-123')).rejects.toThrow(
-        'No account ID found'
-      );
+      await expect(service.fetchTransactions('user-123')).rejects.toThrow('No account ID found');
     });
 
     it('should fetch transactions successfully', async () => {
@@ -89,9 +85,7 @@ describe('MonzoApiService', () => {
         text: () => Promise.resolve('Rate limited'),
       });
 
-      await expect(service.fetchTransactions('user-123')).rejects.toThrow(
-        'Rate limited by Monzo'
-      );
+      await expect(service.fetchTransactions('user-123')).rejects.toThrow('Rate limited by Monzo');
     });
 
     it('should handle expired token', async () => {
@@ -105,9 +99,7 @@ describe('MonzoApiService', () => {
         text: () => Promise.resolve('Unauthorized'),
       });
 
-      await expect(service.fetchTransactions('user-123')).rejects.toThrow(
-        'Access token expired'
-      );
+      await expect(service.fetchTransactions('user-123')).rejects.toThrow('Access token expired');
     });
 
     it('should apply pagination parameters', async () => {
@@ -244,9 +236,7 @@ describe('MonzoApiService', () => {
         })),
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
-      await expect(service.performFullSync('user-123')).rejects.toThrow(
-        'Failed to start sync'
-      );
+      await expect(service.performFullSync('user-123')).rejects.toThrow('Failed to start sync');
     });
 
     it('should handle errors during sync and update log', async () => {
@@ -432,9 +422,7 @@ describe('MonzoApiService', () => {
                 ),
               }),
             }),
-            upsert: vi.fn(() =>
-              Promise.resolve({ error: { message: 'Upsert failed' } })
-            ),
+            upsert: vi.fn(() => Promise.resolve({ error: { message: 'Upsert failed' } })),
           };
         } else {
           return {
@@ -446,7 +434,9 @@ describe('MonzoApiService', () => {
 
       // All calls to createClient return the same mock client with shared from function
       const mockClient = { from: sharedFrom };
-      vi.mocked(createClient).mockResolvedValue(mockClient as unknown as Awaited<ReturnType<typeof createClient>>);
+      vi.mocked(createClient).mockResolvedValue(
+        mockClient as unknown as Awaited<ReturnType<typeof createClient>>
+      );
 
       const result = await service.performFullSync('user-123');
 
@@ -538,14 +528,18 @@ describe('MonzoApiService', () => {
       });
 
       const mockClient = { from: sharedFrom };
-      vi.mocked(createClient).mockResolvedValue(mockClient as unknown as Awaited<ReturnType<typeof createClient>>);
+      vi.mocked(createClient).mockResolvedValue(
+        mockClient as unknown as Awaited<ReturnType<typeof createClient>>
+      );
 
       const result = await service.performFullSync('user-123');
 
       expect(result.success).toBe(true);
       expect(mockUpsert).toHaveBeenCalled();
       // Verify merchant data was transformed correctly
-      const calls = mockUpsert.mock.calls as unknown as Array<Array<Array<{ merchant_name: string }>>>;
+      const calls = mockUpsert.mock.calls as unknown as Array<
+        Array<Array<{ merchant_name: string }>>
+      >;
       expect(calls[0]?.[0]?.[0]?.merchant_name).toBe('Test Shop');
     });
 
@@ -600,7 +594,9 @@ describe('MonzoApiService', () => {
       });
 
       const mockClient = { from: sharedFrom };
-      vi.mocked(createClient).mockResolvedValue(mockClient as unknown as Awaited<ReturnType<typeof createClient>>);
+      vi.mocked(createClient).mockResolvedValue(
+        mockClient as unknown as Awaited<ReturnType<typeof createClient>>
+      );
 
       const result = await service.performFullSync('user-123');
 
@@ -766,7 +762,9 @@ describe('MonzoApiService', () => {
       });
 
       const mockClient = { from: sharedFrom };
-      vi.mocked(createClient).mockResolvedValue(mockClient as unknown as Awaited<ReturnType<typeof createClient>>);
+      vi.mocked(createClient).mockResolvedValue(
+        mockClient as unknown as Awaited<ReturnType<typeof createClient>>
+      );
 
       const result = await service.performIncrementalSync('user-123');
 
@@ -1147,4 +1145,3 @@ describe('MonzoApiService', () => {
     });
   });
 });
-

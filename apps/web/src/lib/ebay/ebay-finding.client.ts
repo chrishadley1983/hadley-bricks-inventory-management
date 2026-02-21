@@ -160,7 +160,9 @@ export class EbayFindingClient {
     // Sort by end time (most recent first)
     url.searchParams.set('sortOrder', 'EndTimeSoonest');
 
-    console.log(`[EbayFindingClient] Searching completed items for: ${keywords}, condition: ${condition}`);
+    console.log(
+      `[EbayFindingClient] Searching completed items for: ${keywords}, condition: ${condition}`
+    );
 
     try {
       const response = await fetch(url.toString(), {
@@ -175,7 +177,10 @@ export class EbayFindingClient {
         const errorText = await response.text();
 
         // Check if it's a rate limit error in the response body
-        if (errorText.includes('RateLimiter') || errorText.includes('exceeded the number of times')) {
+        if (
+          errorText.includes('RateLimiter') ||
+          errorText.includes('exceeded the number of times')
+        ) {
           console.warn(`[EbayFindingClient] Rate limit exceeded for ${keywords}`);
           // Return empty result instead of throwing - allows other items to still process
           return {
@@ -217,7 +222,8 @@ export class EbayFindingClient {
 
       // Check for API errors
       if (responseData.ack?.[0] !== 'Success') {
-        const errorMsg = responseData.errorMessage?.[0]?.error?.[0]?.message?.[0] || 'Unknown error';
+        const errorMsg =
+          responseData.errorMessage?.[0]?.error?.[0]?.message?.[0] || 'Unknown error';
         throw new Error(`eBay Finding API error: ${errorMsg}`);
       }
 
@@ -414,7 +420,9 @@ export class EbayFindingClientExtended extends EbayFindingClient {
     // Sort by price (lowest first for comparison)
     url.searchParams.set('sortOrder', 'PricePlusShippingLowest');
 
-    console.log(`[EbayFindingClient] Searching active items for: ${keywords}, condition: ${condition}`);
+    console.log(
+      `[EbayFindingClient] Searching active items for: ${keywords}, condition: ${condition}`
+    );
 
     try {
       const response = await fetch(url.toString(), {
@@ -426,7 +434,10 @@ export class EbayFindingClientExtended extends EbayFindingClient {
 
       if (!response.ok) {
         const errorText = await response.text();
-        if (errorText.includes('RateLimiter') || errorText.includes('exceeded the number of times')) {
+        if (
+          errorText.includes('RateLimiter') ||
+          errorText.includes('exceeded the number of times')
+        ) {
           console.warn(`[EbayFindingClient] Rate limit exceeded for ${keywords}`);
           return {
             minPrice: null,
@@ -464,7 +475,8 @@ export class EbayFindingClientExtended extends EbayFindingClient {
       }
 
       if (responseData.ack?.[0] !== 'Success') {
-        const errorMsg = responseData.errorMessage?.[0]?.error?.[0]?.message?.[0] || 'Unknown error';
+        const errorMsg =
+          responseData.errorMessage?.[0]?.error?.[0]?.message?.[0] || 'Unknown error';
         throw new Error(`eBay Finding API error: ${errorMsg}`);
       }
 

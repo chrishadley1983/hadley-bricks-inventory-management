@@ -139,9 +139,7 @@ export function WorkflowSettingsPanel() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="target_amazon_listings">
-                    Amazon Weekly Listed Value (£)
-                  </Label>
+                  <Label htmlFor="target_amazon_listings">Amazon Weekly Listed Value (£)</Label>
                   <Input
                     id="target_amazon_listings"
                     type="number"
@@ -179,9 +177,7 @@ export function WorkflowSettingsPanel() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="target_daily_listed_value">
-                    Daily Listed Value (£)
-                  </Label>
+                  <Label htmlFor="target_daily_listed_value">Daily Listed Value (£)</Label>
                   <Input
                     id="target_daily_listed_value"
                     type="number"
@@ -197,9 +193,7 @@ export function WorkflowSettingsPanel() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="target_daily_sold_value">
-                    Daily Sold Value (£)
-                  </Label>
+                  <Label htmlFor="target_daily_sold_value">Daily Sold Value (£)</Label>
                   <Input
                     id="target_daily_sold_value"
                     type="number"
@@ -318,15 +312,11 @@ export function WorkflowSettingsPanel() {
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Sound Effects</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Play sounds when phases complete
-                  </p>
+                  <p className="text-xs text-muted-foreground">Play sounds when phases complete</p>
                 </div>
                 <Switch
                   checked={localConfig.audio_enabled ?? true}
-                  onCheckedChange={(checked: boolean) =>
-                    updateField('audio_enabled', checked)
-                  }
+                  onCheckedChange={(checked: boolean) => updateField('audio_enabled', checked)}
                 />
               </div>
             </TabsContent>
@@ -349,9 +339,7 @@ export function WorkflowSettingsPanel() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notification_dispatch_hours">
-                  Dispatch Alert (hours before)
-                </Label>
+                <Label htmlFor="notification_dispatch_hours">Dispatch Alert (hours before)</Label>
                 <Input
                   id="notification_dispatch_hours"
                   type="number"
@@ -402,17 +390,10 @@ export function WorkflowSettingsPanel() {
             Reset to Defaults
           </Button>
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={updateConfig.isPending || isLoading}
-            >
+            <Button onClick={handleSave} disabled={updateConfig.isPending || isLoading}>
               <Save className="h-4 w-4 mr-2" />
               {updateConfig.isPending ? 'Saving...' : 'Save'}
             </Button>

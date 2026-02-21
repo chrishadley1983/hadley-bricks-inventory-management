@@ -48,9 +48,7 @@ export function PickupCalendarPanel() {
   // Get upcoming pickups (scheduled, not in the past)
   const todayStr = today.toISOString().split('T')[0];
   const upcomingPickups = pickups
-    .filter(
-      (p) => p.status === 'scheduled' && p.scheduled_date >= todayStr
-    )
+    .filter((p) => p.status === 'scheduled' && p.scheduled_date >= todayStr)
     .slice(0, 3);
 
   const handleMonthChange = (year: number, month: number) => {
@@ -145,18 +143,14 @@ export function PickupCalendarPanel() {
                   <span>Upcoming</span>
                 </div>
                 <p className="text-2xl font-bold mt-1">{stats.upcoming}</p>
-                <p className="text-xs text-muted-foreground">
-                  {stats.thisWeek} this week
-                </p>
+                <p className="text-xs text-muted-foreground">{stats.thisWeek} this week</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="h-3.5 w-3.5" />
                   <span>This Month</span>
                 </div>
-                <p className="text-2xl font-bold mt-1">
-                  {stats.completedThisMonth}
-                </p>
+                <p className="text-2xl font-bold mt-1">{stats.completedThisMonth}</p>
                 <p className="text-xs text-muted-foreground">
                   {formatCurrency(stats.totalValueThisMonth)} spent
                 </p>
@@ -227,15 +221,8 @@ export function PickupCalendarPanel() {
           {/* Empty State */}
           {!selectedDate && upcomingPickups.length === 0 && !pickupsLoading && (
             <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground">
-                No upcoming pickups scheduled.
-              </p>
-              <Button
-                variant="link"
-                size="sm"
-                className="mt-1"
-                onClick={handleSchedule}
-              >
+              <p className="text-sm text-muted-foreground">No upcoming pickups scheduled.</p>
+              <Button variant="link" size="sm" className="mt-1" onClick={handleSchedule}>
                 Schedule your first pickup
               </Button>
             </div>

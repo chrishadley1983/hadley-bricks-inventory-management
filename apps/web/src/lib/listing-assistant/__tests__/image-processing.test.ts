@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  generateFilename,
-  validateImageFile,
-} from '../image-processing';
+import { generateFilename, validateImageFile } from '../image-processing';
 import { EBAY_IMAGE_SPECS } from '../constants';
 
 // Note: loadImage, processImage, and other canvas-based functions require

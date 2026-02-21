@@ -44,15 +44,19 @@ const DraftSchema = z.object({
   incomeTaxRate: z.number(),
   niRate: z.number(),
   legoPartsPercent: z.number(),
-  packageCosts: z.array(z.object({
-    id: z.string().optional(),
-    packageType: z.string(),
-    postage: z.number(),
-    cardboard: z.number(),
-    bubbleWrap: z.number(),
-    legoCard: z.number(),
-    businessCard: z.number(),
-  })).optional(),
+  packageCosts: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        packageType: z.string(),
+        postage: z.number(),
+        cardboard: z.number(),
+        bubbleWrap: z.number(),
+        legoCard: z.number(),
+        businessCard: z.number(),
+      })
+    )
+    .optional(),
 });
 
 /**
@@ -60,10 +64,7 @@ const DraftSchema = z.object({
  * Returns draft data if it exists
  * F48: Check for draft on page load
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -97,10 +98,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/cost-modelling/scenarios/[id]/draft] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to check draft' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to check draft' }, { status: 500 });
   }
 }
 
@@ -109,10 +107,7 @@ export async function GET(
  * Saves draft data for auto-save
  * F47: Auto-save every 30 seconds
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -141,10 +136,7 @@ export async function PUT(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[PUT /api/cost-modelling/scenarios/[id]/draft] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to save draft' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to save draft' }, { status: 500 });
   }
 }
 
@@ -174,9 +166,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[DELETE /api/cost-modelling/scenarios/[id]/draft] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to clear draft' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to clear draft' }, { status: 500 });
   }
 }

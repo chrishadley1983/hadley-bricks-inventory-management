@@ -62,7 +62,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, dateFrom, dateTo, source, search, syncedFromBricqer, purchaseId, unlinked } = parsed.data;
+    const {
+      page,
+      pageSize,
+      dateFrom,
+      dateTo,
+      source,
+      search,
+      syncedFromBricqer,
+      purchaseId,
+      unlinked,
+    } = parsed.data;
 
     const service = new BrickLinkUploadService(supabase, user.id);
     const result = await service.getAll(

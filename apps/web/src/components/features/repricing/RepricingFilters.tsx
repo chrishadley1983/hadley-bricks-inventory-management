@@ -129,15 +129,8 @@ export function RepricingFilters({
       </div>
 
       {/* Sync Prices button */}
-      <Button
-        variant="default"
-        size="sm"
-        onClick={onSyncPrices}
-        disabled={isSyncing}
-      >
-        <RefreshCw
-          className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`}
-        />
+      <Button variant="default" size="sm" onClick={onSyncPrices} disabled={isSyncing}>
+        <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
         {isSyncing ? 'Syncing...' : 'Sync Prices'}
       </Button>
 
@@ -158,12 +151,10 @@ export function RepricingFilters({
       {summary && (
         <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
           <span>
-            <span className="font-medium text-foreground">{summary.totalListings}</span>{' '}
-            listings
+            <span className="font-medium text-foreground">{summary.totalListings}</span> listings
           </span>
           <span>
-            <span className="font-medium text-foreground">{summary.withCostData}</span>{' '}
-            with cost
+            <span className="font-medium text-foreground">{summary.withCostData}</span> with cost
           </span>
           <span className="text-green-600">
             <span className="font-medium">{summary.buyBoxOwned}</span> Buy Box

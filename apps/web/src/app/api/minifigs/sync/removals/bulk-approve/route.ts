@@ -66,7 +66,10 @@ export async function POST() {
     }
     if (needsBricqer) {
       const credentialsRepo = new CredentialsRepository(supabase);
-      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(user.id, 'bricqer');
+      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(
+        user.id,
+        'bricqer'
+      );
       if (bricqerCreds) {
         bricqerClient = new BricqerClient(bricqerCreds);
       }
@@ -79,26 +82,30 @@ export async function POST() {
 
         // Execute removal based on remove_from
         if (removal.remove_from === 'EBAY' && syncItem?.ebay_offer_id && ebayAdapter) {
-            try {
-              await ebayAdapter.withdrawOffer(syncItem.ebay_offer_id as string);
-            } catch {
-              // Already withdrawn or not found (E9)
-            }
+          try {
+            await ebayAdapter.withdrawOffer(syncItem.ebay_offer_id as string);
+          } catch {
+            // Already withdrawn or not found (E9)
+          }
 
-            if (syncItem.ebay_sku) {
-              try {
-                await ebayAdapter.deleteInventoryItem(syncItem.ebay_sku as string);
-              } catch {
-                // Already deleted
-              }
-            }
-        } else if (removal.remove_from === 'BRICQER' && syncItem?.bricqer_item_id && bricqerClient) {
-            // Remove from Bricqer inventory (C1)
+          if (syncItem.ebay_sku) {
             try {
-              await bricqerClient.deleteInventoryItem(Number(syncItem.bricqer_item_id));
+              await ebayAdapter.deleteInventoryItem(syncItem.ebay_sku as string);
             } catch {
-              // Item may already be removed or sold through Bricqer
+              // Already deleted
             }
+          }
+        } else if (
+          removal.remove_from === 'BRICQER' &&
+          syncItem?.bricqer_item_id &&
+          bricqerClient
+        ) {
+          // Remove from Bricqer inventory (C1)
+          try {
+            await bricqerClient.deleteInventoryItem(Number(syncItem.bricqer_item_id));
+          } catch {
+            // Item may already be removed or sold through Bricqer
+          }
         }
 
         // Mark removal as executed
@@ -114,8 +121,7 @@ export async function POST() {
 
         // Update sync item status
         if (syncItem) {
-          const finalStatus =
-            removal.sold_on === 'EBAY' ? 'SOLD_EBAY' : 'SOLD_BRICQER';
+          const finalStatus = removal.sold_on === 'EBAY' ? 'SOLD_EBAY' : 'SOLD_BRICQER';
           await supabase
             .from('minifig_sync_items')
             .update({
@@ -142,9 +148,14 @@ export async function POST() {
     return NextResponse.json(
       {
         error: 'Failed to bulk approve',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

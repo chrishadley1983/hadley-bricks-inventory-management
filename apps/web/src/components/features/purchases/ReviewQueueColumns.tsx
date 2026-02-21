@@ -38,11 +38,7 @@ export function getReviewQueueColumns(): ColumnDef<ReviewQueueItem>[] {
       header: 'Source',
       cell: ({ row }) => {
         const source = row.getValue('source') as string;
-        return (
-          <Badge variant={source === 'Vinted' ? 'default' : 'secondary'}>
-            {source}
-          </Badge>
-        );
+        return <Badge variant={source === 'Vinted' ? 'default' : 'secondary'}>{source}</Badge>;
       },
       size: 80,
     },
@@ -80,7 +76,7 @@ export function getReviewQueueColumns(): ColumnDef<ReviewQueueItem>[] {
       accessorKey: 'seller_username',
       header: 'Seller',
       cell: ({ row }) => (
-        <span className="text-sm">{row.getValue('seller_username') as string || '-'}</span>
+        <span className="text-sm">{(row.getValue('seller_username') as string) || '-'}</span>
       ),
       size: 120,
     },

@@ -38,10 +38,7 @@ export function PurchaseTable() {
   const bulkUpdateMutation = useBulkUpdatePurchases();
   const bulkDeleteMutation = useBulkDeletePurchases();
 
-  const columns = useMemo(
-    () => getPurchaseColumns({ onDelete: (id) => setDeleteId(id) }),
-    []
-  );
+  const columns = useMemo(() => getPurchaseColumns({ onDelete: (id) => setDeleteId(id) }), []);
 
   const handleFiltersChange = (newFilters: Filters) => {
     setFilters(newFilters);
@@ -83,7 +80,9 @@ export function PurchaseTable() {
     setBulkEditItems(rows);
   }, []);
 
-  const handleConfirmBulkEdit = async (updates: Partial<Record<string, string | number | null>>) => {
+  const handleConfirmBulkEdit = async (
+    updates: Partial<Record<string, string | number | null>>
+  ) => {
     const ids = bulkEditItems.map((item) => item.id);
     await bulkUpdateMutation.mutateAsync({ ids, updates });
     setBulkEditItems([]);

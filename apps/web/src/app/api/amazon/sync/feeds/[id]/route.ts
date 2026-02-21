@@ -12,10 +12,7 @@ import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 // GET - Get feed detail with items
 // ============================================================================
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -39,9 +36,6 @@ export async function GET(
     return NextResponse.json({ data: { feed } });
   } catch (error) {
     console.error('[GET /api/amazon/sync/feeds/[id]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

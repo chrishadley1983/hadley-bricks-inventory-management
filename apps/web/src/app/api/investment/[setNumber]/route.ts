@@ -27,10 +27,7 @@ export async function GET(
       .single();
 
     if (setError || !rawSet) {
-      return NextResponse.json(
-        { error: 'Set not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Set not found' }, { status: 404 });
     }
 
     const set = rawSet as unknown as Record<string, unknown>;
@@ -40,7 +37,9 @@ export async function GET(
     if (set.amazon_asin) {
       const { data: snapshot } = await supabase
         .from('amazon_arbitrage_pricing')
-        .select('buy_box_price, was_price_90d, sales_rank, offer_count, lowest_offer_price, total_offer_count, snapshot_date')
+        .select(
+          'buy_box_price, was_price_90d, sales_rank, offer_count, lowest_offer_price, total_offer_count, snapshot_date'
+        )
         .eq('asin', set.amazon_asin as string)
         .order('snapshot_date', { ascending: false })
         .limit(1)
@@ -110,9 +109,6 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/investment/[setNumber]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -5,23 +5,9 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  ExternalLink,
-  Loader2,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -192,7 +178,11 @@ async function deleteBricqerCredentials(): Promise<void> {
 }
 
 // Amazon API functions
-async function fetchAmazonStatus(): Promise<{ isConfigured: boolean; totalOrders?: number; lastSyncedAt?: string }> {
+async function fetchAmazonStatus(): Promise<{
+  isConfigured: boolean;
+  totalOrders?: number;
+  lastSyncedAt?: string;
+}> {
   const response = await fetch('/api/integrations/amazon/credentials');
   if (!response.ok) throw new Error('Failed to fetch status');
   return response.json();
@@ -221,7 +211,13 @@ async function deleteAmazonCredentials(): Promise<void> {
   }
 }
 
-async function syncAmazon(): Promise<{ success: boolean; ordersProcessed?: number; ordersCreated?: number; ordersUpdated?: number; errors?: string[] }> {
+async function syncAmazon(): Promise<{
+  success: boolean;
+  ordersProcessed?: number;
+  ordersCreated?: number;
+  ordersUpdated?: number;
+  errors?: string[];
+}> {
   const response = await fetch('/api/integrations/amazon/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,7 +234,12 @@ async function fetchEbayStatus(): Promise<EbayConnectionStatus> {
   return response.json();
 }
 
-async function testEbayConnection(): Promise<{ success: boolean; message?: string; error?: string; details?: unknown }> {
+async function testEbayConnection(): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  details?: unknown;
+}> {
   const response = await fetch('/api/integrations/ebay/test');
   return response.json();
 }
@@ -254,7 +255,9 @@ async function disconnectEbay(): Promise<void> {
   }
 }
 
-async function syncEbay(type: 'orders' | 'transactions' | 'payouts' | 'all'): Promise<{ success: boolean; results?: unknown }> {
+async function syncEbay(
+  type: 'orders' | 'transactions' | 'payouts' | 'all'
+): Promise<{ success: boolean; results?: unknown }> {
   const response = await fetch('/api/integrations/ebay/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -265,13 +268,25 @@ async function syncEbay(type: 'orders' | 'transactions' | 'payouts' | 'all'): Pr
 }
 
 // Monzo API functions
-async function fetchMonzoStatus(): Promise<{ data: { connection: MonzoConnectionStatus; sync: MonzoSyncStatus | null } }> {
+async function fetchMonzoStatus(): Promise<{
+  data: { connection: MonzoConnectionStatus; sync: MonzoSyncStatus | null };
+}> {
   const response = await fetch('/api/integrations/monzo/status');
   if (!response.ok) throw new Error('Failed to fetch status');
   return response.json();
 }
 
-async function syncMonzo(type: 'full' | 'incremental' = 'incremental'): Promise<{ data?: { success: boolean; transactionsProcessed?: number; transactionsCreated?: number; transactionsUpdated?: number }; error?: string }> {
+async function syncMonzo(
+  type: 'full' | 'incremental' = 'incremental'
+): Promise<{
+  data?: {
+    success: boolean;
+    transactionsProcessed?: number;
+    transactionsCreated?: number;
+    transactionsUpdated?: number;
+  };
+  error?: string;
+}> {
   const response = await fetch('/api/integrations/monzo/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -311,14 +326,27 @@ async function deletePayPalCredentials(): Promise<void> {
   }
 }
 
-async function testPayPalConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
+async function testPayPalConnection(): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
   const response = await fetch('/api/integrations/paypal/test', {
     method: 'POST',
   });
   return response.json();
 }
 
-async function syncPayPal(fullSync: boolean = false): Promise<{ success: boolean; transactionsProcessed?: number; transactionsCreated?: number; transactionsUpdated?: number; transactionsSkipped?: number; error?: string }> {
+async function syncPayPal(
+  fullSync: boolean = false
+): Promise<{
+  success: boolean;
+  transactionsProcessed?: number;
+  transactionsCreated?: number;
+  transactionsUpdated?: number;
+  transactionsSkipped?: number;
+  error?: string;
+}> {
   const response = await fetch('/api/integrations/paypal/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -425,10 +453,16 @@ export default function IntegrationsSettingsPage() {
   const [amazonSuccess, setAmazonSuccess] = useState<string | null>(null);
 
   // eBay state
-  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [ebayMessage, setEbayMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Monzo state
-  const [monzoMessage, setMonzoMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [monzoMessage, setMonzoMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // PayPal state
   const [showPayPalSecrets, setShowPayPalSecrets] = useState(false);
@@ -439,7 +473,10 @@ export default function IntegrationsSettingsPage() {
   });
   const [paypalError, setPayPalError] = useState<string | null>(null);
   const [paypalSuccess, setPayPalSuccess] = useState<string | null>(null);
-  const [paypalMessage, setPayPalMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [paypalMessage, setPayPalMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Brickset state
   const [showBricksetSecret, setShowBricksetSecret] = useState(false);
@@ -462,7 +499,6 @@ export default function IntegrationsSettingsPage() {
       window.history.replaceState({}, '', '/settings/integrations');
     }
   }, [ebaySuccess, ebayError, queryClient]);
-
 
   // BrickLink queries/mutations
   const { data: brickLinkStatus, isLoading: brickLinkStatusLoading } = useQuery({
@@ -609,9 +645,10 @@ export default function IntegrationsSettingsPage() {
     mutationFn: syncAmazon,
     onSuccess: (data) => {
       if (data.success) {
-        const detail = data.ordersProcessed !== undefined
-          ? ` (${data.ordersProcessed} orders processed, ${data.ordersCreated} created, ${data.ordersUpdated} updated)`
-          : '';
+        const detail =
+          data.ordersProcessed !== undefined
+            ? ` (${data.ordersProcessed} orders processed, ${data.ordersCreated} created, ${data.ordersUpdated} updated)`
+            : '';
         setAmazonSuccess(`Amazon sync completed successfully!${detail}`);
       } else {
         setAmazonError(`Sync completed with errors: ${data.errors?.join(', ') || 'Unknown error'}`);
@@ -660,12 +697,17 @@ export default function IntegrationsSettingsPage() {
     mutationFn: (type: 'orders' | 'transactions' | 'payouts' | 'all') => syncEbay(type),
     onSuccess: (data) => {
       // Type the results properly
-      const results = data.results as Record<string, {
-        success?: boolean;
-        ordersProcessed?: number;
-        recordsProcessed?: number;
-        error?: string;
-      }> | undefined;
+      const results = data.results as
+        | Record<
+            string,
+            {
+              success?: boolean;
+              ordersProcessed?: number;
+              recordsProcessed?: number;
+              error?: string;
+            }
+          >
+        | undefined;
 
       // Collect success stats and errors
       const successParts: string[] = [];
@@ -697,7 +739,10 @@ export default function IntegrationsSettingsPage() {
         const detail = successParts.length > 0 ? ` (${successParts.join(', ')})` : '';
         setEbayMessage({ type: 'success', message: `eBay sync completed successfully!${detail}` });
       } else if (errors.length > 0) {
-        setEbayMessage({ type: 'error', message: `Sync completed with errors: ${errors.join('; ')}` });
+        setEbayMessage({
+          type: 'error',
+          message: `Sync completed with errors: ${errors.join('; ')}`,
+        });
       } else {
         setEbayMessage({ type: 'error', message: 'Sync completed with errors' });
       }
@@ -718,10 +763,14 @@ export default function IntegrationsSettingsPage() {
     mutationFn: (type: 'full' | 'incremental') => syncMonzo(type),
     onSuccess: (data) => {
       if (data.data?.success) {
-        const detail = data.data.transactionsProcessed !== undefined
-          ? ` (${data.data.transactionsProcessed} transactions processed, ${data.data.transactionsCreated} new, ${data.data.transactionsUpdated} updated)`
-          : '';
-        setMonzoMessage({ type: 'success', message: `Monzo sync completed successfully!${detail}` });
+        const detail =
+          data.data.transactionsProcessed !== undefined
+            ? ` (${data.data.transactionsProcessed} transactions processed, ${data.data.transactionsCreated} new, ${data.data.transactionsUpdated} updated)`
+            : '';
+        setMonzoMessage({
+          type: 'success',
+          message: `Monzo sync completed successfully!${detail}`,
+        });
       } else {
         setMonzoMessage({ type: 'error', message: data.error || 'Sync completed with errors' });
       }
@@ -770,7 +819,10 @@ export default function IntegrationsSettingsPage() {
     mutationFn: testPayPalConnection,
     onSuccess: (data) => {
       if (data.success) {
-        setPayPalMessage({ type: 'success', message: data.message || 'Connection test successful!' });
+        setPayPalMessage({
+          type: 'success',
+          message: data.message || 'Connection test successful!',
+        });
       } else {
         setPayPalMessage({ type: 'error', message: data.error || 'Connection test failed' });
       }
@@ -784,10 +836,14 @@ export default function IntegrationsSettingsPage() {
     mutationFn: (fullSync: boolean) => syncPayPal(fullSync),
     onSuccess: (data) => {
       if (data.success) {
-        const detail = data.transactionsProcessed !== undefined
-          ? ` (${data.transactionsProcessed} processed, ${data.transactionsCreated} new, ${data.transactionsUpdated} updated, ${data.transactionsSkipped} skipped)`
-          : '';
-        setPayPalMessage({ type: 'success', message: `PayPal sync completed successfully!${detail}` });
+        const detail =
+          data.transactionsProcessed !== undefined
+            ? ` (${data.transactionsProcessed} processed, ${data.transactionsCreated} new, ${data.transactionsUpdated} updated, ${data.transactionsSkipped} skipped)`
+            : '';
+        setPayPalMessage({
+          type: 'success',
+          message: `PayPal sync completed successfully!${detail}`,
+        });
       } else {
         setPayPalMessage({ type: 'error', message: data.error || 'Sync completed with errors' });
       }
@@ -970,7 +1026,14 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const hasConfiguredPlatforms = brickLinkStatus?.configured || brickOwlStatus?.configured || bricqerStatus?.configured || ebayStatus?.isConnected || amazonStatus?.isConfigured || monzoStatus?.data?.connection?.isConnected || paypalStatus?.isConnected;
+  const hasConfiguredPlatforms =
+    brickLinkStatus?.configured ||
+    brickOwlStatus?.configured ||
+    bricqerStatus?.configured ||
+    ebayStatus?.isConnected ||
+    amazonStatus?.isConfigured ||
+    monzoStatus?.data?.connection?.isConnected ||
+    paypalStatus?.isConnected;
 
   return (
     <>
@@ -984,10 +1047,7 @@ export default function IntegrationsSettingsPage() {
             </p>
           </div>
           {hasConfiguredPlatforms && (
-            <Button
-              onClick={() => syncAllMutation.mutate()}
-              disabled={syncAllMutation.isPending}
-            >
+            <Button onClick={() => syncAllMutation.mutate()} disabled={syncAllMutation.isPending}>
               {syncAllMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1032,9 +1092,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>eBay</CardTitle>
-                  <CardDescription>
-                    Sync orders and financial data from eBay
-                  </CardDescription>
+                  <CardDescription>Sync orders and financial data from eBay</CardDescription>
                 </div>
               </div>
               {ebayStatusLoading ? (
@@ -1063,9 +1121,18 @@ export default function IntegrationsSettingsPage() {
             )}
 
             {ebayMessage && !syncEbayMutation.isPending && (
-              <Alert className={ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={ebayMessage.type === 'error' ? 'destructive' : undefined}>
-                {ebayMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-                <AlertDescription className={ebayMessage.type === 'success' ? 'text-green-800' : undefined}>
+              <Alert
+                className={
+                  ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
+                variant={ebayMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                {ebayMessage.type === 'success' && (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+                <AlertDescription
+                  className={ebayMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
                   {ebayMessage.message}
                 </AlertDescription>
               </Alert>
@@ -1143,15 +1210,14 @@ export default function IntegrationsSettingsPage() {
                     Disconnect
                   </Button>
                 </div>
-
               </>
             ) : (
               <>
                 <div className="rounded-lg bg-muted p-4 text-sm">
                   <p className="font-medium mb-2">Connect your eBay account:</p>
                   <p className="text-muted-foreground mb-4">
-                    Click the button below to authorize Hadley Bricks to access your eBay seller account.
-                    This will allow syncing of orders, transactions, and financial data.
+                    Click the button below to authorize Hadley Bricks to access your eBay seller
+                    account. This will allow syncing of orders, transactions, and financial data.
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                     <li>Order fulfilment data for picking lists</li>
@@ -1181,9 +1247,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>BrickLink</CardTitle>
-                  <CardDescription>
-                    Sync orders from your BrickLink store
-                  </CardDescription>
+                  <CardDescription>Sync orders from your BrickLink store</CardDescription>
                 </div>
               </div>
               {brickLinkStatusLoading ? (
@@ -1245,7 +1309,10 @@ export default function IntegrationsSettingsPage() {
                   placeholder="Enter your Consumer Key"
                   value={brickLinkCredentials.consumerKey}
                   onChange={(e) =>
-                    setBrickLinkCredentials({ ...brickLinkCredentials, consumerKey: e.target.value })
+                    setBrickLinkCredentials({
+                      ...brickLinkCredentials,
+                      consumerKey: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -1258,7 +1325,10 @@ export default function IntegrationsSettingsPage() {
                   placeholder="Enter your Consumer Secret"
                   value={brickLinkCredentials.consumerSecret}
                   onChange={(e) =>
-                    setBrickLinkCredentials({ ...brickLinkCredentials, consumerSecret: e.target.value })
+                    setBrickLinkCredentials({
+                      ...brickLinkCredentials,
+                      consumerSecret: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -1284,7 +1354,10 @@ export default function IntegrationsSettingsPage() {
                   placeholder="Enter your Token Secret"
                   value={brickLinkCredentials.tokenSecret}
                   onChange={(e) =>
-                    setBrickLinkCredentials({ ...brickLinkCredentials, tokenSecret: e.target.value })
+                    setBrickLinkCredentials({
+                      ...brickLinkCredentials,
+                      tokenSecret: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -1311,10 +1384,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSaveBrickLink}
-                disabled={saveBrickLinkMutation.isPending}
-              >
+              <Button onClick={handleSaveBrickLink} disabled={saveBrickLinkMutation.isPending}>
                 {saveBrickLinkMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1354,9 +1424,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>Brick Owl</CardTitle>
-                  <CardDescription>
-                    Sync orders from your Brick Owl store
-                  </CardDescription>
+                  <CardDescription>Sync orders from your Brick Owl store</CardDescription>
                 </div>
               </div>
               {brickOwlStatusLoading ? (
@@ -1416,9 +1484,7 @@ export default function IntegrationsSettingsPage() {
                   type={showBrickOwlSecret ? 'text' : 'password'}
                   placeholder="Enter your Brick Owl API Key"
                   value={brickOwlCredentials.apiKey}
-                  onChange={(e) =>
-                    setBrickOwlCredentials({ apiKey: e.target.value })
-                  }
+                  onChange={(e) => setBrickOwlCredentials({ apiKey: e.target.value })}
                 />
               </div>
             </div>
@@ -1444,10 +1510,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSaveBrickOwl}
-                disabled={saveBrickOwlMutation.isPending}
-              >
+              <Button onClick={handleSaveBrickOwl} disabled={saveBrickOwlMutation.isPending}>
                 {saveBrickOwlMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1487,9 +1550,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>Bricqer</CardTitle>
-                  <CardDescription>
-                    Sync orders from your Bricqer account
-                  </CardDescription>
+                  <CardDescription>Sync orders from your Bricqer account</CardDescription>
                 </div>
               </div>
               {bricqerStatusLoading ? (
@@ -1580,10 +1641,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSaveBricqer}
-                disabled={saveBricqerMutation.isPending}
-              >
+              <Button onClick={handleSaveBricqer} disabled={saveBricqerMutation.isPending}>
                 {saveBricqerMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1760,10 +1818,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSaveAmazon}
-                disabled={saveAmazonMutation.isPending}
-              >
+              <Button onClick={handleSaveAmazon} disabled={saveAmazonMutation.isPending}>
                 {saveAmazonMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1835,9 +1890,18 @@ export default function IntegrationsSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {monzoMessage && (
-              <Alert className={monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={monzoMessage.type === 'error' ? 'destructive' : undefined}>
-                {monzoMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-                <AlertDescription className={monzoMessage.type === 'success' ? 'text-green-800' : undefined}>
+              <Alert
+                className={
+                  monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
+                variant={monzoMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                {monzoMessage.type === 'success' && (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+                <AlertDescription
+                  className={monzoMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
                   {monzoMessage.message}
                 </AlertDescription>
               </Alert>
@@ -1846,11 +1910,15 @@ export default function IntegrationsSettingsPage() {
             <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Data Source:</span>
-                <span className="font-medium">{monzoStatus?.data?.connection?.accountType || 'Google Sheets'}</span>
+                <span className="font-medium">
+                  {monzoStatus?.data?.connection?.accountType || 'Google Sheets'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Transactions:</span>
-                <span className="font-medium">{monzoStatus?.data?.connection?.transactionCount || 0}</span>
+                <span className="font-medium">
+                  {monzoStatus?.data?.connection?.transactionCount || 0}
+                </span>
               </div>
               {monzoStatus?.data?.connection?.lastSyncAt && (
                 <div className="flex justify-between">
@@ -1863,7 +1931,9 @@ export default function IntegrationsSettingsPage() {
               {monzoStatus?.data?.sync?.lastSync && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Last Sync Status:</span>
-                  <span className={`font-medium ${monzoStatus.data.sync.lastSync.status === 'COMPLETED' ? 'text-green-600' : monzoStatus.data.sync.lastSync.status === 'FAILED' ? 'text-red-600' : 'text-blue-600'}`}>
+                  <span
+                    className={`font-medium ${monzoStatus.data.sync.lastSync.status === 'COMPLETED' ? 'text-green-600' : monzoStatus.data.sync.lastSync.status === 'FAILED' ? 'text-red-600' : 'text-blue-600'}`}
+                  >
                     {monzoStatus.data.sync.lastSync.status}
                   </span>
                 </div>
@@ -1878,8 +1948,8 @@ export default function IntegrationsSettingsPage() {
 
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm">
               <p className="text-blue-800">
-                Monzo transactions are synced from the &quot;Monzo Transactions&quot; sheet in your Lego Planning spreadsheet.
-                This sheet is live-connected to your Monzo account.
+                Monzo transactions are synced from the &quot;Monzo Transactions&quot; sheet in your
+                Lego Planning spreadsheet. This sheet is live-connected to your Monzo account.
               </p>
             </div>
 
@@ -1930,9 +2000,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>PayPal</CardTitle>
-                  <CardDescription>
-                    Sync fee transactions from PayPal
-                  </CardDescription>
+                  <CardDescription>Sync fee transactions from PayPal</CardDescription>
                 </div>
               </div>
               {paypalStatusLoading ? (
@@ -1965,9 +2033,18 @@ export default function IntegrationsSettingsPage() {
             )}
 
             {paypalMessage && (
-              <Alert className={paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined} variant={paypalMessage.type === 'error' ? 'destructive' : undefined}>
-                {paypalMessage.type === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-                <AlertDescription className={paypalMessage.type === 'success' ? 'text-green-800' : undefined}>
+              <Alert
+                className={
+                  paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
+                variant={paypalMessage.type === 'error' ? 'destructive' : undefined}
+              >
+                {paypalMessage.type === 'success' && (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+                <AlertDescription
+                  className={paypalMessage.type === 'success' ? 'text-green-800' : undefined}
+                >
                   {paypalMessage.message}
                 </AlertDescription>
               </Alert>
@@ -1977,7 +2054,9 @@ export default function IntegrationsSettingsPage() {
               <div className="rounded-lg bg-muted p-4 text-sm space-y-2">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Environment:</span>
-                  <span className="font-medium">{paypalStatus.sandbox ? 'Sandbox' : 'Production'}</span>
+                  <span className="font-medium">
+                    {paypalStatus.sandbox ? 'Sandbox' : 'Production'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Fee Transactions:</span>
@@ -2083,10 +2162,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSavePayPal}
-                disabled={savePayPalMutation.isPending}
-              >
+              <Button onClick={handleSavePayPal} disabled={savePayPalMutation.isPending}>
                 {savePayPalMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2174,9 +2250,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <div>
                   <CardTitle>Brickset</CardTitle>
-                  <CardDescription>
-                    LEGO set database for lookups and metadata
-                  </CardDescription>
+                  <CardDescription>LEGO set database for lookups and metadata</CardDescription>
                 </div>
               </div>
               {bricksetStatusLoading ? (
@@ -2236,9 +2310,7 @@ export default function IntegrationsSettingsPage() {
                   type={showBricksetSecret ? 'text' : 'password'}
                   placeholder="Enter your Brickset API Key"
                   value={bricksetCredentials.apiKey}
-                  onChange={(e) =>
-                    setBricksetCredentials({ apiKey: e.target.value })
-                  }
+                  onChange={(e) => setBricksetCredentials({ apiKey: e.target.value })}
                 />
               </div>
             </div>
@@ -2264,10 +2336,7 @@ export default function IntegrationsSettingsPage() {
             </div>
 
             <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleSaveBrickset}
-                disabled={saveBricksetMutation.isPending}
-              >
+              <Button onClick={handleSaveBrickset} disabled={saveBricksetMutation.isPending}>
                 {saveBricksetMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

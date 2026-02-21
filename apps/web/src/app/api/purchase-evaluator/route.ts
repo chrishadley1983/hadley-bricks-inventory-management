@@ -14,21 +14,23 @@ const CreateEvaluationSchema = z.object({
   name: z.string().optional(),
   source: z.enum(['csv_upload', 'clipboard_paste', 'photo_analysis']),
   defaultPlatform: z.enum(['amazon', 'ebay']),
-  items: z.array(
-    z.object({
-      setNumber: z.string().min(1),
-      setName: z.string().optional(),
-      condition: z.enum(['New', 'Used']),
-      quantity: z.number().int().positive().optional(),
-      cost: z.number().nonnegative().optional(),
-      // Photo analysis fields
-      itemType: z.enum(['set', 'minifig', 'parts_lot', 'non_lego', 'unknown']).optional(),
-      boxCondition: z.enum(['Mint', 'Excellent', 'Good', 'Fair', 'Poor']).optional(),
-      sealStatus: z.enum(['Factory Sealed', 'Resealed', 'Open Box', 'Unknown']).optional(),
-      damageNotes: z.array(z.string()).optional(),
-      aiConfidenceScore: z.number().min(0).max(1).optional(),
-    })
-  ).min(1),
+  items: z
+    .array(
+      z.object({
+        setNumber: z.string().min(1),
+        setName: z.string().optional(),
+        condition: z.enum(['New', 'Used']),
+        quantity: z.number().int().positive().optional(),
+        cost: z.number().nonnegative().optional(),
+        // Photo analysis fields
+        itemType: z.enum(['set', 'minifig', 'parts_lot', 'non_lego', 'unknown']).optional(),
+        boxCondition: z.enum(['Mint', 'Excellent', 'Good', 'Fair', 'Poor']).optional(),
+        sealStatus: z.enum(['Factory Sealed', 'Resealed', 'Open Box', 'Unknown']).optional(),
+        damageNotes: z.array(z.string()).optional(),
+        aiConfidenceScore: z.number().min(0).max(1).optional(),
+      })
+    )
+    .min(1),
   totalPurchasePrice: z.number().nonnegative().optional(),
   costAllocationMethod: z.enum(['per_item', 'proportional', 'equal']).optional(),
   // Photo evaluation fields

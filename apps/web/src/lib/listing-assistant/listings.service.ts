@@ -179,10 +179,7 @@ export async function updateListing(
 /**
  * Delete a listing
  */
-export async function deleteListing(
-  userId: string,
-  listingId: string
-): Promise<void> {
+export async function deleteListing(userId: string, listingId: string): Promise<void> {
   const supabase = await createClient();
 
   const { error } = await supabase

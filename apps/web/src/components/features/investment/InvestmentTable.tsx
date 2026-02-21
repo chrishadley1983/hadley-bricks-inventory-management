@@ -43,7 +43,6 @@ export function InvestmentTable() {
         data={data?.data || []}
         isLoading={isLoading}
         getRowId={(row) => row.id}
-
         enableColumnVisibility
         columnDisplayNames={COLUMN_DISPLAY_NAMES}
         columnVisibilityStorageKey="investment-table-columns"

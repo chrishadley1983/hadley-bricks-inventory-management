@@ -49,9 +49,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        await writer.write(
-          encoder.encode(formatSSE({ type: 'error', error: 'Unauthorized' }))
-        );
+        await writer.write(encoder.encode(formatSSE({ type: 'error', error: 'Unauthorized' })));
         await writer.close();
         return;
       }
@@ -88,7 +86,8 @@ export async function GET(request: NextRequest): Promise<Response> {
           encoder.encode(
             formatSSE({
               type: 'error',
-              error: 'BrickLink not configured. Please configure BrickLink credentials in Settings.',
+              error:
+                'BrickLink not configured. Please configure BrickLink credentials in Settings.',
             })
           )
         );
@@ -147,9 +146,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
       const errorMessage = error instanceof Error ? error.message : 'Internal server error';
 
-      await writer.write(
-        encoder.encode(formatSSE({ type: 'error', error: errorMessage }))
-      );
+      await writer.write(encoder.encode(formatSSE({ type: 'error', error: errorMessage })));
     } finally {
       await writer.close();
     }

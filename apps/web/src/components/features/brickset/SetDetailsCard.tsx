@@ -3,13 +3,7 @@
 import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import type { BricksetSet } from '@/lib/brickset';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -98,20 +92,21 @@ interface StatCardProps {
 function StatCard({ label, value, subtext, valueClassName }: StatCardProps) {
   return (
     <div className="rounded-lg bg-muted/50 p-2 text-center">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-        {label}
-      </div>
-      <div className={`font-mono text-base font-bold mt-0.5 ${valueClassName ?? ''}`}>
-        {value}
-      </div>
-      {subtext && (
-        <div className="text-[10px] text-muted-foreground truncate">{subtext}</div>
-      )}
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
+      <div className={`font-mono text-base font-bold mt-0.5 ${valueClassName ?? ''}`}>{value}</div>
+      {subtext && <div className="text-[10px] text-muted-foreground truncate">{subtext}</div>}
     </div>
   );
 }
 
-export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEbayUsedClick, onAmazonOffersClick }: SetDetailsCardProps) {
+export function SetDetailsCard({
+  set,
+  pricing,
+  pricingLoading,
+  onEbayClick,
+  onEbayUsedClick,
+  onAmazonOffersClick,
+}: SetDetailsCardProps) {
   return (
     <Card>
       {/* Header - Compact like arbitrage modal */}
@@ -128,9 +123,7 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
                 className="object-contain"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl">
-                📦
-              </div>
+              <div className="flex h-full w-full items-center justify-center text-2xl">📦</div>
             )}
           </div>
 
@@ -138,12 +131,8 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div>
-                <CardTitle className="text-lg font-bold leading-tight">
-                  {set.setName}
-                </CardTitle>
-                <CardDescription className="text-base mt-1">
-                  {set.setNumber}
-                </CardDescription>
+                <CardTitle className="text-lg font-bold leading-tight">{set.setName}</CardTitle>
+                <CardDescription className="text-base mt-1">{set.setNumber}</CardDescription>
               </div>
               <div className="flex gap-2">
                 {set.released && (
@@ -151,9 +140,7 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
                     Released
                   </Badge>
                 )}
-                {set.availability && (
-                  <Badge variant="outline">{set.availability}</Badge>
-                )}
+                {set.availability && <Badge variant="outline">{set.availability}</Badge>}
               </div>
             </div>
 
@@ -173,7 +160,10 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
                 </Badge>
               )}
               {set.ukRetailPrice && (
-                <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">
+                <Badge
+                  variant="outline"
+                  className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200"
+                >
                   RRP: {formatPrice(set.ukRetailPrice, 'GBP')}
                 </Badge>
               )}
@@ -190,18 +180,9 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
       <CardContent className="space-y-4 pt-0">
         {/* Set Details - 2x2 grid */}
         <div className="grid grid-cols-4 gap-2">
-          <StatCard
-            label="Pieces"
-            value={set.pieces?.toLocaleString() ?? '—'}
-          />
-          <StatCard
-            label="Minifigs"
-            value={set.minifigs?.toString() ?? '—'}
-          />
-          <StatCard
-            label="Year"
-            value={set.yearFrom?.toString() ?? '—'}
-          />
+          <StatCard label="Pieces" value={set.pieces?.toLocaleString() ?? '—'} />
+          <StatCard label="Minifigs" value={set.minifigs?.toString() ?? '—'} />
+          <StatCard label="Year" value={set.yearFrom?.toString() ?? '—'} />
           <StatCard
             label="Rating"
             value={set.rating?.toFixed(1) ?? '—'}
@@ -261,7 +242,7 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
             >
               <span>Offers</span>
               <span className="font-mono font-medium text-foreground">
-                {pricingLoading ? '...' : pricing?.amazon?.offerCount ?? '—'} sellers
+                {pricingLoading ? '...' : (pricing?.amazon?.offerCount ?? '—')} sellers
                 {onAmazonOffersClick && !pricingLoading && pricing?.amazon?.offers?.length ? (
                   <span className="ml-1 text-amber-600">(click)</span>
                 ) : null}
@@ -324,8 +305,10 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
               <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
                 <span>Listings</span>
                 <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : pricing?.ebay?.listingCount ?? '—'} available
-                  {onEbayClick && !pricingLoading && <span className="ml-1 text-purple-600">(click)</span>}
+                  {pricingLoading ? '...' : (pricing?.ebay?.listingCount ?? '—')} available
+                  {onEbayClick && !pricingLoading && (
+                    <span className="ml-1 text-purple-600">(click)</span>
+                  )}
                 </span>
               </div>
             </button>
@@ -383,8 +366,10 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
               <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
                 <span>Listings</span>
                 <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : pricing?.ebayUsed?.listingCount ?? '—'} available
-                  {onEbayUsedClick && !pricingLoading && <span className="ml-1 text-orange-600">(click)</span>}
+                  {pricingLoading ? '...' : (pricing?.ebayUsed?.listingCount ?? '—')} available
+                  {onEbayUsedClick && !pricingLoading && (
+                    <span className="ml-1 text-orange-600">(click)</span>
+                  )}
                 </span>
               </div>
             </button>
@@ -441,7 +426,7 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
               <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
                 <span>Listings</span>
                 <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : pricing?.bricklink?.lotCount ?? '—'} lots
+                  {pricingLoading ? '...' : (pricing?.bricklink?.lotCount ?? '—')} lots
                 </span>
               </div>
             </div>
@@ -495,7 +480,7 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
               <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
                 <span>Listings</span>
                 <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : pricing?.bricklinkUsed?.lotCount ?? '—'} lots
+                  {pricingLoading ? '...' : (pricing?.bricklinkUsed?.lotCount ?? '—')} lots
                 </span>
               </div>
             </div>
@@ -533,18 +518,9 @@ export function SetDetailsCard({ set, pricing, pricingLoading, onEbayClick, onEb
             Community
           </h4>
           <div className="grid grid-cols-3 gap-2">
-            <StatCard
-              label="Rating"
-              value={set.rating?.toFixed(1) ?? '—'}
-            />
-            <StatCard
-              label="Own It"
-              value={set.ownCount?.toLocaleString() ?? '—'}
-            />
-            <StatCard
-              label="Want It"
-              value={set.wantCount?.toLocaleString() ?? '—'}
-            />
+            <StatCard label="Rating" value={set.rating?.toFixed(1) ?? '—'} />
+            <StatCard label="Own It" value={set.ownCount?.toLocaleString() ?? '—'} />
+            <StatCard label="Want It" value={set.wantCount?.toLocaleString() ?? '—'} />
           </div>
         </div>
 

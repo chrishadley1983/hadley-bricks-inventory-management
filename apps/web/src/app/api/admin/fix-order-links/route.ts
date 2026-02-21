@@ -11,10 +11,12 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
 const FixLinksSchema = z.object({
-  links: z.array(z.object({
-    orderItemId: z.string().uuid(),
-    inventoryItemId: z.string().uuid(),
-  })),
+  links: z.array(
+    z.object({
+      orderItemId: z.string().uuid(),
+      inventoryItemId: z.string().uuid(),
+    })
+  ),
 });
 
 export async function POST(request: NextRequest) {
@@ -50,7 +52,11 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (orderItemError || !orderItem) {
-        results.push({ orderItemId: link.orderItemId, success: false, error: 'Order item not found' });
+        results.push({
+          orderItemId: link.orderItemId,
+          success: false,
+          error: 'Order item not found',
+        });
         continue;
       }
 
@@ -63,7 +69,11 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (inventoryError || !inventoryItem) {
-        results.push({ orderItemId: link.orderItemId, success: false, error: 'Inventory item not found' });
+        results.push({
+          orderItemId: link.orderItemId,
+          success: false,
+          error: 'Inventory item not found',
+        });
         continue;
       }
 
@@ -81,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      success: results.every(r => r.success),
+      success: results.every((r) => r.success),
       results,
     });
   } catch (error) {

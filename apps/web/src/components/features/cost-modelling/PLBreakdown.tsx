@@ -127,12 +127,7 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
 
         {/* VAT (if registered) - F17 */}
         {isVatRegistered && (
-          <LineItem
-            label="VAT (Flat Rate)"
-            value={-scaled.vatAmount}
-            negative
-            isBold
-          />
+          <LineItem label="VAT (Flat Rate)" value={-scaled.vatAmount} negative isBold />
         )}
 
         {/* Other Costs Section */}
@@ -201,7 +196,7 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
         {expandedSections.tax && (
           <div className="ml-6 space-y-1">
             <LineItem
-              label={`Taxable Income (after £${scaled.taxableIncome > 0 ? Math.round((scaled.netProfit - scaled.taxableIncome)).toLocaleString() : 0} allowance)`}
+              label={`Taxable Income (after £${scaled.taxableIncome > 0 ? Math.round(scaled.netProfit - scaled.taxableIncome).toLocaleString() : 0} allowance)`}
               value={scaled.taxableIncome}
               muted
             />
@@ -220,11 +215,7 @@ export function PLBreakdown({ calculations, isVatRegistered, compact }: PLBreakd
           isLarge
           highlight={scaled.takeHome > 0}
         />
-        <LineItem
-          label="Weekly Take-Home"
-          value={scaled.weeklyTakeHome}
-          muted
-        />
+        <LineItem label="Weekly Take-Home" value={scaled.weeklyTakeHome} muted />
       </CardContent>
     </Card>
   );
@@ -241,13 +232,7 @@ interface SectionHeaderProps {
   negative?: boolean;
 }
 
-function SectionHeader({
-  title,
-  total,
-  expanded,
-  onToggle,
-  negative,
-}: SectionHeaderProps) {
+function SectionHeader({ title, total, expanded, onToggle, negative }: SectionHeaderProps) {
   return (
     <button
       onClick={onToggle}
@@ -262,12 +247,7 @@ function SectionHeader({
         <span className="font-medium">{title}</span>
       </div>
       {/* U7: Positive/negative colouring */}
-      <span
-        className={cn(
-          'font-medium',
-          negative ? 'text-red-600' : 'text-foreground'
-        )}
-      >
+      <span className={cn('font-medium', negative ? 'text-red-600' : 'text-foreground')}>
         {formatCurrency(total)}
       </span>
     </button>
@@ -287,29 +267,10 @@ interface LineItemProps {
   muted?: boolean;
 }
 
-function LineItem({
-  label,
-  value,
-  negative,
-  isBold,
-  isLarge,
-  highlight,
-  muted,
-}: LineItemProps) {
+function LineItem({ label, value, negative, isBold, isLarge, highlight, muted }: LineItemProps) {
   return (
-    <div
-      className={cn(
-        'flex items-center justify-between py-1 px-2',
-        isLarge && 'py-2'
-      )}
-    >
-      <span
-        className={cn(
-          'text-sm',
-          isBold && 'font-medium',
-          muted && 'text-muted-foreground'
-        )}
-      >
+    <div className={cn('flex items-center justify-between py-1 px-2', isLarge && 'py-2')}>
+      <span className={cn('text-sm', isBold && 'font-medium', muted && 'text-muted-foreground')}>
         {label}
       </span>
       <span

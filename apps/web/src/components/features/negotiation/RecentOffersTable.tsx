@@ -26,7 +26,9 @@ interface RecentOffersTableProps {
 /**
  * Get status badge color
  */
-function getStatusBadgeVariant(status: NegotiationOffer['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusBadgeVariant(
+  status: NegotiationOffer['status']
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'ACCEPTED':
       return 'default'; // Green-ish
@@ -173,22 +175,19 @@ export function RecentOffersTable({
                     </a>
                   </div>
                 </TableCell>
-                <TableCell className="text-right font-mono">
-                  {offer.discountPercentage}%
-                </TableCell>
+                <TableCell className="text-right font-mono">{offer.discountPercentage}%</TableCell>
                 <TableCell className="max-w-[300px]">
-                  <span className="text-sm text-muted-foreground line-clamp-2" title={offer.offerMessage}>
+                  <span
+                    className="text-sm text-muted-foreground line-clamp-2"
+                    title={offer.offerMessage}
+                  >
                     {offer.offerMessage || '-'}
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusBadgeVariant(offer.status)}>
-                    {offer.status}
-                  </Badge>
+                  <Badge variant={getStatusBadgeVariant(offer.status)}>{offer.status}</Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDate(offer.sentAt)}
-                </TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(offer.sentAt)}</TableCell>
                 <TableCell className="text-right">
                   <span className="text-sm text-muted-foreground">{offer.score}</span>
                 </TableCell>

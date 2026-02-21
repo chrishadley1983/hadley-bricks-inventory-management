@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import {
-  ebayTransactionSyncService,
-  ebayOrderSyncService,
-  ebayAutoSyncService,
-} from '@/lib/ebay';
+import { ebayTransactionSyncService, ebayOrderSyncService, ebayAutoSyncService } from '@/lib/ebay';
 
 const SyncSchema = z.object({
   type: z.enum(['orders', 'transactions', 'payouts', 'all']).default('all'),
@@ -65,7 +61,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'transactions') {
-      results.transactions = await ebayTransactionSyncService.syncTransactions(user.id, { fullSync });
+      results.transactions = await ebayTransactionSyncService.syncTransactions(user.id, {
+        fullSync,
+      });
     }
 
     if (type === 'payouts') {
@@ -74,7 +72,11 @@ export async function POST(request: NextRequest) {
 
     // Check for any failures
     const hasFailures = Object.values(results).some(
-      (r) => typeof r === 'object' && r !== null && 'success' in r && !(r as { success: boolean }).success
+      (r) =>
+        typeof r === 'object' &&
+        r !== null &&
+        'success' in r &&
+        !(r as { success: boolean }).success
     );
 
     return NextResponse.json({

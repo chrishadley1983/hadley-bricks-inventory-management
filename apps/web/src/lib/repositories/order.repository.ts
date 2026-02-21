@@ -105,7 +105,9 @@ export class OrderRepository extends BaseRepository<
           'cancel',
           'npb',
         ];
-        const excludeConditions = nonPendingPatterns.map((p) => `status.not.ilike.%${p}%`).join(',');
+        const excludeConditions = nonPendingPatterns
+          .map((p) => `status.not.ilike.%${p}%`)
+          .join(',');
         query = query.or(
           `internal_status.eq.Pending,and(internal_status.is.null,${excludeConditions})`
         );
@@ -270,7 +272,10 @@ export class OrderRepository extends BaseRepository<
    * Replace order items (delete existing and insert new)
    * Preserves inventory_item_id links by matching on item_number (ASIN for Amazon)
    */
-  async replaceOrderItems(orderId: string, items: Omit<OrderItemInsert, 'order_id'>[]): Promise<OrderItem[]> {
+  async replaceOrderItems(
+    orderId: string,
+    items: Omit<OrderItemInsert, 'order_id'>[]
+  ): Promise<OrderItem[]> {
     // First, fetch existing order items to preserve inventory_item_id links
     const existingItems = await this.getOrderItems(orderId);
 

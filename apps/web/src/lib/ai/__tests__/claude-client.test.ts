@@ -137,9 +137,7 @@ describe('Claude Client', () => {
 
       const { sendMessage } = await import('../claude-client');
 
-      await expect(sendMessage('System', 'User')).rejects.toThrow(
-        'No text response from Claude'
-      );
+      await expect(sendMessage('System', 'User')).rejects.toThrow('No text response from Claude');
     });
 
     it('should throw error when content is empty', async () => {
@@ -147,9 +145,7 @@ describe('Claude Client', () => {
 
       const { sendMessage } = await import('../claude-client');
 
-      await expect(sendMessage('System', 'User')).rejects.toThrow(
-        'No text response from Claude'
-      );
+      await expect(sendMessage('System', 'User')).rejects.toThrow('No text response from Claude');
     });
   });
 
@@ -167,11 +163,10 @@ describe('Claude Client', () => {
 
       const { sendMessageWithImage } = await import('../claude-client');
 
-      const result = await sendMessageWithImage(
-        'Analyze this image.',
-        'What do you see?',
-        { base64: 'iVBORw0KGgoAAAANSUhEU', mediaType: 'image/png' }
-      );
+      const result = await sendMessageWithImage('Analyze this image.', 'What do you see?', {
+        base64: 'iVBORw0KGgoAAAANSUhEU',
+        mediaType: 'image/png',
+      });
 
       expect(result).toBe('Image analysis result');
       expect(mockCreate).toHaveBeenCalledWith({
@@ -260,11 +255,7 @@ describe('Claude Client', () => {
         { base64: 'image2data', mediaType: 'image/png' as const },
       ];
 
-      const result = await sendMessageWithImages(
-        'Analyze images.',
-        'Compare these.',
-        images
-      );
+      const result = await sendMessageWithImages('Analyze images.', 'Compare these.', images);
 
       expect(result).toBe('Multi-image analysis');
       expect(mockCreate).toHaveBeenCalledWith(
@@ -359,10 +350,7 @@ describe('Claude Client', () => {
 
       const { sendMessageForJSON } = await import('../claude-client');
 
-      const result = await sendMessageForJSON<{ parsed: boolean }>(
-        'System',
-        'User'
-      );
+      const result = await sendMessageForJSON<{ parsed: boolean }>('System', 'User');
 
       expect(result).toEqual({ parsed: true });
     });
@@ -379,10 +367,7 @@ describe('Claude Client', () => {
 
       const { sendMessageForJSON } = await import('../claude-client');
 
-      const result = await sendMessageForJSON<{ data: number[] }>(
-        'System',
-        'User'
-      );
+      const result = await sendMessageForJSON<{ data: number[] }>('System', 'User');
 
       expect(result).toEqual({ data: [1, 2, 3] });
     });
@@ -394,9 +379,9 @@ describe('Claude Client', () => {
 
       const { sendMessageForJSON } = await import('../claude-client');
 
-      await expect(
-        sendMessageForJSON('System', 'User')
-      ).rejects.toThrow('Failed to parse AI response as JSON');
+      await expect(sendMessageForJSON('System', 'User')).rejects.toThrow(
+        'Failed to parse AI response as JSON'
+      );
     });
 
     it('should throw error on malformed JSON', async () => {
@@ -406,9 +391,9 @@ describe('Claude Client', () => {
 
       const { sendMessageForJSON } = await import('../claude-client');
 
-      await expect(
-        sendMessageForJSON('System', 'User')
-      ).rejects.toThrow('Failed to parse AI response as JSON');
+      await expect(sendMessageForJSON('System', 'User')).rejects.toThrow(
+        'Failed to parse AI response as JSON'
+      );
     });
   });
 
@@ -432,9 +417,7 @@ describe('Claude Client', () => {
       const result = await sendMessageWithImagesForJSON<{
         setNumber: string;
         confidence: number;
-      }>('Analyze image.', 'Extract data.', [
-        { base64: 'imagedata', mediaType: 'image/jpeg' },
-      ]);
+      }>('Analyze image.', 'Extract data.', [{ base64: 'imagedata', mediaType: 'image/jpeg' }]);
 
       expect(result).toEqual({ setNumber: '75192', confidence: 0.95 });
     });
@@ -451,11 +434,9 @@ describe('Claude Client', () => {
 
       const { sendMessageWithImagesForJSON } = await import('../claude-client');
 
-      const result = await sendMessageWithImagesForJSON<{ items: string[] }>(
-        'System',
-        'Message',
-        [{ base64: 'data', mediaType: 'image/png' }]
-      );
+      const result = await sendMessageWithImagesForJSON<{ items: string[] }>('System', 'Message', [
+        { base64: 'data', mediaType: 'image/png' },
+      ]);
 
       expect(result).toEqual({ items: ['a', 'b'] });
     });

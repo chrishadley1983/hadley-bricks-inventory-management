@@ -90,17 +90,13 @@ export const pickupKeys = {
   upcoming: () => [...pickupKeys.all, 'upcoming'] as const,
   detail: (id: string) => [...pickupKeys.all, 'detail', id] as const,
   stats: () => [...pickupKeys.all, 'stats'] as const,
-  month: (year: number, month: number) =>
-    [...pickupKeys.all, 'month', year, month] as const,
+  month: (year: number, month: number) => [...pickupKeys.all, 'month', year, month] as const,
 };
 
 /**
  * Fetch pickups for a specific month
  */
-async function fetchMonthPickups(
-  year: number,
-  month: number
-): Promise<MonthPickups> {
+async function fetchMonthPickups(year: number, month: number): Promise<MonthPickups> {
   const params = new URLSearchParams({
     year: year.toString(),
     month: month.toString(),
@@ -160,10 +156,7 @@ async function createPickup(input: CreatePickupInput): Promise<StockPickup> {
 /**
  * Update a pickup
  */
-async function updatePickup(
-  id: string,
-  input: Partial<CreatePickupInput>
-): Promise<StockPickup> {
+async function updatePickup(id: string, input: Partial<CreatePickupInput>): Promise<StockPickup> {
   const response = await fetch(`/api/pickups/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -462,9 +455,7 @@ export function getFirstDayOfMonth(year: number, month: number): number {
 /**
  * Group pickups by date
  */
-export function groupPickupsByDate(
-  pickups: StockPickup[]
-): Record<string, StockPickup[]> {
+export function groupPickupsByDate(pickups: StockPickup[]): Record<string, StockPickup[]> {
   return pickups.reduce(
     (acc, pickup) => {
       const date = pickup.scheduled_date;

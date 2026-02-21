@@ -26,10 +26,7 @@ export async function GET(
 
     // Validate auditId
     if (!auditId || auditId.length < 10) {
-      return NextResponse.json(
-        { status: 'failed', error: 'Invalid audit ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ status: 'failed', error: 'Invalid audit ID' }, { status: 400 });
     }
 
     // Create authenticated client
@@ -42,10 +39,7 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { status: 'failed', error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ status: 'failed', error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch audit record
@@ -85,9 +79,6 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/ebay/listing/[auditId]/quality-review] Error:', error);
-    return NextResponse.json(
-      { status: 'failed', error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: 'failed', error: 'Internal server error' }, { status: 500 });
   }
 }

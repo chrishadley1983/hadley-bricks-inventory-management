@@ -22,7 +22,12 @@ import type {
 
 // Re-export types and constants
 export { POLL_INTERVAL_MS, TWO_PHASE_DEFAULTS } from '@/lib/amazon/amazon-sync.types';
-export type { PriceConflict, SyncMode, TwoPhaseResult, TwoPhaseStepResult } from '@/lib/amazon/amazon-sync.types';
+export type {
+  PriceConflict,
+  SyncMode,
+  TwoPhaseResult,
+  TwoPhaseStepResult,
+} from '@/lib/amazon/amazon-sync.types';
 
 // ============================================================================
 // TYPES
@@ -94,9 +99,10 @@ async function fetchQueue(): Promise<SyncQueueResponse> {
   return json.data;
 }
 
-async function addToQueue(
-  input: { inventoryItemId?: string; inventoryItemIds?: string[] }
-): Promise<AddToQueueResponse> {
+async function addToQueue(input: {
+  inventoryItemId?: string;
+  inventoryItemIds?: string[];
+}): Promise<AddToQueueResponse> {
   const response = await fetch('/api/amazon/sync/queue', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

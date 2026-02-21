@@ -305,14 +305,21 @@ export class EbayTradingClient {
 
     const requestXml = this.buildReviseItemRequest(request);
     console.log(`[EbayTradingClient] ===== ReviseFixedPriceItem for ${request.itemId} =====`);
-    console.log(`[EbayTradingClient] Request details:`, JSON.stringify({
-      itemId: request.itemId,
-      hasTitle: !!request.title,
-      hasDescription: !!request.description,
-      hasItemSpecifics: !!(request.itemSpecifics && request.itemSpecifics.length > 0),
-      itemSpecificsCount: request.itemSpecifics?.length || 0,
-      itemSpecifics: request.itemSpecifics?.map(s => ({ name: s.name, value: s.value })),
-    }, null, 2));
+    console.log(
+      `[EbayTradingClient] Request details:`,
+      JSON.stringify(
+        {
+          itemId: request.itemId,
+          hasTitle: !!request.title,
+          hasDescription: !!request.description,
+          hasItemSpecifics: !!(request.itemSpecifics && request.itemSpecifics.length > 0),
+          itemSpecificsCount: request.itemSpecifics?.length || 0,
+          itemSpecifics: request.itemSpecifics?.map((s) => ({ name: s.name, value: s.value })),
+        },
+        null,
+        2
+      )
+    );
     console.log(`[EbayTradingClient] Full Request XML:\n`, requestXml);
 
     try {
@@ -331,7 +338,10 @@ export class EbayTradingClient {
 
       // Log all errors/warnings from the response
       if (apiResponse.Errors) {
-        console.log(`[EbayTradingClient] Response Errors/Warnings:`, JSON.stringify(apiResponse.Errors, null, 2));
+        console.log(
+          `[EbayTradingClient] Response Errors/Warnings:`,
+          JSON.stringify(apiResponse.Errors, null, 2)
+        );
       }
 
       // Extract warnings if any
@@ -428,7 +438,10 @@ export class EbayTradingClient {
   /**
    * Execute a Trading API request with retries
    */
-  private async executeRequest(callName: string, requestXml: string): Promise<GetSellerListResponse> {
+  private async executeRequest(
+    callName: string,
+    requestXml: string
+  ): Promise<GetSellerListResponse> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -517,15 +530,22 @@ export class EbayTradingClient {
     // Debug: Check if WatchCount exists in raw items
     if (items.length > 0) {
       // Find the Dobby's Release item (known to have watchers)
-      const dobbyItem = items.find(i => i.ItemID === '177476194025');
+      const dobbyItem = items.find((i) => i.ItemID === '177476194025');
       if (dobbyItem) {
-        console.log('[EbayTradingClient] Dobby item raw data:', JSON.stringify({
-          ItemID: dobbyItem.ItemID,
-          WatchCount: dobbyItem.WatchCount,
-          HitCount: dobbyItem.HitCount,
-          PictureDetails: dobbyItem.PictureDetails,
-          allKeys: Object.keys(dobbyItem),
-        }, null, 2));
+        console.log(
+          '[EbayTradingClient] Dobby item raw data:',
+          JSON.stringify(
+            {
+              ItemID: dobbyItem.ItemID,
+              WatchCount: dobbyItem.WatchCount,
+              HitCount: dobbyItem.HitCount,
+              PictureDetails: dobbyItem.PictureDetails,
+              allKeys: Object.keys(dobbyItem),
+            },
+            null,
+            2
+          )
+        );
       }
     }
 
@@ -808,7 +828,8 @@ export class EbayTradingClient {
           ReturnsAcceptedOption: item.returnsAccepted ? 'ReturnsAccepted' : 'ReturnsNotAccepted',
         };
         if (item.returnsWithin) {
-          (itemNode.ReturnPolicy as Record<string, unknown>).ReturnsWithinOption = item.returnsWithin;
+          (itemNode.ReturnPolicy as Record<string, unknown>).ReturnsWithinOption =
+            item.returnsWithin;
         }
         if (item.refundOption) {
           (itemNode.ReturnPolicy as Record<string, unknown>).RefundOption = item.refundOption;
@@ -888,8 +909,10 @@ export class EbayTradingClient {
     }
 
     if (request.itemSpecifics !== undefined && request.itemSpecifics.length > 0) {
-      console.log(`[EbayTradingClient] Building ItemSpecifics with ${request.itemSpecifics.length} items:`,
-        request.itemSpecifics.map(s => `${s.name}=${s.value}`).join(', '));
+      console.log(
+        `[EbayTradingClient] Building ItemSpecifics with ${request.itemSpecifics.length} items:`,
+        request.itemSpecifics.map((s) => `${s.name}=${s.value}`).join(', ')
+      );
       itemNode.ItemSpecifics = {
         NameValueList: request.itemSpecifics.map((spec) => ({
           Name: spec.name,
@@ -922,7 +945,10 @@ export class EbayTradingClient {
       }
 
       itemNode.BestOfferDetails = bestOfferDetails;
-    } else if (request.bestOfferAutoAcceptPrice !== undefined || request.minimumBestOfferPrice !== undefined) {
+    } else if (
+      request.bestOfferAutoAcceptPrice !== undefined ||
+      request.minimumBestOfferPrice !== undefined
+    ) {
       // Update just the prices without changing BestOfferEnabled status
       const currency = request.currency || 'GBP';
       const bestOfferDetails: Record<string, unknown> = {};
@@ -1133,7 +1159,8 @@ export class EbayTradingClient {
     return optionsArray.map((opt) => ({
       shippingService: opt.ShippingService || '',
       shippingServiceCost: this.extractTextValue(opt.ShippingServiceCost) ?? 0,
-      shippingServiceAdditionalCost: this.extractTextValue(opt.ShippingServiceAdditionalCost) ?? undefined,
+      shippingServiceAdditionalCost:
+        this.extractTextValue(opt.ShippingServiceAdditionalCost) ?? undefined,
       shippingServicePriority: parseInt(String(opt.ShippingServicePriority ?? 1), 10),
       freeShipping: opt.FreeShipping === 'true' || opt.FreeShipping === true,
     }));

@@ -112,10 +112,7 @@ export async function DELETE(request: NextRequest) {
       const supabase = createServiceRoleClient();
 
       // Delete the purchase
-      const { error } = await supabase
-        .from('purchases')
-        .delete()
-        .eq('id', purchaseId);
+      const { error } = await supabase.from('purchases').delete().eq('id', purchaseId);
 
       if (error) {
         console.error('[DELETE /api/service/purchases] Delete error:', error);

@@ -91,7 +91,11 @@ export function useEnrichViews(): UseEnrichViewsResult {
 
                     if (event.type === 'progress' && event.data && 'current' in event.data) {
                       setProgress(event.data);
-                    } else if (event.type === 'complete' && event.data && 'listings' in event.data) {
+                    } else if (
+                      event.type === 'complete' &&
+                      event.data &&
+                      'listings' in event.data
+                    ) {
                       // Convert date strings back to Date objects
                       const result = event.data.listings.map((listing) => ({
                         ...listing,

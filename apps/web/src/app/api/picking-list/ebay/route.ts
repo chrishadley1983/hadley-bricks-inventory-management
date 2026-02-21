@@ -111,10 +111,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GET /api/picking-list/ebay] Error fetching orders:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch orders' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
     }
 
     // Filter to only include orders with unfulfilled line items
@@ -316,7 +313,11 @@ function generatePickingListPDF(data: PickingListResponse): ArrayBuffer {
   // Metadata
   doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text(`Generated: ${date} | Total Items: ${data.totalItems} | Orders: ${data.totalOrders}`, 14, 28);
+  doc.text(
+    `Generated: ${date} | Total Items: ${data.totalItems} | Orders: ${data.totalOrders}`,
+    14,
+    28
+  );
 
   // Check for warnings
   const hasWarnings = data.unmatchedItems.length > 0 || data.unknownLocationItems.length > 0;
@@ -409,7 +410,13 @@ function generatePickingListPDF(data: PickingListResponse): ArrayBuffer {
 
   for (const [location, items] of itemsByLocation) {
     // Add location header as a row
-    tableData.push([{ content: location, colSpan: 5, styles: { fontStyle: 'bold', fillColor: [232, 232, 232] } } as unknown as string]);
+    tableData.push([
+      {
+        content: location,
+        colSpan: 5,
+        styles: { fontStyle: 'bold', fillColor: [232, 232, 232] },
+      } as unknown as string,
+    ]);
 
     // Add items for this location
     for (const item of items) {

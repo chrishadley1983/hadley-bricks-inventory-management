@@ -253,7 +253,7 @@ export function createAnalyseListingMessage(
 ): string {
   // Format item specifics for display
   const itemSpecificsText = listing.itemSpecifics
-    .map(spec => `  - ${spec.name}: ${spec.value}`)
+    .map((spec) => `  - ${spec.name}: ${spec.value}`)
     .join('\n');
 
   let message = `## LISTING TO ANALYSE

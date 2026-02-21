@@ -114,11 +114,8 @@ export function ScanHistoryTable() {
 
   // Calculate summary stats
   const successCount = scans.filter((s) => s.status === 'success').length;
-  const failureCount = scans.filter(
-    (s) => s.status === 'failed' || s.status === 'captcha'
-  ).length;
-  const successRate =
-    scans.length > 0 ? ((successCount / scans.length) * 100).toFixed(0) : 0;
+  const failureCount = scans.filter((s) => s.status === 'failed' || s.status === 'captcha').length;
+  const successRate = scans.length > 0 ? ((successCount / scans.length) * 100).toFixed(0) : 0;
 
   return (
     <Card>
@@ -132,8 +129,7 @@ export function ScanHistoryTable() {
             <CardDescription>
               {scans.length > 0 && (
                 <span>
-                  {successCount} successful • {failureCount} failed • {successRate}%
-                  success rate
+                  {successCount} successful • {failureCount} failed • {successRate}% success rate
                 </span>
               )}
             </CardDescription>
@@ -145,10 +141,7 @@ export function ScanHistoryTable() {
               onValueChange={(value: string) =>
                 setFilters((f) => ({
                   ...f,
-                  scanType:
-                    value === 'all'
-                      ? undefined
-                      : (value as ScanHistoryFilters['scanType']),
+                  scanType: value === 'all' ? undefined : (value as ScanHistoryFilters['scanType']),
                 }))
               }
             >
@@ -167,10 +160,7 @@ export function ScanHistoryTable() {
               onValueChange={(value: string) =>
                 setFilters((f) => ({
                   ...f,
-                  status:
-                    value === 'all'
-                      ? undefined
-                      : (value as ScanHistoryFilters['status']),
+                  status: value === 'all' ? undefined : (value as ScanHistoryFilters['status']),
                 }))
               }
             >
@@ -192,9 +182,7 @@ export function ScanHistoryTable() {
         {isLoading ? (
           <ScanHistoryTableSkeleton />
         ) : scans.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No scan history found
-          </div>
+          <div className="text-center py-8 text-muted-foreground">No scan history found</div>
         ) : (
           <Table>
             <TableHeader>
@@ -224,31 +212,23 @@ export function ScanHistoryTable() {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {scan.set_number || '-'}
-                  </TableCell>
+                  <TableCell className="font-mono text-sm">{scan.set_number || '-'}</TableCell>
                   <TableCell>{getStatusBadge(scan.status)}</TableCell>
                   <TableCell className="text-right">{scan.listings_found}</TableCell>
                   <TableCell className="text-right">
                     {scan.opportunities_found > 0 ? (
-                      <span className="font-medium text-green-600">
-                        {scan.opportunities_found}
-                      </span>
+                      <span className="font-medium text-green-600">{scan.opportunities_found}</span>
                     ) : (
                       <span className="text-muted-foreground">0</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right text-sm text-muted-foreground">
-                    {scan.timing_delay_ms
-                      ? `${(scan.timing_delay_ms / 1000).toFixed(1)}s`
-                      : '-'}
+                    {scan.timing_delay_ms ? `${(scan.timing_delay_ms / 1000).toFixed(1)}s` : '-'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     <div
                       title={
-                        scan.completed_at
-                          ? format(new Date(scan.completed_at), 'PPpp')
-                          : undefined
+                        scan.completed_at ? format(new Date(scan.completed_at), 'PPpp') : undefined
                       }
                     >
                       {scan.completed_at
@@ -274,11 +254,7 @@ export function ScanHistoryTable() {
           </Table>
         )}
 
-        <ScanDetailDialog
-          scan={selectedScan}
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-        />
+        <ScanDetailDialog scan={selectedScan} open={dialogOpen} onOpenChange={setDialogOpen} />
       </CardContent>
     </Card>
   );

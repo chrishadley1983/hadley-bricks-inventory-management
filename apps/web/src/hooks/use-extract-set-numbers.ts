@@ -19,7 +19,9 @@ interface ExtractSetNumbersResponse {
 /**
  * Extract set numbers from images via AI Vision
  */
-async function extractSetNumbers(input: ExtractSetNumbersInput): Promise<ExtractSetNumbersResponse> {
+async function extractSetNumbers(
+  input: ExtractSetNumbersInput
+): Promise<ExtractSetNumbersResponse> {
   const response = await fetch('/api/ai/extract-set-numbers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

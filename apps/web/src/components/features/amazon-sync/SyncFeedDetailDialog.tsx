@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Clock,
-  ExternalLink,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Clock, ExternalLink } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -80,25 +74,18 @@ function FeedItemRow({ item }: { item: FeedItemWithDetails }) {
         )}
 
         <div className="flex items-center gap-2 flex-wrap">
-          <code className="text-sm font-medium bg-muted px-1.5 py-0.5 rounded">
-            {item.asin}
-          </code>
-          <span className="text-sm text-muted-foreground">
-            SKU: {item.amazon_sku}
-          </span>
+          <code className="text-sm font-medium bg-muted px-1.5 py-0.5 rounded">{item.asin}</code>
+          <span className="text-sm text-muted-foreground">SKU: {item.amazon_sku}</span>
         </div>
 
         <div className="mt-1 text-sm text-muted-foreground">
-          Price: {formatCurrency(item.submitted_price)} | Qty:{' '}
-          {item.submitted_quantity}
+          Price: {formatCurrency(item.submitted_price)} | Qty: {item.submitted_quantity}
         </div>
 
         {item.error_message && (
           <div className="mt-2 text-sm text-destructive">
             <strong>Error:</strong> {item.error_message}
-            {item.error_code && (
-              <span className="ml-1 text-xs">({item.error_code})</span>
-            )}
+            {item.error_code && <span className="ml-1 text-xs">({item.error_code})</span>}
           </div>
         )}
 
@@ -128,11 +115,7 @@ interface SyncFeedDetailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function SyncFeedDetailDialog({
-  feedId,
-  open,
-  onOpenChange,
-}: SyncFeedDetailDialogProps) {
+export function SyncFeedDetailDialog({ feedId, open, onOpenChange }: SyncFeedDetailDialogProps) {
   const { data: feed, isLoading } = useSyncFeed(feedId ?? undefined, {
     enabled: !!feedId && open,
     pollWhileProcessing: true,
@@ -175,10 +158,7 @@ export function SyncFeedDetailDialog({
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>Total: {feed.total_items} items</span>
               {feed.submitted_at && (
-                <span>
-                  Submitted:{' '}
-                  {new Date(feed.submitted_at).toLocaleString('en-GB')}
-                </span>
+                <span>Submitted: {new Date(feed.submitted_at).toLocaleString('en-GB')}</span>
               )}
             </div>
 
@@ -197,9 +177,7 @@ export function SyncFeedDetailDialog({
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Feed not found
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-8">Feed not found</p>
         )}
       </DialogContent>
     </Dialog>

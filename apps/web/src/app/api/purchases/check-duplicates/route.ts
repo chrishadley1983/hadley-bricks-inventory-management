@@ -76,10 +76,7 @@ export async function POST(request: NextRequest) {
 
     if (queryError) {
       console.error('[POST /api/purchases/check-duplicates] Query error:', queryError);
-      return NextResponse.json(
-        { error: 'Failed to check for duplicates' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to check for duplicates' }, { status: 500 });
     }
 
     // 4. Check each purchase for duplicates
@@ -87,8 +84,7 @@ export async function POST(request: NextRequest) {
       // Look for exact match: same cost + same date
       const exactMatch = existingPurchases?.find((existing) => {
         const costMatch = Math.abs(Number(existing.cost) - purchase.price) < 0.01;
-        const dateMatch =
-          purchase.purchaseDate && existing.purchase_date === purchase.purchaseDate;
+        const dateMatch = purchase.purchaseDate && existing.purchase_date === purchase.purchaseDate;
         return costMatch && dateMatch;
       });
 
@@ -136,9 +132,7 @@ export async function POST(request: NextRequest) {
         if (!costMatch || !existing.purchase_date) return false;
 
         const existingDate = new Date(existing.purchase_date);
-        const daysDiff = Math.abs(
-          (Date.now() - existingDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
+        const daysDiff = Math.abs((Date.now() - existingDate.getTime()) / (1000 * 60 * 60 * 24));
         return daysDiff <= 30;
       });
 

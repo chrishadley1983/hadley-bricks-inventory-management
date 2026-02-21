@@ -90,7 +90,8 @@ async function searchItems(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
-      'X-EBAY-C-ENDUSERCTX': 'affiliateCampaignId=<ePNCampaignId>,affiliateReferenceId=<referenceId>',
+      'X-EBAY-C-ENDUSERCTX':
+        'affiliateCampaignId=<ePNCampaignId>,affiliateReferenceId=<referenceId>',
     },
   });
 

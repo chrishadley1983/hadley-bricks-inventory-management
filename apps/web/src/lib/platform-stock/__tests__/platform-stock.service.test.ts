@@ -141,11 +141,13 @@ function createMockListingRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createChainedQuery(overrides: {
-  data?: unknown;
-  error?: { code?: string; message: string } | null;
-  count?: number | null;
-} = {}) {
+function createChainedQuery(
+  overrides: {
+    data?: unknown;
+    error?: { code?: string; message: string } | null;
+    count?: number | null;
+  } = {}
+) {
   const { data = null, error = null, count = null } = overrides;
 
   const mockResult = { data, error, count };
@@ -500,7 +502,8 @@ describe('PlatformStockService', () => {
       const chain: Record<string, ReturnType<typeof vi.fn>> = {};
       chain.delete = vi.fn().mockReturnValue(chain);
       // First eq returns chain, second eq resolves
-      chain.eq = vi.fn()
+      chain.eq = vi
+        .fn()
         .mockReturnValueOnce(chain) // First .eq('user_id', ...) returns chain
         .mockResolvedValueOnce({ error: null }); // Second .eq('platform', ...) resolves
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
@@ -515,7 +518,8 @@ describe('PlatformStockService', () => {
       const chain: Record<string, ReturnType<typeof vi.fn>> = {};
       chain.delete = vi.fn().mockReturnValue(chain);
       // First eq returns chain, second eq resolves with error
-      chain.eq = vi.fn()
+      chain.eq = vi
+        .fn()
         .mockReturnValueOnce(chain)
         .mockResolvedValueOnce({ error: { message: 'Delete failed' } });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);

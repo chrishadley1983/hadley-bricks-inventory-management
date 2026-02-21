@@ -5,11 +5,7 @@ import { Sparkles, Loader2, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { InventoryFilters as Filters } from '@/lib/api';
 
 interface NaturalLanguageFilterProps {
@@ -115,11 +111,7 @@ export function NaturalLanguageFilter({ filters, onFiltersChange }: NaturalLangu
             onClick={handleSubmit}
             disabled={isLoading || !query.trim()}
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              'Apply'
-            )}
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
           </Button>
         </div>
       </div>
@@ -168,9 +160,7 @@ export function NaturalLanguageFilter({ filters, onFiltersChange }: NaturalLangu
         </Collapsible>
       )}
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

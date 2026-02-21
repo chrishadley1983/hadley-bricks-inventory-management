@@ -5,12 +5,7 @@
  */
 
 import type { Json } from '@hadley-bricks/database';
-import type {
-  PlatformListing,
-  StockComparison,
-  ListingStatus,
-  DiscrepancyType,
-} from '../types';
+import type { PlatformListing, StockComparison, ListingStatus, DiscrepancyType } from '../types';
 
 // ============================================================================
 // TRADING API RESPONSE TYPES

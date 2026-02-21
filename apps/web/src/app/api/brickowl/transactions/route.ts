@@ -86,7 +86,9 @@ export async function GET(request: NextRequest) {
     // Calculate summary for ALL matching records (not just current page)
     let summaryQuery = supabase
       .from('brickowl_transactions')
-      .select('order_total, shipping, tax, coupon_discount, combined_shipping_discount, base_grand_total')
+      .select(
+        'order_total, shipping, tax, coupon_discount, combined_shipping_discount, base_grand_total'
+      )
       .eq('user_id', user.id);
 
     // Apply same filters for summary

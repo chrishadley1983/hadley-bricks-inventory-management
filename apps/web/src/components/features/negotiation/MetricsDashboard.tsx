@@ -2,12 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Send,
-  CheckCircle,
-  Percent,
-  TrendingUp,
-} from 'lucide-react';
+import { Send, CheckCircle, Percent, TrendingUp } from 'lucide-react';
 import type { NegotiationMetrics } from '@/lib/ebay/negotiation.types';
 
 interface MetricsDashboardProps {
@@ -39,9 +34,7 @@ function MetricCard({ title, value, icon, description, variant = 'default' }: Me
       </CardHeader>
       <CardContent>
         <div className={`text-2xl font-bold ${variantStyles[variant]}`}>{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
       </CardContent>
     </Card>
   );
@@ -119,7 +112,13 @@ export function MetricsDashboard({ metrics, isLoading }: MetricsDashboardProps) 
         value={`${metrics.acceptanceRate}%`}
         icon={<CheckCircle className="h-4 w-4" />}
         description={`${metrics.offersAccepted} accepted, ${metrics.offersDeclined} declined`}
-        variant={metrics.acceptanceRate >= 20 ? 'success' : metrics.acceptanceRate >= 10 ? 'warning' : 'default'}
+        variant={
+          metrics.acceptanceRate >= 20
+            ? 'success'
+            : metrics.acceptanceRate >= 10
+              ? 'warning'
+              : 'default'
+        }
         data-testid="metric-acceptance-rate"
       />
       <MetricCard

@@ -82,10 +82,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: 'Order not found' }, { status: 404 });
       }
       console.error('[GET /api/orders/ebay/:orderId] Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch order' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch order' }, { status: 500 });
     }
 
     // Get SKU mappings for this user
@@ -189,7 +186,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (order.fulfilment_instructions?.shippingInstructions?.shipTo) {
       const shipTo = order.fulfilment_instructions.shippingInstructions.shipTo;
       shippingAddress = {
-        name: shipTo.fullName || `${shipTo.contactAddress?.firstName || ''} ${shipTo.contactAddress?.lastName || ''}`.trim(),
+        name:
+          shipTo.fullName ||
+          `${shipTo.contactAddress?.firstName || ''} ${shipTo.contactAddress?.lastName || ''}`.trim(),
         addressLine1: shipTo.contactAddress?.addressLine1,
         addressLine2: shipTo.contactAddress?.addressLine2,
         city: shipTo.contactAddress?.city,
@@ -204,17 +203,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const transformedOrder = {
       ...order,
       line_items: enhancedLineItems,
-      ui_status: mapEbayStatusToUI(
-        order.order_fulfilment_status,
-        order.order_payment_status
-      ),
+      ui_status: mapEbayStatusToUI(order.order_fulfilment_status, order.order_payment_status),
       total: order.pricing_summary?.total?.value || 0,
       currency: order.pricing_summary?.total?.currency || 'GBP',
       shipping_address: shippingAddress,
-      shipping_service:
-        order.fulfilment_instructions?.shippingInstructions?.minEstimatedDeliveryDate
-          ? `Estimated delivery: ${order.fulfilment_instructions.shippingInstructions.minEstimatedDeliveryDate}`
-          : null,
+      shipping_service: order.fulfilment_instructions?.shippingInstructions
+        ?.minEstimatedDeliveryDate
+        ? `Estimated delivery: ${order.fulfilment_instructions.shippingInstructions.minEstimatedDeliveryDate}`
+        : null,
     };
 
     return NextResponse.json({ data: transformedOrder });

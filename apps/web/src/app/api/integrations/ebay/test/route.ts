@@ -23,10 +23,7 @@ export async function GET() {
     // Check connection status
     const status = await authService.getConnectionStatus(user.id);
     if (!status.isConnected) {
-      return NextResponse.json(
-        { success: false, error: 'Not connected to eBay' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Not connected to eBay' }, { status: 400 });
     }
 
     // Get access token

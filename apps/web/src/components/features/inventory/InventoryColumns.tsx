@@ -1,7 +1,14 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, ArrowUpDown, ExternalLink, Trash2, CloudUpload, Link2 } from 'lucide-react';
+import {
+  MoreHorizontal,
+  ArrowUpDown,
+  ExternalLink,
+  Trash2,
+  CloudUpload,
+  Link2,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { InventoryItem, InventoryItemUpdate } from '@hadley-bricks/database';
 import { Button } from '@/components/ui/button';
@@ -14,12 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EditableCell } from '@/components/ui/editable-cell';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -78,7 +80,11 @@ const CONDITION_OPTIONS = [
   { value: 'Used', label: 'Used' },
 ];
 
-export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
+export function getInventoryColumns({
+  onDelete,
+  onAddToAmazonSync,
+  onUpdate,
+}: ColumnsProps = {}): ColumnDef<InventoryItem>[] {
   return [
     {
       accessorKey: 'set_number',
@@ -159,23 +165,25 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
 
         // For SOLD items, always show tooltip
         if (status === 'SOLD') {
-          const hasAnyOrderData = item.sold_date || item.sold_platform || item.sold_order_id ||
-            item.sold_gross_amount != null || item.sold_fees_amount != null || item.sold_net_amount != null;
+          const hasAnyOrderData =
+            item.sold_date ||
+            item.sold_platform ||
+            item.sold_order_id ||
+            item.sold_gross_amount != null ||
+            item.sold_fees_amount != null ||
+            item.sold_net_amount != null;
 
           const soldBadge = (
             <span className="inline-flex items-center gap-1">
-              <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
-                {status}
-              </Badge>
-              {hasAnyOrderData && (
-                <Link2 className="h-3.5 w-3.5 text-green-600" />
-              )}
+              <Badge variant={STATUS_VARIANTS[status] || 'outline'}>{status}</Badge>
+              {hasAnyOrderData && <Link2 className="h-3.5 w-3.5 text-green-600" />}
             </span>
           );
 
-          const profit = item.sold_net_amount != null && item.cost != null
-            ? item.sold_net_amount - item.cost
-            : null;
+          const profit =
+            item.sold_net_amount != null && item.cost != null
+              ? item.sold_net_amount - item.cost
+              : null;
 
           return (
             <TooltipProvider>
@@ -195,50 +203,106 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
                       <>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Sold:</span>
-                          <span className={item.sold_date ? 'text-foreground' : 'text-muted-foreground italic'}>
+                          <span
+                            className={
+                              item.sold_date ? 'text-foreground' : 'text-muted-foreground italic'
+                            }
+                          >
                             {item.sold_date ? formatDate(item.sold_date) : 'Unavailable'}
                           </span>
                         </div>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Platform:</span>
-                          <span className={item.sold_platform ? 'text-foreground capitalize' : 'text-muted-foreground italic'}>
+                          <span
+                            className={
+                              item.sold_platform
+                                ? 'text-foreground capitalize'
+                                : 'text-muted-foreground italic'
+                            }
+                          >
                             {item.sold_platform || 'Unavailable'}
                           </span>
                         </div>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Order:</span>
-                          <span className={item.sold_order_id ? 'text-foreground font-mono text-xs' : 'text-muted-foreground italic'}>
-                            {item.sold_order_id ? `${item.sold_order_id.slice(0, 15)}...` : 'Unavailable'}
+                          <span
+                            className={
+                              item.sold_order_id
+                                ? 'text-foreground font-mono text-xs'
+                                : 'text-muted-foreground italic'
+                            }
+                          >
+                            {item.sold_order_id
+                              ? `${item.sold_order_id.slice(0, 15)}...`
+                              : 'Unavailable'}
                           </span>
                         </div>
                         <div className="border-t pt-2 mt-2">
                           <div className="flex justify-between gap-4">
                             <span className="text-muted-foreground">Gross:</span>
-                            <span className={item.sold_gross_amount != null ? 'text-foreground' : 'text-muted-foreground italic'}>
-                              {item.sold_gross_amount != null ? formatCurrency(item.sold_gross_amount) : 'Unavailable'}
+                            <span
+                              className={
+                                item.sold_gross_amount != null
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground italic'
+                              }
+                            >
+                              {item.sold_gross_amount != null
+                                ? formatCurrency(item.sold_gross_amount)
+                                : 'Unavailable'}
                             </span>
                           </div>
                           <div className="flex justify-between gap-4">
                             <span className="text-muted-foreground">Fees:</span>
-                            <span className={item.sold_fees_amount != null ? 'text-red-600' : 'text-muted-foreground italic'}>
-                              {item.sold_fees_amount != null ? `-${formatCurrency(item.sold_fees_amount)}` : 'Unavailable'}
+                            <span
+                              className={
+                                item.sold_fees_amount != null
+                                  ? 'text-red-600'
+                                  : 'text-muted-foreground italic'
+                              }
+                            >
+                              {item.sold_fees_amount != null
+                                ? `-${formatCurrency(item.sold_fees_amount)}`
+                                : 'Unavailable'}
                             </span>
                           </div>
                           <div className="flex justify-between gap-4">
                             <span className="text-muted-foreground">Net:</span>
-                            <span className={item.sold_net_amount != null ? 'text-foreground' : 'text-muted-foreground italic'}>
-                              {item.sold_net_amount != null ? formatCurrency(item.sold_net_amount) : 'Unavailable'}
+                            <span
+                              className={
+                                item.sold_net_amount != null
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground italic'
+                              }
+                            >
+                              {item.sold_net_amount != null
+                                ? formatCurrency(item.sold_net_amount)
+                                : 'Unavailable'}
                             </span>
                           </div>
                           <div className="flex justify-between gap-4">
                             <span className="text-muted-foreground">Cost:</span>
-                            <span className={item.cost != null ? 'text-foreground' : 'text-muted-foreground italic'}>
+                            <span
+                              className={
+                                item.cost != null
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground italic'
+                              }
+                            >
                               {item.cost != null ? `-${formatCurrency(item.cost)}` : 'Unavailable'}
                             </span>
                           </div>
                           <div className="flex justify-between gap-4 border-t pt-1 mt-1 font-semibold">
                             <span className="text-muted-foreground">Profit:</span>
-                            <span className={profit != null ? (profit >= 0 ? 'text-green-600' : 'text-red-600') : 'text-muted-foreground italic font-normal'}>
+                            <span
+                              className={
+                                profit != null
+                                  ? profit >= 0
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                                  : 'text-muted-foreground italic font-normal'
+                              }
+                            >
                               {profit != null ? formatCurrency(profit) : 'Unavailable'}
                             </span>
                           </div>
@@ -254,16 +318,14 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
 
         // For LISTED items, always show tooltip
         if (status === 'LISTED') {
-          const hasAnyListingData = item.listing_date || item.listing_platform || item.listing_value != null;
+          const hasAnyListingData =
+            item.listing_date || item.listing_platform || item.listing_value != null;
 
-          const potentialProfit = item.cost != null && item.listing_value != null
-            ? item.listing_value - item.cost
-            : null;
+          const potentialProfit =
+            item.cost != null && item.listing_value != null ? item.listing_value - item.cost : null;
 
           const listedBadge = (
-            <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
-              {status}
-            </Badge>
+            <Badge variant={STATUS_VARIANTS[status] || 'outline'}>{status}</Badge>
           );
 
           return (
@@ -277,33 +339,63 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
                   className="bg-background border shadow-lg p-3 max-w-xs"
                 >
                   <div className="space-y-2 text-sm">
-                    <div className="font-semibold text-foreground border-b pb-1">Listing Details</div>
+                    <div className="font-semibold text-foreground border-b pb-1">
+                      Listing Details
+                    </div>
                     {!hasAnyListingData ? (
                       <div className="text-muted-foreground italic py-2">No listing data</div>
                     ) : (
                       <>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Listed:</span>
-                          <span className={item.listing_date ? 'text-foreground' : 'text-muted-foreground italic'}>
+                          <span
+                            className={
+                              item.listing_date ? 'text-foreground' : 'text-muted-foreground italic'
+                            }
+                          >
                             {item.listing_date ? formatDate(item.listing_date) : 'Unavailable'}
                           </span>
                         </div>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Platform:</span>
-                          <span className={item.listing_platform ? 'text-foreground capitalize' : 'text-muted-foreground italic'}>
+                          <span
+                            className={
+                              item.listing_platform
+                                ? 'text-foreground capitalize'
+                                : 'text-muted-foreground italic'
+                            }
+                          >
                             {item.listing_platform || 'Unavailable'}
                           </span>
                         </div>
                         <div className="flex justify-between gap-4">
                           <span className="text-muted-foreground">Price:</span>
-                          <span className={item.listing_value != null ? 'text-foreground' : 'text-muted-foreground italic'}>
-                            {item.listing_value != null ? formatCurrency(item.listing_value) : 'Unavailable'}
+                          <span
+                            className={
+                              item.listing_value != null
+                                ? 'text-foreground'
+                                : 'text-muted-foreground italic'
+                            }
+                          >
+                            {item.listing_value != null
+                              ? formatCurrency(item.listing_value)
+                              : 'Unavailable'}
                           </span>
                         </div>
                         <div className="flex justify-between gap-4 border-t pt-1 mt-1">
                           <span className="text-muted-foreground">Potential Profit:</span>
-                          <span className={potentialProfit != null ? (potentialProfit >= 0 ? 'text-green-600' : 'text-red-600') : 'text-muted-foreground italic'}>
-                            {potentialProfit != null ? formatCurrency(potentialProfit) : 'Unavailable'}
+                          <span
+                            className={
+                              potentialProfit != null
+                                ? potentialProfit >= 0
+                                  ? 'text-green-600'
+                                  : 'text-red-600'
+                                : 'text-muted-foreground italic'
+                            }
+                          >
+                            {potentialProfit != null
+                              ? formatCurrency(potentialProfit)
+                              : 'Unavailable'}
                           </span>
                         </div>
                       </>
@@ -470,9 +562,7 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
             <EditableCell
               value={location}
               displayValue={
-                location ? (
-                  <span className="max-w-[100px] truncate">{location}</span>
-                ) : undefined
+                location ? <span className="max-w-[100px] truncate">{location}</span> : undefined
               }
               type="text"
               onSave={async (value) => {
@@ -554,11 +644,7 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
       },
       cell: ({ row }) => {
         const platform = row.getValue('listing_platform') as string | null;
-        return platform ? (
-          <Badge variant="outline">{platform}</Badge>
-        ) : (
-          '-'
-        );
+        return platform ? <Badge variant="outline">{platform}</Badge> : '-';
       },
     },
     // Sale columns
@@ -587,7 +673,9 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
       cell: ({ row }) => {
         const platform = row.getValue('sold_platform') as string | null;
         return platform ? (
-          <Badge variant="outline" className="capitalize">{platform}</Badge>
+          <Badge variant="outline" className="capitalize">
+            {platform}
+          </Badge>
         ) : (
           '-'
         );
@@ -797,10 +885,7 @@ export function getInventoryColumns({ onDelete, onAddToAmazonSync, onUpdate }: C
               )}
               <DropdownMenuSeparator />
               {onDelete && (
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={() => onDelete(item.id)}
-                >
+                <DropdownMenuItem className="text-destructive" onClick={() => onDelete(item.id)}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
                 </DropdownMenuItem>

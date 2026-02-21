@@ -179,7 +179,9 @@ export class EbayImageUploadService {
     const estimatedSize = (image.base64.length * 3) / 4;
     const maxSize = 12 * 1024 * 1024; // 12MB
     if (estimatedSize > maxSize) {
-      errors.push(`Image too large: ~${(estimatedSize / 1024 / 1024).toFixed(1)}MB. Maximum is 12MB.`);
+      errors.push(
+        `Image too large: ~${(estimatedSize / 1024 / 1024).toFixed(1)}MB. Maximum is 12MB.`
+      );
     }
 
     return {

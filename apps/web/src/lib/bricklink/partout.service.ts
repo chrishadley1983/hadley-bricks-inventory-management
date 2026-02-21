@@ -112,7 +112,9 @@ export class PartoutService {
     } = {}
   ): Promise<PartoutData> {
     const { onProgress, forceRefresh = false } = options;
-    console.log(`[PartoutService] Getting partout value for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`);
+    console.log(
+      `[PartoutService] Getting partout value for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`
+    );
 
     // 1. Fetch colors and parts list in parallel
     const [colorMap, subsets] = await Promise.all([
@@ -237,7 +239,9 @@ export class PartoutService {
       return [];
     }
 
-    console.log(`[PartoutService] Fetching ${parts.length} uncached parts from BrickLink (sequential with ${REQUEST_DELAY_MS}ms delay)`);
+    console.log(
+      `[PartoutService] Fetching ${parts.length} uncached parts from BrickLink (sequential with ${REQUEST_DELAY_MS}ms delay)`
+    );
 
     const results: PartPriceData[] = [];
     let rateLimitHit = false;
@@ -256,16 +260,11 @@ export class PartoutService {
           }
         } catch (error) {
           if (error instanceof RateLimitError) {
-            console.warn(
-              `[PartoutService] Rate limit hit at part ${part.partNumber}. Stopping.`
-            );
+            console.warn(`[PartoutService] Rate limit hit at part ${part.partNumber}. Stopping.`);
             rateLimitHit = true;
             break;
           } else {
-            console.warn(
-              `[PartoutService] Failed to fetch price for ${part.partNumber}:`,
-              error
-            );
+            console.warn(`[PartoutService] Failed to fetch price for ${part.partNumber}:`, error);
           }
         }
 
@@ -286,7 +285,9 @@ export class PartoutService {
     }
 
     if (rateLimitHit) {
-      console.warn(`[PartoutService] Rate limit stopped fetching. Got ${results.length}/${parts.length} parts before limit.`);
+      console.warn(
+        `[PartoutService] Rate limit stopped fetching. Got ${results.length}/${parts.length} parts before limit.`
+      );
     } else {
       console.log(`[PartoutService] Fetched ${results.length}/${parts.length} prices from API`);
     }
@@ -341,12 +342,18 @@ export class PartoutService {
 
       // Parse prices from SOLD data (actual sale prices, not asking prices)
       // Fall back to stock prices if no sold data available
-      const priceNew = soldNew && soldNew.total_quantity > 0
-        ? parseFloat(soldNew.avg_price)
-        : (stockNew && stockNew.total_quantity > 0 ? parseFloat(stockNew.avg_price) : null);
-      const priceUsed = soldUsed && soldUsed.total_quantity > 0
-        ? parseFloat(soldUsed.avg_price)
-        : (stockUsed && stockUsed.total_quantity > 0 ? parseFloat(stockUsed.avg_price) : null);
+      const priceNew =
+        soldNew && soldNew.total_quantity > 0
+          ? parseFloat(soldNew.avg_price)
+          : stockNew && stockNew.total_quantity > 0
+            ? parseFloat(stockNew.avg_price)
+            : null;
+      const priceUsed =
+        soldUsed && soldUsed.total_quantity > 0
+          ? parseFloat(soldUsed.avg_price)
+          : stockUsed && stockUsed.total_quantity > 0
+            ? parseFloat(stockUsed.avg_price)
+            : null;
 
       return {
         partNumber: part.partNumber,
@@ -363,10 +370,7 @@ export class PartoutService {
         timesSoldUsed,
       };
     } catch (error) {
-      console.error(
-        `[PartoutService] Error fetching price for ${part.partNumber}:`,
-        error
-      );
+      console.error(`[PartoutService] Error fetching price for ${part.partNumber}:`, error);
       return null;
     }
   }

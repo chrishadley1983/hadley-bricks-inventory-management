@@ -45,7 +45,8 @@ export async function GET(_request: NextRequest) {
     // Fetch platform_orders awaiting dispatch with dispatch_by set
     const { data: platformOrders, error: platformOrdersError } = await supabase
       .from('platform_orders')
-      .select(`
+      .select(
+        `
         id,
         platform_order_id,
         buyer_name,
@@ -54,14 +55,18 @@ export async function GET(_request: NextRequest) {
         dispatch_by,
         platform,
         order_items(item_name)
-      `)
+      `
+      )
       .eq('user_id', user.id)
       .in('internal_status', ['Paid', 'Processing'])
       .not('dispatch_by', 'is', null)
       .order('dispatch_by', { ascending: true });
 
     if (platformOrdersError) {
-      console.error('[GET /api/orders/dispatch-deadlines] platform_orders error:', platformOrdersError);
+      console.error(
+        '[GET /api/orders/dispatch-deadlines] platform_orders error:',
+        platformOrdersError
+      );
       return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
     }
 
@@ -69,14 +74,16 @@ export async function GET(_request: NextRequest) {
     // Only include orders that are PAID (not PENDING, not refunded)
     const { data: ebayOrders, error: ebayOrdersError } = await supabase
       .from('ebay_orders')
-      .select(`
+      .select(
+        `
         id,
         ebay_order_id,
         buyer_username,
         pricing_summary,
         dispatch_by,
         ebay_order_line_items(id, title)
-      `)
+      `
+      )
       .eq('user_id', user.id)
       .in('order_fulfilment_status', ['NOT_STARTED', 'IN_PROGRESS'])
       .eq('order_payment_status', 'PAID')
@@ -105,7 +112,8 @@ export async function GET(_request: NextRequest) {
       if (isUrgent) urgentCount++;
 
       // Get item name from first item, or join multiple item names
-      const orderItems = (order as { order_items?: Array<{ item_name: string | null }> }).order_items || [];
+      const orderItems =
+        (order as { order_items?: Array<{ item_name: string | null }> }).order_items || [];
       const itemNames = orderItems.map((i) => i.item_name).filter(Boolean) as string[];
       const itemName = itemNames.length > 0 ? itemNames[0] : null;
 
@@ -142,12 +150,17 @@ export async function GET(_request: NextRequest) {
       if (isUrgent) urgentCount++;
 
       // Extract total from pricing_summary
-      const pricingSummary = order.pricing_summary as { total?: { value?: string; currency?: string } } | null;
+      const pricingSummary = order.pricing_summary as {
+        total?: { value?: string; currency?: string };
+      } | null;
       const total = pricingSummary?.total?.value ? parseFloat(pricingSummary.total.value) : 0;
       const currency = pricingSummary?.total?.currency || 'GBP';
 
       // Get item name from line items
-      const lineItems = (order.ebay_order_line_items || []) as Array<{ id: string; title?: string }>;
+      const lineItems = (order.ebay_order_line_items || []) as Array<{
+        id: string;
+        title?: string;
+      }>;
       const itemTitles = lineItems.map((li) => li.title).filter(Boolean) as string[];
       const itemName = itemTitles.length > 0 ? itemTitles[0] : null;
 
@@ -173,8 +186,8 @@ export async function GET(_request: NextRequest) {
 
     // Sort orders within each platform group by dispatch_by
     for (const platform of Object.keys(platformGroups)) {
-      platformGroups[platform].sort((a, b) =>
-        new Date(a.dispatchBy).getTime() - new Date(b.dispatchBy).getTime()
+      platformGroups[platform].sort(
+        (a, b) => new Date(a.dispatchBy).getTime() - new Date(b.dispatchBy).getTime()
       );
     }
 

@@ -75,10 +75,7 @@ export async function POST(request: NextRequest) {
 
     if (queryError) {
       console.error('[POST /api/purchases/match-monzo] Query error:', queryError);
-      return NextResponse.json(
-        { error: 'Failed to query transactions' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to query transactions' }, { status: 500 });
     }
 
     console.log(

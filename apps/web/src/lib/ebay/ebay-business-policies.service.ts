@@ -9,12 +9,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@hadley-bricks/database';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import { EbayAuthService } from './ebay-auth.service';
+import type { EbayFulfillmentPolicy, EbayPaymentPolicy, EbayReturnPolicy } from './types';
 import type {
-  EbayFulfillmentPolicy,
-  EbayPaymentPolicy,
-  EbayReturnPolicy,
-} from './types';
-import type { EbayBusinessPolicy, PolicyType, BusinessPoliciesResponse } from './listing-creation.types';
+  EbayBusinessPolicy,
+  PolicyType,
+  BusinessPoliciesResponse,
+} from './listing-creation.types';
 
 // Cache TTL in milliseconds (24 hours)
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -113,10 +113,11 @@ export class EbayBusinessPoliciesService {
     }
 
     // Otherwise, try to find a "small parcel" style policy
-    const smallParcelPolicy = policies.fulfillment.find((p) =>
-      p.name.toLowerCase().includes('small') ||
-      p.name.toLowerCase().includes('parcel') ||
-      p.name.toLowerCase().includes('royal mail')
+    const smallParcelPolicy = policies.fulfillment.find(
+      (p) =>
+        p.name.toLowerCase().includes('small') ||
+        p.name.toLowerCase().includes('parcel') ||
+        p.name.toLowerCase().includes('royal mail')
     );
 
     return smallParcelPolicy || policies.fulfillment[0] || null;

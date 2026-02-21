@@ -111,7 +111,9 @@ export async function GET(request: NextRequest) {
     // Calculate summary stats
     const totalOrders = orders.length;
     const allMatchedOrders = orders.filter((o) => o.allMatched).length;
-    const partialMatchOrders = orders.filter((o) => !o.allMatched && o.unmatchedCount < o.items.length).length;
+    const partialMatchOrders = orders.filter(
+      (o) => !o.allMatched && o.unmatchedCount < o.items.length
+    ).length;
     const unmatchedOrders = orders.filter((o) => o.unmatchedCount === o.items.length).length;
 
     return NextResponse.json({

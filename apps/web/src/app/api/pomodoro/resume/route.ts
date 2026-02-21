@@ -33,10 +33,7 @@ export async function POST() {
     }
 
     if (!session) {
-      return NextResponse.json(
-        { error: 'No paused session to resume' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No paused session to resume' }, { status: 400 });
     }
 
     // Calculate pause duration

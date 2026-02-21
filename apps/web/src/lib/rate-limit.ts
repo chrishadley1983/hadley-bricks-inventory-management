@@ -110,10 +110,7 @@ export const RateLimits = {
  * Get rate limit identifier from request
  * Uses IP address or user ID if available
  */
-export function getRateLimitIdentifier(
-  request: Request,
-  userId?: string
-): string {
+export function getRateLimitIdentifier(request: Request, userId?: string): string {
   if (userId) {
     return `user:${userId}`;
   }

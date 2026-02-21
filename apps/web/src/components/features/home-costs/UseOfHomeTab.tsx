@@ -8,11 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import {
-  useCreateHomeCost,
-  useUpdateHomeCost,
-  useDeleteHomeCost,
-} from '@/hooks/use-home-costs';
+import { useCreateHomeCost, useUpdateHomeCost, useDeleteHomeCost } from '@/hooks/use-home-costs';
 import { MonthPicker } from './MonthPicker';
 import type { HomeCost, HoursPerMonth } from '@/types/home-costs';
 import { HMRC_RATES } from '@/types/home-costs';
@@ -208,9 +204,7 @@ export function UseOfHomeTab({ existingCost, isLoading }: UseOfHomeTabProps) {
                 Ongoing
               </Label>
             </div>
-            {!isOngoing && (
-              <MonthPicker value={endDate ?? ''} onChange={setEndDate} />
-            )}
+            {!isOngoing && <MonthPicker value={endDate ?? ''} onChange={setEndDate} />}
           </div>
         </div>
       </div>
@@ -234,11 +228,7 @@ export function UseOfHomeTab({ existingCost, isLoading }: UseOfHomeTabProps) {
       {/* Actions */}
       <div className="flex justify-between pt-2">
         {existingCost && (
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={isDeleting || isSaving}
-          >
+          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting || isSaving}>
             <Trash2 className="h-4 w-4 mr-2" />
             {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>

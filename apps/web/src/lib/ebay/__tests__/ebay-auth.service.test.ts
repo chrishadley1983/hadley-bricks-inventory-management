@@ -241,9 +241,7 @@ describe('EbayAuthService', () => {
 
     it('should return error when token exchange fails', async () => {
       const service = new EbayAuthService(validConfig);
-      const state = Buffer.from(
-        JSON.stringify({ userId: testUserId })
-      ).toString('base64url');
+      const state = Buffer.from(JSON.stringify({ userId: testUserId })).toString('base64url');
 
       mockFetch.mockResolvedValueOnce({
         ok: false,

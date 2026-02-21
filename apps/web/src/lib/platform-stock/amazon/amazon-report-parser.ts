@@ -111,11 +111,7 @@ export function parseAmazonListingsReport(content: string): ParseReportResult {
   });
 
   // Validate required columns exist
-  const requiredColumns = [
-    COLUMN_NAMES.sellerSku,
-    COLUMN_NAMES.productId,
-    COLUMN_NAMES.quantity,
-  ];
+  const requiredColumns = [COLUMN_NAMES.sellerSku, COLUMN_NAMES.productId, COLUMN_NAMES.quantity];
 
   for (const col of requiredColumns) {
     if (!columnMap.has(col)) {
@@ -173,40 +169,28 @@ export function parseAmazonListingsReport(content: string): ParseReportResult {
 
       const price = priceStr ? parseFloat(priceStr) : null;
       const quantity = quantityStr ? parseInt(quantityStr, 10) : 0;
-      const pendingQuantity = pendingQuantityStr
-        ? parseInt(pendingQuantityStr, 10)
-        : null;
+      const pendingQuantity = pendingQuantityStr ? parseInt(pendingQuantityStr, 10) : null;
 
       // Parse status
       const status = getColumn(row, COLUMN_NAMES.status);
       const listingStatus = mapAmazonStatus(status);
 
       // Parse fulfillment channel
-      const fulfillmentChannel = getColumn(
-        row,
-        COLUMN_NAMES.fulfillmentChannel
-      );
+      const fulfillmentChannel = getColumn(row, COLUMN_NAMES.fulfillmentChannel);
 
       // Build Amazon-specific data
       const amazonData: AmazonListingData = {
         fnsku: null, // Not in this report
         productType: getColumn(row, COLUMN_NAMES.productIdType) || null,
         productIdType: getColumn(row, COLUMN_NAMES.productIdType) || null,
-        itemCondition: mapItemCondition(
-          getColumn(row, COLUMN_NAMES.itemCondition)
-        ),
+        itemCondition: mapItemCondition(getColumn(row, COLUMN_NAMES.itemCondition)),
         itemNote: getColumn(row, COLUMN_NAMES.itemNote) || null,
         itemDescription: getColumn(row, COLUMN_NAMES.itemDescription) || null,
         openDate: getColumn(row, COLUMN_NAMES.openDate) || null,
-        willShipInternationally: parseBoolean(
-          getColumn(row, COLUMN_NAMES.willShipInternationally)
-        ),
-        expeditedShipping: parseBoolean(
-          getColumn(row, COLUMN_NAMES.expeditedShipping)
-        ),
+        willShipInternationally: parseBoolean(getColumn(row, COLUMN_NAMES.willShipInternationally)),
+        expeditedShipping: parseBoolean(getColumn(row, COLUMN_NAMES.expeditedShipping)),
         pendingQuantity,
-        merchantShippingGroup:
-          getColumn(row, COLUMN_NAMES.merchantShippingGroup) || null,
+        merchantShippingGroup: getColumn(row, COLUMN_NAMES.merchantShippingGroup) || null,
         listingId: getColumn(row, COLUMN_NAMES.listingId) || null,
       };
 
@@ -276,10 +260,7 @@ function mapFulfillmentChannel(channel: string | null): string | null {
 
   const normalizedChannel = channel.toUpperCase().trim();
 
-  if (
-    normalizedChannel.startsWith('AMAZON') ||
-    normalizedChannel === 'AFN'
-  ) {
+  if (normalizedChannel.startsWith('AMAZON') || normalizedChannel === 'AFN') {
     return 'FBA';
   }
 

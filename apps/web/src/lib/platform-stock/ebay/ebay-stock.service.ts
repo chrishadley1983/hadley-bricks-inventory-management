@@ -71,14 +71,12 @@ export class EbayStockService extends PlatformStockService {
       });
 
       // 4. Fetch all active listings with progress tracking
-      const allListings = await tradingClient.getAllActiveListings(
-        async (current, total) => {
-          await this.updateImportRecord(importId, {
-            processed_rows: current,
-            total_rows: total,
-          });
-        }
-      );
+      const allListings = await tradingClient.getAllActiveListings(async (current, total) => {
+        await this.updateImportRecord(importId, {
+          processed_rows: current,
+          total_rows: total,
+        });
+      });
 
       console.log(`[EbayStockService] Fetched ${allListings.length} listings`);
 
@@ -105,7 +103,9 @@ export class EbayStockService extends PlatformStockService {
         total_rows: allListings.length,
         processed_rows: upsertedCount,
         error_count: skuValidation.totalIssueCount,
-        error_details: skuValidation.hasIssues ? (skuValidation as unknown as Database['public']['Tables']['platform_listing_imports']['Update']['error_details']) : null,
+        error_details: skuValidation.hasIssues
+          ? (skuValidation as unknown as Database['public']['Tables']['platform_listing_imports']['Update']['error_details'])
+          : null,
       });
 
       const result = await this.getImportStatus(importId);
@@ -136,10 +136,7 @@ export class EbayStockService extends PlatformStockService {
   /**
    * Convert parsed listing to database insert format
    */
-  private convertToDbListing(
-    importId: string,
-    listing: ParsedEbayListing
-  ): PlatformListingInsert {
+  private convertToDbListing(importId: string, listing: ParsedEbayListing): PlatformListingInsert {
     return {
       user_id: this.userId,
       platform: 'ebay',
@@ -151,9 +148,11 @@ export class EbayStockService extends PlatformStockService {
       currency: listing.currency,
       listing_status: listing.listingStatus,
       fulfillment_channel: null, // eBay doesn't have FBA/FBM
-      ebay_data: listing.ebayData as unknown as Database['public']['Tables']['platform_listings']['Insert']['ebay_data'],
+      ebay_data:
+        listing.ebayData as unknown as Database['public']['Tables']['platform_listings']['Insert']['ebay_data'],
       import_id: importId,
-      raw_data: listing.ebayData as unknown as Database['public']['Tables']['platform_listings']['Insert']['raw_data'],
+      raw_data:
+        listing.ebayData as unknown as Database['public']['Tables']['platform_listings']['Insert']['raw_data'],
     };
   }
 
@@ -195,7 +194,10 @@ export class EbayStockService extends PlatformStockService {
 
       if (error) {
         console.error(`[EbayStockService] Error upserting batch ${i / BATCH_SIZE + 1}:`, error);
-        console.error(`[EbayStockService] First item in failed batch:`, JSON.stringify(batch[0], null, 2));
+        console.error(
+          `[EbayStockService] First item in failed batch:`,
+          JSON.stringify(batch[0], null, 2)
+        );
         // Continue with other batches
       } else {
         const count = data?.length || 0;
@@ -241,13 +243,13 @@ export class EbayStockService extends PlatformStockService {
     const BATCH_SIZE = 500;
     for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
       const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-      const { error } = await this.supabase
-        .from('platform_listings')
-        .delete()
-        .in('id', batch);
+      const { error } = await this.supabase.from('platform_listings').delete().in('id', batch);
 
       if (error) {
-        console.error(`[EbayStockService] Error deleting stale batch ${i / BATCH_SIZE + 1}:`, error);
+        console.error(
+          `[EbayStockService] Error deleting stale batch ${i / BATCH_SIZE + 1}:`,
+          error
+        );
       }
     }
   }
@@ -264,7 +266,9 @@ export class EbayStockService extends PlatformStockService {
     // Instead of using the view (which may not be in types), we do it in code
     const { data: allListings, error } = await this.supabase
       .from('platform_listings')
-      .select('id, user_id, platform_sku, platform_item_id, title, quantity, price, listing_status, ebay_data, created_at')
+      .select(
+        'id, user_id, platform_sku, platform_item_id, title, quantity, price, listing_status, ebay_data, created_at'
+      )
       .eq('user_id', this.userId)
       .eq('platform', 'ebay');
 
@@ -281,7 +285,9 @@ export class EbayStockService extends PlatformStockService {
     }
 
     // Find empty SKUs
-    const emptySkuListings = (allListings || []).filter(l => !l.platform_sku || l.platform_sku.trim() === '');
+    const emptySkuListings = (allListings || []).filter(
+      (l) => !l.platform_sku || l.platform_sku.trim() === ''
+    );
 
     // Find duplicate SKUs
     const skuCounts = new Map<string, number>();
@@ -300,12 +306,12 @@ export class EbayStockService extends PlatformStockService {
     }
 
     const duplicateSkuListings = (allListings || []).filter(
-      l => l.platform_sku && duplicateSkuValues.has(l.platform_sku)
+      (l) => l.platform_sku && duplicateSkuValues.has(l.platform_sku)
     );
 
     // Convert to EbaySkuIssueRow format
     const rows: EbaySkuIssueRow[] = [
-      ...emptySkuListings.map(l => ({
+      ...emptySkuListings.map((l) => ({
         id: l.id,
         user_id: l.user_id,
         platform_sku: l.platform_sku,
@@ -319,7 +325,7 @@ export class EbayStockService extends PlatformStockService {
         issue_type: 'empty' as const,
         created_at: l.created_at,
       })),
-      ...duplicateSkuListings.map(l => ({
+      ...duplicateSkuListings.map((l) => ({
         id: l.id,
         user_id: l.user_id,
         platform_sku: l.platform_sku,
@@ -585,8 +591,7 @@ export class EbayStockService extends PlatformStockService {
 
     for (const comparison of comparisonMap.values()) {
       // Calculate quantity difference
-      comparison.quantityDifference =
-        comparison.platformQuantity - comparison.inventoryQuantity;
+      comparison.quantityDifference = comparison.platformQuantity - comparison.inventoryQuantity;
 
       // Determine discrepancy type
       if (comparison.platformQuantity === comparison.inventoryQuantity) {
@@ -601,8 +606,7 @@ export class EbayStockService extends PlatformStockService {
 
       // Calculate price difference if both have prices
       if (comparison.platformPrice && comparison.inventoryItems.length > 0) {
-        const avgInventoryPrice =
-          comparison.inventoryTotalValue / comparison.inventoryItems.length;
+        const avgInventoryPrice = comparison.inventoryTotalValue / comparison.inventoryItems.length;
         comparison.priceDifference = comparison.platformPrice - avgInventoryPrice;
       }
 
@@ -631,9 +635,7 @@ export class EbayStockService extends PlatformStockService {
     }
 
     if (filters.hideZeroQuantities) {
-      filtered = filtered.filter(
-        (c) => c.platformQuantity > 0 || c.inventoryQuantity > 0
-      );
+      filtered = filtered.filter((c) => c.platformQuantity > 0 || c.inventoryQuantity > 0);
     }
 
     // 7. Sort: issues first (platform_only, inventory_only, quantity_mismatch, match)
@@ -648,8 +650,7 @@ export class EbayStockService extends PlatformStockService {
 
     filtered.sort((a, b) => {
       const orderDiff =
-        (discrepancyOrder[a.discrepancyType] ?? 99) -
-        (discrepancyOrder[b.discrepancyType] ?? 99);
+        (discrepancyOrder[a.discrepancyType] ?? 99) - (discrepancyOrder[b.discrepancyType] ?? 99);
       if (orderDiff !== 0) return orderDiff;
 
       // Secondary sort by title/SKU
@@ -664,15 +665,11 @@ export class EbayStockService extends PlatformStockService {
       totalPlatformQuantity: ebayListings.reduce((sum, l) => sum + l.quantity, 0),
       totalInventoryItems: inventoryItems?.length || 0,
       matchedItems: comparisons.filter((c) => c.discrepancyType === 'match').length,
-      platformOnlyItems: comparisons.filter((c) => c.discrepancyType === 'platform_only')
+      platformOnlyItems: comparisons.filter((c) => c.discrepancyType === 'platform_only').length,
+      inventoryOnlyItems: comparisons.filter((c) => c.discrepancyType === 'inventory_only').length,
+      quantityMismatches: comparisons.filter((c) => c.discrepancyType === 'quantity_mismatch')
         .length,
-      inventoryOnlyItems: comparisons.filter((c) => c.discrepancyType === 'inventory_only')
-        .length,
-      quantityMismatches: comparisons.filter(
-        (c) => c.discrepancyType === 'quantity_mismatch'
-      ).length,
-      priceMismatches: comparisons.filter((c) => c.discrepancyType === 'price_mismatch')
-        .length,
+      priceMismatches: comparisons.filter((c) => c.discrepancyType === 'price_mismatch').length,
       missingAsinItems: 0, // Not applicable to eBay (uses SKU matching, not ASIN)
       lastImportAt: (await this.getLatestImport())?.completedAt || null,
     };

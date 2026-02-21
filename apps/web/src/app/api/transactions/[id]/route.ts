@@ -19,10 +19,7 @@ const UpdateSchema = z.object({
 /**
  * GET - Get a single transaction
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -63,10 +60,7 @@ export async function GET(
 /**
  * PATCH - Update transaction notes, local category, or tags
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

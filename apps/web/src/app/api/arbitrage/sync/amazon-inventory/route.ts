@@ -39,7 +39,9 @@ export async function POST() {
 
         // Send initial message
         await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ type: 'start', message: 'Starting Amazon inventory sync...' })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'start', message: 'Starting Amazon inventory sync...' })}\n\n`
+          )
         );
 
         // Run sync with progress callback

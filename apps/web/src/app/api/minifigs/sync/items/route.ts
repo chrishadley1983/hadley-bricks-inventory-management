@@ -45,9 +45,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: data ?? [] });
   } catch (error) {
     console.error('[GET /api/minifigs/sync/items] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch items' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
   }
 }

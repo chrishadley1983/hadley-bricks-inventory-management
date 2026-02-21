@@ -6,9 +6,12 @@ import { googleCalendarAuthService } from '@/lib/google-calendar';
 const ConnectSchema = z.object({
   returnUrl: z
     .string()
-    .refine((val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'), {
-      message: 'Must be a valid URL or relative path starting with /',
-    })
+    .refine(
+      (val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'),
+      {
+        message: 'Must be a valid URL or relative path starting with /',
+      }
+    )
     .optional(),
 });
 

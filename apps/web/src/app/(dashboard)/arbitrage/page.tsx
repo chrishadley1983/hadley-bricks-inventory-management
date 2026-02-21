@@ -27,7 +27,11 @@ import {
   useAmazonInventorySyncWithProgress,
 } from '@/hooks/use-arbitrage';
 import type { SyncProgress } from '@/hooks/use-arbitrage';
-import type { ArbitrageFilterOptions, ArbitrageItem, ArbitrageSortField } from '@/lib/arbitrage/types';
+import type {
+  ArbitrageFilterOptions,
+  ArbitrageItem,
+  ArbitrageSortField,
+} from '@/lib/arbitrage/types';
 import {
   SHOW_FILTER_OPTIONS_WITH_SEEDED,
   EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED,
@@ -104,28 +108,37 @@ function ArbitragePageContent() {
   const currentFilters = activeTab === 'bricklink' ? blFilters : ebayFilters;
 
   // Data hooks
-  const { data: arbitrageData, isLoading: dataLoading, error: dataError } = useArbitrageData(
-    activeTab !== 'seeded' ? currentFilters : undefined
-  );
+  const {
+    data: arbitrageData,
+    isLoading: dataLoading,
+    error: dataError,
+  } = useArbitrageData(activeTab !== 'seeded' ? currentFilters : undefined);
   const { data: selectedItem } = useArbitrageItem(selectedAsin);
   const { data: syncStatus, isLoading: syncLoading } = useSyncStatus();
-  const { data: summary, isLoading: summaryLoading } = useArbitrageSummary(undefined, currentFilters.maxCog ?? 50);
+  const { data: summary, isLoading: summaryLoading } = useArbitrageSummary(
+    undefined,
+    currentFilters.maxCog ?? 50
+  );
 
   // Mutations
   const excludeMutation = useExcludeAsin();
 
   // Update URL when tab changes
-  const handleTabChange = useCallback((tab: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', tab);
-    router.push(`/arbitrage?${params.toString()}`);
-  }, [searchParams, router]);
+  const handleTabChange = useCallback(
+    (tab: string) => {
+      const params = new URLSearchParams(searchParams);
+      params.set('tab', tab);
+      router.push(`/arbitrage?${params.toString()}`);
+    },
+    [searchParams, router]
+  );
 
   const handleBlFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
     setBlFilters((prev) => {
       // If only the page changed, keep it. Otherwise reset to page 1.
       const pageChanged = newFilters.page !== prev.page;
-      const onlyPageChanged = pageChanged &&
+      const onlyPageChanged =
+        pageChanged &&
         newFilters.show === prev.show &&
         newFilters.sortField === prev.sortField &&
         newFilters.sortDirection === prev.sortDirection &&
@@ -133,7 +146,7 @@ function ArbitragePageContent() {
         newFilters.search === prev.search;
       return {
         ...newFilters,
-        page: onlyPageChanged ? newFilters.page : (pageChanged ? newFilters.page : 1),
+        page: onlyPageChanged ? newFilters.page : pageChanged ? newFilters.page : 1,
       };
     });
   }, []);
@@ -141,7 +154,8 @@ function ArbitragePageContent() {
   const handleEbayFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
     setEbayFilters((prev) => {
       const pageChanged = newFilters.page !== prev.page;
-      const onlyPageChanged = pageChanged &&
+      const onlyPageChanged =
+        pageChanged &&
         newFilters.show === prev.show &&
         newFilters.sortField === prev.sortField &&
         newFilters.sortDirection === prev.sortDirection &&
@@ -149,7 +163,7 @@ function ArbitragePageContent() {
         newFilters.search === prev.search;
       return {
         ...newFilters,
-        page: onlyPageChanged ? newFilters.page : (pageChanged ? newFilters.page : 1),
+        page: onlyPageChanged ? newFilters.page : pageChanged ? newFilters.page : 1,
       };
     });
   }, []);
@@ -181,15 +195,18 @@ function ArbitragePageContent() {
     setSelectedAsin(null);
   }, []);
 
-  const handleExclude = useCallback(async (asin: string, reason?: string) => {
-    try {
-      await excludeMutation.mutateAsync({ asin, reason });
-      toast({ title: 'ASIN excluded from tracking' });
-      setSelectedAsin(null);
-    } catch {
-      toast({ title: 'Failed to exclude ASIN', variant: 'destructive' });
-    }
-  }, [excludeMutation, toast]);
+  const handleExclude = useCallback(
+    async (asin: string, reason?: string) => {
+      try {
+        await excludeMutation.mutateAsync({ asin, reason });
+        toast({ title: 'ASIN excluded from tracking' });
+        setSelectedAsin(null);
+      } catch {
+        toast({ title: 'Failed to exclude ASIN', variant: 'destructive' });
+      }
+    },
+    [excludeMutation, toast]
+  );
 
   // Extract data
   const items = arbitrageData?.items ?? [];
@@ -487,10 +504,7 @@ function SummaryCard({
       </CardHeader>
       <CardContent>
         {onClick ? (
-          <button
-            onClick={onClick}
-            className="text-xs text-primary hover:underline"
-          >
+          <button onClick={onClick} className="text-xs text-primary hover:underline">
             {description}
           </button>
         ) : (
@@ -520,7 +534,12 @@ function SyncStatusCard({
   isLoading,
   tab,
 }: {
-  syncStatus: Record<string, { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null } | null> | undefined;
+  syncStatus:
+    | Record<
+        string,
+        { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null } | null
+      >
+    | undefined;
   isLoading: boolean;
   tab: 'bricklink' | 'ebay';
 }) {
@@ -568,7 +587,9 @@ function SyncStatusCard({
               <CalendarClock className="h-4 w-4" />
               Sync Status
             </CardTitle>
-            <CardDescription>Data synced automatically. Shows actual last run time.</CardDescription>
+            <CardDescription>
+              Data synced automatically. Shows actual last run time.
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -589,20 +610,11 @@ function SyncStatusCard({
               syncProgress={syncProgress}
               onSync={handleSyncAmazonInventory}
             />
-            <SyncStatusBadge
-              label="Amazon Pricing"
-              syncData={syncStatus?.amazon_pricing}
-            />
+            <SyncStatusBadge label="Amazon Pricing" syncData={syncStatus?.amazon_pricing} />
             {tab === 'bricklink' ? (
-              <SyncStatusBadge
-                label="BrickLink"
-                syncData={syncStatus?.bricklink_pricing}
-              />
+              <SyncStatusBadge label="BrickLink" syncData={syncStatus?.bricklink_pricing} />
             ) : (
-              <SyncStatusBadge
-                label="eBay"
-                syncData={syncStatus?.ebay_pricing}
-              />
+              <SyncStatusBadge label="eBay" syncData={syncStatus?.ebay_pricing} />
             )}
           </div>
         )}
@@ -620,7 +632,10 @@ function SyncStatusBadge({
   onSync,
 }: {
   label: string;
-  syncData: { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null } | null | undefined;
+  syncData:
+    | { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null }
+    | null
+    | undefined;
   showSyncButton?: boolean;
   isSyncing?: boolean;
   syncProgress?: SyncProgress | null;
@@ -629,8 +644,8 @@ function SyncStatusBadge({
   const lastSync = syncData?.lastRunAt ?? syncData?.lastSuccessAt;
   const status = syncData?.status;
 
-  const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 3 * 24 * 60 * 60 * 1000;
-  const isRecent = lastSync && (Date.now() - new Date(lastSync).getTime()) < 24 * 60 * 60 * 1000;
+  const isStale = !lastSync || Date.now() - new Date(lastSync).getTime() > 3 * 24 * 60 * 60 * 1000;
+  const isRecent = lastSync && Date.now() - new Date(lastSync).getTime() < 24 * 60 * 60 * 1000;
   const isError = status === 'failed';
 
   const formatRelativeTime = (date: string | null | undefined) => {
@@ -647,8 +662,10 @@ function SyncStatusBadge({
 
   const getStalenessColor = () => {
     if (isError) return 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20';
-    if (isStale) return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20';
-    if (isRecent) return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20';
+    if (isStale)
+      return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20';
+    if (isRecent)
+      return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20';
     return '';
   };
 
@@ -672,9 +689,7 @@ function SyncStatusBadge({
       )}
       <div className="flex flex-col">
         <span className="text-sm font-medium">{label}</span>
-        <span className="text-xs text-muted-foreground">
-          {getStatusText()}
-        </span>
+        <span className="text-xs text-muted-foreground">{getStatusText()}</span>
       </div>
       {showSyncButton && onSync && (
         <Button

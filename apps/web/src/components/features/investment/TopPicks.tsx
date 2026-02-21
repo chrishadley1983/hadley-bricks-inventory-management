@@ -21,10 +21,11 @@ export function TopPicks() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['investment-predictions', 'top-picks', retiringWithin],
-    queryFn: () => fetchPredictions({
-      pageSize: 20,
-      retiringWithinMonths: retiringWithin,
-    }),
+    queryFn: () =>
+      fetchPredictions({
+        pageSize: 20,
+        retiringWithinMonths: retiringWithin,
+      }),
   });
 
   if (error) {
@@ -106,9 +107,7 @@ export function TopPicks() {
                         <div className="font-medium text-sm truncate">
                           {item.set_name ?? prediction.set_num}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          #{prediction.set_num}
-                        </div>
+                        <div className="text-xs text-muted-foreground">#{prediction.set_num}</div>
                       </div>
                     </div>
 
@@ -117,7 +116,13 @@ export function TopPicks() {
                       {prediction.predicted_1yr_appreciation != null && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">1yr prediction</span>
-                          <span className={prediction.predicted_1yr_appreciation >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          <span
+                            className={
+                              prediction.predicted_1yr_appreciation >= 0
+                                ? 'text-green-600 font-medium'
+                                : 'text-red-600 font-medium'
+                            }
+                          >
                             {prediction.predicted_1yr_appreciation > 0 ? '+' : ''}
                             {prediction.predicted_1yr_appreciation.toFixed(1)}%
                           </span>
@@ -126,7 +131,11 @@ export function TopPicks() {
 
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">RRP</span>
-                        <span>{item.uk_retail_price != null ? formatCurrency(item.uk_retail_price) : '\u2014'}</span>
+                        <span>
+                          {item.uk_retail_price != null
+                            ? formatCurrency(item.uk_retail_price)
+                            : '\u2014'}
+                        </span>
                       </div>
 
                       {item.retirement_status && (
@@ -134,13 +143,13 @@ export function TopPicks() {
                           <span className="text-muted-foreground">Status</span>
                           <Badge
                             variant={
-                              item.retirement_status === 'retiring_soon'
-                                ? 'destructive'
-                                : 'outline'
+                              item.retirement_status === 'retiring_soon' ? 'destructive' : 'outline'
                             }
                             className="text-xs"
                           >
-                            {item.retirement_status === 'retiring_soon' ? 'Retiring Soon' : item.retirement_status}
+                            {item.retirement_status === 'retiring_soon'
+                              ? 'Retiring Soon'
+                              : item.retirement_status}
                           </Badge>
                         </div>
                       )}
@@ -148,7 +157,9 @@ export function TopPicks() {
                       {item.expected_retirement_date && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Retirement</span>
-                          <span className="text-xs">{formatDate(item.expected_retirement_date)}</span>
+                          <span className="text-xs">
+                            {formatDate(item.expected_retirement_date)}
+                          </span>
                         </div>
                       )}
                     </div>

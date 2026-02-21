@@ -25,10 +25,7 @@ interface PriceConflictDialogProps {
   onResolved: (message: string) => void;
 }
 
-async function updateInventoryPrice(
-  inventoryItemId: string,
-  newPrice: number
-): Promise<void> {
+async function updateInventoryPrice(inventoryItemId: string, newPrice: number): Promise<void> {
   const response = await fetch(`/api/inventory/${inventoryItemId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -74,7 +71,9 @@ export function PriceConflictDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['amazon-sync', 'queue'] });
-      onResolved(`Inventory updated to £${conflict?.conflictPrice.toFixed(2)} and added to sync queue.`);
+      onResolved(
+        `Inventory updated to £${conflict?.conflictPrice.toFixed(2)} and added to sync queue.`
+      );
       setPendingAction(null);
     },
     onError: () => {
@@ -92,7 +91,9 @@ export function PriceConflictDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['amazon-sync', 'queue'] });
-      onResolved(`Added to sync queue. Amazon will be updated to £${conflict?.localPrice.toFixed(2)}.`);
+      onResolved(
+        `Added to sync queue. Amazon will be updated to £${conflict?.localPrice.toFixed(2)}.`
+      );
       setPendingAction(null);
     },
     onError: () => {
@@ -149,17 +150,13 @@ export function PriceConflictDialog({
             {conflict.itemName && (
               <div className="text-sm text-muted-foreground">{conflict.itemName}</div>
             )}
-            <div className="text-xs text-muted-foreground mt-1">
-              ASIN: {conflict.asin}
-            </div>
+            <div className="text-xs text-muted-foreground mt-1">ASIN: {conflict.asin}</div>
           </div>
 
           {/* Price Comparison */}
           <div className="flex items-center justify-center gap-4 py-2">
             <div className="text-center">
-              <div className="text-xs text-muted-foreground uppercase mb-1">
-                Your Price
-              </div>
+              <div className="text-xs text-muted-foreground uppercase mb-1">Your Price</div>
               <Badge variant="default" className="text-lg px-3 py-1">
                 £{conflict.localPrice.toFixed(2)}
               </Badge>
@@ -215,11 +212,10 @@ export function PriceConflictDialog({
               <ArrowDown className="mr-2 h-4 w-4" />
             )}
             <span className="flex-1 text-left">
-              Use {isAmazonConflict ? 'Amazon' : 'Queue'} price (£{conflict.conflictPrice.toFixed(2)})
+              Use {isAmazonConflict ? 'Amazon' : 'Queue'} price (£
+              {conflict.conflictPrice.toFixed(2)})
             </span>
-            <span className="text-xs text-muted-foreground ml-2">
-              Updates inventory
-            </span>
+            <span className="text-xs text-muted-foreground ml-2">Updates inventory</span>
           </Button>
 
           {/* Use Inventory Price */}
@@ -236,18 +232,11 @@ export function PriceConflictDialog({
             <span className="flex-1 text-left">
               Use my price (£{conflict.localPrice.toFixed(2)})
             </span>
-            <span className="text-xs text-muted-foreground ml-2">
-              Updates Amazon
-            </span>
+            <span className="text-xs text-muted-foreground ml-2">Updates Amazon</span>
           </Button>
 
           {/* Cancel */}
-          <Button
-            variant="ghost"
-            className="w-full"
-            onClick={handleCancel}
-            disabled={isPending}
-          >
+          <Button variant="ghost" className="w-full" onClick={handleCancel} disabled={isPending}>
             <X className="mr-2 h-4 w-4" />
             Cancel
           </Button>

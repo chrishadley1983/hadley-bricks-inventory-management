@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (removal.status !== 'PENDING') {
       return NextResponse.json(
         { error: `Cannot approve: status is ${removal.status}` },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -82,7 +82,10 @@ export async function POST(request: NextRequest) {
     } else if (removal.remove_from === 'BRICQER' && syncItem?.bricqer_item_id) {
       // Remove from Bricqer inventory (C1)
       const credentialsRepo = new CredentialsRepository(supabase);
-      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(user.id, 'bricqer');
+      const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(
+        user.id,
+        'bricqer'
+      );
       if (bricqerCreds) {
         const bricqerClient = new BricqerClient(bricqerCreds);
         try {
@@ -107,8 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Update sync item status
     if (syncItem) {
-      const finalStatus =
-        removal.sold_on === 'EBAY' ? 'SOLD_EBAY' : 'SOLD_BRICQER';
+      const finalStatus = removal.sold_on === 'EBAY' ? 'SOLD_EBAY' : 'SOLD_BRICQER';
       await supabase
         .from('minifig_sync_items')
         .update({
@@ -125,9 +127,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to approve removal',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

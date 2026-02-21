@@ -242,7 +242,14 @@ describe('AmazonCatalogClient', () => {
               images: [
                 {
                   marketplaceId: 'A1F83G8C2ARO7P',
-                  images: [{ variant: 'MAIN', link: 'https://example.com/img.jpg', height: 500, width: 500 }],
+                  images: [
+                    {
+                      variant: 'MAIN',
+                      link: 'https://example.com/img.jpg',
+                      height: 500,
+                      width: 500,
+                    },
+                  ],
                 },
               ],
             },
@@ -556,7 +563,9 @@ describe('AmazonCatalogClient', () => {
       const client = new AmazonCatalogClient(validCredentials);
       vi.advanceTimersByTime(2200);
 
-      await expect(client.getCatalogItem('B001')).rejects.toThrow('Invalid or expired access token');
+      await expect(client.getCatalogItem('B001')).rejects.toThrow(
+        'Invalid or expired access token'
+      );
     });
   });
 

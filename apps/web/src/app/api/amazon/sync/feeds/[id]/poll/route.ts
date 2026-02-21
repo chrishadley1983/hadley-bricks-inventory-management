@@ -12,10 +12,7 @@ import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 // POST - Poll Amazon for feed status
 // ============================================================================
 
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -32,9 +29,7 @@ export async function POST(
     const service = new AmazonSyncService(supabase, user.id);
     const feed = await service.pollFeedStatus(id);
 
-    const isComplete = !['pending', 'submitted', 'processing'].includes(
-      feed.status
-    );
+    const isComplete = !['pending', 'submitted', 'processing'].includes(feed.status);
 
     let message: string;
     switch (feed.status) {
@@ -68,17 +63,11 @@ export async function POST(
     console.error('[POST /api/amazon/sync/feeds/[id]/poll] Error:', error);
 
     if (error instanceof Error) {
-      if (
-        error.message.includes('Feed not found') ||
-        error.message.includes('no Amazon feed ID')
-      ) {
+      if (error.message.includes('Feed not found') || error.message.includes('no Amazon feed ID')) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

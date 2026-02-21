@@ -68,12 +68,13 @@ export function PriceUpdateDialog({
   }, [isOpen]);
 
   const priceDiff = currentPrice !== null ? newPrice - currentPrice : 0;
-  const percentChange = currentPrice !== null && currentPrice > 0
-    ? ((newPrice - currentPrice) / currentPrice) * 100
-    : 0;
+  const percentChange =
+    currentPrice !== null && currentPrice > 0
+      ? ((newPrice - currentPrice) / currentPrice) * 100
+      : 0;
 
-  const autoAcceptPrice = Math.round((newPrice * autoAcceptPercent) / 100 * 100) / 100;
-  const minOfferPrice = Math.round((newPrice * minOfferPercent) / 100 * 100) / 100;
+  const autoAcceptPrice = Math.round(((newPrice * autoAcceptPercent) / 100) * 100) / 100;
+  const minOfferPrice = Math.round(((newPrice * minOfferPercent) / 100) * 100) / 100;
 
   const handleConfirm = () => {
     onConfirm({
@@ -115,19 +116,25 @@ export function PriceUpdateDialog({
                       {updateResult.autoAcceptPrice !== null && (
                         <div className="flex justify-between">
                           <span>Auto-Accept Price:</span>
-                          <span className="font-medium">{formatPrice(updateResult.autoAcceptPrice)}</span>
+                          <span className="font-medium">
+                            {formatPrice(updateResult.autoAcceptPrice)}
+                          </span>
                         </div>
                       )}
                       {updateResult.minOfferPrice !== null && (
                         <div className="flex justify-between">
                           <span>Minimum Offer Price:</span>
-                          <span className="font-medium">{formatPrice(updateResult.minOfferPrice)}</span>
+                          <span className="font-medium">
+                            {formatPrice(updateResult.minOfferPrice)}
+                          </span>
                         </div>
                       )}
                     </div>
                   </>
                 ) : (
-                  <p className="text-destructive">{updateResult.error || 'An unknown error occurred'}</p>
+                  <p className="text-destructive">
+                    {updateResult.error || 'An unknown error occurred'}
+                  </p>
                 )}
               </div>
             </AlertDialogDescription>
@@ -149,9 +156,7 @@ export function PriceUpdateDialog({
           <AlertDialogTitle>Confirm Price Update</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-4">
-              <p>
-                You are about to update the price for:
-              </p>
+              <p>You are about to update the price for:</p>
               <div className="bg-muted rounded-md p-3 text-sm">
                 <p className="font-medium truncate" title={itemTitle || undefined}>
                   {itemTitle || 'Untitled listing'}
@@ -172,7 +177,9 @@ export function PriceUpdateDialog({
                   <div className="flex justify-between items-center text-sm">
                     <span>Change:</span>
                     <span className={priceDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {priceDiff >= 0 ? '+' : ''}{formatPrice(priceDiff)} ({percentChange >= 0 ? '+' : ''}{percentChange.toFixed(1)}%)
+                      {priceDiff >= 0 ? '+' : ''}
+                      {formatPrice(priceDiff)} ({percentChange >= 0 ? '+' : ''}
+                      {percentChange.toFixed(1)}%)
                     </span>
                   </div>
                 )}
@@ -183,7 +190,9 @@ export function PriceUpdateDialog({
                   <Checkbox
                     id="updateBestOffer"
                     checked={updateBestOffer}
-                    onCheckedChange={(checked: boolean | 'indeterminate') => setUpdateBestOffer(checked === true)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      setUpdateBestOffer(checked === true)
+                    }
                   />
                   <Label htmlFor="updateBestOffer" className="text-sm font-normal cursor-pointer">
                     Update Best Offer thresholds
@@ -194,11 +203,15 @@ export function PriceUpdateDialog({
                   <div className="ml-6 space-y-2 text-sm text-muted-foreground">
                     <div className="flex justify-between">
                       <span>Auto-Accept Price ({autoAcceptPercent}%):</span>
-                      <span className="font-medium text-foreground">{formatPrice(autoAcceptPrice)}</span>
+                      <span className="font-medium text-foreground">
+                        {formatPrice(autoAcceptPrice)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Minimum Offer Price ({minOfferPercent}%):</span>
-                      <span className="font-medium text-foreground">{formatPrice(minOfferPrice)}</span>
+                      <span className="font-medium text-foreground">
+                        {formatPrice(minOfferPrice)}
+                      </span>
                     </div>
                   </div>
                 )}

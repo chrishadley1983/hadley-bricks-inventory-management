@@ -272,10 +272,7 @@ describe('/api/inventory/[id] API Routes', () => {
       const response = await PUT(request, { params: Promise.resolve({ id: 'item-001' }) });
 
       expect(response.status).toBe(200);
-      expect(mockUpdate).toHaveBeenCalledWith(
-        'item-001',
-        expect.objectContaining({ notes: null })
-      );
+      expect(mockUpdate).toHaveBeenCalledWith('item-001', expect.objectContaining({ notes: null }));
     });
 
     it('should return 500 on service error', async () => {

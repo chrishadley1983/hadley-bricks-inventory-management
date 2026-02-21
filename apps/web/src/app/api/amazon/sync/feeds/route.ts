@@ -49,9 +49,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: { feeds } });
   } catch (error) {
     console.error('[GET /api/amazon/sync/feeds] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

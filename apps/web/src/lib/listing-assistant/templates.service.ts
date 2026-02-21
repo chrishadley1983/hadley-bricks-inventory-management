@@ -5,11 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type {
-  ListingTemplate,
-  CreateTemplateInput,
-  UpdateTemplateInput,
-} from './types';
+import type { ListingTemplate, CreateTemplateInput, UpdateTemplateInput } from './types';
 import { DEFAULT_TEMPLATES } from './constants';
 
 /**
@@ -123,10 +119,7 @@ export async function updateTemplate(
 /**
  * Delete a template (only custom templates can be deleted)
  */
-export async function deleteTemplate(
-  userId: string,
-  templateId: string
-): Promise<void> {
+export async function deleteTemplate(userId: string, templateId: string): Promise<void> {
   const supabase = await createClient();
 
   // First check if it's a default template

@@ -74,11 +74,7 @@ export class MigrationService {
   private sheetsClient: GoogleSheetsClient;
   private supabase: SupabaseClient<GenericDatabase>;
 
-  constructor(
-    sheetsClient: GoogleSheetsClient,
-    supabaseUrl: string,
-    supabaseServiceKey: string
-  ) {
+  constructor(sheetsClient: GoogleSheetsClient, supabaseUrl: string, supabaseServiceKey: string) {
     this.sheetsClient = sheetsClient;
     // Use service role key for migration (bypasses RLS)
     this.supabase = createClient<GenericDatabase>(supabaseUrl, supabaseServiceKey);
@@ -173,7 +169,10 @@ export class MigrationService {
     for (let i = 0; i < dataToProcess.length; i++) {
       const row = dataToProcess[i];
       const rowNumber = (options.startFromRow || 2) + i;
-      const sheetId = row[mapping.columns.find((c) => c.sheetColumn === mapping.uniqueKeyColumn)?.sheetHeader || ''] || '';
+      const sheetId =
+        row[
+          mapping.columns.find((c) => c.sheetColumn === mapping.uniqueKeyColumn)?.sheetHeader || ''
+        ] || '';
 
       // Skip empty rows
       if (!sheetId || sheetId.trim() === '') {
@@ -391,9 +390,7 @@ export class MigrationService {
 /**
  * Create a migration service instance
  */
-export function createMigrationService(
-  sheetsClient: GoogleSheetsClient
-): MigrationService {
+export function createMigrationService(sheetsClient: GoogleSheetsClient): MigrationService {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

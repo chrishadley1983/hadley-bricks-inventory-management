@@ -10,10 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@hadley-bricks/database';
-import {
-  AmazonCatalogClient,
-  type CatalogSearchItem,
-} from '../amazon/amazon-catalog.client';
+import { AmazonCatalogClient, type CatalogSearchItem } from '../amazon/amazon-catalog.client';
 import type { AmazonCredentials } from '../amazon/types';
 import {
   calculateTitleMatchConfidence,
@@ -152,9 +149,7 @@ export class SeededAsinDiscoveryService {
     const created = result?.created_count ?? 0;
     const skipped = result?.skipped_count ?? 0;
 
-    console.log(
-      `[SeededDiscovery] Initialized: ${created} created, ${skipped} already existed`
-    );
+    console.log(`[SeededDiscovery] Initialized: ${created} created, ${skipped} already existed`);
 
     return {
       created,
@@ -214,14 +209,11 @@ export class SeededAsinDiscoveryService {
         : null;
 
     // Find most recent discovery attempt
-    const lastDiscoveryAt = records.reduce(
-      (latest: string | null, r) => {
-        if (!r.last_discovery_attempt_at) return latest;
-        if (!latest) return r.last_discovery_attempt_at;
-        return r.last_discovery_attempt_at > latest ? r.last_discovery_attempt_at : latest;
-      },
-      null
-    );
+    const lastDiscoveryAt = records.reduce((latest: string | null, r) => {
+      if (!r.last_discovery_attempt_at) return latest;
+      if (!latest) return r.last_discovery_attempt_at;
+      return r.last_discovery_attempt_at > latest ? r.last_discovery_attempt_at : latest;
+    }, null);
 
     const foundCount = statusCounts.found ?? 0;
 
@@ -301,9 +293,7 @@ export class SeededAsinDiscoveryService {
 
       // Batch pause
       if (processed % DISCOVERY_BATCH_SIZE === 0 && processed < pendingSets.length) {
-        console.log(
-          `[SeededDiscovery] Processed ${processed}/${pendingSets.length}, pausing...`
-        );
+        console.log(`[SeededDiscovery] Processed ${processed}/${pendingSets.length}, pausing...`);
         await this.delay(DISCOVERY_BATCH_PAUSE_MS);
       }
     }
@@ -317,9 +307,7 @@ export class SeededAsinDiscoveryService {
       durationMs: Date.now() - startTime,
     };
 
-    console.log(
-      `[SeededDiscovery] Discovery complete: ${JSON.stringify(result)}`
-    );
+    console.log(`[SeededDiscovery] Discovery complete: ${JSON.stringify(result)}`);
 
     return result;
   }
@@ -373,9 +361,7 @@ export class SeededAsinDiscoveryService {
    * 3. Title exact match (85% confidence)
    * 4. Title fuzzy match (60-80% confidence)
    */
-  private async discoverAsinForSet(
-    set: BricksetSetWithSeeded
-  ): Promise<DiscoveryAttemptResult> {
+  private async discoverAsinForSet(set: BricksetSetWithSeeded): Promise<DiscoveryAttemptResult> {
     console.log(`[SeededDiscovery] Discovering ASIN for set: ${set.set_number}`);
 
     // Helper to check if barcode is valid (not scientific notation from corrupted import)
@@ -516,25 +502,17 @@ export class SeededAsinDiscoveryService {
     asins: CatalogSearchItem[];
   }> {
     try {
-      const result = await this.catalogClient.searchCatalogByIdentifier(
-        identifier,
-        type
-      );
+      const result = await this.catalogClient.searchCatalogByIdentifier(identifier, type);
 
       // Filter to likely LEGO products
-      const legoItems = result.items.filter(
-        (item) => !item.title || isLegoProduct(item.title)
-      );
+      const legoItems = result.items.filter((item) => !item.title || isLegoProduct(item.title));
 
       return {
         found: legoItems.length > 0,
         asins: legoItems,
       };
     } catch (error) {
-      console.warn(
-        `[SeededDiscovery] ${type} lookup failed for ${identifier}:`,
-        error
-      );
+      console.warn(`[SeededDiscovery] ${type} lookup failed for ${identifier}:`, error);
       return { found: false, asins: [] };
     }
   }
@@ -563,11 +541,7 @@ export class SeededAsinDiscoveryService {
         .filter((item) => item.title && isLegoProduct(item.title))
         .map((item) => ({
           ...item,
-          confidence: calculateTitleMatchConfidence(
-            item.title ?? '',
-            expectedName,
-            setNumber
-          ),
+          confidence: calculateTitleMatchConfidence(item.title ?? '', expectedName, setNumber),
         }))
         .filter((item) => item.confidence >= 60)
         .sort((a, b) => b.confidence - a.confidence);
@@ -590,10 +564,7 @@ export class SeededAsinDiscoveryService {
         confidence: bestMatch.confidence,
       };
     } catch (error) {
-      console.warn(
-        `[SeededDiscovery] Title search failed for "${keywords}":`,
-        error
-      );
+      console.warn(`[SeededDiscovery] Title search failed for "${keywords}":`, error);
       return { found: false, asins: [], confidence: 0 };
     }
   }
@@ -789,7 +760,9 @@ export class SeededAsinDiscoveryService {
     if (error) {
       // Handle duplicate ASIN constraint violation
       if (error.code === '23505' && error.message.includes('idx_seeded_asins_asin_unique')) {
-        console.log(`[SeededDiscovery] ASIN ${result.asin} already assigned to another set, marking as duplicate`);
+        console.log(
+          `[SeededDiscovery] ASIN ${result.asin} already assigned to another set, marking as duplicate`
+        );
 
         // Save without the ASIN in the main field, store in alternative_asins instead
         const alternativeAsins = result.alternativeAsins ?? [];
@@ -845,10 +818,7 @@ export class SeededAsinDiscoveryService {
   /**
    * Record discovery error
    */
-  private async recordDiscoveryError(
-    seededAsinId: string,
-    errorMessage: string
-  ): Promise<void> {
+  private async recordDiscoveryError(seededAsinId: string, errorMessage: string): Promise<void> {
     const { error } = await this.supabase
       .from('seeded_asins')
       .update({

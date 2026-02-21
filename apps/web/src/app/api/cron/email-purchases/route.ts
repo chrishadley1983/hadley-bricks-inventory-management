@@ -134,8 +134,14 @@ export async function POST(request: NextRequest) {
     if (candidates.length === 0) {
       console.log('[Cron EmailPurchases] No new candidates to import');
       await execution.complete(
-        { message: 'No new candidates', needsReview: needsReview.length, alreadyProcessed: scanResult.data?.already_processed_count ?? 0 },
-        200, 0, 0
+        {
+          message: 'No new candidates',
+          needsReview: needsReview.length,
+          alreadyProcessed: scanResult.data?.already_processed_count ?? 0,
+        },
+        200,
+        0,
+        0
       );
       return NextResponse.json({
         success: true,
@@ -149,7 +155,17 @@ export async function POST(request: NextRequest) {
 
     // 3. Enrich candidates with Brickset data + ASIN + pricing
     const enriched: EnrichedCandidate[] = [];
-    const skipItems: Array<{ email_id: string; source: 'Vinted' | 'eBay'; order_reference?: string; email_subject?: string; email_date?: string; item_name?: string; cost?: number; seller_username?: string; skip_reason: string }> = [];
+    const skipItems: Array<{
+      email_id: string;
+      source: 'Vinted' | 'eBay';
+      order_reference?: string;
+      email_subject?: string;
+      email_date?: string;
+      item_name?: string;
+      cost?: number;
+      seller_username?: string;
+      skip_reason: string;
+    }> = [];
 
     for (const candidate of candidates) {
       if (!candidate.set_number) {
@@ -253,15 +269,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Keepa fallback for items missing list price
-    const missingPriceItems = enriched.filter(e => !e.list_price && e.amazon_asin);
+    const missingPriceItems = enriched.filter((e) => !e.list_price && e.amazon_asin);
     if (missingPriceItems.length > 0) {
-      console.log(`[Cron EmailPurchases] ${missingPriceItems.length} items missing Amazon pricing, trying Keepa fallback...`);
+      console.log(
+        `[Cron EmailPurchases] ${missingPriceItems.length} items missing Amazon pricing, trying Keepa fallback...`
+      );
 
       // Tier 1: Check price_snapshots table for existing Keepa data (free, no API call)
       //   Process in batches of 15 set_nums to stay under Supabase 1000-row limit
       try {
         const supabase = createServiceRoleClient();
-        const setNums = missingPriceItems.map(e => `${e.set_number}-1`);
+        const setNums = missingPriceItems.map((e) => `${e.set_number}-1`);
         const priceMap = new Map<string, number>();
 
         for (let i = 0; i < setNums.length; i += 15) {
@@ -286,7 +304,9 @@ export async function POST(request: NextRequest) {
           const price = priceMap.get(`${item.set_number}-1`);
           if (price) {
             item.list_price = price;
-            console.log(`[Cron EmailPurchases] Keepa DB price for ${item.set_number}: £${price.toFixed(2)}`);
+            console.log(
+              `[Cron EmailPurchases] Keepa DB price for ${item.set_number}: £${price.toFixed(2)}`
+            );
           }
         }
       } catch (dbErr) {
@@ -294,40 +314,48 @@ export async function POST(request: NextRequest) {
       }
 
       // Tier 2: Keepa API for items still missing price
-      const stillMissing = enriched.filter(e => !e.list_price && e.amazon_asin);
+      const stillMissing = enriched.filter((e) => !e.list_price && e.amazon_asin);
       if (stillMissing.length > 0) {
         try {
           const keepaClient = new KeepaClient();
           if (keepaClient.isConfigured()) {
-            const asins = stillMissing.map(e => e.amazon_asin!);
+            const asins = stillMissing.map((e) => e.amazon_asin!);
             // Batch in groups of 10 (Keepa limit)
             for (let i = 0; i < asins.length; i += 10) {
               const batch = asins.slice(i, i + 10);
-              console.log(`[Cron EmailPurchases] Keepa API lookup for ${batch.length} ASINs: ${batch.join(', ')}`);
+              console.log(
+                `[Cron EmailPurchases] Keepa API lookup for ${batch.length} ASINs: ${batch.join(', ')}`
+              );
               const products = await keepaClient.fetchProducts(batch);
 
               for (const product of products) {
                 const pricing = keepaClient.extractCurrentPricing(product);
                 const price = pricing.buyBoxPrice ?? pricing.lowestNewPrice;
                 if (price) {
-                  const item = stillMissing.find(e => e.amazon_asin === product.asin);
+                  const item = stillMissing.find((e) => e.amazon_asin === product.asin);
                   if (item) {
                     item.list_price = price;
-                    console.log(`[Cron EmailPurchases] Keepa API price for ${item.set_number} (${product.asin}): £${price.toFixed(2)}`);
+                    console.log(
+                      `[Cron EmailPurchases] Keepa API price for ${item.set_number} (${product.asin}): £${price.toFixed(2)}`
+                    );
                   }
                 }
               }
             }
           } else {
-            console.warn('[Cron EmailPurchases] Keepa API key not configured, skipping API fallback');
+            console.warn(
+              '[Cron EmailPurchases] Keepa API key not configured, skipping API fallback'
+            );
           }
         } catch (keepaErr) {
           console.warn('[Cron EmailPurchases] Keepa API fallback failed:', keepaErr);
         }
       }
 
-      const resolved = missingPriceItems.filter(e => e.list_price).length;
-      console.log(`[Cron EmailPurchases] Keepa fallback resolved ${resolved}/${missingPriceItems.length} missing prices`);
+      const resolved = missingPriceItems.filter((e) => e.list_price).length;
+      console.log(
+        `[Cron EmailPurchases] Keepa fallback resolved ${resolved}/${missingPriceItems.length} missing prices`
+      );
     }
 
     // Also mark needs_review items as skipped
@@ -360,7 +388,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert bundle groups to import format
-    const bundleImports = Array.from(bundleGroups.values()).map(items => ({
+    const bundleImports = Array.from(bundleGroups.values()).map((items) => ({
       email_id: items[0].email_id,
       email_subject: items[0].email_subject,
       email_date: items[0].email_date,
@@ -370,7 +398,7 @@ export async function POST(request: NextRequest) {
       total_cost: items[0].bundle_total_cost!,
       purchase_date: items[0].purchase_date,
       payment_method: items[0].payment_method,
-      items: items.map(i => ({
+      items: items.map((i) => ({
         set_number: i.set_number,
         set_name: i.set_name,
         condition: i.condition,
@@ -379,7 +407,9 @@ export async function POST(request: NextRequest) {
       })),
     }));
 
-    console.log(`[Cron EmailPurchases] Importing ${standaloneItems.length} standalone + ${bundleImports.length} bundles (${enriched.length} total items)...`);
+    console.log(
+      `[Cron EmailPurchases] Importing ${standaloneItems.length} standalone + ${bundleImports.length} bundles (${enriched.length} total items)...`
+    );
 
     let importResult = null;
     if (enriched.length > 0) {
@@ -459,11 +489,13 @@ export async function POST(request: NextRequest) {
               .single();
 
             if (purchaseData?.user_id) {
-              const messages = Array.from(vintedOrders.entries()).map(([orderRef, { seller_username }]) => ({
-                user_id: purchaseData.user_id,
-                order_reference: orderRef,
-                seller_username,
-              }));
+              const messages = Array.from(vintedOrders.entries()).map(
+                ([orderRef, { seller_username }]) => ({
+                  user_id: purchaseData.user_id,
+                  order_reference: orderRef,
+                  seller_username,
+                })
+              );
 
               const { error: msgError } = await supabase
                 .from('vinted_seller_messages')
@@ -489,7 +521,10 @@ export async function POST(request: NextRequest) {
     const createdCount = summary.created_count ?? 0;
     const failedCount = summary.failed_count ?? 0;
     const skippedCount = summary.skipped_count ?? 0;
-    const allSkipped = [...skipItems, ...needsReview.filter(nr => !skipItems.some(s => s.email_id === nr.email_id))];
+    const allSkipped = [
+      ...skipItems,
+      ...needsReview.filter((nr) => !skipItems.some((s) => s.email_id === nr.email_id)),
+    ];
 
     if (createdCount > 0 || failedCount > 0 || allSkipped.length > 0) {
       const lines = [`Imported: ${createdCount} purchases`];
@@ -513,11 +548,13 @@ export async function POST(request: NextRequest) {
       if (allSkipped.length > 0) {
         const maxItems = 10;
         const itemsToShow = allSkipped.slice(0, maxItems);
-        const reviewLines = itemsToShow.map(item => {
+        const reviewLines = itemsToShow.map((item) => {
           const source = 'source' in item ? item.source : 'Unknown';
           const name = ('item_name' in item ? item.item_name : '') || 'Unknown item';
-          const cost = 'cost' in item && item.cost != null ? `\u00a3${Number(item.cost).toFixed(2)}` : '?';
-          const seller = 'seller_username' in item && item.seller_username ? ` (${item.seller_username})` : '';
+          const cost =
+            'cost' in item && item.cost != null ? `\u00a3${Number(item.cost).toFixed(2)}` : '?';
+          const seller =
+            'seller_username' in item && item.seller_username ? ` (${item.seller_username})` : '';
           return `\u2022 **${source}** - ${name} - ${cost}${seller}`;
         });
 
@@ -540,11 +577,12 @@ export async function POST(request: NextRequest) {
       }
 
       const embed = {
-        title: failedCount > 0
-          ? '\u26a0\ufe0f Email Purchase Import (with errors)'
-          : allSkipped.length > 0
-            ? '\ud83d\udcec Email Purchase Import (needs review)'
-            : '\u2705 Email Purchase Import Complete',
+        title:
+          failedCount > 0
+            ? '\u26a0\ufe0f Email Purchase Import (with errors)'
+            : allSkipped.length > 0
+              ? '\ud83d\udcec Email Purchase Import (needs review)'
+              : '\u2705 Email Purchase Import Complete',
         description: lines.join('\n'),
         color: failedCount > 0 ? 0xe67e22 : allSkipped.length > 0 ? 0xfee75c : 0x57f287,
         fields: fields.length > 0 ? fields : undefined,
@@ -565,9 +603,7 @@ export async function POST(request: NextRequest) {
         }> = importResult.data.created;
 
         // Build a lookup from enriched candidates for source/condition/bundle info
-        const enrichedMap = new Map(
-          enriched.map((e) => [`${e.email_id}:${e.set_number}`, e])
-        );
+        const enrichedMap = new Map(enriched.map((e) => [`${e.email_id}:${e.set_number}`, e]));
 
         // Track which bundle groups have already had their first row labelled
         const seenBundleGroups = new Set<string>();
@@ -624,8 +660,15 @@ export async function POST(request: NextRequest) {
     }
 
     await execution.complete(
-      { created: createdCount, failed: failedCount, skipped: skippedCount, totalInvested: summary.total_invested },
-      200, createdCount, failedCount
+      {
+        created: createdCount,
+        failed: failedCount,
+        skipped: skippedCount,
+        totalInvested: summary.total_invested,
+      },
+      200,
+      createdCount,
+      failedCount
     );
 
     return NextResponse.json({
@@ -653,10 +696,7 @@ export async function POST(request: NextRequest) {
       // Ignore Discord errors
     }
 
-    return NextResponse.json(
-      { error: errorMsg, duration },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: errorMsg, duration }, { status: 500 });
   }
 }
 

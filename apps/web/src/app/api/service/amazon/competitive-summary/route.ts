@@ -43,13 +43,18 @@ async function getAccessToken(credentials: AmazonCredentials): Promise<string> {
 async function getCompetitiveSummary(
   asins: string[],
   credentials: AmazonCredentials
-): Promise<Record<string, {
-  asin: string;
-  buyBoxPrice: number | null;
-  lowestNewPrice: number | null;
-  wasPrice: number | null;
-  currency: string;
-}>> {
+): Promise<
+  Record<
+    string,
+    {
+      asin: string;
+      buyBoxPrice: number | null;
+      lowestNewPrice: number | null;
+      wasPrice: number | null;
+      currency: string;
+    }
+  >
+> {
   const accessToken = await getAccessToken(credentials);
 
   const requests = asins.map((asin) => ({
@@ -78,13 +83,16 @@ async function getCompetitiveSummary(
   }
 
   const data = await response.json();
-  const results: Record<string, {
-    asin: string;
-    buyBoxPrice: number | null;
-    lowestNewPrice: number | null;
-    wasPrice: number | null;
-    currency: string;
-  }> = {};
+  const results: Record<
+    string,
+    {
+      asin: string;
+      buyBoxPrice: number | null;
+      lowestNewPrice: number | null;
+      wasPrice: number | null;
+      currency: string;
+    }
+  > = {};
 
   for (let i = 0; i < (data.responses || []).length; i++) {
     const item = data.responses[i];
@@ -111,7 +119,8 @@ async function getCompetitiveSummary(
     );
 
     // Extract featured offer (Buy Box)
-    const featuredOffer = body?.featuredBuyingOptions?.[0]?.segmentedFeaturedOffers?.[0]?.featuredOffer;
+    const featuredOffer =
+      body?.featuredBuyingOptions?.[0]?.segmentedFeaturedOffers?.[0]?.featuredOffer;
     const buyBoxPrice = featuredOffer?.listingPrice
       ? featuredOffer.listingPrice.amount + (featuredOffer.shippingPrice?.amount ?? 0)
       : null;
@@ -163,20 +172,17 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const asins = asinsParam.split(',').map((a) => a.trim()).filter(Boolean);
+      const asins = asinsParam
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean);
 
       if (asins.length === 0) {
-        return NextResponse.json(
-          { error: 'No valid ASINs provided' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'No valid ASINs provided' }, { status: 400 });
       }
 
       if (asins.length > 20) {
-        return NextResponse.json(
-          { error: 'Maximum 20 ASINs per request' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Maximum 20 ASINs per request' }, { status: 400 });
       }
 
       // Get Amazon credentials
@@ -189,10 +195,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (!credentials) {
-        return NextResponse.json(
-          { error: 'Amazon credentials not configured' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Amazon credentials not configured' }, { status: 500 });
       }
 
       const results = await getCompetitiveSummary(asins, credentials);

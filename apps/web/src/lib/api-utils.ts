@@ -35,10 +35,7 @@ export function withRateLimit(
   const rateLimitConfig = config || RateLimits[type];
   const identifier = getRateLimitIdentifier(request, userId);
 
-  const { allowed, remaining, resetIn } = checkRateLimit(
-    identifier,
-    rateLimitConfig
-  );
+  const { allowed, remaining, resetIn } = checkRateLimit(identifier, rateLimitConfig);
 
   if (!allowed) {
     return NextResponse.json(
@@ -71,11 +68,7 @@ export function addRateLimitHeaders(
 
   const { remaining, resetIn } = checkRateLimit(identifier, rateLimitConfig);
 
-  const headers = createRateLimitHeaders(
-    remaining,
-    rateLimitConfig.limit,
-    resetIn
-  );
+  const headers = createRateLimitHeaders(remaining, rateLimitConfig.limit, resetIn);
 
   Object.entries(headers).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -104,9 +97,6 @@ export function errorResponse(
 /**
  * Standard success response format
  */
-export function successResponse<T>(
-  data: T,
-  status: number = 200
-): NextResponse {
+export function successResponse<T>(data: T, status: number = 200): NextResponse {
   return NextResponse.json({ data }, { status });
 }

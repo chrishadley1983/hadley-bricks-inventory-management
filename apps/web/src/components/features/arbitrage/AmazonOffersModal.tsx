@@ -1,12 +1,7 @@
 'use client';
 
 import { ExternalLink, Package, Truck, Award, User } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,11 +16,7 @@ interface AmazonOffersModalProps {
   onClose: () => void;
 }
 
-export function AmazonOffersModal({
-  item,
-  isOpen,
-  onClose,
-}: AmazonOffersModalProps) {
+export function AmazonOffersModal({ item, isOpen, onClose }: AmazonOffersModalProps) {
   if (!item) return null;
 
   // Parse offersJson if it's a string (from database), otherwise use as-is
@@ -94,7 +85,10 @@ export function AmazonOffersModal({
                 {formatCurrencyGBP(effectivePrice)}
               </div>
               {!hasBuyBox && (
-                <Badge variant="outline" className="text-[10px] mt-0.5 bg-amber-50 text-amber-700 border-amber-200">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] mt-0.5 bg-amber-50 text-amber-700 border-amber-200"
+                >
                   No Buy Box
                 </Badge>
               )}
@@ -109,13 +103,21 @@ export function AmazonOffersModal({
                 {item.wasPrice90d ? formatCurrencyGBP(item.wasPrice90d) : '—'}
               </div>
               {item.wasPrice90d && effectivePrice && item.wasPrice90d < effectivePrice && (
-                <Badge variant="outline" className="text-[10px] mt-0.5 bg-red-50 text-red-700 border-red-200">
-                  +{(((effectivePrice - item.wasPrice90d) / item.wasPrice90d) * 100).toFixed(0)}% above
+                <Badge
+                  variant="outline"
+                  className="text-[10px] mt-0.5 bg-red-50 text-red-700 border-red-200"
+                >
+                  +{(((effectivePrice - item.wasPrice90d) / item.wasPrice90d) * 100).toFixed(0)}%
+                  above
                 </Badge>
               )}
               {item.wasPrice90d && effectivePrice && item.wasPrice90d > effectivePrice && (
-                <Badge variant="outline" className="text-[10px] mt-0.5 bg-green-50 text-green-700 border-green-200">
-                  {(((item.wasPrice90d - effectivePrice) / item.wasPrice90d) * 100).toFixed(0)}% below
+                <Badge
+                  variant="outline"
+                  className="text-[10px] mt-0.5 bg-green-50 text-green-700 border-green-200"
+                >
+                  {(((item.wasPrice90d - effectivePrice) / item.wasPrice90d) * 100).toFixed(0)}%
+                  below
                 </Badge>
               )}
             </div>
@@ -153,16 +155,12 @@ export function AmazonOffersModal({
                     variant={item.buyBoxIsYours ? 'default' : 'secondary'}
                     className={cn(
                       'text-xs',
-                      item.buyBoxIsYours
-                        ? 'bg-green-600'
-                        : 'bg-muted text-muted-foreground'
+                      item.buyBoxIsYours ? 'bg-green-600' : 'bg-muted text-muted-foreground'
                     )}
                   >
                     {item.buyBoxIsYours ? 'Has Buy Box' : 'No Buy Box'}
                   </Badge>
-                  <span className="text-muted-foreground text-xs">
-                    Qty: {item.yourQty ?? 0}
-                  </span>
+                  <span className="text-muted-foreground text-xs">Qty: {item.yourQty ?? 0}</span>
                 </div>
               </div>
             </>
@@ -173,9 +171,7 @@ export function AmazonOffersModal({
         <div className="flex-1 min-h-0">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
             <span>All Offers</span>
-            <span className="font-normal normal-case">
-              Sorted by total price
-            </span>
+            <span className="font-normal normal-case">Sorted by total price</span>
           </h4>
 
           {offers.length > 0 ? (
@@ -248,7 +244,10 @@ function OfferRow({ offer, isLowest, isBuyBox }: OfferRowProps) {
             </Badge>
           )}
           {isLowest && !isBuyBox && (
-            <Badge variant="outline" className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200">
+            <Badge
+              variant="outline"
+              className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200"
+            >
               Lowest
             </Badge>
           )}
@@ -267,7 +266,10 @@ function OfferRow({ offer, isLowest, isBuyBox }: OfferRowProps) {
               </Badge>
             )}
             {offer.isPrime && (
-              <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-blue-50 text-blue-700 border-blue-200">
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 h-5 bg-blue-50 text-blue-700 border-blue-200"
+              >
                 Prime
               </Badge>
             )}
@@ -292,8 +294,7 @@ function OfferRow({ offer, isLowest, isBuyBox }: OfferRowProps) {
           <div>Item: {formatCurrencyGBP(offer.listingPrice)}</div>
           {offer.shippingPrice > 0 && (
             <div className="flex items-center gap-1 justify-end">
-              <Truck className="h-3 w-3" />
-              +{formatCurrencyGBP(offer.shippingPrice)}
+              <Truck className="h-3 w-3" />+{formatCurrencyGBP(offer.shippingPrice)}
             </div>
           )}
         </div>

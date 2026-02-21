@@ -1,7 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, Plus, List, Calculator, TrendingUp, TrendingDown, Gavel } from 'lucide-react';
+import {
+  CheckCircle2,
+  Plus,
+  List,
+  Calculator,
+  TrendingUp,
+  TrendingDown,
+  Gavel,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,7 +49,6 @@ function getSellPrice(item: EvaluationItem): number | null {
   return item.amazonBuyBoxPrice || item.amazonWasPrice || null;
 }
 
-
 /**
  * Final step showing success message after saving
  * Enhanced for max_bid mode to allow entering actual cost and see profit
@@ -65,7 +72,7 @@ export function SavedStep({
   // Calculate expected revenue from sell prices
   const totalExpectedRevenue = items.reduce((sum, item) => {
     const sellPrice = getSellPrice(item);
-    return sum + ((sellPrice || 0) * (item.quantity || 1));
+    return sum + (sellPrice || 0) * (item.quantity || 1);
   }, 0);
 
   // Calculate total platform fees using the dedicated function (consistent with ReviewStep)
@@ -73,7 +80,7 @@ export function SavedStep({
     const sellPrice = getSellPrice(item);
     if (!sellPrice) return sum;
     const feeResult = calculatePlatformFeesOnly(sellPrice, item.targetPlatform);
-    return sum + (feeResult.total * (item.quantity || 1));
+    return sum + feeResult.total * (item.quantity || 1);
   }, 0);
 
   // Calculate max purchase price for non-auction mode display
@@ -81,11 +88,12 @@ export function SavedStep({
     const sellPrice = getSellPrice(item);
     if (!sellPrice || sellPrice <= 0) return sum;
 
-    const result = item.targetPlatform === 'ebay'
-      ? calculateMaxPurchasePriceEbay(sellPrice, targetMarginPercent)
-      : calculateMaxPurchasePriceAmazon(sellPrice, targetMarginPercent);
+    const result =
+      item.targetPlatform === 'ebay'
+        ? calculateMaxPurchasePriceEbay(sellPrice, targetMarginPercent)
+        : calculateMaxPurchasePriceAmazon(sellPrice, targetMarginPercent);
 
-    return sum + (result.maxPurchasePrice * (item.quantity || 1));
+    return sum + result.maxPurchasePrice * (item.quantity || 1);
   }, 0);
 
   // Calculate auction breakdown using the CORRECT method
@@ -103,9 +111,10 @@ export function SavedStep({
   // Calculate profit based on actual cost entered
   const actualCostNum = parseFloat(actualCost) || 0;
   const actualProfit = actualCostNum > 0 ? totalExpectedRevenue - totalFees - actualCostNum : null;
-  const actualMargin = actualCostNum > 0 && totalExpectedRevenue > 0
-    ? ((actualProfit || 0) / totalExpectedRevenue) * 100
-    : null;
+  const actualMargin =
+    actualCostNum > 0 && totalExpectedRevenue > 0
+      ? ((actualProfit || 0) / totalExpectedRevenue) * 100
+      : null;
 
   // Handle updating actual cost
   const handleUpdateCost = async () => {
@@ -129,7 +138,8 @@ export function SavedStep({
           </div>
           <p className="text-lg font-medium">Evaluation Saved!</p>
           <p className="text-muted-foreground mb-6 text-center">
-            Your purchase evaluation has been saved. You can view it anytime from your evaluations list.
+            Your purchase evaluation has been saved. You can view it anytime from your evaluations
+            list.
           </p>
           <div className="flex gap-4">
             <Button variant="outline" onClick={onNewEvaluation}>
@@ -178,21 +188,31 @@ export function SavedStep({
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-4">
               <div className="text-center p-4 rounded-lg bg-primary/10 border-2 border-primary">
-                <p className="text-2xl font-bold text-primary">{formatCurrencyGBP(auctionBreakdown.maxBid)}</p>
+                <p className="text-2xl font-bold text-primary">
+                  {formatCurrencyGBP(auctionBreakdown.maxBid)}
+                </p>
                 <p className="text-sm text-muted-foreground">Max Bid</p>
                 <p className="text-xs text-muted-foreground">Enter this amount</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-xl font-bold">{formatCurrencyGBP(auctionBreakdown.commission)}</p>
+                <p className="text-xl font-bold">
+                  {formatCurrencyGBP(auctionBreakdown.commission)}
+                </p>
                 <p className="text-sm text-muted-foreground">Commission</p>
-                <p className="text-xs text-muted-foreground">{auctionSettings.commissionPercent}%</p>
+                <p className="text-xs text-muted-foreground">
+                  {auctionSettings.commissionPercent}%
+                </p>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-xl font-bold">{formatCurrencyGBP(auctionBreakdown.shippingCost)}</p>
+                <p className="text-xl font-bold">
+                  {formatCurrencyGBP(auctionBreakdown.shippingCost)}
+                </p>
                 <p className="text-sm text-muted-foreground">Shipping</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-amber-100 border border-amber-300">
-                <p className="text-xl font-bold text-amber-700">{formatCurrencyGBP(auctionBreakdown.totalPaid)}</p>
+                <p className="text-xl font-bold text-amber-700">
+                  {formatCurrencyGBP(auctionBreakdown.totalPaid)}
+                </p>
                 <p className="text-sm text-muted-foreground">Total Paid</p>
                 <p className="text-xs text-muted-foreground">Your max cost</p>
               </div>
@@ -229,12 +249,7 @@ export function SavedStep({
               />
             </div>
             {onUpdateActualCost && actualCostNum > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUpdateCost}
-                disabled={isUpdating}
-              >
+              <Button variant="outline" size="sm" onClick={handleUpdateCost} disabled={isUpdating}>
                 Save Cost
               </Button>
             )}
@@ -264,16 +279,22 @@ export function SavedStep({
                 <p className="text-xs text-green-600 mt-1">Within max bid</p>
               )}
               {actualCostNum > 0 && actualCostNum > totalMaxPurchasePrice && (
-                <p className="text-xs text-red-600 mt-1">Above max bid by {formatCurrencyGBP(actualCostNum - totalMaxPurchasePrice)}</p>
+                <p className="text-xs text-red-600 mt-1">
+                  Above max bid by {formatCurrencyGBP(actualCostNum - totalMaxPurchasePrice)}
+                </p>
               )}
             </div>
 
             {/* Expected Profit */}
-            <div className={`p-4 rounded-lg ${
-              actualProfit !== null
-                ? actualProfit > 0 ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'
-                : 'bg-muted/50'
-            }`}>
+            <div
+              className={`p-4 rounded-lg ${
+                actualProfit !== null
+                  ? actualProfit > 0
+                    ? 'bg-green-100 dark:bg-green-900/30'
+                    : 'bg-red-100 dark:bg-red-900/30'
+                  : 'bg-muted/50'
+              }`}
+            >
               <p className="text-sm text-muted-foreground">Expected Profit</p>
               <div className="flex items-center gap-2">
                 {actualProfit !== null ? (
@@ -283,7 +304,9 @@ export function SavedStep({
                     ) : (
                       <TrendingDown className="h-5 w-5 text-red-600" />
                     )}
-                    <p className={`text-xl font-bold ${actualProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p
+                      className={`text-xl font-bold ${actualProfit > 0 ? 'text-green-600' : 'text-red-600'}`}
+                    >
                       {formatCurrencyGBP(actualProfit)}
                     </p>
                   </>
@@ -292,7 +315,9 @@ export function SavedStep({
                 )}
               </div>
               {actualMargin !== null && (
-                <p className={`text-xs mt-1 ${actualMargin > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`text-xs mt-1 ${actualMargin > 0 ? 'text-green-600' : 'text-red-600'}`}
+                >
                   {actualMargin.toFixed(1)}% margin
                 </p>
               )}
@@ -305,7 +330,9 @@ export function SavedStep({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">
-                    {auctionBreakdown ? 'Comparison to Recommended Total Paid' : 'Comparison to Recommended Max Price'}
+                    {auctionBreakdown
+                      ? 'Comparison to Recommended Total Paid'
+                      : 'Comparison to Recommended Max Price'}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {auctionBreakdown
@@ -315,7 +342,9 @@ export function SavedStep({
                 </div>
                 <div className="text-right">
                   {(() => {
-                    const compareValue = auctionBreakdown ? auctionBreakdown.totalPaid : totalMaxPurchasePrice;
+                    const compareValue = auctionBreakdown
+                      ? auctionBreakdown.totalPaid
+                      : totalMaxPurchasePrice;
                     if (actualCostNum <= compareValue) {
                       return (
                         <p className="text-sm font-medium text-green-600">

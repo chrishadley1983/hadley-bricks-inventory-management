@@ -8,7 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { getListings, createListing, getListingCounts } from '@/lib/listing-assistant/listings.service';
+import {
+  getListings,
+  createListing,
+  getListingCounts,
+} from '@/lib/listing-assistant/listings.service';
 
 const CreateListingSchema = z.object({
   inventory_item_id: z.string().uuid().nullable().optional(),
@@ -43,7 +47,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') as 'draft' | 'ready' | 'listed' | 'sold' | null;
     const inventoryItemId = searchParams.get('inventoryItemId');
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
-    const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : undefined;
+    const offset = searchParams.get('offset')
+      ? parseInt(searchParams.get('offset')!, 10)
+      : undefined;
     const includeCounts = searchParams.get('includeCounts') === 'true';
 
     const { listings, total } = await getListings(user.id, {

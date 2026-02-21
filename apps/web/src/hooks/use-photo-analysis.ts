@@ -13,7 +13,10 @@ import type {
   PrimaryAnalysisModel,
   AIModel,
 } from '@/lib/purchase-evaluator/photo-types';
-import type { ItemRegion, RegionDetectionResult } from '@/lib/purchase-evaluator/image-chunking.service';
+import type {
+  ItemRegion,
+  RegionDetectionResult,
+} from '@/lib/purchase-evaluator/image-chunking.service';
 
 // ============================================
 // Types
@@ -55,9 +58,7 @@ export interface AnalyzePhotosRequest {
 // API Function
 // ============================================
 
-async function analyzePhotosApi(
-  request: AnalyzePhotosRequest
-): Promise<PhotoAnalysisResult> {
+async function analyzePhotosApi(request: AnalyzePhotosRequest): Promise<PhotoAnalysisResult> {
   const response = await fetch('/api/purchase-evaluator/analyze-photos', {
     method: 'POST',
     headers: {
@@ -121,9 +122,7 @@ function fileToBase64(file: File): Promise<string> {
  * Get media type from file
  * Normalizes various image types to the supported formats
  */
-function getMediaType(
-  file: File
-): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
+function getMediaType(file: File): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
   const type = file.type.toLowerCase();
 
   // Direct matches for supported types
@@ -227,9 +226,7 @@ function cropImageToRegion(
         ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
 
         // Convert to base64 (remove data URL prefix)
-        const croppedBase64 = canvas
-          .toDataURL(mediaType)
-          .replace(/^data:image\/\w+;base64,/, '');
+        const croppedBase64 = canvas.toDataURL(mediaType).replace(/^data:image\/\w+;base64,/, '');
 
         resolve(croppedBase64);
       } catch (err) {
@@ -268,7 +265,9 @@ async function processImagesClientSide(
       console.error(`[Chunking] Failed to detect regions for image ${i}:`, error);
       // Fallback - treat as single region
       detectionResults.push({
-        regions: [{ x: 0, y: 0, width: 100, height: 100, description: 'Full image', itemType: 'unknown' }],
+        regions: [
+          { x: 0, y: 0, width: 100, height: 100, description: 'Full image', itemType: 'unknown' },
+        ],
         shouldChunk: false,
         reason: 'Detection failed',
         itemCount: 1,
@@ -281,7 +280,9 @@ async function processImagesClientSide(
   const anyRecommendChunking = detectionResults.some((r) => r.shouldChunk);
   const shouldChunk = totalRegions > images.length && anyRecommendChunking;
 
-  console.log(`[Chunking] Detection complete: ${totalRegions} regions, shouldChunk: ${shouldChunk}`);
+  console.log(
+    `[Chunking] Detection complete: ${totalRegions} regions, shouldChunk: ${shouldChunk}`
+  );
 
   if (!shouldChunk) {
     // No chunking needed - return original images as-is
@@ -291,7 +292,14 @@ async function processImagesClientSide(
         mediaType: img.mediaType,
         filename: img.filename || `image-${i + 1}.jpg`,
         sourceIndex: i,
-        region: { x: 0, y: 0, width: 100, height: 100, description: 'Full image', itemType: 'unknown' as const },
+        region: {
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+          description: 'Full image',
+          itemType: 'unknown' as const,
+        },
       })),
       wasChunked: false,
       totalRegions,
@@ -310,7 +318,9 @@ async function processImagesClientSide(
       // Multiple regions - crop each one
       for (let j = 0; j < detection.regions.length; j++) {
         const region = detection.regions[j];
-        onProgress?.(`Cropping region ${j + 1} of ${detection.regions.length} from image ${i + 1}...`);
+        onProgress?.(
+          `Cropping region ${j + 1} of ${detection.regions.length} from image ${i + 1}...`
+        );
 
         try {
           const croppedBase64 = await cropImageToRegion(img.base64, region, img.mediaType);
@@ -332,7 +342,14 @@ async function processImagesClientSide(
         mediaType: img.mediaType,
         filename: img.filename || `image-${i + 1}.jpg`,
         sourceIndex: i,
-        region: detection.regions[0] || { x: 0, y: 0, width: 100, height: 100, description: 'Full image', itemType: 'unknown' as const },
+        region: detection.regions[0] || {
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+          description: 'Full image',
+          itemType: 'unknown' as const,
+        },
       });
     }
   }
@@ -368,9 +385,7 @@ export function usePhotoAnalysis() {
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
 
   // State for analysis result
-  const [analysisResult, setAnalysisResult] = useState<PhotoAnalysisResult | null>(
-    null
-  );
+  const [analysisResult, setAnalysisResult] = useState<PhotoAnalysisResult | null>(null);
 
   // Mutation for running analysis
   const analysisMutation = useMutation({
@@ -381,43 +396,48 @@ export function usePhotoAnalysis() {
   });
 
   // Add images handler
-  const addImages = useCallback(async (files: FileList | File[]) => {
-    const newImages: UploadedImage[] = [];
+  const addImages = useCallback(
+    async (files: FileList | File[]) => {
+      const newImages: UploadedImage[] = [];
 
-    for (const file of Array.from(files)) {
-      // Validate file type - allow empty type for clipboard pastes
-      if (file.type && !file.type.startsWith('image/')) {
-        console.warn(`[addImages] Skipping non-image file: ${file.name} (type: ${file.type})`);
-        continue;
+      for (const file of Array.from(files)) {
+        // Validate file type - allow empty type for clipboard pastes
+        if (file.type && !file.type.startsWith('image/')) {
+          console.warn(`[addImages] Skipping non-image file: ${file.name} (type: ${file.type})`);
+          continue;
+        }
+
+        // Check if we already have 10 images
+        if (images.length + newImages.length >= 10) {
+          console.warn('[addImages] Maximum 10 images allowed');
+          break;
+        }
+
+        try {
+          const base64 = await fileToBase64(file);
+          const mediaType = getMediaType(file);
+          const preview = URL.createObjectURL(file);
+
+          console.log(
+            `[addImages] Processed image: ${file.name}, type: ${file.type} -> ${mediaType}, base64 length: ${base64.length}`
+          );
+
+          newImages.push({
+            id: generateImageId(),
+            file,
+            preview,
+            base64,
+            mediaType,
+          });
+        } catch (error) {
+          console.error(`[addImages] Failed to process image ${file.name}:`, error);
+        }
       }
 
-      // Check if we already have 10 images
-      if (images.length + newImages.length >= 10) {
-        console.warn('[addImages] Maximum 10 images allowed');
-        break;
-      }
-
-      try {
-        const base64 = await fileToBase64(file);
-        const mediaType = getMediaType(file);
-        const preview = URL.createObjectURL(file);
-
-        console.log(`[addImages] Processed image: ${file.name}, type: ${file.type} -> ${mediaType}, base64 length: ${base64.length}`);
-
-        newImages.push({
-          id: generateImageId(),
-          file,
-          preview,
-          base64,
-          mediaType,
-        });
-      } catch (error) {
-        console.error(`[addImages] Failed to process image ${file.name}:`, error);
-      }
-    }
-
-    setImages((prev) => [...prev, ...newImages]);
-  }, [images.length]);
+      setImages((prev) => [...prev, ...newImages]);
+    },
+    [images.length]
+  );
 
   // Remove image handler
   const removeImage = useCallback((id: string) => {
@@ -469,9 +489,7 @@ export function usePhotoAnalysis() {
 
         return {
           ...prev,
-          items: prev.items.map((item) =>
-            item.id === itemId ? { ...item, ...updates } : item
-          ),
+          items: prev.items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)),
         };
       });
     },
@@ -479,18 +497,21 @@ export function usePhotoAnalysis() {
   );
 
   // Remove analysis item
-  const removeAnalysisItem = useCallback((itemId: string) => {
-    if (!analysisResult) return;
+  const removeAnalysisItem = useCallback(
+    (itemId: string) => {
+      if (!analysisResult) return;
 
-    setAnalysisResult((prev) => {
-      if (!prev) return prev;
+      setAnalysisResult((prev) => {
+        if (!prev) return prev;
 
-      return {
-        ...prev,
-        items: prev.items.filter((item) => item.id !== itemId),
-      };
-    });
-  }, [analysisResult]);
+        return {
+          ...prev,
+          items: prev.items.filter((item) => item.id !== itemId),
+        };
+      });
+    },
+    [analysisResult]
+  );
 
   // Add manual item
   const addManualItem = useCallback(
@@ -526,120 +547,141 @@ export function usePhotoAnalysis() {
   }, [clearImages, analysisMutation]);
 
   // Create the analyze function that the wizard expects
-  const analyzePhotos = useCallback(async (options: {
-    primaryModel?: PrimaryAnalysisModel;
-    useGeminiVerification?: boolean;
-    useBrickognize?: boolean;
-    useImageChunking?: boolean;
-    listingDescription?: string;
-  }) => {
-    if (images.length === 0) {
-      throw new Error('No images to analyze');
-    }
+  const analyzePhotos = useCallback(
+    async (options: {
+      primaryModel?: PrimaryAnalysisModel;
+      useGeminiVerification?: boolean;
+      useBrickognize?: boolean;
+      useImageChunking?: boolean;
+      listingDescription?: string;
+    }) => {
+      if (images.length === 0) {
+        throw new Error('No images to analyze');
+      }
 
-    const useChunking = options.useImageChunking ?? true;
-    let imagesToSend: Array<{ base64: string; mediaType: MediaType; filename?: string }>;
+      const useChunking = options.useImageChunking ?? true;
+      let imagesToSend: Array<{ base64: string; mediaType: MediaType; filename?: string }>;
 
-    if (useChunking) {
-      // Perform client-side chunking
-      setProgressMessage('Detecting item regions...');
-      try {
-        const chunkingResult = await processImagesClientSide(
-          images.map((img) => ({
+      if (useChunking) {
+        // Perform client-side chunking
+        setProgressMessage('Detecting item regions...');
+        try {
+          const chunkingResult = await processImagesClientSide(
+            images.map((img) => ({
+              base64: img.base64,
+              mediaType: img.mediaType,
+              filename: img.file.name,
+            })),
+            setProgressMessage
+          );
+
+          imagesToSend = chunkingResult.chunkedImages.map((chunk) => ({
+            base64: chunk.base64,
+            mediaType: chunk.mediaType,
+            filename: chunk.filename,
+          }));
+
+          console.log(
+            `[analyzePhotos] ${chunkingResult.wasChunked ? 'Chunked' : 'Not chunked'}: ${imagesToSend.length} images to send`
+          );
+        } catch (error) {
+          console.error('[analyzePhotos] Chunking failed, using original images:', error);
+          // Fallback to original images
+          imagesToSend = images.map((img) => ({
             base64: img.base64,
             mediaType: img.mediaType,
             filename: img.file.name,
-          })),
-          setProgressMessage
-        );
-
-        imagesToSend = chunkingResult.chunkedImages.map((chunk) => ({
-          base64: chunk.base64,
-          mediaType: chunk.mediaType,
-          filename: chunk.filename,
-        }));
-
-        console.log(`[analyzePhotos] ${chunkingResult.wasChunked ? 'Chunked' : 'Not chunked'}: ${imagesToSend.length} images to send`);
-      } catch (error) {
-        console.error('[analyzePhotos] Chunking failed, using original images:', error);
-        // Fallback to original images
+          }));
+        }
+      } else {
+        // No chunking - use original images
         imagesToSend = images.map((img) => ({
           base64: img.base64,
           mediaType: img.mediaType,
           filename: img.file.name,
         }));
       }
-    } else {
-      // No chunking - use original images
-      imagesToSend = images.map((img) => ({
-        base64: img.base64,
-        mediaType: img.mediaType,
-        filename: img.file.name,
-      }));
-    }
 
-    // Batch images if more than 10 (API limit)
-    const MAX_IMAGES_PER_REQUEST = 10;
-    const batches: Array<typeof imagesToSend> = [];
+      // Batch images if more than 10 (API limit)
+      const MAX_IMAGES_PER_REQUEST = 10;
+      const batches: Array<typeof imagesToSend> = [];
 
-    for (let i = 0; i < imagesToSend.length; i += MAX_IMAGES_PER_REQUEST) {
-      batches.push(imagesToSend.slice(i, i + MAX_IMAGES_PER_REQUEST));
-    }
-
-    console.log(`[analyzePhotos] Processing ${imagesToSend.length} images in ${batches.length} batch(es)`);
-
-    try {
-      // Process each batch and merge results
-      const allItems: PhotoAnalysisResult['items'] = [];
-      let totalProcessingTime = 0;
-
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        const batchLabel = batches.length > 1 ? ` (batch ${batchIndex + 1}/${batches.length})` : '';
-
-        setProgressMessage(
-          options.primaryModel === 'gemini'
-            ? `Analyzing with Gemini Pro${batchLabel}...`
-            : `Analyzing with Claude${batchLabel}...`
-        );
-
-        const request: AnalyzePhotosRequest = {
-          images: batch,
-          listingDescription: options.listingDescription,
-          options: {
-            primaryModel: options.primaryModel ?? 'gemini',
-            useGeminiVerification: options.useGeminiVerification ?? useGeminiVerification,
-            useBrickognize: options.useBrickognize ?? useBrickognize,
-            useImageChunking: false,
-          },
-        };
-
-        const batchResult = await analysisMutation.mutateAsync(request);
-        allItems.push(...batchResult.items);
-        totalProcessingTime += batchResult.processingTimeMs;
+      for (let i = 0; i < imagesToSend.length; i += MAX_IMAGES_PER_REQUEST) {
+        batches.push(imagesToSend.slice(i, i + MAX_IMAGES_PER_REQUEST));
       }
 
-      // Merge results from all batches
-      const mergedResult: PhotoAnalysisResult = {
-        items: allItems,
-        processingTimeMs: totalProcessingTime,
-        modelsUsed: [(options.primaryModel === 'claude' ? 'opus' : options.primaryModel ?? 'gemini') as AIModel],
-        overallNotes: '',
-        analysisConfidence: allItems.length > 0
-          ? allItems.reduce((sum, item) => sum + (item.confidenceScore || 0), 0) / allItems.length
-          : 0,
-        warnings: [],
-        sourceDescription: listingDescription || null,
-      };
+      console.log(
+        `[analyzePhotos] Processing ${imagesToSend.length} images in ${batches.length} batch(es)`
+      );
 
-      setProgressMessage(null);
-      setAnalysisResult(mergedResult);
-      return mergedResult;
-    } catch (error) {
-      setProgressMessage(null);
-      throw error;
-    }
-  }, [images, useGeminiVerification, useBrickognize, analysisMutation, setAnalysisResult, listingDescription]);
+      try {
+        // Process each batch and merge results
+        const allItems: PhotoAnalysisResult['items'] = [];
+        let totalProcessingTime = 0;
+
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          const batch = batches[batchIndex];
+          const batchLabel =
+            batches.length > 1 ? ` (batch ${batchIndex + 1}/${batches.length})` : '';
+
+          setProgressMessage(
+            options.primaryModel === 'gemini'
+              ? `Analyzing with Gemini Pro${batchLabel}...`
+              : `Analyzing with Claude${batchLabel}...`
+          );
+
+          const request: AnalyzePhotosRequest = {
+            images: batch,
+            listingDescription: options.listingDescription,
+            options: {
+              primaryModel: options.primaryModel ?? 'gemini',
+              useGeminiVerification: options.useGeminiVerification ?? useGeminiVerification,
+              useBrickognize: options.useBrickognize ?? useBrickognize,
+              useImageChunking: false,
+            },
+          };
+
+          const batchResult = await analysisMutation.mutateAsync(request);
+          allItems.push(...batchResult.items);
+          totalProcessingTime += batchResult.processingTimeMs;
+        }
+
+        // Merge results from all batches
+        const mergedResult: PhotoAnalysisResult = {
+          items: allItems,
+          processingTimeMs: totalProcessingTime,
+          modelsUsed: [
+            (options.primaryModel === 'claude'
+              ? 'opus'
+              : (options.primaryModel ?? 'gemini')) as AIModel,
+          ],
+          overallNotes: '',
+          analysisConfidence:
+            allItems.length > 0
+              ? allItems.reduce((sum, item) => sum + (item.confidenceScore || 0), 0) /
+                allItems.length
+              : 0,
+          warnings: [],
+          sourceDescription: listingDescription || null,
+        };
+
+        setProgressMessage(null);
+        setAnalysisResult(mergedResult);
+        return mergedResult;
+      } catch (error) {
+        setProgressMessage(null);
+        throw error;
+      }
+    },
+    [
+      images,
+      useGeminiVerification,
+      useBrickognize,
+      analysisMutation,
+      setAnalysisResult,
+      listingDescription,
+    ]
+  );
 
   return {
     // Image state

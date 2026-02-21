@@ -94,12 +94,16 @@ export async function GET(request: NextRequest) {
 
     // Strategy 2 & 3: Use Amazon API if credentials are available
     const credentialsRepo = new CredentialsRepository(supabase);
-    const amazonCredentials = await credentialsRepo.getCredentials<AmazonCredentials>(user.id, 'amazon');
+    const amazonCredentials = await credentialsRepo.getCredentials<AmazonCredentials>(
+      user.id,
+      'amazon'
+    );
 
     if (!amazonCredentials) {
       return NextResponse.json({
         data: null,
-        message: 'No ASIN found in inventory. Configure Amazon API credentials to search Amazon catalog.',
+        message:
+          'No ASIN found in inventory. Configure Amazon API credentials to search Amazon catalog.',
       });
     }
 
@@ -130,9 +134,7 @@ export async function GET(request: NextRequest) {
 
       // Filter results to find the best match (title contains set number)
       const matchingItems = keywordResult.items.filter(
-        (item) =>
-          item.title?.includes(baseSetNumber) ||
-          item.title?.toLowerCase().includes('lego')
+        (item) => item.title?.includes(baseSetNumber) || item.title?.toLowerCase().includes('lego')
       );
 
       if (matchingItems.length > 0) {

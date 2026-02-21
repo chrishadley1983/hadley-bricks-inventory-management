@@ -209,7 +209,9 @@ export interface BricksetCredentials {
 /**
  * Convert API response to internal BricksetSet format
  */
-export function apiSetToInternal(apiSet: BricksetApiSet): Omit<BricksetSet, 'id' | 'createdAt' | 'updatedAt'> {
+export function apiSetToInternal(
+  apiSet: BricksetApiSet
+): Omit<BricksetSet, 'id' | 'createdAt' | 'updatedAt'> {
   // Extract image filename from URL
   const imageFilename = apiSet.image?.imageURL
     ? apiSet.image.imageURL.split('/').pop() || null
@@ -255,15 +257,19 @@ export function apiSetToInternal(apiSet: BricksetApiSet): Omit<BricksetSet, 'id'
     rating: apiSet.rating || null,
     bricklinkSoldPriceNew: null, // Would need separate BrickLink API call
     bricklinkSoldPriceUsed: null, // Would need separate BrickLink API call
-    designers: apiSet.extendedData?.tags?.filter(t => t.startsWith('Designer:'))
-      .map(t => t.replace('Designer:', '').trim()) || null,
-    launchDate: apiSet.LEGOCom?.UK?.dateFirstAvailable || apiSet.LEGOCom?.US?.dateFirstAvailable || null,
+    designers:
+      apiSet.extendedData?.tags
+        ?.filter((t) => t.startsWith('Designer:'))
+        .map((t) => t.replace('Designer:', '').trim()) || null,
+    launchDate:
+      apiSet.LEGOCom?.UK?.dateFirstAvailable || apiSet.LEGOCom?.US?.dateFirstAvailable || null,
     // dateLastAvailable can be empty string "", so we need to check explicitly
-    exitDate: (apiSet.LEGOCom?.UK?.dateLastAvailable && apiSet.LEGOCom.UK.dateLastAvailable !== '')
-      ? apiSet.LEGOCom.UK.dateLastAvailable
-      : (apiSet.LEGOCom?.US?.dateLastAvailable && apiSet.LEGOCom.US.dateLastAvailable !== '')
-        ? apiSet.LEGOCom.US.dateLastAvailable
-        : null,
+    exitDate:
+      apiSet.LEGOCom?.UK?.dateLastAvailable && apiSet.LEGOCom.UK.dateLastAvailable !== ''
+        ? apiSet.LEGOCom.UK.dateLastAvailable
+        : apiSet.LEGOCom?.US?.dateLastAvailable && apiSet.LEGOCom.US.dateLastAvailable !== ''
+          ? apiSet.LEGOCom.US.dateLastAvailable
+          : null,
     lastFetchedAt: new Date().toISOString(),
   };
 }

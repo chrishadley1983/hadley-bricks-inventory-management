@@ -5,7 +5,11 @@ import type {
   WorkflowTaskInstanceInsert,
   TaskStatus,
 } from '@hadley-bricks/database';
-import { WorkflowRepository, ResolvedTaskInstance, CompletedTaskSummary } from '../repositories/workflow.repository';
+import {
+  WorkflowRepository,
+  ResolvedTaskInstance,
+  CompletedTaskSummary,
+} from '../repositories/workflow.repository';
 
 /**
  * Resolution stats for inventory resolution task
@@ -73,9 +77,11 @@ export class WorkflowService {
     const { pending, completed } = await this.repository.getTodaysTasks(userId, today);
 
     // Get dynamic counts for tasks that have count_source
-    const countSources = [...new Set(pending.filter(t => t.countSource).map(t => t.countSource!))];
+    const countSources = [
+      ...new Set(pending.filter((t) => t.countSource).map((t) => t.countSource!)),
+    ];
     const counts = await this.getDynamicCounts(userId, countSources);
-    const countMap = new Map(counts.map(c => [c.countSource, c.count]));
+    const countMap = new Map(counts.map((c) => [c.countSource, c.count]));
 
     // Fetch resolution stats if there's a resolution.pending task
     let resolutionStats: ResolutionStats | undefined;
@@ -84,7 +90,7 @@ export class WorkflowService {
     }
 
     // Merge counts into tasks
-    const tasksWithCounts: TaskWithCount[] = pending.map(task => ({
+    const tasksWithCounts: TaskWithCount[] = pending.map((task) => ({
       ...task,
       count: task.countSource ? countMap.get(task.countSource) : undefined,
       resolutionStats: task.countSource === 'resolution.pending' ? resolutionStats : undefined,
@@ -149,7 +155,11 @@ export class WorkflowService {
   /**
    * Check if a task should run on a specific day
    */
-  private shouldTaskRunToday(def: WorkflowTaskDefinition, date: Date, dbDayOfWeek: number): boolean {
+  private shouldTaskRunToday(
+    def: WorkflowTaskDefinition,
+    date: Date,
+    dbDayOfWeek: number
+  ): boolean {
     const frequency = def.frequency;
 
     switch (frequency) {

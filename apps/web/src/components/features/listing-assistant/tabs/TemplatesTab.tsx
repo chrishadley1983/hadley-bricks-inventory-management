@@ -167,7 +167,8 @@ export function TemplatesTab() {
         <div>
           <h2 className="text-lg font-semibold">Listing Templates</h2>
           <p className="text-sm text-muted-foreground">
-            HTML templates for your eBay listings. The AI will fill in placeholders like [Set Number].
+            HTML templates for your eBay listings. The AI will fill in placeholders like [Set
+            Number].
           </p>
         </div>
         <Button onClick={openCreateDialog}>
@@ -247,12 +248,10 @@ export function TemplatesTab() {
       <Dialog open={isCreating || !!editingTemplate} onOpenChange={() => closeDialog()}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingTemplate ? 'Edit Template' : 'Create Template'}
-            </DialogTitle>
+            <DialogTitle>{editingTemplate ? 'Edit Template' : 'Create Template'}</DialogTitle>
             <DialogDescription>
-              Create an HTML template for your eBay listings. Use placeholders like [Set
-              Number], [Set Name], [Year], etc.
+              Create an HTML template for your eBay listings. Use placeholders like [Set Number],
+              [Set Name], [Year], etc.
             </DialogDescription>
           </DialogHeader>
 
@@ -269,7 +268,10 @@ export function TemplatesTab() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="type">Type</Label>
-                <Select value={formType} onValueChange={(v: string) => setFormType(v as TemplateType)}>
+                <Select
+                  value={formType}
+                  onValueChange={(v: string) => setFormType(v as TemplateType)}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -303,9 +305,7 @@ export function TemplatesTab() {
               onClick={handleSave}
               disabled={createMutation.isPending || updateMutation.isPending}
             >
-              {createMutation.isPending || updateMutation.isPending
-                ? 'Saving...'
-                : 'Save Template'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save Template'}
             </Button>
           </DialogFooter>
         </DialogContent>

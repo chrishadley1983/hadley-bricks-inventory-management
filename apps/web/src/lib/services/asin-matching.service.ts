@@ -66,11 +66,21 @@ export class AsinMatchingService {
     }
 
     // Build a map of brickset_set_id to brickset data
-    const bricksetById = new Map<string, { set_number: string; set_name: string; uk_retail_price: number | null }>();
-    const bricksetByNumber = new Map<string, { id: string; set_number: string; set_name: string; uk_retail_price: number | null }>();
+    const bricksetById = new Map<
+      string,
+      { set_number: string; set_name: string; uk_retail_price: number | null }
+    >();
+    const bricksetByNumber = new Map<
+      string,
+      { id: string; set_number: string; set_name: string; uk_retail_price: number | null }
+    >();
 
     bricksetSets?.forEach((bs) => {
-      bricksetById.set(bs.id, { set_number: bs.set_number, set_name: bs.set_name, uk_retail_price: bs.uk_retail_price });
+      bricksetById.set(bs.id, {
+        set_number: bs.set_number,
+        set_name: bs.set_name,
+        uk_retail_price: bs.uk_retail_price,
+      });
       bricksetByNumber.set(bs.set_number, bs);
     });
 
@@ -159,7 +169,11 @@ export class AsinMatchingService {
    */
   async getAmazonPrice(
     setNumber: string,
-    amazonClient?: { getCompetitivePricing: (asins: string[]) => Promise<Array<{ asin: string; buyBoxPrice: number | null }>> }
+    amazonClient?: {
+      getCompetitivePricing: (
+        asins: string[]
+      ) => Promise<Array<{ asin: string; buyBoxPrice: number | null }>>;
+    }
   ): Promise<number | null> {
     const match = await this.matchSingle(setNumber);
     if (!match) {
@@ -193,8 +207,18 @@ export class AsinMatchingService {
   async getAmazonPrices(
     setNumbers: string[],
     amazonClient?: {
-      getCompetitivePricing: (asins: string[]) => Promise<Array<{ asin: string; buyBoxPrice: number | null }>>;
-      getCompetitiveSummary?: (asins: string[]) => Promise<Array<{ asin: string; wasPrice: number | null; lowestOffer?: { totalPrice: number } | null }>>;
+      getCompetitivePricing: (
+        asins: string[]
+      ) => Promise<Array<{ asin: string; buyBoxPrice: number | null }>>;
+      getCompetitiveSummary?: (
+        asins: string[]
+      ) => Promise<
+        Array<{
+          asin: string;
+          wasPrice: number | null;
+          lowestOffer?: { totalPrice: number } | null;
+        }>
+      >;
     }
   ): Promise<Map<string, AsinWithPricing>> {
     const matches = await this.matchMultiple(setNumbers);
@@ -215,9 +239,7 @@ export class AsinMatchingService {
     }
 
     // Get ASINs that need pricing
-    const asinsToPrice = [...matches.values()]
-      .filter((m) => m.asin)
-      .map((m) => m.asin!);
+    const asinsToPrice = [...matches.values()].filter((m) => m.asin).map((m) => m.asin!);
 
     if (asinsToPrice.length === 0) {
       return results;

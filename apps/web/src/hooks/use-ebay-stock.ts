@@ -5,11 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  PlatformListing,
-  ListingImport,
-  ComparisonSummary,
-} from '@/lib/platform-stock/types';
+import type { PlatformListing, ListingImport, ComparisonSummary } from '@/lib/platform-stock/types';
 import type {
   EbayStockComparison,
   EbayComparisonFilters,
@@ -180,11 +176,7 @@ async function fetchSkuIssues(): Promise<SkuIssuesResponse['data']> {
 /**
  * Fetch eBay listings with pagination and filtering
  */
-export function useEbayListings(
-  filters: EbayListingFilters = {},
-  page = 1,
-  pageSize = 50
-) {
+export function useEbayListings(filters: EbayListingFilters = {}, page = 1, pageSize = 50) {
   return useQuery({
     queryKey: ebayStockKeys.listings(filters, page, pageSize),
     queryFn: () => fetchEbayListings(filters, page, pageSize),

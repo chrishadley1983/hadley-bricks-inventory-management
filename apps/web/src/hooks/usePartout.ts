@@ -18,7 +18,10 @@ import type {
 /**
  * Fetch partout data from the API (non-streaming)
  */
-async function fetchPartout(setNumber: string, forceRefresh: boolean = false): Promise<PartoutData> {
+async function fetchPartout(
+  setNumber: string,
+  forceRefresh: boolean = false
+): Promise<PartoutData> {
   const params = new URLSearchParams({ setNumber });
   if (forceRefresh) {
     params.set('forceRefresh', 'true');

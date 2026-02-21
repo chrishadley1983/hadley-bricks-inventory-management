@@ -124,7 +124,17 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
       setHasTriggeredInitialLoad(true);
       fetchWithProgress(false);
     }
-  }, [enabled, setNumber, data, isLoading, isFetching, isStreaming, hasTriggeredInitialLoad, error, fetchWithProgress]);
+  }, [
+    enabled,
+    setNumber,
+    data,
+    isLoading,
+    isFetching,
+    isStreaming,
+    hasTriggeredInitialLoad,
+    error,
+    fetchWithProgress,
+  ]);
 
   // Reset initial load flag when set number changes
   useEffect(() => {
@@ -197,12 +207,7 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
         <AlertTitle>Failed to load partout data</AlertTitle>
         <AlertDescription className="flex items-center justify-between">
           <span>{error instanceof Error ? error.message : 'An error occurred'}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? (
               <RefreshCw className="h-4 w-4 animate-spin mr-1" />
             ) : (

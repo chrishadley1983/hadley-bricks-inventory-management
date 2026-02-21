@@ -11,10 +11,7 @@ import {
   ImportStatusBanner,
 } from '@/components/features/platform-stock';
 import { RepricingView } from '@/components/features/repricing';
-import {
-  usePlatformListings,
-  useTriggerImport,
-} from '@/hooks/use-platform-stock';
+import { usePlatformListings, useTriggerImport } from '@/hooks/use-platform-stock';
 import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic import for Header to avoid SSR issues
@@ -48,9 +45,7 @@ export default function PlatformStockPage() {
       toast({
         title: 'Import failed',
         description:
-          error instanceof Error
-            ? error.message
-            : 'Failed to import listings from Amazon.',
+          error instanceof Error ? error.message : 'Failed to import listings from Amazon.',
         variant: 'destructive',
       });
     }
@@ -67,9 +62,7 @@ export default function PlatformStockPage() {
           isRefreshing={importMutation.isPending}
         />
 
-        {importMutation.isPending && (
-          <ImportStatusBanner isImporting />
-        )}
+        {importMutation.isPending && <ImportStatusBanner isImporting />}
 
         {importMutation.isError && (
           <ImportStatusBanner
@@ -94,10 +87,7 @@ export default function PlatformStockPage() {
           />
         )}
 
-        <Tabs
-          value={activeTab}
-          onValueChange={(v: string) => setActiveTab(v as TabValue)}
-        >
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as TabValue)}>
           <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="listings">Listings</TabsTrigger>
             <TabsTrigger value="comparison">Comparison</TabsTrigger>

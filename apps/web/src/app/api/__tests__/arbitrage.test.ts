@@ -70,9 +70,7 @@ describe('Arbitrage API Routes', () => {
       });
 
       mockServiceMethods.getArbitrageData.mockResolvedValueOnce({
-        items: [
-          { asin: 'B07FQ1XXYJ', name: 'LEGO 75192', marginPercent: 35 },
-        ],
+        items: [{ asin: 'B07FQ1XXYJ', name: 'LEGO 75192', marginPercent: 35 }],
         totalCount: 1,
         opportunityCount: 1,
         hasMore: false,
@@ -100,7 +98,8 @@ describe('Arbitrage API Routes', () => {
         hasMore: false,
       });
 
-      const url = 'http://localhost/api/arbitrage?minMargin=40&show=opportunities&sortField=margin&sortDirection=desc&page=2&pageSize=50';
+      const url =
+        'http://localhost/api/arbitrage?minMargin=40&show=opportunities&sortField=margin&sortDirection=desc&page=2&pageSize=50';
       const request = new NextRequest(url);
       await getArbitrage(request);
 

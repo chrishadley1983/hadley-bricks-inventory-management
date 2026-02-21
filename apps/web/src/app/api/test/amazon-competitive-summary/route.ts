@@ -188,10 +188,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (asinList.length > 20) {
-      return NextResponse.json(
-        { error: 'Maximum 20 ASINs per batch request' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Maximum 20 ASINs per batch request' }, { status: 400 });
     }
 
     // Get Amazon credentials from platform_credentials (encrypted)

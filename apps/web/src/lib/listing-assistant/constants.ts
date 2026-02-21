@@ -195,12 +195,12 @@ export const IMAGE_PRESETS = {
  * - Background whitening with shadow preservation
  */
 export const EBAY_OPTIMIZE_SETTINGS: ImageProcessSettings = {
-  brightness: 1.15,      // +15% exposure boost
-  contrast: 1.10,        // +10% contrast for depth
-  saturation: 1.0,       // Keep natural
-  sharpness: 0.65,       // High-pass for legible text
-  padding: 0.12,         // 10-15% breathing room
-  temperature: -15,      // Cool to neutralize indoor warmth
+  brightness: 1.15, // +15% exposure boost
+  contrast: 1.1, // +10% contrast for depth
+  saturation: 1.0, // Keep natural
+  sharpness: 0.65, // High-pass for legible text
+  padding: 0.12, // 10-15% breathing room
+  temperature: -15, // Cool to neutralize indoor warmth
 };
 
 // ============================================

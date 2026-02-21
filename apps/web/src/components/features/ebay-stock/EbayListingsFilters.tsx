@@ -18,10 +18,7 @@ interface EbayListingsFiltersProps {
   onFiltersChange: (filters: EbayListingFilters) => void;
 }
 
-export function EbayListingsFilters({
-  filters,
-  onFiltersChange,
-}: EbayListingsFiltersProps) {
+export function EbayListingsFilters({ filters, onFiltersChange }: EbayListingsFiltersProps) {
   const debouncedSearch = useDebouncedCallback((value: string) => {
     onFiltersChange({ ...filters, search: value || undefined });
   }, 300);

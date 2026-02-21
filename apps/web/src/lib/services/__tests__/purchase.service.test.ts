@@ -82,10 +82,7 @@ describe('PurchaseService', () => {
       const filters = { source: 'eBay', paymentMethod: 'paypal' };
       await service.getAll(filters);
 
-      expect(mockPurchaseRepo.findAllFiltered).toHaveBeenCalledWith(
-        filters,
-        undefined
-      );
+      expect(mockPurchaseRepo.findAllFiltered).toHaveBeenCalledWith(filters, undefined);
     });
 
     it('should apply pagination options', async () => {
@@ -100,10 +97,7 @@ describe('PurchaseService', () => {
       const pagination = { page: 2, pageSize: 20 };
       await service.getAll(undefined, pagination);
 
-      expect(mockPurchaseRepo.findAllFiltered).toHaveBeenCalledWith(
-        undefined,
-        pagination
-      );
+      expect(mockPurchaseRepo.findAllFiltered).toHaveBeenCalledWith(undefined, pagination);
     });
   });
 
@@ -239,11 +233,10 @@ describe('PurchaseService', () => {
 
       await service.getByDateRange('2024-01-01', '2024-12-31', { page: 2, pageSize: 10 });
 
-      expect(mockPurchaseRepo.findByDateRange).toHaveBeenCalledWith(
-        '2024-01-01',
-        '2024-12-31',
-        { page: 2, pageSize: 10 }
-      );
+      expect(mockPurchaseRepo.findByDateRange).toHaveBeenCalledWith('2024-01-01', '2024-12-31', {
+        page: 2,
+        pageSize: 10,
+      });
     });
   });
 
@@ -287,7 +280,7 @@ describe('PurchaseService', () => {
   describe('getTotalsBySource', () => {
     it('should return totals grouped by source', async () => {
       const bySource = {
-        'eBay': 1500.0,
+        eBay: 1500.0,
         'Car Boot Sale': 800.0,
         'LEGO Store': 2000.0,
       };
@@ -303,7 +296,7 @@ describe('PurchaseService', () => {
     it('should return complete purchase summary', async () => {
       const currentMonthTotal = 500.0;
       const rolling12MonthTotal = 5000.0;
-      const bySource = { 'eBay': 1500.0, 'LEGO Store': 2000.0 };
+      const bySource = { eBay: 1500.0, 'LEGO Store': 2000.0 };
       const recentPurchases = Object.values(testPurchases).slice(0, 5);
 
       mockPurchaseRepo.getMonthlyTotal.mockResolvedValue(currentMonthTotal);

@@ -38,9 +38,6 @@ export async function DELETE(
     });
   } catch (error) {
     console.error('[DELETE /api/amazon/sync/queue/[id]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

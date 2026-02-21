@@ -86,7 +86,11 @@ export function PartoutSummary({ data }: PartoutSummaryProps) {
               {formatRatio(data.ratioNew)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {data.ratioNew !== null ? (data.ratioNew > 1 ? 'Part out profitable' : 'Sell complete better') : 'No set price'}
+              {data.ratioNew !== null
+                ? data.ratioNew > 1
+                  ? 'Part out profitable'
+                  : 'Sell complete better'
+                : 'No set price'}
             </div>
           </CardContent>
         </Card>
@@ -117,7 +121,11 @@ export function PartoutSummary({ data }: PartoutSummaryProps) {
               {formatRatio(data.ratioUsed)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {data.ratioUsed !== null ? (data.ratioUsed > 1 ? 'Part out profitable' : 'Sell complete better') : 'No set price'}
+              {data.ratioUsed !== null
+                ? data.ratioUsed > 1
+                  ? 'Part out profitable'
+                  : 'Sell complete better'
+                : 'No set price'}
             </div>
           </CardContent>
         </Card>
@@ -174,10 +182,15 @@ export function PartoutSummary({ data }: PartoutSummaryProps) {
         <Card className={hasMissingPrices ? 'border-amber-200 bg-amber-50' : ''}>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle className={`h-5 w-5 ${hasMissingPrices ? 'text-amber-600' : 'text-muted-foreground'}`} />
+              <AlertTriangle
+                className={`h-5 w-5 ${hasMissingPrices ? 'text-amber-600' : 'text-muted-foreground'}`}
+              />
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Missing Prices</div>
-                <div className={`text-lg font-bold ${hasMissingPrices ? 'text-amber-700' : 'text-green-600'}`} data-testid="missing-prices">
+                <div
+                  className={`text-lg font-bold ${hasMissingPrices ? 'text-amber-700' : 'text-green-600'}`}
+                  data-testid="missing-prices"
+                >
                   {hasMissingPrices ? (
                     <>
                       {missingStats.missingNew} New / {missingStats.missingUsed} Used

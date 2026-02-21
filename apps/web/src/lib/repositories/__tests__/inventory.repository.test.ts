@@ -69,7 +69,10 @@ const createMockSupabase = () => {
       }),
       single: vi.fn(() => {
         const key = `${tableName}_single`;
-        const response = mockResponses.get(key) || { data: null, error: { code: 'PGRST116', message: 'Not found' } };
+        const response = mockResponses.get(key) || {
+          data: null,
+          error: { code: 'PGRST116', message: 'Not found' },
+        };
         return Promise.resolve(response);
       }),
       // Make builder thenable for direct await
@@ -86,7 +89,11 @@ const createMockSupabase = () => {
   return {
     from: vi.fn((tableName: string) => createQueryBuilder(tableName)),
     // Test helpers
-    setMockResponse: (table: string, operation: 'single' | 'query', response: { data: unknown; error: unknown; count?: number }) => {
+    setMockResponse: (
+      table: string,
+      operation: 'single' | 'query',
+      response: { data: unknown; error: unknown; count?: number }
+    ) => {
       const key = `${table}_${operation}`;
       mockResponses.set(key, response);
     },
@@ -317,7 +324,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(repository.findAllFiltered({})).rejects.toThrow('Failed to find inventory items');
+      await expect(repository.findAllFiltered({})).rejects.toThrow(
+        'Failed to find inventory items'
+      );
     });
 
     it('should calculate totalPages correctly', async () => {
@@ -459,7 +468,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(repository.findByLinkedLot('LOT-001')).rejects.toThrow('Failed to find inventory by linked lot');
+      await expect(repository.findByLinkedLot('LOT-001')).rejects.toThrow(
+        'Failed to find inventory by linked lot'
+      );
     });
   });
 
@@ -495,7 +506,9 @@ describe('InventoryRepository', () => {
         error: { code: 'PGRST500', message: 'Database error' },
       });
 
-      await expect(repository.findBySku('ANY-SKU')).rejects.toThrow('Failed to find inventory by SKU');
+      await expect(repository.findBySku('ANY-SKU')).rejects.toThrow(
+        'Failed to find inventory by SKU'
+      );
     });
   });
 
@@ -531,7 +544,9 @@ describe('InventoryRepository', () => {
         error: { code: 'PGRST500', message: 'Database error' },
       });
 
-      await expect(repository.findByAsin('ANY-ASIN')).rejects.toThrow('Failed to find inventory by ASIN');
+      await expect(repository.findByAsin('ANY-ASIN')).rejects.toThrow(
+        'Failed to find inventory by ASIN'
+      );
     });
   });
 
@@ -558,9 +573,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Bulk insert failed' },
       });
 
-      await expect(repository.createMany([{ user_id: 'user-1', set_number: '75192' }])).rejects.toThrow(
-        'Failed to create inventory items'
-      );
+      await expect(
+        repository.createMany([{ user_id: 'user-1', set_number: '75192' }])
+      ).rejects.toThrow('Failed to create inventory items');
     });
 
     it('should handle empty input array', async () => {
@@ -609,7 +624,10 @@ describe('InventoryRepository', () => {
         error: null,
       });
 
-      const result = await repository.updateBulk(['inv-1', 'inv-2'], { status: 'LISTED', listing_platform: 'amazon' });
+      const result = await repository.updateBulk(['inv-1', 'inv-2'], {
+        status: 'LISTED',
+        listing_platform: 'amazon',
+      });
 
       expect(result).toHaveLength(2);
     });
@@ -657,7 +675,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Delete failed' },
       });
 
-      await expect(repository.deleteBulk(['inv-1'])).rejects.toThrow('Failed to bulk delete inventory items');
+      await expect(repository.deleteBulk(['inv-1'])).rejects.toThrow(
+        'Failed to bulk delete inventory items'
+      );
     });
   });
 
@@ -711,7 +731,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(repository.getCountByStatus()).rejects.toThrow('Failed to get inventory count by status');
+      await expect(repository.getCountByStatus()).rejects.toThrow(
+        'Failed to get inventory count by status'
+      );
     });
 
     it('should handle pagination for large datasets (>1000 rows)', async () => {
@@ -869,7 +891,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(repository.getValueByStatus()).rejects.toThrow('Failed to get inventory value by status');
+      await expect(repository.getValueByStatus()).rejects.toThrow(
+        'Failed to get inventory value by status'
+      );
     });
   });
 
@@ -904,10 +928,7 @@ describe('InventoryRepository', () => {
     });
 
     it('should filter out null platforms', async () => {
-      const mockItems = [
-        { listing_platform: 'ebay' },
-        { listing_platform: null },
-      ];
+      const mockItems = [{ listing_platform: 'ebay' }, { listing_platform: null }];
 
       mockSupabase.setMockResponse('inventory_items', 'query', {
         data: mockItems,
@@ -925,7 +946,9 @@ describe('InventoryRepository', () => {
         error: { message: 'Query failed' },
       });
 
-      await expect(repository.getDistinctPlatforms()).rejects.toThrow('Failed to get distinct platforms');
+      await expect(repository.getDistinctPlatforms()).rejects.toThrow(
+        'Failed to get distinct platforms'
+      );
     });
   });
 });

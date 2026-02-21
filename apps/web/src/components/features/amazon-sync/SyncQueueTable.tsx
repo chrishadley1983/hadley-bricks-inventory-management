@@ -22,9 +22,7 @@ import { formatCurrency } from '@/lib/utils';
 // COLUMN DEFINITIONS
 // ============================================================================
 
-function getColumns(
-  onRemove: (id: string) => void
-): ColumnDef<QueueItemWithDetails>[] {
+function getColumns(onRemove: (id: string) => void): ColumnDef<QueueItemWithDetails>[] {
   return [
     {
       accessorKey: 'inventoryItem.set_number',
@@ -39,11 +37,7 @@ function getColumns(
         </Button>
       ),
       cell: ({ row }) => {
-        return (
-          <span className="font-medium">
-            {row.original.inventoryItem.set_number}
-          </span>
-        );
+        return <span className="font-medium">{row.original.inventoryItem.set_number}</span>;
       },
     },
     {
@@ -62,9 +56,7 @@ function getColumns(
       accessorKey: 'asin',
       header: 'ASIN',
       cell: ({ row }) => (
-        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-          {row.original.asin}
-        </code>
+        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{row.original.asin}</code>
       ),
     },
     {
@@ -95,7 +87,11 @@ function getColumns(
       header: 'Amazon Price',
       cell: ({ row }) => {
         const price = row.original.amazon_price;
-        return price !== null ? formatCurrency(price) : <span className="text-muted-foreground">N/A</span>;
+        return price !== null ? (
+          formatCurrency(price)
+        ) : (
+          <span className="text-muted-foreground">N/A</span>
+        );
       },
     },
     {

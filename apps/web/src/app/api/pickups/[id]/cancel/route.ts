@@ -5,10 +5,7 @@ import { createClient } from '@/lib/supabase/server';
  * POST /api/pickups/[id]/cancel
  * Cancel a scheduled pickup
  */
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

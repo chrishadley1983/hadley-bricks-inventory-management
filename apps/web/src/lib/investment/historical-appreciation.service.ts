@@ -113,7 +113,9 @@ export class HistoricalAppreciationService {
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('brickset_sets')
-        .select('set_number, uk_retail_price, exit_date, expected_retirement_date, has_amazon_listing')
+        .select(
+          'set_number, uk_retail_price, exit_date, expected_retirement_date, has_amazon_listing'
+        )
         .eq('retirement_status' as string, 'retired')
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -130,7 +132,8 @@ export class HistoricalAppreciationService {
       for (const row of data) {
         const record = row as unknown as Record<string, unknown>;
         // Prefer exit_date (backfilled from Brickset CSV + us_date_removed), fall back to expected_retirement_date
-        const retiredDate = (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
+        const retiredDate =
+          (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
         sets.push({
           set_number: record.set_number as string,
           uk_retail_price: record.uk_retail_price as number | null,
@@ -150,9 +153,7 @@ export class HistoricalAppreciationService {
    * Batch-fetch all price snapshots for the given set numbers.
    * Returns a map of set_num -> sorted snapshots.
    */
-  private async batchFetchSnapshots(
-    setNums: string[]
-  ): Promise<Map<string, PriceSnapshot[]>> {
+  private async batchFetchSnapshots(setNums: string[]): Promise<Map<string, PriceSnapshot[]>> {
     const snapshotsBySet = new Map<string, PriceSnapshot[]>();
     const pageSize = 1000;
 
@@ -224,10 +225,7 @@ export class HistoricalAppreciationService {
   /**
    * Upsert the historical result for a set.
    */
-  private async upsertResult(
-    set: RetiredSet,
-    snapshots: PriceSnapshot[]
-  ): Promise<void> {
+  private async upsertResult(set: RetiredSet, snapshots: PriceSnapshot[]): Promise<void> {
     const rrp = set.uk_retail_price;
     const retiredDate = set.retired_date;
 
@@ -241,9 +239,7 @@ export class HistoricalAppreciationService {
       return;
     }
 
-    const priceAtRetirement = retiredDate
-      ? this.findPriceNearDate(snapshots, retiredDate)
-      : null;
+    const priceAtRetirement = retiredDate ? this.findPriceNearDate(snapshots, retiredDate) : null;
 
     const oneYearPost = retiredDate
       ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 1))
@@ -253,24 +249,18 @@ export class HistoricalAppreciationService {
       ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 3))
       : null;
 
-    const avgSalesRank = retiredDate
-      ? this.getAvgSalesRankPost(snapshots, retiredDate)
-      : null;
+    const avgSalesRank = retiredDate ? this.getAvgSalesRankPost(snapshots, retiredDate) : null;
 
     // Calculate appreciation percentages
-    const appreciation1yr = oneYearPost != null
-      ? ((oneYearPost - rrp) / rrp) * 100
-      : null;
+    const appreciation1yr = oneYearPost != null ? ((oneYearPost - rrp) / rrp) * 100 : null;
 
-    const appreciation3yr = threeYearPost != null
-      ? ((threeYearPost - rrp) / rrp) * 100
-      : null;
+    const appreciation3yr = threeYearPost != null ? ((threeYearPost - rrp) / rrp) * 100 : null;
 
     // Determine data quality
     const hasAnyPrice = priceAtRetirement != null || oneYearPost != null || threeYearPost != null;
     const dataQuality = !hasAnyPrice
       ? 'insufficient'
-      : (appreciation1yr != null && appreciation3yr != null)
+      : appreciation1yr != null && appreciation3yr != null
         ? 'good'
         : 'partial';
 
@@ -280,8 +270,10 @@ export class HistoricalAppreciationService {
       price_at_retirement: priceAtRetirement,
       price_1yr_post: oneYearPost,
       price_3yr_post: threeYearPost,
-      actual_1yr_appreciation: appreciation1yr != null ? Math.round(appreciation1yr * 100) / 100 : null,
-      actual_3yr_appreciation: appreciation3yr != null ? Math.round(appreciation3yr * 100) / 100 : null,
+      actual_1yr_appreciation:
+        appreciation1yr != null ? Math.round(appreciation1yr * 100) / 100 : null,
+      actual_3yr_appreciation:
+        appreciation3yr != null ? Math.round(appreciation3yr * 100) / 100 : null,
       had_amazon_listing: set.has_amazon_listing ?? false,
       avg_sales_rank_post: avgSalesRank,
       data_quality: dataQuality,
@@ -292,10 +284,7 @@ export class HistoricalAppreciationService {
    * Find the closest price snapshot to a target date from pre-fetched data.
    * Looks within a 30-day window around the target date.
    */
-  private findPriceNearDate(
-    snapshots: PriceSnapshot[],
-    targetDate: string
-  ): number | null {
+  private findPriceNearDate(snapshots: PriceSnapshot[], targetDate: string): number | null {
     const windowMs = 30 * 24 * 60 * 60 * 1000; // 30 days
     const targetTime = new Date(targetDate).getTime();
 
@@ -317,13 +306,12 @@ export class HistoricalAppreciationService {
   /**
    * Get average sales rank for a set after retirement from pre-fetched data.
    */
-  private getAvgSalesRankPost(
-    snapshots: PriceSnapshot[],
-    retiredDate: string
-  ): number | null {
+  private getAvgSalesRankPost(snapshots: PriceSnapshot[], retiredDate: string): number | null {
     const retiredTime = new Date(retiredDate).getTime();
     const ranks = snapshots
-      .filter((s) => new Date(s.date).getTime() >= retiredTime && s.sales_rank != null && s.sales_rank > 0)
+      .filter(
+        (s) => new Date(s.date).getTime() >= retiredTime && s.sales_rank != null && s.sales_rank > 0
+      )
       .map((s) => s.sales_rank!);
 
     if (ranks.length === 0) return null;
@@ -333,20 +321,15 @@ export class HistoricalAppreciationService {
   /**
    * Upsert a row into investment_historical.
    */
-  private async upsertHistorical(
-    setNum: string,
-    data: Record<string, unknown>
-  ): Promise<void> {
-    const { error } = await this.supabase
-      .from('investment_historical')
-      .upsert(
-        {
-          set_num: setNum,
-          ...data,
-          updated_at: new Date().toISOString(),
-        } as unknown as Record<string, unknown>,
-        { onConflict: 'set_num' }
-      );
+  private async upsertHistorical(setNum: string, data: Record<string, unknown>): Promise<void> {
+    const { error } = await this.supabase.from('investment_historical').upsert(
+      {
+        set_num: setNum,
+        ...data,
+        updated_at: new Date().toISOString(),
+      } as unknown as Record<string, unknown>,
+      { onConflict: 'set_num' }
+    );
 
     if (error) {
       console.error(`[HistoricalAppreciation] Upsert error for ${setNum}:`, error.message);

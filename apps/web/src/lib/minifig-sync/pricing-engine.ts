@@ -21,7 +21,7 @@ export function roundToNearestCharm(price: number): number {
   if (frac >= 0.99) return whole + 0.99;
   if (frac >= 0.49) return whole + 0.49;
   // fraction < 0.49 → drop to previous whole's .99
-  return (whole - 1) + 0.99;
+  return whole - 1 + 0.99;
 }
 
 /**
@@ -64,9 +64,7 @@ export class PricingEngine {
    */
   calculateProfit(avgSoldPrice: number, avgShipping: number): number {
     const feeAmount = avgSoldPrice * this.config.ebay_fvf_rate;
-    return (
-      avgSoldPrice - feeAmount - avgShipping - this.config.packaging_cost
-    );
+    return avgSoldPrice - feeAmount - avgShipping - this.config.packaging_cost;
   }
 
   /**

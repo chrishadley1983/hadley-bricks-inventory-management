@@ -66,7 +66,9 @@ export function AreaChart({
         />
         <YAxis tickFormatter={formatYAxis} className="text-xs fill-muted-foreground" />
         <Tooltip
-          formatter={(value: number | undefined) => [formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0)]}
+          formatter={(value: number | undefined) => [
+            formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0),
+          ]}
           labelFormatter={formatXAxis}
           contentStyle={{
             backgroundColor: 'hsl(var(--background))',

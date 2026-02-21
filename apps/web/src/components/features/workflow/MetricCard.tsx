@@ -34,17 +34,19 @@ export function MetricCard({
   const percentage = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
   const gap = target - current;
 
-  const format = formatValue || ((value: number) => {
-    if (isCurrency) {
-      return new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency: 'GBP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(value);
-    }
-    return new Intl.NumberFormat('en-GB').format(value);
-  });
+  const format =
+    formatValue ||
+    ((value: number) => {
+      if (isCurrency) {
+        return new Intl.NumberFormat('en-GB', {
+          style: 'currency',
+          currency: 'GBP',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(value);
+      }
+      return new Intl.NumberFormat('en-GB').format(value);
+    });
 
   const getGapText = () => {
     if (gap > 0) {

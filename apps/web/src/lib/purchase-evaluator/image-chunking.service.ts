@@ -117,9 +117,7 @@ Your task is to identify separate LEGO items in the image and provide their appr
  * @param image - Image to analyze
  * @returns Detected regions with bounding boxes
  */
-export async function detectItemRegions(
-  image: AnalysisImageInput
-): Promise<RegionDetectionResult> {
+export async function detectItemRegions(image: AnalysisImageInput): Promise<RegionDetectionResult> {
   try {
     console.log('[ImageChunking] Detecting item regions...');
 
@@ -235,9 +233,7 @@ export async function cropImageToRegion(
           ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
 
           // Convert to base64
-          const croppedBase64 = canvas
-            .toDataURL(mediaType)
-            .replace(/^data:image\/\w+;base64,/, '');
+          const croppedBase64 = canvas.toDataURL(mediaType).replace(/^data:image\/\w+;base64,/, '');
 
           resolve({
             base64: croppedBase64,
@@ -280,11 +276,7 @@ export async function cropImageToChunks(
     const region = regions[i];
 
     try {
-      const croppedImage = await cropImageToRegion(
-        image.base64,
-        region,
-        image.mediaType
-      );
+      const croppedImage = await cropImageToRegion(image.base64, region, image.mediaType);
 
       chunks.push({
         sourceIndex: 0, // Will be set by caller
@@ -337,10 +329,7 @@ export async function processImagesForChunking(
   const detectionResults = await detectAllRegions(images);
 
   // Step 2: Decide if chunking is worthwhile
-  const totalRegions = detectionResults.reduce(
-    (sum, r) => sum + r.regions.length,
-    0
-  );
+  const totalRegions = detectionResults.reduce((sum, r) => sum + r.regions.length, 0);
   const totalItems = detectionResults.reduce((sum, r) => sum + r.itemCount, 0);
   const anyRecommendChunking = detectionResults.some((r) => r.shouldChunk);
 

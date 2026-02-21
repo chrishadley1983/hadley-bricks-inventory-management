@@ -24,7 +24,14 @@ import {
 // ============================================================================
 
 const TriggerSyncSchema = z.object({
-  jobType: z.enum(['inventory_asins', 'amazon_pricing', 'bricklink_pricing', 'asin_mapping', 'ebay_pricing', 'all']),
+  jobType: z.enum([
+    'inventory_asins',
+    'amazon_pricing',
+    'bricklink_pricing',
+    'asin_mapping',
+    'ebay_pricing',
+    'all',
+  ]),
 });
 
 // ============================================================================
@@ -55,10 +62,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/sync] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -101,7 +105,9 @@ export async function POST(request: NextRequest) {
         results.inventoryAsins = await amazonSyncService.syncInventoryAsins(user.id);
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] inventory_asins error:', error);
-        results.inventoryAsins = { error: error instanceof Error ? error.message : 'Unknown error' };
+        results.inventoryAsins = {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
       }
     }
 
@@ -136,7 +142,9 @@ export async function POST(request: NextRequest) {
         results.bricklinkPricing = await brickLinkSyncService.syncPricing(user.id);
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] bricklink_pricing error:', error);
-        results.bricklinkPricing = { error: error instanceof Error ? error.message : 'Unknown error' };
+        results.bricklinkPricing = {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
       }
     }
 
@@ -157,9 +165,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/arbitrage/sync] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

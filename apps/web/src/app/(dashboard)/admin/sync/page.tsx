@@ -12,13 +12,7 @@ import {
 } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useGlobalSyncStatus, useSyncAll } from '@/hooks';
@@ -130,9 +124,7 @@ export default function AdminSyncPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold capitalize">{status}</div>
-              <p className="text-xs text-muted-foreground">
-                Last sync: {formatDate(lastSync)}
-              </p>
+              <p className="text-xs text-muted-foreground">Last sync: {formatDate(lastSync)}</p>
             </CardContent>
           </Card>
 
@@ -204,9 +196,7 @@ export default function AdminSyncPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground">Database</p>
-                      <p className="font-medium">
-                        {stats.supabase.inventoryNew.toLocaleString()}
-                      </p>
+                      <p className="font-medium">{stats.supabase.inventoryNew.toLocaleString()}</p>
                     </div>
                     {stats.sheets.newKitRows === stats.supabase.inventoryNew ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700">
@@ -239,9 +229,7 @@ export default function AdminSyncPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground">Database</p>
-                      <p className="font-medium">
-                        {stats.supabase.inventoryUsed.toLocaleString()}
-                      </p>
+                      <p className="font-medium">{stats.supabase.inventoryUsed.toLocaleString()}</p>
                     </div>
                     {stats.sheets.usedKitRows === stats.supabase.inventoryUsed ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700">
@@ -262,9 +250,7 @@ export default function AdminSyncPage() {
                   <div className="flex items-center gap-4">
                     <div>
                       <p className="font-medium">Purchases</p>
-                      <p className="text-sm text-muted-foreground">
-                        Purchase transaction records
-                      </p>
+                      <p className="text-sm text-muted-foreground">Purchase transaction records</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -312,8 +298,8 @@ export default function AdminSyncPage() {
                   <span className="font-medium text-foreground">Cache:</span> Supabase database
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">TTL:</span> 5 minutes (auto-sync when
-                  stale)
+                  <span className="font-medium text-foreground">TTL:</span> 5 minutes (auto-sync
+                  when stale)
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Conflict Resolution:</span> Sheets

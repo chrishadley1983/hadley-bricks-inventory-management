@@ -43,10 +43,7 @@ vi.spyOn(console, 'log').mockImplementation(() => {});
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 import { createClient } from '@/lib/supabase/server';
-import {
-  sendMessageForJSON,
-  sendMessageWithImagesForJSON,
-} from '@/lib/ai';
+import { sendMessageForJSON, sendMessageWithImagesForJSON } from '@/lib/ai';
 import { POST as ParsePurchase } from '../ai/parse-purchase/route';
 import { POST as CalculateDistance } from '../ai/calculate-distance/route';
 import { POST as ParseInventory } from '../ai/parse-inventory/route';
@@ -387,7 +384,8 @@ describe('/api/ai API Routes', () => {
   // ==========================================================================
 
   describe('POST /api/ai/extract-set-numbers', () => {
-    const validBase64Image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const validBase64Image =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
     it('should return 401 when not authenticated', async () => {
       vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);

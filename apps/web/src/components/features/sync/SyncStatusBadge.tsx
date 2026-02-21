@@ -65,21 +65,11 @@ export function SyncStatusBadge({ status, showTime = false, className }: SyncSta
   };
 
   return (
-    <Badge
-      variant={config.variant}
-      className={cn('gap-1', config.className, className)}
-    >
-      <Icon
-        className={cn(
-          'h-3 w-3',
-          status.status === 'syncing' && 'animate-spin'
-        )}
-      />
+    <Badge variant={config.variant} className={cn('gap-1', config.className, className)}>
+      <Icon className={cn('h-3 w-3', status.status === 'syncing' && 'animate-spin')} />
       <span>{config.label}</span>
       {showTime && status.lastSync && (
-        <span className="text-xs opacity-70">
-          ({formatTime(status.lastSync)})
-        </span>
+        <span className="text-xs opacity-70">({formatTime(status.lastSync)})</span>
       )}
     </Badge>
   );

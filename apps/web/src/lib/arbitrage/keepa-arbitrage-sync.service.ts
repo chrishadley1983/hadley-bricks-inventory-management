@@ -89,10 +89,12 @@ export class KeepaArbitrageSyncService {
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('user_seeded_asin_preferences')
-        .select(`
+        .select(
+          `
           seeded_asins!inner(asin),
           manual_asin_override
-        `)
+        `
+        )
         .eq('user_id', userId)
         .eq('include_in_sync', true)
         .eq('user_status', 'active')
@@ -117,7 +119,9 @@ export class KeepaArbitrageSyncService {
 
     // Step 3: Deduplicate
     const allAsins = [...new Set([...trackedAsins, ...seededAsins])];
-    console.log(`[KeepaArbitrageSync] Total unique ASINs: ${allAsins.length} (${trackedAsins.length} tracked + ${seededAsins.length} seeded)`);
+    console.log(
+      `[KeepaArbitrageSync] Total unique ASINs: ${allAsins.length} (${trackedAsins.length} tracked + ${seededAsins.length} seeded)`
+    );
 
     if (allAsins.length === 0) return [];
 
@@ -158,7 +162,9 @@ export class KeepaArbitrageSyncService {
 
     const neverSynced = result.filter((a) => !snapshotMap.has(a)).length;
     const oldestDate = snapshotMap.get(result[result.length - 1]) ?? 'never';
-    console.log(`[KeepaArbitrageSync] Selected ${result.length} ASINs for today (${neverSynced} never synced, oldest: ${oldestDate})`);
+    console.log(
+      `[KeepaArbitrageSync] Selected ${result.length} ASINs for today (${neverSynced} never synced, oldest: ${oldestDate})`
+    );
 
     return result;
   }
@@ -184,7 +190,9 @@ export class KeepaArbitrageSyncService {
     }
 
     const dailyLimit = this.getDailyLimit();
-    console.log(`[KeepaArbitrageSync] Starting batch - offset: ${options.offset}, limit: ${options.limit}, daily limit: ${dailyLimit}`);
+    console.log(
+      `[KeepaArbitrageSync] Starting batch - offset: ${options.offset}, limit: ${options.limit}, daily limit: ${dailyLimit}`
+    );
     const startTime = Date.now();
 
     // Get today's ASIN list (oldest-first, capped at daily limit)
@@ -196,7 +204,9 @@ export class KeepaArbitrageSyncService {
       return { processed: 0, failed: 0, updated: 0, totalForToday: todaysAsins.length };
     }
 
-    console.log(`[KeepaArbitrageSync] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${todaysAsins.length} for today)`);
+    console.log(
+      `[KeepaArbitrageSync] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${todaysAsins.length} for today)`
+    );
 
     let updated = 0;
     let failed = 0;
@@ -263,7 +273,9 @@ export class KeepaArbitrageSyncService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[KeepaArbitrageSync] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed, tokens remaining: ${this.keepa.remainingTokens}`);
+    console.log(
+      `[KeepaArbitrageSync] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed, tokens remaining: ${this.keepa.remainingTokens}`
+    );
 
     return { processed: batchAsins.length, failed, updated, totalForToday: todaysAsins.length };
   }

@@ -22,7 +22,9 @@ export async function GET() {
     while (hasMore) {
       const { data, error } = await supabase
         .from('minifig_removal_queue')
-        .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(id, name, bricklink_id, bricqer_image_url, ebay_listing_url, ebay_sku, images)')
+        .select(
+          '*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(id, name, bricklink_id, bricqer_image_url, ebay_listing_url, ebay_sku, images)'
+        )
         .eq('user_id', user.id)
         .eq('status', 'PENDING')
         .order('created_at', { ascending: false })
@@ -43,9 +45,14 @@ export async function GET() {
     return NextResponse.json(
       {
         error: 'Failed to fetch removals',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

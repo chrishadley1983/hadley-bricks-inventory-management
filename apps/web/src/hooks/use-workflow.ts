@@ -82,7 +82,15 @@ export interface TaskDefinition {
   description: string | null;
   category: string;
   icon: string | null;
-  frequency: 'daily' | 'twice_daily' | 'twice_weekly' | 'weekly' | 'monthly' | 'quarterly' | 'biannual' | 'adhoc';
+  frequency:
+    | 'daily'
+    | 'twice_daily'
+    | 'twice_weekly'
+    | 'weekly'
+    | 'monthly'
+    | 'quarterly'
+    | 'biannual'
+    | 'adhoc';
   frequency_days: number[] | null;
   ideal_time: 'AM' | 'PM' | 'ANY' | null;
   priority: number;
@@ -180,7 +188,9 @@ async function createFromPreset(presetId: string): Promise<void> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to create task from preset' }));
+    const error = await response
+      .json()
+      .catch(() => ({ error: 'Failed to create task from preset' }));
     throw new Error(error.error || 'Failed to create task from preset');
   }
 }
@@ -244,7 +254,9 @@ export function useUpdateTaskStatus() {
                 category: task.category,
                 completedAt: now,
                 timeSpentSeconds: task.startedAt
-                  ? Math.round((new Date(now).getTime() - new Date(task.startedAt).getTime()) / 1000)
+                  ? Math.round(
+                      (new Date(now).getTime() - new Date(task.startedAt).getTime()) / 1000
+                    )
                   : null,
               },
               ...updatedCompleted,
@@ -263,7 +275,10 @@ export function useUpdateTaskStatus() {
             completedToday: updatedCompleted,
             summary: {
               tasksCompleted: updatedCompleted.length,
-              totalTimeSeconds: updatedCompleted.reduce((sum, t) => sum + (t.timeSpentSeconds ?? 0), 0),
+              totalTimeSeconds: updatedCompleted.reduce(
+                (sum, t) => sum + (t.timeSpentSeconds ?? 0),
+                0
+              ),
             },
           });
         }
@@ -332,9 +347,17 @@ export function useDeferTask() {
   return {
     ...updateStatus,
     mutate: (params: { taskId: string; deferredToDate: string }) =>
-      updateStatus.mutate({ taskId: params.taskId, status: 'deferred', deferredToDate: params.deferredToDate }),
+      updateStatus.mutate({
+        taskId: params.taskId,
+        status: 'deferred',
+        deferredToDate: params.deferredToDate,
+      }),
     mutateAsync: (params: { taskId: string; deferredToDate: string }) =>
-      updateStatus.mutateAsync({ taskId: params.taskId, status: 'deferred', deferredToDate: params.deferredToDate }),
+      updateStatus.mutateAsync({
+        taskId: params.taskId,
+        status: 'deferred',
+        deferredToDate: params.deferredToDate,
+      }),
   };
 }
 
@@ -418,7 +441,17 @@ async function updateDefinition(params: {
  * Create task definition
  */
 async function createDefinition(
-  data: Omit<TaskDefinition, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'is_system' | 'task_type' | 'deep_link_params' | 'sort_order'>
+  data: Omit<
+    TaskDefinition,
+    | 'id'
+    | 'user_id'
+    | 'created_at'
+    | 'updated_at'
+    | 'is_system'
+    | 'task_type'
+    | 'deep_link_params'
+    | 'sort_order'
+  >
 ): Promise<{ definition: TaskDefinition }> {
   const response = await fetch('/api/workflow/definitions', {
     method: 'POST',

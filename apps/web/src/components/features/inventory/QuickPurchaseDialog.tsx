@@ -35,13 +35,16 @@ import { useCreatePurchase } from '@/hooks';
 
 const quickPurchaseSchema = z.object({
   short_description: z.string().min(1, 'Description is required'),
-  cost: z.string().min(1, 'Cost is required').refine(
-    (val) => {
-      const num = parseFloat(val);
-      return !isNaN(num) && num > 0;
-    },
-    { message: 'Cost must be a positive number' }
-  ),
+  cost: z
+    .string()
+    .min(1, 'Cost is required')
+    .refine(
+      (val) => {
+        const num = parseFloat(val);
+        return !isNaN(num) && num > 0;
+      },
+      { message: 'Cost must be a positive number' }
+    ),
   purchase_date: z.string().min(1, 'Purchase date is required'),
   source: z.string().optional(),
   payment_method: z.string().optional(),
@@ -62,12 +65,7 @@ const SOURCE_OPTIONS = [
   'Other',
 ];
 
-const PAYMENT_METHOD_OPTIONS = [
-  'Cash',
-  'Card',
-  'PayPal',
-  'Bank Transfer',
-];
+const PAYMENT_METHOD_OPTIONS = ['Cash', 'Card', 'PayPal', 'Bank Transfer'];
 
 interface QuickPurchaseDialogProps {
   open: boolean;
@@ -153,11 +151,7 @@ export function QuickPurchaseDialog({
                 <FormItem>
                   <FormLabel>Description *</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="e.g., 3x UCS sets from eBay"
-                      {...field}
-                      autoFocus
-                    />
+                    <Input placeholder="e.g., 3x UCS sets from eBay" {...field} autoFocus />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -172,13 +166,7 @@ export function QuickPurchaseDialog({
                   <FormItem>
                     <FormLabel>Total Cost (GBP) *</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        {...field}
-                      />
+                      <Input type="number" step="0.01" min="0" placeholder="0.00" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -207,10 +195,7 @@ export function QuickPurchaseDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Source</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select source" />
@@ -235,10 +220,7 @@ export function QuickPurchaseDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment Method</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select method" />
@@ -259,17 +241,10 @@ export function QuickPurchaseDialog({
             </div>
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={createPurchase.isPending}
-              >
+              <Button type="submit" disabled={createPurchase.isPending}>
                 {createPurchase.isPending ? 'Creating...' : 'Create Purchase'}
               </Button>
             </DialogFooter>

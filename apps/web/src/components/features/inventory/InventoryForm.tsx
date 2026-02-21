@@ -91,7 +91,9 @@ function normalizeCondition(value: string | null | undefined): 'New' | 'Used' | 
 /**
  * Normalize status value from database to form enum
  */
-function normalizeStatus(value: string | null | undefined): InventoryFormValues['status'] | undefined {
+function normalizeStatus(
+  value: string | null | undefined
+): InventoryFormValues['status'] | undefined {
   if (!value) return undefined;
   const upper = value.toUpperCase().replace(/\s+/g, ' ').trim();
   if (upper === 'NOT YET RECEIVED') return 'NOT YET RECEIVED';
@@ -101,7 +103,12 @@ function normalizeStatus(value: string | null | undefined): InventoryFormValues[
   return undefined;
 }
 
-export function InventoryForm({ mode, itemId, showHeader = true, initialPurchaseId }: InventoryFormProps) {
+export function InventoryForm({
+  mode,
+  itemId,
+  showHeader = true,
+  initialPurchaseId,
+}: InventoryFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const createMutation = useCreateInventory();
@@ -328,7 +335,8 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
 
       if (result.data?.asin) {
         form.setValue('amazon_asin', result.data.asin);
-        const sourceLabel = result.data.source === 'inventory' ? 'existing inventory' : 'Amazon catalog';
+        const sourceLabel =
+          result.data.source === 'inventory' ? 'existing inventory' : 'Amazon catalog';
         toast({
           title: 'ASIN found',
           description: `Found ${result.data.asin} from ${sourceLabel}`,
@@ -336,7 +344,8 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
       } else {
         toast({
           title: 'ASIN not found',
-          description: result.message || `No ASIN found for set ${setNumber}${setName ? ` (${setName})` : ''}`,
+          description:
+            result.message || `No ASIN found for set ${setNumber}${setName ? ` (${setName})` : ''}`,
           variant: 'destructive',
         });
       }
@@ -425,9 +434,7 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
                         placeholder="e.g., 75192"
                       />
                     </FormControl>
-                    <FormDescription>
-                      Type to search Brickset for set details
-                    </FormDescription>
+                    <FormDescription>Type to search Brickset for set details</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -442,9 +449,7 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
                     <FormControl>
                       <Input placeholder="e.g., Millennium Falcon" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Auto-filled when you select a set above
-                    </FormDescription>
+                    <FormDescription>Auto-filled when you select a set above</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -668,9 +673,7 @@ export function InventoryForm({ mode, itemId, showHeader = true, initialPurchase
                         onCreateNew={handleCreateNewPurchase}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Link to a purchase to auto-fill cost and date
-                    </FormDescription>
+                    <FormDescription>Link to a purchase to auto-fill cost and date</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

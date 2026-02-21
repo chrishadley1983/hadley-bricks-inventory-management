@@ -22,12 +22,7 @@ export async function GET(request: NextRequest) {
   // Get query params
   const { searchParams } = new URL(request.url);
   const scanType = searchParams.get('scanType') as 'broad_sweep' | 'watchlist' | null;
-  const status = searchParams.get('status') as
-    | 'success'
-    | 'failed'
-    | 'partial'
-    | 'captcha'
-    | null;
+  const status = searchParams.get('status') as 'success' | 'failed' | 'partial' | 'captcha' | null;
   const limit = parseInt(searchParams.get('limit') || '50', 10);
 
   // Build query

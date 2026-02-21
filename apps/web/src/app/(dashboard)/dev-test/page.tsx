@@ -74,14 +74,18 @@ const TEST_ENDPOINTS: TestEndpoint[] = [
     description: 'Inspect raw BrickLink API response for price guide data',
     path: '/api/test/bricklink-debug',
     method: 'GET',
-    params: [{ name: 'asin', label: 'ASIN', placeholder: 'B0BBSB69YX', defaultValue: 'B0BBSB69YX' }],
+    params: [
+      { name: 'asin', label: 'ASIN', placeholder: 'B0BBSB69YX', defaultValue: 'B0BBSB69YX' },
+    ],
   },
   {
     name: 'BrickLink Sync Single',
-    description: 'Sync a single ASIN\'s BrickLink pricing data',
+    description: "Sync a single ASIN's BrickLink pricing data",
     path: '/api/test/bricklink-sync-single',
     method: 'GET',
-    params: [{ name: 'asin', label: 'ASIN', placeholder: 'B0BBSB69YX', defaultValue: 'B0BBSB69YX' }],
+    params: [
+      { name: 'asin', label: 'ASIN', placeholder: 'B0BBSB69YX', defaultValue: 'B0BBSB69YX' },
+    ],
   },
 ];
 
@@ -177,9 +181,7 @@ function EndpointCard({ endpoint }: { endpoint: TestEndpoint }) {
 
         {/* URL Preview */}
         <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs bg-muted px-2 py-1 rounded truncate">
-            {buildUrl()}
-          </code>
+          <code className="flex-1 text-xs bg-muted px-2 py-1 rounded truncate">{buildUrl()}</code>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyUrl}>
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           </Button>
@@ -202,9 +204,7 @@ function EndpointCard({ endpoint }: { endpoint: TestEndpoint }) {
 
         {/* Error */}
         {error && (
-          <div className="bg-destructive/10 text-destructive text-xs p-2 rounded">
-            {error}
-          </div>
+          <div className="bg-destructive/10 text-destructive text-xs p-2 rounded">{error}</div>
         )}
 
         {/* Result */}

@@ -8,7 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { InvestmentSet } from '@/lib/api/investment';
 
-const RETIREMENT_STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+const RETIREMENT_STATUS_VARIANTS: Record<
+  string,
+  'default' | 'secondary' | 'outline' | 'destructive'
+> = {
   available: 'default',
   retiring_soon: 'destructive',
   retired: 'secondary',
@@ -111,11 +114,7 @@ export function getInvestmentColumns(): ColumnDef<InvestmentSet>[] {
       cell: ({ row }) => {
         const score = row.original.investment_score;
         if (score == null) return <span className="text-muted-foreground">{'\u2014'}</span>;
-        const variant = score >= 7
-          ? 'default'
-          : score >= 4
-            ? 'secondary'
-            : 'destructive';
+        const variant = score >= 7 ? 'default' : score >= 4 ? 'secondary' : 'destructive';
         return (
           <Badge variant={variant} className="font-mono tabular-nums">
             {score.toFixed(1)}
@@ -274,7 +273,11 @@ export function getInvestmentColumns(): ColumnDef<InvestmentSet>[] {
       cell: ({ row }) => {
         const tier = row.getValue('exclusivity_tier') as string | null;
         if (!tier || tier === 'none') return '-';
-        return <Badge variant="secondary" className="capitalize">{tier}</Badge>;
+        return (
+          <Badge variant="secondary" className="capitalize">
+            {tier}
+          </Badge>
+        );
       },
     },
     {

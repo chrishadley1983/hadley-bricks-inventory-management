@@ -41,10 +41,7 @@ const EXAMPLE_ROW = [
  * Returns a CSV template for inventory import
  */
 export async function GET() {
-  const csvContent = [
-    CSV_HEADERS.join(','),
-    EXAMPLE_ROW.join(','),
-  ].join('\n');
+  const csvContent = [CSV_HEADERS.join(','), EXAMPLE_ROW.join(',')].join('\n');
 
   return new NextResponse(csvContent, {
     status: 200,

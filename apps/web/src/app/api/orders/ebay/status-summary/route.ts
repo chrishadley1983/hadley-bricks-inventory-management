@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
 
     // Base query builder
     const buildQuery = () => {
-      let q = supabase.from('ebay_orders').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+      let q = supabase
+        .from('ebay_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
       if (startDate) {
         q = q.gte('creation_date', startDate);
       }
@@ -73,10 +76,7 @@ export async function GET(request: NextRequest) {
 
     if (allResult.error) {
       console.error('[GET /api/orders/ebay/status-summary] Error:', allResult.error);
-      return NextResponse.json(
-        { error: 'Failed to fetch status summary' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch status summary' }, { status: 500 });
     }
 
     const all = allResult.count ?? 0;

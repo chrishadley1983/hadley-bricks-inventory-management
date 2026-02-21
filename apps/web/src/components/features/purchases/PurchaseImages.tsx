@@ -2,15 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import {
-  Camera,
-  Upload,
-  Trash2,
-  ImageIcon,
-  Loader2,
-  ZoomIn,
-  Download,
-} from 'lucide-react';
+import { Camera, Upload, Trash2, ImageIcon, Loader2, ZoomIn, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -57,77 +49,80 @@ export function PurchaseImages({ purchaseId, readOnly = false }: PurchaseImagesP
   const deleteMutation = useDeletePurchaseImage(purchaseId);
 
   // Handle file selection
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-    const filesToUpload: Array<{
-      id: string;
-      base64: string;
-      mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-      filename: string;
-    }> = [];
+      const filesToUpload: Array<{
+        id: string;
+        base64: string;
+        mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+        filename: string;
+      }> = [];
 
-    const previews: UploadingImage[] = [];
+      const previews: UploadingImage[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
 
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
-        continue;
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!validTypes.includes(file.type)) {
+          continue;
+        }
+
+        // Generate ID and preview
+        const id = `upload-${Date.now()}-${i}`;
+        const preview = URL.createObjectURL(file);
+        previews.push({ id, preview, filename: file.name });
+
+        try {
+          // Compress image before upload (max 1600px, 80% quality)
+          const compressed = await compressImage(file, {
+            maxDimension: 1600,
+            quality: 0.8,
+            outputType: 'image/jpeg',
+          });
+
+          filesToUpload.push({
+            id,
+            base64: compressed.base64,
+            mimeType: compressed.mimeType,
+            filename: file.name,
+          });
+        } catch {
+          // Fallback to original file if compression fails
+          const base64 = await fileToBase64(file);
+          filesToUpload.push({
+            id,
+            base64,
+            mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+            filename: file.name,
+          });
+        }
       }
 
-      // Generate ID and preview
-      const id = `upload-${Date.now()}-${i}`;
-      const preview = URL.createObjectURL(file);
-      previews.push({ id, preview, filename: file.name });
+      if (filesToUpload.length === 0) return;
+
+      // Show previews while uploading
+      setUploadingImages(previews);
 
       try {
-        // Compress image before upload (max 1600px, 80% quality)
-        const compressed = await compressImage(file, {
-          maxDimension: 1600,
-          quality: 0.8,
-          outputType: 'image/jpeg',
-        });
-
-        filesToUpload.push({
-          id,
-          base64: compressed.base64,
-          mimeType: compressed.mimeType,
-          filename: file.name,
-        });
-      } catch {
-        // Fallback to original file if compression fails
-        const base64 = await fileToBase64(file);
-        filesToUpload.push({
-          id,
-          base64,
-          mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-          filename: file.name,
-        });
+        await uploadMutation.mutateAsync(filesToUpload);
+      } finally {
+        // Cleanup previews
+        previews.forEach((p) => URL.revokeObjectURL(p.preview));
+        setUploadingImages([]);
       }
-    }
 
-    if (filesToUpload.length === 0) return;
-
-    // Show previews while uploading
-    setUploadingImages(previews);
-
-    try {
-      await uploadMutation.mutateAsync(filesToUpload);
-    } finally {
-      // Cleanup previews
-      previews.forEach((p) => URL.revokeObjectURL(p.preview));
-      setUploadingImages([]);
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  }, [uploadMutation]);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    [uploadMutation]
+  );
 
   // Handle delete confirmation
   const handleDeleteClick = (image: PurchaseImage) => {
@@ -292,9 +287,7 @@ export function PurchaseImages({ purchaseId, readOnly = false }: PurchaseImagesP
               className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors"
             >
               <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                Drag and drop photos here, or click to browse
-              </p>
+              <p className="text-muted-foreground">Drag and drop photos here, or click to browse</p>
               <p className="text-sm text-muted-foreground mt-2">
                 Supports JPEG, PNG, WebP, GIF (auto-compressed)
               </p>

@@ -53,10 +53,7 @@ export async function GET() {
     return NextResponse.json({ data: scenarios });
   } catch (error) {
     console.error('[GET /api/cost-modelling/scenarios] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch scenarios' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch scenarios' }, { status: 500 });
   }
 }
 
@@ -105,9 +102,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { error: 'Failed to create scenario' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to create scenario' }, { status: 500 });
   }
 }

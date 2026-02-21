@@ -222,9 +222,7 @@ export class NegotiationScoringService {
     }
 
     // Find matching rule for the score
-    const matchingRule = rules.find(
-      (rule) => score >= rule.min_score && score <= rule.max_score
-    );
+    const matchingRule = rules.find((rule) => score >= rule.min_score && score <= rule.max_score);
 
     if (matchingRule) {
       // Ensure minimum 10% discount
@@ -260,9 +258,7 @@ export class NegotiationScoringService {
     for (const rule of rules) {
       // Check min <= max
       if (rule.minScore > rule.maxScore) {
-        errors.push(
-          `Invalid range: min (${rule.minScore}) > max (${rule.maxScore})`
-        );
+        errors.push(`Invalid range: min (${rule.minScore}) > max (${rule.maxScore})`);
       }
 
       // Check discount >= 10%
@@ -281,9 +277,7 @@ export class NegotiationScoringService {
 
       // Check score range is valid
       if (rule.minScore < 0 || rule.maxScore > 100) {
-        errors.push(
-          `Score must be between 0-100: got ${rule.minScore}-${rule.maxScore}`
-        );
+        errors.push(`Score must be between 0-100: got ${rule.minScore}-${rule.maxScore}`);
       }
     }
 
@@ -317,7 +311,7 @@ export class NegotiationScoringService {
       this.weights.category +
       this.weights.watchers;
 
-    return (this.weights.listingAge / totalWeight) >= 0.5;
+    return this.weights.listingAge / totalWeight >= 0.5;
   }
 
   /**

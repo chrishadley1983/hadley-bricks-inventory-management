@@ -12,10 +12,7 @@ interface ViewsEnrichmentProgressProps {
 /**
  * Progress indicator for views data enrichment (GetItem calls)
  */
-export function ViewsEnrichmentProgress({
-  progress,
-  isEnriching,
-}: ViewsEnrichmentProgressProps) {
+export function ViewsEnrichmentProgress({ progress, isEnriching }: ViewsEnrichmentProgressProps) {
   if (!isEnriching) return null;
 
   const percentage = progress ? Math.round((progress.current / progress.total) * 100) : 0;

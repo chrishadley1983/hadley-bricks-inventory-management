@@ -119,10 +119,7 @@ async function duplicateScenario(id: string): Promise<CostModelScenario> {
 /**
  * Save draft
  */
-async function saveDraft(params: {
-  id: string;
-  data: CostModelScenarioFormData;
-}): Promise<void> {
+async function saveDraft(params: { id: string; data: CostModelScenarioFormData }): Promise<void> {
   const response = await fetch(`/api/cost-modelling/scenarios/${params.id}/draft`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

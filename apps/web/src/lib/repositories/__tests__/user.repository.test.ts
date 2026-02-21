@@ -114,9 +114,9 @@ describe('UserRepository', () => {
     it('should throw error when no user is authenticated', async () => {
       mockClient._setCurrentUser(null);
 
-      await expect(
-        repository.updateCurrentProfile({ business_name: 'New Name' })
-      ).rejects.toThrow('No authenticated user');
+      await expect(repository.updateCurrentProfile({ business_name: 'New Name' })).rejects.toThrow(
+        'No authenticated user'
+      );
     });
 
     it('should update the current user profile', async () => {

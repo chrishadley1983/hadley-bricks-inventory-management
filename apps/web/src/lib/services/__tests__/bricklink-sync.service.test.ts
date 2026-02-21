@@ -20,8 +20,21 @@ vi.mock('../../bricklink', () => ({
     }
   },
   RateLimitError: class RateLimitError extends Error {
-    rateLimitInfo: { remaining: number; resetTime: Date; dailyLimit: number; dailyRemaining: number };
-    constructor(message: string, rateLimitInfo: { remaining: number; resetTime: Date; dailyLimit: number; dailyRemaining: number }) {
+    rateLimitInfo: {
+      remaining: number;
+      resetTime: Date;
+      dailyLimit: number;
+      dailyRemaining: number;
+    };
+    constructor(
+      message: string,
+      rateLimitInfo: {
+        remaining: number;
+        resetTime: Date;
+        dailyLimit: number;
+        dailyRemaining: number;
+      }
+    ) {
       super(message);
       this.rateLimitInfo = rateLimitInfo;
     }
@@ -109,10 +122,7 @@ describe('BrickLinkSyncService', () => {
       const result = await service.testConnection('test-user-id');
 
       expect(result).toBe(true);
-      expect(mockCredentialsRepo.getCredentials).toHaveBeenCalledWith(
-        'test-user-id',
-        'bricklink'
-      );
+      expect(mockCredentialsRepo.getCredentials).toHaveBeenCalledWith('test-user-id', 'bricklink');
     });
 
     it('should throw error when credentials not configured', async () => {
@@ -181,10 +191,7 @@ describe('BrickLinkSyncService', () => {
       const result = await service.isConfigured('test-user-id');
 
       expect(result).toBe(true);
-      expect(mockCredentialsRepo.hasCredentials).toHaveBeenCalledWith(
-        'test-user-id',
-        'bricklink'
-      );
+      expect(mockCredentialsRepo.hasCredentials).toHaveBeenCalledWith('test-user-id', 'bricklink');
     });
 
     it('should return false when no credentials', async () => {
@@ -228,12 +235,14 @@ describe('BrickLinkSyncService', () => {
     });
 
     it('should track updated orders when they exist', async () => {
-      const mockOrders = [{
-        order_id: 123,
-        status: 'Paid',
-        disp_cost: { grand_total: 100 },
-        date_status_changed: '2024-12-20T12:00:00Z' // newer than existing
-      }];
+      const mockOrders = [
+        {
+          order_id: 123,
+          status: 'Paid',
+          disp_cost: { grand_total: 100 },
+          date_status_changed: '2024-12-20T12:00:00Z', // newer than existing
+        },
+      ];
 
       mockBrickLinkClient.getSalesOrders.mockResolvedValue(mockOrders);
       mockBrickLinkClient.getOrderWithItems.mockResolvedValue({
@@ -256,9 +265,7 @@ describe('BrickLinkSyncService', () => {
 
     it('should sync with items when includeItems is true', async () => {
       const mockOrders = [{ order_id: 123, status: 'Paid' }];
-      const mockItems = [
-        { item_no: '75192', quantity: 1, unit_price: 100 },
-      ];
+      const mockItems = [{ item_no: '75192', quantity: 1, unit_price: 100 }];
 
       mockBrickLinkClient.getSalesOrders.mockResolvedValue(mockOrders);
       mockBrickLinkClient.getOrderWithItems.mockResolvedValue({
@@ -378,10 +385,7 @@ describe('BrickLinkSyncService', () => {
 
       await service.syncOrderById('test-user-id', 123);
 
-      expect(mockOrderRepo.replaceOrderItems).toHaveBeenCalledWith(
-        'saved-id',
-        expect.any(Array)
-      );
+      expect(mockOrderRepo.replaceOrderItems).toHaveBeenCalledWith('saved-id', expect.any(Array));
     });
   });
 

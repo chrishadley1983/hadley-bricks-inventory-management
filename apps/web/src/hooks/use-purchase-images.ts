@@ -71,10 +71,7 @@ async function uploadPurchaseImages(
 /**
  * Delete a purchase image
  */
-async function deletePurchaseImage(
-  purchaseId: string,
-  imageId: string
-): Promise<void> {
+async function deletePurchaseImage(purchaseId: string, imageId: string): Promise<void> {
   const response = await fetch(`/api/purchases/${purchaseId}/images/${imageId}`, {
     method: 'DELETE',
   });

@@ -61,7 +61,9 @@ export function Sparkline({
   });
 
   // Create line path
-  const linePath = points.map((point, i) => `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const linePath = points
+    .map((point, i) => `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
 
   // Create fill path (closed polygon)
   const fillPath = filled
@@ -78,9 +80,7 @@ export function Sparkline({
       viewBox={`0 0 ${width} ${height}`}
     >
       {/* Fill area */}
-      {filled && (
-        <path d={fillPath} fill={color} fillOpacity={fillOpacity} stroke="none" />
-      )}
+      {filled && <path d={fillPath} fill={color} fillOpacity={fillOpacity} stroke="none" />}
 
       {/* Line */}
       <path
@@ -93,9 +93,7 @@ export function Sparkline({
       />
 
       {/* End dot */}
-      {showEndDot && lastPoint && (
-        <circle cx={lastPoint.x} cy={lastPoint.y} r={2.5} fill={color} />
-      )}
+      {showEndDot && lastPoint && <circle cx={lastPoint.x} cy={lastPoint.y} r={2.5} fill={color} />}
     </svg>
   );
 }

@@ -3,18 +3,16 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Package, ShoppingCart, Filter } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import type { InventoryStockItem, InventoryStockSummary } from '@/app/api/brickset/inventory-stock/route';
+import type {
+  InventoryStockItem,
+  InventoryStockSummary,
+} from '@/app/api/brickset/inventory-stock/route';
 
 interface SetStockModalProps {
   setNumber: string | null;
@@ -44,9 +42,9 @@ function formatDate(date: string | null): string {
 
 const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   'NOT YET RECEIVED': 'secondary',
-  'BACKLOG': 'default',
-  'LISTED': 'outline',
-  'SOLD': 'destructive',
+  BACKLOG: 'default',
+  LISTED: 'outline',
+  SOLD: 'destructive',
 };
 
 interface InventoryTableProps {
@@ -100,7 +98,10 @@ function InventoryTable({ items, showSoldColumns }: InventoryTableProps) {
               <td className="px-3 py-2">
                 <div className="font-mono text-xs">{item.setNumber}</div>
                 {item.itemName && (
-                  <div className="text-xs text-muted-foreground truncate max-w-[150px]" title={item.itemName}>
+                  <div
+                    className="text-xs text-muted-foreground truncate max-w-[150px]"
+                    title={item.itemName}
+                  >
                     {item.itemName}
                   </div>
                 )}
@@ -132,19 +133,18 @@ function InventoryTable({ items, showSoldColumns }: InventoryTableProps) {
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {formatDate(item.soldDate)}
                   </td>
-                  <td className="px-3 py-2 text-xs">
-                    {item.soldPlatform || '—'}
-                  </td>
+                  <td className="px-3 py-2 text-xs">{item.soldPlatform || '—'}</td>
                 </>
               ) : (
                 <>
                   <td className="px-3 py-2 text-right font-mono text-xs text-blue-600 font-medium">
                     {formatCurrency(item.listingValue)}
                   </td>
-                  <td className="px-3 py-2 text-xs">
-                    {item.listingPlatform || '—'}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[100px]" title={item.storageLocation || ''}>
+                  <td className="px-3 py-2 text-xs">{item.listingPlatform || '—'}</td>
+                  <td
+                    className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[100px]"
+                    title={item.storageLocation || ''}
+                  >
                     {item.storageLocation || '—'}
                   </td>
                 </>
@@ -178,9 +178,7 @@ export function SetStockModal({
   // Filter items based on tab and condition
   const currentStockItems = useMemo(() => {
     if (!stock) return [];
-    let items = stock.items.filter(
-      (item) => item.status === 'BACKLOG' || item.status === 'LISTED'
-    );
+    let items = stock.items.filter((item) => item.status === 'BACKLOG' || item.status === 'LISTED');
     if (conditionFilter === 'new') {
       items = items.filter((item) => item.condition === 'New');
     } else if (conditionFilter === 'used') {
@@ -213,19 +211,18 @@ export function SetStockModal({
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-start justify-between">
             <div>
-              <DialogTitle className="text-lg font-bold">
-                Inventory: {setNumber}
-              </DialogTitle>
-              {setName && (
-                <p className="text-sm text-muted-foreground mt-1">{setName}</p>
-              )}
+              <DialogTitle className="text-lg font-bold">Inventory: {setNumber}</DialogTitle>
+              {setName && <p className="text-sm text-muted-foreground mt-1">{setName}</p>}
             </div>
             <div className="flex gap-2">
               <Badge variant="outline" className="font-mono text-xs border-blue-300 text-blue-700">
                 <Package className="h-3 w-3 mr-1" />
                 {stock?.currentStock.total ?? 0} in stock
               </Badge>
-              <Badge variant="outline" className="font-mono text-xs border-green-300 text-green-700">
+              <Badge
+                variant="outline"
+                className="font-mono text-xs border-green-300 text-green-700"
+              >
                 <ShoppingCart className="h-3 w-3 mr-1" />
                 {stock?.soldStock.total ?? 0} sold
               </Badge>
@@ -266,7 +263,11 @@ export function SetStockModal({
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'current' | 'sold')} className="flex-1 min-h-0 flex flex-col">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v: string) => setActiveTab(v as 'current' | 'sold')}
+          className="flex-1 min-h-0 flex flex-col"
+        >
           <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
             <TabsTrigger value="current" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
@@ -283,7 +284,10 @@ export function SetStockModal({
               <InventoryTable items={currentStockItems} showSoldColumns={false} />
               {currentStockItems.length > 0 && (
                 <div className="mt-3 text-sm text-muted-foreground text-right pr-4">
-                  Total Cost: <span className="font-mono font-medium text-foreground">{formatCurrency(currentTotal)}</span>
+                  Total Cost:{' '}
+                  <span className="font-mono font-medium text-foreground">
+                    {formatCurrency(currentTotal)}
+                  </span>
                 </div>
               )}
             </ScrollArea>
@@ -294,7 +298,10 @@ export function SetStockModal({
               <InventoryTable items={soldStockItems} showSoldColumns={true} />
               {soldStockItems.length > 0 && (
                 <div className="mt-3 text-sm text-muted-foreground text-right pr-4">
-                  Total Sold: <span className="font-mono font-medium text-green-600">{formatCurrency(soldTotal)}</span>
+                  Total Sold:{' '}
+                  <span className="font-mono font-medium text-green-600">
+                    {formatCurrency(soldTotal)}
+                  </span>
                 </div>
               )}
             </ScrollArea>

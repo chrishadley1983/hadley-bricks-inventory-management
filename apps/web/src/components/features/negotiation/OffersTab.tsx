@@ -38,7 +38,11 @@ export function OffersTab() {
     offset: offersPage * OFFERS_PAGE_SIZE,
   });
   const { data: rules, isLoading: rulesLoading } = useDiscountRules();
-  const { data: eligibleItems, isLoading: eligibleLoading, error: eligibleError } = useEligibleItems();
+  const {
+    data: eligibleItems,
+    isLoading: eligibleLoading,
+    error: eligibleError,
+  } = useEligibleItems();
 
   // Mutations
   const sendOffersMutation = useSendOffers();
@@ -65,7 +69,8 @@ export function OffersTab() {
       if (result.offersSent === 0 && result.eligibleCount === 0) {
         toast({
           title: 'No eligible listings',
-          description: 'No listings are currently eligible for offers. Check your settings or wait for listings to meet the criteria.',
+          description:
+            'No listings are currently eligible for offers. Check your settings or wait for listings to meet the criteria.',
         });
       } else if (result.offersSent === 0) {
         toast({
@@ -96,7 +101,11 @@ export function OffersTab() {
     await updateConfigMutation.mutateAsync(updates);
   };
 
-  const handleCreateRule = async (rule: { minScore: number; maxScore: number; discountPercentage: number }) => {
+  const handleCreateRule = async (rule: {
+    minScore: number;
+    maxScore: number;
+    discountPercentage: number;
+  }) => {
     await createRuleMutation.mutateAsync(rule);
   };
 
