@@ -62,18 +62,15 @@ export function SetLookupForm({ onLookup, isLoading }: SetLookupFormProps) {
         <Checkbox
           id="forceRefresh"
           checked={forceRefresh}
-          onCheckedChange={(checked: boolean | 'indeterminate') => setForceRefresh(checked === true)}
+          onCheckedChange={(checked: boolean | 'indeterminate') =>
+            setForceRefresh(checked === true)
+          }
           disabled={isLoading}
         />
-        <Label
-          htmlFor="forceRefresh"
-          className="text-sm text-muted-foreground cursor-pointer"
-        >
+        <Label htmlFor="forceRefresh" className="text-sm text-muted-foreground cursor-pointer">
           Force refresh from Brickset API (ignores cache)
         </Label>
-        {forceRefresh && (
-          <RefreshCw className="h-3 w-3 text-muted-foreground" />
-        )}
+        {forceRefresh && <RefreshCw className="h-3 w-3 text-muted-foreground" />}
       </div>
     </form>
   );

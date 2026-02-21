@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeOrder, normalizeOrders, calculateOrderStats } from '../adapter';
-import type {
-  BrickOwlOrderDetail,
-  BrickOwlOrderItem,
-  NormalizedBrickOwlOrder,
-} from '../types';
+import type { BrickOwlOrderDetail, BrickOwlOrderItem, NormalizedBrickOwlOrder } from '../types';
 
 describe('Brick Owl Adapter', () => {
   // Helper to create mock Brick Owl order
-  const createMockOrder = (
-    overrides: Partial<BrickOwlOrderDetail> = {}
-  ): BrickOwlOrderDetail => ({
+  const createMockOrder = (overrides: Partial<BrickOwlOrderDetail> = {}): BrickOwlOrderDetail => ({
     order_id: '12345678',
     status: 'Shipped',
     order_time: '2024-01-15 10:30:00',
@@ -34,9 +28,7 @@ describe('Brick Owl Adapter', () => {
   });
 
   // Helper to create mock Brick Owl order item
-  const createMockItem = (
-    overrides: Partial<BrickOwlOrderItem> = {}
-  ): BrickOwlOrderItem => ({
+  const createMockItem = (overrides: Partial<BrickOwlOrderItem> = {}): BrickOwlOrderItem => ({
     order_item_id: '123456',
     boid: '3001-11',
     name: 'Brick 2 x 4',
@@ -125,18 +117,15 @@ describe('Brick Owl Adapter', () => {
         ['Received', 'Received'],
         ['Cancelled', 'Cancelled'],
         ['On Hold', 'On Hold'],
-      ])(
-        'should normalize status %s to %s',
-        (brickOwlStatus, expectedStatus) => {
-          const order = createMockOrder({
-            status: brickOwlStatus as BrickOwlOrderDetail['status'],
-          });
+      ])('should normalize status %s to %s', (brickOwlStatus, expectedStatus) => {
+        const order = createMockOrder({
+          status: brickOwlStatus as BrickOwlOrderDetail['status'],
+        });
 
-          const result = normalizeOrder(order);
+        const result = normalizeOrder(order);
 
-          expect(result.status).toBe(expectedStatus);
-        }
-      );
+        expect(result.status).toBe(expectedStatus);
+      });
 
       it('should pass through unknown statuses as-is', () => {
         const order = createMockOrder({
@@ -246,7 +235,10 @@ describe('Brick Owl Adapter', () => {
       it('should normalize used item conditions', () => {
         const order = createMockOrder();
 
-        const conditions: Array<{ input: BrickOwlOrderItem['condition']; expected: 'New' | 'Used' }> = [
+        const conditions: Array<{
+          input: BrickOwlOrderItem['condition'];
+          expected: 'New' | 'Used';
+        }> = [
           { input: 'new', expected: 'New' },
           { input: 'usedn', expected: 'Used' },
           { input: 'usedg', expected: 'Used' },
@@ -517,13 +509,40 @@ describe('Brick Owl Adapter', () => {
       const orders = [
         createNormalizedOrder({
           items: [
-            { itemNumber: '1', itemName: 'A', itemType: 'Part', quantity: 5, condition: 'New', unitPrice: 1, totalPrice: 5, currency: 'GBP' },
-            { itemNumber: '2', itemName: 'B', itemType: 'Part', quantity: 3, condition: 'New', unitPrice: 1, totalPrice: 3, currency: 'GBP' },
+            {
+              itemNumber: '1',
+              itemName: 'A',
+              itemType: 'Part',
+              quantity: 5,
+              condition: 'New',
+              unitPrice: 1,
+              totalPrice: 5,
+              currency: 'GBP',
+            },
+            {
+              itemNumber: '2',
+              itemName: 'B',
+              itemType: 'Part',
+              quantity: 3,
+              condition: 'New',
+              unitPrice: 1,
+              totalPrice: 3,
+              currency: 'GBP',
+            },
           ],
         }),
         createNormalizedOrder({
           items: [
-            { itemNumber: '3', itemName: 'C', itemType: 'Set', quantity: 1, condition: 'New', unitPrice: 10, totalPrice: 10, currency: 'GBP' },
+            {
+              itemNumber: '3',
+              itemName: 'C',
+              itemType: 'Set',
+              quantity: 1,
+              condition: 'New',
+              unitPrice: 10,
+              totalPrice: 10,
+              currency: 'GBP',
+            },
           ],
         }),
       ];
@@ -570,11 +589,11 @@ describe('Brick Owl Adapter', () => {
     });
 
     it('should calculate correct average for single order', () => {
-      const orders = [createNormalizedOrder({ total: 75.50 })];
+      const orders = [createNormalizedOrder({ total: 75.5 })];
 
       const stats = calculateOrderStats(orders);
 
-      expect(stats.averageOrderValue).toBe(75.50);
+      expect(stats.averageOrderValue).toBe(75.5);
     });
 
     it('should handle decimal totals correctly', () => {

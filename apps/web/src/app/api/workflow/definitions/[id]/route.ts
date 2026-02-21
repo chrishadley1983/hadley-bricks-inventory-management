@@ -37,10 +37,7 @@ const UpdateDefinitionSchema = z.object({
   sort_order: z.number().optional(),
 });
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -72,10 +69,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -121,11 +115,14 @@ export async function PATCH(
     if (parsed.data.category !== undefined) updateData.category = parsed.data.category;
     if (parsed.data.icon !== undefined) updateData.icon = parsed.data.icon;
     if (parsed.data.frequency !== undefined) updateData.frequency = parsed.data.frequency;
-    if (parsed.data.frequency_days !== undefined) updateData.frequency_days = parsed.data.frequency_days;
+    if (parsed.data.frequency_days !== undefined)
+      updateData.frequency_days = parsed.data.frequency_days;
     if (parsed.data.ideal_time !== undefined) updateData.ideal_time = parsed.data.ideal_time;
     if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
-    if (parsed.data.estimated_minutes !== undefined) updateData.estimated_minutes = parsed.data.estimated_minutes;
-    if (parsed.data.deep_link_url !== undefined) updateData.deep_link_url = parsed.data.deep_link_url;
+    if (parsed.data.estimated_minutes !== undefined)
+      updateData.estimated_minutes = parsed.data.estimated_minutes;
+    if (parsed.data.deep_link_url !== undefined)
+      updateData.deep_link_url = parsed.data.deep_link_url;
     if (parsed.data.count_source !== undefined) updateData.count_source = parsed.data.count_source;
     if (parsed.data.is_active !== undefined) updateData.is_active = parsed.data.is_active;
     if (parsed.data.sort_order !== undefined) updateData.sort_order = parsed.data.sort_order;

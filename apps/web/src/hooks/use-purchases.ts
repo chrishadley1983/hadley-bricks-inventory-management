@@ -76,8 +76,7 @@ export function useUpdatePurchase() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: PurchaseUpdate }) =>
-      updatePurchase(id, data),
+    mutationFn: ({ id, data }: { id: string; data: PurchaseUpdate }) => updatePurchase(id, data),
     onSuccess: (updatedPurchase) => {
       queryClient.setQueryData(purchaseKeys.detail(updatedPurchase.id), updatedPurchase);
       queryClient.invalidateQueries({ queryKey: purchaseKeys.lists() });

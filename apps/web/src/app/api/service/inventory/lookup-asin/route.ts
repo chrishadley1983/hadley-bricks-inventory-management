@@ -132,8 +132,7 @@ export async function GET(request: NextRequest) {
 
         const matchingItems = keywordResult.items.filter(
           (item) =>
-            item.title?.includes(baseSetNumber) ||
-            item.title?.toLowerCase().includes('lego')
+            item.title?.includes(baseSetNumber) || item.title?.toLowerCase().includes('lego')
         );
 
         if (matchingItems.length > 0) {

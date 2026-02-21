@@ -102,10 +102,7 @@ interface BulkAddToSyncButtonProps {
   onComplete?: () => void;
 }
 
-export function BulkAddToSyncButton({
-  inventoryItemIds,
-  onComplete,
-}: BulkAddToSyncButtonProps) {
+export function BulkAddToSyncButton({ inventoryItemIds, onComplete }: BulkAddToSyncButtonProps) {
   const { toast } = useToast();
   const addMutation = useAddToSyncQueue();
 
@@ -130,12 +127,7 @@ export function BulkAddToSyncButton({
   };
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleClick}
-      disabled={count === 0 || isLoading}
-    >
+    <Button variant="outline" size="sm" onClick={handleClick} disabled={count === 0 || isLoading}>
       {isLoading ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (

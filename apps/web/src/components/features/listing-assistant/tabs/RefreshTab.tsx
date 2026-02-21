@@ -48,7 +48,11 @@ export function RefreshTab() {
 
   // Queries
   const { data: scopeData, isLoading: scopesLoading } = useEbayScopes();
-  const { data: eligibleListings, isLoading: listingsLoading, refetch: refetchListings } = useEligibleListings();
+  const {
+    data: eligibleListings,
+    isLoading: listingsLoading,
+    refetch: refetchListings,
+  } = useEligibleListings();
 
   // Views enrichment hook
   const {
@@ -82,7 +86,14 @@ export function RefreshTab() {
   }, [displayListings]);
 
   // Execute refresh hook
-  const { progress, result, error: executeError, isExecuting, execute, reset } = useExecuteRefresh(currentJobId || '');
+  const {
+    progress,
+    result,
+    error: executeError,
+    isExecuting,
+    execute,
+    reset,
+  } = useExecuteRefresh(currentJobId || '');
 
   // Determine if we should show scope upgrade prompt
   const needsScopeUpgrade = scopeData && (!scopeData.isConnected || !scopeData.hasScopes);
@@ -288,21 +299,13 @@ export function RefreshTab() {
           </p>
         </div>
         {activeView === 'select' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveView('history')}
-          >
+          <Button variant="outline" size="sm" onClick={() => setActiveView('history')}>
             <HistoryIcon className="mr-2 h-4 w-4" />
             History
           </Button>
         )}
         {activeView === 'history' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveView('select')}
-          >
+          <Button variant="outline" size="sm" onClick={() => setActiveView('select')}>
             Back to Listings
           </Button>
         )}
@@ -452,10 +455,7 @@ export function RefreshTab() {
                   >
                     Approve All
                   </Button>
-                  <Button
-                    onClick={handleStartExecution}
-                    disabled={pendingReviewItems.length > 0}
-                  >
+                  <Button onClick={handleStartExecution} disabled={pendingReviewItems.length > 0}>
                     <Play className="mr-2 h-4 w-4" />
                     Start Processing
                   </Button>
@@ -488,11 +488,7 @@ export function RefreshTab() {
                     </div>
                     <div className="flex items-center gap-2">
                       {item.status === 'pending_review' ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingItem(item)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setEditingItem(item)}>
                           Review
                         </Button>
                       ) : item.status === 'approved' ? (
@@ -529,7 +525,11 @@ export function RefreshTab() {
         onSave={handleSaveItem}
         onApprove={handleApproveItem}
         onSkip={handleSkipItem}
-        isSaving={updateItemMutation.isPending || approveItemsMutation.isPending || skipItemsMutation.isPending}
+        isSaving={
+          updateItemMutation.isPending ||
+          approveItemsMutation.isPending ||
+          skipItemsMutation.isPending
+        }
       />
     </div>
   );

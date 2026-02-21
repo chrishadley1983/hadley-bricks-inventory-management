@@ -26,7 +26,12 @@ export function PlatformStockHeader({
   const platformLabel = platform.charAt(0).toUpperCase() + platform.slice(1);
 
   return (
-    <div className={cn('flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between', className)}>
+    <div
+      className={cn(
+        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between',
+        className
+      )}
+    >
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{platformLabel} Stock</h1>
         <p className="text-muted-foreground">
@@ -42,14 +47,8 @@ export function PlatformStockHeader({
             Export
           </Button>
         )}
-        <Button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          size="sm"
-        >
-          <RefreshCw
-            className={cn('mr-2 h-4 w-4', isRefreshing && 'animate-spin')}
-          />
+        <Button onClick={onRefresh} disabled={isRefreshing} size="sm">
+          <RefreshCw className={cn('mr-2 h-4 w-4', isRefreshing && 'animate-spin')} />
           {isRefreshing ? 'Importing...' : `Refresh from ${platformLabel}`}
         </Button>
       </div>

@@ -50,14 +50,19 @@ export async function POST(request: NextRequest) {
     const configuredPlatforms = await syncService.getConfiguredPlatforms(user.id);
     if (configuredPlatforms.length === 0) {
       return NextResponse.json(
-        { error: 'No platforms configured. Please set up at least one platform in Settings > Integrations.' },
+        {
+          error:
+            'No platforms configured. Please set up at least one platform in Settings > Integrations.',
+        },
         { status: 400 }
       );
     }
 
     // Run sync across all platforms
     const result = await syncService.syncAllPlatforms(user.id, {
-      platforms: options.platforms as ('bricklink' | 'brickowl' | 'bricqer' | 'ebay' | 'amazon')[] | undefined,
+      platforms: options.platforms as
+        | ('bricklink' | 'brickowl' | 'bricqer' | 'ebay' | 'amazon')[]
+        | undefined,
       includeArchived: options.includeArchived,
       includeItems: options.includeItems,
       fullSync: options.fullSync,

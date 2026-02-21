@@ -68,10 +68,7 @@ export async function POST(request: NextRequest) {
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
     if (!isConfigured) {
-      return NextResponse.json(
-        { error: 'Brick Owl credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Brick Owl credentials not configured' }, { status: 400 });
     }
 
     // Sync transactions (to brickowl_transactions table)

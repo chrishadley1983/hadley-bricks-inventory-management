@@ -23,7 +23,10 @@ vi.mock('../../bricqer', () => ({
   },
   BricqerRateLimitError: class BricqerRateLimitError extends Error {
     rateLimitInfo: { remaining: number; resetTime: Date; limit: number };
-    constructor(message: string, rateLimitInfo: { remaining: number; resetTime: Date; limit: number }) {
+    constructor(
+      message: string,
+      rateLimitInfo: { remaining: number; resetTime: Date; limit: number }
+    ) {
       super(message);
       this.rateLimitInfo = rateLimitInfo;
       this.name = 'BricqerRateLimitError';
@@ -215,9 +218,7 @@ describe('BricqerSyncService', () => {
     });
 
     it('should use order_number for platform order ID when available', async () => {
-      mockBricqerClient.getAllOrders.mockResolvedValue([
-        { id: 1, order_number: 'BQ-001' },
-      ]);
+      mockBricqerClient.getAllOrders.mockResolvedValue([{ id: 1, order_number: 'BQ-001' }]);
 
       await service.syncOrders(testUserId);
 
@@ -288,9 +289,7 @@ describe('BricqerSyncService', () => {
 
     it('should handle auth errors', async () => {
       const { BricqerAuthError } = await import('../../bricqer');
-      mockBricqerClient.getAllOrders.mockRejectedValue(
-        new BricqerAuthError('Invalid credentials')
-      );
+      mockBricqerClient.getAllOrders.mockRejectedValue(new BricqerAuthError('Invalid credentials'));
 
       const result = await service.syncOrders(testUserId);
 

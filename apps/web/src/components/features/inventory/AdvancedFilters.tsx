@@ -12,16 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import type { InventoryFilters as Filters, EmptyFilter } from '@/lib/api';
@@ -39,7 +31,13 @@ interface DateRangePickerProps {
   onToChange: (date: string | undefined) => void;
 }
 
-function DateRangePicker({ label, fromDate, toDate, onFromChange, onToChange }: DateRangePickerProps) {
+function DateRangePicker({
+  label,
+  fromDate,
+  toDate,
+  onFromChange,
+  onToChange,
+}: DateRangePickerProps) {
   const [from, setFrom] = useState<Date | undefined>(fromDate ? new Date(fromDate) : undefined);
   const [to, setTo] = useState<Date | undefined>(toDate ? new Date(toDate) : undefined);
 
@@ -132,7 +130,9 @@ function NumericRangeInput({ label, min, max, onMinChange, onMaxChange }: Numeri
     <div className="flex items-center gap-1">
       <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
       <div className="relative">
-        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          £
+        </span>
         <Input
           type="number"
           placeholder="Min"
@@ -144,7 +144,9 @@ function NumericRangeInput({ label, min, max, onMinChange, onMaxChange }: Numeri
       </div>
       <span className="text-muted-foreground text-xs">-</span>
       <div className="relative">
-        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          £
+        </span>
         <Input
           type="number"
           placeholder="Max"
@@ -170,7 +172,7 @@ function EmptyFilterSelect({ label, value, onChange }: EmptyFilterSelectProps) {
       <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
       <Select
         value={value || 'all'}
-        onValueChange={(v: string) => onChange(v === 'all' ? undefined : v as EmptyFilter)}
+        onValueChange={(v: string) => onChange(v === 'all' ? undefined : (v as EmptyFilter))}
       >
         <SelectTrigger className="h-7 w-[90px] text-xs">
           <SelectValue placeholder="Any" />
@@ -233,7 +235,9 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
                 {advancedFilterCount}
               </Badge>
             )}
-            <ChevronDown className={`ml-2 h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown
+              className={`ml-2 h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            />
           </Button>
         </CollapsibleTrigger>
         {advancedFilterCount > 0 && (
@@ -255,17 +259,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  costRange: min !== undefined || filters.costRange?.max !== undefined
-                    ? { ...filters.costRange, min }
-                    : undefined,
+                  costRange:
+                    min !== undefined || filters.costRange?.max !== undefined
+                      ? { ...filters.costRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  costRange: max !== undefined || filters.costRange?.min !== undefined
-                    ? { ...filters.costRange, max }
-                    : undefined,
+                  costRange:
+                    max !== undefined || filters.costRange?.min !== undefined
+                      ? { ...filters.costRange, max }
+                      : undefined,
                 })
               }
             />
@@ -276,17 +282,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  listingValueRange: min !== undefined || filters.listingValueRange?.max !== undefined
-                    ? { ...filters.listingValueRange, min }
-                    : undefined,
+                  listingValueRange:
+                    min !== undefined || filters.listingValueRange?.max !== undefined
+                      ? { ...filters.listingValueRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  listingValueRange: max !== undefined || filters.listingValueRange?.min !== undefined
-                    ? { ...filters.listingValueRange, max }
-                    : undefined,
+                  listingValueRange:
+                    max !== undefined || filters.listingValueRange?.min !== undefined
+                      ? { ...filters.listingValueRange, max }
+                      : undefined,
                 })
               }
             />
@@ -297,17 +305,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  soldGrossRange: min !== undefined || filters.soldGrossRange?.max !== undefined
-                    ? { ...filters.soldGrossRange, min }
-                    : undefined,
+                  soldGrossRange:
+                    min !== undefined || filters.soldGrossRange?.max !== undefined
+                      ? { ...filters.soldGrossRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  soldGrossRange: max !== undefined || filters.soldGrossRange?.min !== undefined
-                    ? { ...filters.soldGrossRange, max }
-                    : undefined,
+                  soldGrossRange:
+                    max !== undefined || filters.soldGrossRange?.min !== undefined
+                      ? { ...filters.soldGrossRange, max }
+                      : undefined,
                 })
               }
             />
@@ -318,17 +328,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  soldNetRange: min !== undefined || filters.soldNetRange?.max !== undefined
-                    ? { ...filters.soldNetRange, min }
-                    : undefined,
+                  soldNetRange:
+                    min !== undefined || filters.soldNetRange?.max !== undefined
+                      ? { ...filters.soldNetRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  soldNetRange: max !== undefined || filters.soldNetRange?.min !== undefined
-                    ? { ...filters.soldNetRange, max }
-                    : undefined,
+                  soldNetRange:
+                    max !== undefined || filters.soldNetRange?.min !== undefined
+                      ? { ...filters.soldNetRange, max }
+                      : undefined,
                 })
               }
             />
@@ -339,17 +351,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  profitRange: min !== undefined || filters.profitRange?.max !== undefined
-                    ? { ...filters.profitRange, min }
-                    : undefined,
+                  profitRange:
+                    min !== undefined || filters.profitRange?.max !== undefined
+                      ? { ...filters.profitRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  profitRange: max !== undefined || filters.profitRange?.min !== undefined
-                    ? { ...filters.profitRange, max }
-                    : undefined,
+                  profitRange:
+                    max !== undefined || filters.profitRange?.min !== undefined
+                      ? { ...filters.profitRange, max }
+                      : undefined,
                 })
               }
             />
@@ -360,17 +374,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  soldFeesRange: min !== undefined || filters.soldFeesRange?.max !== undefined
-                    ? { ...filters.soldFeesRange, min }
-                    : undefined,
+                  soldFeesRange:
+                    min !== undefined || filters.soldFeesRange?.max !== undefined
+                      ? { ...filters.soldFeesRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  soldFeesRange: max !== undefined || filters.soldFeesRange?.min !== undefined
-                    ? { ...filters.soldFeesRange, max }
-                    : undefined,
+                  soldFeesRange:
+                    max !== undefined || filters.soldFeesRange?.min !== undefined
+                      ? { ...filters.soldFeesRange, max }
+                      : undefined,
                 })
               }
             />
@@ -381,17 +397,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onMinChange={(min) =>
                 onFiltersChange({
                   ...filters,
-                  soldPostageRange: min !== undefined || filters.soldPostageRange?.max !== undefined
-                    ? { ...filters.soldPostageRange, min }
-                    : undefined,
+                  soldPostageRange:
+                    min !== undefined || filters.soldPostageRange?.max !== undefined
+                      ? { ...filters.soldPostageRange, min }
+                      : undefined,
                 })
               }
               onMaxChange={(max) =>
                 onFiltersChange({
                   ...filters,
-                  soldPostageRange: max !== undefined || filters.soldPostageRange?.min !== undefined
-                    ? { ...filters.soldPostageRange, max }
-                    : undefined,
+                  soldPostageRange:
+                    max !== undefined || filters.soldPostageRange?.min !== undefined
+                      ? { ...filters.soldPostageRange, max }
+                      : undefined,
                 })
               }
             />
@@ -406,17 +424,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onFromChange={(from) =>
                 onFiltersChange({
                   ...filters,
-                  purchaseDateRange: from || filters.purchaseDateRange?.to
-                    ? { ...filters.purchaseDateRange, from }
-                    : undefined,
+                  purchaseDateRange:
+                    from || filters.purchaseDateRange?.to
+                      ? { ...filters.purchaseDateRange, from }
+                      : undefined,
                 })
               }
               onToChange={(to) =>
                 onFiltersChange({
                   ...filters,
-                  purchaseDateRange: to || filters.purchaseDateRange?.from
-                    ? { ...filters.purchaseDateRange, to }
-                    : undefined,
+                  purchaseDateRange:
+                    to || filters.purchaseDateRange?.from
+                      ? { ...filters.purchaseDateRange, to }
+                      : undefined,
                 })
               }
             />
@@ -427,17 +447,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onFromChange={(from) =>
                 onFiltersChange({
                   ...filters,
-                  listingDateRange: from || filters.listingDateRange?.to
-                    ? { ...filters.listingDateRange, from }
-                    : undefined,
+                  listingDateRange:
+                    from || filters.listingDateRange?.to
+                      ? { ...filters.listingDateRange, from }
+                      : undefined,
                 })
               }
               onToChange={(to) =>
                 onFiltersChange({
                   ...filters,
-                  listingDateRange: to || filters.listingDateRange?.from
-                    ? { ...filters.listingDateRange, to }
-                    : undefined,
+                  listingDateRange:
+                    to || filters.listingDateRange?.from
+                      ? { ...filters.listingDateRange, to }
+                      : undefined,
                 })
               }
             />
@@ -448,17 +470,19 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               onFromChange={(from) =>
                 onFiltersChange({
                   ...filters,
-                  soldDateRange: from || filters.soldDateRange?.to
-                    ? { ...filters.soldDateRange, from }
-                    : undefined,
+                  soldDateRange:
+                    from || filters.soldDateRange?.to
+                      ? { ...filters.soldDateRange, from }
+                      : undefined,
                 })
               }
               onToChange={(to) =>
                 onFiltersChange({
                   ...filters,
-                  soldDateRange: to || filters.soldDateRange?.from
-                    ? { ...filters.soldDateRange, to }
-                    : undefined,
+                  soldDateRange:
+                    to || filters.soldDateRange?.from
+                      ? { ...filters.soldDateRange, to }
+                      : undefined,
                 })
               }
             />
@@ -466,7 +490,9 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               <span className="text-xs text-muted-foreground w-16 shrink-0">Sold On</span>
               <Select
                 value={filters.salePlatform || 'all'}
-                onValueChange={(v: string) => onFiltersChange({ ...filters, salePlatform: v === 'all' ? undefined : v })}
+                onValueChange={(v: string) =>
+                  onFiltersChange({ ...filters, salePlatform: v === 'all' ? undefined : v })
+                }
               >
                 <SelectTrigger className="h-7 w-[100px] text-xs">
                   <SelectValue placeholder="Any" />
@@ -484,7 +510,9 @@ export function AdvancedFilters({ filters, onFiltersChange }: AdvancedFiltersPro
               <span className="text-xs text-muted-foreground w-16 shrink-0">Source</span>
               <Select
                 value={filters.source || 'all'}
-                onValueChange={(v: string) => onFiltersChange({ ...filters, source: v === 'all' ? undefined : v })}
+                onValueChange={(v: string) =>
+                  onFiltersChange({ ...filters, source: v === 'all' ? undefined : v })
+                }
               >
                 <SelectTrigger className="h-7 w-[110px] text-xs">
                   <SelectValue placeholder="Any" />

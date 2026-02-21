@@ -268,7 +268,11 @@ export class PayPalAuthService {
             error: errorJson.error_description || errorJson.error || 'Authentication failed',
           };
         } catch {
-          return { success: false, expiresIn: 0, error: `Authentication failed: ${response.status}` };
+          return {
+            success: false,
+            expiresIn: 0,
+            error: `Authentication failed: ${response.status}`,
+          };
         }
       }
 

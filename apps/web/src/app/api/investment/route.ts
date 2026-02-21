@@ -25,11 +25,23 @@ const QuerySchema = z.object({
   maxPieces: z.coerce.number().optional(),
   minRrp: z.coerce.number().optional(),
   maxRrp: z.coerce.number().optional(),
-  isLicensed: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
-  isUcs: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
-  isModular: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  isLicensed: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  isUcs: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  isModular: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
   exclusivityTier: z.string().optional(),
-  hasAmazon: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  hasAmazon: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
   sortBy: z.string().default('year_from'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -82,9 +94,7 @@ export async function GET(request: NextRequest) {
 
     // Apply filters
     if (search) {
-      query = query.or(
-        `set_number.ilike.%${search}%,set_name.ilike.%${search}%`
-      );
+      query = query.or(`set_number.ilike.%${search}%,set_name.ilike.%${search}%`);
     }
 
     if (retirementStatus) {
@@ -163,27 +173,25 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GET /api/investment] Query error:', error.message);
-      return NextResponse.json(
-        { error: 'Database query failed' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Database query failed' }, { status: 500 });
     }
 
     // Cast since generated types may not include all investment columns yet
     const sets = (data ?? []) as unknown as Record<string, unknown>[];
 
     // Enrich with Amazon pricing data for sets that have ASINs
-    const asinsToLookup = sets
-      .filter((s) => s.amazon_asin)
-      .map((s) => s.amazon_asin as string);
+    const asinsToLookup = sets.filter((s) => s.amazon_asin).map((s) => s.amazon_asin as string);
 
-    const pricingMap = new Map<string, {
-      buy_box_price: number | null;
-      was_price_90d: number | null;
-      sales_rank: number | null;
-      offer_count: number | null;
-      snapshot_date: string | null;
-    }>();
+    const pricingMap = new Map<
+      string,
+      {
+        buy_box_price: number | null;
+        was_price_90d: number | null;
+        sales_rank: number | null;
+        offer_count: number | null;
+        snapshot_date: string | null;
+      }
+    >();
 
     if (asinsToLookup.length > 0) {
       // Batch query: get latest pricing snapshot for each ASIN
@@ -223,22 +231,27 @@ export async function GET(request: NextRequest) {
 
     // Fetch investment predictions for these sets
     const setNumbers = sets.map((s) => s.set_number as string);
-    const predictionMap = new Map<string, {
-      investment_score: number;
-      predicted_1yr_appreciation: number | null;
-      predicted_3yr_appreciation: number | null;
-      confidence: number;
-    }>();
+    const predictionMap = new Map<
+      string,
+      {
+        investment_score: number;
+        predicted_1yr_appreciation: number | null;
+        predicted_3yr_appreciation: number | null;
+        confidence: number;
+      }
+    >();
 
     if (setNumbers.length > 0) {
       for (let i = 0; i < setNumbers.length; i += 100) {
         const chunk = setNumbers.slice(i, i + 100);
         const { data: predictions } = await supabase
           .from('investment_predictions')
-          .select('set_num, investment_score, predicted_1yr_appreciation, predicted_3yr_appreciation, confidence')
+          .select(
+            'set_num, investment_score, predicted_1yr_appreciation, predicted_3yr_appreciation, confidence'
+          )
           .in('set_num', chunk);
 
-        for (const pred of (predictions ?? [])) {
+        for (const pred of predictions ?? []) {
           const p = pred as Record<string, unknown>;
           predictionMap.set(p.set_num as string, {
             investment_score: p.investment_score as number,
@@ -281,9 +294,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/investment] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

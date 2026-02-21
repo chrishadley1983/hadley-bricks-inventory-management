@@ -361,7 +361,9 @@ export class AmazonPricingClient {
 
         // Rate limit between batches - use longer delay to avoid 429
         if (i + MAX_BATCH_SIZE < asins.length) {
-          console.log(`[AmazonPricingClient] Waiting ${BATCH_DELAY_PRICING_MS}ms before next batch...`);
+          console.log(
+            `[AmazonPricingClient] Waiting ${BATCH_DELAY_PRICING_MS}ms before next batch...`
+          );
           await this.sleep(BATCH_DELAY_PRICING_MS);
         }
       }
@@ -381,16 +383,16 @@ export class AmazonPricingClient {
     console.log(`[AmazonPricingClient] Request URL: ${url}`);
 
     try {
-      const response = await this.request<CompetitivePricingV0Response>(
-        url,
-        'GET'
-      );
+      const response = await this.request<CompetitivePricingV0Response>(url, 'GET');
 
       console.log(`[AmazonPricingClient] Response payload count: ${response.payload?.length ?? 0}`);
 
       // Debug: log first item structure
       if (response.payload && response.payload.length > 0) {
-        console.log(`[AmazonPricingClient] Sample response item:`, JSON.stringify(response.payload[0], null, 2));
+        console.log(
+          `[AmazonPricingClient] Sample response item:`,
+          JSON.stringify(response.payload[0], null, 2)
+        );
       }
 
       // The v0 API returns payload as an array
@@ -452,9 +454,7 @@ export class AmazonPricingClient {
         { requests }
       );
 
-      return response.responses
-        .filter((r) => r.status.statusCode === 200)
-        .map((r) => r.body);
+      return response.responses.filter((r) => r.status.statusCode === 200).map((r) => r.body);
     } catch (error) {
       console.error('[AmazonPricingClient] Error fetching featured offer prices:', error);
       throw error;
@@ -507,7 +507,9 @@ export class AmazonPricingClient {
     const url = '/batches/products/pricing/2022-05-01/items/competitiveSummary';
 
     try {
-      const response = await this.request<CompetitiveSummaryBatchResponse>(url, 'POST', { requests });
+      const response = await this.request<CompetitiveSummaryBatchResponse>(url, 'POST', {
+        requests,
+      });
 
       return response.responses
         .filter((r) => r.status.statusCode === 200 && r.body)
@@ -592,11 +594,13 @@ export class AmazonPricingClient {
   private normalizeCompetitivePricing(data: CompetitivePricingResponse): AsinPricingData {
     // Find your price (belongsToRequester = true)
     const yourOffer = data.competitivePrices?.find((p) => p.belongsToRequester === true);
-    const yourPrice = yourOffer?.price?.landedPrice?.amount ?? yourOffer?.price?.listingPrice?.amount ?? null;
+    const yourPrice =
+      yourOffer?.price?.landedPrice?.amount ?? yourOffer?.price?.listingPrice?.amount ?? null;
 
     // Find Buy Box price (competitivePriceId = "1" is typically the Buy Box)
     const buyBoxOffer = data.competitivePrices?.find((p) => p.competitivePriceId === '1');
-    const buyBoxPrice = buyBoxOffer?.price?.landedPrice?.amount ?? buyBoxOffer?.price?.listingPrice?.amount ?? null;
+    const buyBoxPrice =
+      buyBoxOffer?.price?.landedPrice?.amount ?? buyBoxOffer?.price?.listingPrice?.amount ?? null;
 
     // Check if we own the Buy Box
     const buyBoxIsYours = buyBoxOffer?.belongsToRequester ?? false;
@@ -613,7 +617,8 @@ export class AmazonPricingClient {
     const primaryRank = data.salesRanks?.[0];
 
     // Get currency from any price we found
-    const currency = yourOffer?.price?.listingPrice?.currencyCode ??
+    const currency =
+      yourOffer?.price?.listingPrice?.currencyCode ??
       buyBoxOffer?.price?.listingPrice?.currencyCode ??
       'GBP';
 
@@ -642,28 +647,27 @@ export class AmazonPricingClient {
 
     // Find your price (belongsToRequester = true)
     const yourOffer = competitivePrices.find((p) => p.belongsToRequester === true);
-    const yourPrice = yourOffer?.Price?.LandedPrice?.Amount ?? yourOffer?.Price?.ListingPrice?.Amount ?? null;
+    const yourPrice =
+      yourOffer?.Price?.LandedPrice?.Amount ?? yourOffer?.Price?.ListingPrice?.Amount ?? null;
 
     // Find Buy Box price (CompetitivePriceId = "1" is typically the Buy Box)
     const buyBoxOffer = competitivePrices.find((p) => p.CompetitivePriceId === '1');
-    const buyBoxPrice = buyBoxOffer?.Price?.LandedPrice?.Amount ?? buyBoxOffer?.Price?.ListingPrice?.Amount ?? null;
+    const buyBoxPrice =
+      buyBoxOffer?.Price?.LandedPrice?.Amount ?? buyBoxOffer?.Price?.ListingPrice?.Amount ?? null;
 
     // Check if we own the Buy Box
     const buyBoxIsYours = buyBoxOffer?.belongsToRequester ?? false;
 
     // Count offers by condition - use Count field (not Value)
-    const newOffers = offerListings.find(
-      (o) => o.condition.toLowerCase() === 'new'
-    );
-    const usedOffers = offerListings.find(
-      (o) => o.condition.toLowerCase() === 'used'
-    );
+    const newOffers = offerListings.find((o) => o.condition.toLowerCase() === 'new');
+    const usedOffers = offerListings.find((o) => o.condition.toLowerCase() === 'used');
 
     // Get primary sales rank (first one is usually the main category)
     const primaryRank = salesRankings[0];
 
     // Get currency from any price we found
-    const currency = yourOffer?.Price?.ListingPrice?.CurrencyCode ??
+    const currency =
+      yourOffer?.Price?.ListingPrice?.CurrencyCode ??
       buyBoxOffer?.Price?.ListingPrice?.CurrencyCode ??
       'GBP';
 
@@ -687,11 +691,7 @@ export class AmazonPricingClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body?: unknown
-  ): Promise<T> {
+  private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -810,8 +810,6 @@ export class AmazonPricingClient {
 /**
  * Factory function to create an Amazon Pricing client
  */
-export function createAmazonPricingClient(
-  credentials: AmazonCredentials
-): AmazonPricingClient {
+export function createAmazonPricingClient(credentials: AmazonCredentials): AmazonPricingClient {
   return new AmazonPricingClient(credentials);
 }

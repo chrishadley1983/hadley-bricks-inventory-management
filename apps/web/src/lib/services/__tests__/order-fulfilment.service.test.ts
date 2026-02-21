@@ -129,9 +129,9 @@ describe('OrderFulfilmentService', () => {
         error: { message: 'Database error' },
       });
 
-      await expect(
-        service.getOrdersReadyForConfirmation('user-1', 'amazon')
-      ).rejects.toThrow('Failed to fetch shipped Amazon orders');
+      await expect(service.getOrdersReadyForConfirmation('user-1', 'amazon')).rejects.toThrow(
+        'Failed to fetch shipped Amazon orders'
+      );
     });
 
     it('should return empty array for unsupported platform', async () => {
@@ -376,7 +376,7 @@ describe('OrderFulfilmentService', () => {
         platform: 'amazon',
         buyer_name: 'Test Buyer',
         order_date: '2024-01-15',
-        total: 50.00,
+        total: 50.0,
         items: [],
       });
 
@@ -484,7 +484,7 @@ describe('OrderFulfilmentService', () => {
         fulfilled_at: null,
         order_date: '2024-01-15',
         shipping: 5.99,
-        fees: 12.50,
+        fees: 12.5,
         items: [
           {
             id: 'item-1',
@@ -675,9 +675,9 @@ describe('OrderFulfilmentService', () => {
         error: { message: 'Database error' },
       });
 
-      await expect(
-        service.getOrdersReadyForConfirmation('user-1', 'ebay')
-      ).rejects.toThrow('Failed to fetch shipped eBay orders');
+      await expect(service.getOrdersReadyForConfirmation('user-1', 'ebay')).rejects.toThrow(
+        'Failed to fetch shipped eBay orders'
+      );
     });
   });
 
@@ -694,9 +694,7 @@ describe('OrderFulfilmentService', () => {
     });
 
     it('should include PartiallyShipped status for Amazon', async () => {
-      const mockOrders = [
-        { id: 'order-1', status: 'PartiallyShipped' },
-      ];
+      const mockOrders = [{ id: 'order-1', status: 'PartiallyShipped' }];
 
       mockSupabase.setNextResponse({ data: mockOrders, error: null });
 

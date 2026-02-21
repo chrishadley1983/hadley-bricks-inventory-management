@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EbayInventoryLinkingService, createEbayInventoryLinkingService } from '../ebay-inventory-linking.service';
+import {
+  EbayInventoryLinkingService,
+  createEbayInventoryLinkingService,
+} from '../ebay-inventory-linking.service';
 
 // Mock Supabase server client
 vi.mock('@/lib/supabase/server', () => ({
@@ -203,8 +206,18 @@ describe('EbayInventoryLinkingService', () => {
               in: vi.fn().mockReturnValue({
                 order: vi.fn().mockResolvedValue({
                   data: [
-                    { id: 'inventory-1', sku: 'SKU-001', status: 'BACKLOG', purchase_date: '2023-01-01' },
-                    { id: 'inventory-2', sku: 'SKU-001', status: 'BACKLOG', purchase_date: '2023-06-01' },
+                    {
+                      id: 'inventory-1',
+                      sku: 'SKU-001',
+                      status: 'BACKLOG',
+                      purchase_date: '2023-01-01',
+                    },
+                    {
+                      id: 'inventory-2',
+                      sku: 'SKU-001',
+                      status: 'BACKLOG',
+                      purchase_date: '2023-06-01',
+                    },
                   ],
                   error: null,
                 }),
@@ -725,9 +738,28 @@ describe('EbayInventoryLinkingService', () => {
     it('should extract meaningful keywords', () => {
       const title = 'LEGO Star Wars Millennium Falcon Set 75192 New';
       const stopWords = new Set([
-        'lego', 'the', 'a', 'an', 'and', 'or', 'new', 'used', 'sealed',
-        'set', 'with', 'for', 'in', 'of', 'to', 'from', 'by', 'free',
-        'shipping', 'fast', 'uk', 'brand',
+        'lego',
+        'the',
+        'a',
+        'an',
+        'and',
+        'or',
+        'new',
+        'used',
+        'sealed',
+        'set',
+        'with',
+        'for',
+        'in',
+        'of',
+        'to',
+        'from',
+        'by',
+        'free',
+        'shipping',
+        'fast',
+        'uk',
+        'brand',
       ]);
 
       const keywords = title
@@ -954,7 +986,9 @@ describe('EbayInventoryLinkingService', () => {
               ilike: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   limit: vi.fn().mockResolvedValue({
-                    data: [{ id: 'inv-title', item_name: 'Star Wars AT-AT Walker', status: 'LISTED' }],
+                    data: [
+                      { id: 'inv-title', item_name: 'Star Wars AT-AT Walker', status: 'LISTED' },
+                    ],
                     error: null,
                   }),
                 }),
@@ -990,9 +1024,7 @@ describe('EbayInventoryLinkingService', () => {
         { id: '4', status: 'SOLD', ebay_line_item_id: 'already-linked' }, // Should be excluded
       ];
 
-      const filtered = items.filter(
-        (item) => item.status !== 'SOLD' || !item.ebay_line_item_id
-      );
+      const filtered = items.filter((item) => item.status !== 'SOLD' || !item.ebay_line_item_id);
 
       expect(filtered).toHaveLength(3);
       expect(filtered.map((i) => i.id)).toContain('1');

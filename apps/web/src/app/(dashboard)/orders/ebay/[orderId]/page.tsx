@@ -21,13 +21,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -126,7 +120,10 @@ async function fetchOrderDetail(orderId: string): Promise<{ data: EbayOrderDetai
   return response.json();
 }
 
-async function confirmOrder(orderId: string, skipUnmatched: boolean = false): Promise<{
+async function confirmOrder(
+  orderId: string,
+  skipUnmatched: boolean = false
+): Promise<{
   success: boolean;
   data?: { inventoryUpdated: number; unmatchedItems: number; isLateMatch?: boolean };
   error?: string;
@@ -158,11 +155,26 @@ function getStatusColor(status: string): string {
 function getMatchStatusBadge(status: 'matched' | 'unmatched' | 'manual' | 'no_sku') {
   switch (status) {
     case 'matched':
-      return <Badge className="bg-green-100 text-green-800"><Check className="h-3 w-3 mr-1" />Matched</Badge>;
+      return (
+        <Badge className="bg-green-100 text-green-800">
+          <Check className="h-3 w-3 mr-1" />
+          Matched
+        </Badge>
+      );
     case 'manual':
-      return <Badge className="bg-blue-100 text-blue-800"><Link2 className="h-3 w-3 mr-1" />Manual</Badge>;
+      return (
+        <Badge className="bg-blue-100 text-blue-800">
+          <Link2 className="h-3 w-3 mr-1" />
+          Manual
+        </Badge>
+      );
     case 'unmatched':
-      return <Badge className="bg-orange-100 text-orange-800"><X className="h-3 w-3 mr-1" />Unmatched</Badge>;
+      return (
+        <Badge className="bg-orange-100 text-orange-800">
+          <X className="h-3 w-3 mr-1" />
+          Unmatched
+        </Badge>
+      );
     case 'no_sku':
       return <Badge className="bg-gray-100 text-gray-600">No SKU</Badge>;
   }
@@ -175,11 +187,7 @@ function formatCurrency(amount: number, currency = 'GBP'): string {
   }).format(amount);
 }
 
-export default function EbayOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ orderId: string }>;
-}) {
+export default function EbayOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   usePerfPage('EbayOrderDetailPage');
   const { orderId } = use(params);
   const queryClient = useQueryClient();
@@ -187,9 +195,16 @@ export default function EbayOrderDetailPage({
   const [unmatchedWarning, setUnmatchedWarning] = useState<string[] | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [skuMatcherOpen, setSkuMatcherOpen] = useState(false);
-  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{ sku: string; title: string } | null>(null);
+  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{
+    sku: string;
+    title: string;
+  } | null>(null);
 
-  const { data: orderData, isLoading, error } = useQuery({
+  const {
+    data: orderData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['ebay', 'order', orderId],
     queryFn: () => fetchOrderDetail(orderId),
   });
@@ -236,9 +251,7 @@ export default function EbayOrderDetailPage({
         <div className="p-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Failed to load order details. {error?.message}
-            </AlertDescription>
+            <AlertDescription>Failed to load order details. {error?.message}</AlertDescription>
           </Alert>
         </div>
       </>
@@ -315,9 +328,7 @@ export default function EbayOrderDetailPage({
         {successMessage && (
           <Alert className="bg-green-50 border-green-200">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              {successMessage}
-            </AlertDescription>
+            <AlertDescription className="text-green-800">{successMessage}</AlertDescription>
           </Alert>
         )}
 
@@ -335,7 +346,10 @@ export default function EbayOrderDetailPage({
                   {format(new Date(order.creation_date), 'p')}
                 </CardDescription>
               </div>
-              <Badge className={getStatusColor(order.ui_status)} style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>
+              <Badge
+                className={getStatusColor(order.ui_status)}
+                style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}
+              >
                 {order.ui_status}
               </Badge>
             </div>
@@ -369,9 +383,12 @@ export default function EbayOrderDetailPage({
                     )}
                     <p>
                       {order.shipping_address.city}
-                      {order.shipping_address.stateOrProvince && `, ${order.shipping_address.stateOrProvince}`}
+                      {order.shipping_address.stateOrProvince &&
+                        `, ${order.shipping_address.stateOrProvince}`}
                     </p>
-                    <p>{order.shipping_address.postalCode}, {order.shipping_address.country}</p>
+                    <p>
+                      {order.shipping_address.postalCode}, {order.shipping_address.country}
+                    </p>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No shipping address</p>
@@ -387,19 +404,34 @@ export default function EbayOrderDetailPage({
                   {order.pricing_summary.subtotal && (
                     <div className="flex justify-between">
                       <span>Subtotal</span>
-                      <span>{formatCurrency(order.pricing_summary.subtotal.value, order.pricing_summary.subtotal.currency)}</span>
+                      <span>
+                        {formatCurrency(
+                          order.pricing_summary.subtotal.value,
+                          order.pricing_summary.subtotal.currency
+                        )}
+                      </span>
                     </div>
                   )}
                   {order.pricing_summary.deliveryCost && (
                     <div className="flex justify-between">
                       <span>Shipping</span>
-                      <span>{formatCurrency(order.pricing_summary.deliveryCost.value, order.pricing_summary.deliveryCost.currency)}</span>
+                      <span>
+                        {formatCurrency(
+                          order.pricing_summary.deliveryCost.value,
+                          order.pricing_summary.deliveryCost.currency
+                        )}
+                      </span>
                     </div>
                   )}
                   {order.pricing_summary.tax && (
                     <div className="flex justify-between">
                       <span>Tax</span>
-                      <span>{formatCurrency(order.pricing_summary.tax.value, order.pricing_summary.tax.currency)}</span>
+                      <span>
+                        {formatCurrency(
+                          order.pricing_summary.tax.value,
+                          order.pricing_summary.tax.currency
+                        )}
+                      </span>
                     </div>
                   )}
                   <Separator className="my-2" />
@@ -418,8 +450,8 @@ export default function EbayOrderDetailPage({
           <Alert className="bg-yellow-50 border-yellow-200">
             <AlertCircle className="h-4 w-4 text-yellow-600" />
             <AlertDescription className="text-yellow-800">
-              {unmatchedCount} item(s) in this order could not be matched to inventory.
-              You can still confirm the order, but inventory won&apos;t be updated for unmatched items.
+              {unmatchedCount} item(s) in this order could not be matched to inventory. You can
+              still confirm the order, but inventory won&apos;t be updated for unmatched items.
             </AlertDescription>
           </Alert>
         )}
@@ -428,9 +460,7 @@ export default function EbayOrderDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>Line Items</CardTitle>
-            <CardDescription>
-              {order.line_items.length} item(s) in this order
-            </CardDescription>
+            <CardDescription>{order.line_items.length} item(s) in this order</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -449,15 +479,14 @@ export default function EbayOrderDetailPage({
                 <TableBody>
                   {order.line_items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-mono text-sm">
-                        {item.sku || '-'}
-                      </TableCell>
+                      <TableCell className="font-mono text-sm">{item.sku || '-'}</TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{item.title}</p>
                           {item.matched_inventory && (
                             <p className="text-xs text-muted-foreground">
-                              → {item.matched_inventory.set_number || item.matched_inventory.sku}: {item.matched_inventory.item_name}
+                              → {item.matched_inventory.set_number || item.matched_inventory.sku}:{' '}
+                              {item.matched_inventory.item_name}
                             </p>
                           )}
                         </div>
@@ -509,7 +538,8 @@ export default function EbayOrderDetailPage({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">
-                          {fulfilment.shipping_carrier_code || 'Carrier'}: {fulfilment.tracking_number}
+                          {fulfilment.shipping_carrier_code || 'Carrier'}:{' '}
+                          {fulfilment.tracking_number}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Shipped {format(new Date(fulfilment.shipped_date), 'PPP')}
@@ -540,12 +570,14 @@ export default function EbayOrderDetailPage({
           <div className="py-4">
             <ul className="list-disc list-inside space-y-1 text-sm">
               {unmatchedWarning?.map((item, i) => (
-                <li key={i} className="text-muted-foreground">{item}</li>
+                <li key={i} className="text-muted-foreground">
+                  {item}
+                </li>
               ))}
             </ul>
             <p className="mt-4 text-sm">
-              You can either match these items first, or confirm the order anyway
-              (inventory won&apos;t be updated for unmatched items).
+              You can either match these items first, or confirm the order anyway (inventory
+              won&apos;t be updated for unmatched items).
             </p>
           </div>
           <DialogFooter>
@@ -553,13 +585,9 @@ export default function EbayOrderDetailPage({
               Cancel
             </Button>
             <Link href="/settings/integrations">
-              <Button variant="secondary">
-                Match Items
-              </Button>
+              <Button variant="secondary">Match Items</Button>
             </Link>
-            <Button onClick={() => confirmMutation.mutate(true)}>
-              Confirm Anyway
-            </Button>
+            <Button onClick={() => confirmMutation.mutate(true)}>Confirm Anyway</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

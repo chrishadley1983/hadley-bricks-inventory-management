@@ -74,9 +74,7 @@ export function calculateAll(inputs: CostModelScenarioFormData): CalculatedResul
     inputs.ebayAvgPostageCost * inputs.ebaySalesPerMonth * 12;
 
   // Lego parts (% of eBay turnover + % of BrickLink turnover)
-  const legoParts =
-    ebayTurnover * inputs.legoPartsPercent +
-    blTurnover * inputs.legoPartsPercentBl;
+  const legoParts = ebayTurnover * inputs.legoPartsPercent + blTurnover * inputs.legoPartsPercentBl;
 
   // Accountant cost depends on VAT status (F13)
   const accountantCost = inputs.isVatRegistered
@@ -254,14 +252,18 @@ function calculatePackagingMaterials(
   // Average packaging cost per platform
   const avgAmazonPackaging =
     amazonPackages.length > 0
-      ? amazonPackages.reduce((sum, p) => sum + p.cardboard + p.bubbleWrap + p.legoCard + p.businessCard, 0) /
-        amazonPackages.length
+      ? amazonPackages.reduce(
+          (sum, p) => sum + p.cardboard + p.bubbleWrap + p.legoCard + p.businessCard,
+          0
+        ) / amazonPackages.length
       : 0;
 
   const avgEbayPackaging =
     ebayPackages.length > 0
-      ? ebayPackages.reduce((sum, p) => sum + p.cardboard + p.bubbleWrap + p.legoCard + p.businessCard, 0) /
-        ebayPackages.length
+      ? ebayPackages.reduce(
+          (sum, p) => sum + p.cardboard + p.bubbleWrap + p.legoCard + p.businessCard,
+          0
+        ) / ebayPackages.length
       : 0;
 
   total = avgAmazonPackaging * annualSales.amazonSales + avgEbayPackaging * annualSales.ebaySales;
@@ -273,12 +275,14 @@ function calculatePackagingMaterials(
  * Calculate package cost total for a single package type
  * F28: Total = sum of components + fixed_cost_per_sale
  */
-export function calculatePackageTotal(
-  cost: PackageCostFormData,
-  fixedCostPerSale: number
-): number {
+export function calculatePackageTotal(cost: PackageCostFormData, fixedCostPerSale: number): number {
   return (
-    cost.postage + cost.cardboard + cost.bubbleWrap + cost.legoCard + cost.businessCard + fixedCostPerSale
+    cost.postage +
+    cost.cardboard +
+    cost.bubbleWrap +
+    cost.legoCard +
+    cost.businessCard +
+    fixedCostPerSale
   );
 }
 
@@ -371,19 +375,19 @@ export function validateDefaultCalculations(): {
     description: '',
     blSalesPerMonth: 165,
     blAvgSaleValue: 15.0,
-    blAvgPostageCost: 2.70,
+    blAvgPostageCost: 2.7,
     amazonSalesPerMonth: 75,
     amazonAvgSaleValue: 40.0,
     amazonAvgPostageCost: 3.95,
     ebaySalesPerMonth: 80,
     ebayAvgSaleValue: 25.0,
-    ebayAvgPostageCost: 3.20,
-    blFeeRate: 0.10,
+    ebayAvgPostageCost: 3.2,
+    blFeeRate: 0.1,
     amazonFeeRate: 0.183,
-    ebayFeeRate: 0.20,
-    blCogPercent: 0.20,
+    ebayFeeRate: 0.2,
+    blCogPercent: 0.2,
     amazonCogPercent: 0.35,
-    ebayCogPercent: 0.30,
+    ebayCogPercent: 0.3,
     fixedShopify: 25.0,
     fixedEbayStore: 35.0,
     fixedSellerTools: 50.0,
@@ -396,7 +400,7 @@ export function validateDefaultCalculations(): {
     accountantCostIfVat: 1650.0,
     targetAnnualProfit: 26000.0,
     personalAllowance: 12570.0,
-    incomeTaxRate: 0.20,
+    incomeTaxRate: 0.2,
     niRate: 0.06,
     legoPartsPercent: 0.02,
     legoPartsPercentBl: 0.02,
@@ -407,60 +411,44 @@ export function validateDefaultCalculations(): {
 
   // F15: Total turnover should be £89,700
   if (Math.abs(result.totalTurnover - 89700) > 0.01) {
-    errors.push(
-      `Total turnover: expected £89,700, got ${formatCurrency(result.totalTurnover)}`
-    );
+    errors.push(`Total turnover: expected £89,700, got ${formatCurrency(result.totalTurnover)}`);
   }
 
   // Check BrickLink turnover: 165 * 15 * 12 = £29,700
   if (Math.abs(result.blTurnover - 29700) > 0.01) {
-    errors.push(
-      `BrickLink turnover: expected £29,700, got ${formatCurrency(result.blTurnover)}`
-    );
+    errors.push(`BrickLink turnover: expected £29,700, got ${formatCurrency(result.blTurnover)}`);
   }
 
   // Check Amazon turnover: 75 * 40 * 12 = £36,000
   if (Math.abs(result.amazonTurnover - 36000) > 0.01) {
-    errors.push(
-      `Amazon turnover: expected £36,000, got ${formatCurrency(result.amazonTurnover)}`
-    );
+    errors.push(`Amazon turnover: expected £36,000, got ${formatCurrency(result.amazonTurnover)}`);
   }
 
   // Check eBay turnover: 80 * 25 * 12 = £24,000
   if (Math.abs(result.ebayTurnover - 24000) > 0.01) {
-    errors.push(
-      `eBay turnover: expected £24,000, got ${formatCurrency(result.ebayTurnover)}`
-    );
+    errors.push(`eBay turnover: expected £24,000, got ${formatCurrency(result.ebayTurnover)}`);
   }
 
   // F16: Total fees should be £14,358
   // BL: 29700 * 0.10 = 2970, Amazon: 36000 * 0.183 = 6588, eBay: 24000 * 0.20 = 4800
   if (Math.abs(result.totalFees - 14358) > 0.01) {
-    errors.push(
-      `Total fees: expected £14,358, got ${formatCurrency(result.totalFees)}`
-    );
+    errors.push(`Total fees: expected £14,358, got ${formatCurrency(result.totalFees)}`);
   }
 
   // F18: Total COG should be £25,740
   // BL: 29700 * 0.20 = 5940, Amazon: 36000 * 0.35 = 12600, eBay: 24000 * 0.30 = 7200
   if (Math.abs(result.totalCog - 25740) > 0.01) {
-    errors.push(
-      `Total COG: expected £25,740, got ${formatCurrency(result.totalCog)}`
-    );
+    errors.push(`Total COG: expected £25,740, got ${formatCurrency(result.totalCog)}`);
   }
 
   // F17: VAT should be £0 when not registered
   if (Math.abs(result.vatAmount - 0) > 0.01) {
-    errors.push(
-      `VAT (not registered): expected £0, got ${formatCurrency(result.vatAmount)}`
-    );
+    errors.push(`VAT (not registered): expected £0, got ${formatCurrency(result.vatAmount)}`);
   }
 
   // Total monthly sales should be 320
   if (result.totalMonthlySales !== 320) {
-    errors.push(
-      `Total monthly sales: expected 320, got ${result.totalMonthlySales}`
-    );
+    errors.push(`Total monthly sales: expected 320, got ${result.totalMonthlySales}`);
   }
 
   // F29: Fixed cost per sale should be £1.09 (350 / 320)

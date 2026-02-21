@@ -57,11 +57,7 @@ const PLATFORM_OPTIONS = [
   { value: 'brickowl', label: 'Brick Owl' },
 ];
 
-export function InventoryImportModal({
-  open,
-  onOpenChange,
-  onSelect,
-}: InventoryImportModalProps) {
+export function InventoryImportModal({ open, onOpenChange, onSelect }: InventoryImportModalProps) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -212,9 +208,7 @@ export function InventoryImportModal({
               ))}
             </div>
           ) : error ? (
-            <div className="py-8 text-center text-destructive">
-              Failed to load inventory items
-            </div>
+            <div className="py-8 text-center text-destructive">Failed to load inventory items</div>
           ) : items.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No inventory items found matching your criteria
@@ -262,9 +256,7 @@ interface InventoryItemRowProps {
 }
 
 function InventoryItemRow({ item, isSelected, onClick }: InventoryItemRowProps) {
-  const displayName = item.item_name
-    ? `${item.set_number} - ${item.item_name}`
-    : item.set_number;
+  const displayName = item.item_name ? `${item.set_number} - ${item.item_name}` : item.set_number;
 
   return (
     <button
@@ -273,9 +265,7 @@ function InventoryItemRow({ item, isSelected, onClick }: InventoryItemRowProps) 
       className={cn(
         'w-full text-left p-3 rounded-lg border transition-colors',
         'hover:bg-muted/50',
-        isSelected
-          ? 'border-primary bg-primary/5 ring-1 ring-primary'
-          : 'border-border'
+        isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border'
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -295,19 +285,13 @@ function InventoryItemRow({ item, isSelected, onClick }: InventoryItemRowProps) 
                 {item.status}
               </Badge>
             )}
-            {item.listing_platform && (
-              <span className="text-xs">{item.listing_platform}</span>
-            )}
+            {item.listing_platform && <span className="text-xs">{item.listing_platform}</span>}
           </div>
           {item.notes && (
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-              {item.notes}
-            </p>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{item.notes}</p>
           )}
         </div>
-        {isSelected && (
-          <Check className="h-5 w-5 text-primary flex-shrink-0" />
-        )}
+        {isSelected && <Check className="h-5 w-5 text-primary flex-shrink-0" />}
       </div>
     </button>
   );

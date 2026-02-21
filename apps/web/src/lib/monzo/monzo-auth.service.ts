@@ -436,9 +436,7 @@ export class MonzoAuthService {
     // Decrypt sensitive fields
     try {
       const decryptedAccessToken = await decrypt(data.access_token);
-      const decryptedRefreshToken = data.refresh_token
-        ? await decrypt(data.refresh_token)
-        : null;
+      const decryptedRefreshToken = data.refresh_token ? await decrypt(data.refresh_token) : null;
 
       return {
         ...data,
@@ -464,9 +462,7 @@ export class MonzoAuthService {
 
     // Encrypt sensitive tokens before storing
     const encryptedAccessToken = await encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? await encrypt(tokens.refresh_token)
-      : null;
+    const encryptedRefreshToken = tokens.refresh_token ? await encrypt(tokens.refresh_token) : null;
 
     const credentialsData = {
       user_id: userId,

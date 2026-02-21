@@ -69,10 +69,19 @@ export class PayPalTransactionSyncService {
    * Only stores transactions where fee_amount != 0
    */
   async syncTransactions(userId: string, options?: PayPalSyncOptions): Promise<PayPalSyncResult> {
-    console.log('[PayPalTransactionSyncService] Starting transaction sync for user:', userId, 'options:', options);
+    console.log(
+      '[PayPalTransactionSyncService] Starting transaction sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await createClient();
-    const syncMode: PayPalSyncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
+    const syncMode: PayPalSyncMode = options?.fromDate
+      ? 'HISTORICAL'
+      : options?.fullSync
+        ? 'FULL'
+        : 'INCREMENTAL';
     console.log('[PayPalTransactionSyncService] Sync mode:', syncMode);
 
     // Check for running sync
@@ -174,19 +183,20 @@ export class PayPalTransactionSyncService {
       console.log('[PayPalTransactionSyncService] Date range:', startDate, 'to', endDate);
 
       // Fetch all transactions with pagination (handles 31-day chunking internally)
-      console.log('[PayPalTransactionSyncService] Starting to fetch transactions from PayPal API...');
-      const allTransactions = await apiAdapter.getAllTransactionsInRange(
-        startDate,
-        endDate,
-        {
-          fields: 'all',
-          onProgress: (fetched, total) => {
-            console.log(`[PayPalTransactionSyncService] Progress: ${fetched}/${total} transactions`);
-          },
-        }
+      console.log(
+        '[PayPalTransactionSyncService] Starting to fetch transactions from PayPal API...'
       );
+      const allTransactions = await apiAdapter.getAllTransactionsInRange(startDate, endDate, {
+        fields: 'all',
+        onProgress: (fetched, total) => {
+          console.log(`[PayPalTransactionSyncService] Progress: ${fetched}/${total} transactions`);
+        },
+      });
 
-      console.log('[PayPalTransactionSyncService] Total transactions fetched:', allTransactions.length);
+      console.log(
+        '[PayPalTransactionSyncService] Total transactions fetched:',
+        allTransactions.length
+      );
 
       // Filter for transactions with fees
       const transactionsWithFees = allTransactions.filter((tx) => {
@@ -206,15 +216,22 @@ export class PayPalTransactionSyncService {
       // Upsert transactions
       console.log('[PayPalTransactionSyncService] Upserting transactions to database...');
       const { created, updated } = await this.upsertTransactions(userId, transactionsWithFees);
-      console.log('[PayPalTransactionSyncService] Upsert complete. Created:', created, 'Updated:', updated);
+      console.log(
+        '[PayPalTransactionSyncService] Upsert complete. Created:',
+        created,
+        'Updated:',
+        updated
+      );
 
       // Update sync cursor to newest transaction date
       const newestDate =
         transactionsWithFees.length > 0
-          ? transactionsWithFees.reduce((newest, tx) => {
-              const txDate = new Date(tx.transaction_info.transaction_initiation_date);
-              return txDate > newest ? txDate : newest;
-            }, new Date(0)).toISOString()
+          ? transactionsWithFees
+              .reduce((newest, tx) => {
+                const txDate = new Date(tx.transaction_info.transaction_initiation_date);
+                return txDate > newest ? txDate : newest;
+              }, new Date(0))
+              .toISOString()
           : endDate;
 
       // Update sync config with cursor

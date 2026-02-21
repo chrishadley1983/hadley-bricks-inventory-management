@@ -34,7 +34,9 @@ export async function GET() {
       params,
       env: {
         EBAY_REDIRECT_URI: process.env.EBAY_REDIRECT_URI,
-        EBAY_CLIENT_ID: process.env.EBAY_CLIENT_ID ? `${process.env.EBAY_CLIENT_ID.substring(0, 10)}...` : 'NOT SET',
+        EBAY_CLIENT_ID: process.env.EBAY_CLIENT_ID
+          ? `${process.env.EBAY_CLIENT_ID.substring(0, 10)}...`
+          : 'NOT SET',
         EBAY_SANDBOX: process.env.EBAY_SANDBOX,
       },
     });

@@ -48,30 +48,37 @@ export async function GET() {
 
     if (session.status === 'paused') {
       // When paused, calculate based on when it was paused
-      const phaseStart = session.status === 'paused' && session.work_completed_at
-        ? new Date(session.work_completed_at)
-        : new Date(session.started_at);
+      const phaseStart =
+        session.status === 'paused' && session.work_completed_at
+          ? new Date(session.work_completed_at)
+          : new Date(session.started_at);
 
       const phaseDuration = session.work_completed_at
         ? session.break_minutes * 60
         : session.work_minutes * 60;
 
       const pausedAt = session.paused_at ? new Date(session.paused_at) : now;
-      const elapsedBeforePause = Math.floor((pausedAt.getTime() - phaseStart.getTime()) / 1000) - (session.paused_duration_seconds || 0);
+      const elapsedBeforePause =
+        Math.floor((pausedAt.getTime() - phaseStart.getTime()) / 1000) -
+        (session.paused_duration_seconds || 0);
       remainingSeconds = Math.max(0, phaseDuration - elapsedBeforePause);
     } else {
-      const phaseStart = session.status === 'break'
-        ? new Date(session.work_completed_at!)
-        : new Date(session.started_at);
+      const phaseStart =
+        session.status === 'break'
+          ? new Date(session.work_completed_at!)
+          : new Date(session.started_at);
 
-      const phaseDuration = session.status === 'break'
-        ? session.break_minutes * 60
-        : session.work_minutes * 60;
+      const phaseDuration =
+        session.status === 'break' ? session.break_minutes * 60 : session.work_minutes * 60;
 
-      const elapsed = Math.floor((now.getTime() - phaseStart.getTime()) / 1000) - (session.paused_duration_seconds || 0);
+      const elapsed =
+        Math.floor((now.getTime() - phaseStart.getTime()) / 1000) -
+        (session.paused_duration_seconds || 0);
       remainingSeconds = Math.max(0, phaseDuration - elapsed);
 
-      phaseEndTime = new Date(phaseStart.getTime() + (phaseDuration + (session.paused_duration_seconds || 0)) * 1000);
+      phaseEndTime = new Date(
+        phaseStart.getTime() + (phaseDuration + (session.paused_duration_seconds || 0)) * 1000
+      );
     }
 
     // Transform to camelCase

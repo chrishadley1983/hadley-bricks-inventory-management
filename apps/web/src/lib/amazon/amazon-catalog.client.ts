@@ -165,9 +165,7 @@ export class AmazonCatalogClient {
     );
 
     // Extract data from the summary for the requested marketplace
-    const summary = response.summaries?.find(
-      (s) => s.marketplaceId === marketplaceId
-    );
+    const summary = response.summaries?.find((s) => s.marketplaceId === marketplaceId);
 
     // Product types are at the top level, not inside summaries
     const productTypeEntry = response.productTypes?.find(
@@ -208,9 +206,7 @@ export class AmazonCatalogClient {
     identifierType: 'EAN' | 'UPC',
     marketplaceId: string = 'A1F83G8C2ARO7P'
   ): Promise<CatalogSearchResult> {
-    console.log(
-      `[AmazonCatalogClient] Searching by ${identifierType}: ${identifier}`
-    );
+    console.log(`[AmazonCatalogClient] Searching by ${identifierType}: ${identifier}`);
 
     const params = new URLSearchParams({
       marketplaceIds: marketplaceId,
@@ -295,11 +291,7 @@ export class AmazonCatalogClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET',
-    retryCount: number = 0
-  ): Promise<T> {
+  private async request<T>(path: string, method: 'GET', retryCount: number = 0): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -340,9 +332,7 @@ export class AmazonCatalogClient {
 
       // Retry once after clearing token
       if (retryCount === 0) {
-        console.warn(
-          '[AmazonCatalogClient] Auth error, refreshing token and retrying...'
-        );
+        console.warn('[AmazonCatalogClient] Auth error, refreshing token and retrying...');
         return this.request<T>(path, method, 1);
       }
 
@@ -419,10 +409,7 @@ export class AmazonCatalogClient {
       expiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
     };
 
-    console.log(
-      '[AmazonCatalogClient] Token refreshed, expires at:',
-      this.tokenData.expiresAt
-    );
+    console.log('[AmazonCatalogClient] Token refreshed, expires at:', this.tokenData.expiresAt);
 
     return this.tokenData.accessToken;
   }
@@ -477,8 +464,6 @@ export class AmazonCatalogClient {
 /**
  * Factory function to create an Amazon Catalog client
  */
-export function createAmazonCatalogClient(
-  credentials: AmazonCredentials
-): AmazonCatalogClient {
+export function createAmazonCatalogClient(credentials: AmazonCredentials): AmazonCatalogClient {
   return new AmazonCatalogClient(credentials);
 }

@@ -169,7 +169,13 @@ describe('Platform Stock Types', () => {
 
   describe('ListingStatus', () => {
     it('should support all listing statuses', () => {
-      const statuses: ListingStatus[] = ['Active', 'Inactive', 'Incomplete', 'Out of Stock', 'Unknown'];
+      const statuses: ListingStatus[] = [
+        'Active',
+        'Inactive',
+        'Incomplete',
+        'Out of Stock',
+        'Unknown',
+      ];
       expect(statuses).toHaveLength(5);
       expect(statuses).toContain('Active');
       expect(statuses).toContain('Inactive');

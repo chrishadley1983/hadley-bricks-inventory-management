@@ -21,30 +21,25 @@
 const EXCLUDE_PATTERNS: RegExp[] = [
   // DISABLED - eBay category filter handles most of these
   // Re-enable specific patterns if needed
-
   // // Display accessories
   // /\bdisplay\s+mount\b/i,
   // /\bdisplay\s+stand\s+only\b/i,
   // /\bdisplay\s+case\s+only\b/i,
   // /\bwall\s+mount\b/i,
   // /\bacrylic\s+case\b/i,
-
   // // Documentation
   // /\binstructions?\s+only\b/i,
   // /\bmanual\s+only\b/i,
-
   // // Incomplete items
   // /\bminifig(ure)?s?\s+only\b/i,
   // /\bparts\s+only\b/i,
   // /\bincomplete\b/i,
   // /\bno\s+box\b/i,
   // /\bmissing\s+pieces\b/i,
-
   // // Third-party
   // /\bfor\s+lego\b/i,
   // /\bcompatible\s+with\b/i,
   // /\bmoc\b/i,
-
   // // Knockoffs
   // /\blepin\b/i,
   // /\bnot\s+lego\b/i,
@@ -99,10 +94,7 @@ export function isValidLegoListing(title: string, setNumber: string): boolean {
  * @param setNumber - The LEGO set number to match
  * @returns Rejection reason or null if valid
  */
-export function getListingRejectionReason(
-  title: string,
-  setNumber: string
-): string | null {
+export function getListingRejectionReason(title: string, setNumber: string): string | null {
   if (!title || !setNumber) {
     return 'Missing title or set number';
   }

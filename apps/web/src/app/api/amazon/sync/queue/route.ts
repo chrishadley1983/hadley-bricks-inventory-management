@@ -15,15 +15,17 @@ import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 // SCHEMAS
 // ============================================================================
 
-const AddToQueueSchema = z.object({
-  inventoryItemId: z.string().uuid().optional(),
-  inventoryItemIds: z.array(z.string().uuid()).optional(),
-  /** Skip price conflict check (use after user confirms price update) */
-  skipConflictCheck: z.boolean().optional(),
-}).refine(
-  (data) => data.inventoryItemId || (data.inventoryItemIds && data.inventoryItemIds.length > 0),
-  { message: 'Either inventoryItemId or inventoryItemIds is required' }
-);
+const AddToQueueSchema = z
+  .object({
+    inventoryItemId: z.string().uuid().optional(),
+    inventoryItemIds: z.array(z.string().uuid()).optional(),
+    /** Skip price conflict check (use after user confirms price update) */
+    skipConflictCheck: z.boolean().optional(),
+  })
+  .refine(
+    (data) => data.inventoryItemId || (data.inventoryItemIds && data.inventoryItemIds.length > 0),
+    { message: 'Either inventoryItemId or inventoryItemIds is required' }
+  );
 
 // ============================================================================
 // GET - Get all queue items
@@ -58,10 +60,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/amazon/sync/queue] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -137,17 +136,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { error: 'No inventory item(s) provided' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'No inventory item(s) provided' }, { status: 400 });
   } catch (error) {
     console.error('[POST /api/amazon/sync/queue] Error:', error);
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -176,9 +169,6 @@ export async function DELETE() {
     });
   } catch (error) {
     console.error('[DELETE /api/amazon/sync/queue] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

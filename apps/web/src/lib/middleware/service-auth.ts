@@ -70,7 +70,7 @@ export async function validateServiceKey(
 
     // Check permissions
     const permissions = (data.permissions as string[]) || [];
-    const hasPermissions = requiredPermissions.every(p => permissions.includes(p));
+    const hasPermissions = requiredPermissions.every((p) => permissions.includes(p));
 
     if (!hasPermissions) {
       return {
@@ -124,7 +124,11 @@ export function unauthorizedResponse(message: string = 'Unauthorized'): NextResp
 export async function withServiceAuth<T>(
   request: NextRequest,
   requiredPermissions: string[],
-  handler: (keyInfo: { keyId: string; keyName: string; permissions: string[] }) => Promise<NextResponse<T | { error: string }>>
+  handler: (keyInfo: {
+    keyId: string;
+    keyName: string;
+    permissions: string[];
+  }) => Promise<NextResponse<T | { error: string }>>
 ): Promise<NextResponse<T | { error: string }>> {
   const validation = await validateServiceKey(request, requiredPermissions);
 
@@ -173,14 +177,12 @@ export async function getSystemUserId(): Promise<string> {
 
   // Fall back to first profile (single-user system)
   const supabase = createServiceRoleClient();
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .limit(1)
-    .single();
+  const { data: profile, error } = await supabase.from('profiles').select('id').limit(1).single();
 
   if (error || !profile) {
-    throw new Error('No system user configured. Set SYSTEM_USER_ID env var or ensure a profile exists.');
+    throw new Error(
+      'No system user configured. Set SYSTEM_USER_ID env var or ensure a profile exists.'
+    );
   }
 
   return profile.id;

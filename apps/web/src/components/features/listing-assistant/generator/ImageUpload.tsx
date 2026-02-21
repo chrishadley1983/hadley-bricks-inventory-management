@@ -3,10 +3,7 @@
 import { useCallback, useState } from 'react';
 import { ImageIcon, X, Plus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -48,9 +45,7 @@ export function ImageUpload({
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
-      const fileArray = Array.from(files).filter((f) =>
-        f.type.startsWith('image/')
-      );
+      const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
 
       if (fileArray.length === 0) return;
 
@@ -110,7 +105,9 @@ export function ImageUpload({
       if (errors.length > 0) {
         toast({
           title: 'Some images could not be added',
-          description: errors.slice(0, 3).join('\n') + (errors.length > 3 ? `\n...and ${errors.length - 3} more` : ''),
+          description:
+            errors.slice(0, 3).join('\n') +
+            (errors.length > 3 ? `\n...and ${errors.length - 3} more` : ''),
           variant: 'destructive',
         });
       }
@@ -210,11 +207,7 @@ export function ImageUpload({
                 onClick={() => openLightbox(index)}
                 className="w-full h-full cursor-zoom-in"
               >
-                <img
-                  src={image.base64}
-                  alt={image.name}
-                  className="h-full w-full object-cover"
-                />
+                <img src={image.base64} alt={image.name} className="h-full w-full object-cover" />
               </button>
               {/* Warning indicator for low-res images */}
               {image.warnings && image.warnings.length > 0 && (
@@ -263,7 +256,10 @@ export function ImageUpload({
         </p>
 
         {/* Lightbox Modal */}
-        <Dialog open={lightboxIndex !== null} onOpenChange={(open: boolean) => !open && closeLightbox()}>
+        <Dialog
+          open={lightboxIndex !== null}
+          onOpenChange={(open: boolean) => !open && closeLightbox()}
+        >
           <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-black/95 border-none">
             {lightboxIndex !== null && value[lightboxIndex] && (
               <div className="relative flex items-center justify-center min-h-[400px]">
@@ -310,9 +306,7 @@ export function ImageUpload({
 
                 {/* Image info footer */}
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-3 flex items-center justify-between">
-                  <span className="text-sm truncate max-w-[70%]">
-                    {value[lightboxIndex].name}
-                  </span>
+                  <span className="text-sm truncate max-w-[70%]">{value[lightboxIndex].name}</span>
                   <span className="text-sm text-white/70">
                     {lightboxIndex + 1} of {value.length}
                   </span>
@@ -348,16 +342,17 @@ export function ImageUpload({
           'Processing images...'
         ) : (
           <>
-            <span className="font-medium text-foreground">Click to upload</span>
-            {' '}or drag and drop
+            <span className="font-medium text-foreground">Click to upload</span> or drag and drop
           </>
         )}
       </p>
       <p className="text-xs text-muted-foreground mt-1">
-        JPEG, PNG or WebP • Min {EBAY_IMAGE_SPECS.minDimension}×{EBAY_IMAGE_SPECS.minDimension}px • Max {EBAY_IMAGE_SPECS.maxFileSizeMB}MB each
+        JPEG, PNG or WebP • Min {EBAY_IMAGE_SPECS.minDimension}×{EBAY_IMAGE_SPECS.minDimension}px •
+        Max {EBAY_IMAGE_SPECS.maxFileSizeMB}MB each
       </p>
       <p className="text-xs text-muted-foreground">
-        Recommended: {EBAY_IMAGE_SPECS.recommendedDimension}×{EBAY_IMAGE_SPECS.recommendedDimension}px for zoom • Up to {maxImages} images
+        Recommended: {EBAY_IMAGE_SPECS.recommendedDimension}×{EBAY_IMAGE_SPECS.recommendedDimension}
+        px for zoom • Up to {maxImages} images
       </p>
     </div>
   );

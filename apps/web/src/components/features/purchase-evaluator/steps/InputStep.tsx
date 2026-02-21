@@ -15,7 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { parseAndConsolidate, type EvaluationInputItem, type ParseError } from '@/lib/purchase-evaluator';
+import {
+  parseAndConsolidate,
+  type EvaluationInputItem,
+  type ParseError,
+} from '@/lib/purchase-evaluator';
 
 interface InputStepProps {
   onItemsParsed: (items: EvaluationInputItem[], source: 'csv_upload' | 'clipboard_paste') => void;
@@ -188,9 +192,7 @@ export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps
                 }}
               />
               <div className="flex justify-end">
-                <Button onClick={handlePaste}>
-                  Parse Data
-                </Button>
+                <Button onClick={handlePaste}>Parse Data</Button>
               </div>
             </div>
           </TabsContent>
@@ -205,8 +207,9 @@ export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps
                 <div className="flex-1 space-y-2">
                   <h3 className="text-lg font-semibold">AI-Powered Photo Analysis</h3>
                   <p className="text-sm text-muted-foreground">
-                    Upload photos of LEGO lots from auctions, marketplace listings, or collection shots.
-                    Our AI will identify sets, minifigures, and parts, then assess their condition.
+                    Upload photos of LEGO lots from auctions, marketplace listings, or collection
+                    shots. Our AI will identify sets, minifigures, and parts, then assess their
+                    condition.
                   </p>
                 </div>
               </div>
@@ -260,8 +263,8 @@ export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps
               <div className="mt-6 p-4 bg-background/50 rounded-lg">
                 <h4 className="font-medium text-sm mb-2">Calculate Maximum Purchase Price</h4>
                 <p className="text-sm text-muted-foreground">
-                  Set your target profit margin (20-50%) and we&apos;ll calculate the maximum you should pay
-                  for the lot based on current market prices.
+                  Set your target profit margin (20-50%) and we&apos;ll calculate the maximum you
+                  should pay for the lot based on current market prices.
                 </p>
               </div>
 
@@ -289,9 +292,7 @@ export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps
                     {error.message}
                   </li>
                 ))}
-                {parseErrors.length > 5 && (
-                  <li>...and {parseErrors.length - 5} more errors</li>
-                )}
+                {parseErrors.length > 5 && <li>...and {parseErrors.length - 5} more errors</li>}
               </ul>
             </AlertDescription>
           </Alert>
@@ -301,14 +302,24 @@ export function InputStep({ onItemsParsed, onSwitchToPhotoMode }: InputStepProps
         <div className="text-sm space-y-2">
           <p className="font-medium">Required Columns:</p>
           <ul className="list-disc list-inside text-muted-foreground space-y-1">
-            <li><strong>Item Code / Set Number</strong> - LEGO set number (e.g., 75192)</li>
-            <li><strong>Condition</strong> - New or Used</li>
+            <li>
+              <strong>Item Code / Set Number</strong> - LEGO set number (e.g., 75192)
+            </li>
+            <li>
+              <strong>Condition</strong> - New or Used
+            </li>
           </ul>
           <p className="font-medium mt-4">Optional Columns:</p>
           <ul className="list-disc list-inside text-muted-foreground space-y-1">
-            <li><strong>Item Name</strong> - Set name/description</li>
-            <li><strong>Quantity</strong> - Number of units (duplicates auto-detected if not provided)</li>
-            <li><strong>Cost</strong> - Unit cost (can also enter total purchase price later)</li>
+            <li>
+              <strong>Item Name</strong> - Set name/description
+            </li>
+            <li>
+              <strong>Quantity</strong> - Number of units (duplicates auto-detected if not provided)
+            </li>
+            <li>
+              <strong>Cost</strong> - Unit cost (can also enter total purchase price later)
+            </li>
           </ul>
         </div>
       </CardContent>

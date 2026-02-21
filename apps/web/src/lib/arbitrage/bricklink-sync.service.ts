@@ -7,7 +7,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@hadley-bricks/database';
 import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '../bricklink/client';
-import type { BrickLinkCredentials, BrickLinkPriceGuide, BrickLinkPriceDetail } from '../bricklink/types';
+import type {
+  BrickLinkCredentials,
+  BrickLinkPriceGuide,
+  BrickLinkPriceDetail,
+} from '../bricklink/types';
 import { CredentialsRepository } from '../repositories';
 import { ArbitrageWatchlistService } from './watchlist.service';
 
@@ -52,7 +56,10 @@ export class BrickLinkArbitrageSyncService {
     options: { includeSeeded?: boolean } = {},
     onProgress?: (processed: number, total: number) => void
   ): Promise<{ updated: number; failed: number; total: number }> {
-    console.log('[BrickLinkArbitrageSyncService.syncPricing] Starting pricing sync for user:', userId);
+    console.log(
+      '[BrickLinkArbitrageSyncService.syncPricing] Starting pricing sync for user:',
+      userId
+    );
     const startTime = Date.now();
 
     const client = await this.getClient(userId);
@@ -89,11 +96,13 @@ export class BrickLinkArbitrageSyncService {
     if (options.includeSeeded !== false) {
       const { data: seededData, error: seededError } = await this.supabase
         .from('user_seeded_asin_preferences')
-        .select(`
+        .select(
+          `
           seeded_asins!inner(
             brickset_sets!inner(set_number)
           )
-        `)
+        `
+        )
         .eq('user_id', userId)
         .eq('include_in_sync', true)
         .eq('user_status', 'active');
@@ -108,14 +117,18 @@ export class BrickLinkArbitrageSyncService {
           })
           .filter((s): s is string => s !== null && s !== undefined);
 
-        console.log(`[BrickLinkArbitrageSyncService.syncPricing] Found ${seededSetNumbers.length} seeded set numbers to sync`);
+        console.log(
+          `[BrickLinkArbitrageSyncService.syncPricing] Found ${seededSetNumbers.length} seeded set numbers to sync`
+        );
       }
     }
 
     // Combine and deduplicate set numbers
     const setNumbers = [...new Set([...inventorySetNumbers, ...seededSetNumbers])];
     const total = setNumbers.length;
-    console.log(`[BrickLinkArbitrageSyncService.syncPricing] Found ${total} unique set numbers to sync`);
+    console.log(
+      `[BrickLinkArbitrageSyncService.syncPricing] Found ${total} unique set numbers to sync`
+    );
 
     let updated = 0;
     let failed = 0;
@@ -143,7 +156,9 @@ export class BrickLinkArbitrageSyncService {
 
         // Debug: Log UK prices
         if (i < 3) {
-          console.log(`[BrickLinkArbitrageSyncService] ${setNumber} UK: min=${ukPriceGuide.min_price}, lots=${ukPriceGuide.unit_quantity}`);
+          console.log(
+            `[BrickLinkArbitrageSyncService] ${setNumber} UK: min=${ukPriceGuide.min_price}, lots=${ukPriceGuide.unit_quantity}`
+          );
         }
 
         // Process global price details - sort by price, keep all sellers
@@ -153,32 +168,42 @@ export class BrickLinkArbitrageSyncService {
         // Note: BrickLink uses "UK" not ISO standard "GB"
         const { error: insertError } = await this.supabase
           .from('bricklink_arbitrage_pricing')
-          .upsert({
-            user_id: userId,
-            bricklink_set_number: setNumber,
-            snapshot_date: today,
-            condition: 'N',
-            country_code: 'UK',
-            min_price: ukPriceGuide.min_price ? parseFloat(ukPriceGuide.min_price) : null,
-            avg_price: ukPriceGuide.avg_price ? parseFloat(ukPriceGuide.avg_price) : null,
-            max_price: ukPriceGuide.max_price ? parseFloat(ukPriceGuide.max_price) : null,
-            qty_avg_price: ukPriceGuide.qty_avg_price ? parseFloat(ukPriceGuide.qty_avg_price) : null,
-            total_lots: ukPriceGuide.unit_quantity,
-            total_qty: ukPriceGuide.total_quantity,
-            price_detail_json: priceDetails as unknown as Json, // Global price_detail for breakdown (UI highlights UK)
-          }, {
-            onConflict: 'user_id,bricklink_set_number,snapshot_date,condition,country_code',
-          });
+          .upsert(
+            {
+              user_id: userId,
+              bricklink_set_number: setNumber,
+              snapshot_date: today,
+              condition: 'N',
+              country_code: 'UK',
+              min_price: ukPriceGuide.min_price ? parseFloat(ukPriceGuide.min_price) : null,
+              avg_price: ukPriceGuide.avg_price ? parseFloat(ukPriceGuide.avg_price) : null,
+              max_price: ukPriceGuide.max_price ? parseFloat(ukPriceGuide.max_price) : null,
+              qty_avg_price: ukPriceGuide.qty_avg_price
+                ? parseFloat(ukPriceGuide.qty_avg_price)
+                : null,
+              total_lots: ukPriceGuide.unit_quantity,
+              total_qty: ukPriceGuide.total_quantity,
+              price_detail_json: priceDetails as unknown as Json, // Global price_detail for breakdown (UI highlights UK)
+            },
+            {
+              onConflict: 'user_id,bricklink_set_number,snapshot_date,condition,country_code',
+            }
+          );
 
         if (insertError) {
-          console.error(`[BrickLinkArbitrageSyncService.syncPricing] Error storing pricing for ${setNumber}:`, insertError);
+          console.error(
+            `[BrickLinkArbitrageSyncService.syncPricing] Error storing pricing for ${setNumber}:`,
+            insertError
+          );
           failed++;
         } else {
           updated++;
         }
       } catch (err) {
         if (err instanceof RateLimitError) {
-          console.error('[BrickLinkArbitrageSyncService.syncPricing] Rate limit exceeded, stopping sync');
+          console.error(
+            '[BrickLinkArbitrageSyncService.syncPricing] Rate limit exceeded, stopping sync'
+          );
           // Update sync status with error
           await this.updateSyncStatus(userId, {
             status: 'failed',
@@ -191,9 +216,14 @@ export class BrickLinkArbitrageSyncService {
         }
 
         if (err instanceof BrickLinkApiError && err.code === 404) {
-          console.log(`[BrickLinkArbitrageSyncService.syncPricing] Set ${setNumber} not found in BrickLink`);
+          console.log(
+            `[BrickLinkArbitrageSyncService.syncPricing] Set ${setNumber} not found in BrickLink`
+          );
         } else {
-          console.error(`[BrickLinkArbitrageSyncService.syncPricing] Error fetching pricing for ${setNumber}:`, err);
+          console.error(
+            `[BrickLinkArbitrageSyncService.syncPricing] Error fetching pricing for ${setNumber}:`,
+            err
+          );
         }
         failed++;
       }
@@ -206,7 +236,9 @@ export class BrickLinkArbitrageSyncService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[BrickLinkArbitrageSyncService.syncPricing] Completed in ${duration}ms: ${updated} updated, ${failed} failed`);
+    console.log(
+      `[BrickLinkArbitrageSyncService.syncPricing] Completed in ${duration}ms: ${updated} updated, ${failed} failed`
+    );
 
     // Update sync status
     await this.updateSyncStatus(userId, {
@@ -233,22 +265,33 @@ export class BrickLinkArbitrageSyncService {
     userId: string,
     options: { offset: number; limit: number }
   ): Promise<{ processed: number; failed: number; updated: number; setNumbers: string[] }> {
-    console.log(`[BrickLinkArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`);
+    console.log(
+      `[BrickLinkArbitrageSyncService.syncPricingBatch] Starting batch - offset: ${options.offset}, limit: ${options.limit}`
+    );
     const startTime = Date.now();
 
     const client = await this.getClient(userId);
 
     // Get batch from watchlist (ordered by oldest sync time first)
     const watchlistService = new ArbitrageWatchlistService(this.supabase);
-    const watchlistBatch = await watchlistService.getWatchlistBatch(userId, 'bricklink', options.offset, options.limit);
+    const watchlistBatch = await watchlistService.getWatchlistBatch(
+      userId,
+      'bricklink',
+      options.offset,
+      options.limit
+    );
 
     if (watchlistBatch.length === 0) {
-      console.log('[BrickLinkArbitrageSyncService.syncPricingBatch] No items to process in this batch');
+      console.log(
+        '[BrickLinkArbitrageSyncService.syncPricingBatch] No items to process in this batch'
+      );
       return { processed: 0, failed: 0, updated: 0, setNumbers: [] };
     }
 
     const setNumbers = watchlistBatch.map((item) => item.bricklinkSetNumber);
-    console.log(`[BrickLinkArbitrageSyncService.syncPricingBatch] Processing ${setNumbers.length} set numbers`);
+    console.log(
+      `[BrickLinkArbitrageSyncService.syncPricingBatch] Processing ${setNumbers.length} set numbers`
+    );
 
     let updated = 0;
     let failed = 0;
@@ -279,25 +322,33 @@ export class BrickLinkArbitrageSyncService {
         // Store UK-only pricing snapshot with global price_detail for breakdown
         const { error: insertError } = await this.supabase
           .from('bricklink_arbitrage_pricing')
-          .upsert({
-            user_id: userId,
-            bricklink_set_number: setNumber,
-            snapshot_date: today,
-            condition: 'N',
-            country_code: 'UK',
-            min_price: ukPriceGuide.min_price ? parseFloat(ukPriceGuide.min_price) : null,
-            avg_price: ukPriceGuide.avg_price ? parseFloat(ukPriceGuide.avg_price) : null,
-            max_price: ukPriceGuide.max_price ? parseFloat(ukPriceGuide.max_price) : null,
-            qty_avg_price: ukPriceGuide.qty_avg_price ? parseFloat(ukPriceGuide.qty_avg_price) : null,
-            total_lots: ukPriceGuide.unit_quantity,
-            total_qty: ukPriceGuide.total_quantity,
-            price_detail_json: priceDetails as unknown as Json,
-          }, {
-            onConflict: 'user_id,bricklink_set_number,snapshot_date,condition,country_code',
-          });
+          .upsert(
+            {
+              user_id: userId,
+              bricklink_set_number: setNumber,
+              snapshot_date: today,
+              condition: 'N',
+              country_code: 'UK',
+              min_price: ukPriceGuide.min_price ? parseFloat(ukPriceGuide.min_price) : null,
+              avg_price: ukPriceGuide.avg_price ? parseFloat(ukPriceGuide.avg_price) : null,
+              max_price: ukPriceGuide.max_price ? parseFloat(ukPriceGuide.max_price) : null,
+              qty_avg_price: ukPriceGuide.qty_avg_price
+                ? parseFloat(ukPriceGuide.qty_avg_price)
+                : null,
+              total_lots: ukPriceGuide.unit_quantity,
+              total_qty: ukPriceGuide.total_quantity,
+              price_detail_json: priceDetails as unknown as Json,
+            },
+            {
+              onConflict: 'user_id,bricklink_set_number,snapshot_date,condition,country_code',
+            }
+          );
 
         if (insertError) {
-          console.error(`[BrickLinkArbitrageSyncService.syncPricingBatch] Error storing pricing for ${setNumber}:`, insertError);
+          console.error(
+            `[BrickLinkArbitrageSyncService.syncPricingBatch] Error storing pricing for ${setNumber}:`,
+            insertError
+          );
           failed++;
         } else {
           updated++;
@@ -305,14 +356,21 @@ export class BrickLinkArbitrageSyncService {
         }
       } catch (err) {
         if (err instanceof RateLimitError) {
-          console.error('[BrickLinkArbitrageSyncService.syncPricingBatch] Rate limit exceeded, stopping batch');
+          console.error(
+            '[BrickLinkArbitrageSyncService.syncPricingBatch] Rate limit exceeded, stopping batch'
+          );
           throw err;
         }
 
         if (err instanceof BrickLinkApiError && err.code === 404) {
-          console.log(`[BrickLinkArbitrageSyncService.syncPricingBatch] Set ${setNumber} not found in BrickLink`);
+          console.log(
+            `[BrickLinkArbitrageSyncService.syncPricingBatch] Set ${setNumber} not found in BrickLink`
+          );
         } else {
-          console.error(`[BrickLinkArbitrageSyncService.syncPricingBatch] Error fetching pricing for ${setNumber}:`, err);
+          console.error(
+            `[BrickLinkArbitrageSyncService.syncPricingBatch] Error fetching pricing for ${setNumber}:`,
+            err
+          );
         }
         failed++;
       }
@@ -327,7 +385,9 @@ export class BrickLinkArbitrageSyncService {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[BrickLinkArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`);
+    console.log(
+      `[BrickLinkArbitrageSyncService.syncPricingBatch] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed`
+    );
 
     return { processed: setNumbers.length, failed, updated, setNumbers };
   }
@@ -337,10 +397,7 @@ export class BrickLinkArbitrageSyncService {
    * Uses UK country filter to get UK-only aggregate prices
    * Also fetches global price_detail for breakdown display (UI highlights UK sellers)
    */
-  async syncSingleSet(
-    userId: string,
-    setNumber: string
-  ): Promise<BrickLinkPriceGuide> {
+  async syncSingleSet(userId: string, setNumber: string): Promise<BrickLinkPriceGuide> {
     const client = await this.getClient(userId);
     const today = new Date().toISOString().split('T')[0];
 
@@ -363,9 +420,8 @@ export class BrickLinkArbitrageSyncService {
 
     // Store UK-only pricing snapshot with global price_detail for breakdown
     // Note: BrickLink uses "UK" not ISO standard "GB"
-    await this.supabase
-      .from('bricklink_arbitrage_pricing')
-      .upsert({
+    await this.supabase.from('bricklink_arbitrage_pricing').upsert(
+      {
         user_id: userId,
         bricklink_set_number: setNumber,
         snapshot_date: today,
@@ -378,9 +434,11 @@ export class BrickLinkArbitrageSyncService {
         total_lots: ukPriceGuide.unit_quantity,
         total_qty: ukPriceGuide.total_quantity,
         price_detail_json: priceDetails as unknown as Json, // Global price_detail for breakdown (UI highlights UK)
-      }, {
+      },
+      {
         onConflict: 'user_id,bricklink_set_number,snapshot_date,condition,country_code',
-      });
+      }
+    );
 
     return ukPriceGuide;
   }
@@ -468,9 +526,8 @@ export class BrickLinkArbitrageSyncService {
       errorMessage?: string;
     }
   ): Promise<void> {
-    await this.supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    await this.supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: userId,
         job_type: 'bricklink_pricing',
         status: data.status,
@@ -480,9 +537,11 @@ export class BrickLinkArbitrageSyncService {
         items_processed: data.itemsProcessed,
         items_failed: data.itemsFailed,
         error_message: data.errorMessage ?? null,
-      }, {
+      },
+      {
         onConflict: 'user_id,job_type',
-      });
+      }
+    );
   }
 
   /**

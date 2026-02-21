@@ -288,9 +288,7 @@ export async function analyzePhotosWithGemini(
   images: GeminiImageInput[],
   listingDescription?: string
 ): Promise<GeminiFullAnalysisResult> {
-  const imageCountText = images.length === 1
-    ? 'this photo'
-    : `these ${images.length} photos`;
+  const imageCountText = images.length === 1 ? 'this photo' : `these ${images.length} photos`;
 
   const descriptionContext = listingDescription
     ? `\n\nThe seller provided this description:\n"${listingDescription}"\n\nUse this to help identify items, but verify against what you see.`

@@ -19,10 +19,17 @@ export type {
   PurchaseProfitability,
   PurchaseItemProfitability,
 } from './purchase-profitability.service';
-export type { SyncResult as BrickLinkSyncResult, BrickLinkSyncOptions } from './bricklink-sync.service';
+export type {
+  SyncResult as BrickLinkSyncResult,
+  BrickLinkSyncOptions,
+} from './bricklink-sync.service';
 export type { BrickOwlSyncOptions } from './brickowl-sync.service';
 export type { BricqerSyncOptions } from './bricqer-sync.service';
-export type { ShippingInfo, StatusUpdateResult, BulkStatusUpdateResult } from './order-status.service';
+export type {
+  ShippingInfo,
+  StatusUpdateResult,
+  BulkStatusUpdateResult,
+} from './order-status.service';
 export type {
   DailyProfitSummary,
   MonthlyProfitSummary,

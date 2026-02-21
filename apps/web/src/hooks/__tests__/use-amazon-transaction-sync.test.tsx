@@ -71,9 +71,7 @@ function createWrapper() {
     },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
 }
 
@@ -133,26 +131,22 @@ describe('useAmazonTransactionSync', () => {
         json: () => Promise.resolve(createSyncStatusResponse()),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isLoadingStatus).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/integrations/amazon/transactions/sync'
-      );
+      expect(mockFetch).toHaveBeenCalledWith('/api/integrations/amazon/transactions/sync');
       expect(result.current.isConnected).toBe(true);
     });
 
     it('should not fetch when disabled', async () => {
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: false }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: false }), {
+        wrapper: createWrapper(),
+      });
 
       // Give time for any potential fetch
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -164,14 +158,12 @@ describe('useAmazonTransactionSync', () => {
     it('should return not connected when API returns not connected', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve(createSyncStatusResponse({ isConnected: false })),
+        json: () => Promise.resolve(createSyncStatusResponse({ isConnected: false })),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isLoadingStatus).toBe(false);
@@ -183,14 +175,12 @@ describe('useAmazonTransactionSync', () => {
     it('should return running status when sync is in progress', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve(createSyncStatusResponse({ isRunning: true })),
+        json: () => Promise.resolve(createSyncStatusResponse({ isRunning: true })),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isRunning).toBe(true);
@@ -203,10 +193,9 @@ describe('useAmazonTransactionSync', () => {
         status: 500,
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.statusError).toBeTruthy();
@@ -225,10 +214,9 @@ describe('useAmazonTransactionSync', () => {
         json: () => Promise.resolve(createSyncStatusResponse()),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isLoadingStatus).toBe(false);
@@ -254,10 +242,9 @@ describe('useAmazonTransactionSync', () => {
         json: () => Promise.resolve(createSyncStatusResponse()),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isLoadingStatus).toBe(false);
@@ -295,10 +282,9 @@ describe('useAmazonTransactionSync', () => {
           ),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.needsSync).toBe(true);
@@ -311,10 +297,9 @@ describe('useAmazonTransactionSync', () => {
         json: () => Promise.resolve(createSyncStatusResponse()),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.needsSync).toBe(false);
@@ -335,10 +320,9 @@ describe('useAmazonTransactionSync', () => {
           ),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.hasCompletedHistoricalImport).toBe(true);
@@ -357,15 +341,12 @@ describe('useAmazonTransactionSync', () => {
           ),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
-        expect(result.current.lastSyncTime).toBe(
-          new Date(completedAt).toISOString()
-        );
+        expect(result.current.lastSyncTime).toBe(new Date(completedAt).toISOString());
       });
     });
   });
@@ -381,10 +362,9 @@ describe('useAmazonTransactionSync', () => {
         json: () => Promise.resolve(createSyncStatusResponse()),
       });
 
-      const { result } = renderHook(
-        () => useAmazonTransactionSync({ enabled: true }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAmazonTransactionSync({ enabled: true }), {
+        wrapper: createWrapper(),
+      });
 
       await waitFor(() => {
         expect(result.current.isLoadingStatus).toBe(false);

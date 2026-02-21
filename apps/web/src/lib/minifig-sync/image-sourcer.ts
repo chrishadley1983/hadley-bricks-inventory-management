@@ -39,7 +39,7 @@ export class ImageSourcer {
   async sourceImages(
     name: string,
     bricklinkId: string,
-    bricqerImageUrl?: string | null,
+    bricqerImageUrl?: string | null
   ): Promise<SourcedImage[]> {
     const images: SourcedImage[] = [];
 
@@ -54,7 +54,7 @@ export class ImageSourcer {
       } catch (err) {
         console.warn(
           `[ImageSourcer] Google Images search failed for ${bricklinkId}:`,
-          err instanceof Error ? err.message : err,
+          err instanceof Error ? err.message : err
         );
       }
     }
@@ -78,7 +78,7 @@ export class ImageSourcer {
       } catch (err) {
         console.warn(
           `[ImageSourcer] Rebrickable lookup failed for ${bricklinkId}:`,
-          err instanceof Error ? err.message : err,
+          err instanceof Error ? err.message : err
         );
       }
     }
@@ -101,10 +101,7 @@ export class ImageSourcer {
    * Excludes eBay results via search query AND URL filtering.
    * Validates images meet minimum 800x800px.
    */
-  private async searchGoogleImages(
-    name: string,
-    bricklinkId: string,
-  ): Promise<SourcedImage[]> {
+  private async searchGoogleImages(name: string, bricklinkId: string): Promise<SourcedImage[]> {
     const { chromium } = await import('playwright');
 
     const query = `LEGO ${name} ${bricklinkId} minifigure -stock -render -official -site:ebay.com -site:ebay.co.uk`;
@@ -174,9 +171,7 @@ export class ImageSourcer {
    * Get catalogue image from Rebrickable API.
    * Queries GET /api/v3/lego/minifigs/{fig_num}/ and uses set_img_url.
    */
-  private async getRebrickableImage(
-    bricklinkId: string,
-  ): Promise<SourcedImage | null> {
+  private async getRebrickableImage(bricklinkId: string): Promise<SourcedImage | null> {
     const client = new RebrickableApiClient(this.rebrickableApiKey);
 
     // Rebrickable uses "fig-XXXXXX" format for minifig numbers

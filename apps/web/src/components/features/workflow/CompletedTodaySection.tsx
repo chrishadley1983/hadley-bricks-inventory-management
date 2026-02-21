@@ -83,11 +83,7 @@ export function CompletedTodaySection({ className }: CompletedTodaySectionProps)
             onClick={toggleCollapsed}
             aria-label={isCollapsed ? 'Expand completed tasks' : 'Collapse completed tasks'}
           >
-            {isCollapsed ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronUp className="h-4 w-4" />
-            )}
+            {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
           </Button>
         </div>
       </CardHeader>

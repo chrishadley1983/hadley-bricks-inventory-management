@@ -21,7 +21,9 @@ vi.mock('../ebay-api.adapter', () => {
     getAllTransactions = mockApiAdapter.getAllTransactions;
     getPayouts = mockApiAdapter.getPayouts;
     getAllPayouts = mockApiAdapter.getAllPayouts;
-    static buildTransactionDateFilter = vi.fn().mockReturnValue('2025-01-01T00:00:00Z..2025-01-31T23:59:59Z');
+    static buildTransactionDateFilter = vi
+      .fn()
+      .mockReturnValue('2025-01-01T00:00:00Z..2025-01-31T23:59:59Z');
   }
   return { EbayApiAdapter: MockEbayApiAdapter };
 });
@@ -48,7 +50,9 @@ describe('EbayFinancesService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new EbayFinancesService(mockAuthService as unknown as import('../ebay-auth.service').EbayAuthService);
+    service = new EbayFinancesService(
+      mockAuthService as unknown as import('../ebay-auth.service').EbayAuthService
+    );
   });
 
   describe('syncTransactions', () => {
@@ -156,8 +160,20 @@ describe('EbayFinancesService', () => {
   describe('getFinancialSummary', () => {
     it('should calculate financial summary correctly', async () => {
       const mockTransactions = [
-        { transaction_type: 'SALE', booking_entry: 'CREDIT', amount: '100', total_fee_amount: '10', currency: 'GBP' },
-        { transaction_type: 'SALE', booking_entry: 'CREDIT', amount: '200', total_fee_amount: '20', currency: 'GBP' },
+        {
+          transaction_type: 'SALE',
+          booking_entry: 'CREDIT',
+          amount: '100',
+          total_fee_amount: '10',
+          currency: 'GBP',
+        },
+        {
+          transaction_type: 'SALE',
+          booking_entry: 'CREDIT',
+          amount: '200',
+          total_fee_amount: '20',
+          currency: 'GBP',
+        },
         { transaction_type: 'REFUND', booking_entry: 'DEBIT', amount: '50', currency: 'GBP' },
       ];
 
@@ -177,7 +193,10 @@ describe('EbayFinancesService', () => {
           } else {
             resolve({ data: mockPayouts, error: null });
           }
-          return Promise.resolve({ data: table === 'ebay_transactions' ? mockTransactions : mockPayouts, error: null });
+          return Promise.resolve({
+            data: table === 'ebay_transactions' ? mockTransactions : mockPayouts,
+            error: null,
+          });
         }),
       }));
 
@@ -320,9 +339,7 @@ describe('EbayFinancesService', () => {
 
   describe('getPayouts', () => {
     it('should fetch payouts with pagination', async () => {
-      const mockPayouts = [
-        { id: 'payout-1', payout_status: 'SUCCEEDED' },
-      ];
+      const mockPayouts = [{ id: 'payout-1', payout_status: 'SUCCEEDED' }];
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -593,7 +610,10 @@ describe('EbayFinancesService', () => {
           } else {
             resolve({ data: mockPayouts, error: null });
           }
-          return Promise.resolve({ data: table === 'ebay_transactions' ? mockTransactions : mockPayouts, error: null });
+          return Promise.resolve({
+            data: table === 'ebay_transactions' ? mockTransactions : mockPayouts,
+            error: null,
+          });
         }),
       }));
 
@@ -642,7 +662,13 @@ describe('EbayFinancesService', () => {
     it('should handle transactions without fee amounts', async () => {
       const mockTransactions = [
         { transaction_type: 'SALE', booking_entry: 'CREDIT', amount: '100', currency: 'GBP' },
-        { transaction_type: 'SALE', booking_entry: 'CREDIT', amount: '200', total_fee_amount: null, currency: 'GBP' },
+        {
+          transaction_type: 'SALE',
+          booking_entry: 'CREDIT',
+          amount: '200',
+          total_fee_amount: null,
+          currency: 'GBP',
+        },
       ];
 
       mockSupabase.from.mockImplementation((table: string) => ({

@@ -7,11 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TableSkeleton, StatCardSkeleton } from '@/components/ui/skeletons';
-import {
-  useAmazonSyncQueue,
-  useSyncFeedHistory,
-  useSyncFeed,
-} from '@/hooks/use-amazon-sync';
+import { useAmazonSyncQueue, useSyncFeedHistory, useSyncFeed } from '@/hooks/use-amazon-sync';
 import { usePerfPage } from '@/hooks/use-perf';
 
 // Dynamic imports with loading skeletons
@@ -87,10 +83,7 @@ export default function AmazonSyncPage() {
   const [activeFeedId, setActiveFeedId] = useState<string | null>(null);
 
   // Fetch queue data
-  const {
-    data: queueData,
-    isLoading: isLoadingQueue,
-  } = useAmazonSyncQueue();
+  const { data: queueData, isLoading: isLoadingQueue } = useAmazonSyncQueue();
 
   // Fetch feed history
   const { data: feeds, isLoading: isLoadingFeeds } = useSyncFeedHistory(20);
@@ -119,38 +112,33 @@ export default function AmazonSyncPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               Amazon Sync
-              {queueCount > 0 && (
-                <Badge variant="secondary">{queueCount} queued</Badge>
-              )}
+              {queueCount > 0 && <Badge variant="secondary">{queueCount} queued</Badge>}
             </h1>
-            <p className="text-muted-foreground">
-              Push price and quantity updates to Amazon
-            </p>
+            <p className="text-muted-foreground">Push price and quantity updates to Amazon</p>
           </div>
         </div>
 
         {/* Active Feed Banner */}
-        {activeFeed &&
-          ['submitted', 'processing'].includes(activeFeed.status) && (
-            <Card className="border-blue-200 bg-blue-50/50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-blue-500/10 p-2">
-                      <CloudUpload className="h-5 w-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Feed in Progress</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activeFeed.total_items} items being processed
-                      </p>
-                    </div>
+        {activeFeed && ['submitted', 'processing'].includes(activeFeed.status) && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-blue-500/10 p-2">
+                    <CloudUpload className="h-5 w-5 text-blue-500" />
                   </div>
-                  <SyncFeedStatus feed={activeFeed} showPollButton />
+                  <div>
+                    <p className="font-medium">Feed in Progress</p>
+                    <p className="text-sm text-muted-foreground">
+                      {activeFeed.total_items} items being processed
+                    </p>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <SyncFeedStatus feed={activeFeed} showPollButton />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -198,15 +186,12 @@ export default function AmazonSyncPage() {
                   <CardHeader>
                     <CardTitle>Queue Items</CardTitle>
                     <CardDescription>
-                      Items waiting to be synced to Amazon. Multiple items with
-                      the same ASIN will be aggregated.
+                      Items waiting to be synced to Amazon. Multiple items with the same ASIN will
+                      be aggregated.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <SyncQueueTable
-                      items={queueData?.items ?? []}
-                      isLoading={isLoadingQueue}
-                    />
+                    <SyncQueueTable items={queueData?.items ?? []} isLoading={isLoadingQueue} />
                   </CardContent>
                 </Card>
               </>
@@ -224,15 +209,10 @@ export default function AmazonSyncPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Feed History</CardTitle>
-                <CardDescription>
-                  Recent feed submissions and their results
-                </CardDescription>
+                <CardDescription>Recent feed submissions and their results</CardDescription>
               </CardHeader>
               <CardContent>
-                <SyncFeedHistoryTable
-                  feeds={feeds ?? []}
-                  isLoading={isLoadingFeeds}
-                />
+                <SyncFeedHistoryTable feeds={feeds ?? []} isLoading={isLoadingFeeds} />
               </CardContent>
             </Card>
           </TabsContent>

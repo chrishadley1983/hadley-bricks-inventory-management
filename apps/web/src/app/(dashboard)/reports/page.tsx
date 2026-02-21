@@ -12,13 +12,7 @@ import {
   ArrowRight,
   CalendarDays,
 } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePerfPage } from '@/hooks/use-perf';
 
@@ -149,7 +143,9 @@ export default function ReportsPage() {
                               Coming Soon
                             </span>
                           </div>
-                          <CardTitle className="text-base text-muted-foreground">{report.name}</CardTitle>
+                          <CardTitle className="text-base text-muted-foreground">
+                            {report.name}
+                          </CardTitle>
                           <CardDescription>{report.description}</CardDescription>
                         </CardHeader>
                       </Card>
@@ -185,16 +181,15 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p>
-              <strong>Date Range:</strong> All reports support custom date ranges and preset
-              periods (this month, last quarter, etc.)
+              <strong>Date Range:</strong> All reports support custom date ranges and preset periods
+              (this month, last quarter, etc.)
             </p>
             <p>
-              <strong>Export:</strong> Reports can be exported to CSV or JSON for external
-              analysis
+              <strong>Export:</strong> Reports can be exported to CSV or JSON for external analysis
             </p>
             <p>
-              <strong>Mileage:</strong> Collection mileage is tracked at HMRC rate of 45p/mile
-              for tax deduction purposes
+              <strong>Mileage:</strong> Collection mileage is tracked at HMRC rate of 45p/mile for
+              tax deduction purposes
             </p>
           </CardContent>
         </Card>

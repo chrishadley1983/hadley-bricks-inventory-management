@@ -5,10 +5,13 @@ import { EbayAuthService } from '@/lib/ebay';
 
 const ConnectSchema = z.object({
   // Allow both full URLs and relative paths (starting with /)
-  returnUrl: z.string().refine(
-    (val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'),
-    { message: 'Must be a valid URL or relative path starting with /' }
-  ).optional(),
+  returnUrl: z
+    .string()
+    .refine(
+      (val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'),
+      { message: 'Must be a valid URL or relative path starting with /' }
+    )
+    .optional(),
   marketplaceId: z.enum(['EBAY_GB', 'EBAY_US', 'EBAY_DE', 'EBAY_AU']).optional(),
 });
 

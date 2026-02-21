@@ -95,7 +95,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({
       success: true,
       eventId,
-      message: pickup.google_calendar_event_id ? 'Calendar event updated' : 'Calendar event created',
+      message: pickup.google_calendar_event_id
+        ? 'Calendar event updated'
+        : 'Calendar event created',
     });
   } catch (error) {
     console.error('[POST /api/pickups/[id]/calendar] Error:', error);

@@ -310,8 +310,34 @@ describe('EvaluationConversionService', () => {
           description: null,
         },
         inventoryItems: [
-          { set_number: '75192', item_name: 'Millennium Falcon', condition: 'New', status: 'NOT YET RECEIVED', source: 'Car Boot Sale', cost: 50, listing_value: 100, listing_platform: '', storage_location: '', amazon_asin: '', sku: '', notes: '' },
-          { set_number: '76139', item_name: 'Batman Tumbler', condition: 'Used', status: 'NOT YET RECEIVED', source: 'Car Boot Sale', cost: 50, listing_value: 80, listing_platform: '', storage_location: '', amazon_asin: '', sku: '', notes: '' },
+          {
+            set_number: '75192',
+            item_name: 'Millennium Falcon',
+            condition: 'New',
+            status: 'NOT YET RECEIVED',
+            source: 'Car Boot Sale',
+            cost: 50,
+            listing_value: 100,
+            listing_platform: '',
+            storage_location: '',
+            amazon_asin: '',
+            sku: '',
+            notes: '',
+          },
+          {
+            set_number: '76139',
+            item_name: 'Batman Tumbler',
+            condition: 'Used',
+            status: 'NOT YET RECEIVED',
+            source: 'Car Boot Sale',
+            cost: 50,
+            listing_value: 80,
+            listing_platform: '',
+            storage_location: '',
+            amazon_asin: '',
+            sku: '',
+            notes: '',
+          },
         ],
       });
 
@@ -393,7 +419,20 @@ describe('EvaluationConversionService', () => {
           description: null,
         },
         inventoryItems: [
-          { set_number: '75192', item_name: 'Test Set', condition: 'New', status: 'NOT YET RECEIVED', source: '', cost: 100, listing_value: 200, listing_platform: '', storage_location: '', amazon_asin: '', sku: '', notes: '' },
+          {
+            set_number: '75192',
+            item_name: 'Test Set',
+            condition: 'New',
+            status: 'NOT YET RECEIVED',
+            source: '',
+            cost: 100,
+            listing_value: 200,
+            listing_platform: '',
+            storage_location: '',
+            amazon_asin: '',
+            sku: '',
+            notes: '',
+          },
         ],
       });
 
@@ -461,7 +500,20 @@ describe('EvaluationConversionService', () => {
           description: null,
         },
         inventoryItems: [
-          { set_number: '75192', item_name: 'Test Set', condition: 'New', status: 'NOT YET RECEIVED', source: '', cost: 100, listing_value: 200, listing_platform: '', storage_location: '', amazon_asin: '', sku: '', notes: '' },
+          {
+            set_number: '75192',
+            item_name: 'Test Set',
+            condition: 'New',
+            status: 'NOT YET RECEIVED',
+            source: '',
+            cost: 100,
+            listing_value: 200,
+            listing_platform: '',
+            storage_location: '',
+            amazon_asin: '',
+            sku: '',
+            notes: '',
+          },
         ],
       });
 
@@ -493,7 +545,8 @@ describe('EvaluationConversionService', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        single: vi.fn()
+        single: vi
+          .fn()
           .mockResolvedValueOnce({ data: null, error: { message: 'Update failed' } })
           .mockResolvedValueOnce({
             data: { id: 'eval-1', status: 'completed' },
@@ -528,7 +581,20 @@ describe('EvaluationConversionService', () => {
           description: null,
         },
         inventoryItems: [
-          { set_number: '75192', item_name: 'Test Set', condition: 'New', status: 'NOT YET RECEIVED', source: '', cost: 100, listing_value: 200, listing_platform: '', storage_location: '', amazon_asin: '', sku: '', notes: '' },
+          {
+            set_number: '75192',
+            item_name: 'Test Set',
+            condition: 'New',
+            status: 'NOT YET RECEIVED',
+            source: '',
+            cost: 100,
+            listing_value: 200,
+            listing_platform: '',
+            storage_location: '',
+            amazon_asin: '',
+            sku: '',
+            notes: '',
+          },
         ],
       });
 

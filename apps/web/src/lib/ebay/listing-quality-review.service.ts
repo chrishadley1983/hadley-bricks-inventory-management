@@ -64,7 +64,9 @@ export class ListingQualityReviewService {
     const log = (message: string, detail?: string) => {
       const elapsed = Date.now() - startTime;
       const timestamp = new Date().toISOString();
-      console.log(`[ListingQualityReviewService] [${timestamp}] [${elapsed}ms] ${message}${detail ? `: ${detail}` : ''}`);
+      console.log(
+        `[ListingQualityReviewService] [${timestamp}] [${elapsed}ms] ${message}${detail ? `: ${detail}` : ''}`
+      );
       if (onProgress) {
         onProgress(message, detail);
       }
@@ -133,7 +135,10 @@ export class ListingQualityReviewService {
       log('JSON parsed successfully');
 
       const totalTime = Date.now() - startTime;
-      log('Review complete', `Score: ${reviewResponse.score}/100 (${reviewResponse.grade}), Total time: ${totalTime}ms`);
+      log(
+        'Review complete',
+        `Score: ${reviewResponse.score}/100 (${reviewResponse.grade}), Total time: ${totalTime}ms`
+      );
 
       // Transform to QualityReviewResult
       return this.transformResponse(reviewResponse);
@@ -267,7 +272,9 @@ export class ListingQualityReviewService {
             seoOptimization: { score: 11, feedback: 'Review timed out - using default score' },
           },
           issues: [],
-          suggestions: ['Quality review timed out after 60 seconds. Listing published with default quality check.'],
+          suggestions: [
+            'Quality review timed out after 60 seconds. Listing published with default quality check.',
+          ],
           highlights: ['Listing met basic validation requirements.'],
           reviewedAt: new Date().toISOString(),
           reviewerModel: `${GEMINI_MODEL} (timeout)`,
@@ -281,7 +288,10 @@ export class ListingQualityReviewService {
         timeoutPromise,
       ]);
     } catch (error) {
-      console.error('[ListingQualityReviewService] Review failed, returning timeout result:', error);
+      console.error(
+        '[ListingQualityReviewService] Review failed, returning timeout result:',
+        error
+      );
       return timeoutPromise;
     }
   }
@@ -311,10 +321,7 @@ export class ListingQualityReviewService {
     }
 
     // Combine issues and suggestions for improvement prompt
-    const improvements = [
-      ...review.issues.map((i) => `CRITICAL: ${i}`),
-      ...review.suggestions,
-    ];
+    const improvements = [...review.issues.map((i) => `CRITICAL: ${i}`), ...review.suggestions];
 
     if (improvements.length === 0) {
       console.log('[ListingQualityReviewService] No suggestions to apply');
@@ -333,7 +340,9 @@ export class ListingQualityReviewService {
     if (boilerplateIndex !== -1) {
       boilerplate = listing.description.substring(boilerplateIndex);
       descriptionWithoutBoilerplate = listing.description.substring(0, boilerplateIndex).trim();
-      console.log(`[ListingQualityReviewService] Extracted boilerplate (${boilerplate.length} chars) before improvement`);
+      console.log(
+        `[ListingQualityReviewService] Extracted boilerplate (${boilerplate.length} chars) before improvement`
+      );
     }
 
     const systemPrompt = `You are an eBay listing improvement assistant. Your task is to apply specific feedback to improve a LEGO listing.
@@ -393,15 +402,11 @@ Only include fields that need changes. Omit fields that are already optimal.`;
         itemSpecifics?: Record<string, string>;
       }
 
-      const improved = await sendMessageForJSON<ImprovedListing>(
-        systemPrompt,
-        userPrompt,
-        {
-          model: 'claude-sonnet-4-20250514', // Use Sonnet for speed
-          maxTokens: 4096,
-          temperature: 0.3,
-        }
-      );
+      const improved = await sendMessageForJSON<ImprovedListing>(systemPrompt, userPrompt, {
+        model: 'claude-sonnet-4-20250514', // Use Sonnet for speed
+        maxTokens: 4096,
+        temperature: 0.3,
+      });
 
       // Get improved description, defaulting to the version without boilerplate
       let improvedDescription = improved.description || descriptionWithoutBoilerplate;
@@ -410,8 +415,12 @@ Only include fields that need changes. Omit fields that are already optimal.`;
       // (prevents duplication when we re-append)
       // Check for the marker first
       if (improvedDescription.includes(boilerplateMarker)) {
-        improvedDescription = improvedDescription.substring(0, improvedDescription.indexOf(boilerplateMarker)).trim();
-        console.log(`[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via marker)`);
+        improvedDescription = improvedDescription
+          .substring(0, improvedDescription.indexOf(boilerplateMarker))
+          .trim();
+        console.log(
+          `[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via marker)`
+        );
       }
       // Also check for common boilerplate text patterns (AI may copy without marker)
       const boilerplatePatterns = [
@@ -424,8 +433,12 @@ Only include fields that need changes. Omit fields that are already optimal.`;
       ];
       for (const pattern of boilerplatePatterns) {
         if (improvedDescription.includes(pattern)) {
-          improvedDescription = improvedDescription.substring(0, improvedDescription.indexOf(pattern)).trim();
-          console.log(`[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via pattern: "${pattern}")`);
+          improvedDescription = improvedDescription
+            .substring(0, improvedDescription.indexOf(pattern))
+            .trim();
+          console.log(
+            `[ListingQualityReviewService] Stripped duplicate boilerplate from AI response (via pattern: "${pattern}")`
+          );
           break;
         }
       }
@@ -437,7 +450,9 @@ Only include fields that need changes. Omit fields that are already optimal.`;
           improvedDescription += '\n';
         }
         improvedDescription += boilerplate;
-        console.log(`[ListingQualityReviewService] Re-appended boilerplate to improved description`);
+        console.log(
+          `[ListingQualityReviewService] Re-appended boilerplate to improved description`
+        );
       }
 
       // Merge improvements with original listing
@@ -446,9 +461,10 @@ Only include fields that need changes. Omit fields that are already optimal.`;
         title: improved.title && improved.title.length <= 80 ? improved.title : listing.title,
         subtitle: improved.subtitle !== undefined ? improved.subtitle : listing.subtitle,
         description: improvedDescription,
-        conditionDescription: improved.conditionDescription !== undefined
-          ? improved.conditionDescription
-          : listing.conditionDescription,
+        conditionDescription:
+          improved.conditionDescription !== undefined
+            ? improved.conditionDescription
+            : listing.conditionDescription,
         itemSpecifics: improved.itemSpecifics
           ? { ...listing.itemSpecifics, ...improved.itemSpecifics }
           : listing.itemSpecifics,

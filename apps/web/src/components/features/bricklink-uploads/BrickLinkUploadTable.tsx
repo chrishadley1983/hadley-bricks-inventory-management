@@ -56,9 +56,7 @@ export function BrickLinkUploadTable() {
       <div className="space-y-4">
         <BrickLinkUploadFilters filters={filters} onFiltersChange={handleFiltersChange} />
 
-        {data?.data && data.data.length > 0 && (
-          <BrickLinkUploadSummary uploads={data.data} />
-        )}
+        {data?.data && data.data.length > 0 && <BrickLinkUploadSummary uploads={data.data} />}
 
         <DataTable
           columns={columns}

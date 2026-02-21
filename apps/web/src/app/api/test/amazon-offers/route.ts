@@ -264,17 +264,13 @@ export async function GET(request: NextRequest) {
       minPrice:
         offers.length > 0
           ? Math.min(
-              ...offers.map(
-                (o) => (o.listingPrice?.amount ?? 0) + (o.shippingPrice?.amount ?? 0)
-              )
+              ...offers.map((o) => (o.listingPrice?.amount ?? 0) + (o.shippingPrice?.amount ?? 0))
             )
           : null,
       maxPrice:
         offers.length > 0
           ? Math.max(
-              ...offers.map(
-                (o) => (o.listingPrice?.amount ?? 0) + (o.shippingPrice?.amount ?? 0)
-              )
+              ...offers.map((o) => (o.listingPrice?.amount ?? 0) + (o.shippingPrice?.amount ?? 0))
             )
           : null,
       avgPrice:

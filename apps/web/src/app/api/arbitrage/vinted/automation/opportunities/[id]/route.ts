@@ -12,10 +12,7 @@ const UpdateSchema = z.object({
   status: z.enum(['active', 'purchased', 'expired', 'dismissed']),
 });
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 

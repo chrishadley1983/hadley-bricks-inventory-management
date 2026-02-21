@@ -96,7 +96,13 @@ function ItemTypeIcon({ type }: { type: PhotoItemType }) {
   return <>{icons[type]}</>;
 }
 
-function ConfidenceIndicator({ confidence, modelsAgree }: { confidence: number; modelsAgree: boolean }) {
+function ConfidenceIndicator({
+  confidence,
+  modelsAgree,
+}: {
+  confidence: number;
+  modelsAgree: boolean;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className={cn('font-medium', getConfidenceColor(confidence))}>
@@ -372,7 +378,10 @@ function AddItemDialog({ open, onClose, onAdd }: AddItemDialogProps) {
 
           <div className="space-y-2">
             <Label>Condition</Label>
-            <Select value={condition} onValueChange={(v: string) => setCondition(v as 'New' | 'Used')}>
+            <Select
+              value={condition}
+              onValueChange={(v: string) => setCondition(v as 'New' | 'Used')}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -486,9 +495,7 @@ export function PhotoAnalysisStep({
                 Confidence: {formatConfidence(result.analysisConfidence)}
               </Badge>
             )}
-            {reviewCount > 0 && (
-              <Badge variant="destructive">{reviewCount} need review</Badge>
-            )}
+            {reviewCount > 0 && <Badge variant="destructive">{reviewCount} need review</Badge>}
             {result?.wasChunked && (
               <Badge variant="secondary">
                 Smart chunking: {result.chunkCount} regions analyzed
@@ -527,9 +534,7 @@ export function PhotoAnalysisStep({
               {items.map((item) => (
                 <React.Fragment key={item.id}>
                   <TableRow
-                    className={cn(
-                      item.needsReview && 'bg-yellow-50 dark:bg-yellow-950/20'
-                    )}
+                    className={cn(item.needsReview && 'bg-yellow-50 dark:bg-yellow-950/20')}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -562,9 +567,7 @@ export function PhotoAnalysisStep({
                           </Badge>
                         )}
                         {item.sealStatus !== 'Unknown' && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {item.sealStatus}
-                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">{item.sealStatus}</p>
                         )}
                       </div>
                     </TableCell>
@@ -576,29 +579,17 @@ export function PhotoAnalysisStep({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => toggleExpanded(item.id)}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => toggleExpanded(item.id)}>
                           {expandedItems.has(item.id) ? (
                             <ChevronUp className="h-4 w-4" />
                           ) : (
                             <ChevronDown className="h-4 w-4" />
                           )}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setEditingItem(item)}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onRemoveItem(item.id)}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => onRemoveItem(item.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -665,28 +656,43 @@ export function PhotoAnalysisStep({
                                     key={i}
                                     className={cn(
                                       'border rounded-lg p-3 space-y-2',
-                                      m.model === 'opus' && 'border-purple-300 bg-purple-50/50 dark:bg-purple-950/20',
-                                      m.model === 'gemini' && 'border-blue-300 bg-blue-50/50 dark:bg-blue-950/20',
-                                      m.model === 'brickognize' && 'border-orange-300 bg-orange-50/50 dark:bg-orange-950/20'
+                                      m.model === 'opus' &&
+                                        'border-purple-300 bg-purple-50/50 dark:bg-purple-950/20',
+                                      m.model === 'gemini' &&
+                                        'border-blue-300 bg-blue-50/50 dark:bg-blue-950/20',
+                                      m.model === 'brickognize' &&
+                                        'border-orange-300 bg-orange-50/50 dark:bg-orange-950/20'
                                     )}
                                   >
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-2">
-                                        <span className={cn(
-                                          'font-semibold text-sm',
-                                          m.model === 'opus' && 'text-purple-700 dark:text-purple-300',
-                                          m.model === 'gemini' && 'text-blue-700 dark:text-blue-300',
-                                          m.model === 'brickognize' && 'text-orange-700 dark:text-orange-300'
-                                        )}>
+                                        <span
+                                          className={cn(
+                                            'font-semibold text-sm',
+                                            m.model === 'opus' &&
+                                              'text-purple-700 dark:text-purple-300',
+                                            m.model === 'gemini' &&
+                                              'text-blue-700 dark:text-blue-300',
+                                            m.model === 'brickognize' &&
+                                              'text-orange-700 dark:text-orange-300'
+                                          )}
+                                        >
                                           {m.model === 'opus' && '🤖 Claude Opus'}
                                           {m.model === 'gemini' && '✨ Google Gemini'}
                                           {m.model === 'brickognize' && '🧱 Brickognize'}
                                         </span>
                                         {i === 0 && (
-                                          <Badge variant="secondary" className="text-xs">Primary</Badge>
+                                          <Badge variant="secondary" className="text-xs">
+                                            Primary
+                                          </Badge>
                                         )}
                                       </div>
-                                      <span className={cn('font-bold', getConfidenceColor(m.confidence))}>
+                                      <span
+                                        className={cn(
+                                          'font-bold',
+                                          getConfidenceColor(m.confidence)
+                                        )}
+                                      >
                                         {formatConfidence(m.confidence)}
                                       </span>
                                     </div>

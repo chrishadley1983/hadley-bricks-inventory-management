@@ -28,7 +28,9 @@ const EditedListingSchema = z.object({
   description: z.string(),
   conditionId: z.number(),
   conditionDescription: z.string().nullable(),
-  itemSpecifics: z.record(z.string(), z.string().optional()).transform((val) => val as Record<string, string | undefined>),
+  itemSpecifics: z
+    .record(z.string(), z.string().optional())
+    .transform((val) => val as Record<string, string | undefined>),
   categoryId: z.string(),
   sku: z.string(),
   price: z.number(),
@@ -127,11 +129,7 @@ export async function POST(request: NextRequest) {
             itemSpecifics: editedListing.itemSpecifics as AIGeneratedListing['itemSpecifics'],
           };
 
-          const result = await service.continueFromPreview(
-            sessionId,
-            aiListing,
-            onProgress
-          );
+          const result = await service.continueFromPreview(sessionId, aiListing, onProgress);
 
           if (result.success) {
             sendEvent('complete', result);

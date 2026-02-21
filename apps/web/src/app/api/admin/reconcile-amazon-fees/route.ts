@@ -79,7 +79,9 @@ export async function POST(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const reconcileAll = searchParams.get('reconcileAll') === 'true';
 
-    console.log(`[POST /api/admin/reconcile-amazon-fees] Starting reconciliation for user ${user.id}, reconcileAll=${reconcileAll}`);
+    console.log(
+      `[POST /api/admin/reconcile-amazon-fees] Starting reconciliation for user ${user.id}, reconcileAll=${reconcileAll}`
+    );
 
     const reconciliationService = new AmazonFeeReconciliationService(supabase);
     const result = await reconciliationService.reconcileFees(user.id, reconcileAll);

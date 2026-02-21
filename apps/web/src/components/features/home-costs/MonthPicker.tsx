@@ -64,7 +64,9 @@ export function MonthPicker({
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger>
-        <SelectValue placeholder="Select month">{value ? displayValue : 'Select month'}</SelectValue>
+        <SelectValue placeholder="Select month">
+          {value ? displayValue : 'Select month'}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent className="max-h-[300px]">
         {options.map((option) => (

@@ -49,9 +49,7 @@ async function fetchConfig(): Promise<NegotiationConfig> {
   return json.data;
 }
 
-async function updateConfig(
-  updates: Partial<NegotiationConfig>
-): Promise<NegotiationConfig> {
+async function updateConfig(updates: Partial<NegotiationConfig>): Promise<NegotiationConfig> {
   const response = await fetch('/api/negotiation/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -300,8 +298,10 @@ export function useUpdateDiscountRule() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ...rule }: { id: string } & Omit<NegotiationDiscountRule, 'id' | 'userId'>) =>
-      updateRule(id, rule),
+    mutationFn: ({
+      id,
+      ...rule
+    }: { id: string } & Omit<NegotiationDiscountRule, 'id' | 'userId'>) => updateRule(id, rule),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: negotiationKeys.rules() });
     },

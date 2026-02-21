@@ -86,8 +86,7 @@ export class AmazonClient {
     this.credentials = credentials;
     // Determine endpoint based on first marketplace
     const firstMarketplace = credentials.marketplaceIds[0];
-    this.endpoint =
-      MARKETPLACE_INFO[firstMarketplace]?.endpoint || EU_ENDPOINT;
+    this.endpoint = MARKETPLACE_INFO[firstMarketplace]?.endpoint || EU_ENDPOINT;
   }
 
   /**
@@ -189,10 +188,7 @@ export class AmazonClient {
 
         // For rate limit, wait for reset time
         if (error instanceof AmazonRateLimitError) {
-          const waitTime = Math.max(
-            0,
-            error.rateLimitInfo.resetTime.getTime() - Date.now()
-          );
+          const waitTime = Math.max(0, error.rateLimitInfo.resetTime.getTime() - Date.now());
           console.log(`[AmazonClient] Rate limited, waiting ${waitTime}ms...`);
           await this.sleep(waitTime + 1000); // Add 1s buffer
           continue;
@@ -491,9 +487,7 @@ export class AmazonClient {
    * Get a single order by ID
    */
   async getOrder(orderId: string): Promise<AmazonOrder> {
-    const response = await this.request<AmazonOrderResponse>(
-      `/orders/v0/orders/${orderId}`
-    );
+    const response = await this.request<AmazonOrderResponse>(`/orders/v0/orders/${orderId}`);
     return response.payload;
   }
 
@@ -532,10 +526,7 @@ export class AmazonClient {
   async getOrderWithItems(
     orderId: string
   ): Promise<{ order: AmazonOrder; items: AmazonOrderItem[] }> {
-    const [order, items] = await Promise.all([
-      this.getOrder(orderId),
-      this.getOrderItems(orderId),
-    ]);
+    const [order, items] = await Promise.all([this.getOrder(orderId), this.getOrderItems(orderId)]);
     return { order, items };
   }
 

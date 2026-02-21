@@ -53,7 +53,9 @@ export async function GET(request: NextRequest) {
       `
       )
       .eq('user_id', user.id)
-      .or(`short_description.ilike.${searchTerm},reference.ilike.${searchTerm},source.ilike.${searchTerm}`)
+      .or(
+        `short_description.ilike.${searchTerm},reference.ilike.${searchTerm},source.ilike.${searchTerm}`
+      )
       .order('purchase_date', { ascending: false })
       .limit(limit);
 
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
       source: purchase.source,
       reference: purchase.reference,
       items_linked: Array.isArray(purchase.inventory_items)
-        ? purchase.inventory_items[0]?.count ?? 0
+        ? (purchase.inventory_items[0]?.count ?? 0)
         : 0,
     }));
 

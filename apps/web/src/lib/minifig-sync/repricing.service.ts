@@ -30,7 +30,7 @@ export class RepricingService {
 
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string,
+    private userId: string
   ) {
     this.configService = new MinifigConfigService(supabase);
     this.researchService = new ResearchService(supabase, userId);
@@ -83,7 +83,14 @@ export class RepricingService {
           itemsUpdated: 0,
           itemsErrored: 0,
         });
-        return { jobId, itemsChecked: 0, itemsRepriced: 0, itemsSkipped: 0, itemsErrored: 0, errors };
+        return {
+          jobId,
+          itemsChecked: 0,
+          itemsRepriced: 0,
+          itemsSkipped: 0,
+          itemsErrored: 0,
+          errors,
+        };
       }
 
       // Get eBay adapter for price updates
@@ -106,7 +113,9 @@ export class RepricingService {
           // Re-fetch the item with updated pricing
           const { data: updatedItem } = await this.supabase
             .from('minifig_sync_items')
-            .select('recommended_price, best_offer_auto_accept, best_offer_auto_decline, ebay_offer_id')
+            .select(
+              'recommended_price, best_offer_auto_accept, best_offer_auto_decline, ebay_offer_id'
+            )
             .eq('id', item.id)
             .eq('user_id', this.userId)
             .single();
@@ -132,11 +141,17 @@ export class RepricingService {
                 bestOffer: {
                   bestOfferEnabled: true,
                   autoAcceptPrice: {
-                    value: (Number(updatedItem.best_offer_auto_accept) || Math.round(newPrice * 0.95 * 100) / 100).toFixed(2),
+                    value: (
+                      Number(updatedItem.best_offer_auto_accept) ||
+                      Math.round(newPrice * 0.95 * 100) / 100
+                    ).toFixed(2),
                     currency: 'GBP',
                   },
                   autoDeclinePrice: {
-                    value: (Number(updatedItem.best_offer_auto_decline) || Math.round(newPrice * 0.75 * 100) / 100).toFixed(2),
+                    value: (
+                      Number(updatedItem.best_offer_auto_decline) ||
+                      Math.round(newPrice * 0.75 * 100) / 100
+                    ).toFixed(2),
                     currency: 'GBP',
                   },
                 },

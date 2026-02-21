@@ -25,13 +25,15 @@ export default function EditEvaluationPage() {
   const { data: evaluation, isLoading, error, refetch } = useEvaluation(id);
 
   // Handle updating items
-  const handleUpdateItems = async (updates: Array<{
-    id: string;
-    allocatedCost?: number | null;
-    amazonAsin?: string;
-    targetPlatform?: 'amazon' | 'ebay';
-    userSellPriceOverride?: number | null;
-  }>) => {
+  const handleUpdateItems = async (
+    updates: Array<{
+      id: string;
+      allocatedCost?: number | null;
+      amazonAsin?: string;
+      targetPlatform?: 'amazon' | 'ebay';
+      userSellPriceOverride?: number | null;
+    }>
+  ) => {
     try {
       const response = await fetch(`/api/purchase-evaluator/${id}/items`, {
         method: 'PATCH',

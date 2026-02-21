@@ -2,12 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,9 +89,32 @@ function formatCurrency(value: number | string | null | undefined): string {
 function sanitizeHtml(html: string): string {
   // Allowlist-based sanitizer: only permit safe tags and attributes (M11)
   const ALLOWED_TAGS = new Set([
-    'p', 'br', 'b', 'i', 'u', 'em', 'strong', 'span', 'div',
-    'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'a', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr',
+    'p',
+    'br',
+    'b',
+    'i',
+    'u',
+    'em',
+    'strong',
+    'span',
+    'div',
+    'ul',
+    'ol',
+    'li',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'td',
+    'th',
+    'hr',
   ]);
   const ALLOWED_ATTRS = new Set(['href', 'class']);
 
@@ -151,19 +169,27 @@ function sanitizeHtml(html: string): string {
 
 function getSourceLabel(source: string): string {
   switch (source) {
-    case 'google': return 'Google';
-    case 'rebrickable': return 'Rebrickable';
-    case 'bricklink': return 'BrickLink';
-    case 'bricqer': return 'Bricqer';
-    default: return source;
+    case 'google':
+      return 'Google';
+    case 'rebrickable':
+      return 'Rebrickable';
+    case 'bricklink':
+      return 'BrickLink';
+    case 'bricqer':
+      return 'Bricqer';
+    default:
+      return source;
   }
 }
 
 function getSourceBadgeVariant(source: string): 'default' | 'secondary' | 'outline' {
   switch (source) {
-    case 'google': return 'default';
-    case 'rebrickable': return 'secondary';
-    default: return 'outline';
+    case 'google':
+      return 'default';
+    case 'rebrickable':
+      return 'secondary';
+    default:
+      return 'outline';
   }
 }
 
@@ -210,7 +236,8 @@ export function ReviewCard({
     setIsEditingPrice(false);
   };
 
-  const displayTitle = item.ebay_title || `LEGO ${item.name || item.bricklink_id} Minifigure - Used`;
+  const displayTitle =
+    item.ebay_title || `LEGO ${item.name || item.bricklink_id} Minifigure - Used`;
   const displayDesc = item.ebay_description || '';
 
   return (
@@ -230,17 +257,30 @@ export function ReviewCard({
                   className="h-8 text-sm font-semibold"
                   autoFocus
                 />
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleSaveTitle}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={handleSaveTitle}
+                >
                   <Check className="h-3.5 w-3.5 text-green-600" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setIsEditingTitle(false)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={() => setIsEditingTitle(false)}
+                >
                   <X className="h-3.5 w-3.5 text-red-600" />
                 </Button>
               </div>
             ) : (
               <div
                 className="group flex items-center gap-1 cursor-pointer"
-                onClick={() => { setEditTitle(displayTitle); setIsEditingTitle(true); }}
+                onClick={() => {
+                  setEditTitle(displayTitle);
+                  setIsEditingTitle(true);
+                }}
               >
                 <h3 className="text-sm font-semibold leading-tight truncate">{displayTitle}</h3>
                 <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 shrink-0" />
@@ -304,7 +344,10 @@ export function ReviewCard({
                 variant="ghost"
                 size="sm"
                 className="h-5 px-1 text-xs"
-                onClick={() => { setEditDesc(displayDesc); setIsEditingDesc(true); }}
+                onClick={() => {
+                  setEditDesc(displayDesc);
+                  setIsEditingDesc(true);
+                }}
               >
                 <Pencil className="h-3 w-3 mr-1" /> Edit
               </Button>
@@ -322,7 +365,12 @@ export function ReviewCard({
                 <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleSaveDesc}>
                   <Check className="h-3 w-3 mr-1" /> Save
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setIsEditingDesc(false)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-xs"
+                  onClick={() => setIsEditingDesc(false)}
+                >
                   Cancel
                 </Button>
               </div>
@@ -341,9 +389,13 @@ export function ReviewCard({
                   onClick={() => setShowFullDesc(!showFullDesc)}
                 >
                   {showFullDesc ? (
-                    <><ChevronUp className="h-3 w-3 mr-0.5" /> Less</>
+                    <>
+                      <ChevronUp className="h-3 w-3 mr-0.5" /> Less
+                    </>
                   ) : (
-                    <><ChevronDown className="h-3 w-3 mr-0.5" /> More</>
+                    <>
+                      <ChevronDown className="h-3 w-3 mr-0.5" /> More
+                    </>
                   )}
                 </Button>
               )}
@@ -413,7 +465,8 @@ export function ReviewCard({
             <div className="text-center">
               <p className="text-[10px] text-muted-foreground">Price Range</p>
               <p className="text-xs">
-                {formatCurrency(item.ebay_min_sold_price)} - {formatCurrency(item.ebay_max_sold_price)}
+                {formatCurrency(item.ebay_min_sold_price)} -{' '}
+                {formatCurrency(item.ebay_max_sold_price)}
               </p>
             </div>
           </div>
@@ -484,14 +537,13 @@ export function ReviewCard({
             <AlertDialogHeader>
               <AlertDialogTitle>Reject this listing?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete the eBay inventory item and offer for &quot;{item.name}&quot; and reset it to NOT_LISTED.
+                This will delete the eBay inventory item and offer for &quot;{item.name}&quot; and
+                reset it to NOT_LISTED.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => onReject(item.id)}>
-                Reject
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => onReject(item.id)}>Reject</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

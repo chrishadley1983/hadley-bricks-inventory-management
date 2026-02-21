@@ -15,12 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   useSubmitSyncFeed,
   useClearSyncQueue,
@@ -164,11 +159,12 @@ export function SyncSubmitControls({
                 {stepInfo?.label || 'Starting...'}
               </p>
               <Progress value={stepInfo?.progress || 5} className="h-2" />
-              {twoPhaseResult?.verificationProgress && twoPhaseResult.verificationProgress.pendingSkus.length > 0 && (
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  Pending: {twoPhaseResult.verificationProgress.pendingSkus.join(', ')}
-                </p>
-              )}
+              {twoPhaseResult?.verificationProgress &&
+                twoPhaseResult.verificationProgress.pendingSkus.length > 0 && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Pending: {twoPhaseResult.verificationProgress.pendingSkus.join(', ')}
+                  </p>
+                )}
               <p className="text-xs text-blue-600 dark:text-blue-400">
                 You can safely navigate away - you&apos;ll receive a notification when complete.
               </p>
@@ -231,9 +227,10 @@ export function SyncSubmitControls({
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p>
-                      Submits price update first, waits until it&apos;s live on Amazon (up to 2 hours),
-                      then submits quantity. Prevents selling at old price when updating both.
-                      You can safely navigate away - you&apos;ll receive a notification when complete.
+                      Submits price update first, waits until it&apos;s live on Amazon (up to 2
+                      hours), then submits quantity. Prevents selling at old price when updating
+                      both. You can safely navigate away - you&apos;ll receive a notification when
+                      complete.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -260,20 +257,12 @@ export function SyncSubmitControls({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowClearConfirm(true)}
-            disabled={isDisabled}
-          >
+          <Button variant="outline" onClick={() => setShowClearConfirm(true)} disabled={isDisabled}>
             <Trash2 className="mr-2 h-4 w-4" />
             Clear Queue
           </Button>
 
-          <Button
-            onClick={handleSubmit}
-            disabled={isDisabled}
-            className="min-w-[140px]"
-          >
+          <Button onClick={handleSubmit} disabled={isDisabled} className="min-w-[140px]">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

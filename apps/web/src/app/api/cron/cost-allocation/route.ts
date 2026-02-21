@@ -55,9 +55,10 @@ export async function POST(request: NextRequest) {
 
     // Send Discord summary to #sync-status
     await discordService.send('sync-status', {
-      title: summary.totalChanges > 0
-        ? `💰 Cost Allocation: ${summary.totalChanges} items updated`
-        : '💰 Cost Allocation: No changes',
+      title:
+        summary.totalChanges > 0
+          ? `💰 Cost Allocation: ${summary.totalChanges} items updated`
+          : '💰 Cost Allocation: No changes',
       description:
         `Purchases: ${summary.purchasesProcessed} processed, ${summary.purchasesSkipped} skipped\n` +
         `Changes: ${summary.totalChanges} items across ${summary.purchasesWithChanges} purchases\n` +

@@ -60,14 +60,7 @@ const SOURCE_OPTIONS = [
   'Other',
 ];
 
-const PAYMENT_OPTIONS = [
-  'Cash',
-  'Card',
-  'PayPal',
-  'Bank Transfer',
-  'HSBC - Cash',
-  'Monzo - Card',
-];
+const PAYMENT_OPTIONS = ['Cash', 'Card', 'PayPal', 'Bank Transfer', 'HSBC - Cash', 'Monzo - Card'];
 
 const initialFieldState = <T = string | null,>(defaultValue: T = null as T): BulkEditField<T> => ({
   enabled: false,
@@ -104,10 +97,7 @@ export function PurchaseBulkEditDialog({
     }));
   };
 
-  const handleFieldChange = (
-    field: keyof BulkEditFormState,
-    value: string | number | null
-  ) => {
+  const handleFieldChange = (field: keyof BulkEditFormState, value: string | number | null) => {
     setFormState((prev) => ({
       ...prev,
       [field]: { ...prev[field], value },
@@ -187,9 +177,7 @@ export function PurchaseBulkEditDialog({
               <Input
                 placeholder="Enter description"
                 value={formState.short_description.value || ''}
-                onChange={(e) =>
-                  handleFieldChange('short_description', e.target.value || null)
-                }
+                onChange={(e) => handleFieldChange('short_description', e.target.value || null)}
               />
             )}
           </div>
@@ -221,10 +209,7 @@ export function PurchaseBulkEditDialog({
                   className="pl-7"
                   value={formState.cost.value ?? ''}
                   onChange={(e) =>
-                    handleFieldChange(
-                      'cost',
-                      e.target.value ? parseFloat(e.target.value) : null
-                    )
+                    handleFieldChange('cost', e.target.value ? parseFloat(e.target.value) : null)
                   }
                 />
               </div>

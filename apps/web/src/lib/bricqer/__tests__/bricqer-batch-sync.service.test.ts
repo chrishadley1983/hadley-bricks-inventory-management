@@ -316,9 +316,44 @@ describe('BricqerBatchSyncService', () => {
 
       // Mock getBatches to return mixed activated/deactivated batches with all required fields
       mockGetBatchesDefault.mockResolvedValueOnce([
-        { id: 1, activated: true, totalQuantity: 10, lots: 5, totalPrice: '100.00', purchase: null, activationDate: '2025-01-01T00:00:00Z', created: '2025-01-01T00:00:00Z', remainingQuantity: 10, remainingPrice: '100.00', condition: 'new' },
-        { id: 2, activated: false, totalQuantity: 20, lots: 8, totalPrice: '200.00', purchase: null, created: '2025-01-02T00:00:00Z', remainingQuantity: 20, remainingPrice: '200.00', condition: 'new' },
-        { id: 3, activated: true, totalQuantity: 15, lots: 3, totalPrice: '150.00', purchase: null, activationDate: '2025-01-03T00:00:00Z', created: '2025-01-03T00:00:00Z', remainingQuantity: 15, remainingPrice: '150.00', condition: 'new' },
+        {
+          id: 1,
+          activated: true,
+          totalQuantity: 10,
+          lots: 5,
+          totalPrice: '100.00',
+          purchase: null,
+          activationDate: '2025-01-01T00:00:00Z',
+          created: '2025-01-01T00:00:00Z',
+          remainingQuantity: 10,
+          remainingPrice: '100.00',
+          condition: 'new',
+        },
+        {
+          id: 2,
+          activated: false,
+          totalQuantity: 20,
+          lots: 8,
+          totalPrice: '200.00',
+          purchase: null,
+          created: '2025-01-02T00:00:00Z',
+          remainingQuantity: 20,
+          remainingPrice: '200.00',
+          condition: 'new',
+        },
+        {
+          id: 3,
+          activated: true,
+          totalQuantity: 15,
+          lots: 3,
+          totalPrice: '150.00',
+          purchase: null,
+          activationDate: '2025-01-03T00:00:00Z',
+          created: '2025-01-03T00:00:00Z',
+          remainingQuantity: 15,
+          remainingPrice: '150.00',
+          condition: 'new',
+        },
       ]);
       mockGetPurchasesDefault.mockResolvedValueOnce([]);
 

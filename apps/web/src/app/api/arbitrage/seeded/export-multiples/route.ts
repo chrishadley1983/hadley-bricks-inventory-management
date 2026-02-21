@@ -52,7 +52,8 @@ export async function GET(_request: NextRequest) {
     // Fetch all seeded ASINs with 'multiple' status
     const { data: multiples, error: fetchError } = await serviceClient
       .from('seeded_asins')
-      .select(`
+      .select(
+        `
         id,
         asin,
         alternative_asins,
@@ -64,23 +65,18 @@ export async function GET(_request: NextRequest) {
           theme,
           year_from
         )
-      `)
+      `
+      )
       .eq('discovery_status', 'multiple')
       .order('created_at', { ascending: false });
 
     if (fetchError) {
       console.error('[GET /api/arbitrage/seeded/export-multiples] Fetch error:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch multiple matches' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch multiple matches' }, { status: 500 });
     }
 
     if (!multiples || multiples.length === 0) {
-      return NextResponse.json(
-        { error: 'No multiple matches found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'No multiple matches found' }, { status: 404 });
     }
 
     // Collect all unique ASINs to look up sales ranks
@@ -133,34 +129,38 @@ export async function GET(_request: NextRequest) {
       // Primary ASIN (if exists)
       if (row.asin) {
         const salesRank = salesRankMap.get(row.asin) ?? '';
-        csvRows.push([
-          setNumber,
-          setName,
-          theme,
-          year,
-          row.asin,
-          escapeCsvField(row.amazon_title ?? ''),
-          row.match_confidence?.toString() ?? '',
-          salesRank.toString(),
-          'Yes',
-        ].join(','));
+        csvRows.push(
+          [
+            setNumber,
+            setName,
+            theme,
+            year,
+            row.asin,
+            escapeCsvField(row.amazon_title ?? ''),
+            row.match_confidence?.toString() ?? '',
+            salesRank.toString(),
+            'Yes',
+          ].join(',')
+        );
       }
 
       // Alternative ASINs
       if (row.alternative_asins) {
         for (const alt of row.alternative_asins) {
           const salesRank = salesRankMap.get(alt.asin) ?? '';
-          csvRows.push([
-            setNumber,
-            setName,
-            theme,
-            year,
-            alt.asin,
-            escapeCsvField(alt.title ?? ''),
-            alt.confidence?.toString() ?? '',
-            salesRank.toString(),
-            'No',
-          ].join(','));
+          csvRows.push(
+            [
+              setNumber,
+              setName,
+              theme,
+              year,
+              alt.asin,
+              escapeCsvField(alt.title ?? ''),
+              alt.confidence?.toString() ?? '',
+              salesRank.toString(),
+              'No',
+            ].join(',')
+          );
         }
       }
     }
@@ -177,10 +177,7 @@ export async function GET(_request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/seeded/export-multiples] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

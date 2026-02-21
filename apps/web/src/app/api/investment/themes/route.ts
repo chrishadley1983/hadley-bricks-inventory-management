@@ -26,10 +26,7 @@ export async function GET() {
 
       if (error) {
         console.error('[GET /api/investment/themes] Query error:', error.message);
-        return NextResponse.json(
-          { error: 'Database query failed' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Database query failed' }, { status: 500 });
       }
 
       for (const row of data ?? []) {
@@ -46,9 +43,6 @@ export async function GET() {
     return NextResponse.json({ themes });
   } catch (error) {
     console.error('[GET /api/investment/themes] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -129,10 +129,7 @@ export async function POST(request: NextRequest) {
     const durationSeconds = Math.floor((end.getTime() - start.getTime()) / 1000);
 
     if (durationSeconds <= 0) {
-      return NextResponse.json(
-        { error: 'End time must be after start time' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
     }
 
     // Create manual entry

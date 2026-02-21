@@ -15,7 +15,10 @@ const ImageSchema = z.object({
 });
 
 const RequestSchema = z.object({
-  images: z.array(ImageSchema).min(1, 'At least one image is required').max(10, 'Maximum 10 images allowed'),
+  images: z
+    .array(ImageSchema)
+    .min(1, 'At least one image is required')
+    .max(10, 'Maximum 10 images allowed'),
 });
 
 /**
@@ -76,17 +79,16 @@ export async function POST(request: NextRequest) {
 
     // Validate the response structure
     if (!result.extractions || !Array.isArray(result.extractions)) {
-      return NextResponse.json(
-        { error: 'Invalid AI response structure' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Invalid AI response structure' }, { status: 500 });
     }
 
     // Ensure all extractions have required fields
-    const validatedExtractions = result.extractions.map((ext) => ({
-      set_number: String(ext.set_number || ''),
-      confidence: typeof ext.confidence === 'number' ? ext.confidence : 0.5,
-    })).filter((ext) => ext.set_number.length > 0);
+    const validatedExtractions = result.extractions
+      .map((ext) => ({
+        set_number: String(ext.set_number || ''),
+        confidence: typeof ext.confidence === 'number' ? ext.confidence : 0.5,
+      }))
+      .filter((ext) => ext.set_number.length > 0);
 
     return NextResponse.json({
       data: {

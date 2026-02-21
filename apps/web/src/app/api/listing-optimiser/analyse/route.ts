@@ -64,10 +64,7 @@ export async function POST(request: NextRequest) {
     // 5. Initialise service with eBay credentials
     const initSuccess = await service.init(user.id);
     if (!initSuccess) {
-      return NextResponse.json(
-        { error: 'Failed to initialise eBay connection' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to initialise eBay connection' }, { status: 500 });
     }
 
     // 6. Analyse listings (process sequentially to avoid API rate limits)

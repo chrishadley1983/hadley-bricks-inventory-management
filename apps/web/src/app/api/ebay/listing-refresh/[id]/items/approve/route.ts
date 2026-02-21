@@ -13,10 +13,7 @@ const BulkApproveSchema = z.object({
   itemIds: z.array(z.string().uuid()).min(1, 'At least one item ID is required'),
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

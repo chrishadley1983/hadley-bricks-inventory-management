@@ -553,10 +553,7 @@ export class InventoryRepository extends BaseRepository<
    * Bulk delete multiple inventory items
    */
   async deleteBulk(ids: string[]): Promise<{ count: number }> {
-    const { error, count } = await this.supabase
-      .from(this.tableName)
-      .delete()
-      .in('id', ids);
+    const { error, count } = await this.supabase.from(this.tableName).delete().in('id', ids);
 
     if (error) {
       throw new Error(`Failed to bulk delete inventory items: ${error.message}`);
@@ -672,9 +669,9 @@ export class InventoryRepository extends BaseRepository<
    * Get inventory value breakdown by status
    * Uses pagination to handle >1000 records
    */
-  async getValueByStatus(options?: { platform?: string }): Promise<
-    Record<string, { cost: number; listingValue: number; count: number }>
-  > {
+  async getValueByStatus(options?: {
+    platform?: string;
+  }): Promise<Record<string, { cost: number; listingValue: number; count: number }>> {
     const perf = createPerfLogger('InventoryRepo.getValueByStatus');
 
     const pageSize = 1000;

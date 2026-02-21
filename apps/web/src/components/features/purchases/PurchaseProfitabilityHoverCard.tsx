@@ -2,20 +2,10 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import {
-  TrendingUp,
-  TrendingDown,
-  BarChart3,
-  Clock,
-  AlertTriangle,
-} from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchPurchaseProfitability } from '@/lib/api';
 import type { PurchaseProfitability } from '@/lib/services/purchase-profitability.service';
@@ -81,9 +71,7 @@ export function PurchaseProfitabilityHoverCard({
 
             {/* No items case */}
             {data.totalItems === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-2">
-                No items linked
-              </p>
+              <p className="text-sm text-muted-foreground text-center py-2">No items linked</p>
             ) : (
               <>
                 {/* Progress Bar */}
@@ -203,7 +191,8 @@ export function PurchaseProfitabilityHoverCard({
                     <span>
                       {data.itemsWithNoCost > 0 && `${data.itemsWithNoCost} no cost`}
                       {data.itemsWithNoCost > 0 && data.itemsWithNoListingValue > 0 && ', '}
-                      {data.itemsWithNoListingValue > 0 && `${data.itemsWithNoListingValue} unlisted`}
+                      {data.itemsWithNoListingValue > 0 &&
+                        `${data.itemsWithNoListingValue} unlisted`}
                     </span>
                   </div>
                 )}

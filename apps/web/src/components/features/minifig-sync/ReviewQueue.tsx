@@ -83,7 +83,7 @@ export function ReviewQueue() {
 
   const handleUpdate = async (
     id: string,
-    data: { title?: string; description?: string; price?: number },
+    data: { title?: string; description?: string; price?: number }
   ) => {
     setActiveItemId(id);
     try {
@@ -103,10 +103,14 @@ export function ReviewQueue() {
         toast.success(`Published ${result.published} listing${result.published !== 1 ? 's' : ''}`);
       }
       if (result.skipped > 0) {
-        toast.info(`${result.skipped} listing${result.skipped !== 1 ? 's' : ''} skipped (quality check)`);
+        toast.info(
+          `${result.skipped} listing${result.skipped !== 1 ? 's' : ''} skipped (quality check)`
+        );
       }
       if (result.errors.length > 0) {
-        toast.error(`${result.errors.length} listing${result.errors.length !== 1 ? 's' : ''} failed`);
+        toast.error(
+          `${result.errors.length} listing${result.errors.length !== 1 ? 's' : ''} failed`
+        );
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk publish failed');

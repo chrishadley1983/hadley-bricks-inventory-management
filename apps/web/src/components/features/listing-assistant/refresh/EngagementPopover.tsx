@@ -1,11 +1,7 @@
 'use client';
 
 import { Eye, Heart, ShoppingCart, Package, Calendar, Tag, TrendingUp } from 'lucide-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
 
@@ -218,10 +214,7 @@ export function EngagementBadge({ listing }: { listing: EligibleListing }) {
         )}
 
         {/* Score Badge */}
-        <Badge
-          variant={getEngagementBadgeVariant(level)}
-          className="text-xs ml-1 h-5"
-        >
+        <Badge variant={getEngagementBadgeVariant(level)} className="text-xs ml-1 h-5">
           {score}
         </Badge>
       </button>

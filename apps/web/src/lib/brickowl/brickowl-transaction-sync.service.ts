@@ -161,11 +161,23 @@ export class BrickOwlTransactionSyncService {
    * Sync transactions from BrickOwl API
    * Stores ALL orders (no filtering)
    */
-  async syncTransactions(userId: string, options?: BrickOwlSyncOptions): Promise<BrickOwlSyncResult> {
-    console.log('[BrickOwlTransactionSyncService] Starting transaction sync for user:', userId, 'options:', options);
+  async syncTransactions(
+    userId: string,
+    options?: BrickOwlSyncOptions
+  ): Promise<BrickOwlSyncResult> {
+    console.log(
+      '[BrickOwlTransactionSyncService] Starting transaction sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await createClient();
-    const syncMode: BrickOwlSyncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
+    const syncMode: BrickOwlSyncMode = options?.fromDate
+      ? 'HISTORICAL'
+      : options?.fullSync
+        ? 'FULL'
+        : 'INCREMENTAL';
     console.log('[BrickOwlTransactionSyncService] Sync mode:', syncMode);
 
     // Check for running sync
@@ -227,7 +239,10 @@ export class BrickOwlTransactionSyncService {
       // Get BrickOwl client
       console.log('[BrickOwlTransactionSyncService] Getting BrickOwl client...');
       const credentialsRepo = new CredentialsRepository(supabase);
-      const credentials = await credentialsRepo.getCredentials<BrickOwlCredentials>(userId, 'brickowl');
+      const credentials = await credentialsRepo.getCredentials<BrickOwlCredentials>(
+        userId,
+        'brickowl'
+      );
 
       if (!credentials) {
         throw new Error('BrickOwl credentials not configured');
@@ -238,7 +253,7 @@ export class BrickOwlTransactionSyncService {
 
       // Fetch order list from BrickOwl (minimal data - just IDs and dates)
       console.log('[BrickOwlTransactionSyncService] Fetching order list from BrickOwl API...');
-      const orderList = await client.getSalesOrders() as unknown as BrickOwlOrderListItem[];
+      const orderList = (await client.getSalesOrders()) as unknown as BrickOwlOrderListItem[];
       console.log('[BrickOwlTransactionSyncService] Total orders in list:', orderList.length);
 
       // Helper to parse Unix timestamp from order_date field
@@ -283,7 +298,9 @@ export class BrickOwlTransactionSyncService {
       }
 
       // Fetch full details for each order
-      console.log(`[BrickOwlTransactionSyncService] Fetching details for ${ordersToFetch.length} orders...`);
+      console.log(
+        `[BrickOwlTransactionSyncService] Fetching details for ${ordersToFetch.length} orders...`
+      );
       const fullOrders: BrickOwlOrderDetail[] = [];
       for (const orderSummary of ordersToFetch) {
         try {
@@ -291,27 +308,44 @@ export class BrickOwlTransactionSyncService {
           fullOrders.push(fullOrder);
           // Debug: log first order to see available fields
           if (fullOrders.length === 1) {
-            console.log('[BrickOwlTransactionSyncService] Sample full order fields:', JSON.stringify(fullOrder, null, 2));
+            console.log(
+              '[BrickOwlTransactionSyncService] Sample full order fields:',
+              JSON.stringify(fullOrder, null, 2)
+            );
           }
         } catch (err) {
-          console.warn(`[BrickOwlTransactionSyncService] Failed to fetch order ${orderSummary.order_id}:`, err);
+          console.warn(
+            `[BrickOwlTransactionSyncService] Failed to fetch order ${orderSummary.order_id}:`,
+            err
+          );
         }
       }
-      console.log(`[BrickOwlTransactionSyncService] Successfully fetched ${fullOrders.length} order details`);
+      console.log(
+        `[BrickOwlTransactionSyncService] Successfully fetched ${fullOrders.length} order details`
+      );
 
       // Transform and upsert orders
       console.log('[BrickOwlTransactionSyncService] Upserting orders to database...');
       const { created, updated, skipped } = await this.upsertTransactions(userId, fullOrders);
-      console.log('[BrickOwlTransactionSyncService] Upsert complete. Created:', created, 'Updated:', updated, 'Skipped:', skipped);
+      console.log(
+        '[BrickOwlTransactionSyncService] Upsert complete. Created:',
+        created,
+        'Updated:',
+        updated,
+        'Skipped:',
+        skipped
+      );
 
       // Update sync cursor to newest order date
       const newestDate =
         ordersToFetch.length > 0
-          ? ordersToFetch.reduce((newest, order) => {
-              const orderDate = getOrderDateFromList(order);
-              if (!orderDate) return newest;
-              return orderDate > newest ? orderDate : newest;
-            }, new Date(0)).toISOString()
+          ? ordersToFetch
+              .reduce((newest, order) => {
+                const orderDate = getOrderDateFromList(order);
+                if (!orderDate) return newest;
+                return orderDate > newest ? orderDate : newest;
+              }, new Date(0))
+              .toISOString()
           : new Date().toISOString();
 
       // Update sync config with cursor
@@ -458,7 +492,8 @@ export class BrickOwlTransactionSyncService {
   private transformOrderToRow(userId: string, order: BrickOwlOrderDetail): TransactionRow | null {
     // Determine order date - prefer iso_order_time, fallback to order_time
     // Both may be Unix timestamps or ISO strings depending on API version
-    const orderDate = this.toISODateString(order.iso_order_time) || this.toISODateString(order.order_time);
+    const orderDate =
+      this.toISODateString(order.iso_order_time) || this.toISODateString(order.order_time);
     if (!orderDate) {
       console.warn(
         `[BrickOwlTransactionSyncService] Order ${order.order_id} has no valid date, skipping`
@@ -493,15 +528,22 @@ export class BrickOwlTransactionSyncService {
     const combinedDiscount = parseCurrencyValue(orderAny.combined_shipping_discount);
 
     // Grand total - use payment_total or base_order_total
-    const grandTotal = parseCurrencyValue(orderAny.payment_total) || parseCurrencyValue(orderAny.base_order_total);
+    const grandTotal =
+      parseCurrencyValue(orderAny.payment_total) || parseCurrencyValue(orderAny.base_order_total);
 
     // Lot and item counts - BrickOwl returns these as strings
-    const totalLots = typeof orderAny.total_lots === 'string'
-      ? parseInt(orderAny.total_lots, 10) || 0
-      : (typeof orderAny.total_lots === 'number' ? orderAny.total_lots : 0);
-    const totalItems = typeof orderAny.total_quantity === 'string'
-      ? parseInt(orderAny.total_quantity, 10) || 0
-      : (typeof orderAny.total_quantity === 'number' ? orderAny.total_quantity : 0);
+    const totalLots =
+      typeof orderAny.total_lots === 'string'
+        ? parseInt(orderAny.total_lots, 10) || 0
+        : typeof orderAny.total_lots === 'number'
+          ? orderAny.total_lots
+          : 0;
+    const totalItems =
+      typeof orderAny.total_quantity === 'string'
+        ? parseInt(orderAny.total_quantity, 10) || 0
+        : typeof orderAny.total_quantity === 'number'
+          ? orderAny.total_quantity
+          : 0;
 
     // Map API field names to our database fields
     // API uses: customer_email, customer_username, ship_method_name, base_currency

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (fetchError || !removal) {
-      return NextResponse.json({ error: 'Removal not found or already processed' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Removal not found or already processed' },
+        { status: 404 }
+      );
     }
 
     const now = new Date().toISOString();
@@ -73,9 +76,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to dismiss removal',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

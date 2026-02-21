@@ -21,10 +21,7 @@ const UpdateSeededAsinSchema = z.object({
 // PATCH - Update seeded ASIN
 // =============================================================================
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -61,10 +58,7 @@ export async function PATCH(
       .single();
 
     if (fetchError || !seededAsin) {
-      return NextResponse.json(
-        { error: 'Seeded ASIN not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Seeded ASIN not found' }, { status: 404 });
     }
 
     if (action === 'select_asin') {
@@ -77,11 +71,11 @@ export async function PATCH(
       }
 
       // Verify the selected ASIN is in the alternatives or is the current ASIN
-      const alternatives = (seededAsin.alternative_asins as { asin: string; title: string; confidence: number }[] | null) ?? [];
-      const validAsins = [
-        seededAsin.asin,
-        ...alternatives.map(a => a.asin),
-      ].filter(Boolean);
+      const alternatives =
+        (seededAsin.alternative_asins as
+          | { asin: string; title: string; confidence: number }[]
+          | null) ?? [];
+      const validAsins = [seededAsin.asin, ...alternatives.map((a) => a.asin)].filter(Boolean);
 
       if (!validAsins.includes(selectedAsin)) {
         return NextResponse.json(
@@ -91,7 +85,7 @@ export async function PATCH(
       }
 
       // Find the selected alternative to get its data
-      const selectedAlternative = alternatives.find(a => a.asin === selectedAsin);
+      const selectedAlternative = alternatives.find((a) => a.asin === selectedAsin);
 
       // Update the seeded ASIN with the selected one
       const { error: updateError } = await serviceClient
@@ -99,7 +93,9 @@ export async function PATCH(
         .update({
           asin: selectedAsin,
           discovery_status: 'found',
-          amazon_title: selectedAlternative?.title ?? (seededAsin.asin === selectedAsin ? null : selectedAlternative?.title),
+          amazon_title:
+            selectedAlternative?.title ??
+            (seededAsin.asin === selectedAsin ? null : selectedAlternative?.title),
           match_confidence: selectedAlternative?.confidence ?? 100,
           alternative_asins: null, // Clear alternatives after selection
           updated_at: new Date().toISOString(),
@@ -117,10 +113,7 @@ export async function PATCH(
           );
         }
 
-        return NextResponse.json(
-          { error: 'Failed to update seeded ASIN' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to update seeded ASIN' }, { status: 500 });
       }
 
       return NextResponse.json({
@@ -143,10 +136,7 @@ export async function PATCH(
 
       if (updateError) {
         console.error('[PATCH /api/arbitrage/seeded/[id]] Update error:', updateError);
-        return NextResponse.json(
-          { error: 'Failed to mark as not found' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to mark as not found' }, { status: 500 });
       }
 
       return NextResponse.json({
@@ -158,9 +148,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('[PATCH /api/arbitrage/seeded/[id]] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

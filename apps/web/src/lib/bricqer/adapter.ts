@@ -297,9 +297,7 @@ export function normalizeOrder(
 /**
  * Normalize multiple Bricqer orders
  */
-export function normalizeOrders(
-  orders: BricqerOrder[]
-): NormalizedBricqerOrder[] {
+export function normalizeOrders(orders: BricqerOrder[]): NormalizedBricqerOrder[] {
   return orders.map((order) => normalizeOrder(order));
 }
 
@@ -413,9 +411,9 @@ export function normalizeInventoryItem(
 export function normalizeInventoryItems(
   items: BricqerInventoryItem[]
 ): NormalizedBricqerInventoryItem[] {
-  return items.map(normalizeInventoryItem).filter(
-    (item): item is NormalizedBricqerInventoryItem => item !== null,
-  );
+  return items
+    .map(normalizeInventoryItem)
+    .filter((item): item is NormalizedBricqerInventoryItem => item !== null);
 }
 
 /**
@@ -442,8 +440,7 @@ export function calculateInventoryStats(items: NormalizedBricqerInventoryItem[])
 
     stats.conditionBreakdown[item.condition] =
       (stats.conditionBreakdown[item.condition] || 0) + item.quantity;
-    stats.typeBreakdown[item.itemType] =
-      (stats.typeBreakdown[item.itemType] || 0) + item.quantity;
+    stats.typeBreakdown[item.itemType] = (stats.typeBreakdown[item.itemType] || 0) + item.quantity;
   }
 
   return stats;

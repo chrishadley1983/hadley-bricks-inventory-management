@@ -139,9 +139,7 @@ function extractItemsFromResponse(response: BrickognizeResponse): BrickognizeIte
 /**
  * Map API item type to our type
  */
-function mapItemType(
-  apiType: string | undefined
-): 'part' | 'set' | 'minifig' | 'sticker' {
+function mapItemType(apiType: string | undefined): 'part' | 'set' | 'minifig' | 'sticker' {
   switch (apiType?.toLowerCase()) {
     case 'part':
       return 'part';
@@ -172,11 +170,7 @@ export async function identifyWithBrickognize(
   image: BrickognizeImageInput
 ): Promise<BrickognizeIdentifyResult> {
   try {
-    const response = await makeBrickognizeRequest(
-      ENDPOINTS.predict,
-      image.base64,
-      image.filename
-    );
+    const response = await makeBrickognizeRequest(ENDPOINTS.predict, image.base64, image.filename);
 
     const items = extractItemsFromResponse(response);
 
@@ -319,9 +313,7 @@ export async function identifyAllItemsFromImages(
 
   try {
     // Process all images in parallel
-    const results = await Promise.all(
-      images.map((image) => identifyWithBrickognize(image))
-    );
+    const results = await Promise.all(images.map((image) => identifyWithBrickognize(image)));
 
     // Combine all items
     const allItems: BrickognizeItem[] = [];
@@ -404,16 +396,12 @@ export function getBestSetMatch(items: BrickognizeItem[]): BrickognizeItem | nul
  * Get all minifig matches from Brickognize results
  */
 export function getMinifigMatches(items: BrickognizeItem[]): BrickognizeItem[] {
-  return items
-    .filter((i) => i.type === 'minifig')
-    .sort((a, b) => b.confidence - a.confidence);
+  return items.filter((i) => i.type === 'minifig').sort((a, b) => b.confidence - a.confidence);
 }
 
 /**
  * Get all part matches from Brickognize results
  */
 export function getPartMatches(items: BrickognizeItem[]): BrickognizeItem[] {
-  return items
-    .filter((i) => i.type === 'part')
-    .sort((a, b) => b.confidence - a.confidence);
+  return items.filter((i) => i.type === 'part').sort((a, b) => b.confidence - a.confidence);
 }

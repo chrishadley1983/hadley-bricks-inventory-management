@@ -36,7 +36,7 @@ export class InventoryPullService {
 
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string,
+    private userId: string
   ) {
     this.configService = new MinifigConfigService(supabase);
     this.jobTracker = new MinifigJobTracker(supabase, userId);
@@ -79,11 +79,15 @@ export class InventoryPullService {
       const config = await this.configService.getConfig();
 
       // 3. Get Bricqer credentials and create client
-      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking Bricqer credentials...' });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'credentials',
+        message: 'Checking Bricqer credentials...',
+      });
       const credentialsRepo = new CredentialsRepository(this.supabase);
       const credentials = await credentialsRepo.getCredentials<BricqerCredentials>(
         this.userId,
-        'bricqer',
+        'bricqer'
       );
 
       if (!credentials) {
@@ -93,16 +97,21 @@ export class InventoryPullService {
       const client = new BricqerClient(credentials);
 
       // 4. Load existing sync items for upsert matching
-      await onProgress?.({ type: 'stage', stage: 'match', message: 'Loading existing sync items...' });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'match',
+        message: 'Loading existing sync items...',
+      });
       const existingByBricqerId = await this.loadExistingItems();
 
       // 5. Page-by-page fetch, filter, and upsert
       await onProgress?.({
         type: 'stage',
         stage: 'sync',
-        message: startPage > 1
-          ? `Syncing inventory (resuming from page ${startPage})...`
-          : 'Syncing inventory from Bricqer...',
+        message:
+          startPage > 1
+            ? `Syncing inventory (resuming from page ${startPage})...`
+            : 'Syncing inventory from Bricqer...',
       });
 
       let page = startPage;
@@ -112,7 +121,7 @@ export class InventoryPullService {
 
       while (hasMore && pagesThisInvocation < MAX_PAGES_PER_INVOCATION) {
         // Check time budget before fetching next page
-        if (maxDurationMs && (Date.now() - startTime) >= maxDurationMs) {
+        if (maxDurationMs && Date.now() - startTime >= maxDurationMs) {
           break;
         }
 
@@ -182,10 +191,7 @@ export class InventoryPullService {
 
         if (staleItems && staleItems.length > 0) {
           const staleIds = staleItems.map((s: { id: string }) => s.id);
-          await this.supabase
-            .from('minifig_sync_items')
-            .delete()
-            .in('id', staleIds);
+          await this.supabase.from('minifig_sync_items').delete().in('id', staleIds);
           itemsRemoved = staleIds.length;
         }
 
@@ -248,7 +254,7 @@ export class InventoryPullService {
           bricqer_item_id: string;
           bricqer_price: number | null;
           updated_at: string | null;
-        }>),
+        }>)
       );
       hasMore = (data?.length ?? 0) === pageSize;
       page++;
@@ -262,7 +268,7 @@ export class InventoryPullService {
     existingByBricqerId: Map<
       string,
       { id: string; bricqer_price: number | null; updated_at: string | null }
-    >,
+    >
   ): Promise<'created' | 'updated'> {
     const bricqerItemId = String(raw.id);
     const definition = raw.definition;

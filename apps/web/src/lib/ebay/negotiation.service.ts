@@ -7,14 +7,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
-import {
-  EbayNegotiationClient,
-  EbayNegotiationApiError,
-} from './ebay-negotiation.client';
-import {
-  NegotiationScoringService,
-  MIN_DISCOUNT_PERCENTAGE,
-} from './negotiation-scoring.service';
+import { EbayNegotiationClient, EbayNegotiationApiError } from './ebay-negotiation.client';
+import { NegotiationScoringService, MIN_DISCOUNT_PERCENTAGE } from './negotiation-scoring.service';
 import { discordService } from '@/lib/notifications';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
@@ -82,9 +76,7 @@ function substituteMessagePlaceholders(
       .replace(/\{offer_price\}/g, formatPrice(offerPrice, data.currency));
   } else {
     // Remove price placeholders if no price available
-    message = message
-      .replace(/\{price\}/g, '')
-      .replace(/\{offer_price\}/g, '');
+    message = message.replace(/\{price\}/g, '').replace(/\{offer_price\}/g, '');
   }
 
   return message;
@@ -325,9 +317,10 @@ export class NegotiationService {
     }
 
     // Get the SKUs from platform_listings to look up in ebay_sku_mappings
-    const skusFromListings = listings
-      ?.map((l) => l.platform_sku)
-      .filter((sku): sku is string => sku !== null && sku !== undefined) || [];
+    const skusFromListings =
+      listings
+        ?.map((l) => l.platform_sku)
+        .filter((sku): sku is string => sku !== null && sku !== undefined) || [];
 
     // Get inventory item mappings from ebay_sku_mappings (match by SKU, not item ID)
     const { data: skuMappings } = await supabase
@@ -386,9 +379,7 @@ export class NegotiationService {
             item.id,
             {
               cost: item.cost || 0,
-              listingDate: item.listing_date
-                ? new Date(item.listing_date)
-                : new Date(),
+              listingDate: item.listing_date ? new Date(item.listing_date) : new Date(),
             },
           ])
         );
@@ -399,9 +390,7 @@ export class NegotiationService {
     const enrichedItems: EnrichedEligibleItem[] = [];
 
     for (const eligibleItem of eligibleItems) {
-      const listing = listings?.find(
-        (l) => l.platform_item_id === eligibleItem.listingId
-      );
+      const listing = listings?.find((l) => l.platform_item_id === eligibleItem.listingId);
 
       if (!listing) {
         // Skip items we don't have data for
@@ -418,9 +407,7 @@ export class NegotiationService {
 
       // Get inventory data for scoring (use mapping table to find inventory item)
       const inventoryItemId = listingToInventoryMap[listing.platform_item_id];
-      const invData = inventoryItemId
-        ? inventoryItems[inventoryItemId]
-        : null;
+      const invData = inventoryItemId ? inventoryItems[inventoryItemId] : null;
 
       // Use listing date: prefer inventory data, then eBay listingStartDate, then skip filtering
       const ebayStartDate = ebayData?.listingStartDate
@@ -535,7 +522,8 @@ export class NegotiationService {
 
     // Log first few filtered items for debugging
     if (filteredItems.length > 0) {
-      console.log('[NegotiationService] Sample filtered items (first 10):',
+      console.log(
+        '[NegotiationService] Sample filtered items (first 10):',
         filteredItems.slice(0, 10)
       );
     }
@@ -594,8 +582,7 @@ export class NegotiationService {
         }
       } catch (error) {
         offersFailed++;
-        const errorMsg =
-          error instanceof Error ? error.message : 'Unknown error';
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         errors.push(`${item.listingId}: ${errorMsg}`);
         results.push({
           success: false,
@@ -675,9 +662,7 @@ export class NegotiationService {
           isReOffer: item.isReOffer,
           previousOfferId: item.previousOfferId,
           triggerType,
-          expiresAt: new Date(
-            Date.now() + OFFER_DURATION_DAYS * 24 * 60 * 60 * 1000
-          ),
+          expiresAt: new Date(Date.now() + OFFER_DURATION_DAYS * 24 * 60 * 60 * 1000),
         });
       }
 
@@ -914,9 +899,7 @@ export class NegotiationService {
         triggerType: row.trigger_type as 'manual' | 'automated',
         sentAt: new Date(row.sent_at),
         expiresAt: row.expires_at ? new Date(row.expires_at) : undefined,
-        statusUpdatedAt: row.status_updated_at
-          ? new Date(row.status_updated_at)
-          : undefined,
+        statusUpdatedAt: row.status_updated_at ? new Date(row.status_updated_at) : undefined,
         errorMessage: row.error_message || undefined,
       })) || [];
 
@@ -971,14 +954,16 @@ export class NegotiationService {
     // We match by: listing ID + order placed after offer sent + price matches offer price (within tolerance)
     const { data: matchingOrders, error: ordersError } = await supabase
       .from('ebay_order_line_items')
-      .select(`
+      .select(
+        `
         legacy_item_id,
         line_item_cost_amount,
         order:ebay_orders!inner(
           creation_date,
           user_id
         )
-      `)
+      `
+      )
       .in('legacy_item_id', listingIds)
       .eq('order.user_id', userId);
 
@@ -1017,7 +1002,7 @@ export class NegotiationService {
             acceptedOfferIds.push(offer.id);
             console.log(
               `[NegotiationService] Offer ${offer.id} accepted: listing ${offer.ebay_listing_id}, ` +
-              `offer price £${offerPrice}, order price £${orderPrice}`
+                `offer price £${offerPrice}, order price £${orderPrice}`
             );
             break; // One match is enough for this offer
           }
@@ -1047,9 +1032,7 @@ export class NegotiationService {
     const expiredOfferIds = pendingOffers
       .filter(
         (o) =>
-          !acceptedOfferIds.includes(o.id) &&
-          o.expires_at &&
-          new Date(o.expires_at) < new Date()
+          !acceptedOfferIds.includes(o.id) && o.expires_at && new Date(o.expires_at) < new Date()
       )
       .map((o) => o.id);
 
@@ -1090,9 +1073,10 @@ export class NegotiationService {
       return;
     }
 
-    const message = result.offersFailed > 0
-      ? `${result.offersSent} offer(s) sent, ${result.offersFailed} failed`
-      : `${result.offersSent} offer(s) sent to interested buyers`;
+    const message =
+      result.offersFailed > 0
+        ? `${result.offersSent} offer(s) sent, ${result.offersFailed} failed`
+        : `${result.offersSent} offer(s) sent to interested buyers`;
 
     await discordService.sendSyncStatus({
       title: '📤 eBay Offers Sent',
@@ -1121,10 +1105,9 @@ export class NegotiationService {
       weightItemValue: row.weight_item_value as number,
       weightCategory: row.weight_category as number,
       weightWatchers: row.weight_watchers as number,
-      offerMessageTemplate: (row.offer_message_template as string) || DEFAULT_OFFER_MESSAGE_TEMPLATE,
-      lastAutoRunAt: row.last_auto_run_at
-        ? new Date(row.last_auto_run_at as string)
-        : undefined,
+      offerMessageTemplate:
+        (row.offer_message_template as string) || DEFAULT_OFFER_MESSAGE_TEMPLATE,
+      lastAutoRunAt: row.last_auto_run_at ? new Date(row.last_auto_run_at as string) : undefined,
       lastAutoRunOffersSent: row.last_auto_run_offers_sent as number | undefined,
     };
   }

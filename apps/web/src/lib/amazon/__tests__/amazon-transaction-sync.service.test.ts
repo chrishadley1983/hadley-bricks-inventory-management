@@ -57,9 +57,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 describe('AmazonTransactionSyncService', () => {
   describe('module exports', () => {
     it('should export AmazonTransactionSyncService class', async () => {
-      const { AmazonTransactionSyncService } = await import(
-        '../amazon-transaction-sync.service'
-      );
+      const { AmazonTransactionSyncService } = await import('../amazon-transaction-sync.service');
       expect(AmazonTransactionSyncService).toBeDefined();
       expect(typeof AmazonTransactionSyncService).toBe('function');
     });
@@ -67,18 +65,14 @@ describe('AmazonTransactionSyncService', () => {
 
   describe('service instantiation', () => {
     it('should create service instance', async () => {
-      const { AmazonTransactionSyncService } = await import(
-        '../amazon-transaction-sync.service'
-      );
+      const { AmazonTransactionSyncService } = await import('../amazon-transaction-sync.service');
       const service = new AmazonTransactionSyncService();
       expect(service).toBeDefined();
       expect(service).toBeInstanceOf(AmazonTransactionSyncService);
     });
 
     it('should have required public methods', async () => {
-      const { AmazonTransactionSyncService } = await import(
-        '../amazon-transaction-sync.service'
-      );
+      const { AmazonTransactionSyncService } = await import('../amazon-transaction-sync.service');
       const service = new AmazonTransactionSyncService();
 
       expect(typeof service.syncTransactions).toBe('function');

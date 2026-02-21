@@ -67,10 +67,10 @@ export async function PUT(
 
     // Calculate Best Offer prices
     const autoAcceptPrice = updateBestOffer
-      ? Math.round((newPrice * autoAcceptPercent) / 100 * 100) / 100
+      ? Math.round(((newPrice * autoAcceptPercent) / 100) * 100) / 100
       : undefined;
     const minOfferPrice = updateBestOffer
-      ? Math.round((newPrice * minOfferPercent) / 100 * 100) / 100
+      ? Math.round(((newPrice * minOfferPercent) / 100) * 100) / 100
       : undefined;
 
     // 5. Call eBay API to revise the listing
@@ -110,7 +110,10 @@ export async function PUT(
       console.error('[PUT /api/ebay-stock/[itemId]/price] DB update error:', updateError);
       // Don't fail the request - eBay update succeeded
     } else if (!updatedRows || updatedRows.length === 0) {
-      console.warn('[PUT /api/ebay-stock/[itemId]/price] No local listing found to update for itemId:', itemId);
+      console.warn(
+        '[PUT /api/ebay-stock/[itemId]/price] No local listing found to update for itemId:',
+        itemId
+      );
       // Don't fail - eBay update succeeded, local record may not exist yet
     }
 

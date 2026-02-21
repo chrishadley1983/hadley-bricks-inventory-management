@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -36,16 +36,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {
-    console.error(
-      '[POST /api/minifigs/sync/research/refresh] Error:',
-      error,
-    );
+    console.error('[POST /api/minifigs/sync/research/refresh] Error:', error);
     return NextResponse.json(
       {
         error: 'Failed to refresh research',
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined,
+        details:
+          process.env.NODE_ENV === 'development'
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

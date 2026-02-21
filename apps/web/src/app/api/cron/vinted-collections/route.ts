@@ -20,11 +20,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { discordService } from '@/lib/notifications';
 import { emailService } from '@/lib/email/email.service';
 import { jobExecutionService } from '@/lib/services/job-execution.service';
-import {
-  searchEmails,
-  getEmailBody,
-  isGmailConfigured,
-} from '@/lib/google/gmail-client';
+import { searchEmails, getEmailBody, isGmailConfigured } from '@/lib/google/gmail-client';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120; // 2 minutes
@@ -113,7 +109,7 @@ async function linkRoyalMailToVintedItem(senderName: string): Promise<string> {
 
   const vintedEmails = await searchEmails(
     `from:no-reply@vinted.co.uk "${senderName}" newer_than:14d`,
-    1,
+    1
   );
 
   if (vintedEmails.length > 0) {
@@ -146,7 +142,7 @@ async function fetchViaHadleyApi(days: number): Promise<HadleyCollection[] | nul
   try {
     const resp = await fetch(
       `${HADLEY_API_BASE}/vinted/collections?days=${days}&mark_reported=false`,
-      { signal: AbortSignal.timeout(10_000) },
+      { signal: AbortSignal.timeout(10_000) }
     );
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -190,7 +186,7 @@ export async function POST(request: NextRequest) {
       // Direct Gmail API path
       const emails = await searchEmails(
         `from:no-reply@vinted.co.uk "waiting for you" newer_than:${DAYS}d`,
-        100,
+        100
       );
 
       console.log(`[Cron VintedCollections] Found ${emails.length} emails via Gmail API`);
@@ -210,7 +206,7 @@ export async function POST(request: NextRequest) {
       // Also search Royal Mail collection emails
       const royalMailEmails = await searchEmails(
         `from:no-reply@royalmail.com "ready to collect" newer_than:${DAYS}d`,
-        100,
+        100
       );
 
       console.log(`[Cron VintedCollections] Found ${royalMailEmails.length} Royal Mail emails`);
@@ -257,12 +253,12 @@ export async function POST(request: NextRequest) {
       .in('email_id', emailIds);
 
     const reportedSet = new Set(
-      ((existing ?? []) as Array<{ email_id: string }>).map((r) => r.email_id),
+      ((existing ?? []) as Array<{ email_id: string }>).map((r) => r.email_id)
     );
     const newItems = items.filter((i) => !reportedSet.has(i.email_id));
 
     console.log(
-      `[Cron VintedCollections] ${items.length} total, ${newItems.length} new, ${reportedSet.size} already reported`,
+      `[Cron VintedCollections] ${items.length} total, ${newItems.length} new, ${reportedSet.size} already reported`
     );
 
     // Mark new items as reported
@@ -274,7 +270,7 @@ export async function POST(request: NextRequest) {
           service: i.service,
           location: i.location,
         })),
-        { onConflict: 'email_id' },
+        { onConflict: 'email_id' }
       );
     }
 
@@ -311,7 +307,7 @@ export async function POST(request: NextRequest) {
                 `<tr>
                   <td style="padding:6px 10px;border:1px solid #ddd;">${i.item}</td>
                   <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;">${i.service}</td>
-                </tr>`,
+                </tr>`
             )
             .join('');
           return `
@@ -348,7 +344,7 @@ export async function POST(request: NextRequest) {
       { total: items.length, new: newItems.length },
       200,
       newItems.length,
-      0,
+      0
     );
 
     return NextResponse.json({

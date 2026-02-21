@@ -22,11 +22,13 @@ export async function GET() {
 
     // Get key details (without sensitive data)
     // Type assertion needed until database types are regenerated
-    const { data: credentials } = await supabase
+    const { data: credentials } = (await supabase
       .from('ebay_credentials')
       .select('signing_key_id, signing_key_expires_at')
       .eq('user_id', user.id)
-      .single() as { data: { signing_key_id: string | null; signing_key_expires_at: string | null } | null };
+      .single()) as {
+      data: { signing_key_id: string | null; signing_key_expires_at: string | null } | null;
+    };
 
     return NextResponse.json({
       hasKeys,
@@ -76,10 +78,7 @@ export async function POST() {
     const keys = await ebaySignatureService.regenerateSigningKeys(user.id, accessToken);
 
     if (!keys) {
-      return NextResponse.json(
-        { error: 'Failed to regenerate signing keys' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to regenerate signing keys' }, { status: 500 });
     }
 
     return NextResponse.json({

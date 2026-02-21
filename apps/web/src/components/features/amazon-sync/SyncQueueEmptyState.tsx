@@ -12,8 +12,8 @@ export function SyncQueueEmptyState() {
       </div>
       <h3 className="text-lg font-semibold mb-2">No items in queue</h3>
       <p className="text-muted-foreground max-w-sm mb-6">
-        Add inventory items to the sync queue from the inventory page, then
-        return here to validate and submit to Amazon.
+        Add inventory items to the sync queue from the inventory page, then return here to validate
+        and submit to Amazon.
       </p>
       <Button asChild>
         <Link href="/inventory">

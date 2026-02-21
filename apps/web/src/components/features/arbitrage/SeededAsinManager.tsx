@@ -30,11 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -352,9 +348,10 @@ export function SeededAsinManager() {
 
   const handleExportCsv = async (type: 'multiples' | 'not-found') => {
     try {
-      const endpoint = type === 'multiples'
-        ? '/api/arbitrage/seeded/export-multiples'
-        : '/api/arbitrage/seeded/export-not-found';
+      const endpoint =
+        type === 'multiples'
+          ? '/api/arbitrage/seeded/export-multiples'
+          : '/api/arbitrage/seeded/export-not-found';
 
       const response = await fetch(endpoint);
       if (!response.ok) {
@@ -365,9 +362,10 @@ export function SeededAsinManager() {
       // Get the filename from the response header or generate one
       const contentDisposition = response.headers.get('Content-Disposition');
       const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
-      const defaultFilename = type === 'multiples'
-        ? `seeded-multiples-${new Date().toISOString().split('T')[0]}.csv`
-        : `seeded-not-found-${new Date().toISOString().split('T')[0]}.csv`;
+      const defaultFilename =
+        type === 'multiples'
+          ? `seeded-multiples-${new Date().toISOString().split('T')[0]}.csv`
+          : `seeded-not-found-${new Date().toISOString().split('T')[0]}.csv`;
       const filename = filenameMatch?.[1] || defaultFilename;
 
       // Download the file
@@ -403,9 +401,7 @@ export function SeededAsinManager() {
       {/* Discovery Status Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {statusLoading ? (
-          Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))
+          Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24" />)
         ) : (
           <>
             <StatusCard
@@ -429,7 +425,9 @@ export function SeededAsinManager() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-red-600"><AlertCircle className="h-4 w-4" /></span>
+                  <span className="text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                  </span>
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">
                     Not Found
                   </span>
@@ -451,7 +449,9 @@ export function SeededAsinManager() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-purple-600"><AlertCircle className="h-4 w-4" /></span>
+                  <span className="text-purple-600">
+                    <AlertCircle className="h-4 w-4" />
+                  </span>
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">
                     Multiple
                   </span>
@@ -643,9 +643,7 @@ export function SeededAsinManager() {
       {/* Bulk Actions */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
-          <span className="text-sm font-medium">
-            {selectedIds.size} selected
-          </span>
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
           <Button
             size="sm"
             variant="outline"
@@ -662,11 +660,7 @@ export function SeededAsinManager() {
           >
             Disable Sync
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSelectedIds(new Set())}
-          >
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
             Clear Selection
           </Button>
         </div>
@@ -696,10 +690,7 @@ export function SeededAsinManager() {
                   <tr>
                     <th className="px-4 py-3 text-left w-10">
                       <Checkbox
-                        checked={
-                          seededData?.items &&
-                          selectedIds.size === seededData.items.length
-                        }
+                        checked={seededData?.items && selectedIds.size === seededData.items.length}
                         onCheckedChange={handleSelectAll}
                       />
                     </th>
@@ -728,9 +719,7 @@ export function SeededAsinManager() {
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <div className="font-medium">
-                            {item.bricksetSet.setNumber}
-                          </div>
+                          <div className="font-medium">{item.bricksetSet.setNumber}</div>
                           <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                             {item.bricksetSet.setName}
                           </div>
@@ -749,11 +738,15 @@ export function SeededAsinManager() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {(item.discoveryStatus === 'multiple' || item.discoveryStatus === 'found') ? (
+                        {item.discoveryStatus === 'multiple' || item.discoveryStatus === 'found' ? (
                           <button
                             onClick={() => handleOpenResolutionDialog(item)}
                             className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
-                            title={item.discoveryStatus === 'multiple' ? 'Click to resolve multiple matches' : 'Click to change or mark as not found'}
+                            title={
+                              item.discoveryStatus === 'multiple'
+                                ? 'Click to resolve multiple matches'
+                                : 'Click to change or mark as not found'
+                            }
                           >
                             <StatusBadge status={item.discoveryStatus} />
                             {item.discoveryStatus === 'multiple' && (
@@ -834,8 +827,9 @@ export function SeededAsinManager() {
           <DialogHeader>
             <DialogTitle>Run ASIN Discovery</DialogTitle>
             <DialogDescription>
-              Set how many sets to process. Enter 0 to process all {summary?.pending.toLocaleString() ?? 0} pending sets.
-              At ~2 seconds per set, 1000 sets takes about 30 minutes.
+              Set how many sets to process. Enter 0 to process all{' '}
+              {summary?.pending.toLocaleString() ?? 0} pending sets. At ~2 seconds per set, 1000
+              sets takes about 30 minutes.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -856,42 +850,23 @@ export function SeededAsinManager() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <div className="col-span-4 flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDiscoveryLimit('100')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setDiscoveryLimit('100')}>
                   100
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDiscoveryLimit('500')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setDiscoveryLimit('500')}>
                   500
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDiscoveryLimit('1000')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setDiscoveryLimit('1000')}>
                   1,000
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDiscoveryLimit('0')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setDiscoveryLimit('0')}>
                   All
                 </Button>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDiscoveryDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setDiscoveryDialogOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -922,14 +897,20 @@ export function SeededAsinManager() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>
-              {itemToResolve?.discoveryStatus === 'multiple' ? 'Resolve Multiple Matches' : 'Manage ASIN'}
+              {itemToResolve?.discoveryStatus === 'multiple'
+                ? 'Resolve Multiple Matches'
+                : 'Manage ASIN'}
             </DialogTitle>
             <DialogDescription>
               {itemToResolve && (
                 <span className="block mt-1">
-                  <span className="font-medium">{itemToResolve.bricksetSet.setNumber}</span> - {itemToResolve.bricksetSet.setName}
+                  <span className="font-medium">{itemToResolve.bricksetSet.setNumber}</span> -{' '}
+                  {itemToResolve.bricksetSet.setName}
                   {itemToResolve.bricksetSet.theme && (
-                    <span className="text-muted-foreground"> ({itemToResolve.bricksetSet.theme}, {itemToResolve.bricksetSet.yearFrom})</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      ({itemToResolve.bricksetSet.theme}, {itemToResolve.bricksetSet.yearFrom})
+                    </span>
                   )}
                 </span>
               )}
@@ -969,11 +950,13 @@ export function SeededAsinManager() {
                   ))}
 
                   {/* No alternatives available message */}
-                  {!itemToResolve.asin && (!itemToResolve.alternativeAsins || itemToResolve.alternativeAsins.length === 0) && (
-                    <p className="text-sm text-muted-foreground italic">
-                      No ASIN options available for this set.
-                    </p>
-                  )}
+                  {!itemToResolve.asin &&
+                    (!itemToResolve.alternativeAsins ||
+                      itemToResolve.alternativeAsins.length === 0) && (
+                      <p className="text-sm text-muted-foreground italic">
+                        No ASIN options available for this set.
+                      </p>
+                    )}
                 </RadioGroup>
               </div>
 
@@ -996,10 +979,7 @@ export function SeededAsinManager() {
           )}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setResolutionDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setResolutionDialogOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -1054,9 +1034,7 @@ function AsinOptionItem({ asin, title, confidence, isCurrent, selected }: AsinOp
               Current
             </Badge>
           )}
-          {confidence !== undefined && (
-            <ConfidenceBadge confidence={confidence} />
-          )}
+          {confidence !== undefined && <ConfidenceBadge confidence={confidence} />}
           <a
             href={amazonUrl}
             target="_blank"
@@ -1067,11 +1045,7 @@ function AsinOptionItem({ asin, title, confidence, isCurrent, selected }: AsinOp
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
-        {title && (
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-            {title}
-          </p>
-        )}
+        {title && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{title}</p>}
       </div>
     </div>
   );
@@ -1093,14 +1067,10 @@ function StatusCard({ label, value, subtext, icon, className }: StatusCardProps)
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-1">
           {icon && <span className={className}>{icon}</span>}
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">
-            {label}
-          </span>
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">{label}</span>
         </div>
         <div className={cn('text-2xl font-bold', className)}>{value}</div>
-        {subtext && (
-          <div className="text-xs text-muted-foreground">{subtext}</div>
-        )}
+        {subtext && <div className="text-xs text-muted-foreground">{subtext}</div>}
       </CardContent>
     </Card>
   );
@@ -1127,8 +1097,8 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
     confidence >= 95
       ? 'bg-green-100 text-green-800'
       : confidence >= 85
-      ? 'bg-blue-100 text-blue-800'
-      : 'bg-amber-100 text-amber-800';
+        ? 'bg-blue-100 text-blue-800'
+        : 'bg-amber-100 text-amber-800';
 
   return (
     <Badge variant="outline" className={cn('font-mono text-xs', className)}>

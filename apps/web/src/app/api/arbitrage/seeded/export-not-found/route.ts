@@ -44,7 +44,8 @@ export async function GET(_request: NextRequest) {
     // Fetch all seeded ASINs with 'not_found' status
     const { data: notFoundItems, error: fetchError } = await serviceClient
       .from('seeded_asins')
-      .select(`
+      .select(
+        `
         id,
         discovery_attempts,
         last_discovery_attempt_at,
@@ -59,47 +60,48 @@ export async function GET(_request: NextRequest) {
           uk_retail_price,
           pieces
         )
-      `)
+      `
+      )
       .eq('discovery_status', 'not_found')
       .order('created_at', { ascending: false });
 
     if (fetchError) {
       console.error('[GET /api/arbitrage/seeded/export-not-found] Fetch error:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch not found items' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch not found items' }, { status: 500 });
     }
 
     if (!notFoundItems || notFoundItems.length === 0) {
-      return NextResponse.json(
-        { error: 'No not found items' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'No not found items' }, { status: 404 });
     }
 
     // Build CSV rows
     const csvRows: string[] = [];
 
     // Header
-    csvRows.push('Set Number,Set Name,Theme,Year,RRP,Pieces,EAN,UPC,Discovery Attempts,Last Attempt,Error');
+    csvRows.push(
+      'Set Number,Set Name,Theme,Year,RRP,Pieces,EAN,UPC,Discovery Attempts,Last Attempt,Error'
+    );
 
     // Data rows
     for (const row of notFoundItems as SeededAsinRow[]) {
       const bs = row.brickset_sets;
-      csvRows.push([
-        escapeCsvField(bs.set_number),
-        escapeCsvField(bs.set_name),
-        escapeCsvField(bs.theme ?? ''),
-        bs.year_from?.toString() ?? '',
-        bs.uk_retail_price?.toFixed(2) ?? '',
-        bs.pieces?.toString() ?? '',
-        escapeCsvField(bs.ean ?? ''),
-        escapeCsvField(bs.upc ?? ''),
-        row.discovery_attempts.toString(),
-        row.last_discovery_attempt_at ? new Date(row.last_discovery_attempt_at).toISOString().split('T')[0] : '',
-        escapeCsvField(row.discovery_error ?? ''),
-      ].join(','));
+      csvRows.push(
+        [
+          escapeCsvField(bs.set_number),
+          escapeCsvField(bs.set_name),
+          escapeCsvField(bs.theme ?? ''),
+          bs.year_from?.toString() ?? '',
+          bs.uk_retail_price?.toFixed(2) ?? '',
+          bs.pieces?.toString() ?? '',
+          escapeCsvField(bs.ean ?? ''),
+          escapeCsvField(bs.upc ?? ''),
+          row.discovery_attempts.toString(),
+          row.last_discovery_attempt_at
+            ? new Date(row.last_discovery_attempt_at).toISOString().split('T')[0]
+            : '',
+          escapeCsvField(row.discovery_error ?? ''),
+        ].join(',')
+      );
     }
 
     const csvContent = csvRows.join('\n');
@@ -114,10 +116,7 @@ export async function GET(_request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/seeded/export-not-found] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

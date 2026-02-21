@@ -42,12 +42,7 @@ export async function GET(request: NextRequest) {
 
     // 3. Get repricing data (uses cache unless forceSync is true)
     const repricingService = createRepricingService(supabase, user.id);
-    const data = await repricingService.getRepricingData(
-      filters,
-      page,
-      pageSize,
-      forceSync
-    );
+    const data = await repricingService.getRepricingData(filters, page, pageSize, forceSync);
 
     return NextResponse.json({ data });
   } catch (error) {

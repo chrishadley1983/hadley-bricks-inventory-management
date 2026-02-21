@@ -197,9 +197,7 @@ export class BrickOwlClient {
     const queryParams: Record<string, string | number | boolean | undefined> = {};
 
     if (params?.status) {
-      queryParams.status = Array.isArray(params.status)
-        ? params.status.join(',')
-        : params.status;
+      queryParams.status = Array.isArray(params.status) ? params.status.join(',') : params.status;
     }
 
     if (params?.min_order_id) {
@@ -287,10 +285,7 @@ export class BrickOwlClient {
   async getOrderWithItems(
     orderId: string
   ): Promise<{ order: BrickOwlOrderDetail; items: BrickOwlOrderItem[] }> {
-    const [order, items] = await Promise.all([
-      this.getOrder(orderId),
-      this.getOrderItems(orderId),
-    ]);
+    const [order, items] = await Promise.all([this.getOrder(orderId), this.getOrderItems(orderId)]);
 
     return { order, items };
   }

@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     let options: { fullSync: boolean; includeItems: boolean; limit: number | undefined } = {
       fullSync: false,
       includeItems: true,
-      limit: undefined
+      limit: undefined,
     };
     try {
       const body = await request.json();
@@ -50,10 +50,7 @@ export async function POST(request: NextRequest) {
     // Check if configured
     const isConfigured = await syncService.isConfigured(user.id);
     if (!isConfigured) {
-      return NextResponse.json(
-        { error: 'Bricqer credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Bricqer credentials not configured' }, { status: 400 });
     }
 
     // Run sync

@@ -208,7 +208,9 @@ export function ReviewQueueTable() {
                   <Input
                     placeholder="e.g. 75192"
                     value={bundleItem.set_number}
-                    onChange={(e) => updateBundleItemRef.current(item.id, index, 'set_number', e.target.value)}
+                    onChange={(e) =>
+                      updateBundleItemRef.current(item.id, index, 'set_number', e.target.value)
+                    }
                     className="h-8 w-24"
                     disabled={isApproving}
                     onKeyDown={(e) => {
@@ -270,8 +272,7 @@ export function ReviewQueueTable() {
           const items = bundleItemsRef.current[item.id] || [{ ...DEFAULT_BUNDLE_ITEM }];
           const validCount = items.filter((i) => i.set_number.trim()).length;
 
-          const importLabel =
-            validCount <= 1 ? 'Import' : `Import ${validCount} sets`;
+          const importLabel = validCount <= 1 ? 'Import' : `Import ${validCount} sets`;
 
           return (
             <div className="flex items-center gap-1">
@@ -319,9 +320,7 @@ export function ReviewQueueTable() {
     return (
       <div className="rounded-lg border p-8 text-center text-muted-foreground">
         <p className="text-lg font-medium">No items to review</p>
-        <p className="mt-1 text-sm">
-          All email purchases have been processed or dismissed.
-        </p>
+        <p className="mt-1 text-sm">All email purchases have been processed or dismissed.</p>
       </div>
     );
   }
@@ -355,8 +354,8 @@ export function ReviewQueueTable() {
           <DialogHeader>
             <DialogTitle>Dismiss Items</DialogTitle>
             <DialogDescription>
-              Are you sure you want to dismiss {bulkDismissIds.length} item(s)? They will be
-              marked as non-LEGO and hidden from the review queue.
+              Are you sure you want to dismiss {bulkDismissIds.length} item(s)? They will be marked
+              as non-LEGO and hidden from the review queue.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -159,11 +159,7 @@ export const testBricqerOrders: TestPlatformOrder[] = [
   },
 ];
 
-export const allTestOrders = [
-  ...testBrickLinkOrders,
-  ...testBrickOwlOrders,
-  ...testBricqerOrders,
-];
+export const allTestOrders = [...testBrickLinkOrders, ...testBrickOwlOrders, ...testBricqerOrders];
 
 /**
  * Helper to get orders by platform

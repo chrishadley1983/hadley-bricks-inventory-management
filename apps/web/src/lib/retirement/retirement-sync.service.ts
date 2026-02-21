@@ -190,7 +190,7 @@ export class RetirementSyncService {
     ) {
       // Special distribution - treat old ones as retired
       status = isCertainlyOld ? 'retired' : 'available';
-      confidence = retirementDate ? 'confirmed' : (isCertainlyOld ? 'likely' : 'speculative');
+      confidence = retirementDate ? 'confirmed' : isCertainlyOld ? 'likely' : 'speculative';
     } else {
       // Unknown availability value
       status = isCertainlyOld ? 'retired' : 'available';
@@ -229,9 +229,7 @@ export class RetirementSyncService {
       const sheetUrl = process.env.BRICKTAP_SHEET_URL;
 
       if (!sheetUrl) {
-        console.warn(
-          '[RetirementSync] BRICKTAP_SHEET_URL not set - skipping Brick Tap sync'
-        );
+        console.warn('[RetirementSync] BRICKTAP_SHEET_URL not set - skipping Brick Tap sync');
         return {
           source: 'bricktap',
           success: false,
@@ -307,9 +305,7 @@ export class RetirementSyncService {
   private parseBrickTapCSV(csvText: string): RetirementSourceRecord[] {
     const allLines = csvText.trim().split('\n');
     // Skip blank/empty-comma lines to find the actual header row
-    const headerIdx = allLines.findIndex(
-      (line) => line.replace(/,/g, '').trim().length > 0
-    );
+    const headerIdx = allLines.findIndex((line) => line.replace(/,/g, '').trim().length > 0);
     if (headerIdx === -1 || headerIdx >= allLines.length - 1) return [];
 
     const lines = allLines.slice(headerIdx);
@@ -319,8 +315,7 @@ export class RetirementSyncService {
 
     // Find column indices (flexible to handle column order changes)
     const setNumIdx = headers.findIndex(
-      (h) =>
-        h.includes('set') && (h.includes('num') || h.includes('#') || h.includes('number'))
+      (h) => h.includes('set') && (h.includes('num') || h.includes('#') || h.includes('number'))
     );
     const dateIdx = headers.findIndex(
       (h) => h.includes('retire') || h.includes('date') || h.includes('eol')
@@ -330,9 +325,7 @@ export class RetirementSyncService {
     );
 
     if (setNumIdx === -1) {
-      console.warn(
-        '[RetirementSync] BrickTap CSV: Could not find set number column'
-      );
+      console.warn('[RetirementSync] BrickTap CSV: Could not find set number column');
       return [];
     }
 
@@ -345,9 +338,7 @@ export class RetirementSyncService {
       if (!setNum) continue;
 
       // Normalize set number to include variant (e.g., "75192" -> "75192-1")
-      const normalizedSetNum = setNum.includes('-')
-        ? setNum
-        : `${setNum}-1`;
+      const normalizedSetNum = setNum.includes('-') ? setNum : `${setNum}-1`;
 
       // Parse retirement date
       let retirementDate: string | null = null;
@@ -356,7 +347,7 @@ export class RetirementSyncService {
       }
 
       // Determine confidence from source notes
-      const sourceNotes = sourceIdx !== -1 ? cols[sourceIdx]?.trim() ?? '' : '';
+      const sourceNotes = sourceIdx !== -1 ? (cols[sourceIdx]?.trim() ?? '') : '';
       const confidence = this.inferConfidence(sourceNotes);
 
       // Determine status from date
@@ -429,18 +420,33 @@ export class RetirementSyncService {
 
     // Month abbreviation/full name lookup
     const monthLookup: Record<string, string> = {
-      jan: '01', january: '01', feb: '02', february: '02',
-      mar: '03', march: '03', apr: '04', april: '04',
-      may: '05', jun: '06', june: '06', jul: '07', july: '07',
-      aug: '08', august: '08', sep: '09', september: '09',
-      oct: '10', october: '10', nov: '11', november: '11',
-      dec: '12', december: '12',
+      jan: '01',
+      january: '01',
+      feb: '02',
+      february: '02',
+      mar: '03',
+      march: '03',
+      apr: '04',
+      april: '04',
+      may: '05',
+      jun: '06',
+      june: '06',
+      jul: '07',
+      july: '07',
+      aug: '08',
+      august: '08',
+      sep: '09',
+      september: '09',
+      oct: '10',
+      october: '10',
+      nov: '11',
+      november: '11',
+      dec: '12',
+      december: '12',
     };
 
     // Try "Mon DD, YYYY" (e.g., "Apr 30, 2026")
-    const monDayYear = dateStr.match(
-      /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/
-    );
+    const monDayYear = dateStr.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
     if (monDayYear) {
       const month = monthLookup[monDayYear[1].toLowerCase()];
       if (month) {
@@ -449,9 +455,7 @@ export class RetirementSyncService {
     }
 
     // Try Month YYYY (e.g., "December 2026")
-    const monthYear = dateStr.match(
-      /^([A-Za-z]+)\s+(\d{4})$/
-    );
+    const monthYear = dateStr.match(/^([A-Za-z]+)\s+(\d{4})$/);
     if (monthYear) {
       const month = monthLookup[monthYear[1].toLowerCase()];
       if (month) {
@@ -470,11 +474,7 @@ export class RetirementSyncService {
   /** Infer confidence level from source notes */
   private inferConfidence(notes: string): RetirementConfidence {
     const lower = notes.toLowerCase();
-    if (
-      lower.includes('official') ||
-      lower.includes('confirmed') ||
-      lower.includes('lego.com')
-    ) {
+    if (lower.includes('official') || lower.includes('confirmed') || lower.includes('lego.com')) {
       return 'confirmed';
     }
     if (
@@ -535,9 +535,7 @@ export class RetirementSyncService {
       page++;
     }
 
-    console.log(
-      `[RetirementSync] Rollup: ${sourcesBySet.size} sets with retirement data`
-    );
+    console.log(`[RetirementSync] Rollup: ${sourcesBySet.size} sets with retirement data`);
 
     // Calculate rollup for each set and group by update values for batching
     const confidencePriority: Record<RetirementConfidence, number> = {
@@ -547,19 +545,19 @@ export class RetirementSyncService {
     };
 
     // Group sets by their rollup values so we can batch updates
-    const updateGroups = new Map<string, {
-      status: RetirementStatus;
-      date: string | null;
-      confidence: RetirementConfidence;
-      setNumbers: string[];
-    }>();
+    const updateGroups = new Map<
+      string,
+      {
+        status: RetirementStatus;
+        date: string | null;
+        confidence: RetirementConfidence;
+        setNumbers: string[];
+      }
+    >();
 
     for (const [setNum, sources] of sourcesBySet) {
       // Sort sources by confidence (highest first)
-      sources.sort(
-        (a, b) =>
-          confidencePriority[b.confidence] - confidencePriority[a.confidence]
-      );
+      sources.sort((a, b) => confidencePriority[b.confidence] - confidencePriority[a.confidence]);
 
       const bestSource = sources[0];
 
@@ -587,9 +585,7 @@ export class RetirementSyncService {
       }
     }
 
-    console.log(
-      `[RetirementSync] Rollup: ${updateGroups.size} distinct update groups`
-    );
+    console.log(`[RetirementSync] Rollup: ${updateGroups.size} distinct update groups`);
 
     // Batch update each group (chunk .in() to max 500 set numbers per call)
     const BATCH_SIZE = 500;

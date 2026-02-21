@@ -123,7 +123,10 @@ export function normalizeOrder(
  * Normalize multiple orders
  */
 export function normalizeOrders(
-  orders: Array<{ order: BrickLinkOrderDetail | BrickLinkOrderSummary; items?: BrickLinkOrderItem[] }>
+  orders: Array<{
+    order: BrickLinkOrderDetail | BrickLinkOrderSummary;
+    items?: BrickLinkOrderItem[];
+  }>
 ): NormalizedOrder[] {
   return orders.map(({ order, items }) => normalizeOrder(order, items || []));
 }

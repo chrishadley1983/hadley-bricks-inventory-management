@@ -70,10 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (queryError) {
       console.error('[refresh-barcodes] Query error:', queryError);
-      return NextResponse.json(
-        { error: 'Failed to query sets' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to query sets' }, { status: 500 });
     }
 
     if (!setsToRefresh || setsToRefresh.length === 0) {
@@ -221,9 +218,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/admin/brickset/refresh-barcodes] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

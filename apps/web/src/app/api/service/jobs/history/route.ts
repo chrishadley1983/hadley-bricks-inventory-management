@@ -29,15 +29,16 @@ export async function GET(request: NextRequest) {
       const status = url.searchParams.get('status');
       const since = url.searchParams.get('since');
       const until = url.searchParams.get('until');
-      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 200);
+      const limit = Math.min(
+        Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1),
+        200
+      );
       const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10) || 0, 0);
 
       const supabase = createServiceRoleClient();
 
       // Build query
-      let query = supabase
-        .from('job_execution_history')
-        .select('*', { count: 'exact' });
+      let query = supabase.from('job_execution_history').select('*', { count: 'exact' });
 
       // Apply filters
       if (jobName) {
@@ -61,18 +62,13 @@ export async function GET(request: NextRequest) {
       }
 
       // Order and paginate
-      query = query
-        .order('started_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      query = query.order('started_at', { ascending: false }).range(offset, offset + limit - 1);
 
       const { data, error, count } = await query;
 
       if (error) {
         console.error('[GET /api/service/jobs/history] Query error:', error);
-        return NextResponse.json(
-          { error: 'Failed to query job history' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to query job history' }, { status: 500 });
       }
 
       const total = count ?? 0;

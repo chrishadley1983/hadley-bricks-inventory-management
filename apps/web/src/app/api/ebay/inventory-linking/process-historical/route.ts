@@ -47,7 +47,11 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          const result = await linkingService.processHistoricalOrders({ includeSold, includePaid, onProgress });
+          const result = await linkingService.processHistoricalOrders({
+            includeSold,
+            includePaid,
+            onProgress,
+          });
 
           // Send final result
           const finalResult = { type: 'complete', data: result };

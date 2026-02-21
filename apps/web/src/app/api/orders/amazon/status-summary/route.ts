@@ -41,10 +41,7 @@ export async function GET() {
 
       if (error) {
         console.error('[GET /api/orders/amazon/status-summary] Error:', error);
-        return NextResponse.json(
-          { error: 'Failed to fetch order summary' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to fetch order summary' }, { status: 500 });
       }
 
       for (const order of orders || []) {
@@ -84,11 +81,13 @@ function normalizeStatus(rawStatus: string | null): string {
   if (!rawStatus) return 'Pending';
   const lower = rawStatus.toLowerCase();
 
-  if (lower.includes('completed') || lower.includes('received') || lower.includes('delivered')) return 'Completed';
+  if (lower.includes('completed') || lower.includes('received') || lower.includes('delivered'))
+    return 'Completed';
   if (lower.includes('shipped') || lower.includes('dispatched')) return 'Shipped';
   if (lower.includes('packed') || lower.includes('ready')) return 'Packed';
   if (lower.includes('paid') || lower.includes('payment')) return 'Paid';
-  if (lower.includes('cancel') || lower.includes('npb') || lower.includes('refund')) return 'Cancelled';
+  if (lower.includes('cancel') || lower.includes('npb') || lower.includes('refund'))
+    return 'Cancelled';
 
   return 'Pending';
 }

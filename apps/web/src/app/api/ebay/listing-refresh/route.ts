@@ -14,33 +14,35 @@ import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
 // Validation schema for create request
 // Note: itemId and categoryId can come as numbers from the eBay API, so we coerce them to strings
 const CreateRefreshJobSchema = z.object({
-  listings: z.array(
-    z.object({
-      itemId: z.union([z.string(), z.number()]).transform(String),
-      title: z.string(),
-      price: z.number(),
-      currency: z.string(),
-      quantity: z.number(),
-      quantityAvailable: z.number(),
-      quantitySold: z.number(),
-      condition: z.string().nullable(),
-      conditionId: z.number().nullable(),
-      watchers: z.number(),
-      views: z.number().nullable(),
-      listingStartDate: z.string(),
-      listingEndDate: z.string().nullable().optional(),
-      listingAge: z.number(),
-      galleryUrl: z.string().nullable(),
-      viewItemUrl: z.string().nullable(),
-      sku: z.string().nullable(),
-      categoryId: z.union([z.string(), z.number()]).transform(String).nullable(),
-      categoryName: z.string().nullable(),
-      listingType: z.string(),
-      bestOfferEnabled: z.boolean(),
-      pendingOfferCount: z.number().default(0),
-      endsWithin12Hours: z.boolean().default(false),
-    })
-  ).min(1, 'At least one listing is required'),
+  listings: z
+    .array(
+      z.object({
+        itemId: z.union([z.string(), z.number()]).transform(String),
+        title: z.string(),
+        price: z.number(),
+        currency: z.string(),
+        quantity: z.number(),
+        quantityAvailable: z.number(),
+        quantitySold: z.number(),
+        condition: z.string().nullable(),
+        conditionId: z.number().nullable(),
+        watchers: z.number(),
+        views: z.number().nullable(),
+        listingStartDate: z.string(),
+        listingEndDate: z.string().nullable().optional(),
+        listingAge: z.number(),
+        galleryUrl: z.string().nullable(),
+        viewItemUrl: z.string().nullable(),
+        sku: z.string().nullable(),
+        categoryId: z.union([z.string(), z.number()]).transform(String).nullable(),
+        categoryName: z.string().nullable(),
+        listingType: z.string(),
+        bestOfferEnabled: z.boolean(),
+        pendingOfferCount: z.number().default(0),
+        endsWithin12Hours: z.boolean().default(false),
+      })
+    )
+    .min(1, 'At least one listing is required'),
   reviewMode: z.boolean().default(true),
 });
 

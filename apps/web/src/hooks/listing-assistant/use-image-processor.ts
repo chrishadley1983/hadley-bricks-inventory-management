@@ -61,59 +61,65 @@ export function useImageProcessor() {
   /**
    * Add images from files
    */
-  const addImages = useCallback(async (files: File[]) => {
-    const newImages: StudioImage[] = [];
+  const addImages = useCallback(
+    async (files: File[]) => {
+      const newImages: StudioImage[] = [];
 
-    for (const file of files) {
-      try {
-        // Convert to base64
-        let base64 = await fileToBase64(file);
+      for (const file of files) {
+        try {
+          // Convert to base64
+          let base64 = await fileToBase64(file);
 
-        // Resize if too large
-        base64 = await resizeImage(base64, 1500);
+          // Resize if too large
+          base64 = await resizeImage(base64, 1500);
 
-        const newImage: StudioImage = {
-          id: uuidv4(),
-          name: file.name.replace(/\.[^/.]+$/, ''),
-          fileName: file.name,
-          original: base64,
-          processed: null,
-          settings: { ...DEFAULT_IMAGE_SETTINGS },
-          analysis: null,
-          isProcessing: false,
-          isAnalyzing: false,
-          isFixing: false,
-        };
+          const newImage: StudioImage = {
+            id: uuidv4(),
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            fileName: file.name,
+            original: base64,
+            processed: null,
+            settings: { ...DEFAULT_IMAGE_SETTINGS },
+            analysis: null,
+            isProcessing: false,
+            isAnalyzing: false,
+            isFixing: false,
+          };
 
-        newImages.push(newImage);
-      } catch (error) {
-        console.error('Failed to load image:', file.name, error);
+          newImages.push(newImage);
+        } catch (error) {
+          console.error('Failed to load image:', file.name, error);
+        }
       }
-    }
 
-    setImages((prev) => [...prev, ...newImages]);
+      setImages((prev) => [...prev, ...newImages]);
 
-    // Select the first new image if none selected
-    if (newImages.length > 0 && !selectedId) {
-      setSelectedId(newImages[0].id);
-    }
-  }, [selectedId]);
+      // Select the first new image if none selected
+      if (newImages.length > 0 && !selectedId) {
+        setSelectedId(newImages[0].id);
+      }
+    },
+    [selectedId]
+  );
 
   /**
    * Remove an image
    */
-  const removeImage = useCallback((id: string) => {
-    setImages((prev) => {
-      const filtered = prev.filter((img) => img.id !== id);
+  const removeImage = useCallback(
+    (id: string) => {
+      setImages((prev) => {
+        const filtered = prev.filter((img) => img.id !== id);
 
-      // If we removed the selected image, select another
-      if (selectedId === id) {
-        setSelectedId(filtered.length > 0 ? filtered[0].id : null);
-      }
+        // If we removed the selected image, select another
+        if (selectedId === id) {
+          setSelectedId(filtered.length > 0 ? filtered[0].id : null);
+        }
 
-      return filtered;
-    });
-  }, [selectedId]);
+        return filtered;
+      });
+    },
+    [selectedId]
+  );
 
   /**
    * Update settings for an image

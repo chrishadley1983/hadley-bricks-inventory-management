@@ -150,7 +150,11 @@ export class BricqerSyncService {
         allOrders = await client.getAllOrders({ filed: false });
       }
 
-      console.log('[BricqerSyncService] Fetched', allOrders.length, 'total orders from Bricqer API');
+      console.log(
+        '[BricqerSyncService] Fetched',
+        allOrders.length,
+        'total orders from Bricqer API'
+      );
 
       // Filter out eBay orders - they're handled by the separate eBay integration
       const orders = allOrders.filter((order) => {
@@ -165,11 +169,7 @@ export class BricqerSyncService {
         try {
           // Check if order already exists
           const orderId = orderSummary.order_number || String(orderSummary.id);
-          const existing = await this.orderRepo.findByPlatformOrderId(
-            userId,
-            'bricqer',
-            orderId
-          );
+          const existing = await this.orderRepo.findByPlatformOrderId(userId, 'bricqer', orderId);
 
           await this.processOrder(userId, client, orderSummary, options.includeItems ?? false);
 
@@ -206,7 +206,9 @@ export class BricqerSyncService {
         result.errors.push(errorMsg);
         // Add more context for credential decryption errors
         if (errorMsg.includes('decrypt') || errorMsg.includes('authenticate')) {
-          result.errors.push('Hint: Check that CREDENTIALS_ENCRYPTION_KEY is correctly set in environment');
+          result.errors.push(
+            'Hint: Check that CREDENTIALS_ENCRYPTION_KEY is correctly set in environment'
+          );
         }
       }
     }
@@ -252,11 +254,13 @@ export class BricqerSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
       items_count: itemsCount,
       // Note: buyer_phone and orderDescription are available in normalized.rawData
-      raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      raw_data:
+        normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 
     // Upsert order
@@ -310,11 +314,13 @@ export class BricqerSyncService {
       fees: normalized.fees,
       total: normalized.total,
       currency: normalized.currency,
-      shipping_address: normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
+      shipping_address:
+        normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
       tracking_number: normalized.trackingNumber,
       items_count: itemsCount,
       // Note: buyer_phone and orderDescription are available in normalized.rawData
-      raw_data: normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      raw_data:
+        normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
     };
 
     const savedOrder = await this.orderRepo.upsert(orderInsert);
@@ -361,13 +367,13 @@ export class BricqerSyncService {
     const stats = await this.orderRepo.getStats(userId, 'bricqer');
 
     // Get most recent synced_at
-    const { data } = await this.supabase
+    const { data } = (await this.supabase
       .from('platform_orders')
       .select('synced_at')
       .eq('user_id', userId)
       .eq('platform', 'bricqer')
       .order('synced_at', { ascending: false })
-      .limit(1) as { data: { synced_at: string }[] | null };
+      .limit(1)) as { data: { synced_at: string }[] | null };
 
     const lastSyncedAt = data?.[0]?.synced_at ? new Date(data[0].synced_at) : null;
 

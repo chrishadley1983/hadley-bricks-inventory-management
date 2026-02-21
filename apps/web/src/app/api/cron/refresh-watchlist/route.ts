@@ -60,7 +60,12 @@ export async function POST(request: NextRequest) {
       console.error('[Cron RefreshWatchlist] Discord notification failed:', discordError);
     }
 
-    await execution.complete({ added: result.added, removed: result.removed, total: result.total }, 200, result.total, 0);
+    await execution.complete(
+      { added: result.added, removed: result.removed, total: result.total },
+      200,
+      result.total,
+      0
+    );
 
     return NextResponse.json({
       success: true,

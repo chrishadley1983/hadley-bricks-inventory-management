@@ -46,8 +46,7 @@ function formatDifference(diff: number): string {
 
 export function EbayComparisonView() {
   const [filters, setFilters] = useState<EbayComparisonFiltersType>({});
-  const [selectedComparison, setSelectedComparison] =
-    useState<EbayStockComparison | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState<EbayStockComparison | null>(null);
 
   const { data, isLoading, error } = useEbayStockComparison(filters);
 
@@ -59,9 +58,7 @@ export function EbayComparisonView() {
 
     // Hide items where both platform and inventory quantities are 0
     if (filters.hideZeroQuantities) {
-      result = result.filter(
-        (c) => !(c.platformQuantity === 0 && c.inventoryQuantity === 0)
-      );
+      result = result.filter((c) => !(c.platformQuantity === 0 && c.inventoryQuantity === 0));
     }
 
     return result;
@@ -77,8 +74,7 @@ export function EbayComparisonView() {
     setFilters((prev) => ({
       ...prev,
       discrepancyType: filter === 'all' ? undefined : filter,
-      hideZeroQuantities:
-        filter === 'match' ? prev.hideZeroQuantities : undefined,
+      hideZeroQuantities: filter === 'match' ? prev.hideZeroQuantities : undefined,
     }));
   };
 
@@ -191,9 +187,7 @@ export function EbayComparisonView() {
                       onClick={() => setSelectedComparison(comparison)}
                     >
                       <TableCell className="font-mono text-sm">
-                        {comparison.platformSku || (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        {comparison.platformSku || <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell
                         className="max-w-[300px] truncate"
@@ -262,10 +256,7 @@ interface EbayComparisonDetailSheetProps {
   onClose: () => void;
 }
 
-function EbayComparisonDetailSheet({
-  comparison,
-  onClose,
-}: EbayComparisonDetailSheetProps) {
+function EbayComparisonDetailSheet({ comparison, onClose }: EbayComparisonDetailSheetProps) {
   if (!comparison) return null;
 
   return (
@@ -276,9 +267,7 @@ function EbayComparisonDetailSheet({
             {comparison.platformSku || 'No SKU'}
             <DiscrepancyBadge type={comparison.discrepancyType} />
           </SheetTitle>
-          <SheetDescription>
-            {comparison.platformTitle || 'No title available'}
-          </SheetDescription>
+          <SheetDescription>{comparison.platformTitle || 'No title available'}</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
@@ -329,11 +318,7 @@ function EbayComparisonDetailSheet({
 
             {comparison.viewItemUrl && (
               <Button variant="link" size="sm" className="px-0 mt-2" asChild>
-                <a
-                  href={comparison.viewItemUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={comparison.viewItemUrl} target="_blank" rel="noopener noreferrer">
                   View on eBay
                   <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
@@ -343,14 +328,10 @@ function EbayComparisonDetailSheet({
 
           {/* Inventory Data */}
           <div>
-            <h3 className="font-semibold mb-3">
-              Inventory ({comparison.inventoryQuantity} items)
-            </h3>
+            <h3 className="font-semibold mb-3">Inventory ({comparison.inventoryQuantity} items)</h3>
 
             {comparison.inventoryItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No matching inventory items found
-              </p>
+              <p className="text-sm text-muted-foreground">No matching inventory items found</p>
             ) : (
               <div className="space-y-3">
                 {comparison.inventoryItems.map((item) => (
@@ -391,9 +372,7 @@ function InventoryItemCard({ item }: InventoryItemCardProps) {
       <div className="flex items-start justify-between">
         <div>
           <p className="font-medium">{item.setNumber}</p>
-          <p className="text-sm text-muted-foreground line-clamp-1">
-            {item.itemName || 'No name'}
-          </p>
+          <p className="text-sm text-muted-foreground line-clamp-1">{item.itemName || 'No name'}</p>
         </div>
         <Badge variant="secondary">{item.condition || 'N/A'}</Badge>
       </div>

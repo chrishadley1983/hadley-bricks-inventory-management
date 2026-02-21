@@ -25,7 +25,11 @@ const SET_NUMBER_PATTERNS = [
   // Number in parentheses: (40585)
   { pattern: /\((\d{4,6})\)/, confidence: 'probable' as MatchConfidence, method: 'parentheses' },
   // Standalone 5-digit number
-  { pattern: /\b(\d{5})\b/, confidence: 'probable' as MatchConfidence, method: 'standalone_number' },
+  {
+    pattern: /\b(\d{5})\b/,
+    confidence: 'probable' as MatchConfidence,
+    method: 'standalone_number',
+  },
 ];
 
 /**
@@ -130,28 +134,30 @@ export class MappingService {
     const validation = await this.validateSetNumber(userId, extraction.setNumber);
 
     if (!validation.valid) {
-      console.log(`[MappingService.mapAsin] Set ${extraction.setNumber} not found in BrickLink for ASIN ${asin}`);
+      console.log(
+        `[MappingService.mapAsin] Set ${extraction.setNumber} not found in BrickLink for ASIN ${asin}`
+      );
       return { mapped: false, setNumber: extraction.setNumber, confidence: null };
     }
 
     // Create the mapping
-    const { error } = await this.supabase
-      .from('asin_bricklink_mapping')
-      .upsert({
-        asin,
-        user_id: userId,
-        bricklink_set_number: validation.setNumber,
-        match_confidence: extraction.confidence ?? 'unknown',
-        match_method: extraction.method,
-        verified_at: extraction.confidence === 'exact' ? new Date().toISOString() : null,
-      });
+    const { error } = await this.supabase.from('asin_bricklink_mapping').upsert({
+      asin,
+      user_id: userId,
+      bricklink_set_number: validation.setNumber,
+      match_confidence: extraction.confidence ?? 'unknown',
+      match_method: extraction.method,
+      verified_at: extraction.confidence === 'exact' ? new Date().toISOString() : null,
+    });
 
     if (error) {
       console.error('[MappingService.mapAsin] Error creating mapping:', error);
       throw new Error(`Failed to create mapping: ${error.message}`);
     }
 
-    console.log(`[MappingService.mapAsin] Mapped ASIN ${asin} to ${validation.setNumber} (${extraction.confidence})`);
+    console.log(
+      `[MappingService.mapAsin] Mapped ASIN ${asin} to ${validation.setNumber} (${extraction.confidence})`
+    );
     return { mapped: true, setNumber: validation.setNumber, confidence: extraction.confidence };
   }
 
@@ -189,7 +195,9 @@ export class MappingService {
     const mappedAsins = new Set(mappings?.map((m) => m.asin) ?? []);
     const unmapped = (allAsins ?? []).filter((a) => !mappedAsins.has(a.asin));
 
-    console.log(`[MappingService.mapAllUnmapped] Found ${unmapped.length} unmapped ASINs out of ${allAsins?.length ?? 0} total`);
+    console.log(
+      `[MappingService.mapAllUnmapped] Found ${unmapped.length} unmapped ASINs out of ${allAsins?.length ?? 0} total`
+    );
 
     const total = unmapped?.length ?? 0;
     let mapped = 0;
@@ -222,7 +230,10 @@ export class MappingService {
   /**
    * Get mapping for an ASIN
    */
-  async getMapping(userId: string, asin: string): Promise<{
+  async getMapping(
+    userId: string,
+    asin: string
+  ): Promise<{
     bricklinkSetNumber: string;
     matchConfidence: MatchConfidence;
     matchMethod: string | null;

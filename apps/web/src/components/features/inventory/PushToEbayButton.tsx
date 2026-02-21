@@ -21,13 +21,16 @@ interface PushToEbayButtonProps {
  * - listing_platform is 'ebay'
  * - status is 'Backlog'
  */
-export function PushToEbayButton({ item, variant = 'outline', size = 'sm' }: PushToEbayButtonProps) {
+export function PushToEbayButton({
+  item,
+  variant = 'outline',
+  size = 'sm',
+}: PushToEbayButtonProps) {
   const router = useRouter();
 
   // Only show for eBay backlog items
   const isEbayBacklog =
-    item.listing_platform?.toLowerCase() === 'ebay' &&
-    item.status?.toLowerCase() === 'backlog';
+    item.listing_platform?.toLowerCase() === 'ebay' && item.status?.toLowerCase() === 'backlog';
 
   if (!isEbayBacklog) {
     return null;

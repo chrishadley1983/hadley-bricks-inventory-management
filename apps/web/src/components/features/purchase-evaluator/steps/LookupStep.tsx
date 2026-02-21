@@ -68,9 +68,7 @@ export function LookupStep({ progress, error, isRunning }: LookupStepProps) {
   }, [progress]);
 
   // Overall progress
-  const overallPercent = Math.round(
-    phases.reduce((sum, p) => sum + p.percent, 0) / phases.length
-  );
+  const overallPercent = Math.round(phases.reduce((sum, p) => sum + p.percent, 0) / phases.length);
 
   return (
     <Card>
@@ -79,9 +77,7 @@ export function LookupStep({ progress, error, isRunning }: LookupStepProps) {
           <Search className="h-5 w-5" />
           Looking Up Prices
         </CardTitle>
-        <CardDescription>
-          Fetching pricing data from Brickset, Amazon, and eBay
-        </CardDescription>
+        <CardDescription>Fetching pricing data from Brickset, Amazon, and eBay</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Overall progress */}

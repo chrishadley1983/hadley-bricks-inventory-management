@@ -4,15 +4,20 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, FileText, Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Calendar, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  ArrowLeft,
+  Download,
+  FileText,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  Home,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -28,10 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useProfitLossReport, useExportReport } from '@/hooks/use-reports';
 import { usePerfPage } from '@/hooks/use-perf';
 import type { ProfitLossCategory } from '@/lib/services/profit-loss-report.service';
@@ -43,7 +45,13 @@ import { HomeCostsModal } from '@/components/features/home-costs';
 import { MtdExportDropdown } from '@/components/features/mtd-export';
 
 // View preset types
-type ViewPreset = 'last_12_months' | 'this_year' | 'last_year' | 'this_quarter' | 'last_quarter' | 'custom';
+type ViewPreset =
+  | 'last_12_months'
+  | 'this_year'
+  | 'last_year'
+  | 'this_quarter'
+  | 'last_quarter'
+  | 'custom';
 
 // Helper to get quarter info
 function getQuarterMonths(year: number, quarter: number): string[] {
@@ -123,11 +131,11 @@ function formatMonth(monthStr: string): string {
 
 // Category display order and styling
 const categoryConfig: Record<ProfitLossCategory, { order: number; color: string }> = {
-  'Income': { order: 1, color: 'bg-green-50' },
+  Income: { order: 1, color: 'bg-green-50' },
   'Selling Fees': { order: 2, color: 'bg-red-50' },
   'Stock Purchase': { order: 3, color: 'bg-orange-50' },
   'Packing & Postage': { order: 4, color: 'bg-blue-50' },
-  'Bills': { order: 5, color: 'bg-purple-50' },
+  Bills: { order: 5, color: 'bg-purple-50' },
   'Home Costs': { order: 6, color: 'bg-teal-50' },
 };
 
@@ -141,7 +149,14 @@ export default function ProfitLossReportPage() {
   });
 
   const [expandedCategories, setExpandedCategories] = useState<Set<ProfitLossCategory>>(
-    new Set(['Income', 'Selling Fees', 'Stock Purchase', 'Packing & Postage', 'Bills', 'Home Costs'])
+    new Set([
+      'Income',
+      'Selling Fees',
+      'Stock Purchase',
+      'Packing & Postage',
+      'Bills',
+      'Home Costs',
+    ])
   );
 
   // Fixed date range - always fetch last 24 months from today
@@ -208,12 +223,18 @@ export default function ProfitLossReportPage() {
       doc.setFont('helvetica', 'bold');
       doc.text('Profit & Loss Report', 14, yPos);
 
-      const periodLabel = viewPreset === 'last_12_months' ? 'Last 12 Months'
-        : viewPreset === 'this_year' ? `${new Date().getFullYear()} YTD`
-        : viewPreset === 'last_year' ? `${new Date().getFullYear() - 1} Full Year`
-        : viewPreset === 'this_quarter' ? `Q${getCurrentQuarter()} ${new Date().getFullYear()}`
-        : viewPreset === 'last_quarter' ? `Q${getCurrentQuarter() === 1 ? 4 : getCurrentQuarter() - 1} ${getCurrentQuarter() === 1 ? new Date().getFullYear() - 1 : new Date().getFullYear()}`
-        : 'Custom';
+      const periodLabel =
+        viewPreset === 'last_12_months'
+          ? 'Last 12 Months'
+          : viewPreset === 'this_year'
+            ? `${new Date().getFullYear()} YTD`
+            : viewPreset === 'last_year'
+              ? `${new Date().getFullYear() - 1} Full Year`
+              : viewPreset === 'this_quarter'
+                ? `Q${getCurrentQuarter()} ${new Date().getFullYear()}`
+                : viewPreset === 'last_quarter'
+                  ? `Q${getCurrentQuarter() === 1 ? 4 : getCurrentQuarter() - 1} ${getCurrentQuarter() === 1 ? new Date().getFullYear() - 1 : new Date().getFullYear()}`
+                  : 'Custom';
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
@@ -238,8 +259,19 @@ export default function ProfitLossReportPage() {
       yPos += 4;
 
       // Build detailed table with categories and their transaction types
-      const categories = ['Income', 'Selling Fees', 'Stock Purchase', 'Packing & Postage', 'Bills'] as ProfitLossCategory[];
-      const tableHead = ['Category / Transaction Type', ...displayMonths.map(formatMonth), 'Total', 'Monthly Avg'];
+      const categories = [
+        'Income',
+        'Selling Fees',
+        'Stock Purchase',
+        'Packing & Postage',
+        'Bills',
+      ] as ProfitLossCategory[];
+      const tableHead = [
+        'Category / Transaction Type',
+        ...displayMonths.map(formatMonth),
+        'Total',
+        'Monthly Avg',
+      ];
       const tableBody: (string | { content: string; styles?: Record<string, unknown> })[][] = [];
 
       // Track row indices for styling
@@ -253,20 +285,21 @@ export default function ProfitLossReportPage() {
         // Skip empty categories
         if (categoryTotal === 0) continue;
 
-        const categoryMonthlyAvg = displayMonths.length > 0 ? categoryTotal / displayMonths.length : 0;
+        const categoryMonthlyAvg =
+          displayMonths.length > 0 ? categoryTotal / displayMonths.length : 0;
 
         // Category header row
         categoryRowIndices.push(rowIndex);
         tableBody.push([
           { content: category, styles: { fontStyle: 'bold' } },
-          ...displayMonths.map(m => formatCurrency(categoryTotals[m] || 0)),
+          ...displayMonths.map((m) => formatCurrency(categoryTotals[m] || 0)),
           formatCurrency(categoryTotal),
           formatCurrency(categoryMonthlyAvg),
         ]);
         rowIndex++;
 
         // Transaction type rows within this category
-        const categoryRows = report.rows.filter(r => r.category === category);
+        const categoryRows = report.rows.filter((r) => r.category === category);
         for (const row of categoryRows) {
           const rowTotal = displayMonths.reduce((sum, m) => sum + (row.monthlyValues[m] || 0), 0);
           // Skip zero rows
@@ -275,7 +308,7 @@ export default function ProfitLossReportPage() {
           const rowMonthlyAvg = displayMonths.length > 0 ? rowTotal / displayMonths.length : 0;
           tableBody.push([
             `  ${row.transactionType}`,
-            ...displayMonths.map(m => formatCurrency(row.monthlyValues[m] || 0)),
+            ...displayMonths.map((m) => formatCurrency(row.monthlyValues[m] || 0)),
             formatCurrency(rowTotal),
             formatCurrency(rowMonthlyAvg),
           ]);
@@ -284,12 +317,16 @@ export default function ProfitLossReportPage() {
       }
 
       // Net Profit row
-      const netProfitTotal = displayMonths.reduce((sum, m) => sum + (report.grandTotal?.[m] || 0), 0);
-      const netProfitMonthlyAvg = displayMonths.length > 0 ? netProfitTotal / displayMonths.length : 0;
+      const netProfitTotal = displayMonths.reduce(
+        (sum, m) => sum + (report.grandTotal?.[m] || 0),
+        0
+      );
+      const netProfitMonthlyAvg =
+        displayMonths.length > 0 ? netProfitTotal / displayMonths.length : 0;
       const netProfitRowIndex = rowIndex;
       tableBody.push([
         { content: 'Net Profit / (Loss)', styles: { fontStyle: 'bold' } },
-        ...displayMonths.map(m => formatCurrency(report.grandTotal?.[m] || 0)),
+        ...displayMonths.map((m) => formatCurrency(report.grandTotal?.[m] || 0)),
         formatCurrency(netProfitTotal),
         formatCurrency(netProfitMonthlyAvg),
       ]);
@@ -340,7 +377,9 @@ export default function ProfitLossReportPage() {
       doc.text('Profit & Loss Report - Summary & Analysis', 14, yPos);
       doc.setFontSize(7);
       doc.setTextColor(100);
-      doc.text(`${periodLabel} | Generated: ${new Date().toLocaleString()}`, 283, yPos, { align: 'right' });
+      doc.text(`${periodLabel} | Generated: ${new Date().toLocaleString()}`, 283, yPos, {
+        align: 'right',
+      });
       doc.setTextColor(0);
       yPos += 8;
 
@@ -350,7 +389,11 @@ export default function ProfitLossReportPage() {
       doc.text('Period Summary', 14, yPos);
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
-      doc.text(`${formatMonth(displayMonths[0])} - ${formatMonth(displayMonths[displayMonths.length - 1])} (${displayMonths.length} month${displayMonths.length !== 1 ? 's' : ''})`, 55, yPos);
+      doc.text(
+        `${formatMonth(displayMonths[0])} - ${formatMonth(displayMonths[displayMonths.length - 1])} (${displayMonths.length} month${displayMonths.length !== 1 ? 's' : ''})`,
+        55,
+        yPos
+      );
       yPos += 5;
 
       const summaryTableBody: string[][] = [];
@@ -361,7 +404,11 @@ export default function ProfitLossReportPage() {
         const monthlyAvg = displayMonths.length > 0 ? total / displayMonths.length : 0;
         summaryTableBody.push([category, formatCurrency(total), formatCurrency(monthlyAvg)]);
       }
-      summaryTableBody.push(['Net Profit / (Loss)', formatCurrency(netProfitTotal), formatCurrency(netProfitMonthlyAvg)]);
+      summaryTableBody.push([
+        'Net Profit / (Loss)',
+        formatCurrency(netProfitTotal),
+        formatCurrency(netProfitMonthlyAvg),
+      ]);
 
       autoTable(doc, {
         startY: yPos,
@@ -401,25 +448,42 @@ export default function ProfitLossReportPage() {
       yPos += 5;
 
       // Get platform data
-      const ebayRow = report.rows.find(r => r.transactionType === 'eBay Gross Sales');
-      const bricklinkRow = report.rows.find(r => r.transactionType === 'BrickLink Gross Sales');
-      const amazonRow = report.rows.find(r => r.transactionType === 'Amazon Sales');
-      const brickowlRow = report.rows.find(r => r.transactionType === 'Brick Owl Gross Sales');
+      const ebayRow = report.rows.find((r) => r.transactionType === 'eBay Gross Sales');
+      const bricklinkRow = report.rows.find((r) => r.transactionType === 'BrickLink Gross Sales');
+      const amazonRow = report.rows.find((r) => r.transactionType === 'Amazon Sales');
+      const brickowlRow = report.rows.find((r) => r.transactionType === 'Brick Owl Gross Sales');
 
       const platformTotals = [
-        { name: 'eBay', total: displayMonths.reduce((sum, m) => sum + (ebayRow?.monthlyValues[m] || 0), 0), color: [59, 130, 246] },
-        { name: 'BrickLink', total: displayMonths.reduce((sum, m) => sum + (bricklinkRow?.monthlyValues[m] || 0), 0), color: [239, 68, 68] },
-        { name: 'Amazon', total: displayMonths.reduce((sum, m) => sum + (amazonRow?.monthlyValues[m] || 0), 0), color: [249, 115, 22] },
-        { name: 'Brick Owl', total: displayMonths.reduce((sum, m) => sum + (brickowlRow?.monthlyValues[m] || 0), 0), color: [139, 92, 246] },
-      ].filter(p => p.total > 0);
+        {
+          name: 'eBay',
+          total: displayMonths.reduce((sum, m) => sum + (ebayRow?.monthlyValues[m] || 0), 0),
+          color: [59, 130, 246],
+        },
+        {
+          name: 'BrickLink',
+          total: displayMonths.reduce((sum, m) => sum + (bricklinkRow?.monthlyValues[m] || 0), 0),
+          color: [239, 68, 68],
+        },
+        {
+          name: 'Amazon',
+          total: displayMonths.reduce((sum, m) => sum + (amazonRow?.monthlyValues[m] || 0), 0),
+          color: [249, 115, 22],
+        },
+        {
+          name: 'Brick Owl',
+          total: displayMonths.reduce((sum, m) => sum + (brickowlRow?.monthlyValues[m] || 0), 0),
+          color: [139, 92, 246],
+        },
+      ].filter((p) => p.total > 0);
 
-      const maxPlatformTotal = Math.max(...platformTotals.map(p => p.total));
+      const maxPlatformTotal = Math.max(...platformTotals.map((p) => p.total));
       const barChartWidth = 200;
       const barHeight = 12;
       const barGap = 4;
 
       for (const platform of platformTotals) {
-        const barWidth = maxPlatformTotal > 0 ? (platform.total / maxPlatformTotal) * barChartWidth : 0;
+        const barWidth =
+          maxPlatformTotal > 0 ? (platform.total / maxPlatformTotal) * barChartWidth : 0;
 
         // Draw bar
         doc.setFillColor(platform.color[0], platform.color[1], platform.color[2]);
@@ -445,7 +509,7 @@ export default function ProfitLossReportPage() {
       doc.text('Monthly Profit Trend', 14, yPos);
       yPos += 5;
 
-      const profitTrendBody: string[][] = displayMonths.map(month => {
+      const profitTrendBody: string[][] = displayMonths.map((month) => {
         const turnover = report.categoryTotals?.['Income']?.[month] || 0;
         const sellingFees = Math.abs(report.categoryTotals?.['Selling Fees']?.[month] || 0);
         const packingPostage = Math.abs(report.categoryTotals?.['Packing & Postage']?.[month] || 0);
@@ -494,7 +558,7 @@ export default function ProfitLossReportPage() {
   };
 
   const toggleCategory = (category: ProfitLossCategory) => {
-    setExpandedCategories(prev => {
+    setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(category)) {
         next.delete(category);
@@ -528,7 +592,7 @@ export default function ProfitLossReportPage() {
     if (viewPreset !== 'custom') {
       const presetMonths = getPresetMonths(viewPreset);
       // Filter to only include months that exist in our data
-      return presetMonths.filter(m => report.months.includes(m));
+      return presetMonths.filter((m) => report.months.includes(m));
     }
 
     // Custom view: 6 months ending with selected month
@@ -591,12 +655,12 @@ export default function ProfitLossReportPage() {
     if (!report?.rows || displayMonths.length === 0) return [];
 
     // Find the income rows for each platform
-    const ebayRow = report.rows.find(r => r.transactionType === 'eBay Gross Sales');
-    const bricklinkRow = report.rows.find(r => r.transactionType === 'BrickLink Gross Sales');
-    const brickowlRow = report.rows.find(r => r.transactionType === 'Brick Owl Gross Sales');
-    const amazonRow = report.rows.find(r => r.transactionType === 'Amazon Sales');
+    const ebayRow = report.rows.find((r) => r.transactionType === 'eBay Gross Sales');
+    const bricklinkRow = report.rows.find((r) => r.transactionType === 'BrickLink Gross Sales');
+    const brickowlRow = report.rows.find((r) => r.transactionType === 'Brick Owl Gross Sales');
+    const amazonRow = report.rows.find((r) => r.transactionType === 'Amazon Sales');
 
-    return displayMonths.map(month => ({
+    return displayMonths.map((month) => ({
       month,
       eBay: ebayRow?.monthlyValues[month] || 0,
       BrickLink: bricklinkRow?.monthlyValues[month] || 0,
@@ -609,7 +673,7 @@ export default function ProfitLossReportPage() {
   const profitByMonthData = useMemo(() => {
     if (!report?.categoryTotals || !report?.grandTotal || displayMonths.length === 0) return [];
 
-    return displayMonths.map(month => {
+    return displayMonths.map((month) => {
       const turnover = report.categoryTotals['Income']?.[month] || 0;
       const sellingFees = Math.abs(report.categoryTotals['Selling Fees']?.[month] || 0);
       const packingPostage = Math.abs(report.categoryTotals['Packing & Postage']?.[month] || 0);
@@ -648,10 +712,7 @@ export default function ProfitLossReportPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setHomeCostsModalOpen(true)}
-              >
+              <Button variant="outline" onClick={() => setHomeCostsModalOpen(true)}>
                 <Home className="mr-2 h-4 w-4" />
                 Home Costs
               </Button>
@@ -691,19 +752,39 @@ export default function ProfitLossReportPage() {
               onValueChange={handlePresetChange}
               className="flex-wrap"
             >
-              <ToggleGroupItem value="last_12_months" aria-label="Last 12 months" className="text-xs sm:text-sm">
+              <ToggleGroupItem
+                value="last_12_months"
+                aria-label="Last 12 months"
+                className="text-xs sm:text-sm"
+              >
                 Last 12 Months
               </ToggleGroupItem>
-              <ToggleGroupItem value="this_year" aria-label="This year" className="text-xs sm:text-sm">
+              <ToggleGroupItem
+                value="this_year"
+                aria-label="This year"
+                className="text-xs sm:text-sm"
+              >
                 This Year
               </ToggleGroupItem>
-              <ToggleGroupItem value="last_year" aria-label="Last year" className="text-xs sm:text-sm">
+              <ToggleGroupItem
+                value="last_year"
+                aria-label="Last year"
+                className="text-xs sm:text-sm"
+              >
                 Last Year
               </ToggleGroupItem>
-              <ToggleGroupItem value="this_quarter" aria-label="This quarter" className="text-xs sm:text-sm">
+              <ToggleGroupItem
+                value="this_quarter"
+                aria-label="This quarter"
+                className="text-xs sm:text-sm"
+              >
                 This Quarter
               </ToggleGroupItem>
-              <ToggleGroupItem value="last_quarter" aria-label="Last quarter" className="text-xs sm:text-sm">
+              <ToggleGroupItem
+                value="last_quarter"
+                aria-label="Last quarter"
+                className="text-xs sm:text-sm"
+              >
                 Last Quarter
               </ToggleGroupItem>
               <ToggleGroupItem value="custom" aria-label="Custom" className="text-xs sm:text-sm">
@@ -774,10 +855,12 @@ export default function ProfitLossReportPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className={cn(
-                    "text-2xl font-bold flex items-center gap-2",
-                    summaryMetrics.netProfit >= 0 ? "text-green-600" : "text-red-600"
-                  )}>
+                  <div
+                    className={cn(
+                      'text-2xl font-bold flex items-center gap-2',
+                      summaryMetrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                    )}
+                  >
                     {formatCurrency(summaryMetrics.netProfit)}
                     {summaryMetrics.netProfit >= 0 ? (
                       <TrendingUp className="h-5 w-5" />
@@ -794,10 +877,12 @@ export default function ProfitLossReportPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className={cn(
-                    "text-2xl font-bold",
-                    summaryMetrics.profitMargin >= 0 ? "text-green-600" : "text-red-600"
-                  )}>
+                  <div
+                    className={cn(
+                      'text-2xl font-bold',
+                      summaryMetrics.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                    )}
+                  >
                     {summaryMetrics.profitMargin.toFixed(1)}%
                   </div>
                 </CardContent>
@@ -811,15 +896,19 @@ export default function ProfitLossReportPage() {
                 <CardDescription>
                   Click category headers to expand/collapse.{' '}
                   {viewPreset === 'last_12_months' && 'Showing last 12 months.'}
-                  {viewPreset === 'this_year' && `Showing ${new Date().getFullYear()} year to date.`}
-                  {viewPreset === 'last_year' && `Showing ${new Date().getFullYear() - 1} full year.`}
-                  {viewPreset === 'this_quarter' && `Showing Q${getCurrentQuarter()} ${new Date().getFullYear()}.`}
-                  {viewPreset === 'last_quarter' && (() => {
-                    const q = getCurrentQuarter();
-                    return q === 1
-                      ? `Showing Q4 ${new Date().getFullYear() - 1}.`
-                      : `Showing Q${q - 1} ${new Date().getFullYear()}.`;
-                  })()}
+                  {viewPreset === 'this_year' &&
+                    `Showing ${new Date().getFullYear()} year to date.`}
+                  {viewPreset === 'last_year' &&
+                    `Showing ${new Date().getFullYear() - 1} full year.`}
+                  {viewPreset === 'this_quarter' &&
+                    `Showing Q${getCurrentQuarter()} ${new Date().getFullYear()}.`}
+                  {viewPreset === 'last_quarter' &&
+                    (() => {
+                      const q = getCurrentQuarter();
+                      return q === 1
+                        ? `Showing Q4 ${new Date().getFullYear() - 1}.`
+                        : `Showing Q${q - 1} ${new Date().getFullYear()}.`;
+                    })()}
                   {viewPreset === 'custom' && 'Showing 6 months ending with selected month.'}
                 </CardDescription>
               </CardHeader>
@@ -833,8 +922,8 @@ export default function ProfitLossReportPage() {
                           <TableHead
                             key={month}
                             className={cn(
-                              "text-right min-w-[100px]",
-                              month === selectedMonth && "bg-blue-50 font-bold"
+                              'text-right min-w-[100px]',
+                              month === selectedMonth && 'bg-blue-50 font-bold'
                             )}
                           >
                             {formatMonth(month)}
@@ -848,9 +937,11 @@ export default function ProfitLossReportPage() {
                       {Object.entries(categoryConfig)
                         .sort((a, b) => a[1].order - b[1].order)
                         .map(([category, config]) => {
-                          const categoryRows = groupedRows.get(category as ProfitLossCategory) || [];
+                          const categoryRows =
+                            groupedRows.get(category as ProfitLossCategory) || [];
                           const isExpanded = expandedCategories.has(category as ProfitLossCategory);
-                          const categoryTotals = report?.categoryTotals?.[category as ProfitLossCategory] || {};
+                          const categoryTotals =
+                            report?.categoryTotals?.[category as ProfitLossCategory] || {};
 
                           // Calculate category total across all displayed months
                           const categoryTotal = displayMonths.reduce(
@@ -865,10 +956,7 @@ export default function ProfitLossReportPage() {
                             <React.Fragment key={category}>
                               {/* Category Header Row */}
                               <TableRow
-                                className={cn(
-                                  "cursor-pointer hover:bg-muted/50",
-                                  config.color
-                                )}
+                                className={cn('cursor-pointer hover:bg-muted/50', config.color)}
                                 onClick={() => toggleCategory(category as ProfitLossCategory)}
                               >
                                 <TableCell className="font-bold">
@@ -885,10 +973,10 @@ export default function ProfitLossReportPage() {
                                   <TableCell
                                     key={month}
                                     className={cn(
-                                      "text-right font-bold",
-                                      month === selectedMonth && "bg-blue-100",
-                                      (categoryTotals[month] || 0) < 0 && "text-red-600",
-                                      (categoryTotals[month] || 0) > 0 && "text-green-600"
+                                      'text-right font-bold',
+                                      month === selectedMonth && 'bg-blue-100',
+                                      (categoryTotals[month] || 0) < 0 && 'text-red-600',
+                                      (categoryTotals[month] || 0) > 0 && 'text-green-600'
                                     )}
                                   >
                                     {formatCurrency(categoryTotals[month] || 0)}
@@ -896,9 +984,9 @@ export default function ProfitLossReportPage() {
                                 ))}
                                 <TableCell
                                   className={cn(
-                                    "text-right font-bold",
-                                    categoryTotal < 0 && "text-red-600",
-                                    categoryTotal > 0 && "text-green-600"
+                                    'text-right font-bold',
+                                    categoryTotal < 0 && 'text-red-600',
+                                    categoryTotal > 0 && 'text-green-600'
                                   )}
                                 >
                                   {formatCurrency(categoryTotal)}
@@ -922,10 +1010,10 @@ export default function ProfitLossReportPage() {
                                         <TableCell
                                           key={month}
                                           className={cn(
-                                            "text-right",
-                                            month === selectedMonth && "bg-blue-50",
-                                            (row.monthlyValues[month] || 0) < 0 && "text-red-600",
-                                            (row.monthlyValues[month] || 0) > 0 && "text-green-600"
+                                            'text-right',
+                                            month === selectedMonth && 'bg-blue-50',
+                                            (row.monthlyValues[month] || 0) < 0 && 'text-red-600',
+                                            (row.monthlyValues[month] || 0) > 0 && 'text-green-600'
                                           )}
                                         >
                                           {formatCurrency(row.monthlyValues[month] || 0)}
@@ -933,9 +1021,9 @@ export default function ProfitLossReportPage() {
                                       ))}
                                       <TableCell
                                         className={cn(
-                                          "text-right",
-                                          rowTotal < 0 && "text-red-600",
-                                          rowTotal > 0 && "text-green-600"
+                                          'text-right',
+                                          rowTotal < 0 && 'text-red-600',
+                                          rowTotal > 0 && 'text-green-600'
                                         )}
                                       >
                                         {formatCurrency(rowTotal)}
@@ -956,10 +1044,10 @@ export default function ProfitLossReportPage() {
                             <TableCell
                               key={month}
                               className={cn(
-                                "text-right",
-                                month === selectedMonth && "bg-blue-100",
-                                value < 0 && "text-red-600",
-                                value >= 0 && "text-green-600"
+                                'text-right',
+                                month === selectedMonth && 'bg-blue-100',
+                                value < 0 && 'text-red-600',
+                                value >= 0 && 'text-green-600'
                               )}
                             >
                               {formatCurrency(value)}
@@ -968,14 +1056,20 @@ export default function ProfitLossReportPage() {
                         })}
                         <TableCell
                           className={cn(
-                            "text-right",
-                            (displayMonths.reduce((sum, m) => sum + (report?.grandTotal?.[m] || 0), 0)) < 0
-                              ? "text-red-600"
-                              : "text-green-600"
+                            'text-right',
+                            displayMonths.reduce(
+                              (sum, m) => sum + (report?.grandTotal?.[m] || 0),
+                              0
+                            ) < 0
+                              ? 'text-red-600'
+                              : 'text-green-600'
                           )}
                         >
                           {formatCurrency(
-                            displayMonths.reduce((sum, m) => sum + (report?.grandTotal?.[m] || 0), 0)
+                            displayMonths.reduce(
+                              (sum, m) => sum + (report?.grandTotal?.[m] || 0),
+                              0
+                            )
                           )}
                         </TableCell>
                       </TableRow>
@@ -988,14 +1082,13 @@ export default function ProfitLossReportPage() {
             {/* Period Summary Card */}
             <Card>
               <CardHeader>
-                <CardTitle>
-                  Period Summary
-                </CardTitle>
+                <CardTitle>Period Summary</CardTitle>
                 <CardDescription>
                   {displayMonths.length > 0 && (
                     <>
-                      {formatMonth(displayMonths[0])} - {formatMonth(displayMonths[displayMonths.length - 1])}
-                      {' '}({displayMonths.length} month{displayMonths.length !== 1 ? 's' : ''})
+                      {formatMonth(displayMonths[0])} -{' '}
+                      {formatMonth(displayMonths[displayMonths.length - 1])} ({displayMonths.length}{' '}
+                      month{displayMonths.length !== 1 ? 's' : ''})
                     </>
                   )}
                 </CardDescription>
@@ -1015,30 +1108,34 @@ export default function ProfitLossReportPage() {
                       .map(([category]) => {
                         // Sum up values for all displayed months
                         const value = displayMonths.reduce(
-                          (sum, month) => sum + (report?.categoryTotals?.[category as ProfitLossCategory]?.[month] || 0),
+                          (sum, month) =>
+                            sum +
+                            (report?.categoryTotals?.[category as ProfitLossCategory]?.[month] ||
+                              0),
                           0
                         );
                         if (value === 0) return null;
 
-                        const monthlyAvg = displayMonths.length > 0 ? value / displayMonths.length : 0;
+                        const monthlyAvg =
+                          displayMonths.length > 0 ? value / displayMonths.length : 0;
 
                         return (
                           <TableRow key={category}>
                             <TableCell className="font-medium">{category}</TableCell>
                             <TableCell
                               className={cn(
-                                "text-right",
-                                value < 0 && "text-red-600",
-                                value > 0 && "text-green-600"
+                                'text-right',
+                                value < 0 && 'text-red-600',
+                                value > 0 && 'text-green-600'
                               )}
                             >
                               {formatCurrency(value)}
                             </TableCell>
                             <TableCell
                               className={cn(
-                                "text-right",
-                                monthlyAvg < 0 && "text-red-600",
-                                monthlyAvg > 0 && "text-green-600"
+                                'text-right',
+                                monthlyAvg < 0 && 'text-red-600',
+                                monthlyAvg > 0 && 'text-green-600'
                               )}
                             >
                               {formatCurrency(monthlyAvg)}
@@ -1050,21 +1147,25 @@ export default function ProfitLossReportPage() {
                       <TableCell>Net Profit / (Loss)</TableCell>
                       <TableCell
                         className={cn(
-                          "text-right",
-                          summaryMetrics.netProfit < 0 && "text-red-600",
-                          summaryMetrics.netProfit >= 0 && "text-green-600"
+                          'text-right',
+                          summaryMetrics.netProfit < 0 && 'text-red-600',
+                          summaryMetrics.netProfit >= 0 && 'text-green-600'
                         )}
                       >
                         {formatCurrency(summaryMetrics.netProfit)}
                       </TableCell>
                       <TableCell
                         className={cn(
-                          "text-right",
-                          summaryMetrics.netProfit < 0 && "text-red-600",
-                          summaryMetrics.netProfit >= 0 && "text-green-600"
+                          'text-right',
+                          summaryMetrics.netProfit < 0 && 'text-red-600',
+                          summaryMetrics.netProfit >= 0 && 'text-green-600'
                         )}
                       >
-                        {formatCurrency(displayMonths.length > 0 ? summaryMetrics.netProfit / displayMonths.length : 0)}
+                        {formatCurrency(
+                          displayMonths.length > 0
+                            ? summaryMetrics.netProfit / displayMonths.length
+                            : 0
+                        )}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -1078,9 +1179,7 @@ export default function ProfitLossReportPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Turnover by Platform</CardTitle>
-                  <CardDescription>
-                    Monthly sales breakdown by selling platform
-                  </CardDescription>
+                  <CardDescription>Monthly sales breakdown by selling platform</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BarChart
@@ -1088,8 +1187,18 @@ export default function ProfitLossReportPage() {
                     xAxisKey="month"
                     bars={[
                       { dataKey: 'eBay', name: 'eBay', color: '#3b82f6', stackId: 'turnover' },
-                      { dataKey: 'BrickLink', name: 'BrickLink', color: '#ef4444', stackId: 'turnover' },
-                      { dataKey: 'BrickOwl', name: 'Brick Owl', color: '#8b5cf6', stackId: 'turnover' },
+                      {
+                        dataKey: 'BrickLink',
+                        name: 'BrickLink',
+                        color: '#ef4444',
+                        stackId: 'turnover',
+                      },
+                      {
+                        dataKey: 'BrickOwl',
+                        name: 'Brick Owl',
+                        color: '#8b5cf6',
+                        stackId: 'turnover',
+                      },
                       { dataKey: 'Amazon', name: 'Amazon', color: '#f97316', stackId: 'turnover' },
                     ]}
                     height={350}
@@ -1112,12 +1221,15 @@ export default function ProfitLossReportPage() {
                   <ComboChart
                     data={profitByMonthData}
                     xAxisKey="month"
-                    bars={[
-                      { dataKey: 'Profit', name: 'Profit', color: '#3b82f6' },
-                    ]}
+                    bars={[{ dataKey: 'Profit', name: 'Profit', color: '#3b82f6' }]}
                     lines={[
                       { dataKey: 'Turnover', name: 'Turnover', color: '#eab308', strokeWidth: 2 },
-                      { dataKey: 'Selling & Ops', name: 'Selling & Ops', color: '#22c55e', strokeWidth: 2 },
+                      {
+                        dataKey: 'Selling & Ops',
+                        name: 'Selling & Ops',
+                        color: '#22c55e',
+                        strokeWidth: 2,
+                      },
                       { dataKey: 'COG', name: 'COG', color: '#ef4444', strokeWidth: 2 },
                     ]}
                     height={350}
@@ -1134,10 +1246,7 @@ export default function ProfitLossReportPage() {
       </div>
 
       {/* Home Costs Modal */}
-      <HomeCostsModal
-        open={homeCostsModalOpen}
-        onOpenChange={setHomeCostsModalOpen}
-      />
+      <HomeCostsModal open={homeCostsModalOpen} onOpenChange={setHomeCostsModalOpen} />
     </>
   );
 }

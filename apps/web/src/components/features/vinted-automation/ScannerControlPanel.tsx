@@ -185,9 +185,7 @@ export function ScannerControlPanel() {
               </CardTitle>
               <CardDescription>
                 {config?.pause_reason && (
-                  <span className="text-yellow-600">
-                    Pause reason: {config.pause_reason}
-                  </span>
+                  <span className="text-yellow-600">Pause reason: {config.pause_reason}</span>
                 )}
               </CardDescription>
             </div>
@@ -201,9 +199,7 @@ export function ScannerControlPanel() {
                   onCheckedChange={handleEnableToggle}
                   disabled={updateConfig.isPending}
                 />
-                <Label htmlFor="scanner-enabled">
-                  {isEnabled ? 'Enabled' : 'Disabled'}
-                </Label>
+                <Label htmlFor="scanner-enabled">{isEnabled ? 'Enabled' : 'Disabled'}</Label>
               </div>
 
               {/* Pause/Resume Button */}
@@ -234,7 +230,9 @@ export function ScannerControlPanel() {
                   onClick={handleRegenerateSchedule}
                   disabled={regenerateSchedule.isPending}
                 >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${regenerateSchedule.isPending ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${regenerateSchedule.isPending ? 'animate-spin' : ''}`}
+                  />
                   Regenerate Schedule
                 </Button>
               )}
@@ -262,9 +260,7 @@ export function ScannerControlPanel() {
               <Search className="h-4 w-4" />
               Broad Sweeps Today
             </CardDescription>
-            <CardTitle className="text-2xl">
-              {todayStats?.broadSweeps ?? 0}
-            </CardTitle>
+            <CardTitle className="text-2xl">{todayStats?.broadSweeps ?? 0}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -275,9 +271,7 @@ export function ScannerControlPanel() {
               <Target className="h-4 w-4" />
               Watchlist Scans Today
             </CardDescription>
-            <CardTitle className="text-2xl">
-              {todayStats?.watchlistScans ?? 0}
-            </CardTitle>
+            <CardTitle className="text-2xl">{todayStats?.watchlistScans ?? 0}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -338,19 +332,22 @@ export function ScannerControlPanel() {
                     </Badge>
                   </p>
                   <p className="text-sm">
-                    {config.captcha_detected_at && (() => {
-                      const detectedAt = new Date(config.captcha_detected_at);
-                      const daysSince = differenceInDays(new Date(), detectedAt);
-                      const hoursSince = differenceInHours(new Date(), detectedAt);
-                      const daysUntilFull = Math.max(0, 6 - daysSince);
+                    {config.captcha_detected_at &&
+                      (() => {
+                        const detectedAt = new Date(config.captcha_detected_at);
+                        const daysSince = differenceInDays(new Date(), detectedAt);
+                        const hoursSince = differenceInHours(new Date(), detectedAt);
+                        const daysUntilFull = Math.max(0, 6 - daysSince);
 
-                      if (daysUntilFull === 0) {
-                        return 'Full rate will be restored soon.';
-                      }
-                      return `CAPTCHA detected ${hoursSince < 24 ? `${hoursSince}h` : `${daysSince}d`} ago. ` +
-                        `Rate increases to ${Math.min(100, config.recovery_rate_percent + 25)}% in ${daysUntilFull > 2 ? `${daysUntilFull} days` : `${(daysUntilFull * 24) - (hoursSince % 24)}h`}. ` +
-                        `Full rate in ${daysUntilFull} days.`;
-                    })()}
+                        if (daysUntilFull === 0) {
+                          return 'Full rate will be restored soon.';
+                        }
+                        return (
+                          `CAPTCHA detected ${hoursSince < 24 ? `${hoursSince}h` : `${daysSince}d`} ago. ` +
+                          `Rate increases to ${Math.min(100, config.recovery_rate_percent + 25)}% in ${daysUntilFull > 2 ? `${daysUntilFull} days` : `${daysUntilFull * 24 - (hoursSince % 24)}h`}. ` +
+                          `Full rate in ${daysUntilFull} days.`
+                        );
+                      })()}
                   </p>
                 </div>
               </div>

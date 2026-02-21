@@ -12,11 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import type { PurchaseFilters as Filters } from '@/lib/api';
@@ -38,14 +34,7 @@ const SOURCES = [
   'Other',
 ];
 
-const PAYMENT_METHODS = [
-  'Cash',
-  'Card',
-  'PayPal',
-  'Bank Transfer',
-  'HSBC - Cash',
-  'Monzo - Card',
-];
+const PAYMENT_METHODS = ['Cash', 'Card', 'PayPal', 'Bank Transfer', 'HSBC - Cash', 'Monzo - Card'];
 
 export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersProps) {
   // Local state for search input to allow immediate UI feedback
@@ -181,12 +170,7 @@ export function PurchaseFilters({ filters, onFiltersChange }: PurchaseFiltersPro
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={dateTo}
-              onSelect={handleDateToChange}
-              initialFocus
-            />
+            <Calendar mode="single" selected={dateTo} onSelect={handleDateToChange} initialFocus />
           </PopoverContent>
         </Popover>
 

@@ -240,8 +240,7 @@ export class GoogleCalendarApiService {
 
     if (hasStartTime) {
       // Timed event - format time with seconds
-      const formatTimeWithSeconds = (time: string) =>
-        time.length === 5 ? `${time}:00` : time;
+      const formatTimeWithSeconds = (time: string) => (time.length === 5 ? `${time}:00` : time);
 
       const startDateTime = `${pickup.scheduled_date}T${formatTimeWithSeconds(pickup.scheduled_time!)}`;
 

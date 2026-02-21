@@ -12,7 +12,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { detectItemRegions, type RegionDetectionResult } from '@/lib/purchase-evaluator/image-chunking.service';
+import {
+  detectItemRegions,
+  type RegionDetectionResult,
+} from '@/lib/purchase-evaluator/image-chunking.service';
 import type { AnalysisImageInput } from '@/lib/purchase-evaluator/photo-types';
 
 // ============================================

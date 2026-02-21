@@ -30,7 +30,7 @@ const EBAY_REGULATORY_FEE_RATE = 0.0036; // 0.36%
 /**
  * eBay per-order fee
  */
-const EBAY_PER_ORDER_FEE = 0.30; // £0.30
+const EBAY_PER_ORDER_FEE = 0.3; // £0.30
 
 /**
  * Estimated PayPal/eBay Managed Payments fee
@@ -40,7 +40,7 @@ const EBAY_PAYMENT_PROCESSING_RATE = 0.025; // 2.5%
 /**
  * Estimated average shipping cost for LEGO sets
  */
-const EBAY_ESTIMATED_SHIPPING = 4.00;
+const EBAY_ESTIMATED_SHIPPING = 4.0;
 
 // ============================================
 // COG Percentage Calculation
@@ -411,9 +411,7 @@ function getEffectiveSellPrice(item: EvaluationItem): number | null {
  * @param items - Evaluation items with profitability data
  * @returns Summary statistics
  */
-export function calculateEvaluationSummary(
-  items: EvaluationItem[]
-): EvaluationSummary {
+export function calculateEvaluationSummary(items: EvaluationItem[]): EvaluationSummary {
   const itemCount = items.length;
   let itemsWithCost = 0;
   let itemsWithPrice = 0;
@@ -455,15 +453,11 @@ export function calculateEvaluationSummary(
   }
 
   const overallMarginPercent =
-    totalExpectedRevenue > 0
-      ? (totalGrossProfit / totalExpectedRevenue) * 100
-      : 0;
+    totalExpectedRevenue > 0 ? (totalGrossProfit / totalExpectedRevenue) * 100 : 0;
 
-  const overallRoiPercent =
-    totalCost > 0 ? (totalGrossProfit / totalCost) * 100 : 0;
+  const overallRoiPercent = totalCost > 0 ? (totalGrossProfit / totalCost) * 100 : 0;
 
-  const averageCogPercent =
-    cogPercentCount > 0 ? cogPercentSum / cogPercentCount : 0;
+  const averageCogPercent = cogPercentCount > 0 ? cogPercentSum / cogPercentCount : 0;
 
   return {
     itemCount,

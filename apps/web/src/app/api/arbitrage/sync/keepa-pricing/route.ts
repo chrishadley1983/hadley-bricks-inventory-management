@@ -35,16 +35,15 @@ export async function POST() {
       try {
         // Send initial message
         await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ type: 'start', message: 'Checking for seeded ASINs missing pricing...' })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'start', message: 'Checking for seeded ASINs missing pricing...' })}\n\n`
+          )
         );
 
         // Run sync with progress callback
-        const result = await keepaSyncService.syncMissingPricing(
-          user.id,
-          async (progress) => {
-            await writer.write(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
-          }
-        );
+        const result = await keepaSyncService.syncMissingPricing(user.id, async (progress) => {
+          await writer.write(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
+        });
 
         // Send completion message
         await writer.write(

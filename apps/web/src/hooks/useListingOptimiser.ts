@@ -16,7 +16,8 @@ import type {
  */
 export const listingOptimiserKeys = {
   all: ['listing-optimiser'] as const,
-  listings: (filters?: OptimiserFilters) => [...listingOptimiserKeys.all, 'listings', filters] as const,
+  listings: (filters?: OptimiserFilters) =>
+    [...listingOptimiserKeys.all, 'listings', filters] as const,
   analysis: (itemId: string) => [...listingOptimiserKeys.all, 'analysis', itemId] as const,
 };
 

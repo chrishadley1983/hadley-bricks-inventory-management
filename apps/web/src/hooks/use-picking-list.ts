@@ -45,21 +45,16 @@ export type PickingListPlatform = 'amazon' | 'ebay';
  */
 export const pickingListKeys = {
   all: ['picking-list'] as const,
-  byPlatform: (platform: PickingListPlatform) =>
-    [...pickingListKeys.all, platform] as const,
+  byPlatform: (platform: PickingListPlatform) => [...pickingListKeys.all, platform] as const,
 };
 
 /**
  * Fetch picking list for a platform
  */
-async function fetchPickingList(
-  platform: PickingListPlatform
-): Promise<PickingListResponse> {
+async function fetchPickingList(platform: PickingListPlatform): Promise<PickingListResponse> {
   const response = await fetch(`/api/picking-list/${platform}`);
   if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ error: 'Failed to fetch picking list' }));
+    const error = await response.json().catch(() => ({ error: 'Failed to fetch picking list' }));
     throw new Error(error.error || 'Failed to fetch picking list');
   }
   const json = await response.json();
@@ -78,11 +73,8 @@ async function fetchPickingList(
       (item.ebayOrderId as string) ||
       (item.platformOrderId as string),
     quantity: item.quantity as number,
-    buyerName:
-      (item.buyerName as string | null) ||
-      (item.buyerUsername as string | null),
-    orderDate:
-      (item.orderDate as string) || (item.creationDate as string),
+    buyerName: (item.buyerName as string | null) || (item.buyerUsername as string | null),
+    orderDate: (item.orderDate as string) || (item.creationDate as string),
     matchStatus: item.matchStatus as 'matched' | 'unmatched' | 'manual',
     inventoryItemId: item.inventoryItemId as string | null | undefined,
     asin: item.asin as string | null | undefined,
@@ -101,9 +93,7 @@ async function fetchPickingList(
 /**
  * Download picking list as PDF
  */
-export async function downloadPickingListPDF(
-  platform: PickingListPlatform
-): Promise<void> {
+export async function downloadPickingListPDF(platform: PickingListPlatform): Promise<void> {
   const response = await fetch(`/api/picking-list/${platform}?format=pdf`);
   if (!response.ok) {
     throw new Error('Failed to download PDF');
@@ -123,10 +113,7 @@ export async function downloadPickingListPDF(
 /**
  * Hook to fetch picking list for a platform
  */
-export function usePickingList(
-  platform: PickingListPlatform,
-  enabled: boolean = true
-) {
+export function usePickingList(platform: PickingListPlatform, enabled: boolean = true) {
   return useQuery({
     queryKey: pickingListKeys.byPlatform(platform),
     queryFn: () => fetchPickingList(platform),

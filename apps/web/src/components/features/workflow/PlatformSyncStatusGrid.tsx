@@ -149,7 +149,10 @@ async function fetchSyncStatus(): Promise<SyncStatusResponse> {
   return { platforms };
 }
 
-function getStatus(lastSyncedAt: string | null, isConfigured: boolean): PlatformSyncStatus['status'] {
+function getStatus(
+  lastSyncedAt: string | null,
+  isConfigured: boolean
+): PlatformSyncStatus['status'] {
   if (!isConfigured) return 'never';
   if (!lastSyncedAt) return 'stale';
 
@@ -265,7 +268,9 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'pending' | 'syncing' | 'complete' | 'failed'>('pending');
+  const [syncStatus, setSyncStatus] = useState<'pending' | 'syncing' | 'complete' | 'failed'>(
+    'pending'
+  );
   const [syncSummary, setSyncSummary] = useState<SyncSummaryResponse | null>(null);
   const [pollingCount, setPollingCount] = useState(0);
 
@@ -422,7 +427,10 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
   }
 
   const platforms = data?.platforms ?? [];
-  const hasSelectedSync = Object.values(selectedOrders).some(Boolean) || transactionsEnabled || Object.values(stockImportsEnabled).some(Boolean);
+  const hasSelectedSync =
+    Object.values(selectedOrders).some(Boolean) ||
+    transactionsEnabled ||
+    Object.values(stockImportsEnabled).some(Boolean);
 
   // Group sync summary items
   const orderItems = syncSummary?.items.filter((item) => item.type === 'order') ?? [];
@@ -542,10 +550,7 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
                   onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   className="flex-shrink-0"
                 />
-                <Label
-                  htmlFor="stock-ebay"
-                  className="flex flex-col cursor-pointer flex-1"
-                >
+                <Label htmlFor="stock-ebay" className="flex flex-col cursor-pointer flex-1">
                   <span className="text-sm font-medium">eBay Stock</span>
                   <span className="text-xs text-muted-foreground">Refresh listings</span>
                 </Label>
@@ -565,10 +570,7 @@ export function PlatformSyncStatusGrid({ className }: PlatformSyncStatusGridProp
                   onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   className="flex-shrink-0"
                 />
-                <Label
-                  htmlFor="stock-amazon"
-                  className="flex flex-col cursor-pointer flex-1"
-                >
+                <Label htmlFor="stock-amazon" className="flex flex-col cursor-pointer flex-1">
                   <span className="text-sm font-medium">Amazon Stock</span>
                   <span className="text-xs text-muted-foreground">Refresh listings</span>
                 </Label>

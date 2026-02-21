@@ -53,8 +53,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
               errors: result.errors,
               complete: result.complete,
             },
-          }),
-        ),
+          })
+        )
       );
     } catch (error) {
       console.error('[GET /api/minifigs/sync/pull-inventory/stream] Error:', error);

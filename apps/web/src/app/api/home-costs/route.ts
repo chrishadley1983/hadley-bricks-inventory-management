@@ -55,9 +55,7 @@ const CreateHomeCostSchema = z
     message: 'End date must be on or after start date',
   })
   .refine(
-    (data) =>
-      data.costType !== 'insurance' ||
-      data.businessStockValue <= data.totalContentsValue,
+    (data) => data.costType !== 'insurance' || data.businessStockValue <= data.totalContentsValue,
     {
       message: 'Business stock value cannot exceed total contents value',
     }

@@ -191,7 +191,11 @@ export function ConfigModal({
                 />
                 <div className="flex justify-between">
                   <p className="text-xs text-muted-foreground">
-                    Available placeholders: <code className="text-xs bg-muted px-1 rounded">{'{discount}'}</code> <code className="text-xs bg-muted px-1 rounded">{'{title}'}</code> <code className="text-xs bg-muted px-1 rounded">{'{price}'}</code> <code className="text-xs bg-muted px-1 rounded">{'{offer_price}'}</code>
+                    Available placeholders:{' '}
+                    <code className="text-xs bg-muted px-1 rounded">{'{discount}'}</code>{' '}
+                    <code className="text-xs bg-muted px-1 rounded">{'{title}'}</code>{' '}
+                    <code className="text-xs bg-muted px-1 rounded">{'{price}'}</code>{' '}
+                    <code className="text-xs bg-muted px-1 rounded">{'{offer_price}'}</code>
                   </p>
                   <span className="text-xs text-muted-foreground">
                     {localConfig.offerMessageTemplate?.length ?? 0}/2000

@@ -31,12 +31,7 @@ export type BricqerOrderStatus =
   | 'ON_HOLD';
 
 /** Bricqer payment status */
-export type BricqerPaymentStatus =
-  | 'pending'
-  | 'paid'
-  | 'partial'
-  | 'refunded'
-  | 'failed';
+export type BricqerPaymentStatus = 'pending' | 'paid' | 'partial' | 'refunded' | 'failed';
 
 /** Bricqer shipping address */
 export interface BricqerAddress {

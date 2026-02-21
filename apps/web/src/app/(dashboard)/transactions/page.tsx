@@ -14,13 +14,7 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -349,11 +343,27 @@ interface AmazonTransactionsResponse {
 // Shared Types
 // ============================================================================
 
-type MonzoSortField = 'created' | 'merchant_name' | 'description' | 'amount' | 'local_category' | 'user_notes';
+type MonzoSortField =
+  | 'created'
+  | 'merchant_name'
+  | 'description'
+  | 'amount'
+  | 'local_category'
+  | 'user_notes';
 type EbaySortField = 'transaction_date' | 'amount' | 'item_title';
 type PayPalSortField = 'transaction_date' | 'fee_amount' | 'gross_amount' | 'payer_name';
-type BrickLinkSortField = 'order_date' | 'buyer_name' | 'order_status' | 'base_grand_total' | 'shipping';
-type BrickOwlSortField = 'order_date' | 'buyer_name' | 'order_status' | 'base_grand_total' | 'shipping';
+type BrickLinkSortField =
+  | 'order_date'
+  | 'buyer_name'
+  | 'order_status'
+  | 'base_grand_total'
+  | 'shipping';
+type BrickOwlSortField =
+  | 'order_date'
+  | 'buyer_name'
+  | 'order_status'
+  | 'base_grand_total'
+  | 'shipping';
 type AmazonSortField = 'purchase_date' | 'posted_date' | 'total_amount' | 'asin';
 type SortDirection = 'asc' | 'desc';
 
@@ -446,7 +456,10 @@ async function fetchMonzoStatus(): Promise<MonzoStatus> {
   return response.json();
 }
 
-async function syncMonzo(): Promise<{ data?: { success: boolean; transactionsProcessed?: number }; error?: string }> {
+async function syncMonzo(): Promise<{
+  data?: { success: boolean; transactionsProcessed?: number };
+  error?: string;
+}> {
   const response = await fetch('/api/integrations/monzo/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -678,7 +691,9 @@ const EBAY_TRANSACTION_TYPES = Object.keys(EBAY_TRANSACTION_TYPE_LABELS);
 export default function TransactionsPage() {
   usePerfPage('TransactionsPage');
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'monzo' | 'ebay' | 'paypal' | 'bricklink' | 'brickowl' | 'amazon'>('monzo');
+  const [activeTab, setActiveTab] = useState<
+    'monzo' | 'ebay' | 'paypal' | 'bricklink' | 'brickowl' | 'amazon'
+  >('monzo');
 
   // ============================================================================
   // Monzo State
@@ -691,10 +706,15 @@ export default function TransactionsPage() {
   const [monzoDateRangeKey, setMonzoDateRangeKey] = useState<DateRangeKey>('__all__');
   const [monzoSortField, setMonzoSortField] = useState<MonzoSortField>('created');
   const [monzoSortDirection, setMonzoSortDirection] = useState<SortDirection>('desc');
-  const [selectedMonzoTransaction, setSelectedMonzoTransaction] = useState<MonzoTransaction | null>(null);
+  const [selectedMonzoTransaction, setSelectedMonzoTransaction] = useState<MonzoTransaction | null>(
+    null
+  );
   const [editNotes, setEditNotes] = useState('');
   const [editLocalCategory, setEditLocalCategory] = useState<string>('');
-  const [monzoMessage, setMonzoMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [monzoMessage, setMonzoMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // ============================================================================
   // eBay State
@@ -707,8 +727,13 @@ export default function TransactionsPage() {
   const [ebayDateRangeKey, setEbayDateRangeKey] = useState<DateRangeKey>('__all__');
   const [ebaySortField, setEbaySortField] = useState<EbaySortField>('transaction_date');
   const [ebaySortDirection, setEbaySortDirection] = useState<SortDirection>('desc');
-  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [selectedEbayTransaction, setSelectedEbayTransaction] = useState<EbayTransaction | null>(null);
+  const [ebayMessage, setEbayMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [selectedEbayTransaction, setSelectedEbayTransaction] = useState<EbayTransaction | null>(
+    null
+  );
 
   // ============================================================================
   // PayPal State
@@ -720,8 +745,12 @@ export default function TransactionsPage() {
   const [paypalDateRangeKey, setPayPalDateRangeKey] = useState<DateRangeKey>('__all__');
   const [paypalSortField, setPayPalSortField] = useState<PayPalSortField>('transaction_date');
   const [paypalSortDirection, setPayPalSortDirection] = useState<SortDirection>('desc');
-  const [paypalMessage, setPayPalMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [selectedPayPalTransaction, setSelectedPayPalTransaction] = useState<PayPalTransaction | null>(null);
+  const [paypalMessage, setPayPalMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [selectedPayPalTransaction, setSelectedPayPalTransaction] =
+    useState<PayPalTransaction | null>(null);
 
   // eBay Sync Hook
   const {
@@ -757,8 +786,12 @@ export default function TransactionsPage() {
   const [bricklinkDateRangeKey, setBrickLinkDateRangeKey] = useState<DateRangeKey>('__all__');
   const [bricklinkSortField, setBrickLinkSortField] = useState<BrickLinkSortField>('order_date');
   const [bricklinkSortDirection, setBrickLinkSortDirection] = useState<SortDirection>('desc');
-  const [bricklinkMessage, setBrickLinkMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [selectedBrickLinkTransaction, setSelectedBrickLinkTransaction] = useState<BrickLinkTransaction | null>(null);
+  const [bricklinkMessage, setBrickLinkMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [selectedBrickLinkTransaction, setSelectedBrickLinkTransaction] =
+    useState<BrickLinkTransaction | null>(null);
 
   // BrickLink Sync Hook
   const {
@@ -784,8 +817,12 @@ export default function TransactionsPage() {
   const [brickowlDateRangeKey, setBrickOwlDateRangeKey] = useState<DateRangeKey>('__all__');
   const [brickowlSortField, setBrickOwlSortField] = useState<BrickOwlSortField>('order_date');
   const [brickowlSortDirection, setBrickOwlSortDirection] = useState<SortDirection>('desc');
-  const [brickowlMessage, setBrickOwlMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [selectedBrickOwlTransaction, setSelectedBrickOwlTransaction] = useState<BrickOwlTransaction | null>(null);
+  const [brickowlMessage, setBrickOwlMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [selectedBrickOwlTransaction, setSelectedBrickOwlTransaction] =
+    useState<BrickOwlTransaction | null>(null);
 
   // BrickOwl Sync Hook
   const {
@@ -810,8 +847,12 @@ export default function TransactionsPage() {
   const [amazonDateRangeKey, setAmazonDateRangeKey] = useState<DateRangeKey>('__all__');
   const [amazonSortField, setAmazonSortField] = useState<AmazonSortField>('purchase_date');
   const [amazonSortDirection, setAmazonSortDirection] = useState<SortDirection>('desc');
-  const [amazonMessage, setAmazonMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [selectedAmazonTransaction, setSelectedAmazonTransaction] = useState<AmazonTransaction | null>(null);
+  const [amazonMessage, setAmazonMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [selectedAmazonTransaction, setSelectedAmazonTransaction] =
+    useState<AmazonTransaction | null>(null);
   const [amazonSyncMode, setAmazonSyncMode] = useState<'incremental' | 'full'>('incremental');
 
   // Amazon Sync Hook
@@ -896,9 +937,10 @@ export default function TransactionsPage() {
   // Show PayPal sync messages
   useEffect(() => {
     if (paypalSyncResult?.success) {
-      const detail = paypalSyncResult.transactionsProcessed !== undefined
-        ? ` (${paypalSyncResult.transactionsProcessed} processed, ${paypalSyncResult.transactionsCreated} new)`
-        : '';
+      const detail =
+        paypalSyncResult.transactionsProcessed !== undefined
+          ? ` (${paypalSyncResult.transactionsProcessed} processed, ${paypalSyncResult.transactionsCreated} new)`
+          : '';
       setPayPalMessage({
         type: 'success',
         message: `Sync completed!${detail}`,
@@ -924,9 +966,10 @@ export default function TransactionsPage() {
   // Show BrickLink sync messages
   useEffect(() => {
     if (bricklinkSyncResult?.success) {
-      const detail = bricklinkSyncResult.ordersProcessed !== undefined
-        ? ` (${bricklinkSyncResult.ordersProcessed} processed, ${bricklinkSyncResult.ordersCreated} new)`
-        : '';
+      const detail =
+        bricklinkSyncResult.ordersProcessed !== undefined
+          ? ` (${bricklinkSyncResult.ordersProcessed} processed, ${bricklinkSyncResult.ordersCreated} new)`
+          : '';
       setBrickLinkMessage({
         type: 'success',
         message: `Sync completed!${detail}`,
@@ -952,9 +995,10 @@ export default function TransactionsPage() {
   // Show BrickOwl sync messages
   useEffect(() => {
     if (brickowlSyncResult?.success) {
-      const detail = brickowlSyncResult.ordersProcessed !== undefined
-        ? ` (${brickowlSyncResult.ordersProcessed} processed, ${brickowlSyncResult.ordersCreated} new)`
-        : '';
+      const detail =
+        brickowlSyncResult.ordersProcessed !== undefined
+          ? ` (${brickowlSyncResult.ordersProcessed} processed, ${brickowlSyncResult.ordersCreated} new)`
+          : '';
       setBrickOwlMessage({
         type: 'success',
         message: `Sync completed!${detail}`,
@@ -981,9 +1025,10 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (amazonSyncResult?.success) {
       const result = amazonSyncResult.result;
-      const detail = result?.recordsProcessed !== undefined
-        ? ` (${result.recordsProcessed} processed, ${result.recordsCreated} new)`
-        : '';
+      const detail =
+        result?.recordsProcessed !== undefined
+          ? ` (${result.recordsProcessed} processed, ${result.recordsCreated} new)`
+          : '';
       setAmazonMessage({
         type: 'success',
         message: `Sync completed!${detail}`,
@@ -1008,7 +1053,16 @@ export default function TransactionsPage() {
   });
 
   const { data: monzoTransactionsData, isLoading: monzoTransactionsLoading } = useQuery({
-    queryKey: ['transactions', monzoPage, monzoPageSize, monzoDebouncedSearch, monzoLocalCategoryFilter, monzoDateRangeKey, monzoSortField, monzoSortDirection],
+    queryKey: [
+      'transactions',
+      monzoPage,
+      monzoPageSize,
+      monzoDebouncedSearch,
+      monzoLocalCategoryFilter,
+      monzoDateRangeKey,
+      monzoSortField,
+      monzoSortDirection,
+    ],
     queryFn: () =>
       fetchMonzoTransactions({
         page: monzoPage,
@@ -1028,7 +1082,17 @@ export default function TransactionsPage() {
   // ============================================================================
 
   const { data: ebayTransactionsData, isLoading: ebayTransactionsLoading } = useQuery({
-    queryKey: ['ebay', 'transactions', ebayPage, ebayPageSize, ebayDebouncedSearch, ebayTransactionTypeFilter, ebayDateRangeKey, ebaySortField, ebaySortDirection],
+    queryKey: [
+      'ebay',
+      'transactions',
+      ebayPage,
+      ebayPageSize,
+      ebayDebouncedSearch,
+      ebayTransactionTypeFilter,
+      ebayDateRangeKey,
+      ebaySortField,
+      ebaySortDirection,
+    ],
     queryFn: () =>
       fetchEbayTransactions({
         page: ebayPage,
@@ -1048,7 +1112,16 @@ export default function TransactionsPage() {
   // ============================================================================
 
   const { data: paypalTransactionsData, isLoading: paypalTransactionsLoading } = useQuery({
-    queryKey: ['paypal', 'transactions', paypalPage, paypalPageSize, paypalDebouncedSearch, paypalDateRangeKey, paypalSortField, paypalSortDirection],
+    queryKey: [
+      'paypal',
+      'transactions',
+      paypalPage,
+      paypalPageSize,
+      paypalDebouncedSearch,
+      paypalDateRangeKey,
+      paypalSortField,
+      paypalSortDirection,
+    ],
     queryFn: () =>
       fetchPayPalTransactions({
         page: paypalPage,
@@ -1067,7 +1140,17 @@ export default function TransactionsPage() {
   // ============================================================================
 
   const { data: bricklinkTransactionsData, isLoading: bricklinkTransactionsLoading } = useQuery({
-    queryKey: ['bricklink', 'transactions', bricklinkPage, bricklinkPageSize, bricklinkDebouncedSearch, bricklinkStatusFilter, bricklinkDateRangeKey, bricklinkSortField, bricklinkSortDirection],
+    queryKey: [
+      'bricklink',
+      'transactions',
+      bricklinkPage,
+      bricklinkPageSize,
+      bricklinkDebouncedSearch,
+      bricklinkStatusFilter,
+      bricklinkDateRangeKey,
+      bricklinkSortField,
+      bricklinkSortDirection,
+    ],
     queryFn: () =>
       fetchBrickLinkTransactions({
         page: bricklinkPage,
@@ -1087,7 +1170,17 @@ export default function TransactionsPage() {
   // ============================================================================
 
   const { data: brickowlTransactionsData, isLoading: brickowlTransactionsLoading } = useQuery({
-    queryKey: ['brickowl', 'transactions', brickowlPage, brickowlPageSize, brickowlDebouncedSearch, brickowlStatusFilter, brickowlDateRangeKey, brickowlSortField, brickowlSortDirection],
+    queryKey: [
+      'brickowl',
+      'transactions',
+      brickowlPage,
+      brickowlPageSize,
+      brickowlDebouncedSearch,
+      brickowlStatusFilter,
+      brickowlDateRangeKey,
+      brickowlSortField,
+      brickowlSortDirection,
+    ],
     queryFn: () =>
       fetchBrickOwlTransactions({
         page: brickowlPage,
@@ -1107,7 +1200,17 @@ export default function TransactionsPage() {
   // ============================================================================
 
   const { data: amazonTransactionsData, isLoading: amazonTransactionsLoading } = useQuery({
-    queryKey: ['amazon', 'transactions', amazonPage, amazonPageSize, amazonDebouncedSearch, amazonTransactionTypeFilter, amazonDateRangeKey, amazonSortField, amazonSortDirection],
+    queryKey: [
+      'amazon',
+      'transactions',
+      amazonPage,
+      amazonPageSize,
+      amazonDebouncedSearch,
+      amazonTransactionTypeFilter,
+      amazonDateRangeKey,
+      amazonSortField,
+      amazonSortDirection,
+    ],
     queryFn: () =>
       fetchAmazonTransactions({
         page: amazonPage,
@@ -1245,7 +1348,11 @@ export default function TransactionsPage() {
   };
 
   const handleBrickLinkResetAndSync = () => {
-    if (confirm('This will clear all existing BrickLink transactions and re-sync from scratch. Continue?')) {
+    if (
+      confirm(
+        'This will clear all existing BrickLink transactions and re-sync from scratch. Continue?'
+      )
+    ) {
       triggerBrickLinkResetAndSync();
     }
   };
@@ -1425,14 +1532,17 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Transactions</h2>
-            <p className="text-muted-foreground">
-              View and manage your financial transactions
-            </p>
+            <p className="text-muted-foreground">View and manage your financial transactions</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'monzo' | 'ebay' | 'paypal' | 'bricklink' | 'brickowl' | 'amazon')}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v: string) =>
+            setActiveTab(v as 'monzo' | 'ebay' | 'paypal' | 'bricklink' | 'brickowl' | 'amazon')
+          }
+        >
           <TabsList>
             <TabsTrigger value="monzo">Monzo</TabsTrigger>
             <TabsTrigger value="ebay">eBay</TabsTrigger>
@@ -1449,10 +1559,7 @@ export default function TransactionsPage() {
             {/* Monzo Sync Button */}
             {monzoIsConnected && (
               <div className="flex justify-end">
-                <Button
-                  onClick={() => monzoSyncMutation.mutate()}
-                  disabled={monzoIsSyncing}
-                >
+                <Button onClick={() => monzoSyncMutation.mutate()} disabled={monzoIsSyncing}>
                   {monzoIsSyncing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1471,7 +1578,9 @@ export default function TransactionsPage() {
             {/* Monzo Messages */}
             {monzoMessage && (
               <Alert
-                className={monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  monzoMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={monzoMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -1553,7 +1662,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setMonzoSearch(e.target.value)}
                   />
                 </div>
-                <Select value={monzoDateRangeKey} onValueChange={(v: string) => { setMonzoDateRangeKey(v as DateRangeKey); setMonzoPage(1); }}>
+                <Select
+                  value={monzoDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setMonzoDateRangeKey(v as DateRangeKey);
+                    setMonzoPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -1565,7 +1680,12 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={monzoLocalCategoryFilter || '__all__'} onValueChange={(v: string) => setMonzoLocalCategoryFilter(v === '__all__' ? '' : v)}>
+                <Select
+                  value={monzoLocalCategoryFilter || '__all__'}
+                  onValueChange={(v: string) =>
+                    setMonzoLocalCategoryFilter(v === '__all__' ? '' : v)
+                  }
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="My Category" />
                   </SelectTrigger>
@@ -1660,7 +1780,10 @@ export default function TransactionsPage() {
                         <TableBody>
                           {monzoTransactionsData?.data?.transactions?.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              <TableCell
+                                colSpan={7}
+                                className="text-center py-8 text-muted-foreground"
+                              >
                                 No transactions found
                               </TableCell>
                             </TableRow>
@@ -1687,8 +1810,9 @@ export default function TransactionsPage() {
                                 <TableCell>
                                   {transaction.local_category ? (
                                     <Badge variant="secondary" className="text-xs">
-                                      {MONZO_CATEGORY_LABELS[transaction.local_category as MonzoCategory] ||
-                                        transaction.local_category}
+                                      {MONZO_CATEGORY_LABELS[
+                                        transaction.local_category as MonzoCategory
+                                      ] || transaction.local_category}
                                     </Badge>
                                   ) : (
                                     <span className="text-muted-foreground text-xs">-</span>
@@ -1716,9 +1840,12 @@ export default function TransactionsPage() {
                       {monzoTransactionsData?.data?.pagination && (
                         <div className="flex items-center justify-between px-4 py-4 border-t">
                           <div className="text-sm text-muted-foreground">
-                            Showing {((monzoPage - 1) * monzoPageSize) + 1} to{' '}
-                            {Math.min(monzoPage * monzoPageSize, monzoTransactionsData.data.pagination.total)} of{' '}
-                            {monzoTransactionsData.data.pagination.total} transactions
+                            Showing {(monzoPage - 1) * monzoPageSize + 1} to{' '}
+                            {Math.min(
+                              monzoPage * monzoPageSize,
+                              monzoTransactionsData.data.pagination.total
+                            )}{' '}
+                            of {monzoTransactionsData.data.pagination.total} transactions
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
@@ -1737,7 +1864,9 @@ export default function TransactionsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => setMonzoPage((p) => p + 1)}
-                              disabled={monzoPage >= monzoTransactionsData.data.pagination.totalPages}
+                              disabled={
+                                monzoPage >= monzoTransactionsData.data.pagination.totalPages
+                              }
                             >
                               Next
                               <ChevronRight className="h-4 w-4" />
@@ -1759,10 +1888,7 @@ export default function TransactionsPage() {
             {/* eBay Sync Button */}
             {ebayIsConnected && (
               <div className="flex justify-end">
-                <Button
-                  onClick={handleEbaySync}
-                  disabled={ebayIsSyncing || ebayIsManualSyncing}
-                >
+                <Button onClick={handleEbaySync} disabled={ebayIsSyncing || ebayIsManualSyncing}>
                   {ebayIsSyncing || ebayIsManualSyncing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1781,7 +1907,9 @@ export default function TransactionsPage() {
             {/* eBay Messages */}
             {ebayMessage && (
               <Alert
-                className={ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  ebayMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={ebayMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -1874,7 +2002,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setEbaySearch(e.target.value)}
                   />
                 </div>
-                <Select value={ebayDateRangeKey} onValueChange={(v: string) => { setEbayDateRangeKey(v as DateRangeKey); setEbayPage(1); }}>
+                <Select
+                  value={ebayDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setEbayDateRangeKey(v as DateRangeKey);
+                    setEbayPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -1886,7 +2020,12 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={ebayTransactionTypeFilter || '__all__'} onValueChange={(v: string) => setEbayTransactionTypeFilter(v === '__all__' ? '' : v)}>
+                <Select
+                  value={ebayTransactionTypeFilter || '__all__'}
+                  onValueChange={(v: string) =>
+                    setEbayTransactionTypeFilter(v === '__all__' ? '' : v)
+                  }
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Transaction Type" />
                   </SelectTrigger>
@@ -1955,8 +2094,12 @@ export default function TransactionsPage() {
                         <TableBody>
                           {ebayTransactionsData?.transactions?.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                No transactions found. Click &quot;Sync Transactions&quot; to import your eBay data.
+                              <TableCell
+                                colSpan={8}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                No transactions found. Click &quot;Sync Transactions&quot; to import
+                                your eBay data.
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -1971,18 +2114,21 @@ export default function TransactionsPage() {
                                       transaction.transaction_type === 'SALE'
                                         ? 'default'
                                         : transaction.transaction_type === 'REFUND'
-                                        ? 'destructive'
-                                        : 'secondary'
+                                          ? 'destructive'
+                                          : 'secondary'
                                     }
                                     className="text-xs"
                                   >
-                                    {EBAY_TRANSACTION_TYPE_LABELS[transaction.transaction_type] || transaction.transaction_type}
+                                    {EBAY_TRANSACTION_TYPE_LABELS[transaction.transaction_type] ||
+                                      transaction.transaction_type}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="max-w-[200px] truncate">
                                   <div className="flex flex-col">
                                     <span className="truncate">
-                                      {transaction.item_title || transaction.transaction_memo || '-'}
+                                      {transaction.item_title ||
+                                        transaction.transaction_memo ||
+                                        '-'}
                                     </span>
                                     {transaction.custom_label && (
                                       <span className="text-xs text-muted-foreground truncate">
@@ -1991,7 +2137,9 @@ export default function TransactionsPage() {
                                     )}
                                     {!transaction.item_title && transaction.transaction_memo && (
                                       <span className="text-xs text-muted-foreground truncate">
-                                        {EBAY_TRANSACTION_TYPE_LABELS[transaction.transaction_type] || transaction.transaction_type}
+                                        {EBAY_TRANSACTION_TYPE_LABELS[
+                                          transaction.transaction_type
+                                        ] || transaction.transaction_type}
                                       </span>
                                     )}
                                   </div>
@@ -2004,23 +2152,31 @@ export default function TransactionsPage() {
                                 </TableCell>
                                 <TableCell
                                   className={`text-right font-medium whitespace-nowrap ${
-                                    transaction.transaction_type === 'NON_SALE_CHARGE' || transaction.transaction_type === 'REFUND'
+                                    transaction.transaction_type === 'NON_SALE_CHARGE' ||
+                                    transaction.transaction_type === 'REFUND'
                                       ? 'text-red-600'
                                       : transaction.amount > 0
                                         ? 'text-green-600'
                                         : 'text-red-600'
                                   }`}
                                 >
-                                  {transaction.transaction_type === 'NON_SALE_CHARGE' || transaction.transaction_type === 'REFUND'
+                                  {transaction.transaction_type === 'NON_SALE_CHARGE' ||
+                                  transaction.transaction_type === 'REFUND'
                                     ? '-'
                                     : transaction.amount > 0
                                       ? '+'
                                       : ''}
-                                  {formatEbayAmount(Math.abs(transaction.amount), transaction.currency)}
+                                  {formatEbayAmount(
+                                    Math.abs(transaction.amount),
+                                    transaction.currency
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">
                                   {transaction.total_fee_amount
-                                    ? formatEbayAmount(Math.abs(transaction.total_fee_amount), transaction.currency)
+                                    ? formatEbayAmount(
+                                        Math.abs(transaction.total_fee_amount),
+                                        transaction.currency
+                                      )
                                     : '-'}
                                 </TableCell>
                                 <TableCell>
@@ -2042,9 +2198,12 @@ export default function TransactionsPage() {
                       {ebayTransactionsData?.pagination && (
                         <div className="flex items-center justify-between px-4 py-4 border-t">
                           <div className="text-sm text-muted-foreground">
-                            Showing {((ebayPage - 1) * ebayPageSize) + 1} to{' '}
-                            {Math.min(ebayPage * ebayPageSize, ebayTransactionsData.pagination.total)} of{' '}
-                            {ebayTransactionsData.pagination.total} transactions
+                            Showing {(ebayPage - 1) * ebayPageSize + 1} to{' '}
+                            {Math.min(
+                              ebayPage * ebayPageSize,
+                              ebayTransactionsData.pagination.total
+                            )}{' '}
+                            of {ebayTransactionsData.pagination.total} transactions
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
@@ -2085,10 +2244,7 @@ export default function TransactionsPage() {
             {/* PayPal Sync Button */}
             {paypalIsConnected && (
               <div className="flex justify-end">
-                <Button
-                  onClick={handlePayPalSync}
-                  disabled={paypalIsRunning || paypalIsSyncing}
-                >
+                <Button onClick={handlePayPalSync} disabled={paypalIsRunning || paypalIsSyncing}>
                   {paypalIsRunning || paypalIsSyncing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2107,7 +2263,9 @@ export default function TransactionsPage() {
             {/* PayPal Messages */}
             {paypalMessage && (
               <Alert
-                className={paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  paypalMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={paypalMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -2178,7 +2336,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setPayPalSearch(e.target.value)}
                   />
                 </div>
-                <Select value={paypalDateRangeKey} onValueChange={(v: string) => { setPayPalDateRangeKey(v as DateRangeKey); setPayPalPage(1); }}>
+                <Select
+                  value={paypalDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setPayPalDateRangeKey(v as DateRangeKey);
+                    setPayPalPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -2254,8 +2418,12 @@ export default function TransactionsPage() {
                         <TableBody>
                           {paypalTransactionsData?.transactions?.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                No fee transactions found. Click &quot;Sync Transactions&quot; to import your PayPal data.
+                              <TableCell
+                                colSpan={7}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                No fee transactions found. Click &quot;Sync Transactions&quot; to
+                                import your PayPal data.
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -2278,10 +2446,15 @@ export default function TransactionsPage() {
                                   {transaction.description || transaction.transaction_type || '-'}
                                 </TableCell>
                                 <TableCell className="text-right font-medium whitespace-nowrap text-green-600">
-                                  +{formatEbayAmount(transaction.gross_amount, transaction.currency)}
+                                  +
+                                  {formatEbayAmount(transaction.gross_amount, transaction.currency)}
                                 </TableCell>
                                 <TableCell className="text-right font-medium whitespace-nowrap text-orange-600">
-                                  -{formatEbayAmount(Math.abs(transaction.fee_amount), transaction.currency)}
+                                  -
+                                  {formatEbayAmount(
+                                    Math.abs(transaction.fee_amount),
+                                    transaction.currency
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right font-medium whitespace-nowrap">
                                   {formatEbayAmount(transaction.net_amount, transaction.currency)}
@@ -2305,9 +2478,12 @@ export default function TransactionsPage() {
                       {paypalTransactionsData?.pagination && (
                         <div className="flex items-center justify-between px-4 py-4 border-t">
                           <div className="text-sm text-muted-foreground">
-                            Showing {((paypalPage - 1) * paypalPageSize) + 1} to{' '}
-                            {Math.min(paypalPage * paypalPageSize, paypalTransactionsData.pagination.total)} of{' '}
-                            {paypalTransactionsData.pagination.total} transactions
+                            Showing {(paypalPage - 1) * paypalPageSize + 1} to{' '}
+                            {Math.min(
+                              paypalPage * paypalPageSize,
+                              paypalTransactionsData.pagination.total
+                            )}{' '}
+                            of {paypalTransactionsData.pagination.total} transactions
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
@@ -2387,7 +2563,9 @@ export default function TransactionsPage() {
             {/* BrickLink Messages */}
             {bricklinkMessage && (
               <Alert
-                className={bricklinkMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  bricklinkMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={bricklinkMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -2469,7 +2647,9 @@ export default function TransactionsPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {bricklinkTransactionCount || bricklinkTransactionsData?.pagination?.total || 0}
+                      {bricklinkTransactionCount ||
+                        bricklinkTransactionsData?.pagination?.total ||
+                        0}
                     </div>
                     {bricklinkLastSyncTime && (
                       <p className="text-xs text-muted-foreground">
@@ -2491,7 +2671,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setBrickLinkSearch(e.target.value)}
                   />
                 </div>
-                <Select value={bricklinkDateRangeKey} onValueChange={(v: string) => { setBrickLinkDateRangeKey(v as DateRangeKey); setBrickLinkPage(1); }}>
+                <Select
+                  value={bricklinkDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setBrickLinkDateRangeKey(v as DateRangeKey);
+                    setBrickLinkPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -2503,7 +2689,10 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={bricklinkStatusFilter || '__all__'} onValueChange={(v: string) => setBrickLinkStatusFilter(v === '__all__' ? '' : v)}>
+                <Select
+                  value={bricklinkStatusFilter || '__all__'}
+                  onValueChange={(v: string) => setBrickLinkStatusFilter(v === '__all__' ? '' : v)}
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Order Status" />
                   </SelectTrigger>
@@ -2590,8 +2779,12 @@ export default function TransactionsPage() {
                         <TableBody>
                           {bricklinkTransactionsData?.transactions?.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                No orders found. Click &quot;Sync Orders&quot; to import your BrickLink data.
+                              <TableCell
+                                colSpan={8}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                No orders found. Click &quot;Sync Orders&quot; to import your
+                                BrickLink data.
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -2616,15 +2809,18 @@ export default function TransactionsPage() {
                                 <TableCell>
                                   <Badge
                                     variant={
-                                      transaction.order_status === 'COMPLETED' || transaction.order_status === 'RECEIVED'
+                                      transaction.order_status === 'COMPLETED' ||
+                                      transaction.order_status === 'RECEIVED'
                                         ? 'default'
-                                        : transaction.order_status === 'CANCELLED' || transaction.order_status === 'NPB'
-                                        ? 'destructive'
-                                        : 'secondary'
+                                        : transaction.order_status === 'CANCELLED' ||
+                                            transaction.order_status === 'NPB'
+                                          ? 'destructive'
+                                          : 'secondary'
                                     }
                                     className="text-xs"
                                   >
-                                    {BRICKLINK_STATUS_LABELS[transaction.order_status] || transaction.order_status}
+                                    {BRICKLINK_STATUS_LABELS[transaction.order_status] ||
+                                      transaction.order_status}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-right text-sm">
@@ -2636,10 +2832,16 @@ export default function TransactionsPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">
-                                  {formatEbayAmount(transaction.shipping, transaction.base_currency)}
+                                  {formatEbayAmount(
+                                    transaction.shipping,
+                                    transaction.base_currency
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right font-medium whitespace-nowrap text-green-600">
-                                  {formatEbayAmount(transaction.base_grand_total, transaction.base_currency)}
+                                  {formatEbayAmount(
+                                    transaction.base_grand_total,
+                                    transaction.base_currency
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -2660,9 +2862,12 @@ export default function TransactionsPage() {
                       {bricklinkTransactionsData?.pagination && (
                         <div className="flex items-center justify-between px-4 py-4 border-t">
                           <div className="text-sm text-muted-foreground">
-                            Showing {((bricklinkPage - 1) * bricklinkPageSize) + 1} to{' '}
-                            {Math.min(bricklinkPage * bricklinkPageSize, bricklinkTransactionsData.pagination.total)} of{' '}
-                            {bricklinkTransactionsData.pagination.total} orders
+                            Showing {(bricklinkPage - 1) * bricklinkPageSize + 1} to{' '}
+                            {Math.min(
+                              bricklinkPage * bricklinkPageSize,
+                              bricklinkTransactionsData.pagination.total
+                            )}{' '}
+                            of {bricklinkTransactionsData.pagination.total} orders
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
@@ -2675,13 +2880,16 @@ export default function TransactionsPage() {
                               Previous
                             </Button>
                             <span className="text-sm text-muted-foreground">
-                              Page {bricklinkPage} of {bricklinkTransactionsData.pagination.totalPages}
+                              Page {bricklinkPage} of{' '}
+                              {bricklinkTransactionsData.pagination.totalPages}
                             </span>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setBrickLinkPage((p) => p + 1)}
-                              disabled={bricklinkPage >= bricklinkTransactionsData.pagination.totalPages}
+                              disabled={
+                                bricklinkPage >= bricklinkTransactionsData.pagination.totalPages
+                              }
                             >
                               Next
                               <ChevronRight className="h-4 w-4" />
@@ -2725,7 +2933,9 @@ export default function TransactionsPage() {
             {/* BrickOwl Messages */}
             {brickowlMessage && (
               <Alert
-                className={brickowlMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  brickowlMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={brickowlMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -2829,7 +3039,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setBrickOwlSearch(e.target.value)}
                   />
                 </div>
-                <Select value={brickowlDateRangeKey} onValueChange={(v: string) => { setBrickOwlDateRangeKey(v as DateRangeKey); setBrickOwlPage(1); }}>
+                <Select
+                  value={brickowlDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setBrickOwlDateRangeKey(v as DateRangeKey);
+                    setBrickOwlPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -2841,7 +3057,10 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={brickowlStatusFilter || '__all__'} onValueChange={(v: string) => setBrickOwlStatusFilter(v === '__all__' ? '' : v)}>
+                <Select
+                  value={brickowlStatusFilter || '__all__'}
+                  onValueChange={(v: string) => setBrickOwlStatusFilter(v === '__all__' ? '' : v)}
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Order Status" />
                   </SelectTrigger>
@@ -2928,8 +3147,12 @@ export default function TransactionsPage() {
                         <TableBody>
                           {brickowlTransactionsData?.transactions?.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                No orders found. Click &quot;Sync Orders&quot; to import your BrickOwl data.
+                              <TableCell
+                                colSpan={8}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                No orders found. Click &quot;Sync Orders&quot; to import your
+                                BrickOwl data.
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -2954,15 +3177,17 @@ export default function TransactionsPage() {
                                 <TableCell>
                                   <Badge
                                     variant={
-                                      transaction.order_status === 'Shipped' || transaction.order_status === 'Received'
+                                      transaction.order_status === 'Shipped' ||
+                                      transaction.order_status === 'Received'
                                         ? 'default'
                                         : transaction.order_status === 'Cancelled'
-                                        ? 'destructive'
-                                        : 'secondary'
+                                          ? 'destructive'
+                                          : 'secondary'
                                     }
                                     className="text-xs"
                                   >
-                                    {BRICKOWL_STATUS_LABELS[transaction.order_status] || transaction.order_status}
+                                    {BRICKOWL_STATUS_LABELS[transaction.order_status] ||
+                                      transaction.order_status}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-right text-sm">
@@ -2974,10 +3199,16 @@ export default function TransactionsPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">
-                                  {formatEbayAmount(transaction.shipping, transaction.base_currency)}
+                                  {formatEbayAmount(
+                                    transaction.shipping,
+                                    transaction.base_currency
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right font-medium whitespace-nowrap text-green-600">
-                                  {formatEbayAmount(transaction.base_grand_total, transaction.base_currency)}
+                                  {formatEbayAmount(
+                                    transaction.base_grand_total,
+                                    transaction.base_currency
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -2998,9 +3229,12 @@ export default function TransactionsPage() {
                       {brickowlTransactionsData?.pagination && (
                         <div className="flex items-center justify-between px-4 py-4 border-t">
                           <div className="text-sm text-muted-foreground">
-                            Showing {((brickowlPage - 1) * brickowlPageSize) + 1} to{' '}
-                            {Math.min(brickowlPage * brickowlPageSize, brickowlTransactionsData.pagination.total)} of{' '}
-                            {brickowlTransactionsData.pagination.total} orders
+                            Showing {(brickowlPage - 1) * brickowlPageSize + 1} to{' '}
+                            {Math.min(
+                              brickowlPage * brickowlPageSize,
+                              brickowlTransactionsData.pagination.total
+                            )}{' '}
+                            of {brickowlTransactionsData.pagination.total} orders
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
@@ -3013,13 +3247,16 @@ export default function TransactionsPage() {
                               Previous
                             </Button>
                             <span className="text-sm text-muted-foreground">
-                              Page {brickowlPage} of {brickowlTransactionsData.pagination.totalPages}
+                              Page {brickowlPage} of{' '}
+                              {brickowlTransactionsData.pagination.totalPages}
                             </span>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setBrickOwlPage((p) => p + 1)}
-                              disabled={brickowlPage >= brickowlTransactionsData.pagination.totalPages}
+                              disabled={
+                                brickowlPage >= brickowlTransactionsData.pagination.totalPages
+                              }
                             >
                               Next
                               <ChevronRight className="h-4 w-4" />
@@ -3054,10 +3291,7 @@ export default function TransactionsPage() {
                     <SelectItem value="full">Full Sync (from 2025)</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
-                  onClick={handleAmazonSync}
-                  disabled={amazonIsSyncing || amazonIsRunning}
-                >
+                <Button onClick={handleAmazonSync} disabled={amazonIsSyncing || amazonIsRunning}>
                   {amazonIsSyncing || amazonIsRunning ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -3076,7 +3310,9 @@ export default function TransactionsPage() {
             {/* Amazon Messages */}
             {amazonMessage && (
               <Alert
-                className={amazonMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined}
+                className={
+                  amazonMessage.type === 'success' ? 'bg-green-50 border-green-200' : undefined
+                }
                 variant={amazonMessage.type === 'error' ? 'destructive' : undefined}
               >
                 <AlertDescription
@@ -3169,7 +3405,13 @@ export default function TransactionsPage() {
                     onChange={(e) => setAmazonSearch(e.target.value)}
                   />
                 </div>
-                <Select value={amazonDateRangeKey} onValueChange={(v: string) => { setAmazonDateRangeKey(v as DateRangeKey); setAmazonPage(1); }}>
+                <Select
+                  value={amazonDateRangeKey}
+                  onValueChange={(v: string) => {
+                    setAmazonDateRangeKey(v as DateRangeKey);
+                    setAmazonPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
@@ -3181,7 +3423,12 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={amazonTransactionTypeFilter || '__all__'} onValueChange={(v: string) => setAmazonTransactionTypeFilter(v === '__all__' ? '' : v)}>
+                <Select
+                  value={amazonTransactionTypeFilter || '__all__'}
+                  onValueChange={(v: string) =>
+                    setAmazonTransactionTypeFilter(v === '__all__' ? '' : v)
+                  }
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Transaction Type" />
                   </SelectTrigger>
@@ -3262,11 +3509,12 @@ export default function TransactionsPage() {
                                       tx.transaction_type === 'Shipment'
                                         ? 'default'
                                         : tx.transaction_type === 'Refund'
-                                        ? 'destructive'
-                                        : 'secondary'
+                                          ? 'destructive'
+                                          : 'secondary'
                                     }
                                   >
-                                    {AMAZON_TRANSACTION_TYPE_LABELS[tx.transaction_type] || tx.transaction_type}
+                                    {AMAZON_TRANSACTION_TYPE_LABELS[tx.transaction_type] ||
+                                      tx.transaction_type}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="max-w-[200px] truncate">
@@ -3279,7 +3527,10 @@ export default function TransactionsPage() {
                                   {tx.amazon_order_id || '-'}
                                 </TableCell>
                                 <TableCell>
-                                  {tx.marketplace_id ? (AMAZON_MARKETPLACE_LABELS[tx.marketplace_id] || tx.marketplace_id) : '-'}
+                                  {tx.marketplace_id
+                                    ? AMAZON_MARKETPLACE_LABELS[tx.marketplace_id] ||
+                                      tx.marketplace_id
+                                    : '-'}
                                 </TableCell>
                                 <TableCell className="text-right whitespace-nowrap">
                                   <span
@@ -3287,8 +3538,8 @@ export default function TransactionsPage() {
                                       (tx.gross_sales_amount ?? tx.total_amount) > 0
                                         ? 'text-green-600'
                                         : (tx.gross_sales_amount ?? tx.total_amount) < 0
-                                        ? 'text-red-600'
-                                        : ''
+                                          ? 'text-red-600'
+                                          : ''
                                     }
                                   >
                                     {/* Show gross amount for sales, otherwise net */}
@@ -3301,7 +3552,9 @@ export default function TransactionsPage() {
                                   </span>
                                 </TableCell>
                                 <TableCell className="text-right whitespace-nowrap text-orange-600">
-                                  {tx.total_fees ? formatEbayAmount(Math.abs(tx.total_fees), tx.currency) : '-'}
+                                  {tx.total_fees
+                                    ? formatEbayAmount(Math.abs(tx.total_fees), tx.currency)
+                                    : '-'}
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -3323,35 +3576,41 @@ export default function TransactionsPage() {
                       </Table>
 
                       {/* Pagination */}
-                      {amazonTransactionsData && amazonTransactionsData.pagination.totalPages > 1 && (
-                        <div className="flex items-center justify-between px-4 py-4 border-t">
-                          <p className="text-sm text-muted-foreground">
-                            Showing {((amazonPage - 1) * amazonPageSize) + 1} to{' '}
-                            {Math.min(amazonPage * amazonPageSize, amazonTransactionsData.pagination.total)} of{' '}
-                            {amazonTransactionsData.pagination.total} transactions
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setAmazonPage((p) => Math.max(1, p - 1))}
-                              disabled={amazonPage === 1}
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                              Previous
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setAmazonPage((p) => p + 1)}
-                              disabled={amazonPage >= amazonTransactionsData.pagination.totalPages}
-                            >
-                              Next
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
+                      {amazonTransactionsData &&
+                        amazonTransactionsData.pagination.totalPages > 1 && (
+                          <div className="flex items-center justify-between px-4 py-4 border-t">
+                            <p className="text-sm text-muted-foreground">
+                              Showing {(amazonPage - 1) * amazonPageSize + 1} to{' '}
+                              {Math.min(
+                                amazonPage * amazonPageSize,
+                                amazonTransactionsData.pagination.total
+                              )}{' '}
+                              of {amazonTransactionsData.pagination.total} transactions
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAmazonPage((p) => Math.max(1, p - 1))}
+                                disabled={amazonPage === 1}
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                                Previous
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAmazonPage((p) => p + 1)}
+                                disabled={
+                                  amazonPage >= amazonTransactionsData.pagination.totalPages
+                                }
+                              >
+                                Next
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                     </>
                   )}
                 </CardContent>
@@ -3363,7 +3622,10 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* Monzo Edit Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedMonzoTransaction} onOpenChange={() => setSelectedMonzoTransaction(null)}>
+        <Sheet
+          open={!!selectedMonzoTransaction}
+          onOpenChange={() => setSelectedMonzoTransaction(null)}
+        >
           <SheetContent>
             <SheetHeader>
               <SheetTitle>Edit Transaction</SheetTitle>
@@ -3377,11 +3639,15 @@ export default function TransactionsPage() {
                 <div className="rounded-lg bg-muted p-4 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date</span>
-                    <span className="font-medium">{formatDateTime(selectedMonzoTransaction.created)}</span>
+                    <span className="font-medium">
+                      {formatDateTime(selectedMonzoTransaction.created)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Merchant</span>
-                    <span className="font-medium">{selectedMonzoTransaction.merchant_name || '-'}</span>
+                    <span className="font-medium">
+                      {selectedMonzoTransaction.merchant_name || '-'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Amount</span>
@@ -3391,7 +3657,10 @@ export default function TransactionsPage() {
                       }`}
                     >
                       {selectedMonzoTransaction.amount > 0 ? '+' : ''}
-                      {formatAmount(selectedMonzoTransaction.amount, selectedMonzoTransaction.currency)}
+                      {formatAmount(
+                        selectedMonzoTransaction.amount,
+                        selectedMonzoTransaction.currency
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -3411,7 +3680,10 @@ export default function TransactionsPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="localCategory">My Category</Label>
-                    <Select value={editLocalCategory || '__none__'} onValueChange={(v: string) => setEditLocalCategory(v === '__none__' ? '' : v)}>
+                    <Select
+                      value={editLocalCategory || '__none__'}
+                      onValueChange={(v: string) => setEditLocalCategory(v === '__none__' ? '' : v)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
@@ -3473,13 +3745,14 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* eBay Detail Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedEbayTransaction} onOpenChange={() => setSelectedEbayTransaction(null)}>
+        <Sheet
+          open={!!selectedEbayTransaction}
+          onOpenChange={() => setSelectedEbayTransaction(null)}
+        >
           <SheetContent>
             <SheetHeader>
               <SheetTitle>Transaction Details</SheetTitle>
-              <SheetDescription>
-                View eBay transaction details and fee breakdown.
-              </SheetDescription>
+              <SheetDescription>View eBay transaction details and fee breakdown.</SheetDescription>
             </SheetHeader>
             {selectedEbayTransaction && (
               <div className="mt-6 space-y-6">
@@ -3487,7 +3760,9 @@ export default function TransactionsPage() {
                 <div className="rounded-lg bg-muted p-4 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date</span>
-                    <span className="font-medium">{formatDateTime(selectedEbayTransaction.transaction_date)}</span>
+                    <span className="font-medium">
+                      {formatDateTime(selectedEbayTransaction.transaction_date)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Type</span>
@@ -3496,54 +3771,69 @@ export default function TransactionsPage() {
                         selectedEbayTransaction.transaction_type === 'SALE'
                           ? 'default'
                           : selectedEbayTransaction.transaction_type === 'REFUND'
-                          ? 'destructive'
-                          : 'secondary'
+                            ? 'destructive'
+                            : 'secondary'
                       }
                     >
-                      {EBAY_TRANSACTION_TYPE_LABELS[selectedEbayTransaction.transaction_type] || selectedEbayTransaction.transaction_type}
+                      {EBAY_TRANSACTION_TYPE_LABELS[selectedEbayTransaction.transaction_type] ||
+                        selectedEbayTransaction.transaction_type}
                     </Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Amount</span>
                     <span
                       className={`font-medium ${
-                        selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' || selectedEbayTransaction.transaction_type === 'REFUND'
+                        selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' ||
+                        selectedEbayTransaction.transaction_type === 'REFUND'
                           ? 'text-red-600'
                           : selectedEbayTransaction.amount > 0
                             ? 'text-green-600'
                             : 'text-red-600'
                       }`}
                     >
-                      {selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' || selectedEbayTransaction.transaction_type === 'REFUND'
+                      {selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' ||
+                      selectedEbayTransaction.transaction_type === 'REFUND'
                         ? '-'
                         : selectedEbayTransaction.amount > 0
                           ? '+'
                           : ''}
-                      {formatEbayAmount(Math.abs(selectedEbayTransaction.amount), selectedEbayTransaction.currency)}
+                      {formatEbayAmount(
+                        Math.abs(selectedEbayTransaction.amount),
+                        selectedEbayTransaction.currency
+                      )}
                     </span>
                   </div>
                   {selectedEbayTransaction.item_title && (
                     <div>
                       <span className="text-muted-foreground">Item</span>
-                      <p className="mt-1 text-sm font-medium">{selectedEbayTransaction.item_title}</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {selectedEbayTransaction.item_title}
+                      </p>
                     </div>
                   )}
-                  {!selectedEbayTransaction.item_title && selectedEbayTransaction.transaction_memo && (
-                    <div>
-                      <span className="text-muted-foreground">Description</span>
-                      <p className="mt-1 text-sm font-medium">{selectedEbayTransaction.transaction_memo}</p>
-                    </div>
-                  )}
+                  {!selectedEbayTransaction.item_title &&
+                    selectedEbayTransaction.transaction_memo && (
+                      <div>
+                        <span className="text-muted-foreground">Description</span>
+                        <p className="mt-1 text-sm font-medium">
+                          {selectedEbayTransaction.transaction_memo}
+                        </p>
+                      </div>
+                    )}
                   {selectedEbayTransaction.custom_label && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">SKU</span>
-                      <span className="font-mono text-sm">{selectedEbayTransaction.custom_label}</span>
+                      <span className="font-mono text-sm">
+                        {selectedEbayTransaction.custom_label}
+                      </span>
                     </div>
                   )}
                   {selectedEbayTransaction.ebay_order_id && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Order ID</span>
-                      <span className="font-mono text-xs">{selectedEbayTransaction.ebay_order_id}</span>
+                      <span className="font-mono text-xs">
+                        {selectedEbayTransaction.ebay_order_id}
+                      </span>
                     </div>
                   )}
                   {selectedEbayTransaction.buyer_username && (
@@ -3555,43 +3845,69 @@ export default function TransactionsPage() {
                 </div>
 
                 {/* Fee Breakdown - for sales with fees */}
-                {selectedEbayTransaction.transaction_type === 'SALE' && (selectedEbayTransaction.total_fee_amount || 0) > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Fee Breakdown</h4>
-                    <div className="rounded-lg border p-4 space-y-2">
-                      {selectedEbayTransaction.final_value_fee_fixed && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Final Value Fee (Fixed)</span>
-                          <span>{formatEbayAmount(selectedEbayTransaction.final_value_fee_fixed, selectedEbayTransaction.currency)}</span>
+                {selectedEbayTransaction.transaction_type === 'SALE' &&
+                  (selectedEbayTransaction.total_fee_amount || 0) > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Fee Breakdown</h4>
+                      <div className="rounded-lg border p-4 space-y-2">
+                        {selectedEbayTransaction.final_value_fee_fixed && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Final Value Fee (Fixed)</span>
+                            <span>
+                              {formatEbayAmount(
+                                selectedEbayTransaction.final_value_fee_fixed,
+                                selectedEbayTransaction.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {selectedEbayTransaction.final_value_fee_variable && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Final Value Fee (Variable)
+                            </span>
+                            <span>
+                              {formatEbayAmount(
+                                selectedEbayTransaction.final_value_fee_variable,
+                                selectedEbayTransaction.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {selectedEbayTransaction.international_fee && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">International Fee</span>
+                            <span>
+                              {formatEbayAmount(
+                                selectedEbayTransaction.international_fee,
+                                selectedEbayTransaction.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {selectedEbayTransaction.regulatory_operating_fee && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Regulatory Operating Fee</span>
+                            <span>
+                              {formatEbayAmount(
+                                selectedEbayTransaction.regulatory_operating_fee,
+                                selectedEbayTransaction.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                          <span>Total Fees</span>
+                          <span className="text-orange-600">
+                            {formatEbayAmount(
+                              Math.abs(selectedEbayTransaction.total_fee_amount || 0),
+                              selectedEbayTransaction.currency
+                            )}
+                          </span>
                         </div>
-                      )}
-                      {selectedEbayTransaction.final_value_fee_variable && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Final Value Fee (Variable)</span>
-                          <span>{formatEbayAmount(selectedEbayTransaction.final_value_fee_variable, selectedEbayTransaction.currency)}</span>
-                        </div>
-                      )}
-                      {selectedEbayTransaction.international_fee && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">International Fee</span>
-                          <span>{formatEbayAmount(selectedEbayTransaction.international_fee, selectedEbayTransaction.currency)}</span>
-                        </div>
-                      )}
-                      {selectedEbayTransaction.regulatory_operating_fee && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Regulatory Operating Fee</span>
-                          <span>{formatEbayAmount(selectedEbayTransaction.regulatory_operating_fee, selectedEbayTransaction.currency)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-medium pt-2 border-t">
-                        <span>Total Fees</span>
-                        <span className="text-orange-600">
-                          {formatEbayAmount(Math.abs(selectedEbayTransaction.total_fee_amount || 0), selectedEbayTransaction.currency)}
-                        </span>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Fee Info - for standalone fee transactions */}
                 {selectedEbayTransaction.transaction_type === 'NON_SALE_CHARGE' && (
@@ -3601,7 +3917,10 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm font-medium">
                         <span>{selectedEbayTransaction.transaction_memo || 'Fee'}</span>
                         <span className="text-orange-600">
-                          {formatEbayAmount(Math.abs(selectedEbayTransaction.amount), selectedEbayTransaction.currency)}
+                          {formatEbayAmount(
+                            Math.abs(selectedEbayTransaction.amount),
+                            selectedEbayTransaction.currency
+                          )}
                         </span>
                       </div>
                     </div>
@@ -3626,13 +3945,14 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* PayPal Detail Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedPayPalTransaction} onOpenChange={() => setSelectedPayPalTransaction(null)}>
+        <Sheet
+          open={!!selectedPayPalTransaction}
+          onOpenChange={() => setSelectedPayPalTransaction(null)}
+        >
           <SheetContent>
             <SheetHeader>
               <SheetTitle>Transaction Details</SheetTitle>
-              <SheetDescription>
-                View PayPal fee transaction details.
-              </SheetDescription>
+              <SheetDescription>View PayPal fee transaction details.</SheetDescription>
             </SheetHeader>
             {selectedPayPalTransaction && (
               <div className="mt-6 space-y-6">
@@ -3640,22 +3960,30 @@ export default function TransactionsPage() {
                 <div className="rounded-lg bg-muted p-4 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date</span>
-                    <span className="font-medium">{formatDateTime(selectedPayPalTransaction.transaction_date)}</span>
+                    <span className="font-medium">
+                      {formatDateTime(selectedPayPalTransaction.transaction_date)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Transaction ID</span>
-                    <span className="font-mono text-xs">{selectedPayPalTransaction.paypal_transaction_id}</span>
+                    <span className="font-mono text-xs">
+                      {selectedPayPalTransaction.paypal_transaction_id}
+                    </span>
                   </div>
                   {selectedPayPalTransaction.transaction_type && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Type</span>
-                      <Badge variant="secondary">{selectedPayPalTransaction.transaction_type}</Badge>
+                      <Badge variant="secondary">
+                        {selectedPayPalTransaction.transaction_type}
+                      </Badge>
                     </div>
                   )}
                   {selectedPayPalTransaction.transaction_status && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status</span>
-                      <span className="font-medium">{selectedPayPalTransaction.transaction_status}</span>
+                      <span className="font-medium">
+                        {selectedPayPalTransaction.transaction_status}
+                      </span>
                     </div>
                   )}
                   {selectedPayPalTransaction.payer_name && (
@@ -3679,7 +4007,9 @@ export default function TransactionsPage() {
                   {selectedPayPalTransaction.invoice_id && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Invoice ID</span>
-                      <span className="font-mono text-sm">{selectedPayPalTransaction.invoice_id}</span>
+                      <span className="font-mono text-sm">
+                        {selectedPayPalTransaction.invoice_id}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -3691,26 +4021,40 @@ export default function TransactionsPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Gross Amount</span>
                       <span className="font-medium text-green-600">
-                        +{formatEbayAmount(selectedPayPalTransaction.gross_amount, selectedPayPalTransaction.currency)}
+                        +
+                        {formatEbayAmount(
+                          selectedPayPalTransaction.gross_amount,
+                          selectedPayPalTransaction.currency
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Fee</span>
                       <span className="font-medium text-orange-600">
-                        -{formatEbayAmount(Math.abs(selectedPayPalTransaction.fee_amount), selectedPayPalTransaction.currency)}
+                        -
+                        {formatEbayAmount(
+                          Math.abs(selectedPayPalTransaction.fee_amount),
+                          selectedPayPalTransaction.currency
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm font-medium pt-2 border-t">
                       <span>Net Amount</span>
                       <span>
-                        {formatEbayAmount(selectedPayPalTransaction.net_amount, selectedPayPalTransaction.currency)}
+                        {formatEbayAmount(
+                          selectedPayPalTransaction.net_amount,
+                          selectedPayPalTransaction.currency
+                        )}
                       </span>
                     </div>
                     {selectedPayPalTransaction.balance_amount !== null && (
                       <div className="flex justify-between text-sm text-muted-foreground pt-2 border-t">
                         <span>Balance After</span>
                         <span>
-                          {formatEbayAmount(selectedPayPalTransaction.balance_amount, selectedPayPalTransaction.currency)}
+                          {formatEbayAmount(
+                            selectedPayPalTransaction.balance_amount,
+                            selectedPayPalTransaction.currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3735,7 +4079,10 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* BrickLink Detail Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedBrickLinkTransaction} onOpenChange={() => setSelectedBrickLinkTransaction(null)}>
+        <Sheet
+          open={!!selectedBrickLinkTransaction}
+          onOpenChange={() => setSelectedBrickLinkTransaction(null)}
+        >
           <SheetContent>
             <SheetHeader>
               <SheetTitle>Order Details</SheetTitle>
@@ -3749,24 +4096,31 @@ export default function TransactionsPage() {
                 <div className="rounded-lg bg-muted p-4 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Order Date</span>
-                    <span className="font-medium">{formatDateTime(selectedBrickLinkTransaction.order_date)}</span>
+                    <span className="font-medium">
+                      {formatDateTime(selectedBrickLinkTransaction.order_date)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Order ID</span>
-                    <span className="font-mono text-sm">{selectedBrickLinkTransaction.bricklink_order_id}</span>
+                    <span className="font-mono text-sm">
+                      {selectedBrickLinkTransaction.bricklink_order_id}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status</span>
                     <Badge
                       variant={
-                        selectedBrickLinkTransaction.order_status === 'COMPLETED' || selectedBrickLinkTransaction.order_status === 'RECEIVED'
+                        selectedBrickLinkTransaction.order_status === 'COMPLETED' ||
+                        selectedBrickLinkTransaction.order_status === 'RECEIVED'
                           ? 'default'
-                          : selectedBrickLinkTransaction.order_status === 'CANCELLED' || selectedBrickLinkTransaction.order_status === 'NPB'
-                          ? 'destructive'
-                          : 'secondary'
+                          : selectedBrickLinkTransaction.order_status === 'CANCELLED' ||
+                              selectedBrickLinkTransaction.order_status === 'NPB'
+                            ? 'destructive'
+                            : 'secondary'
                       }
                     >
-                      {BRICKLINK_STATUS_LABELS[selectedBrickLinkTransaction.order_status] || selectedBrickLinkTransaction.order_status}
+                      {BRICKLINK_STATUS_LABELS[selectedBrickLinkTransaction.order_status] ||
+                        selectedBrickLinkTransaction.order_status}
                     </Badge>
                   </div>
                   <div className="flex justify-between">
@@ -3787,7 +4141,10 @@ export default function TransactionsPage() {
                   )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Items</span>
-                    <span className="text-sm">{selectedBrickLinkTransaction.total_items} items ({selectedBrickLinkTransaction.total_lots} lots)</span>
+                    <span className="text-sm">
+                      {selectedBrickLinkTransaction.total_items} items (
+                      {selectedBrickLinkTransaction.total_lots} lots)
+                    </span>
                   </div>
                   {selectedBrickLinkTransaction.payment_method && (
                     <div className="flex justify-between">
@@ -3798,13 +4155,17 @@ export default function TransactionsPage() {
                   {selectedBrickLinkTransaction.payment_date && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Payment Date</span>
-                      <span className="text-sm">{formatDateTime(selectedBrickLinkTransaction.payment_date)}</span>
+                      <span className="text-sm">
+                        {formatDateTime(selectedBrickLinkTransaction.payment_date)}
+                      </span>
                     </div>
                   )}
                   {selectedBrickLinkTransaction.tracking_number && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tracking</span>
-                      <span className="font-mono text-xs">{selectedBrickLinkTransaction.tracking_number}</span>
+                      <span className="font-mono text-xs">
+                        {selectedBrickLinkTransaction.tracking_number}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -3816,20 +4177,29 @@ export default function TransactionsPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Order Total</span>
                       <span className="font-medium">
-                        {formatEbayAmount(selectedBrickLinkTransaction.order_total, selectedBrickLinkTransaction.base_currency)}
+                        {formatEbayAmount(
+                          selectedBrickLinkTransaction.order_total,
+                          selectedBrickLinkTransaction.base_currency
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Shipping</span>
                       <span>
-                        {formatEbayAmount(selectedBrickLinkTransaction.shipping, selectedBrickLinkTransaction.base_currency)}
+                        {formatEbayAmount(
+                          selectedBrickLinkTransaction.shipping,
+                          selectedBrickLinkTransaction.base_currency
+                        )}
                       </span>
                     </div>
                     {selectedBrickLinkTransaction.insurance > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Insurance</span>
                         <span>
-                          {formatEbayAmount(selectedBrickLinkTransaction.insurance, selectedBrickLinkTransaction.base_currency)}
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.insurance,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3837,7 +4207,10 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Additional Charge 1</span>
                         <span>
-                          {formatEbayAmount(selectedBrickLinkTransaction.add_charge_1, selectedBrickLinkTransaction.base_currency)}
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.add_charge_1,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3845,7 +4218,10 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Additional Charge 2</span>
                         <span>
-                          {formatEbayAmount(selectedBrickLinkTransaction.add_charge_2, selectedBrickLinkTransaction.base_currency)}
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.add_charge_2,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3853,7 +4229,11 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Credit</span>
                         <span className="text-red-600">
-                          -{formatEbayAmount(selectedBrickLinkTransaction.credit, selectedBrickLinkTransaction.base_currency)}
+                          -
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.credit,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3861,7 +4241,11 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Coupon Credit</span>
                         <span className="text-red-600">
-                          -{formatEbayAmount(selectedBrickLinkTransaction.coupon_credit, selectedBrickLinkTransaction.base_currency)}
+                          -
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.coupon_credit,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
@@ -3869,14 +4253,20 @@ export default function TransactionsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tax</span>
                         <span>
-                          {formatEbayAmount(selectedBrickLinkTransaction.tax, selectedBrickLinkTransaction.base_currency)}
+                          {formatEbayAmount(
+                            selectedBrickLinkTransaction.tax,
+                            selectedBrickLinkTransaction.base_currency
+                          )}
                         </span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm font-medium pt-2 border-t">
                       <span>Grand Total</span>
                       <span className="text-green-600">
-                        {formatEbayAmount(selectedBrickLinkTransaction.base_grand_total, selectedBrickLinkTransaction.base_currency)}
+                        {formatEbayAmount(
+                          selectedBrickLinkTransaction.base_grand_total,
+                          selectedBrickLinkTransaction.base_currency
+                        )}
                       </span>
                     </div>
                   </div>
@@ -3910,7 +4300,10 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* BrickOwl Detail Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedBrickOwlTransaction} onOpenChange={() => setSelectedBrickOwlTransaction(null)}>
+        <Sheet
+          open={!!selectedBrickOwlTransaction}
+          onOpenChange={() => setSelectedBrickOwlTransaction(null)}
+        >
           <SheetContent>
             <SheetHeader>
               <SheetTitle>Order Details</SheetTitle>
@@ -3924,21 +4317,26 @@ export default function TransactionsPage() {
                 <div className="rounded-lg bg-muted p-4 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Order Date</span>
-                    <span className="font-medium">{formatDateTime(selectedBrickOwlTransaction.order_date)}</span>
+                    <span className="font-medium">
+                      {formatDateTime(selectedBrickOwlTransaction.order_date)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Order ID</span>
-                    <span className="font-mono text-sm">{selectedBrickOwlTransaction.brickowl_order_id}</span>
+                    <span className="font-mono text-sm">
+                      {selectedBrickOwlTransaction.brickowl_order_id}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status</span>
                     <Badge
                       variant={
-                        selectedBrickOwlTransaction.order_status === 'Shipped' || selectedBrickOwlTransaction.order_status === 'Received'
+                        selectedBrickOwlTransaction.order_status === 'Shipped' ||
+                        selectedBrickOwlTransaction.order_status === 'Received'
                           ? 'default'
                           : selectedBrickOwlTransaction.order_status === 'Cancelled'
-                          ? 'destructive'
-                          : 'secondary'
+                            ? 'destructive'
+                            : 'secondary'
                       }
                     >
                       {selectedBrickOwlTransaction.order_status}
@@ -3968,7 +4366,10 @@ export default function TransactionsPage() {
                   )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Items</span>
-                    <span className="text-sm">{selectedBrickOwlTransaction.total_items} items ({selectedBrickOwlTransaction.total_lots} lots)</span>
+                    <span className="text-sm">
+                      {selectedBrickOwlTransaction.total_items} items (
+                      {selectedBrickOwlTransaction.total_lots} lots)
+                    </span>
                   </div>
                   {selectedBrickOwlTransaction.payment_method && (
                     <div className="flex justify-between">
@@ -3985,7 +4386,9 @@ export default function TransactionsPage() {
                   {selectedBrickOwlTransaction.tracking_number && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tracking</span>
-                      <span className="font-mono text-xs">{selectedBrickOwlTransaction.tracking_number}</span>
+                      <span className="font-mono text-xs">
+                        {selectedBrickOwlTransaction.tracking_number}
+                      </span>
                     </div>
                   )}
                   {selectedBrickOwlTransaction.shipping_method && (
@@ -4001,40 +4404,72 @@ export default function TransactionsPage() {
                   <h4 className="font-medium">Financial Breakdown</h4>
                   <div className="flex justify-between text-sm">
                     <span>Subtotal</span>
-                    <span>{formatEbayAmount(selectedBrickOwlTransaction.order_total, selectedBrickOwlTransaction.base_currency)}</span>
+                    <span>
+                      {formatEbayAmount(
+                        selectedBrickOwlTransaction.order_total,
+                        selectedBrickOwlTransaction.base_currency
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping</span>
-                    <span>{formatEbayAmount(selectedBrickOwlTransaction.shipping, selectedBrickOwlTransaction.base_currency)}</span>
+                    <span>
+                      {formatEbayAmount(
+                        selectedBrickOwlTransaction.shipping,
+                        selectedBrickOwlTransaction.base_currency
+                      )}
+                    </span>
                   </div>
                   {selectedBrickOwlTransaction.tax > 0 && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tax</span>
-                      <span>{formatEbayAmount(selectedBrickOwlTransaction.tax, selectedBrickOwlTransaction.base_currency)}</span>
+                      <span>
+                        {formatEbayAmount(
+                          selectedBrickOwlTransaction.tax,
+                          selectedBrickOwlTransaction.base_currency
+                        )}
+                      </span>
                     </div>
                   )}
                   {selectedBrickOwlTransaction.coupon_discount > 0 && (
                     <div className="flex justify-between text-sm text-red-500">
                       <span>Coupon Discount</span>
-                      <span>-{formatEbayAmount(selectedBrickOwlTransaction.coupon_discount, selectedBrickOwlTransaction.base_currency)}</span>
+                      <span>
+                        -
+                        {formatEbayAmount(
+                          selectedBrickOwlTransaction.coupon_discount,
+                          selectedBrickOwlTransaction.base_currency
+                        )}
+                      </span>
                     </div>
                   )}
                   {selectedBrickOwlTransaction.combined_shipping_discount > 0 && (
                     <div className="flex justify-between text-sm text-red-500">
                       <span>Combined Shipping Discount</span>
-                      <span>-{formatEbayAmount(selectedBrickOwlTransaction.combined_shipping_discount, selectedBrickOwlTransaction.base_currency)}</span>
+                      <span>
+                        -
+                        {formatEbayAmount(
+                          selectedBrickOwlTransaction.combined_shipping_discount,
+                          selectedBrickOwlTransaction.base_currency
+                        )}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-medium pt-2 border-t">
                     <span>Grand Total</span>
                     <span className="text-green-600">
-                      {formatEbayAmount(selectedBrickOwlTransaction.base_grand_total, selectedBrickOwlTransaction.base_currency)}
+                      {formatEbayAmount(
+                        selectedBrickOwlTransaction.base_grand_total,
+                        selectedBrickOwlTransaction.base_currency
+                      )}
                     </span>
                   </div>
                 </div>
 
                 {/* Notes */}
-                {(selectedBrickOwlTransaction.buyer_note || selectedBrickOwlTransaction.seller_note || selectedBrickOwlTransaction.public_note) && (
+                {(selectedBrickOwlTransaction.buyer_note ||
+                  selectedBrickOwlTransaction.seller_note ||
+                  selectedBrickOwlTransaction.public_note) && (
                   <div className="rounded-lg border p-4 space-y-3">
                     <h4 className="font-medium">Notes</h4>
                     {selectedBrickOwlTransaction.buyer_note && (
@@ -4076,7 +4511,10 @@ export default function TransactionsPage() {
         {/* ============================================================================ */}
         {/* Amazon Transaction Details Sheet */}
         {/* ============================================================================ */}
-        <Sheet open={!!selectedAmazonTransaction} onOpenChange={() => setSelectedAmazonTransaction(null)}>
+        <Sheet
+          open={!!selectedAmazonTransaction}
+          onOpenChange={() => setSelectedAmazonTransaction(null)}
+        >
           <SheetContent className="overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Amazon Transaction Details</SheetTitle>
@@ -4095,41 +4533,51 @@ export default function TransactionsPage() {
                         selectedAmazonTransaction.transaction_type === 'Shipment'
                           ? 'default'
                           : selectedAmazonTransaction.transaction_type === 'Refund'
-                          ? 'destructive'
-                          : 'secondary'
+                            ? 'destructive'
+                            : 'secondary'
                       }
                     >
-                      {AMAZON_TRANSACTION_TYPE_LABELS[selectedAmazonTransaction.transaction_type] || selectedAmazonTransaction.transaction_type}
+                      {AMAZON_TRANSACTION_TYPE_LABELS[selectedAmazonTransaction.transaction_type] ||
+                        selectedAmazonTransaction.transaction_type}
                     </Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Posted Date</span>
-                    <span className="text-sm font-medium">{formatDateTime(selectedAmazonTransaction.posted_date)}</span>
+                    <span className="text-sm font-medium">
+                      {formatDateTime(selectedAmazonTransaction.posted_date)}
+                    </span>
                   </div>
                   {selectedAmazonTransaction.marketplace_id && (
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Marketplace</span>
                       <span className="text-sm font-medium">
-                        {AMAZON_MARKETPLACE_LABELS[selectedAmazonTransaction.marketplace_id] || selectedAmazonTransaction.marketplace_id}
+                        {AMAZON_MARKETPLACE_LABELS[selectedAmazonTransaction.marketplace_id] ||
+                          selectedAmazonTransaction.marketplace_id}
                       </span>
                     </div>
                   )}
                   {selectedAmazonTransaction.amazon_order_id && (
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Order ID</span>
-                      <span className="text-sm font-mono">{selectedAmazonTransaction.amazon_order_id}</span>
+                      <span className="text-sm font-mono">
+                        {selectedAmazonTransaction.amazon_order_id}
+                      </span>
                     </div>
                   )}
                   {selectedAmazonTransaction.transaction_status && (
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Status</span>
-                      <span className="text-sm font-medium">{selectedAmazonTransaction.transaction_status}</span>
+                      <span className="text-sm font-medium">
+                        {selectedAmazonTransaction.transaction_status}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* Item Info */}
-                {(selectedAmazonTransaction.item_title || selectedAmazonTransaction.asin || selectedAmazonTransaction.seller_sku) && (
+                {(selectedAmazonTransaction.item_title ||
+                  selectedAmazonTransaction.asin ||
+                  selectedAmazonTransaction.seller_sku) && (
                   <div className="rounded-lg border p-4 space-y-3">
                     <h4 className="font-medium">Item Information</h4>
                     {selectedAmazonTransaction.item_title && (
@@ -4147,19 +4595,25 @@ export default function TransactionsPage() {
                     {selectedAmazonTransaction.seller_sku && (
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">SKU</span>
-                        <span className="text-sm font-mono">{selectedAmazonTransaction.seller_sku}</span>
+                        <span className="text-sm font-mono">
+                          {selectedAmazonTransaction.seller_sku}
+                        </span>
                       </div>
                     )}
                     {selectedAmazonTransaction.quantity && (
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Quantity</span>
-                        <span className="text-sm font-medium">{selectedAmazonTransaction.quantity}</span>
+                        <span className="text-sm font-medium">
+                          {selectedAmazonTransaction.quantity}
+                        </span>
                       </div>
                     )}
                     {selectedAmazonTransaction.fulfillment_channel && (
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Fulfillment</span>
-                        <span className="text-sm font-medium">{selectedAmazonTransaction.fulfillment_channel}</span>
+                        <span className="text-sm font-medium">
+                          {selectedAmazonTransaction.fulfillment_channel}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -4170,59 +4624,114 @@ export default function TransactionsPage() {
                   <h4 className="font-medium">Financial Breakdown</h4>
                   <div className="flex justify-between text-sm">
                     <span>Total Amount</span>
-                    <span className={selectedAmazonTransaction.total_amount > 0 ? 'text-green-600 font-medium' : selectedAmazonTransaction.total_amount < 0 ? 'text-red-600 font-medium' : ''}>
-                      {formatEbayAmount(selectedAmazonTransaction.total_amount, selectedAmazonTransaction.currency)}
+                    <span
+                      className={
+                        selectedAmazonTransaction.total_amount > 0
+                          ? 'text-green-600 font-medium'
+                          : selectedAmazonTransaction.total_amount < 0
+                            ? 'text-red-600 font-medium'
+                            : ''
+                      }
+                    >
+                      {formatEbayAmount(
+                        selectedAmazonTransaction.total_amount,
+                        selectedAmazonTransaction.currency
+                      )}
                     </span>
                   </div>
-                  {selectedAmazonTransaction.gross_sales_amount && selectedAmazonTransaction.gross_sales_amount !== 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Gross Sales</span>
-                      <span>{formatEbayAmount(selectedAmazonTransaction.gross_sales_amount, selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.referral_fee && selectedAmazonTransaction.referral_fee !== 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Referral Fee</span>
-                      <span className="text-orange-600">{formatEbayAmount(Math.abs(selectedAmazonTransaction.referral_fee), selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.fba_fulfillment_fee && selectedAmazonTransaction.fba_fulfillment_fee !== 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>FBA Fulfillment Fee</span>
-                      <span className="text-orange-600">{formatEbayAmount(Math.abs(selectedAmazonTransaction.fba_fulfillment_fee), selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.fba_per_unit_fee && selectedAmazonTransaction.fba_per_unit_fee !== 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>FBA Per-Unit Fee</span>
-                      <span className="text-orange-600">{formatEbayAmount(Math.abs(selectedAmazonTransaction.fba_per_unit_fee), selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.fba_weight_fee && selectedAmazonTransaction.fba_weight_fee !== 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>FBA Weight Fee</span>
-                      <span className="text-orange-600">{formatEbayAmount(Math.abs(selectedAmazonTransaction.fba_weight_fee), selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.total_fees && selectedAmazonTransaction.total_fees !== 0 && (
-                    <div className="flex justify-between text-sm font-medium pt-2 border-t">
-                      <span>Total Fees</span>
-                      <span className="text-orange-600">{formatEbayAmount(Math.abs(selectedAmazonTransaction.total_fees), selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
-                  {selectedAmazonTransaction.net_amount && selectedAmazonTransaction.net_amount !== 0 && (
-                    <div className="flex justify-between text-sm font-medium pt-2 border-t">
-                      <span>Net Amount</span>
-                      <span className="text-green-600">{formatEbayAmount(selectedAmazonTransaction.net_amount, selectedAmazonTransaction.currency)}</span>
-                    </div>
-                  )}
+                  {selectedAmazonTransaction.gross_sales_amount &&
+                    selectedAmazonTransaction.gross_sales_amount !== 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Gross Sales</span>
+                        <span>
+                          {formatEbayAmount(
+                            selectedAmazonTransaction.gross_sales_amount,
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.referral_fee &&
+                    selectedAmazonTransaction.referral_fee !== 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Referral Fee</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(
+                            Math.abs(selectedAmazonTransaction.referral_fee),
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.fba_fulfillment_fee &&
+                    selectedAmazonTransaction.fba_fulfillment_fee !== 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>FBA Fulfillment Fee</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(
+                            Math.abs(selectedAmazonTransaction.fba_fulfillment_fee),
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.fba_per_unit_fee &&
+                    selectedAmazonTransaction.fba_per_unit_fee !== 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>FBA Per-Unit Fee</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(
+                            Math.abs(selectedAmazonTransaction.fba_per_unit_fee),
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.fba_weight_fee &&
+                    selectedAmazonTransaction.fba_weight_fee !== 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>FBA Weight Fee</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(
+                            Math.abs(selectedAmazonTransaction.fba_weight_fee),
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.total_fees &&
+                    selectedAmazonTransaction.total_fees !== 0 && (
+                      <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                        <span>Total Fees</span>
+                        <span className="text-orange-600">
+                          {formatEbayAmount(
+                            Math.abs(selectedAmazonTransaction.total_fees),
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  {selectedAmazonTransaction.net_amount &&
+                    selectedAmazonTransaction.net_amount !== 0 && (
+                      <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                        <span>Net Amount</span>
+                        <span className="text-green-600">
+                          {formatEbayAmount(
+                            selectedAmazonTransaction.net_amount,
+                            selectedAmazonTransaction.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
                 </div>
 
                 {/* Description */}
                 {selectedAmazonTransaction.description && (
                   <div className="rounded-lg border p-4 space-y-2">
                     <h4 className="font-medium">Description</h4>
-                    <p className="text-sm text-muted-foreground">{selectedAmazonTransaction.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedAmazonTransaction.description}
+                    </p>
                   </div>
                 )}
 

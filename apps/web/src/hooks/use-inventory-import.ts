@@ -66,10 +66,16 @@ export function parseCsvContent(content: string): {
   items: ImportItem[];
   errors: Array<{ row: number; message: string }>;
 } {
-  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean);
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   if (lines.length < 2) {
-    return { items: [], errors: [{ row: 0, message: 'CSV must have a header row and at least one data row' }] };
+    return {
+      items: [],
+      errors: [{ row: 0, message: 'CSV must have a header row and at least one data row' }],
+    };
   }
 
   const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
@@ -113,7 +119,10 @@ export function parseCsvContent(content: string): {
       if (condition === 'New' || condition === 'Used') {
         item.condition = condition;
       } else if (condition) {
-        errors.push({ row: rowNum, message: `Invalid condition: ${condition}. Must be "New" or "Used"` });
+        errors.push({
+          row: rowNum,
+          message: `Invalid condition: ${condition}. Must be "New" or "Used"`,
+        });
         continue;
       }
     }
@@ -178,7 +187,10 @@ export function parseCsvContent(content: string): {
       if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         item.listing_date = date;
       } else if (date) {
-        errors.push({ row: rowNum, message: `Invalid listing_date format: ${date}. Use YYYY-MM-DD` });
+        errors.push({
+          row: rowNum,
+          message: `Invalid listing_date format: ${date}. Use YYYY-MM-DD`,
+        });
         continue;
       }
     }
@@ -188,7 +200,10 @@ export function parseCsvContent(content: string): {
       if (!isNaN(value) && value >= 0) {
         item.listing_value = value;
       } else if (values[colMap['listing_value']].trim()) {
-        errors.push({ row: rowNum, message: `Invalid listing_value: ${values[colMap['listing_value']]}` });
+        errors.push({
+          row: rowNum,
+          message: `Invalid listing_value: ${values[colMap['listing_value']]}`,
+        });
         continue;
       }
     }

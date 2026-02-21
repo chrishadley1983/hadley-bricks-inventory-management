@@ -5,13 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download, Loader2, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -91,25 +85,28 @@ export default function PlatformPerformanceReportPage() {
   };
 
   // Prepare chart data
-  const revenueChartData = report?.platforms.map((p) => ({
-    name: p.platform,
-    revenue: p.revenue,
-    netRevenue: p.netRevenue,
-    color: PLATFORM_COLORS[p.platform] || '#6b7280',
-  })) || [];
+  const revenueChartData =
+    report?.platforms.map((p) => ({
+      name: p.platform,
+      revenue: p.revenue,
+      netRevenue: p.netRevenue,
+      color: PLATFORM_COLORS[p.platform] || '#6b7280',
+    })) || [];
 
-  const salesPieData = report?.platforms.map((p) => ({
-    name: p.platform,
-    value: p.orderCount,
-    color: PLATFORM_COLORS[p.platform] || '#6b7280',
-  })) || [];
+  const salesPieData =
+    report?.platforms.map((p) => ({
+      name: p.platform,
+      value: p.orderCount,
+      color: PLATFORM_COLORS[p.platform] || '#6b7280',
+    })) || [];
 
-  const feesChartData = report?.platforms.map((p) => ({
-    name: p.platform,
-    fees: p.fees,
-    feePercentage: p.revenue > 0 ? (p.fees / p.revenue) * 100 : 0,
-    color: PLATFORM_COLORS[p.platform] || '#6b7280',
-  })) || [];
+  const feesChartData =
+    report?.platforms.map((p) => ({
+      name: p.platform,
+      fees: p.fees,
+      feePercentage: p.revenue > 0 ? (p.fees / p.revenue) * 100 : 0,
+      color: PLATFORM_COLORS[p.platform] || '#6b7280',
+    })) || [];
 
   // Find best performing platform by net revenue
   const bestPlatform = report?.platforms.reduce(
@@ -219,11 +216,7 @@ export default function PlatformPerformanceReportPage() {
                   <CardDescription>Number of orders by platform</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <PieChart
-                    data={salesPieData}
-                    height={300}
-                    formatTooltip={(v) => `${v} orders`}
-                  />
+                  <PieChart data={salesPieData} height={300} formatTooltip={(v) => `${v} orders`} />
                 </CardContent>
               </Card>
             </div>
@@ -232,9 +225,7 @@ export default function PlatformPerformanceReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Platform Fees Comparison</CardTitle>
-                <CardDescription>
-                  Fee amounts and percentages by platform
-                </CardDescription>
+                <CardDescription>Fee amounts and percentages by platform</CardDescription>
               </CardHeader>
               <CardContent>
                 <BarChart
@@ -252,9 +243,7 @@ export default function PlatformPerformanceReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Detailed Platform Comparison</CardTitle>
-                <CardDescription>
-                  Complete metrics for each sales platform
-                </CardDescription>
+                <CardDescription>Complete metrics for each sales platform</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -272,9 +261,8 @@ export default function PlatformPerformanceReportPage() {
                   </TableHeader>
                   <TableBody>
                     {report?.platforms.map((platform) => {
-                      const feePercentage = platform.revenue > 0
-                        ? (platform.fees / platform.revenue) * 100
-                        : 0;
+                      const feePercentage =
+                        platform.revenue > 0 ? (platform.fees / platform.revenue) * 100 : 0;
                       return (
                         <TableRow key={platform.platform}>
                           <TableCell>
@@ -321,7 +309,9 @@ export default function PlatformPerformanceReportPage() {
                         {formatCurrency(report?.totals.totalFees || 0)}
                       </TableCell>
                       <TableCell className="text-right text-green-600">
-                        {formatCurrency((report?.totals.totalRevenue || 0) - (report?.totals.totalFees || 0))}
+                        {formatCurrency(
+                          (report?.totals.totalRevenue || 0) - (report?.totals.totalFees || 0)
+                        )}
                       </TableCell>
                       <TableCell className="text-right">-</TableCell>
                       <TableCell className="text-right">

@@ -121,7 +121,6 @@ export function usePurchaseAnalysisReport(dateRange?: DateRangeParams) {
   });
 }
 
-
 /**
  * Hook for fetching report settings
  */

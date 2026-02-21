@@ -21,11 +21,7 @@ export function RepricingView({ platform: _platform = 'amazon' }: RepricingViewP
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
-  const { data, isLoading, error, isFetching } = useRepricingData(
-    filters,
-    page,
-    pageSize
-  );
+  const { data, isLoading, error, isFetching } = useRepricingData(filters, page, pageSize);
 
   const syncPricing = useSyncPricing();
 
@@ -122,9 +118,7 @@ export function RepricingView({ platform: _platform = 'amazon' }: RepricingViewP
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  setPage((p) => Math.min(pagination.totalPages, p + 1))
-                }
+                onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                 disabled={pagination.page >= pagination.totalPages}
               >
                 Next

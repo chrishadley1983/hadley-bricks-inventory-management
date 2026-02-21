@@ -141,9 +141,10 @@ export class RebrickableApiClient {
 
   /** Fetch all themes (typically fits in one page) */
   async getThemes(): Promise<RebrickableTheme[]> {
-    const response = await this.request<
-      RebrickablePaginatedResponse<RebrickableTheme>
-    >('/lego/themes/', { page_size: 1000 });
+    const response = await this.request<RebrickablePaginatedResponse<RebrickableTheme>>(
+      '/lego/themes/',
+      { page_size: 1000 }
+    );
 
     // Themes usually fit in one page, but handle pagination just in case
     const allThemes = [...response.results];
@@ -151,7 +152,8 @@ export class RebrickableApiClient {
 
     while (nextUrl) {
       await new Promise((resolve) => setTimeout(resolve, 1100));
-      const nextData = await this.fetchWithRetry<RebrickablePaginatedResponse<RebrickableTheme>>(nextUrl);
+      const nextData =
+        await this.fetchWithRetry<RebrickablePaginatedResponse<RebrickableTheme>>(nextUrl);
       allThemes.push(...nextData.results);
       nextUrl = nextData.next;
     }
@@ -160,38 +162,34 @@ export class RebrickableApiClient {
   }
 
   /** Fetch minifig count for a specific set */
-  async getSetMinifigs(
-    setNum: string
-  ): Promise<RebrickableSetMinifig[]> {
-    const response = await this.request<
-      RebrickablePaginatedResponse<RebrickableSetMinifig>
-    >(`/lego/sets/${encodeURIComponent(setNum)}/minifigs/`, {
-      page_size: 1000,
-    });
+  async getSetMinifigs(setNum: string): Promise<RebrickableSetMinifig[]> {
+    const response = await this.request<RebrickablePaginatedResponse<RebrickableSetMinifig>>(
+      `/lego/sets/${encodeURIComponent(setNum)}/minifigs/`,
+      {
+        page_size: 1000,
+      }
+    );
     return response.results;
   }
 
   /** Get a single set by set number */
   async getSet(setNum: string): Promise<RebrickableSet> {
-    return this.request<RebrickableSet>(
-      `/lego/sets/${encodeURIComponent(setNum)}/`
-    );
+    return this.request<RebrickableSet>(`/lego/sets/${encodeURIComponent(setNum)}/`);
   }
 
   /** Get a minifig by figure number (e.g., "fig-000001") */
   async getMinifig(figNum: string): Promise<RebrickableMinifig> {
-    return this.request<RebrickableMinifig>(
-      `/lego/minifigs/${encodeURIComponent(figNum)}/`
-    );
+    return this.request<RebrickableMinifig>(`/lego/minifigs/${encodeURIComponent(figNum)}/`);
   }
 
   /** Get all sets that contain a specific minifig */
   async getMinifigSets(figNum: string): Promise<RebrickableMinifigSet[]> {
-    const response = await this.request<
-      RebrickablePaginatedResponse<RebrickableMinifigSet>
-    >(`/lego/minifigs/${encodeURIComponent(figNum)}/sets/`, {
-      page_size: 1000,
-    });
+    const response = await this.request<RebrickablePaginatedResponse<RebrickableMinifigSet>>(
+      `/lego/minifigs/${encodeURIComponent(figNum)}/sets/`,
+      {
+        page_size: 1000,
+      }
+    );
     return response.results;
   }
 

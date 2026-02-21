@@ -15,12 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SetNumberLookup } from '@/components/features/inventory/SetNumberLookup';
 import { formatCurrency } from '@/lib/utils';
 import { calculateAmazonFBMProfit, formatCurrencyGBP } from '@/lib/arbitrage/calculations';
@@ -65,10 +60,7 @@ interface VintedInventoryReviewCardProps {
 /**
  * Card component for reviewing/editing inventory item details before import
  */
-export function VintedInventoryReviewCard({
-  item,
-  onChange,
-}: VintedInventoryReviewCardProps) {
+export function VintedInventoryReviewCard({ item, onChange }: VintedInventoryReviewCardProps) {
   const { toast } = useToast();
   const [setNumberInput, setSetNumberInput] = useState(item.setNumber);
   const [isLookingUpAsin, setIsLookingUpAsin] = useState(false);
@@ -202,7 +194,8 @@ export function VintedInventoryReviewCard({
           ...item,
           amazonAsin: result.data.asin,
         });
-        const sourceLabel = result.data.source === 'inventory' ? 'existing inventory' : 'Amazon catalog';
+        const sourceLabel =
+          result.data.source === 'inventory' ? 'existing inventory' : 'Amazon catalog';
         toast({
           title: 'ASIN found',
           description: `Found ${result.data.asin} from ${sourceLabel}`,
@@ -247,9 +240,7 @@ export function VintedInventoryReviewCard({
             <Package className="h-4 w-4" />
             <span className="truncate">{item.purchaseTitle}</span>
           </CardTitle>
-          <span className="font-semibold text-primary">
-            {formatCurrency(item.purchaseCost)}
-          </span>
+          <span className="font-semibold text-primary">{formatCurrency(item.purchaseCost)}</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -332,9 +323,7 @@ export function VintedInventoryReviewCard({
                     <SelectItem value="SOLD">Sold</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Auto-set from: {item.vintedStatus}
-                </p>
+                <p className="text-xs text-muted-foreground">Auto-set from: {item.vintedStatus}</p>
               </div>
 
               <div className="space-y-2">
@@ -355,7 +344,10 @@ export function VintedInventoryReviewCard({
                         <TooltipTrigger asChild>
                           <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs p-3 bg-popover text-popover-foreground">
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs p-3 bg-popover text-popover-foreground"
+                        >
                           <div className="space-y-1 text-xs">
                             <div className="font-semibold mb-2">Amazon FBM Profit Breakdown</div>
                             <div className="flex justify-between">
@@ -386,7 +378,9 @@ export function VintedInventoryReviewCard({
                               <span>Cost (Vinted):</span>
                               <span>-{formatCurrencyGBP(profitBreakdown.productCost)}</span>
                             </div>
-                            <div className={`border-t my-1 pt-1 flex justify-between font-semibold ${profitBreakdown.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <div
+                              className={`border-t my-1 pt-1 flex justify-between font-semibold ${profitBreakdown.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                            >
                               <span>Profit:</span>
                               <span>{formatCurrencyGBP(profitBreakdown.totalProfit)}</span>
                             </div>
@@ -431,8 +425,11 @@ export function VintedInventoryReviewCard({
                   )}
                 </div>
                 {profitBreakdown && (
-                  <p className={`text-xs ${profitBreakdown.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    Profit: {formatCurrencyGBP(profitBreakdown.totalProfit)} ({profitBreakdown.roiPercent.toFixed(0)}% ROI)
+                  <p
+                    className={`text-xs ${profitBreakdown.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    Profit: {formatCurrencyGBP(profitBreakdown.totalProfit)} (
+                    {profitBreakdown.roiPercent.toFixed(0)}% ROI)
                   </p>
                 )}
               </div>
@@ -474,12 +471,7 @@ export function VintedInventoryReviewCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          asChild
-                        >
+                        <Button type="button" variant="outline" size="icon" asChild>
                           <a
                             href={`https://www.amazon.co.uk/dp/${item.amazonAsin}`}
                             target="_blank"

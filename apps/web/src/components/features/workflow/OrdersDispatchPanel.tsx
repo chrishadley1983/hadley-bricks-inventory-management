@@ -9,7 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Package, AlertCircle, Clock, CheckCircle2, ExternalLink, ClipboardList } from 'lucide-react';
+import {
+  Package,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  ExternalLink,
+  ClipboardList,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PickingListDialog } from './PickingListDialog';
 import type { PickingListPlatform } from '@/hooks/use-picking-list';
@@ -169,9 +176,7 @@ export function OrdersDispatchPanel({ className }: OrdersDispatchPanelProps) {
           <CardTitle className="flex items-center gap-2 text-base">
             <Package className="h-4 w-4" />
             Orders to Dispatch
-            <Badge variant={overdueCount > 0 ? 'destructive' : 'secondary'}>
-              {totalOrders}
-            </Badge>
+            <Badge variant={overdueCount > 0 ? 'destructive' : 'secondary'}>{totalOrders}</Badge>
           </CardTitle>
           <div className="flex gap-2">
             {overdueCount > 0 && (
@@ -212,8 +217,11 @@ export function OrdersDispatchPanel({ className }: OrdersDispatchPanelProps) {
                     key={order.id}
                     className={cn(
                       'flex items-center justify-between p-3 rounded-lg border',
-                      order.isOverdue && 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900',
-                      order.isUrgent && !order.isOverdue && 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900'
+                      order.isOverdue &&
+                        'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900',
+                      order.isUrgent &&
+                        !order.isOverdue &&
+                        'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900'
                     )}
                   >
                     <div className="flex-1 min-w-0">
@@ -229,14 +237,16 @@ export function OrdersDispatchPanel({ className }: OrdersDispatchPanelProps) {
                         </Link>
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 truncate">
-                        {order.itemName || order.buyerName || 'Unknown'} &middot;{' '}
-                        {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'} &middot;{' '}
+                        {order.itemName || order.buyerName || 'Unknown'} &middot; {order.itemCount}{' '}
+                        {order.itemCount === 1 ? 'item' : 'items'} &middot;{' '}
                         {formatCurrency(order.total, order.currency)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge
-                        variant={order.isOverdue ? 'destructive' : order.isUrgent ? 'outline' : 'secondary'}
+                        variant={
+                          order.isOverdue ? 'destructive' : order.isUrgent ? 'outline' : 'secondary'
+                        }
                         className={cn(
                           'text-xs',
                           order.isUrgent && !order.isOverdue && 'text-amber-600 border-amber-500'
@@ -263,9 +273,7 @@ export function OrdersDispatchPanel({ className }: OrdersDispatchPanelProps) {
                   </Button>
                 ) : (
                   <Button variant="outline" size="sm" asChild className="w-full">
-                    <Link href={`/orders?platform=${group.platform}&status=Paid`}>
-                      View Orders
-                    </Link>
+                    <Link href={`/orders?platform=${group.platform}&status=Paid`}>View Orders</Link>
                   </Button>
                 )}
               </div>

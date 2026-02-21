@@ -33,14 +33,11 @@ export class TerapeakScraper {
    * Returns null if no results found.
    * Throws TerapeakSessionExpiredError if session is invalid.
    */
-  async research(
-    name: string,
-    bricklinkId: string,
-  ): Promise<TerapeakResult | null> {
+  async research(name: string, bricklinkId: string): Promise<TerapeakResult | null> {
     // Check profile directory exists (created by `npm run terapeak:login`)
     if (!existsSync(PROFILE_DIR)) {
       throw new Error(
-        'eBay Terapeak browser profile not found. Run `npm run terapeak:login` first.',
+        'eBay Terapeak browser profile not found. Run `npm run terapeak:login` first.'
       );
     }
 
@@ -100,7 +97,7 @@ export class TerapeakScraper {
    * Aborts remaining items on session expiry (E3).
    */
   async researchBatch(
-    items: Array<{ name: string; bricklinkId: string }>,
+    items: Array<{ name: string; bricklinkId: string }>
   ): Promise<Map<string, TerapeakResult | null>> {
     const results = new Map<string, TerapeakResult | null>();
 
@@ -125,9 +122,7 @@ export class TerapeakScraper {
    * Extract market data from Terapeak results page (F14).
    * Filters for Used condition, last 90 days.
    */
-  private async extractData(
-    page: import('playwright').Page,
-  ): Promise<TerapeakResult | null> {
+  private async extractData(page: import('playwright').Page): Promise<TerapeakResult | null> {
     // Wait for research results to load
     try {
       await page.waitForSelector('[data-testid="research-results"]', {
@@ -159,23 +154,13 @@ export class TerapeakScraper {
       };
 
       // Terapeak summary selectors (may need updating if eBay changes UI)
-      const avgSoldPrice = parsePrice(
-        getText('[data-testid="avg-sold-price"]'),
-      );
-      const minSoldPrice = parsePrice(
-        getText('[data-testid="min-sold-price"]'),
-      );
-      const maxSoldPrice = parsePrice(
-        getText('[data-testid="max-sold-price"]'),
-      );
+      const avgSoldPrice = parsePrice(getText('[data-testid="avg-sold-price"]'));
+      const minSoldPrice = parsePrice(getText('[data-testid="min-sold-price"]'));
+      const maxSoldPrice = parsePrice(getText('[data-testid="max-sold-price"]'));
       const soldCount = parseInt_(getText('[data-testid="sold-count"]'));
       const activeCount = parseInt_(getText('[data-testid="active-count"]'));
-      const sellThroughRate = parsePercent(
-        getText('[data-testid="sell-through-rate"]'),
-      );
-      const avgShipping = parsePrice(
-        getText('[data-testid="avg-shipping"]'),
-      );
+      const sellThroughRate = parsePercent(getText('[data-testid="sell-through-rate"]'));
+      const avgShipping = parsePrice(getText('[data-testid="avg-shipping"]'));
 
       return {
         avgSoldPrice,

@@ -87,7 +87,9 @@ async function withTimeout<T>(
 }
 
 /** Get all user IDs with platform credentials */
-async function getUsersWithCredentials(supabase: ReturnType<typeof createServiceRoleClient>): Promise<string[]> {
+async function getUsersWithCredentials(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<string[]> {
   const { data, error } = await supabase
     .from('platform_credentials')
     .select('user_id')
@@ -104,7 +106,9 @@ async function getUsersWithCredentials(supabase: ReturnType<typeof createService
 }
 
 /** Detect stuck jobs (running/in_progress for > 30 minutes) */
-async function detectStuckJobs(supabase: ReturnType<typeof createServiceRoleClient>): Promise<StuckJob[]> {
+async function detectStuckJobs(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<StuckJob[]> {
   const stuckJobs: StuckJob[] = [];
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
@@ -211,35 +215,55 @@ async function resetStuckJobs(
       case 'ebay_sync_log':
         result = await supabase
           .from('ebay_sync_log')
-          .update({ status: 'FAILED', error_message: errorMessage, completed_at: new Date().toISOString() })
+          .update({
+            status: 'FAILED',
+            error_message: errorMessage,
+            completed_at: new Date().toISOString(),
+          })
           .eq('id', job.id);
         break;
 
       case 'amazon_sync_log':
         result = await supabase
           .from('amazon_sync_log')
-          .update({ status: 'FAILED', error_message: errorMessage, completed_at: new Date().toISOString() })
+          .update({
+            status: 'FAILED',
+            error_message: errorMessage,
+            completed_at: new Date().toISOString(),
+          })
           .eq('id', job.id);
         break;
 
       case 'bricklink_sync_log':
         result = await supabase
           .from('bricklink_sync_log')
-          .update({ status: 'FAILED', error_message: errorMessage, completed_at: new Date().toISOString() })
+          .update({
+            status: 'FAILED',
+            error_message: errorMessage,
+            completed_at: new Date().toISOString(),
+          })
           .eq('id', job.id);
         break;
 
       case 'brickowl_sync_log':
         result = await supabase
           .from('brickowl_sync_log')
-          .update({ status: 'FAILED', error_message: errorMessage, completed_at: new Date().toISOString() })
+          .update({
+            status: 'FAILED',
+            error_message: errorMessage,
+            completed_at: new Date().toISOString(),
+          })
           .eq('id', job.id);
         break;
 
       case 'amazon_sync_feeds':
         result = await supabase
           .from('amazon_sync_feeds')
-          .update({ status: 'processing_timeout', error_message: errorMessage, completed_at: new Date().toISOString() })
+          .update({
+            status: 'processing_timeout',
+            error_message: errorMessage,
+            completed_at: new Date().toISOString(),
+          })
           .eq('id', job.id);
         break;
     }
@@ -256,7 +280,9 @@ async function resetStuckJobs(
 }
 
 /** Get weekly stats (aligned with /api/workflow/metrics) */
-async function getWeeklyStats(supabase: ReturnType<typeof createServiceRoleClient>): Promise<WeeklyStats> {
+async function getWeeklyStats(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<WeeklyStats> {
   // Get start of current week (Monday) - use date strings to match workflow metrics
   const now = new Date();
   const dayOfWeek = now.getDay();
@@ -325,7 +351,11 @@ async function getWeeklyStats(supabase: ReturnType<typeof createServiceRoleClien
 /** Calculate next run time */
 function getNextRunTime(): string {
   const now = new Date();
-  const ukOffset = now.toLocaleString('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hour12: false });
+  const ukOffset = now.toLocaleString('en-GB', {
+    timeZone: 'Europe/London',
+    hour: 'numeric',
+    hour12: false,
+  });
   const currentHour = parseInt(ukOffset, 10);
 
   // Scheduled times are 7:45 and 13:45 UK time
@@ -363,13 +393,22 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     day: 'numeric',
     year: 'numeric',
   });
-  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  const timeStr = now.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  });
 
   // Determine overall status color
-  const allSucceeded = results.platformSyncs.every((s) => s.status === 'success' || s.status === 'skipped');
+  const allSucceeded = results.platformSyncs.every(
+    (s) => s.status === 'success' || s.status === 'skipped'
+  );
   const allFailed = results.platformSyncs.every((s) => s.status === 'failed');
   let color: number;
-  if (allSucceeded && (!results.inventoryAsinSync || results.inventoryAsinSync.status === 'success')) {
+  if (
+    allSucceeded &&
+    (!results.inventoryAsinSync || results.inventoryAsinSync.status === 'success')
+  ) {
     color = DiscordColors.GREEN;
   } else if (allFailed) {
     color = DiscordColors.RED;
@@ -450,7 +489,9 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
       title: `Hadley Bricks Full Sync - ${dateStr} (${timeStr} UTC)`,
       description,
       color,
-      footer: { text: `Next sync: ${getNextRunTime()} | Duration: ${Math.round(results.totalDurationMs / 1000)}s` },
+      footer: {
+        text: `Next sync: ${getNextRunTime()} | Duration: ${Math.round(results.totalDurationMs / 1000)}s`,
+      },
     });
     console.log('[Cron FullSync] Discord notification sent');
   } catch (error) {
@@ -519,11 +560,7 @@ export async function POST(request: NextRequest) {
 
       const syncPromises = [
         // eBay Orders
-        withTimeout(
-          ebayOrderSyncService.syncOrders(userId),
-          SYNC_TIMEOUT,
-          'eBay Orders'
-        )
+        withTimeout(ebayOrderSyncService.syncOrders(userId), SYNC_TIMEOUT, 'eBay Orders')
           .then((result) => ({
             platform: 'eBay Orders',
             status: 'success' as const,
@@ -570,7 +607,9 @@ export async function POST(request: NextRequest) {
           }))
           .catch((error) => ({
             platform: 'Amazon Orders',
-            status: error.message.includes('credentials') ? ('skipped' as const) : ('failed' as const),
+            status: error.message.includes('credentials')
+              ? ('skipped' as const)
+              : ('failed' as const),
             error: error instanceof Error ? error.message : 'Unknown error',
           })),
 
@@ -589,7 +628,9 @@ export async function POST(request: NextRequest) {
           }))
           .catch((error) => ({
             platform: 'BrickLink Orders',
-            status: error.message.includes('credentials') ? ('skipped' as const) : ('failed' as const),
+            status: error.message.includes('credentials')
+              ? ('skipped' as const)
+              : ('failed' as const),
             error: error instanceof Error ? error.message : 'Unknown error',
           })),
 
@@ -608,7 +649,9 @@ export async function POST(request: NextRequest) {
           }))
           .catch((error) => ({
             platform: 'Brick Owl Orders',
-            status: error.message.includes('credentials') ? ('skipped' as const) : ('failed' as const),
+            status: error.message.includes('credentials')
+              ? ('skipped' as const)
+              : ('failed' as const),
             error: error instanceof Error ? error.message : 'Unknown error',
           })),
       ];
@@ -669,7 +712,11 @@ export async function POST(request: NextRequest) {
     console.log(`[Cron FullSync] Completed in ${results.totalDurationMs}ms`);
 
     await execution.complete(
-      { platformSyncs: results.platformSyncs.length, stuckJobsFound: results.stuckJobs.length, stuckJobsReset: results.stuckJobsReset },
+      {
+        platformSyncs: results.platformSyncs.length,
+        stuckJobsFound: results.stuckJobs.length,
+        stuckJobsReset: results.stuckJobsReset,
+      },
       200,
       results.platformSyncs.filter((s) => s.status === 'success').length,
       results.platformSyncs.filter((s) => s.status === 'failed').length

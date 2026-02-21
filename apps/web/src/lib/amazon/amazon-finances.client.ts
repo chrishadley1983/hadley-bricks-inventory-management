@@ -77,10 +77,7 @@ export class AmazonFinancesClient extends AmazonClient {
    * Make a request to the Finances API
    * This wraps the parent request method with proper typing
    */
-  private async makeFinancesRequest<T>(
-    path: string,
-    params: Record<string, string>
-  ): Promise<T> {
+  private async makeFinancesRequest<T>(path: string, params: Record<string, string>): Promise<T> {
     // Use the inherited request mechanism from AmazonClient
     // We need to access the protected request method
     return this.financesRequest<T>(path, params);
@@ -90,10 +87,7 @@ export class AmazonFinancesClient extends AmazonClient {
    * Internal finances request handler
    * Uses fetch with the same auth pattern as the base client
    */
-  private async financesRequest<T>(
-    path: string,
-    params: Record<string, string>
-  ): Promise<T> {
+  private async financesRequest<T>(path: string, params: Record<string, string>): Promise<T> {
     // Build query string
     const url = new URL(`https://sellingpartnerapi-eu.amazon.com${path}`);
     for (const [key, value] of Object.entries(params)) {
@@ -163,9 +157,7 @@ export class AmazonFinancesClient extends AmazonClient {
       allTransactions.push(...transactions);
       nextToken = response.payload?.nextToken;
 
-      console.log(
-        `[AmazonFinancesClient] Page ${page}: ${transactions.length} transactions`
-      );
+      console.log(`[AmazonFinancesClient] Page ${page}: ${transactions.length} transactions`);
 
       // Rate limit delay between pages
       if (nextToken) {
@@ -204,9 +196,7 @@ export class AmazonFinancesClient extends AmazonClient {
     const end = endDate ? new Date(endDate) : new Date();
 
     // Calculate the number of days in the range
-    const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
     // If within 180 days, make a single request
     if (daysDiff <= MAX_DATE_RANGE_DAYS) {
@@ -346,7 +336,7 @@ export class AmazonFinancesClient extends AmazonClient {
     // For now, throw an error indicating we need to refactor
     throw new Error(
       'AmazonFinancesClient: Token management needs credentials. ' +
-      'Please use the createFinancesClient factory function.'
+        'Please use the createFinancesClient factory function.'
     );
   }
 }
@@ -423,10 +413,7 @@ export class AmazonFinancesClientWithAuth {
       expiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
     };
 
-    console.log(
-      '[AmazonFinancesClient] Token refreshed, expires at:',
-      this.tokenData.expiresAt
-    );
+    console.log('[AmazonFinancesClient] Token refreshed, expires at:', this.tokenData.expiresAt);
 
     return this.tokenData.accessToken;
   }
@@ -434,10 +421,7 @@ export class AmazonFinancesClientWithAuth {
   /**
    * Make a request to the Finances API
    */
-  private async request<T>(
-    path: string,
-    params: Record<string, string | undefined>
-  ): Promise<T> {
+  private async request<T>(path: string, params: Record<string, string | undefined>): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = new URL(`${this.endpoint}${path}`);
@@ -474,9 +458,7 @@ export class AmazonFinancesClientWithAuth {
       try {
         const errorData = await response.json();
         if (errorData.errors && errorData.errors.length > 0) {
-          errorMessage = errorData.errors
-            .map((e: { message: string }) => e.message)
-            .join('; ');
+          errorMessage = errorData.errors.map((e: { message: string }) => e.message).join('; ');
         }
       } catch {
         // Ignore JSON parse errors
@@ -493,15 +475,12 @@ export class AmazonFinancesClientWithAuth {
   async listTransactions(
     params: AmazonListTransactionsParams
   ): Promise<AmazonListTransactionsResponse> {
-    return this.request<AmazonListTransactionsResponse>(
-      '/finances/2024-06-19/transactions',
-      {
-        postedAfter: params.postedAfter,
-        postedBefore: params.postedBefore,
-        marketplaceId: params.marketplaceId,
-        nextToken: params.nextToken,
-      }
-    );
+    return this.request<AmazonListTransactionsResponse>('/finances/2024-06-19/transactions', {
+      postedAfter: params.postedAfter,
+      postedBefore: params.postedBefore,
+      marketplaceId: params.marketplaceId,
+      nextToken: params.nextToken,
+    });
   }
 
   /**
@@ -534,9 +513,7 @@ export class AmazonFinancesClientWithAuth {
       allTransactions.push(...transactions);
       nextToken = response.payload?.nextToken;
 
-      console.log(
-        `[AmazonFinancesClient] Page ${page}: ${transactions.length} transactions`
-      );
+      console.log(`[AmazonFinancesClient] Page ${page}: ${transactions.length} transactions`);
 
       // Rate limit delay between pages
       if (nextToken) {
@@ -567,9 +544,7 @@ export class AmazonFinancesClientWithAuth {
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : new Date();
 
-    const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
     if (daysDiff <= MAX_DATE_RANGE_DAYS) {
       return this.getAllTransactions({

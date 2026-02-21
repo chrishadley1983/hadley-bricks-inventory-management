@@ -18,7 +18,9 @@ const QuerySchema = z.object({
   localCategory: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  sortField: z.enum(['created', 'amount', 'merchant_name', 'description', 'local_category', 'user_notes']).default('created'),
+  sortField: z
+    .enum(['created', 'amount', 'merchant_name', 'description', 'local_category', 'user_notes'])
+    .default('created'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
 });
 
@@ -57,8 +59,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, search, category, localCategory, startDate, endDate, sortField, sortDirection } =
-      params.data;
+    const {
+      page,
+      pageSize,
+      search,
+      category,
+      localCategory,
+      startDate,
+      endDate,
+      sortField,
+      sortDirection,
+    } = params.data;
 
     // 3. Build query for Monzo transactions
     // TODO: Add support for other platforms when implemented
@@ -138,7 +149,9 @@ export async function GET(request: NextRequest) {
       console.error('[GET /api/transactions] Categories RPC error:', categoryError);
     }
 
-    const categories = (categoryResult || []).map((row: { local_category: string }) => row.local_category);
+    const categories = (categoryResult || []).map(
+      (row: { local_category: string }) => row.local_category
+    );
 
     // 6. Return paginated results with summary and categories
     return NextResponse.json({

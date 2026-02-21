@@ -137,9 +137,7 @@ describe('AmazonInventoryLinkingService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      mockSupabase.chainableMock.single.mockRejectedValueOnce(
-        new Error('Database error')
-      );
+      mockSupabase.chainableMock.single.mockRejectedValueOnce(new Error('Database error'));
 
       const result = await service.processShippedOrder('order-123');
 
@@ -217,9 +215,7 @@ describe('AmazonInventoryLinkingService', () => {
         // First call - get orders page 1
         if (callCount === 1) {
           return createChainableMock({
-            data: [
-              { id: 'order-1', platform_order_id: 'AMZ-001', order_date: '2024-12-20' },
-            ],
+            data: [{ id: 'order-1', platform_order_id: 'AMZ-001', order_date: '2024-12-20' }],
             error: null,
           });
         }

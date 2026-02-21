@@ -69,10 +69,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: 'Order not found' }, { status: 404 });
       }
       console.error('[POST /api/orders/ebay/:orderId/confirm] Error:', orderError);
-      return NextResponse.json(
-        { error: 'Failed to fetch order' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch order' }, { status: 500 });
     }
 
     // Check if this is a "late match" scenario (order already shipped)
@@ -80,10 +77,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Block refunded orders - can't confirm/match these
     if (order.order_payment_status === 'FULLY_REFUNDED') {
-      return NextResponse.json(
-        { error: 'Cannot confirm a refunded order' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Cannot confirm a refunded order' }, { status: 400 });
     }
 
     // Get SKU mappings
@@ -183,11 +177,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .eq('user_id', user.id);
 
       if (orderUpdateError) {
-        console.error('[POST /api/orders/ebay/:orderId/confirm] Order update error:', orderUpdateError);
-        return NextResponse.json(
-          { error: 'Failed to update order status' },
-          { status: 500 }
+        console.error(
+          '[POST /api/orders/ebay/:orderId/confirm] Order update error:',
+          orderUpdateError
         );
+        return NextResponse.json({ error: 'Failed to update order status' }, { status: 500 });
       }
 
       // Update line items status
@@ -202,7 +196,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .in('id', lineItemIds);
 
       if (lineItemUpdateError) {
-        console.error('[POST /api/orders/ebay/:orderId/confirm] Line item update error:', lineItemUpdateError);
+        console.error(
+          '[POST /api/orders/ebay/:orderId/confirm] Line item update error:',
+          lineItemUpdateError
+        );
         // Non-fatal, continue
       }
     }

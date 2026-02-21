@@ -166,7 +166,9 @@ export function getMinifigItemsColumns(): ColumnDef<MinifigSyncItem>[] {
         const meets = row.getValue('meets_threshold') as boolean | null;
         if (meets == null) return <Badge variant="outline">-</Badge>;
         return meets ? (
-          <Badge variant="default" className="bg-green-600 hover:bg-green-700">Yes</Badge>
+          <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+            Yes
+          </Badge>
         ) : (
           <Badge variant="destructive">No</Badge>
         );
@@ -192,11 +194,7 @@ export function getMinifigItemsColumns(): ColumnDef<MinifigSyncItem>[] {
       cell: ({ row }) => {
         const status = row.getValue('listing_status') as string | null;
         if (!status) return <Badge variant="outline">Unknown</Badge>;
-        return (
-          <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
-            {formatStatus(status)}
-          </Badge>
-        );
+        return <Badge variant={STATUS_VARIANTS[status] || 'outline'}>{formatStatus(status)}</Badge>;
       },
     },
   ];

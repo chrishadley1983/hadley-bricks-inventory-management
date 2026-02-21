@@ -100,8 +100,8 @@ export function ExportConfirmDialog({
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Expenses:</span>
                       <span>
-                        {preview.expensesCount} {preview.expensesCount === 1 ? 'entry' : 'entries'} (
-                        {formatCurrency(preview.expensesTotal)})
+                        {preview.expensesCount} {preview.expensesCount === 1 ? 'entry' : 'entries'}{' '}
+                        ({formatCurrency(preview.expensesTotal)})
                       </span>
                     </div>
                   </div>

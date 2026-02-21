@@ -188,7 +188,12 @@ export class EbayOrderSyncService {
    * Sync orders from eBay Fulfilment API
    */
   async syncOrders(userId: string, options?: EbayOrderSyncOptions): Promise<EbayOrderSyncResult> {
-    console.log('[EbayOrderSyncService] Starting order sync for user:', userId, 'options:', options);
+    console.log(
+      '[EbayOrderSyncService] Starting order sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
@@ -284,11 +289,7 @@ export class EbayOrderSyncService {
       if (options?.fromDate && options.toDate) {
         // Historical import - fetch in 90-day chunks
         console.log('[EbayOrderSyncService] Fetching orders in 90-day chunks...');
-        allOrders = await this.fetchOrdersInChunks(
-          apiAdapter,
-          options.fromDate,
-          options.toDate
-        );
+        allOrders = await this.fetchOrdersInChunks(apiAdapter, options.fromDate, options.toDate);
       } else {
         // Regular sync
         const filter = fromDate
@@ -302,11 +303,22 @@ export class EbayOrderSyncService {
 
       // Process orders and upsert
       console.log('[EbayOrderSyncService] Upserting orders to database...');
-      const { ordersCreated, ordersUpdated, orderIdMap } = await this.upsertOrders(userId, allOrders);
-      console.log('[EbayOrderSyncService] Orders upserted. Created:', ordersCreated, 'Updated:', ordersUpdated);
+      const { ordersCreated, ordersUpdated, orderIdMap } = await this.upsertOrders(
+        userId,
+        allOrders
+      );
+      console.log(
+        '[EbayOrderSyncService] Orders upserted. Created:',
+        ordersCreated,
+        'Updated:',
+        ordersUpdated
+      );
 
       // Upsert line items
-      const { lineItemsCreated, lineItemsUpdated } = await this.upsertLineItems(allOrders, orderIdMap);
+      const { lineItemsCreated, lineItemsUpdated } = await this.upsertLineItems(
+        allOrders,
+        orderIdMap
+      );
 
       // Fetch and upsert shipping fulfilments for each order
       let fulfilmentsProcessed = 0;
@@ -321,7 +333,10 @@ export class EbayOrderSyncService {
           await this.delay(RATE_LIMIT_DELAY_MS);
         } catch (error) {
           // Fulfilment fetch failed - log but continue
-          console.warn(`[EbayOrderSyncService] Failed to fetch fulfilments for order ${order.orderId}:`, error);
+          console.warn(
+            `[EbayOrderSyncService] Failed to fetch fulfilments for order ${order.orderId}:`,
+            error
+          );
         }
       }
 
@@ -345,8 +360,7 @@ export class EbayOrderSyncService {
         // Also get PAID orders (not yet fulfilled) for pre-linking to show location on pick list
         const paidOrders = allOrders.filter(
           (order) =>
-            order.orderPaymentStatus === 'PAID' &&
-            order.orderFulfillmentStatus !== 'FULFILLED'
+            order.orderPaymentStatus === 'PAID' && order.orderFulfillmentStatus !== 'FULFILLED'
         );
 
         // Process fulfilled orders
@@ -406,21 +420,25 @@ export class EbayOrderSyncService {
       }
 
       // Update sync cursor to newest lastModifiedDate
-      const newestDate = allOrders.length > 0
-        ? allOrders.reduce((newest, order) => {
-            const orderDate = new Date(order.lastModifiedDate);
-            return orderDate > newest ? orderDate : newest;
-          }, new Date(0)).toISOString()
-        : fromDate;
+      const newestDate =
+        allOrders.length > 0
+          ? allOrders
+              .reduce((newest, order) => {
+                const orderDate = new Date(order.lastModifiedDate);
+                return orderDate > newest ? orderDate : newest;
+              }, new Date(0))
+              .toISOString()
+          : fromDate;
 
       if (newestDate) {
-        await supabase
-          .from('ebay_sync_config')
-          .upsert({
+        await supabase.from('ebay_sync_config').upsert(
+          {
             user_id: userId,
             orders_last_modified_cursor: newestDate,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
+          },
+          { onConflict: 'user_id' }
+        );
       }
 
       const completedAt = new Date();
@@ -561,7 +579,9 @@ export class EbayOrderSyncService {
         chunkEnd.setTime(endDate.getTime());
       }
 
-      console.log(`[EbayOrderSyncService] Fetching orders from ${chunkStart.toISOString()} to ${chunkEnd.toISOString()}`);
+      console.log(
+        `[EbayOrderSyncService] Fetching orders from ${chunkStart.toISOString()} to ${chunkEnd.toISOString()}`
+      );
 
       const filter = EbayApiAdapter.buildOrderDateFilter(
         chunkStart.toISOString(),
@@ -608,13 +628,16 @@ export class EbayOrderSyncService {
       .from('ebay_orders')
       .select('id, ebay_order_id')
       .eq('user_id', userId)
-      .in('ebay_order_id', orders.map(o => o.orderId));
+      .in(
+        'ebay_order_id',
+        orders.map((o) => o.orderId)
+      );
 
-    const existingMap = new Map(existingOrders?.map(o => [o.ebay_order_id, o.id]) || []);
+    const existingMap = new Map(existingOrders?.map((o) => [o.ebay_order_id, o.id]) || []);
     const orderIdMap = new Map<string, string>();
 
     // Transform orders
-    const orderRows: OrderRow[] = orders.map(order => ({
+    const orderRows: OrderRow[] = orders.map((order) => ({
       user_id: userId,
       ebay_order_id: order.orderId,
       legacy_order_id: order.legacyOrderId || null,
@@ -626,11 +649,19 @@ export class EbayOrderSyncService {
       buyer_username: order.buyer.username,
       buyer_checkout_notes: order.buyerCheckoutNotes || null,
       sales_record_reference: order.salesRecordReference || null,
-      total_fee_basis_amount: order.totalFeeBasisAmount ? parseFloat(order.totalFeeBasisAmount.value) : null,
+      total_fee_basis_amount: order.totalFeeBasisAmount
+        ? parseFloat(order.totalFeeBasisAmount.value)
+        : null,
       total_fee_basis_currency: order.totalFeeBasisAmount?.currency || null,
-      pricing_summary: order.pricingSummary ? JSON.parse(JSON.stringify(order.pricingSummary)) : null,
-      payment_summary: order.paymentSummary ? JSON.parse(JSON.stringify(order.paymentSummary)) : null,
-      fulfilment_instructions: order.fulfillmentStartInstructions ? JSON.parse(JSON.stringify(order.fulfillmentStartInstructions)) : null,
+      pricing_summary: order.pricingSummary
+        ? JSON.parse(JSON.stringify(order.pricingSummary))
+        : null,
+      payment_summary: order.paymentSummary
+        ? JSON.parse(JSON.stringify(order.paymentSummary))
+        : null,
+      fulfilment_instructions: order.fulfillmentStartInstructions
+        ? JSON.parse(JSON.stringify(order.fulfillmentStartInstructions))
+        : null,
       dispatch_by: extractDispatchByDate(order),
       raw_response: JSON.parse(JSON.stringify(order)),
     }));
@@ -698,9 +729,12 @@ export class EbayOrderSyncService {
     const { data: existingLineItems } = await supabase
       .from('ebay_order_line_items')
       .select('ebay_line_item_id')
-      .in('ebay_line_item_id', allLineItems.map(li => li.lineItem.lineItemId));
+      .in(
+        'ebay_line_item_id',
+        allLineItems.map((li) => li.lineItem.lineItemId)
+      );
 
-    const existingIds = new Set(existingLineItems?.map(li => li.ebay_line_item_id) || []);
+    const existingIds = new Set(existingLineItems?.map((li) => li.ebay_line_item_id) || []);
 
     // Transform line items
     const lineItemRows: LineItemRow[] = allLineItems.map(({ dbOrderId, lineItem }) => ({
@@ -730,12 +764,10 @@ export class EbayOrderSyncService {
     for (let i = 0; i < lineItemRows.length; i += BATCH_SIZE) {
       const batch = lineItemRows.slice(i, i + BATCH_SIZE);
 
-      const { error } = await supabase
-        .from('ebay_order_line_items')
-        .upsert(batch, {
-          onConflict: 'ebay_line_item_id',
-          ignoreDuplicates: false,
-        });
+      const { error } = await supabase.from('ebay_order_line_items').upsert(batch, {
+        onConflict: 'ebay_line_item_id',
+        ignoreDuplicates: false,
+      });
 
       if (error) {
         console.error('[EbayOrderSyncService] Failed to upsert line items:', error);
@@ -765,7 +797,7 @@ export class EbayOrderSyncService {
 
     const supabase = await this.getSupabase();
 
-    const fulfilmentRows: FulfilmentRow[] = fulfilments.map(f => ({
+    const fulfilmentRows: FulfilmentRow[] = fulfilments.map((f) => ({
       order_id: dbOrderId,
       ebay_fulfilment_id: f.fulfillmentId,
       shipped_date: f.shippedDate || null,
@@ -775,12 +807,10 @@ export class EbayOrderSyncService {
       raw_response: JSON.parse(JSON.stringify(f)),
     }));
 
-    const { error } = await supabase
-      .from('ebay_shipping_fulfilments')
-      .upsert(fulfilmentRows, {
-        onConflict: 'ebay_fulfilment_id',
-        ignoreDuplicates: false,
-      });
+    const { error } = await supabase.from('ebay_shipping_fulfilments').upsert(fulfilmentRows, {
+      onConflict: 'ebay_fulfilment_id',
+      ignoreDuplicates: false,
+    });
 
     if (error) {
       console.error('[EbayOrderSyncService] Failed to upsert fulfilments:', error);
@@ -806,25 +836,30 @@ export class EbayOrderSyncService {
     let enriched = 0;
 
     // Build a map of orderId -> order data for quick lookup
-    const orderDataMap = new Map<string, {
-      salesRecordReference: string | null;
-      lineItems: EbayLineItem[];
-      deliveryCost: number | null;
-      totalPrice: number | null;
-    }>();
+    const orderDataMap = new Map<
+      string,
+      {
+        salesRecordReference: string | null;
+        lineItems: EbayLineItem[];
+        deliveryCost: number | null;
+        totalPrice: number | null;
+      }
+    >();
 
     for (const order of orders) {
       const pricingSummary = order.pricingSummary;
       orderDataMap.set(order.orderId, {
         salesRecordReference: order.salesRecordReference || null,
         lineItems: order.lineItems,
-        deliveryCost: pricingSummary?.deliveryCost ? parseFloat(pricingSummary.deliveryCost.value) : null,
+        deliveryCost: pricingSummary?.deliveryCost
+          ? parseFloat(pricingSummary.deliveryCost.value)
+          : null,
         totalPrice: pricingSummary?.total ? parseFloat(pricingSummary.total.value) : null,
       });
     }
 
     // Get transactions that match these orders
-    const orderIds = orders.map(o => o.orderId);
+    const orderIds = orders.map((o) => o.orderId);
 
     // Process in batches to avoid query limits
     for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
@@ -873,7 +908,7 @@ export class EbayOrderSyncService {
    * Delay helper for rate limiting
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

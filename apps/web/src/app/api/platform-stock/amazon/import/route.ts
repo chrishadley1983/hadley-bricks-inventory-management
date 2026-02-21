@@ -55,7 +55,8 @@ export async function POST(_request: NextRequest) {
         return NextResponse.json(
           {
             error: 'Amazon authentication failed',
-            details: 'Your Amazon credentials may have expired. Please reconnect your Amazon account.',
+            details:
+              'Your Amazon credentials may have expired. Please reconnect your Amazon account.',
           },
           { status: 401 }
         );

@@ -213,7 +213,9 @@ describe('OrderRepository', () => {
       const items = order.items;
 
       const findByIdSpy = vi.spyOn(repository, 'findById').mockResolvedValue(order as never);
-      const getOrderItemsSpy = vi.spyOn(repository, 'getOrderItems').mockResolvedValue(items as never);
+      const getOrderItemsSpy = vi
+        .spyOn(repository, 'getOrderItems')
+        .mockResolvedValue(items as never);
 
       const result = await repository.findByIdWithItems(order.id);
 

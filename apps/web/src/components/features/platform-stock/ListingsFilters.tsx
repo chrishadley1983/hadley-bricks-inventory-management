@@ -32,10 +32,7 @@ const fulfillmentOptions: { value: string; label: string }[] = [
   { value: 'FBM', label: 'FBM (Merchant)' },
 ];
 
-export function ListingsFilters({
-  filters,
-  onFiltersChange,
-}: ListingsFiltersProps) {
+export function ListingsFilters({ filters, onFiltersChange }: ListingsFiltersProps) {
   const debouncedSearch = useDebouncedCallback((value: string) => {
     onFiltersChange({ ...filters, search: value || undefined });
   }, 300);
@@ -59,10 +56,7 @@ export function ListingsFilters({
   };
 
   const hasActiveFilters =
-    filters.search ||
-    filters.listingStatus ||
-    filters.fulfillmentChannel ||
-    filters.hasQuantity;
+    filters.search || filters.listingStatus || filters.fulfillmentChannel || filters.hasQuantity;
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -74,10 +68,7 @@ export function ListingsFilters({
         />
       </div>
 
-      <Select
-        value={filters.listingStatus || 'all'}
-        onValueChange={handleStatusChange}
-      >
+      <Select value={filters.listingStatus || 'all'} onValueChange={handleStatusChange}>
         <SelectTrigger className="w-[160px]">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
@@ -90,10 +81,7 @@ export function ListingsFilters({
         </SelectContent>
       </Select>
 
-      <Select
-        value={filters.fulfillmentChannel || 'all'}
-        onValueChange={handleFulfillmentChange}
-      >
+      <Select value={filters.fulfillmentChannel || 'all'} onValueChange={handleFulfillmentChange}>
         <SelectTrigger className="w-[160px]">
           <SelectValue placeholder="Fulfillment" />
         </SelectTrigger>

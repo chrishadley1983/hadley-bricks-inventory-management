@@ -70,17 +70,11 @@ export async function POST(_request: NextRequest) {
 
     if (ordersError) {
       console.error('[watchlist/refresh] Failed to fetch orders:', ordersError);
-      return NextResponse.json(
-        { error: 'Failed to fetch sales data' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch sales data' }, { status: 500 });
     }
 
     // Count units sold per set number
-    const setNumberSales = new Map<
-      string,
-      { count: number; asin: string | null }
-    >();
+    const setNumberSales = new Map<string, { count: number; asin: string | null }>();
 
     interface OrderItemWithInventory {
       inventory_item_id: string | null;
@@ -206,10 +200,7 @@ export async function POST(_request: NextRequest) {
     // STEP 3: Combine and deduplicate (max 200 total)
     // =========================================================================
 
-    const combinedWatchlist = [...bestSellers, ...popularRetired].slice(
-      0,
-      TOTAL_WATCHLIST_SIZE
-    );
+    const combinedWatchlist = [...bestSellers, ...popularRetired].slice(0, TOTAL_WATCHLIST_SIZE);
 
     // =========================================================================
     // STEP 4: Clear existing watchlist and insert new entries
@@ -223,10 +214,7 @@ export async function POST(_request: NextRequest) {
 
     if (deleteError) {
       console.error('[watchlist/refresh] Failed to clear watchlist:', deleteError);
-      return NextResponse.json(
-        { error: 'Failed to clear existing watchlist' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to clear existing watchlist' }, { status: 500 });
     }
 
     // Insert new watchlist entries
@@ -245,10 +233,7 @@ export async function POST(_request: NextRequest) {
 
       if (insertError) {
         console.error('[watchlist/refresh] Failed to insert watchlist:', insertError);
-        return NextResponse.json(
-          { error: 'Failed to create watchlist' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to create watchlist' }, { status: 500 });
       }
     }
 

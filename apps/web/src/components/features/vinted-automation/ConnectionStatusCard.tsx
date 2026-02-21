@@ -16,13 +16,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow, differenceInMinutes } from 'date-fns';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertTriangle,
@@ -61,9 +55,13 @@ async function fetchConnectionStatus(): Promise<ExtendedConnectionStatus> {
   // Extract connection status from the scanner config
   // Use todayStats for accurate listings/opportunities counts from scan logs
   return {
-    connected: !!data.config?.last_heartbeat_at &&
-      differenceInMinutes(new Date(), new Date(data.config.last_heartbeat_at)) < DISCONNECTION_THRESHOLD_MINUTES,
-    lastSeenAt: data.config?.last_heartbeat_at ? new Date(data.config.last_heartbeat_at) : undefined,
+    connected:
+      !!data.config?.last_heartbeat_at &&
+      differenceInMinutes(new Date(), new Date(data.config.last_heartbeat_at)) <
+        DISCONNECTION_THRESHOLD_MINUTES,
+    lastSeenAt: data.config?.last_heartbeat_at
+      ? new Date(data.config.last_heartbeat_at)
+      : undefined,
     machineId: data.config?.heartbeat_machine_id,
     machineName: data.config?.machine_name,
     status: data.config?.heartbeat_status || 'disconnected',
@@ -78,7 +76,10 @@ async function fetchConnectionStatus(): Promise<ExtendedConnectionStatus> {
  * Status badge component
  */
 function StatusBadge({ status }: { status: ConnectionStatus['status'] }) {
-  const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+  const variants: Record<
+    string,
+    { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }
+  > = {
     running: { variant: 'default', label: 'Running' },
     paused: { variant: 'secondary', label: 'Paused' },
     error: { variant: 'destructive', label: 'Error' },
@@ -96,7 +97,11 @@ function StatusBadge({ status }: { status: ConnectionStatus['status'] }) {
 }
 
 export function ConnectionStatusCard() {
-  const { data: status, isLoading, error } = useQuery({
+  const {
+    data: status,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['vinted-connection-status'],
     queryFn: fetchConnectionStatus,
     refetchInterval: 60000, // Refresh every minute

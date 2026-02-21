@@ -1,4 +1,8 @@
-import type { InventoryItem, InventoryItemInsert, InventoryItemUpdate } from '@hadley-bricks/database';
+import type {
+  InventoryItem,
+  InventoryItemInsert,
+  InventoryItemUpdate,
+} from '@hadley-bricks/database';
 
 /**
  * Numeric range filter for cost, listing_value, sold amounts, etc.
@@ -13,7 +17,7 @@ export interface NumericRangeFilter {
  */
 export interface DateRangeFilter {
   from?: string; // ISO date string
-  to?: string;   // ISO date string
+  to?: string; // ISO date string
 }
 
 /**
@@ -100,21 +104,34 @@ export async function fetchInventory(
   // Numeric range filters
   if (filters?.costRange?.min !== undefined) params.set('costMin', String(filters.costRange.min));
   if (filters?.costRange?.max !== undefined) params.set('costMax', String(filters.costRange.max));
-  if (filters?.listingValueRange?.min !== undefined) params.set('listingValueMin', String(filters.listingValueRange.min));
-  if (filters?.listingValueRange?.max !== undefined) params.set('listingValueMax', String(filters.listingValueRange.max));
-  if (filters?.soldGrossRange?.min !== undefined) params.set('soldGrossMin', String(filters.soldGrossRange.min));
-  if (filters?.soldGrossRange?.max !== undefined) params.set('soldGrossMax', String(filters.soldGrossRange.max));
-  if (filters?.soldNetRange?.min !== undefined) params.set('soldNetMin', String(filters.soldNetRange.min));
-  if (filters?.soldNetRange?.max !== undefined) params.set('soldNetMax', String(filters.soldNetRange.max));
-  if (filters?.profitRange?.min !== undefined) params.set('profitMin', String(filters.profitRange.min));
-  if (filters?.profitRange?.max !== undefined) params.set('profitMax', String(filters.profitRange.max));
-  if (filters?.soldFeesRange?.min !== undefined) params.set('soldFeesMin', String(filters.soldFeesRange.min));
-  if (filters?.soldFeesRange?.max !== undefined) params.set('soldFeesMax', String(filters.soldFeesRange.max));
-  if (filters?.soldPostageRange?.min !== undefined) params.set('soldPostageMin', String(filters.soldPostageRange.min));
-  if (filters?.soldPostageRange?.max !== undefined) params.set('soldPostageMax', String(filters.soldPostageRange.max));
+  if (filters?.listingValueRange?.min !== undefined)
+    params.set('listingValueMin', String(filters.listingValueRange.min));
+  if (filters?.listingValueRange?.max !== undefined)
+    params.set('listingValueMax', String(filters.listingValueRange.max));
+  if (filters?.soldGrossRange?.min !== undefined)
+    params.set('soldGrossMin', String(filters.soldGrossRange.min));
+  if (filters?.soldGrossRange?.max !== undefined)
+    params.set('soldGrossMax', String(filters.soldGrossRange.max));
+  if (filters?.soldNetRange?.min !== undefined)
+    params.set('soldNetMin', String(filters.soldNetRange.min));
+  if (filters?.soldNetRange?.max !== undefined)
+    params.set('soldNetMax', String(filters.soldNetRange.max));
+  if (filters?.profitRange?.min !== undefined)
+    params.set('profitMin', String(filters.profitRange.min));
+  if (filters?.profitRange?.max !== undefined)
+    params.set('profitMax', String(filters.profitRange.max));
+  if (filters?.soldFeesRange?.min !== undefined)
+    params.set('soldFeesMin', String(filters.soldFeesRange.min));
+  if (filters?.soldFeesRange?.max !== undefined)
+    params.set('soldFeesMax', String(filters.soldFeesRange.max));
+  if (filters?.soldPostageRange?.min !== undefined)
+    params.set('soldPostageMin', String(filters.soldPostageRange.min));
+  if (filters?.soldPostageRange?.max !== undefined)
+    params.set('soldPostageMax', String(filters.soldPostageRange.max));
 
   // Date range filters
-  if (filters?.purchaseDateRange?.from) params.set('purchaseDateFrom', filters.purchaseDateRange.from);
+  if (filters?.purchaseDateRange?.from)
+    params.set('purchaseDateFrom', filters.purchaseDateRange.from);
   if (filters?.purchaseDateRange?.to) params.set('purchaseDateTo', filters.purchaseDateRange.to);
   if (filters?.listingDateRange?.from) params.set('listingDateFrom', filters.listingDateRange.from);
   if (filters?.listingDateRange?.to) params.set('listingDateTo', filters.listingDateRange.to);
@@ -122,14 +139,16 @@ export async function fetchInventory(
   if (filters?.soldDateRange?.to) params.set('soldDateTo', filters.soldDateRange.to);
 
   // Empty/non-empty filters
-  if (filters?.storageLocationFilter) params.set('storageLocationFilter', filters.storageLocationFilter);
+  if (filters?.storageLocationFilter)
+    params.set('storageLocationFilter', filters.storageLocationFilter);
   if (filters?.amazonAsinFilter) params.set('amazonAsinFilter', filters.amazonAsinFilter);
   if (filters?.linkedLotFilter) params.set('linkedLotFilter', filters.linkedLotFilter);
   if (filters?.linkedOrderFilter) params.set('linkedOrderFilter', filters.linkedOrderFilter);
   if (filters?.notesFilter) params.set('notesFilter', filters.notesFilter);
   if (filters?.skuFilter) params.set('skuFilter', filters.skuFilter);
   if (filters?.ebayListingFilter) params.set('ebayListingFilter', filters.ebayListingFilter);
-  if (filters?.archiveLocationFilter) params.set('archiveLocationFilter', filters.archiveLocationFilter);
+  if (filters?.archiveLocationFilter)
+    params.set('archiveLocationFilter', filters.archiveLocationFilter);
 
   // Pagination
   if (pagination?.page) params.set('page', String(pagination.page));

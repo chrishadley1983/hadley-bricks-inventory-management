@@ -32,12 +32,7 @@ export type BrickOwlOrderStatus =
   | 'On Hold';
 
 /** Brick Owl payment status */
-export type BrickOwlPaymentStatus =
-  | 'None'
-  | 'Pending'
-  | 'Submitted'
-  | 'Received'
-  | 'Cleared';
+export type BrickOwlPaymentStatus = 'None' | 'Pending' | 'Submitted' | 'Received' | 'Cleared';
 
 /** Brick Owl item condition */
 export type BrickOwlItemCondition = 'new' | 'usedn' | 'usedg' | 'useda';

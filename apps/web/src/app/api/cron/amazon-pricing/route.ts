@@ -76,7 +76,9 @@ export async function POST(request: NextRequest) {
     const isNewDay = currentSyncDate !== today;
     const cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
 
-    console.log(`[Cron AmazonPricing] Starting Keepa sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`);
+    console.log(
+      `[Cron AmazonPricing] Starting Keepa sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`
+    );
 
     // If already completed today, short-circuit to avoid expensive re-query
     if (!isNewDay && syncStatus?.status === 'completed') {
@@ -95,13 +97,10 @@ export async function POST(request: NextRequest) {
     // Run the Keepa sync service with cursor
     const syncService = new KeepaArbitrageSyncService(supabase);
 
-    const result = await syncService.syncPricingBatch(
-      DEFAULT_USER_ID,
-      {
-        offset: cursorPosition,
-        limit: asinsPerInvocation,
-      }
-    );
+    const result = await syncService.syncPricingBatch(DEFAULT_USER_ID, {
+      offset: cursorPosition,
+      limit: asinsPerInvocation,
+    });
 
     const totalForToday = result.totalForToday;
     const newCursorPosition = cursorPosition + result.processed;
@@ -116,9 +115,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update sync status
-    const { error: updateError } = await supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    const { error: updateError } = await supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: DEFAULT_USER_ID,
         job_type: JOB_TYPE,
         status: isComplete ? 'completed' : 'running',
@@ -131,18 +129,23 @@ export async function POST(request: NextRequest) {
         last_success_at: isComplete ? new Date().toISOString() : syncStatus?.last_success_at,
         last_run_duration_ms: Date.now() - startTime,
         error_message: null,
-      }, { onConflict: 'user_id,job_type' });
+      },
+      { onConflict: 'user_id,job_type' }
+    );
 
     if (updateError) {
       console.error('[Cron AmazonPricing] Failed to update sync status:', updateError);
     }
 
     const duration = Date.now() - startTime;
-    const durationStr = duration > 60000
-      ? `${Math.round(duration / 60000)} min`
-      : `${Math.round(duration / 1000)} sec`;
+    const durationStr =
+      duration > 60000
+        ? `${Math.round(duration / 60000)} min`
+        : `${Math.round(duration / 1000)} sec`;
 
-    console.log(`[Cron AmazonPricing] Keepa batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${totalForToday} (${durationStr})`);
+    console.log(
+      `[Cron AmazonPricing] Keepa batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${totalForToday} (${durationStr})`
+    );
 
     // Send completion notification if done
     if (isComplete) {
@@ -162,7 +165,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await execution.complete({ complete: isComplete, cursorPosition: newCursorPosition, total: totalForToday }, 200, result.processed, result.failed);
+    await execution.complete(
+      { complete: isComplete, cursorPosition: newCursorPosition, total: totalForToday },
+      200,
+      result.processed,
+      result.failed
+    );
 
     return NextResponse.json({
       success: true,
@@ -183,16 +191,17 @@ export async function POST(request: NextRequest) {
 
     // Update status with error
     const supabase = createServiceRoleClient();
-    await supabase
-      .from('arbitrage_sync_status')
-      .upsert({
+    await supabase.from('arbitrage_sync_status').upsert(
+      {
         user_id: DEFAULT_USER_ID,
         job_type: JOB_TYPE,
         status: 'error',
         error_message: errorMsg,
         last_run_at: new Date().toISOString(),
         last_run_duration_ms: duration,
-      }, { onConflict: 'user_id,job_type' });
+      },
+      { onConflict: 'user_id,job_type' }
+    );
 
     // Send failure notification
     await discordService.sendAlert({

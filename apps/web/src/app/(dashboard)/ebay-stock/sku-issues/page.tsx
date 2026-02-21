@@ -86,7 +86,10 @@ export default function SkuIssuesPage() {
     );
   }
 
-  const { issues, summary } = data || { issues: [], summary: { emptySkuCount: 0, duplicateSkuCount: 0, totalIssueCount: 0 } };
+  const { issues, summary } = data || {
+    issues: [],
+    summary: { emptySkuCount: 0, duplicateSkuCount: 0, totalIssueCount: 0 },
+  };
 
   const emptySkuIssues = issues.filter((i) => i.issueType === 'empty');
   const duplicateSkuIssues = issues.filter((i) => i.issueType === 'duplicate');
@@ -115,8 +118,8 @@ export default function SkuIssuesPage() {
           <div>
             <h1 className="text-2xl font-bold">eBay SKU Issues</h1>
             <p className="text-muted-foreground">
-              Fix these issues on eBay for accurate stock comparison.
-              SKUs must be unique and non-empty to match with inventory.
+              Fix these issues on eBay for accurate stock comparison. SKUs must be unique and
+              non-empty to match with inventory.
             </p>
           </div>
         </div>
@@ -130,9 +133,7 @@ export default function SkuIssuesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {summary.totalIssueCount}
-              </div>
+              <div className="text-2xl font-bold text-destructive">{summary.totalIssueCount}</div>
             </CardContent>
           </Card>
           <Card>
@@ -281,8 +282,8 @@ export default function SkuIssuesPage() {
                 <CardHeader>
                   <CardTitle>Duplicate SKUs</CardTitle>
                   <CardDescription>
-                    These SKUs are used by multiple listings. Each SKU should be unique.
-                    Update the SKUs on eBay to make them unique.
+                    These SKUs are used by multiple listings. Each SKU should be unique. Update the
+                    SKUs on eBay to make them unique.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -333,10 +334,7 @@ export default function SkuIssuesPage() {
                                     </Button>
                                   </div>
                                 </TableCell>
-                                <TableCell
-                                  className="max-w-[300px] truncate"
-                                  title={item.title}
-                                >
+                                <TableCell className="max-w-[300px] truncate" title={item.title}>
                                   {item.title || '-'}
                                 </TableCell>
                                 <TableCell className="text-right">{item.quantity}</TableCell>

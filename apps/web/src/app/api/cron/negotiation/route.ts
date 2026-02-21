@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
     if (!cronSecret) {
       console.warn('[Cron Negotiation] CRON_SECRET not configured - running without auth check');
     } else if (authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron Negotiation] Unauthorized request - invalid or missing Authorization header');
+      console.warn(
+        '[Cron Negotiation] Unauthorized request - invalid or missing Authorization header'
+      );
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -82,9 +84,7 @@ export async function POST(request: NextRequest) {
         const initialized = await service.init(config.user_id);
 
         if (!initialized) {
-          console.warn(
-            `[Cron Negotiation] Failed to initialize for user ${config.user_id}`
-          );
+          console.warn(`[Cron Negotiation] Failed to initialize for user ${config.user_id}`);
           userResults.push({
             userId: config.user_id,
             statusSync: { accepted: 0, expired: 0 },
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
         console.log(
           `[Cron Negotiation] User ${config.user_id} status sync: ` +
-          `${syncResult.accepted} accepted, ${syncResult.expired} expired`
+            `${syncResult.accepted} accepted, ${syncResult.expired} expired`
         );
 
         // Step 2: Process and send new offers
@@ -127,12 +127,8 @@ export async function POST(request: NextRequest) {
           `[Cron Negotiation] User ${config.user_id}: ${result.offersSent} sent, ${result.offersFailed} failed`
         );
       } catch (error) {
-        const errorMsg =
-          error instanceof Error ? error.message : 'Unknown error';
-        console.error(
-          `[Cron Negotiation] Error processing user ${config.user_id}:`,
-          error
-        );
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Cron Negotiation] Error processing user ${config.user_id}:`, error);
         userResults.push({
           userId: config.user_id,
           statusSync: { accepted: 0, expired: 0 },
@@ -145,10 +141,15 @@ export async function POST(request: NextRequest) {
 
     console.log(
       `[Cron Negotiation] Complete: ${totalStatusSynced} statuses synced, ` +
-      `${totalOffersSent} offers sent, ${totalOffersFailed} failed`
+        `${totalOffersSent} offers sent, ${totalOffersFailed} failed`
     );
 
-    await execution.complete({ usersProcessed: configs.length, totalStatusSynced }, 200, totalOffersSent, totalOffersFailed);
+    await execution.complete(
+      { usersProcessed: configs.length, totalStatusSynced },
+      200,
+      totalOffersSent,
+      totalOffersFailed
+    );
 
     return NextResponse.json({
       success: true,

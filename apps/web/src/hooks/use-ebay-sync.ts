@@ -64,7 +64,12 @@ interface HistoricalImportResult {
   success: boolean;
   results: {
     orders: { success: boolean; ordersProcessed: number; ordersCreated: number; error?: string };
-    transactions: { success: boolean; recordsProcessed: number; recordsCreated: number; error?: string };
+    transactions: {
+      success: boolean;
+      recordsProcessed: number;
+      recordsCreated: number;
+      error?: string;
+    };
     payouts: { success: boolean; recordsProcessed: number; recordsCreated: number; error?: string };
   };
   totalDuration: number;
@@ -135,28 +140,34 @@ export function useEbaySync(options: { enabled?: boolean; autoSync?: boolean } =
   });
 
   // Historical import mutation
-  const historicalImportMutation = useMutation<HistoricalImportResult, Error, { fromDate: string }>({
-    mutationFn: async ({ fromDate }) => {
-      const response = await fetch('/api/integrations/ebay/sync/historical', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromDate }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Historical import failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ebay', 'sync'] });
-      queryClient.invalidateQueries({ queryKey: ['ebay', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['ebay', 'payouts'] });
-    },
-  });
+  const historicalImportMutation = useMutation<HistoricalImportResult, Error, { fromDate: string }>(
+    {
+      mutationFn: async ({ fromDate }) => {
+        const response = await fetch('/api/integrations/ebay/sync/historical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromDate }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Historical import failed');
+        }
+        return response.json();
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['ebay', 'sync'] });
+        queryClient.invalidateQueries({ queryKey: ['ebay', 'transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['ebay', 'payouts'] });
+      },
+    }
+  );
 
   // Config update mutation
-  const updateConfigMutation = useMutation<{ config: EbaySyncConfig }, Error, Partial<EbaySyncConfig>>({
+  const updateConfigMutation = useMutation<
+    { config: EbaySyncConfig },
+    Error,
+    Partial<EbaySyncConfig>
+  >({
     mutationFn: async (updates) => {
       const response = await fetch('/api/integrations/ebay/sync/config', {
         method: 'PUT',

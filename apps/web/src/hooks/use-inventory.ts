@@ -59,11 +59,15 @@ export function useInventoryItem(id: string | undefined) {
  */
 export function useInventorySummary(options?: { excludeSold?: boolean; platform?: string | null }) {
   return useQuery({
-    queryKey: [...inventoryKeys.summary(), { excludeSold: options?.excludeSold, platform: options?.platform }],
-    queryFn: () => fetchInventorySummary({
-      excludeSold: options?.excludeSold,
-      platform: options?.platform || undefined,
-    }),
+    queryKey: [
+      ...inventoryKeys.summary(),
+      { excludeSold: options?.excludeSold, platform: options?.platform },
+    ],
+    queryFn: () =>
+      fetchInventorySummary({
+        excludeSold: options?.excludeSold,
+        platform: options?.platform || undefined,
+      }),
     staleTime: 5 * 60 * 1000, // 5 minutes - summary is expensive to compute
   });
 }

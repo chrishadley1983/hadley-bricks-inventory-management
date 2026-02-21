@@ -37,10 +37,7 @@ export async function POST(request: NextRequest) {
     const { fullSync } = parsed.data;
 
     // Perform the sync
-    const result = await amazonTransactionSyncService.syncTransactions(
-      user.id,
-      { fullSync }
-    );
+    const result = await amazonTransactionSyncService.syncTransactions(user.id, { fullSync });
 
     // After syncing transactions, backfill fee data for linked inventory items
     let backfillResult = null;
@@ -60,10 +57,7 @@ export async function POST(request: NextRequest) {
       backfill: backfillResult,
     });
   } catch (error) {
-    console.error(
-      '[POST /api/integrations/amazon/transactions/sync] Error:',
-      error
-    );
+    console.error('[POST /api/integrations/amazon/transactions/sync] Error:', error);
 
     return NextResponse.json(
       {
@@ -102,17 +96,11 @@ export async function GET() {
       transactionCount: status.transactionCount,
     });
   } catch (error) {
-    console.error(
-      '[GET /api/integrations/amazon/transactions/sync] Error:',
-      error
-    );
+    console.error('[GET /api/integrations/amazon/transactions/sync] Error:', error);
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch sync status',
+        error: error instanceof Error ? error.message : 'Failed to fetch sync status',
       },
       { status: 500 }
     );

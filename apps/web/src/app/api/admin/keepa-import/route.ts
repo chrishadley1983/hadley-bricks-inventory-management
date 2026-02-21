@@ -16,14 +16,15 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { KeepaImportService } from '@/lib/keepa';
 
-const ImportSchema = z.object({
-  asins: z.array(z.string().min(1)).max(100).optional(),
-  retiredSets: z.boolean().optional().default(false),
-  dryRun: z.boolean().optional().default(false),
-}).refine(
-  (data) => data.asins?.length || data.retiredSets,
-  { message: 'Must provide either asins array or retiredSets: true' }
-);
+const ImportSchema = z
+  .object({
+    asins: z.array(z.string().min(1)).max(100).optional(),
+    retiredSets: z.boolean().optional().default(false),
+    dryRun: z.boolean().optional().default(false),
+  })
+  .refine((data) => data.asins?.length || data.retiredSets, {
+    message: 'Must provide either asins array or retiredSets: true',
+  });
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,9 +82,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/admin/keepa-import] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

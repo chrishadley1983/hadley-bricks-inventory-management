@@ -18,13 +18,7 @@ import {
 } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -308,12 +302,17 @@ async function processStreamResponse(
   throw new Error('Stream ended without completion');
 }
 
-async function searchInventory(query: string, includeSold: boolean = false): Promise<{ data: InventoryItem[] }> {
+async function searchInventory(
+  query: string,
+  includeSold: boolean = false
+): Promise<{ data: InventoryItem[] }> {
   // Use the dedicated search-unlinked endpoint which efficiently excludes linked items
   // using a database function instead of client-side filtering with large ID lists
   const statusParam = includeSold ? '' : '&status=BACKLOG,LISTED';
   const includeSoldParam = includeSold ? '&includeSold=true' : '';
-  const response = await fetch(`/api/inventory/search-unlinked?search=${encodeURIComponent(query)}&pageSize=20${statusParam}${includeSoldParam}`);
+  const response = await fetch(
+    `/api/inventory/search-unlinked?search=${encodeURIComponent(query)}&pageSize=20${statusParam}${includeSoldParam}`
+  );
   if (!response.ok) throw new Error('Failed to search inventory');
   const result = await response.json();
   // New API returns { data: [...] } directly
@@ -494,11 +493,19 @@ export default function InventoryResolutionPage() {
     setMessage(null);
 
     try {
-      const result = activeTab === 'ebay'
-        ? await processEbayHistoricalWithProgress(includeSoldForHistorical, includePaidForHistorical, setProgress)
-        : await processAmazonHistoricalWithProgress(includeSoldForHistorical, setProgress);
+      const result =
+        activeTab === 'ebay'
+          ? await processEbayHistoricalWithProgress(
+              includeSoldForHistorical,
+              includePaidForHistorical,
+              setProgress
+            )
+          : await processAmazonHistoricalWithProgress(includeSoldForHistorical, setProgress);
 
-      setMessage({ type: 'success', text: `${activeTab === 'ebay' ? 'eBay' : 'Amazon'} historical orders processed` });
+      setMessage({
+        type: 'success',
+        text: `${activeTab === 'ebay' ? 'eBay' : 'Amazon'} historical orders processed`,
+      });
       setProcessingResult(result);
       queryClient.invalidateQueries({ queryKey: [activeTab, 'resolution-queue'] });
     } catch (error) {
@@ -538,9 +545,7 @@ export default function InventoryResolutionPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Inventory Resolution</h2>
-            <p className="text-muted-foreground">
-              Link platform sales to your inventory items
-            </p>
+            <p className="text-muted-foreground">Link platform sales to your inventory items</p>
           </div>
         </div>
 
@@ -599,11 +604,15 @@ export default function InventoryResolutionPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Auto-Linked</p>
-                  <p className="text-2xl font-bold text-green-600">{processingResult.totalAutoLinked}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {processingResult.totalAutoLinked}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Queued for Resolution</p>
-                  <p className="text-2xl font-bold text-yellow-600">{processingResult.totalQueuedForResolution}</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {processingResult.totalQueuedForResolution}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Complete Orders</p>
@@ -628,14 +637,18 @@ export default function InventoryResolutionPage() {
               <ShoppingCart className="h-4 w-4" />
               eBay
               {ebayStats.pending > 0 && (
-                <Badge variant="secondary" className="ml-1">{ebayStats.pending}</Badge>
+                <Badge variant="secondary" className="ml-1">
+                  {ebayStats.pending}
+                </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="amazon" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Amazon
               {amazonStats.pending > 0 && (
-                <Badge variant="secondary" className="ml-1">{amazonStats.pending}</Badge>
+                <Badge variant="secondary" className="ml-1">
+                  {amazonStats.pending}
+                </Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -661,7 +674,10 @@ export default function InventoryResolutionPage() {
                     className="h-4 w-4 rounded border-gray-300"
                     disabled={isProcessing}
                   />
-                  <label htmlFor="includePaidHistoricalEbay" className="text-sm text-muted-foreground">
+                  <label
+                    htmlFor="includePaidHistoricalEbay"
+                    className="text-sm text-muted-foreground"
+                  >
                     Include PAID orders (for pre-linking before fulfilment)
                   </label>
                 </div>
@@ -674,7 +690,10 @@ export default function InventoryResolutionPage() {
                     className="h-4 w-4 rounded border-gray-300"
                     disabled={isProcessing}
                   />
-                  <label htmlFor="includeSoldHistoricalEbay" className="text-sm text-muted-foreground">
+                  <label
+                    htmlFor="includeSoldHistoricalEbay"
+                    className="text-sm text-muted-foreground"
+                  >
                     Include already-sold items (for legacy data)
                   </label>
                 </div>
@@ -810,7 +829,10 @@ export default function InventoryResolutionPage() {
                     className="h-4 w-4 rounded border-gray-300"
                     disabled={isProcessing}
                   />
-                  <label htmlFor="includeSoldHistoricalAmazon" className="text-sm text-muted-foreground">
+                  <label
+                    htmlFor="includeSoldHistoricalAmazon"
+                    className="text-sm text-muted-foreground"
+                  >
                     Include already-sold items (for legacy data)
                   </label>
                 </div>
@@ -931,7 +953,11 @@ export default function InventoryResolutionPage() {
             <DialogHeader>
               <DialogTitle>Link eBay Sale to Inventory</DialogTitle>
               <DialogDescription>
-                Select the inventory item{selectedEbayItem?.quantity_needed && selectedEbayItem.quantity_needed > 1 ? 's' : ''} that was sold
+                Select the inventory item
+                {selectedEbayItem?.quantity_needed && selectedEbayItem.quantity_needed > 1
+                  ? 's'
+                  : ''}{' '}
+                that was sold
               </DialogDescription>
             </DialogHeader>
 
@@ -961,7 +987,10 @@ export default function InventoryResolutionPage() {
                 }}
                 onConfirmMultiSelect={() => {
                   if (ebaySelectedInventoryIds.length === selectedEbayItem.quantity_needed) {
-                    ebayResolveMutation.mutate({ id: selectedEbayItem.id, inventoryItemIds: ebaySelectedInventoryIds });
+                    ebayResolveMutation.mutate({
+                      id: selectedEbayItem.id,
+                      inventoryItemIds: ebaySelectedInventoryIds,
+                    });
                   }
                 }}
                 onSkip={(reason) => ebaySkipMutation.mutate({ id: selectedEbayItem.id, reason })}
@@ -986,7 +1015,11 @@ export default function InventoryResolutionPage() {
             <DialogHeader>
               <DialogTitle>Link Amazon Sale to Inventory</DialogTitle>
               <DialogDescription>
-                Select the inventory item{selectedAmazonItem?.quantity_needed && selectedAmazonItem.quantity_needed > 1 ? 's' : ''} that was sold
+                Select the inventory item
+                {selectedAmazonItem?.quantity_needed && selectedAmazonItem.quantity_needed > 1
+                  ? 's'
+                  : ''}{' '}
+                that was sold
               </DialogDescription>
             </DialogHeader>
 
@@ -1005,7 +1038,10 @@ export default function InventoryResolutionPage() {
                 selectedInventoryIds={amazonSelectedInventoryIds}
                 onSelectCandidate={(id) => {
                   if (selectedAmazonItem.quantity_needed === 1) {
-                    amazonResolveMutation.mutate({ id: selectedAmazonItem.id, inventoryItemIds: [id] });
+                    amazonResolveMutation.mutate({
+                      id: selectedAmazonItem.id,
+                      inventoryItemIds: [id],
+                    });
                   } else {
                     setAmazonSelectedInventoryIds((prev) => {
                       if (prev.includes(id)) return prev.filter((i) => i !== id);
@@ -1016,10 +1052,15 @@ export default function InventoryResolutionPage() {
                 }}
                 onConfirmMultiSelect={() => {
                   if (amazonSelectedInventoryIds.length === selectedAmazonItem.quantity_needed) {
-                    amazonResolveMutation.mutate({ id: selectedAmazonItem.id, inventoryItemIds: amazonSelectedInventoryIds });
+                    amazonResolveMutation.mutate({
+                      id: selectedAmazonItem.id,
+                      inventoryItemIds: amazonSelectedInventoryIds,
+                    });
                   }
                 }}
-                onSkip={(reason) => amazonSkipMutation.mutate({ id: selectedAmazonItem.id, reason })}
+                onSkip={(reason) =>
+                  amazonSkipMutation.mutate({ id: selectedAmazonItem.id, reason })
+                }
                 onCancel={() => setSelectedAmazonItem(null)}
                 inventorySearch={inventorySearch}
                 setInventorySearch={setInventorySearch}
@@ -1107,7 +1148,7 @@ function ResolutionDialogContent({
 
       setIsCheckingLinks(true);
       try {
-        const candidateIds = matchCandidates.map(c => c.id);
+        const candidateIds = matchCandidates.map((c) => c.id);
         const response = await fetch('/api/inventory/check-linked', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1129,17 +1170,19 @@ function ResolutionDialogContent({
   }, [matchCandidates]);
 
   // Filter out already-linked candidates and SOLD items for display
-  const availableCandidates = matchCandidates?.filter(c => {
-    // Exclude if already linked to another order
-    if (linkedCandidates[c.id]) return false;
-    // Exclude SOLD items (unless they're in search with includeSold)
-    if (c.status === 'SOLD') return false;
-    return true;
-  }) || [];
+  const availableCandidates =
+    matchCandidates?.filter((c) => {
+      // Exclude if already linked to another order
+      if (linkedCandidates[c.id]) return false;
+      // Exclude SOLD items (unless they're in search with includeSold)
+      if (c.status === 'SOLD') return false;
+      return true;
+    }) || [];
 
-  const unavailableCandidates = matchCandidates?.filter(c => {
-    return linkedCandidates[c.id] || c.status === 'SOLD';
-  }) || [];
+  const unavailableCandidates =
+    matchCandidates?.filter((c) => {
+      return linkedCandidates[c.id] || c.status === 'SOLD';
+    }) || [];
 
   return (
     <div className="space-y-4">
@@ -1147,7 +1190,9 @@ function ResolutionDialogContent({
       <div className="bg-muted p-4 rounded-lg">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-sm text-muted-foreground">{platform === 'ebay' ? 'eBay' : 'Amazon'} Order</p>
+            <p className="text-sm text-muted-foreground">
+              {platform === 'ebay' ? 'eBay' : 'Amazon'} Order
+            </p>
             <p className="font-medium font-mono text-sm">{orderId}</p>
           </div>
           <div>
@@ -1180,7 +1225,9 @@ function ResolutionDialogContent({
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Select {quantityNeeded} inventory items</span>
-            <span>{selectedInventoryIds.length} / {quantityNeeded} selected</span>
+            <span>
+              {selectedInventoryIds.length} / {quantityNeeded} selected
+            </span>
           </div>
           <Progress value={(selectedInventoryIds.length / quantityNeeded) * 100} />
         </div>
@@ -1203,7 +1250,9 @@ function ResolutionDialogContent({
             <Alert className="mb-2 py-2">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">
-                {unavailableCandidates.length} suggested item{unavailableCandidates.length > 1 ? 's are' : ' is'} no longer available (already linked to other orders). Use Search below to find available inventory.
+                {unavailableCandidates.length} suggested item
+                {unavailableCandidates.length > 1 ? 's are' : ' is'} no longer available (already
+                linked to other orders). Use Search below to find available inventory.
               </AlertDescription>
             </Alert>
           )}
@@ -1223,16 +1272,24 @@ function ResolutionDialogContent({
                   {availableCandidates.map((candidate) => (
                     <TableRow
                       key={candidate.id}
-                      className={selectedInventoryIds.includes(candidate.id) ? 'bg-green-50' : undefined}
+                      className={
+                        selectedInventoryIds.includes(candidate.id) ? 'bg-green-50' : undefined
+                      }
                     >
                       <TableCell>
                         <div>
-                          <p className="font-medium">{candidate.item_name || candidate.sku || candidate.amazon_asin || '-'}</p>
+                          <p className="font-medium">
+                            {candidate.item_name || candidate.sku || candidate.amazon_asin || '-'}
+                          </p>
                           {candidate.set_number && (
-                            <p className="text-xs text-muted-foreground">Set: {candidate.set_number}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Set: {candidate.set_number}
+                            </p>
                           )}
                           {candidate.condition && (
-                            <Badge variant="outline" className="text-xs mt-1">{candidate.condition}</Badge>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {candidate.condition}
+                            </Badge>
                           )}
                         </div>
                       </TableCell>
@@ -1257,7 +1314,9 @@ function ResolutionDialogContent({
                       <TableCell>
                         <Button
                           size="sm"
-                          variant={selectedInventoryIds.includes(candidate.id) ? 'default' : 'outline'}
+                          variant={
+                            selectedInventoryIds.includes(candidate.id) ? 'default' : 'outline'
+                          }
                           onClick={() => onSelectCandidate(candidate.id)}
                           disabled={isResolving}
                         >
@@ -1275,10 +1334,12 @@ function ResolutionDialogContent({
                 </TableBody>
               </Table>
             </div>
-          ) : !isCheckingLinks && (
-            <p className="text-sm text-muted-foreground py-2">
-              No available suggested matches. Use Search below to find inventory.
-            </p>
+          ) : (
+            !isCheckingLinks && (
+              <p className="text-sm text-muted-foreground py-2">
+                No available suggested matches. Use Search below to find inventory.
+              </p>
+            )
           )}
         </div>
       )}
@@ -1332,15 +1393,22 @@ function ResolutionDialogContent({
                   const isLinked = !!item.linked_order_id;
                   const isSold = item.status === 'SOLD';
                   return (
-                    <TableRow key={item.id} className={isLinked || isSold ? 'opacity-60 bg-muted/30' : undefined}>
+                    <TableRow
+                      key={item.id}
+                      className={isLinked || isSold ? 'opacity-60 bg-muted/30' : undefined}
+                    >
                       <TableCell>
                         <div>
-                          <p className="font-medium">{item.item_name || item.sku || item.amazon_asin || '-'}</p>
+                          <p className="font-medium">
+                            {item.item_name || item.sku || item.amazon_asin || '-'}
+                          </p>
                           {item.set_number && (
                             <p className="text-xs text-muted-foreground">Set: {item.set_number}</p>
                           )}
                           {isLinked && (
-                            <p className="text-xs text-orange-600">Linked to: {item.linked_order_id}</p>
+                            <p className="text-xs text-orange-600">
+                              Linked to: {item.linked_order_id}
+                            </p>
                           )}
                         </div>
                       </TableCell>
@@ -1348,8 +1416,20 @@ function ResolutionDialogContent({
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <Badge
-                            variant={item.status === 'SOLD' ? 'secondary' : item.status === 'LISTED' ? 'default' : 'outline'}
-                            className={item.status === 'SOLD' ? 'bg-gray-500 text-white' : item.status === 'LISTED' ? 'bg-green-600' : undefined}
+                            variant={
+                              item.status === 'SOLD'
+                                ? 'secondary'
+                                : item.status === 'LISTED'
+                                  ? 'default'
+                                  : 'outline'
+                            }
+                            className={
+                              item.status === 'SOLD'
+                                ? 'bg-gray-500 text-white'
+                                : item.status === 'LISTED'
+                                  ? 'bg-green-600'
+                                  : undefined
+                            }
                           >
                             {item.status}
                           </Badge>

@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
 
     const result = await ebayAutoSyncService.performHistoricalImport(user.id, fromDateTime);
 
-    const allSuccess = result.orders.success && result.transactions.success && result.payouts.success;
+    const allSuccess =
+      result.orders.success && result.transactions.success && result.payouts.success;
 
     return NextResponse.json({
       success: allSuccess,

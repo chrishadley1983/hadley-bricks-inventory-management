@@ -13,10 +13,7 @@ import { createClient } from '@/lib/supabase/server';
  *
  * Get a specific draft by ID
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

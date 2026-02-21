@@ -29,7 +29,11 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const status = searchParams.get('status') as ListingStatus | 'all' | undefined;
     const hasQuantity = searchParams.get('hasQuantity') === 'true';
-    const sortColumn = searchParams.get('sortColumn') as ListingFilters['sort'] extends { column: infer C } ? C : never;
+    const sortColumn = searchParams.get('sortColumn') as ListingFilters['sort'] extends {
+      column: infer C;
+    }
+      ? C
+      : never;
     const sortDirection = searchParams.get('sortDirection') as 'asc' | 'desc' | null;
 
     // 3. Build filters
@@ -37,7 +41,8 @@ export async function GET(request: NextRequest) {
       search,
       listingStatus: status,
       hasQuantity: hasQuantity || undefined,
-      sort: sortColumn && sortDirection ? { column: sortColumn, direction: sortDirection } : undefined,
+      sort:
+        sortColumn && sortDirection ? { column: sortColumn, direction: sortDirection } : undefined,
     };
 
     // 4. Get listings

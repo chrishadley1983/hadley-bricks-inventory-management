@@ -23,12 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import {
   TimeEntryDialog,
@@ -44,7 +39,14 @@ import {
   type TimeEntry,
 } from '@/hooks/use-time-tracking';
 
-const CATEGORIES: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
+const CATEGORIES: TimeCategory[] = [
+  'Development',
+  'Listing',
+  'Shipping',
+  'Sourcing',
+  'Admin',
+  'Other',
+];
 
 export default function TimeTrackingPage() {
   usePerfPage('TimeTrackingPage');
@@ -132,7 +134,9 @@ export default function TimeTrackingPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Entries</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Entries
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{entriesData?.total || 0}</div>
@@ -230,9 +234,7 @@ export default function TimeTrackingPage() {
               ))}
             </div>
           ) : entriesData?.entries.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              No time entries found
-            </div>
+            <div className="py-8 text-center text-muted-foreground">No time entries found</div>
           ) : (
             <>
               <Table>
@@ -261,20 +263,14 @@ export default function TimeTrackingPage() {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell>{format(new Date(entry.startedAt), 'HH:mm')}</TableCell>
                       <TableCell>
-                        {format(new Date(entry.startedAt), 'HH:mm')}
-                      </TableCell>
-                      <TableCell>
-                        {entry.endedAt
-                          ? format(new Date(entry.endedAt), 'HH:mm')
-                          : '--:--'}
+                        {entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '--:--'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
-                          {entry.durationSeconds
-                            ? formatDuration(entry.durationSeconds)
-                            : '--'}
+                          {entry.durationSeconds ? formatDuration(entry.durationSeconds) : '--'}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -288,9 +284,7 @@ export default function TimeTrackingPage() {
                           {entry.category}
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {entry.notes || '-'}
-                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">{entry.notes || '-'}</TableCell>
                       <TableCell className="text-right">
                         <TooltipProvider>
                           <div className="flex justify-end gap-1">

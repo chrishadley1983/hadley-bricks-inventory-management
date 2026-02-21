@@ -58,7 +58,11 @@ const STATUS_CONFIG: Record<
 /**
  * List of past refresh operations
  */
-export function RefreshHistoryList({ jobs, isLoading = false, onViewDetails }: RefreshHistoryListProps) {
+export function RefreshHistoryList({
+  jobs,
+  isLoading = false,
+  onViewDetails,
+}: RefreshHistoryListProps) {
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -98,9 +102,7 @@ export function RefreshHistoryList({ jobs, isLoading = false, onViewDetails }: R
         const statusConfig = STATUS_CONFIG[job.status];
         const timeAgo = formatDistanceToNow(new Date(job.createdAt), { addSuffix: true });
         const successRate =
-          job.totalListings > 0
-            ? Math.round((job.createdCount / job.totalListings) * 100)
-            : 0;
+          job.totalListings > 0 ? Math.round((job.createdCount / job.totalListings) * 100) : 0;
 
         return (
           <Card key={job.id} className="hover:bg-muted/50 transition-colors">
@@ -112,9 +114,7 @@ export function RefreshHistoryList({ jobs, isLoading = false, onViewDetails }: R
                       <span className="mr-1.5">{statusConfig.icon}</span>
                       {statusConfig.label}
                     </Badge>
-                    {job.reviewMode && (
-                      <Badge variant="outline">Review Mode</Badge>
-                    )}
+                    {job.reviewMode && <Badge variant="outline">Review Mode</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {job.totalListings} listing{job.totalListings !== 1 ? 's' : ''} &bull; {timeAgo}
@@ -133,9 +133,7 @@ export function RefreshHistoryList({ jobs, isLoading = false, onViewDetails }: R
                       <span className="text-muted-foreground ml-2">({successRate}% success)</span>
                     </p>
                   )}
-                  {job.errorMessage && (
-                    <p className="text-sm text-red-600">{job.errorMessage}</p>
-                  )}
+                  {job.errorMessage && <p className="text-sm text-red-600">{job.errorMessage}</p>}
                 </div>
                 {onViewDetails && (
                   <Button variant="ghost" size="sm" onClick={() => onViewDetails(job.id)}>

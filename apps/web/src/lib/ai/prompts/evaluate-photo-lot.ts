@@ -167,10 +167,7 @@ CRITICAL: Return ONLY the JSON object. No markdown formatting, no explanation te
  * @param listingDescription - Optional listing description from user
  * @returns Formatted user message
  */
-export function createPhotoLotUserMessage(
-  imageCount: number,
-  listingDescription?: string
-): string {
+export function createPhotoLotUserMessage(imageCount: number, listingDescription?: string): string {
   let message = '';
 
   if (imageCount === 1) {
@@ -237,8 +234,7 @@ export function validateOpusResponse(response: unknown): OpusAnalysisResponse {
       reviewReason: typeof i.reviewReason === 'string' ? i.reviewReason : null,
       rawDescription: typeof i.rawDescription === 'string' ? i.rawDescription : '',
       quantity: typeof i.quantity === 'number' && i.quantity > 0 ? i.quantity : 1,
-      minifigDescription:
-        typeof i.minifigDescription === 'string' ? i.minifigDescription : null,
+      minifigDescription: typeof i.minifigDescription === 'string' ? i.minifigDescription : null,
       partsEstimate: typeof i.partsEstimate === 'string' ? i.partsEstimate : null,
     };
   });
@@ -246,8 +242,7 @@ export function validateOpusResponse(response: unknown): OpusAnalysisResponse {
   return {
     items,
     overallNotes: typeof r.overallNotes === 'string' ? r.overallNotes : '',
-    analysisConfidence:
-      typeof r.analysisConfidence === 'number' ? r.analysisConfidence : 0.5,
+    analysisConfidence: typeof r.analysisConfidence === 'number' ? r.analysisConfidence : 0.5,
     warnings: Array.isArray(r.warnings)
       ? r.warnings.filter((w): w is string => typeof w === 'string')
       : [],
@@ -255,13 +250,7 @@ export function validateOpusResponse(response: unknown): OpusAnalysisResponse {
 }
 
 function validateItemType(value: unknown, index: number): PhotoItemType {
-  const validTypes: PhotoItemType[] = [
-    'set',
-    'minifig',
-    'parts_lot',
-    'non_lego',
-    'unknown',
-  ];
+  const validTypes: PhotoItemType[] = ['set', 'minifig', 'parts_lot', 'non_lego', 'unknown'];
   if (typeof value === 'string' && validTypes.includes(value as PhotoItemType)) {
     return value as PhotoItemType;
   }
@@ -278,29 +267,15 @@ function validateCondition(value: unknown, index: number): 'New' | 'Used' {
 }
 
 function validateBoxCondition(value: unknown): BoxCondition | null {
-  const validConditions: BoxCondition[] = [
-    'Mint',
-    'Excellent',
-    'Good',
-    'Fair',
-    'Poor',
-  ];
-  if (
-    typeof value === 'string' &&
-    validConditions.includes(value as BoxCondition)
-  ) {
+  const validConditions: BoxCondition[] = ['Mint', 'Excellent', 'Good', 'Fair', 'Poor'];
+  if (typeof value === 'string' && validConditions.includes(value as BoxCondition)) {
     return value as BoxCondition;
   }
   return null;
 }
 
 function validateSealStatus(value: unknown): SealStatus {
-  const validStatuses: SealStatus[] = [
-    'Factory Sealed',
-    'Resealed',
-    'Open Box',
-    'Unknown',
-  ];
+  const validStatuses: SealStatus[] = ['Factory Sealed', 'Resealed', 'Open Box', 'Unknown'];
   if (typeof value === 'string' && validStatuses.includes(value as SealStatus)) {
     return value as SealStatus;
   }

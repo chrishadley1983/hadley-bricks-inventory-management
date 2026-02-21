@@ -10,7 +10,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { VintedScheduleService, type ScheduleResponse } from '@/lib/services/vinted-schedule.service';
+import {
+  VintedScheduleService,
+  type ScheduleResponse,
+} from '@/lib/services/vinted-schedule.service';
 
 export async function POST(
   request: NextRequest

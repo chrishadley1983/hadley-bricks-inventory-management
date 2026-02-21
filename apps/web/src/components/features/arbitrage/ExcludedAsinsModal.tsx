@@ -88,7 +88,7 @@ export function ExcludedAsinsModal({ isOpen, onClose }: ExcludedAsinsModalProps)
               </h3>
               <p className="text-muted-foreground mt-1">
                 {excluded?.length === 0
-                  ? 'You haven\'t excluded any ASINs yet'
+                  ? "You haven't excluded any ASINs yet"
                   : 'Try a different search term'}
               </p>
             </div>
@@ -112,16 +112,12 @@ export function ExcludedAsinsModal({ isOpen, onClose }: ExcludedAsinsModalProps)
                         {item.asin}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate">
-                      {item.name ?? '—'}
-                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate">{item.name ?? '—'}</TableCell>
                     <TableCell className="font-mono text-sm">
                       {item.bricklinkSetNumber ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {item.excludedAt
-                        ? new Date(item.excludedAt).toLocaleDateString()
-                        : '—'}
+                      {item.excludedAt ? new Date(item.excludedAt).toLocaleDateString() : '—'}
                     </TableCell>
                     <TableCell className="max-w-[150px] truncate text-sm text-muted-foreground">
                       {item.exclusionReason ?? '—'}
@@ -176,12 +172,24 @@ function ExcludedTableSkeleton() {
       <TableBody>
         {Array.from({ length: 3 }).map((_, i) => (
           <TableRow key={i}>
-            <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-            <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-            <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-            <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-            <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+            <TableCell>
+              <Skeleton className="h-6 w-24" />
+            </TableCell>
+            <TableCell>
+              <Skeleton className="h-4 w-40" />
+            </TableCell>
+            <TableCell>
+              <Skeleton className="h-4 w-20" />
+            </TableCell>
+            <TableCell>
+              <Skeleton className="h-4 w-24" />
+            </TableCell>
+            <TableCell>
+              <Skeleton className="h-4 w-32" />
+            </TableCell>
+            <TableCell>
+              <Skeleton className="h-8 w-20" />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

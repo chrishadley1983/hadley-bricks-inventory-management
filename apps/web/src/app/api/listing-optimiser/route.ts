@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser();
 
-    console.log('[GET /api/listing-optimiser] Auth check:', { userId: user?.id, authError: authError?.message });
+    console.log('[GET /api/listing-optimiser] Auth check:', {
+      userId: user?.id,
+      authError: authError?.message,
+    });
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,7 +36,9 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .single();
 
-    console.log('[GET /api/listing-optimiser] eBay credentials:', { hasCredentials: !!credentials });
+    console.log('[GET /api/listing-optimiser] eBay credentials:', {
+      hasCredentials: !!credentials,
+    });
 
     if (!credentials) {
       return NextResponse.json(
@@ -46,9 +51,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const filters: OptimiserFilters = {
       search: searchParams.get('search') || undefined,
-      minAge: searchParams.get('minAge')
-        ? parseInt(searchParams.get('minAge')!, 10)
-        : undefined,
+      minAge: searchParams.get('minAge') ? parseInt(searchParams.get('minAge')!, 10) : undefined,
       minViews: searchParams.get('minViews')
         ? parseInt(searchParams.get('minViews')!, 10)
         : undefined,
@@ -61,12 +64,19 @@ export async function GET(request: NextRequest) {
           : searchParams.get('hasWatchers') === 'false'
             ? false
             : undefined,
-      qualityGrade: (searchParams.get('qualityGrade') as OptimiserFilters['qualityGrade']) || undefined,
-      reviewedStatus: (searchParams.get('reviewedStatus') as OptimiserFilters['reviewedStatus']) || undefined,
+      qualityGrade:
+        (searchParams.get('qualityGrade') as OptimiserFilters['qualityGrade']) || undefined,
+      reviewedStatus:
+        (searchParams.get('reviewedStatus') as OptimiserFilters['reviewedStatus']) || undefined,
     };
 
     // 4. Get listings and summary
-    console.log('[GET /api/listing-optimiser] Fetching listings for user:', user.id, 'with filters:', filters);
+    console.log(
+      '[GET /api/listing-optimiser] Fetching listings for user:',
+      user.id,
+      'with filters:',
+      filters
+    );
     const service = getListingOptimiserService();
     const { listings, summary } = await service.getListings(user.id, filters);
 

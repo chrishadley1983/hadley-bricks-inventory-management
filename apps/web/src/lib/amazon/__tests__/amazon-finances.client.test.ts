@@ -113,9 +113,7 @@ describe('AmazonFinancesClientWithAuth', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
 
       // Only first call should be token refresh
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        'https://api.amazon.com/auth/o2/token'
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe('https://api.amazon.com/auth/o2/token');
       expect(mockFetch.mock.calls[1][0]).toContain('finances');
       expect(mockFetch.mock.calls[2][0]).toContain('finances');
     });
@@ -263,16 +261,13 @@ describe('AmazonFinancesClientWithAuth', () => {
         status: 400,
         json: () =>
           Promise.resolve({
-            errors: [
-              { message: 'Invalid date format' },
-              { message: 'Missing required parameter' },
-            ],
+            errors: [{ message: 'Invalid date format' }, { message: 'Missing required parameter' }],
           }),
       });
 
-      await expect(
-        client.listTransactions({ postedAfter: 'invalid-date' })
-      ).rejects.toThrow('Invalid date format; Missing required parameter');
+      await expect(client.listTransactions({ postedAfter: 'invalid-date' })).rejects.toThrow(
+        'Invalid date format; Missing required parameter'
+      );
     });
 
     it('should handle API errors without parseable JSON', async () => {
@@ -436,9 +431,7 @@ describe('AmazonFinancesClientWithAuth', () => {
 
       // Should have fetched 100 pages max
       expect(result.length).toBe(100);
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Hit max pages limit')
-      );
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Hit max pages limit'));
     });
   });
 
@@ -627,9 +620,7 @@ describe('AmazonFinancesClientWithAuth', () => {
       const url = new URL(apiCall[0]);
       const postedAfter = new Date(url.searchParams.get('postedAfter')!);
       const now = new Date();
-      const diffDays = Math.ceil(
-        (now.getTime() - postedAfter.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const diffDays = Math.ceil((now.getTime() - postedAfter.getTime()) / (1000 * 60 * 60 * 24));
       expect(diffDays).toBeGreaterThanOrEqual(29);
       expect(diffDays).toBeLessThanOrEqual(31);
     });
@@ -667,9 +658,7 @@ describe('AmazonFinancesClientWithAuth', () => {
       });
 
       expect(result.payload?.transactions).toHaveLength(1);
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Rate limited')
-      );
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Rate limited'));
     });
   });
 

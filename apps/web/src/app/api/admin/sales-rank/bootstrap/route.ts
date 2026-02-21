@@ -69,16 +69,10 @@ export async function POST(request: NextRequest) {
   try {
     // Get Amazon credentials
     const credentialsRepo = new CredentialsRepository(supabase);
-    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(
-      user.id,
-      'amazon'
-    );
+    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(user.id, 'amazon');
 
     if (!credentials) {
-      return NextResponse.json(
-        { error: 'Amazon credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Amazon credentials not configured' }, { status: 400 });
     }
 
     // Get all seeded ASINs with status 'found'
@@ -90,10 +84,7 @@ export async function POST(request: NextRequest) {
 
     if (fetchError) {
       console.error('[sales-rank/bootstrap] Failed to fetch seeded ASINs:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch seeded ASINs' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch seeded ASINs' }, { status: 500 });
     }
 
     if (!seededAsins || seededAsins.length === 0) {
@@ -114,14 +105,16 @@ export async function POST(request: NextRequest) {
       asin: sa.asin!,
     }));
 
-    const batches: typeof asinsWithIds[] = [];
+    const batches: (typeof asinsWithIds)[] = [];
     for (let i = 0; i < asinsWithIds.length; i += BATCH_SIZE) {
       batches.push(asinsWithIds.slice(i, i + BATCH_SIZE));
     }
 
     // Apply offset and limit
     const startBatch = offset;
-    const endBatch = batchLimit ? Math.min(startBatch + batchLimit, batches.length) : batches.length;
+    const endBatch = batchLimit
+      ? Math.min(startBatch + batchLimit, batches.length)
+      : batches.length;
     const batchesToProcess = batches.slice(startBatch, endBatch);
 
     console.log(
@@ -169,16 +162,11 @@ export async function POST(request: NextRequest) {
 
     // Store results if not dry run
     if (!dryRun && results.length > 0) {
-      const { error: insertError } = await supabase
-        .from('seeded_asin_rankings')
-        .insert(results);
+      const { error: insertError } = await supabase.from('seeded_asin_rankings').insert(results);
 
       if (insertError) {
         console.error('[sales-rank/bootstrap] Failed to insert rankings:', insertError);
-        return NextResponse.json(
-          { error: 'Failed to store rankings' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to store rankings' }, { status: 500 });
       }
     }
 

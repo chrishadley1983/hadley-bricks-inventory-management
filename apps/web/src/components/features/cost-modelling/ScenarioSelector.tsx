@@ -121,11 +121,7 @@ export function ScenarioSelector({
   return (
     <div className="flex items-center gap-2">
       {/* Scenario dropdown */}
-      <Select
-        value={selectedId || ''}
-        onValueChange={onSelect}
-        disabled={disabled}
-      >
+      <Select value={selectedId || ''} onValueChange={onSelect} disabled={disabled}>
         <SelectTrigger className="w-[240px]">
           <SelectValue placeholder="Select scenario" />
         </SelectTrigger>
@@ -167,16 +163,11 @@ export function ScenarioSelector({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onClick={() => setShowEditDialog(true)}
-          >
+          <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
             <Pencil className="mr-2 h-4 w-4" />
             Rename / Edit Notes
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={handleDuplicate}
-            disabled={duplicateMutation.isPending}
-          >
+          <DropdownMenuItem onClick={handleDuplicate} disabled={duplicateMutation.isPending}>
             <Copy className="mr-2 h-4 w-4" />
             Duplicate
           </DropdownMenuItem>
@@ -188,9 +179,7 @@ export function ScenarioSelector({
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
-            {isLastScenario && (
-              <span className="ml-2 text-xs">(last scenario)</span>
-            )}
+            {isLastScenario && <span className="ml-2 text-xs">(last scenario)</span>}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

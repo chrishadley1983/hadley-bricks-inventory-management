@@ -19,8 +19,14 @@ const UpdateConfigSchema = z.object({
   broad_sweep_cog_threshold: z.number().int().min(10).max(80).optional(),
   watchlist_cog_threshold: z.number().int().min(10).max(80).optional(),
   near_miss_threshold: z.number().int().min(20).max(90).optional(),
-  operating_hours_start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  operating_hours_end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  operating_hours_start: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(),
+  operating_hours_end: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(),
 });
 
 const PauseResumeSchema = z.object({
@@ -64,19 +70,13 @@ export async function GET() {
 
       if (insertError) {
         console.error('[automation] Failed to create config:', insertError);
-        return NextResponse.json(
-          { error: 'Failed to create configuration' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to create configuration' }, { status: 500 });
       }
 
       config = newConfig;
     } else if (error) {
       console.error('[automation] Failed to fetch config:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch configuration' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch configuration' }, { status: 500 });
     }
 
     // Get today's scan stats
@@ -174,10 +174,7 @@ export async function PUT(request: NextRequest) {
 
     if (error) {
       console.error('[automation] Failed to update config:', error);
-      return NextResponse.json(
-        { error: 'Failed to update configuration' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to update configuration' }, { status: 500 });
     }
 
     return NextResponse.json({ config });
@@ -242,10 +239,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error(`[automation] Failed to ${action} scanner:`, error);
-      return NextResponse.json(
-        { error: `Failed to ${action} scanner` },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: `Failed to ${action} scanner` }, { status: 500 });
     }
 
     return NextResponse.json({

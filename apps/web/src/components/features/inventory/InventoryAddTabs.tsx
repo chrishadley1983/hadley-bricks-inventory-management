@@ -9,17 +9,17 @@ import { InventoryForm } from './InventoryForm';
 
 // Lazy load the other tabs to reduce initial bundle size
 // These will be implemented in subsequent phases
-const NaturalLanguageInput = React.lazy(
-  () => import('./NaturalLanguageInput').then((mod) => ({ default: mod.NaturalLanguageInput }))
+const NaturalLanguageInput = React.lazy(() =>
+  import('./NaturalLanguageInput').then((mod) => ({ default: mod.NaturalLanguageInput }))
 );
-const PhotoInput = React.lazy(
-  () => import('./PhotoInput').then((mod) => ({ default: mod.PhotoInput }))
+const PhotoInput = React.lazy(() =>
+  import('./PhotoInput').then((mod) => ({ default: mod.PhotoInput }))
 );
-const CsvImportWizard = React.lazy(
-  () => import('./CsvImportWizard').then((mod) => ({ default: mod.CsvImportWizard }))
+const CsvImportWizard = React.lazy(() =>
+  import('./CsvImportWizard').then((mod) => ({ default: mod.CsvImportWizard }))
 );
-const BulkEntryGrid = React.lazy(
-  () => import('./BulkEntryGrid').then((mod) => ({ default: mod.BulkEntryGrid }))
+const BulkEntryGrid = React.lazy(() =>
+  import('./BulkEntryGrid').then((mod) => ({ default: mod.BulkEntryGrid }))
 );
 
 type TabValue = 'single' | 'natural-language' | 'photo' | 'csv' | 'bulk';
@@ -33,9 +33,19 @@ interface TabConfig {
 
 const TAB_CONFIG: TabConfig[] = [
   { value: 'single', label: 'Single', icon: <FormInput className="h-4 w-4" />, available: true },
-  { value: 'natural-language', label: 'Natural Language', icon: <Sparkles className="h-4 w-4" />, available: true },
+  {
+    value: 'natural-language',
+    label: 'Natural Language',
+    icon: <Sparkles className="h-4 w-4" />,
+    available: true,
+  },
   { value: 'photo', label: 'Photo', icon: <Camera className="h-4 w-4" />, available: true },
-  { value: 'csv', label: 'CSV Import', icon: <FileSpreadsheet className="h-4 w-4" />, available: true },
+  {
+    value: 'csv',
+    label: 'CSV Import',
+    icon: <FileSpreadsheet className="h-4 w-4" />,
+    available: true,
+  },
   { value: 'bulk', label: 'Bulk', icon: <Grid3X3 className="h-4 w-4" />, available: true },
 ];
 

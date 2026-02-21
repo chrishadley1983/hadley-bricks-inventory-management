@@ -229,74 +229,77 @@ export function useLookupWithProgress(): UseLookupResult {
   const [progress, setProgress] = useState<LookupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const startLookup = useCallback(async (evaluationId: string) => {
-    setIsRunning(true);
-    setProgress(null);
-    setError(null);
+  const startLookup = useCallback(
+    async (evaluationId: string) => {
+      setIsRunning(true);
+      setProgress(null);
+      setError(null);
 
-    try {
-      const response = await fetch('/api/purchase-evaluator/lookup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evaluationId }),
-      });
+      try {
+        const response = await fetch('/api/purchase-evaluator/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ evaluationId }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Lookup failed');
-      }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Lookup failed');
+        }
 
-      // Handle Server-Sent Events
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+        // Handle Server-Sent Events
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
 
-      if (!reader) {
-        throw new Error('No response body');
-      }
+        if (!reader) {
+          throw new Error('No response body');
+        }
 
-      let buffer = '';
+        let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
+        while (true) {
+          const { done, value } = await reader.read();
 
-        if (done) break;
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+          buffer += decoder.decode(value, { stream: true });
 
-        // Parse SSE messages
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          // Parse SSE messages
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
 
-              if (data.type === 'done') {
-                // Lookup complete
-                setIsRunning(false);
-                queryClient.invalidateQueries({ queryKey: evaluatorKeys.detail(evaluationId) });
-                queryClient.invalidateQueries({ queryKey: evaluatorKeys.lists() });
-                return;
+                if (data.type === 'done') {
+                  // Lookup complete
+                  setIsRunning(false);
+                  queryClient.invalidateQueries({ queryKey: evaluatorKeys.detail(evaluationId) });
+                  queryClient.invalidateQueries({ queryKey: evaluatorKeys.lists() });
+                  return;
+                }
+
+                if (data.type === 'error') {
+                  throw new Error(data.error);
+                }
+
+                setProgress(data as LookupProgress);
+              } catch (parseError) {
+                console.error('Failed to parse SSE data:', parseError);
               }
-
-              if (data.type === 'error') {
-                throw new Error(data.error);
-              }
-
-              setProgress(data as LookupProgress);
-            } catch (parseError) {
-              console.error('Failed to parse SSE data:', parseError);
             }
           }
         }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setError(errorMessage);
+        setIsRunning(false);
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      setIsRunning(false);
-    }
-  }, [queryClient]);
+    },
+    [queryClient]
+  );
 
   const reset = useCallback(() => {
     setIsRunning(false);

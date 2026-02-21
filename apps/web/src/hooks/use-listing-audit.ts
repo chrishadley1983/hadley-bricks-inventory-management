@@ -1,14 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { ListingAuditData, ListingAuditResponse } from '@/app/api/ebay/listing/by-inventory/[inventoryId]/route';
+import type {
+  ListingAuditData,
+  ListingAuditResponse,
+} from '@/app/api/ebay/listing/by-inventory/[inventoryId]/route';
 
 /**
  * Query key factory for listing audit queries
  */
 export const listingAuditKeys = {
   all: ['listing-audit'] as const,
-  byInventory: (inventoryId: string) => [...listingAuditKeys.all, 'by-inventory', inventoryId] as const,
+  byInventory: (inventoryId: string) =>
+    [...listingAuditKeys.all, 'by-inventory', inventoryId] as const,
 };
 
 /**

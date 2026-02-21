@@ -7,11 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import {
-  HomeCostRow,
-  transformHomeCostRow,
-  dateRangesOverlap,
-} from '@/types/home-costs';
+import { HomeCostRow, transformHomeCostRow, dateRangesOverlap } from '@/types/home-costs';
 
 /**
  * Zod schema for updating home costs
@@ -25,7 +21,10 @@ const UpdateHomeCostSchema = z
     annualPremium: z.number().positive('Annual premium must be positive').optional(),
     businessStockValue: z.number().positive('Business stock value must be positive').optional(),
     totalContentsValue: z.number().positive('Total contents value must be positive').optional(),
-    startDate: z.string().regex(/^\d{4}-\d{2}$/, 'Start date must be YYYY-MM format').optional(),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}$/, 'Start date must be YYYY-MM format')
+      .optional(),
     endDate: z
       .string()
       .regex(/^\d{4}-\d{2}$/, 'End date must be YYYY-MM format')

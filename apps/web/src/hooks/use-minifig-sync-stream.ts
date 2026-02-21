@@ -11,7 +11,7 @@ import type {
 
 const STREAM_URLS: Record<SyncOperation, string> = {
   'pull-inventory': '/api/minifigs/sync/pull-inventory/stream',
-  'research': '/api/minifigs/sync/research/stream',
+  research: '/api/minifigs/sync/research/stream',
   'create-listings': '/api/minifigs/sync/create-listings/stream',
 };
 
@@ -147,7 +147,7 @@ export function useMinifigSyncStream() {
         }));
       }
     },
-    [queryClient],
+    [queryClient]
   );
 
   const reset = useCallback(() => {

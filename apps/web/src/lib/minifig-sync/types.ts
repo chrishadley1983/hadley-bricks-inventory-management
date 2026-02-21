@@ -1,36 +1,25 @@
 import type { Database } from '@hadley-bricks/database';
 
 // Database row types
-export type MinifigSyncItem =
-  Database['public']['Tables']['minifig_sync_items']['Row'];
-export type MinifigSyncItemInsert =
-  Database['public']['Tables']['minifig_sync_items']['Insert'];
-export type MinifigSyncItemUpdate =
-  Database['public']['Tables']['minifig_sync_items']['Update'];
+export type MinifigSyncItem = Database['public']['Tables']['minifig_sync_items']['Row'];
+export type MinifigSyncItemInsert = Database['public']['Tables']['minifig_sync_items']['Insert'];
+export type MinifigSyncItemUpdate = Database['public']['Tables']['minifig_sync_items']['Update'];
 
-export type MinifigPriceCache =
-  Database['public']['Tables']['minifig_price_cache']['Row'];
-export type MinifigPriceCacheInsert =
-  Database['public']['Tables']['minifig_price_cache']['Insert'];
-export type MinifigPriceCacheUpdate =
-  Database['public']['Tables']['minifig_price_cache']['Update'];
+export type MinifigPriceCache = Database['public']['Tables']['minifig_price_cache']['Row'];
+export type MinifigPriceCacheInsert = Database['public']['Tables']['minifig_price_cache']['Insert'];
+export type MinifigPriceCacheUpdate = Database['public']['Tables']['minifig_price_cache']['Update'];
 
-export type MinifigRemovalQueue =
-  Database['public']['Tables']['minifig_removal_queue']['Row'];
+export type MinifigRemovalQueue = Database['public']['Tables']['minifig_removal_queue']['Row'];
 export type MinifigRemovalQueueInsert =
   Database['public']['Tables']['minifig_removal_queue']['Insert'];
 export type MinifigRemovalQueueUpdate =
   Database['public']['Tables']['minifig_removal_queue']['Update'];
 
-export type MinifigSyncJob =
-  Database['public']['Tables']['minifig_sync_jobs']['Row'];
-export type MinifigSyncJobInsert =
-  Database['public']['Tables']['minifig_sync_jobs']['Insert'];
-export type MinifigSyncJobUpdate =
-  Database['public']['Tables']['minifig_sync_jobs']['Update'];
+export type MinifigSyncJob = Database['public']['Tables']['minifig_sync_jobs']['Row'];
+export type MinifigSyncJobInsert = Database['public']['Tables']['minifig_sync_jobs']['Insert'];
+export type MinifigSyncJobUpdate = Database['public']['Tables']['minifig_sync_jobs']['Update'];
 
-export type MinifigSyncConfigRow =
-  Database['public']['Tables']['minifig_sync_config']['Row'];
+export type MinifigSyncConfigRow = Database['public']['Tables']['minifig_sync_config']['Row'];
 
 // Listing status enum
 export type ListingStatus =
@@ -46,12 +35,7 @@ export type ListingStatus =
   | 'ENDED';
 
 // Removal queue status
-export type RemovalStatus =
-  | 'PENDING'
-  | 'APPROVED'
-  | 'EXECUTED'
-  | 'FAILED'
-  | 'DISMISSED';
+export type RemovalStatus = 'PENDING' | 'APPROVED' | 'EXECUTED' | 'FAILED' | 'DISMISSED';
 
 // Job types
 export type MinifigJobType =
@@ -83,11 +67,7 @@ export interface MinifigSyncConfig {
 // Image types
 export interface SourcedImage {
   url: string;
-  source:
-    | 'google'
-    | 'rebrickable'
-    | 'bricklink'
-    | 'bricqer';
+  source: 'google' | 'rebrickable' | 'bricklink' | 'bricqer' | 'uploaded';
   type: 'sourced' | 'stock' | 'original';
 }
 

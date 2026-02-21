@@ -10,16 +10,9 @@ export type RetirementSource =
   | 'brickeconomy'
   | 'lego_official';
 
-export type RetirementStatus =
-  | 'available'
-  | 'retiring_soon'
-  | 'sold_out'
-  | 'retired';
+export type RetirementStatus = 'available' | 'retiring_soon' | 'sold_out' | 'retired';
 
-export type RetirementConfidence =
-  | 'confirmed'
-  | 'likely'
-  | 'speculative';
+export type RetirementConfidence = 'confirmed' | 'likely' | 'speculative';
 
 export interface RetirementSourceRecord {
   set_num: string;

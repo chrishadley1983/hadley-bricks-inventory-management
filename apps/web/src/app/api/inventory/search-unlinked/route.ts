@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
       // Just do a regular search
       const query = supabase
         .from('inventory_items')
-        .select('id, sku, amazon_asin, set_number, item_name, condition, storage_location, status, cost, listing_value, purchase_date, sold_date, created_at')
+        .select(
+          'id, sku, amazon_asin, set_number, item_name, condition, storage_location, status, cost, listing_value, purchase_date, sold_date, created_at'
+        )
         .or(`set_number.ilike.%${search}%,item_name.ilike.%${search}%,sku.ilike.%${search}%`)
         .order('created_at', { ascending: false })
         .limit(pageSize);

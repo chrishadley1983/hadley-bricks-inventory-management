@@ -11,7 +11,13 @@
 export type AsinSource = 'inventory' | 'discovery' | 'manual' | 'seeded';
 export type AsinStatus = 'active' | 'excluded' | 'pending_review';
 export type MatchConfidence = 'exact' | 'probable' | 'manual';
-export type SyncJobType = 'inventory_asins' | 'amazon_pricing' | 'bricklink_pricing' | 'asin_mapping' | 'ebay_pricing' | 'seeded_discovery';
+export type SyncJobType =
+  | 'inventory_asins'
+  | 'amazon_pricing'
+  | 'bricklink_pricing'
+  | 'asin_mapping'
+  | 'ebay_pricing'
+  | 'seeded_discovery';
 export type SyncJobStatus = 'idle' | 'running' | 'completed' | 'failed';
 export type ItemType = 'inventory' | 'seeded';
 export type DiscoveryStatus = 'pending' | 'found' | 'not_found' | 'multiple' | 'excluded';
@@ -399,24 +405,24 @@ export interface AmazonFBMProfitBreakdown {
   productCost: number;
 
   // Fee breakdown
-  referralFee: number;        // 15% of sale price
-  referralFeeRate: number;    // 0.15
+  referralFee: number; // 15% of sale price
+  referralFeeRate: number; // 0.15
   digitalServicesTax: number; // 2% of referral fee
-  dstRate: number;            // 0.02
-  vatOnFees: number;          // 20% of (referral + DST)
-  vatRate: number;            // 0.20
-  totalAmazonFee: number;     // Total fees (18.36% effective)
-  effectiveFeeRate: number;   // 0.1836
+  dstRate: number; // 0.02
+  vatOnFees: number; // 20% of (referral + DST)
+  vatRate: number; // 0.20
+  totalAmazonFee: number; // Total fees (18.36% effective)
+  effectiveFeeRate: number; // 0.1836
 
   // Shipping
-  shippingCost: number;       // £3 or £4 depending on price
-  shippingTier: string;       // Description of which tier
-  shippingThreshold: number;  // £14 threshold
+  shippingCost: number; // £3 or £4 depending on price
+  shippingTier: string; // Description of which tier
+  shippingThreshold: number; // £14 threshold
 
   // Results
-  netPayout: number;          // Sale price - fees - shipping
-  totalProfit: number;        // Net payout - product cost
-  roiPercent: number;         // (profit / cost) * 100
+  netPayout: number; // Sale price - fees - shipping
+  totalProfit: number; // Net payout - product cost
+  roiPercent: number; // (profit / cost) * 100
   profitMarginPercent: number; // (profit / sale price) * 100
 }
 

@@ -35,9 +35,9 @@ interface PurchaseCandidate {
   suggested_condition: 'New' | 'Used';
   status: 'new' | 'already_processed' | 'already_imported';
   skip_reason?: string;
-  bundle_group?: string;       // Shared group ID for bundle items (original order_reference)
-  bundle_total_cost?: number;  // Total cost of the bundle
-  bundle_index?: number;       // 1-based index within bundle
+  bundle_group?: string; // Shared group ID for bundle items (original order_reference)
+  bundle_total_cost?: number; // Total cost of the bundle
+  bundle_index?: number; // 1-based index within bundle
 }
 
 // Hadley API base URL (fallback for local dev without Gmail OAuth creds)
@@ -54,9 +54,7 @@ async function fetchEmailBody(emailId: string): Promise<string | null> {
 
   // Fall back to Hadley API
   try {
-    const response = await fetch(
-      `${HADLEY_API_BASE}/gmail/get?id=${encodeURIComponent(emailId)}`
-    );
+    const response = await fetch(`${HADLEY_API_BASE}/gmail/get?id=${encodeURIComponent(emailId)}`);
 
     if (!response.ok) {
       console.error(`[scan-emails] Gmail get failed for ${emailId}: ${response.status}`);
@@ -75,15 +73,17 @@ async function fetchEmailBody(emailId: string): Promise<string | null> {
  * Fetch emails matching a Gmail query.
  * Tries direct Gmail API first, falls back to Hadley API.
  */
-async function fetchEmails(query: string): Promise<Array<{
-  id: string;
-  threadId: string;
-  subject: string;
-  from: string;
-  date: string;
-  snippet: string;
-  body?: string;
-}>> {
+async function fetchEmails(query: string): Promise<
+  Array<{
+    id: string;
+    threadId: string;
+    subject: string;
+    from: string;
+    date: string;
+    snippet: string;
+    body?: string;
+  }>
+> {
   // Try direct Gmail API first
   if (isGmailConfigured()) {
     try {
@@ -173,8 +173,8 @@ function extractAllSetNumbers(text: string): string[] {
   if (multiParenMatch) {
     const nums = multiParenMatch[1]
       .split(/[,\s]+/)
-      .map(n => n.replace(/-\d$/, '').trim())
-      .filter(n => /^\d{4,5}$/.test(n));
+      .map((n) => n.replace(/-\d$/, '').trim())
+      .filter((n) => /^\d{4,5}$/.test(n));
     if (nums.length > 1) return nums;
     if (nums.length === 1) return nums;
   }
@@ -212,7 +212,9 @@ function parseVintedEmail(email: {
   // Handle double-quote variants (NOT single quotes - those match apostrophes in names like "Gabby's")
   // Vinted uses U+201E (opening „) and U+201C (closing ")
   const DQUOTES = '\u201C\u201D\u201E\u201F\u00AB\u00BB"';
-  const subjectMatch = email.subject.match(new RegExp(`Your receipt for\\s*[${DQUOTES}](.+?)[${DQUOTES}]`, 'i'));
+  const subjectMatch = email.subject.match(
+    new RegExp(`Your receipt for\\s*[${DQUOTES}](.+?)[${DQUOTES}]`, 'i')
+  );
   let subjectItemName: string;
 
   if (!subjectMatch) {
@@ -225,7 +227,12 @@ function parseVintedEmail(email: {
   }
 
   // Strip any residual quote characters from item name
-  subjectItemName = subjectItemName.replace(/^[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+|[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+$/g, '').trim();
+  subjectItemName = subjectItemName
+    .replace(
+      /^[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+|[\u201C\u201D\u201E\u201F\u00AB\u00BB"]+$/g,
+      ''
+    )
+    .trim();
 
   const content = email.body || email.snippet;
   const normalizedContent = content.replace(/[\r\n\s]+/g, ' ');
@@ -251,21 +258,23 @@ function parseVintedEmail(email: {
 
     if (bundleItems.length === 0) {
       // Couldn't extract items from body - return single candidate for review
-      return [{
-        source: 'Vinted',
-        order_reference: orderRef,
-        seller_username: seller,
-        item_name: subjectItemName,
-        set_number: null,
-        cost: totalCost,
-        purchase_date: purchaseDate,
-        email_id: email.id,
-        email_subject: email.subject,
-        email_date: email.date,
-        payment_method: 'Monzo Card',
-        suggested_condition: 'New',
-        skip_reason: 'no_set_number',
-      }];
+      return [
+        {
+          source: 'Vinted',
+          order_reference: orderRef,
+          seller_username: seller,
+          item_name: subjectItemName,
+          set_number: null,
+          cost: totalCost,
+          purchase_date: purchaseDate,
+          email_id: email.id,
+          email_subject: email.subject,
+          email_date: email.date,
+          payment_method: 'Monzo Card',
+          suggested_condition: 'New',
+          skip_reason: 'no_set_number',
+        },
+      ];
     }
 
     // Extract set numbers from all items, expanding multi-set listings
@@ -284,25 +293,27 @@ function parseVintedEmail(email: {
       }
     }
 
-    const allIdentified = expandedItems.every(i => i.setNumber !== null);
+    const allIdentified = expandedItems.every((i) => i.setNumber !== null);
 
     if (!allIdentified) {
       // If ANY item lacks a set number, return the whole bundle as 1 review candidate
-      return [{
-        source: 'Vinted',
-        order_reference: orderRef,
-        seller_username: seller,
-        item_name: bundleItems.join(' / '),
-        set_number: null,
-        cost: totalCost,
-        purchase_date: purchaseDate,
-        email_id: email.id,
-        email_subject: email.subject,
-        email_date: email.date,
-        payment_method: 'Monzo Card',
-        suggested_condition: 'New',
-        skip_reason: 'no_set_number',
-      }];
+      return [
+        {
+          source: 'Vinted',
+          order_reference: orderRef,
+          seller_username: seller,
+          item_name: bundleItems.join(' / '),
+          set_number: null,
+          cost: totalCost,
+          purchase_date: purchaseDate,
+          email_id: email.id,
+          email_subject: email.subject,
+          email_date: email.date,
+          payment_method: 'Monzo Card',
+          suggested_condition: 'New',
+          skip_reason: 'no_set_number',
+        },
+      ];
     }
 
     // All items identified - return N candidates with bundle grouping
@@ -364,21 +375,23 @@ function parseVintedEmail(email: {
 
   const setNumber = allSetNumbers[0] ?? null;
 
-  return [{
-    source: 'Vinted',
-    order_reference: orderRef,
-    seller_username: seller,
-    item_name: subjectItemName,
-    set_number: setNumber,
-    cost: totalCost,
-    purchase_date: purchaseDate,
-    email_id: email.id,
-    email_subject: email.subject,
-    email_date: email.date,
-    payment_method: 'Monzo Card',
-    suggested_condition: 'New',
-    skip_reason: setNumber ? undefined : 'no_set_number',
-  }];
+  return [
+    {
+      source: 'Vinted',
+      order_reference: orderRef,
+      seller_username: seller,
+      item_name: subjectItemName,
+      set_number: setNumber,
+      cost: totalCost,
+      purchase_date: purchaseDate,
+      email_id: email.id,
+      email_subject: email.subject,
+      email_date: email.date,
+      payment_method: 'Monzo Card',
+      suggested_condition: 'New',
+      skip_reason: setNumber ? undefined : 'no_set_number',
+    },
+  ];
 }
 
 /**
@@ -427,7 +440,7 @@ function parseEbayEmail(email: {
   // Try to extract set number from item name - look for 4-5 digit numbers
   // Pattern handles formats like: (40254), 40254, 75192-1
   const setNumberMatch = itemName.match(/\((\d{4,5})\)|(?:^|\s)(\d{4,5})(?:-\d)?(?:\s|$)/);
-  const setNumber = setNumberMatch ? (setNumberMatch[1] || setNumberMatch[2]) : null;
+  const setNumber = setNumberMatch ? setNumberMatch[1] || setNumberMatch[2] : null;
 
   // Infer condition from item name - default to New, mark Used only if explicit keywords
   const isUsed = /\bused\b|opened|built|incomplete|no box|played/i.test(itemName);
@@ -501,13 +514,17 @@ export async function GET(request: NextRequest) {
         const emailDate = new Date(email.date);
         if (emailDate < CUTOFF_DATE) {
           totalCutoffSkipped++;
-          console.log(`[scan-emails] Skipped Vinted email before cutoff: "${email.subject}" (${email.date})`);
+          console.log(
+            `[scan-emails] Skipped Vinted email before cutoff: "${email.subject}" (${email.date})`
+          );
           continue;
         }
 
         const candidates = parseVintedEmail(email);
         if (candidates.length === 0) {
-          console.warn(`[scan-emails] Failed to parse Vinted email: id=${email.id} subject="${email.subject}" date=${email.date}`);
+          console.warn(
+            `[scan-emails] Failed to parse Vinted email: id=${email.id} subject="${email.subject}" date=${email.date}`
+          );
           continue;
         }
         totalParsed++;
@@ -569,26 +586,32 @@ export async function GET(request: NextRequest) {
         `from:ebay@ebay.com subject:"You won" newer_than:${days}d`
       );
       // Deduplicate by email ID in case an email matches multiple queries
-      const ebayEmailMap = new Map<string, typeof ebayEmailsUk[number]>();
+      const ebayEmailMap = new Map<string, (typeof ebayEmailsUk)[number]>();
       for (const email of [...ebayEmailsUk, ...ebayEmailsCom, ...ebayWonUk, ...ebayWonCom]) {
         ebayEmailMap.set(email.id, email);
       }
       const ebayEmails = Array.from(ebayEmailMap.values());
       totalFetched += ebayEmails.length;
-      console.log(`[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, after dedup)`);
+      console.log(
+        `[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, after dedup)`
+      );
 
       for (const email of ebayEmails) {
         // Skip emails before cutoff date
         const emailDate = new Date(email.date);
         if (emailDate < CUTOFF_DATE) {
           totalCutoffSkipped++;
-          console.log(`[scan-emails] Skipped eBay email before cutoff: "${email.subject}" (${email.date})`);
+          console.log(
+            `[scan-emails] Skipped eBay email before cutoff: "${email.subject}" (${email.date})`
+          );
           continue;
         }
 
         const candidate = parseEbayEmail(email);
         if (!candidate || !candidate.email_id) {
-          console.warn(`[scan-emails] Failed to parse eBay email: id=${email.id} subject="${email.subject}" date=${email.date}`);
+          console.warn(
+            `[scan-emails] Failed to parse eBay email: id=${email.id} subject="${email.subject}" date=${email.date}`
+          );
           continue;
         }
         totalParsed++;
@@ -641,7 +664,9 @@ export async function GET(request: NextRequest) {
       ).length;
       const parseFailures = totalFetched - totalParsed - totalCutoffSkipped;
 
-      console.log(`[scan-emails] Summary: ${totalFetched} fetched, ${totalParsed} parsed, ${totalCutoffSkipped} cutoff-skipped, ${parseFailures} parse-failures, ${readyToImport.length} ready, ${needsReview.length} needs-review, ${alreadyProcessedCount} already-processed`);
+      console.log(
+        `[scan-emails] Summary: ${totalFetched} fetched, ${totalParsed} parsed, ${totalCutoffSkipped} cutoff-skipped, ${parseFailures} parse-failures, ${readyToImport.length} ready, ${needsReview.length} needs-review, ${alreadyProcessedCount} already-processed`
+      );
 
       return NextResponse.json({
         data: {

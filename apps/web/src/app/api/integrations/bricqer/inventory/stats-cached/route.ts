@@ -238,19 +238,17 @@ export async function POST() {
         send('progress', { phase: 'saving', message: 'Saving to cache...', percent: 100 });
 
         // Upsert cache
-        const { error: upsertError } = await supabase
-          .from('bricqer_stats_cache')
-          .upsert(
-            {
-              user_id: user.id,
-              lot_count: lotCount,
-              piece_count: totalQty,
-              inventory_value: totalValue,
-              storage_locations: storageLocations.length,
-              last_updated: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
+        const { error: upsertError } = await supabase.from('bricqer_stats_cache').upsert(
+          {
+            user_id: user.id,
+            lot_count: lotCount,
+            piece_count: totalQty,
+            inventory_value: totalValue,
+            storage_locations: storageLocations.length,
+            last_updated: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
 
         if (upsertError) {
           console.error('Error upserting cache:', upsertError);

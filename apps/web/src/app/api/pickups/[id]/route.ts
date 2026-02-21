@@ -10,7 +10,10 @@ import {
 const UpdatePickupSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  scheduled_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   scheduled_time: z.string().nullable().optional(),
   scheduled_end_time: z.string().nullable().optional(),
   address_line1: z.string().min(1).optional(),
@@ -31,10 +34,7 @@ const UpdatePickupSchema = z.object({
  * GET /api/pickups/[id]
  * Get a single pickup by ID
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -71,10 +71,7 @@ export async function GET(
  * PATCH /api/pickups/[id]
  * Update a pickup
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

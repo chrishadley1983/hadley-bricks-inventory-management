@@ -53,9 +53,7 @@ function getStatusIcon(status: string): React.ElementType {
   }
 }
 
-function getStatusVariant(
-  status: string
-): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'done':
     case 'verified':
@@ -120,9 +118,7 @@ function getColumns(onViewDetails: (feed: SyncFeed) => void): ColumnDef<SyncFeed
 
         return (
           <div className="flex flex-col gap-0.5">
-            <Badge variant="outline">
-              {row.original.is_dry_run ? 'Dry Run' : 'Live'}
-            </Badge>
+            <Badge variant="outline">{row.original.is_dry_run ? 'Dry Run' : 'Live'}</Badge>
             {isTwoPhase && (
               <Badge variant="secondary" className="text-xs">
                 {phase === 'price' ? 'Price' : phase === 'quantity' ? 'Qty' : '2-Phase'}
@@ -150,15 +146,11 @@ function getColumns(onViewDetails: (feed: SyncFeed) => void): ColumnDef<SyncFeed
 
         return (
           <div className="flex items-center gap-2 text-sm">
-            {(success_count ?? 0) > 0 && (
-              <span className="text-green-600">{success_count} ok</span>
-            )}
+            {(success_count ?? 0) > 0 && <span className="text-green-600">{success_count} ok</span>}
             {(warning_count ?? 0) > 0 && (
               <span className="text-yellow-600">{warning_count} warn</span>
             )}
-            {(error_count ?? 0) > 0 && (
-              <span className="text-red-600">{error_count} err</span>
-            )}
+            {(error_count ?? 0) > 0 && <span className="text-red-600">{error_count} err</span>}
           </div>
         );
       },
@@ -194,10 +186,7 @@ interface SyncFeedHistoryTableProps {
   isLoading?: boolean;
 }
 
-export function SyncFeedHistoryTable({
-  feeds,
-  isLoading,
-}: SyncFeedHistoryTableProps) {
+export function SyncFeedHistoryTable({ feeds, isLoading }: SyncFeedHistoryTableProps) {
   const [selectedFeedId, setSelectedFeedId] = useState<string | null>(null);
 
   const handleViewDetails = (feed: SyncFeed) => {

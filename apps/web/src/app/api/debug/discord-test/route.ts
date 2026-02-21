@@ -20,10 +20,14 @@ export async function GET() {
     }
 
     if (!discordService.isEnabled()) {
-      return NextResponse.json({
-        error: 'Discord not configured',
-        details: 'No Discord webhook URLs configured. Set DISCORD_WEBHOOK_* environment variables.',
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'Discord not configured',
+          details:
+            'No Discord webhook URLs configured. Set DISCORD_WEBHOOK_* environment variables.',
+        },
+        { status: 400 }
+      );
     }
 
     const results: Record<DiscordChannel, { sent: boolean; error?: string }> = {
@@ -37,7 +41,8 @@ export async function GET() {
     if (discordService.isChannelEnabled('alerts')) {
       const result = await discordService.send('alerts', {
         title: '🧪 Test Alert',
-        description: 'This is a test alert from Hadley Bricks.\n\nIf you see this, the #alerts channel is working!',
+        description:
+          'This is a test alert from Hadley Bricks.\n\nIf you see this, the #alerts channel is working!',
         color: DiscordColors.RED,
         fields: [
           { name: 'Test Field', value: 'Test Value', inline: true },
@@ -67,7 +72,8 @@ export async function GET() {
     if (discordService.isChannelEnabled('sync-status')) {
       const result = await discordService.send('sync-status', {
         title: '🔄 Test Sync Status',
-        description: 'This is a test sync status notification.\n\nSync operations will appear here.',
+        description:
+          'This is a test sync status notification.\n\nSync operations will appear here.',
         color: DiscordColors.BLUE,
       });
       results['sync-status'] = { sent: result.success, error: result.error };
@@ -89,8 +95,8 @@ export async function GET() {
     }
 
     const successCount = Object.values(results).filter((r) => r.sent).length;
-    const configuredCount = Object.values(results).filter(
-      (_, i) => discordService.isChannelEnabled(Object.keys(results)[i] as DiscordChannel)
+    const configuredCount = Object.values(results).filter((_, i) =>
+      discordService.isChannelEnabled(Object.keys(results)[i] as DiscordChannel)
     ).length;
 
     return NextResponse.json({

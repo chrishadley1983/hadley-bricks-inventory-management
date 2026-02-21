@@ -181,7 +181,7 @@ export function useRefreshJob(jobId: string | undefined, options?: { enabled?: b
   return useQuery({
     queryKey: refreshJobKeys.detail(jobId || ''),
     queryFn: () => fetchRefreshJob(jobId!),
-    enabled: !!jobId && (options?.enabled !== false),
+    enabled: !!jobId && options?.enabled !== false,
     staleTime: 10 * 1000, // 10 seconds
     refetchInterval: (query) => {
       // Poll while job is in progress

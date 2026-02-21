@@ -158,8 +158,7 @@ export class MonzoApiService {
       const { created, updated } = await this.upsertTransactions(userId, allTransactions);
 
       // Get the most recent transaction ID for incremental sync cursor
-      const newestTransactionId =
-        allTransactions.length > 0 ? allTransactions[0].id : undefined;
+      const newestTransactionId = allTransactions.length > 0 ? allTransactions[0].id : undefined;
 
       const completedAt = new Date();
 

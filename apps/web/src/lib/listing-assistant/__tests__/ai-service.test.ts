@@ -245,7 +245,8 @@ describe('AI Service', () => {
     it('should handle markdown-wrapped JSON response', async () => {
       const { analyzeImagesWithGemini } = await import('@/lib/ai/gemini-client');
 
-      const mockResponse = '```json\n{"altText":"Test","defectsNote":null,"suggestedFilename":"test"}\n```';
+      const mockResponse =
+        '```json\n{"altText":"Test","defectsNote":null,"suggestedFilename":"test"}\n```';
 
       (analyzeImagesWithGemini as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
 
@@ -386,10 +387,7 @@ describe('AI Service', () => {
 
   describe('editImageWithAI', () => {
     it('should return error indicating feature not available', async () => {
-      const result = await editImageWithAI(
-        'data:image/jpeg;base64,test',
-        'Remove dust spots'
-      );
+      const result = await editImageWithAI('data:image/jpeg;base64,test', 'Remove dust spots');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('not yet available');

@@ -6,7 +6,10 @@ import { MileageService } from '@/lib/services';
 const ExpenseTypeSchema = z.enum(['mileage', 'parking', 'toll', 'other']);
 
 const UpdateMileageSchema = z.object({
-  trackingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  trackingDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   destinationPostcode: z.string().min(1).optional(),
   milesTravelled: z.number().min(0).optional(),
   amountClaimed: z.number().min(0).optional(),
@@ -97,7 +100,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Handle not found or not authorized errors
     if (error instanceof Error && error.message.includes('No rows')) {
-      return NextResponse.json({ error: 'Mileage entry not found or not authorized' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Mileage entry not found or not authorized' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

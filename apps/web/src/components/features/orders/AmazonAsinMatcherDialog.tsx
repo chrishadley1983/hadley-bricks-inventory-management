@@ -17,15 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Loader2,
-  Search,
-  CheckCircle2,
-  Package,
-  MapPin,
-  AlertTriangle,
-  Link2,
-} from 'lucide-react';
+import { Loader2, Search, CheckCircle2, Package, MapPin, AlertTriangle, Link2 } from 'lucide-react';
 
 interface InventoryItem {
   id: string;
@@ -172,7 +164,8 @@ export function AmazonAsinMatcherDialog({
             Link Amazon Item to Inventory
           </DialogTitle>
           <DialogDescription>
-            Search for an inventory item to link to this ASIN. This will set the Amazon ASIN on the inventory item for future matching.
+            Search for an inventory item to link to this ASIN. This will set the Amazon ASIN on the
+            inventory item for future matching.
           </DialogDescription>
         </DialogHeader>
 
@@ -258,7 +251,10 @@ export function AmazonAsinMatcherDialog({
                               </Badge>
                             )}
                             {item.status === 'SOLD' && item.sold_platform && (
-                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-orange-600 border-orange-300"
+                              >
                                 {item.sold_platform}
                               </Badge>
                             )}

@@ -30,9 +30,6 @@ export async function GET() {
     return NextResponse.json({ data: excluded });
   } catch (error) {
     console.error('[GET /api/arbitrage/excluded] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

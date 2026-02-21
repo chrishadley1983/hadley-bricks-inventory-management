@@ -133,27 +133,33 @@ export class ModelTrainingService {
     const model = tf.sequential();
     const featureCount = getFeatureCount();
 
-    model.add(tf.layers.dense({
-      inputShape: [featureCount],
-      units: 64,
-      activation: 'relu',
-      kernelInitializer: 'heNormal',
-    }));
+    model.add(
+      tf.layers.dense({
+        inputShape: [featureCount],
+        units: 64,
+        activation: 'relu',
+        kernelInitializer: 'heNormal',
+      })
+    );
 
     model.add(tf.layers.dropout({ rate: 0.2 }));
 
-    model.add(tf.layers.dense({
-      units: 32,
-      activation: 'relu',
-      kernelInitializer: 'heNormal',
-    }));
+    model.add(
+      tf.layers.dense({
+        units: 32,
+        activation: 'relu',
+        kernelInitializer: 'heNormal',
+      })
+    );
 
     model.add(tf.layers.dropout({ rate: 0.1 }));
 
-    model.add(tf.layers.dense({
-      units: 2, // [1yr_appreciation, 3yr_appreciation]
-      activation: 'linear',
-    }));
+    model.add(
+      tf.layers.dense({
+        units: 2, // [1yr_appreciation, 3yr_appreciation]
+        activation: 'linear',
+      })
+    );
 
     model.compile({
       optimizer: tf.train.adam(LEARNING_RATE),
@@ -167,10 +173,7 @@ export class ModelTrainingService {
   /**
    * Convert training samples to a feature tensor.
    */
-  private samplesToFeatureTensor(
-    samples: TrainingSample[],
-    ctx: FeatureNormContext
-  ): tf.Tensor2D {
+  private samplesToFeatureTensor(samples: TrainingSample[], ctx: FeatureNormContext): tf.Tensor2D {
     const vectors = samples.map((s) => featuresToVector(s.features, ctx));
     return tf.tensor2d(vectors);
   }
@@ -248,29 +251,28 @@ export class ModelTrainingService {
     metrics: TrainingMetrics
   ): Promise<void> {
     // Serialize model to JSON + weights
-    await model.save(tf.io.withSaveHandler(async (artifacts) => {
-      const weightsData = artifacts.weightData;
-      const weightsSpec = artifacts.weightSpecs;
+    await model.save(
+      tf.io.withSaveHandler(async (artifacts) => {
+        const weightsData = artifacts.weightData;
+        const weightsSpec = artifacts.weightSpecs;
 
-      // Store the complete artifact as JSON in the database
-      // Using a simple approach: store model JSON + base64 weights in a config table
-      const artifact = {
-        model_topology: artifacts.modelTopology,
-        weight_specs: weightsSpec,
-        weight_data_base64: weightsData
-          ? Buffer.from(new Uint8Array(weightsData as ArrayBuffer)).toString('base64')
-          : null,
-        norm_context: normContext,
-        model_version: modelVersion,
-        trained_at: new Date().toISOString(),
-        metrics,
-      };
+        // Store the complete artifact as JSON in the database
+        // Using a simple approach: store model JSON + base64 weights in a config table
+        const artifact = {
+          model_topology: artifacts.modelTopology,
+          weight_specs: weightsSpec,
+          weight_data_base64: weightsData
+            ? Buffer.from(new Uint8Array(weightsData as ArrayBuffer)).toString('base64')
+            : null,
+          norm_context: normContext,
+          model_version: modelVersion,
+          trained_at: new Date().toISOString(),
+          metrics,
+        };
 
-      // Store as a sentinel row with data_quality='model_artifact'
-      // so it's excluded from training queries that filter in('data_quality', ['good', 'partial'])
-      const { error } = await this.supabase
-        .from('investment_historical')
-        .upsert(
+        // Store as a sentinel row with data_quality='model_artifact'
+        // so it's excluded from training queries that filter in('data_quality', ['good', 'partial'])
+        const { error } = await this.supabase.from('investment_historical').upsert(
           {
             set_num: '__model_artifact__',
             data_quality: 'model_artifact',
@@ -281,20 +283,21 @@ export class ModelTrainingService {
           { onConflict: 'set_num' }
         );
 
-      if (error) {
-        console.error('[ModelTraining] Error saving model artifact:', error.message);
-        throw error;
-      }
+        if (error) {
+          console.error('[ModelTraining] Error saving model artifact:', error.message);
+          throw error;
+        }
 
-      console.log(`[ModelTraining] Model ${modelVersion} saved to database`);
+        console.log(`[ModelTraining] Model ${modelVersion} saved to database`);
 
-      return {
-        modelArtifactsInfo: {
-          dateSaved: new Date(),
-          modelTopologyType: 'JSON' as const,
-        },
-      };
-    }));
+        return {
+          modelArtifactsInfo: {
+            dateSaved: new Date(),
+            modelTopologyType: 'JSON' as const,
+          },
+        };
+      })
+    );
 
     return;
   }
@@ -305,7 +308,11 @@ export class ModelTrainingService {
    */
   static async loadModel(
     supabase: SupabaseClient
-  ): Promise<{ model: tf.Sequential; normContext: FeatureNormContext; modelVersion: string } | null> {
+  ): Promise<{
+    model: tf.Sequential;
+    normContext: FeatureNormContext;
+    modelVersion: string;
+  } | null> {
     const { data, error } = await supabase
       .from('investment_historical')
       .select('*')
@@ -335,11 +342,7 @@ export class ModelTrainingService {
         : undefined;
 
       const model = (await tf.loadLayersModel(
-        tf.io.fromMemory(
-          artifact.model_topology,
-          artifact.weight_specs,
-          weightData
-        )
+        tf.io.fromMemory(artifact.model_topology, artifact.weight_specs, weightData)
       )) as tf.Sequential;
 
       return {

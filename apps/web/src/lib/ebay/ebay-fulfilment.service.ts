@@ -209,7 +209,10 @@ export class EbayFulfilmentService {
         } catch (error) {
           // Some orders may not have fulfilments yet
           if (!(error instanceof EbayApiError && error.statusCode === 404)) {
-            console.error(`[EbayFulfilmentService] Error fetching fulfilments for order ${order.orderId}:`, error);
+            console.error(
+              `[EbayFulfilmentService] Error fetching fulfilments for order ${order.orderId}:`,
+              error
+            );
           }
         }
       }
@@ -247,7 +250,10 @@ export class EbayFulfilmentService {
   /**
    * Sync a single order by ID
    */
-  async syncOrder(userId: string, ebayOrderId: string): Promise<{ success: boolean; error?: string }> {
+  async syncOrder(
+    userId: string,
+    ebayOrderId: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const accessToken = await this.authService.getAccessToken(userId);
       if (!accessToken) {
@@ -306,7 +312,8 @@ export class EbayFulfilmentService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from('ebay_orders')
-      .select(`
+      .select(
+        `
         id,
         ebay_order_id,
         buyer_username,
@@ -321,7 +328,8 @@ export class EbayFulfilmentService {
           fulfilment_status,
           item_location
         )
-      `)
+      `
+      )
       .eq('user_id', userId);
 
     if (options.unfulfilledOnly !== false) {

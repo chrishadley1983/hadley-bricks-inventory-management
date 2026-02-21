@@ -26,10 +26,7 @@ export async function GET(request: NextRequest) {
     // Parse query parameters
     const platform = searchParams.get('platform') || 'amazon';
     const page = parseInt(searchParams.get('page') || '1', 10);
-    const pageSize = Math.min(
-      parseInt(searchParams.get('pageSize') || '50', 10),
-      100
-    );
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '50', 10), 100);
 
     // Build filters
     const filters: ListingFilters = {};
@@ -81,8 +78,7 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/platform-stock] Error:', error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : 'Internal server error',
+        error: error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500 }
     );

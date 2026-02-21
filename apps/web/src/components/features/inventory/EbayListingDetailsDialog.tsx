@@ -8,22 +8,13 @@
  */
 
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -474,10 +465,7 @@ export function EbayListingDetailsDialog({
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Quality Review
                   {audit.qualityScore !== null && (
-                    <Badge
-                      variant={getGradeVariant(audit.qualityScore)}
-                      className="ml-2 text-xs"
-                    >
+                    <Badge variant={getGradeVariant(audit.qualityScore)} className="ml-2 text-xs">
                       {audit.qualityScore}
                     </Badge>
                   )}

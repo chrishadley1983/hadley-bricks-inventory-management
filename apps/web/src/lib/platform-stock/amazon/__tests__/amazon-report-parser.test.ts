@@ -84,13 +84,61 @@ describe('Amazon Report Parser', () => {
       it('should parse multiple listings', () => {
         const report = createReport([
           [
-            'Item 1', '', 'L001', 'SKU-001', '10.00', '5', '', '', '', '11', '', '', 'ASIN001', '0', 'DEFAULT', '', 'Active',
+            'Item 1',
+            '',
+            'L001',
+            'SKU-001',
+            '10.00',
+            '5',
+            '',
+            '',
+            '',
+            '11',
+            '',
+            '',
+            'ASIN001',
+            '0',
+            'DEFAULT',
+            '',
+            'Active',
           ],
           [
-            'Item 2', '', 'L002', 'SKU-002', '20.00', '3', '', '', '', '11', '', '', 'ASIN002', '0', 'AMAZON_EU', '', 'Active',
+            'Item 2',
+            '',
+            'L002',
+            'SKU-002',
+            '20.00',
+            '3',
+            '',
+            '',
+            '',
+            '11',
+            '',
+            '',
+            'ASIN002',
+            '0',
+            'AMAZON_EU',
+            '',
+            'Active',
           ],
           [
-            'Item 3', '', 'L003', 'SKU-003', '30.00', '8', '', '', '', '11', '', '', 'ASIN003', '0', 'DEFAULT', '', 'Inactive',
+            'Item 3',
+            '',
+            'L003',
+            'SKU-003',
+            '30.00',
+            '8',
+            '',
+            '',
+            '',
+            '11',
+            '',
+            '',
+            'ASIN003',
+            '0',
+            'DEFAULT',
+            '',
+            'Inactive',
           ],
         ]);
 
@@ -118,7 +166,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map Inactive status', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', '', '', 'Inactive'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Inactive',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -127,7 +193,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map Incomplete status', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', '', '', 'Incomplete'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Incomplete',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -136,7 +220,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map Out of Stock status', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '0', '', '', '', '', '', '', 'ASIN', '', '', '', 'out of stock'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '0',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'out of stock',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -145,7 +247,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map hyphenated out-of-stock status', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '0', '', '', '', '', '', '', 'ASIN', '', '', '', 'out-of-stock'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '0',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'out-of-stock',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -154,7 +274,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map unknown status to Unknown', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', '', '', 'some-other-status'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'some-other-status',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -174,7 +312,25 @@ describe('Amazon Report Parser', () => {
     describe('fulfillment channel mapping', () => {
       it('should map AMAZON_EU to FBA', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'AMAZON_EU', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'AMAZON_EU',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -183,7 +339,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map AMAZON_NA to FBA', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'AMAZON_NA', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'AMAZON_NA',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -192,7 +366,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map AFN to FBA', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'AFN', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'AFN',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -201,7 +393,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map DEFAULT to FBM', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'DEFAULT', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'DEFAULT',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -210,7 +420,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map MFN to FBM', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'MFN', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'MFN',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -219,7 +447,25 @@ describe('Amazon Report Parser', () => {
 
       it('should return original value for unknown channel', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', '', '', 'ASIN', '', 'CUSTOM_CHANNEL', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            'CUSTOM_CHANNEL',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -239,7 +485,25 @@ describe('Amazon Report Parser', () => {
     describe('item condition mapping', () => {
       it('should map condition code 11 to New', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '11', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '11',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -284,7 +548,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map condition code 10 to Refurbished', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '10', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '10',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -293,7 +575,25 @@ describe('Amazon Report Parser', () => {
 
       it('should map text "new" to New', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', 'new', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            'new',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -302,7 +602,25 @@ describe('Amazon Report Parser', () => {
 
       it('should return original value for unknown condition', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', 'custom-condition', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            'custom-condition',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -322,7 +640,25 @@ describe('Amazon Report Parser', () => {
 
       it('should parse "yes" as true', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', 'yes', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            'yes',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -331,7 +667,25 @@ describe('Amazon Report Parser', () => {
 
       it('should parse "true" as true', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', 'true', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            'true',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -349,7 +703,25 @@ describe('Amazon Report Parser', () => {
 
       it('should parse "no" as false', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', 'no', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            'no',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -358,7 +730,25 @@ describe('Amazon Report Parser', () => {
 
       it('should parse "false" as false', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '1', '', '', '', '', 'false', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            'false',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -378,7 +768,25 @@ describe('Amazon Report Parser', () => {
     describe('numeric field parsing', () => {
       it('should parse price as float', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '99.99', '1', '', '', '', '', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '99.99',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -396,7 +804,25 @@ describe('Amazon Report Parser', () => {
 
       it('should parse pending quantity as integer', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', '25', '', '', '', '', '', '', 'ASIN', '3', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            '25',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '3',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -423,7 +849,25 @@ describe('Amazon Report Parser', () => {
 
       it('should handle invalid price as null', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', 'not-a-number', '1', '', '', '', '', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            'not-a-number',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -432,7 +876,25 @@ describe('Amazon Report Parser', () => {
 
       it('should handle invalid quantity as 0', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU', '10', 'not-a-number', '', '', '', '', '', '', 'ASIN', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU',
+            '10',
+            'not-a-number',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -443,9 +905,45 @@ describe('Amazon Report Parser', () => {
     describe('row skipping', () => {
       it('should skip rows without SKU and ASIN', () => {
         const report = createReport([
-          ['Item', '', '', 'SKU-001', '10', '1', '', '', '', '', '', '', 'ASIN001', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU-001',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN001',
+            '',
+            '',
+            '',
+            'Active',
+          ],
           ['Item No IDs', '', '', '', '10', '1', '', '', '', '', '', '', '', '', '', '', 'Active'],
-          ['Item', '', '', 'SKU-002', '20', '2', '', '', '', '', '', '', 'ASIN002', '', '', '', 'Active'],
+          [
+            'Item',
+            '',
+            '',
+            'SKU-002',
+            '20',
+            '2',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN002',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -457,9 +955,28 @@ describe('Amazon Report Parser', () => {
       });
 
       it('should skip empty lines', () => {
-        const content = createReport([
-          ['Item', '', '', 'SKU-001', '10', '1', '', '', '', '', '', '', 'ASIN001', '', '', '', 'Active'],
-        ]) + '\n\n\n';
+        const content =
+          createReport([
+            [
+              'Item',
+              '',
+              '',
+              'SKU-001',
+              '10',
+              '1',
+              '',
+              '',
+              '',
+              '',
+              '',
+              '',
+              'ASIN001',
+              '',
+              '',
+              '',
+              'Active',
+            ],
+          ]) + '\n\n\n';
 
         const result = parseAmazonListingsReport(content);
 
@@ -510,8 +1027,7 @@ describe('Amazon Report Parser', () => {
       });
 
       it('should return error for missing required columns', () => {
-        const report = 'item-name\tprice\n' +
-          'Test Item\t10.00';
+        const report = 'item-name\tprice\n' + 'Test Item\t10.00';
 
         const result = parseAmazonListingsReport(report);
 
@@ -523,9 +1039,63 @@ describe('Amazon Report Parser', () => {
 
       it('should track total rows correctly', () => {
         const report = createReport([
-          ['Item 1', '', '', 'SKU-001', '10', '1', '', '', '', '', '', '', 'ASIN001', '', '', '', 'Active'],
-          ['Item 2', '', '', 'SKU-002', '20', '2', '', '', '', '', '', '', 'ASIN002', '', '', '', 'Active'],
-          ['Item 3', '', '', 'SKU-003', '30', '3', '', '', '', '', '', '', 'ASIN003', '', '', '', 'Active'],
+          [
+            'Item 1',
+            '',
+            '',
+            'SKU-001',
+            '10',
+            '1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN001',
+            '',
+            '',
+            '',
+            'Active',
+          ],
+          [
+            'Item 2',
+            '',
+            '',
+            'SKU-002',
+            '20',
+            '2',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN002',
+            '',
+            '',
+            '',
+            'Active',
+          ],
+          [
+            'Item 3',
+            '',
+            '',
+            'SKU-003',
+            '30',
+            '3',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'ASIN003',
+            '',
+            '',
+            '',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -537,7 +1107,25 @@ describe('Amazon Report Parser', () => {
     describe('raw row storage', () => {
       it('should store all column values in rawRow', () => {
         const report = createReport([
-          ['Test Item', 'Description', 'L001', 'SKU-001', '10.00', '5', '2024-01-01', 'ASIN', 'Note', '11', 'y', 'n', 'B12345', '0', 'DEFAULT', 'Standard', 'Active'],
+          [
+            'Test Item',
+            'Description',
+            'L001',
+            'SKU-001',
+            '10.00',
+            '5',
+            '2024-01-01',
+            'ASIN',
+            'Note',
+            '11',
+            'y',
+            'n',
+            'B12345',
+            '0',
+            'DEFAULT',
+            'Standard',
+            'Active',
+          ],
         ]);
 
         const result = parseAmazonListingsReport(report);
@@ -556,7 +1144,8 @@ describe('Amazon Report Parser', () => {
 
     describe('line ending handling', () => {
       it('should handle Unix line endings (LF)', () => {
-        const content = 'item-name\tseller-sku\tproduct-id\tquantity\n' +
+        const content =
+          'item-name\tseller-sku\tproduct-id\tquantity\n' +
           'Item 1\tSKU-001\tASIN001\t5\n' +
           'Item 2\tSKU-002\tASIN002\t3';
 
@@ -566,7 +1155,8 @@ describe('Amazon Report Parser', () => {
       });
 
       it('should handle Windows line endings (CRLF)', () => {
-        const content = 'item-name\tseller-sku\tproduct-id\tquantity\r\n' +
+        const content =
+          'item-name\tseller-sku\tproduct-id\tquantity\r\n' +
           'Item 1\tSKU-001\tASIN001\t5\r\n' +
           'Item 2\tSKU-002\tASIN002\t3';
 
@@ -583,8 +1173,8 @@ describe('Amazon Report Parser', () => {
 
   describe('getReportColumns', () => {
     it('should extract column names from header', () => {
-      const content = 'item-name\tseller-sku\tproduct-id\tquantity\n' +
-        'Test Item\tSKU-001\tASIN001\t5';
+      const content =
+        'item-name\tseller-sku\tproduct-id\tquantity\n' + 'Test Item\tSKU-001\tASIN001\t5';
 
       const columns = getReportColumns(content);
 
@@ -607,8 +1197,7 @@ describe('Amazon Report Parser', () => {
     });
 
     it('should trim whitespace from column names', () => {
-      const content = '  item-name  \t  seller-sku  \n' +
-        'Test Item\tSKU-001';
+      const content = '  item-name  \t  seller-sku  \n' + 'Test Item\tSKU-001';
 
       const columns = getReportColumns(content);
 

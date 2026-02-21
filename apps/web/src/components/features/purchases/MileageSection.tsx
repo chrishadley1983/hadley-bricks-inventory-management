@@ -75,7 +75,11 @@ interface MileageSectionProps {
   readOnly?: boolean;
 }
 
-export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: MileageSectionProps) {
+export function MileageSection({
+  purchaseId,
+  purchaseDate,
+  readOnly = false,
+}: MileageSectionProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -196,9 +200,7 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
         </CardHeader>
         <CardContent>
           <Alert>
-            <AlertDescription>
-              Save the purchase first to add mileage tracking.
-            </AlertDescription>
+            <AlertDescription>Save the purchase first to add mileage tracking.</AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -231,7 +233,9 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
               <div className="text-xs text-muted-foreground">Total Miles</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{formatCurrency(mileageSummary.totalMileageCost)}</div>
+              <div className="text-2xl font-bold">
+                {formatCurrency(mileageSummary.totalMileageCost)}
+              </div>
               <div className="text-xs text-muted-foreground">Mileage Cost</div>
             </div>
             <div className="text-center">
@@ -253,7 +257,8 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
         ) : entries.length > 0 ? (
           <div className="space-y-2">
             {entries.map((entry) => {
-              const TypeIcon = EXPENSE_TYPES.find((t) => t.value === entry.expense_type)?.icon || Car;
+              const TypeIcon =
+                EXPENSE_TYPES.find((t) => t.value === entry.expense_type)?.icon || Car;
               return (
                 <div
                   key={entry.id}
@@ -415,7 +420,8 @@ export function MileageSection({ purchaseId, purchaseDate, readOnly = false }: M
               {expenseType === 'mileage' && !homeAddress && (
                 <Alert>
                   <AlertDescription>
-                    Set your home address in Report Settings to enable automatic distance calculation.
+                    Set your home address in Report Settings to enable automatic distance
+                    calculation.
                   </AlertDescription>
                 </Alert>
               )}

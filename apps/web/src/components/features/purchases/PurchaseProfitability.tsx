@@ -4,14 +4,7 @@ import { usePurchaseProfitability } from '@/hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import {
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  Clock,
-  BarChart3,
-  Upload,
-} from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, Clock, BarChart3, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PurchaseProfitabilityProps {
@@ -154,97 +147,97 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
 
         {/* Financial Breakdown Grid - only show if we have inventory items */}
         {data.totalItems > 0 && (
-        <div className="grid grid-cols-2 gap-4">
-          {/* Realised Column */}
-          <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-sm">Realised</h4>
-              <Badge variant="outline" className="text-xs">
-                {data.soldItems} items
-              </Badge>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Revenue</span>
-                <span className="font-medium">{formatCurrency(data.realisedRevenue)}</span>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Realised Column */}
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm">Realised</h4>
+                <Badge variant="outline" className="text-xs">
+                  {data.soldItems} items
+                </Badge>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fees</span>
-                <span className="font-medium text-red-600">
-                  {data.realisedFees > 0 ? `-${formatCurrency(data.realisedFees)}` : '-'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Cost</span>
-                <span className="font-medium text-red-600">
-                  {data.realisedCost > 0 ? `-${formatCurrency(data.realisedCost)}` : '-'}
-                </span>
-              </div>
-              <div className="border-t pt-2">
+              <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="font-medium">Profit</span>
-                  <span
-                    className={cn(
-                      'font-bold',
-                      data.realisedProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                    )}
-                  >
-                    {formatCurrency(data.realisedProfit)}
+                  <span className="text-muted-foreground">Revenue</span>
+                  <span className="font-medium">{formatCurrency(data.realisedRevenue)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fees</span>
+                  <span className="font-medium text-red-600">
+                    {data.realisedFees > 0 ? `-${formatCurrency(data.realisedFees)}` : '-'}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Margin</span>
-                  <span>{formatPercent(data.realisedMarginPercent)}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cost</span>
+                  <span className="font-medium text-red-600">
+                    {data.realisedCost > 0 ? `-${formatCurrency(data.realisedCost)}` : '-'}
+                  </span>
+                </div>
+                <div className="border-t pt-2">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Profit</span>
+                    <span
+                      className={cn(
+                        'font-bold',
+                        data.realisedProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                      )}
+                    >
+                      {formatCurrency(data.realisedProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>Margin</span>
+                    <span>{formatPercent(data.realisedMarginPercent)}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Unrealised Column */}
-          <div className="space-y-3 rounded-lg border p-4 border-dashed">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-sm">Unrealised</h4>
-              <Badge variant="outline" className="text-xs">
-                {data.listedItems} items
-              </Badge>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Listing Value</span>
-                <span className="font-medium">{formatCurrency(data.unrealisedValue)}</span>
+            {/* Unrealised Column */}
+            <div className="space-y-3 rounded-lg border p-4 border-dashed">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm">Unrealised</h4>
+                <Badge variant="outline" className="text-xs">
+                  {data.listedItems} items
+                </Badge>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Est. Fees</span>
-                <span className="font-medium text-red-600">
-                  {data.estimatedFees > 0 ? `-${formatCurrency(data.estimatedFees)}` : '-'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Cost</span>
-                <span className="font-medium text-red-600">
-                  {data.unrealisedCost > 0 ? `-${formatCurrency(data.unrealisedCost)}` : '-'}
-                </span>
-              </div>
-              <div className="border-t pt-2">
+              <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="font-medium">Projected</span>
-                  <span
-                    className={cn(
-                      'font-bold',
-                      data.unrealisedProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                    )}
-                  >
-                    {formatCurrency(data.unrealisedProfit)}
+                  <span className="text-muted-foreground">Listing Value</span>
+                  <span className="font-medium">{formatCurrency(data.unrealisedValue)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Est. Fees</span>
+                  <span className="font-medium text-red-600">
+                    {data.estimatedFees > 0 ? `-${formatCurrency(data.estimatedFees)}` : '-'}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Margin</span>
-                  <span>{formatPercent(data.unrealisedMarginPercent)}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cost</span>
+                  <span className="font-medium text-red-600">
+                    {data.unrealisedCost > 0 ? `-${formatCurrency(data.unrealisedCost)}` : '-'}
+                  </span>
+                </div>
+                <div className="border-t pt-2">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Projected</span>
+                    <span
+                      className={cn(
+                        'font-bold',
+                        data.unrealisedProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                      )}
+                    >
+                      {formatCurrency(data.unrealisedProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>Margin</span>
+                    <span>{formatPercent(data.unrealisedMarginPercent)}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* BrickLink Uploads Section */}
@@ -262,24 +255,39 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Selling Price</span>
-                <span className="font-medium">{formatCurrency(data.uploadTotalSellingPrice ?? 0)}</span>
+                <span className="font-medium">
+                  {formatCurrency(data.uploadTotalSellingPrice ?? 0)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fees (10%)</span>
                 <span className="font-medium text-red-600">
-                  {(data.uploadTotalFees ?? 0) > 0 ? `-${formatCurrency(data.uploadTotalFees ?? 0)}` : '-'}
+                  {(data.uploadTotalFees ?? 0) > 0
+                    ? `-${formatCurrency(data.uploadTotalFees ?? 0)}`
+                    : '-'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Cost</span>
                 <span className="font-medium text-red-600">
-                  {(data.uploadTotalCost ?? 0) > 0 ? `-${formatCurrency(data.uploadTotalCost ?? 0)}` : '-'}
+                  {(data.uploadTotalCost ?? 0) > 0
+                    ? `-${formatCurrency(data.uploadTotalCost ?? 0)}`
+                    : '-'}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Realised ({((data.uploadRealisedRevenue ?? 0) / (data.uploadTotalSellingPrice || 1) * 100).toFixed(0)}%)</span>
-                  <span className="text-green-600">{formatCurrency(data.uploadRealisedRevenue ?? 0)}</span>
+                  <span>
+                    Realised (
+                    {(
+                      ((data.uploadRealisedRevenue ?? 0) / (data.uploadTotalSellingPrice || 1)) *
+                      100
+                    ).toFixed(0)}
+                    %)
+                  </span>
+                  <span className="text-green-600">
+                    {formatCurrency(data.uploadRealisedRevenue ?? 0)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Unrealised</span>
@@ -327,7 +335,8 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
                 ) : (
                   <>
                     Revenue: {formatCurrency(data.totalProjectedRevenue)} | Fees:{' '}
-                    {formatCurrency(data.totalProjectedFees)} | Cost: {formatCurrency(data.totalCost)}
+                    {formatCurrency(data.totalProjectedFees)} | Cost:{' '}
+                    {formatCurrency(data.totalCost)}
                   </>
                 )}
               </p>
@@ -348,13 +357,11 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
                   {formatCurrency(totalProfit)}
                 </span>
               </div>
-              <p
-                className={cn(
-                  'text-sm',
-                  isProfitable ? 'text-green-600' : 'text-red-600'
-                )}
-              >
-                {formatPercent(hasUploads ? (data.combinedMarginPercent ?? null) : data.blendedMarginPercent)} margin
+              <p className={cn('text-sm', isProfitable ? 'text-green-600' : 'text-red-600')}>
+                {formatPercent(
+                  hasUploads ? (data.combinedMarginPercent ?? null) : data.blendedMarginPercent
+                )}{' '}
+                margin
               </p>
             </div>
           </div>
@@ -365,9 +372,7 @@ export function PurchaseProfitability({ purchaseId }: PurchaseProfitabilityProps
           <div className="flex items-center gap-4 text-sm border-t pt-4">
             <Clock className="h-4 w-4 text-muted-foreground" />
             <div className="flex-1">
-              <span className="font-medium">
-                {data.itemsSoldPerWeek?.toFixed(1)} items/week
-              </span>
+              <span className="font-medium">{data.itemsSoldPerWeek?.toFixed(1)} items/week</span>
               <span className="text-muted-foreground ml-2">
                 since first listing ({data.daysSinceFirstListing} days ago)
               </span>

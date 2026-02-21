@@ -62,7 +62,10 @@ function logPerfEntry(
 ): void {
   // Console log
   const contextStr = context
-    ? ' ' + Object.entries(context).map(([k, v]) => `${k}=${v}`).join(' ')
+    ? ' ' +
+      Object.entries(context)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ')
     : '';
 
   if (type === 'end') {
@@ -163,11 +166,7 @@ export function usePerfPage(pageName: string): void {
  * Usage:
  *   usePerfQuery('inventory-list', isLoading, data?.length);
  */
-export function usePerfQuery(
-  queryName: string,
-  isLoading: boolean,
-  resultCount?: number
-): void {
+export function usePerfQuery(queryName: string, isLoading: boolean, resultCount?: number): void {
   const startTime = useRef<number>(0);
   const hasLoggedStart = useRef(false);
   const hasLoggedEnd = useRef(false);

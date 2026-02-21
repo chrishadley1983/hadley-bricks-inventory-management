@@ -251,10 +251,7 @@ export const MONZO_CATEGORY_LABELS: Record<MonzoCategory, string> = {
 /**
  * Format amount from minor units (pence) to display string
  */
-export function formatMonzoAmount(
-  amountInPence: number,
-  currency: string = 'GBP'
-): string {
+export function formatMonzoAmount(amountInPence: number, currency: string = 'GBP'): string {
   const amount = amountInPence / 100;
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',

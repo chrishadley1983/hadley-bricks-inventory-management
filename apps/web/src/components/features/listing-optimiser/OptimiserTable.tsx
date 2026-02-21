@@ -12,13 +12,16 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Package, ArrowUpDown, ArrowUp, ArrowDown, Clock, MessageSquare } from 'lucide-react';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  ExternalLink,
+  Package,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Clock,
+  MessageSquare,
+} from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { OptimiserListing, SortConfig } from './types';
 
 interface OptimiserTableProps {
@@ -242,7 +245,9 @@ export function OptimiserTable({
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedIds.has(listing.itemId)}
-                    onCheckedChange={(checked: boolean | 'indeterminate') => handleRowSelect(listing.itemId, checked)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      handleRowSelect(listing.itemId, checked)
+                    }
                     aria-label={`Select ${listing.title}`}
                   />
                 </TableCell>
@@ -278,28 +283,41 @@ export function OptimiserTable({
                             {listing.pendingOfferCount > 0 && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="h-5 px-1.5 text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700">
+                                  <Badge
+                                    variant="outline"
+                                    className="h-5 px-1.5 text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700"
+                                  >
                                     <MessageSquare className="h-3 w-3 mr-0.5" />
                                     {listing.pendingOfferCount}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>{listing.pendingOfferCount} pending offer{listing.pendingOfferCount > 1 ? 's' : ''}</p>
-                                  <p className="text-xs text-muted-foreground">Title changes blocked</p>
+                                  <p>
+                                    {listing.pendingOfferCount} pending offer
+                                    {listing.pendingOfferCount > 1 ? 's' : ''}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Title changes blocked
+                                  </p>
                                 </TooltipContent>
                               </Tooltip>
                             )}
                             {listing.endsWithin12Hours && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="h-5 px-1.5 text-xs bg-red-50 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700">
+                                  <Badge
+                                    variant="outline"
+                                    className="h-5 px-1.5 text-xs bg-red-50 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
+                                  >
                                     <Clock className="h-3 w-3 mr-0.5" />
                                     &lt;12h
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>Ends within 12 hours</p>
-                                  <p className="text-xs text-muted-foreground">Title changes blocked</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Title changes blocked
+                                  </p>
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -315,9 +333,7 @@ export function OptimiserTable({
                 <TableCell className="text-right text-muted-foreground">
                   {listing.listingAge}d
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {listing.views}
-                </TableCell>
+                <TableCell className="text-right text-muted-foreground">{listing.views}</TableCell>
                 <TableCell className="text-right">
                   {listing.watchers > 0 ? (
                     <Badge variant="secondary">{listing.watchers}</Badge>

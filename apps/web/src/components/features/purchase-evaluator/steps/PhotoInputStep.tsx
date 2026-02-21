@@ -16,11 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { useImageDrop, type UploadedImage } from '@/hooks/use-photo-analysis';
 import type { TargetPlatform } from '@/lib/purchase-evaluator';
@@ -182,8 +178,8 @@ export function PhotoInputStep({
             Upload Photos
           </CardTitle>
           <CardDescription>
-            Upload photos of the LEGO lot you want to evaluate. Our AI will identify
-            sets, minifigures, and parts, then assess their condition.
+            Upload photos of the LEGO lot you want to evaluate. Our AI will identify sets,
+            minifigures, and parts, then assess their condition.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -238,7 +234,8 @@ export function PhotoInputStep({
             </div>
 
             <p className="text-xs text-muted-foreground mt-4">
-              Supports JPEG, PNG, WebP, GIF. Maximum 10 images. You can also press Ctrl+V anywhere on this page.
+              Supports JPEG, PNG, WebP, GIF. Maximum 10 images. You can also press Ctrl+V anywhere
+              on this page.
             </p>
           </div>
 
@@ -287,8 +284,8 @@ export function PhotoInputStep({
             Listing Description (Optional)
           </CardTitle>
           <CardDescription>
-            Paste the seller&apos;s listing description to help with identification.
-            This is useful for auction screenshots where set numbers may not be visible.
+            Paste the seller&apos;s listing description to help with identification. This is useful
+            for auction screenshots where set numbers may not be visible.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -433,9 +430,9 @@ export function PhotoInputStep({
             {/* Info Box */}
             <div className="rounded-md bg-amber-100 p-3 text-sm">
               <p className="text-amber-800">
-                <strong>How it works:</strong> We&apos;ll calculate the maximum bid you should enter,
-                accounting for commission and shipping. The &quot;Total Paid&quot; will equal your
-                target maximum purchase price.
+                <strong>How it works:</strong> We&apos;ll calculate the maximum bid you should
+                enter, accounting for commission and shipping. The &quot;Total Paid&quot; will equal
+                your target maximum purchase price.
               </p>
             </div>
           </CardContent>
@@ -471,12 +468,8 @@ export function PhotoInputStep({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini">
-                      Gemini Pro (Recommended)
-                    </SelectItem>
-                    <SelectItem value="claude">
-                      Claude Opus
-                    </SelectItem>
+                    <SelectItem value="gemini">Gemini Pro (Recommended)</SelectItem>
+                    <SelectItem value="claude">Claude Opus</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -492,7 +485,8 @@ export function PhotoInputStep({
                     {primaryModel === 'gemini' ? 'Claude Verification' : 'Gemini Verification'}
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Cross-check set numbers with {primaryModel === 'gemini' ? 'Claude' : 'Gemini'} for higher accuracy.
+                    Cross-check set numbers with {primaryModel === 'gemini' ? 'Claude' : 'Gemini'}{' '}
+                    for higher accuracy.
                   </p>
                 </div>
                 <Switch
@@ -508,10 +502,7 @@ export function PhotoInputStep({
                     Use Brickognize AI for specialized part and minifig identification.
                   </p>
                 </div>
-                <Switch
-                  checked={useBrickognize}
-                  onCheckedChange={onUseBrickognizeChange}
-                />
+                <Switch checked={useBrickognize} onCheckedChange={onUseBrickognizeChange} />
               </div>
 
               <div className="flex items-center justify-between">
@@ -522,10 +513,7 @@ export function PhotoInputStep({
                     Uses AI to detect item regions and analyze each separately.
                   </p>
                 </div>
-                <Switch
-                  checked={useImageChunking}
-                  onCheckedChange={onUseImageChunkingChange}
-                />
+                <Switch checked={useImageChunking} onCheckedChange={onUseImageChunkingChange} />
               </div>
             </CardContent>
           </CollapsibleContent>
@@ -534,12 +522,7 @@ export function PhotoInputStep({
 
       {/* Analyze Button */}
       <div className="flex justify-end">
-        <Button
-          onClick={onAnalyze}
-          disabled={!canAnalyze}
-          size="lg"
-          className="min-w-[200px]"
-        >
+        <Button onClick={onAnalyze} disabled={!canAnalyze} size="lg" className="min-w-[200px]">
           {isAnalyzing ? (
             <>
               <span className="animate-spin mr-2">⏳</span>

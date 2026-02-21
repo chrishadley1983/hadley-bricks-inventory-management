@@ -17,7 +17,12 @@ import {
 } from '@/lib/api/bricklink-uploads';
 import type { PaginationParams } from '@/lib/api/inventory';
 
-export type { BrickLinkUpload, BrickLinkUploadInsert, BrickLinkUploadUpdate, BrickLinkUploadFilters };
+export type {
+  BrickLinkUpload,
+  BrickLinkUploadInsert,
+  BrickLinkUploadUpdate,
+  BrickLinkUploadFilters,
+};
 
 /**
  * Query key factory for upload queries
@@ -72,7 +77,10 @@ export function useBrickLinkUploadsByPurchase(purchaseId: string | undefined) {
 /**
  * Hook to fetch unlinked uploads (for linking dialog)
  */
-export function useUnlinkedBrickLinkUploads(filters?: Omit<BrickLinkUploadFilters, 'unlinked'>, pagination?: PaginationParams) {
+export function useUnlinkedBrickLinkUploads(
+  filters?: Omit<BrickLinkUploadFilters, 'unlinked'>,
+  pagination?: PaginationParams
+) {
   return useQuery({
     queryKey: uploadKeys.list({ ...filters, unlinked: true }, pagination),
     queryFn: () => fetchBrickLinkUploads({ ...filters, unlinked: true }, pagination),

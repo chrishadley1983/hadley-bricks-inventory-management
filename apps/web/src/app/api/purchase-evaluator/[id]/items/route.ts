@@ -27,10 +27,7 @@ const BatchUpdateSchema = z.object({
  * GET /api/purchase-evaluator/[id]/items
  * Get all items for an evaluation
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -61,10 +58,7 @@ export async function GET(
  * PATCH /api/purchase-evaluator/[id]/items
  * Update multiple items in batch
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

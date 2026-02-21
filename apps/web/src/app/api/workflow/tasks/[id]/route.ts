@@ -15,17 +15,17 @@ const UpdateTaskSchema = z.object({
   category: z.string().min(1).max(50).optional(),
   priority: z.number().int().min(1).max(4).optional(),
   estimatedMinutes: z.number().int().min(1).max(480).optional().nullable(),
-  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  scheduledDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 /**
  * PATCH /api/workflow/tasks/[id]
  * Update task status
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -83,10 +83,7 @@ export async function PATCH(
  * PUT /api/workflow/tasks/[id]
  * Update task details (for future custom tasks)
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -126,10 +123,7 @@ export async function PUT(
     }
 
     if (task.task_type !== 'off_system' || task.task_definition_id !== null) {
-      return NextResponse.json(
-        { error: 'Can only edit custom ad-hoc tasks' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Can only edit custom ad-hoc tasks' }, { status: 400 });
     }
 
     // Build update object
@@ -141,8 +135,10 @@ export async function PUT(
     if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
     if (parsed.data.category !== undefined) updateData.category = parsed.data.category;
     if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
-    if (parsed.data.estimatedMinutes !== undefined) updateData.estimated_minutes = parsed.data.estimatedMinutes;
-    if (parsed.data.scheduledDate !== undefined) updateData.scheduled_date = parsed.data.scheduledDate;
+    if (parsed.data.estimatedMinutes !== undefined)
+      updateData.estimated_minutes = parsed.data.estimatedMinutes;
+    if (parsed.data.scheduledDate !== undefined)
+      updateData.scheduled_date = parsed.data.scheduledDate;
 
     const { error: updateError } = await supabase
       .from('workflow_task_instances')
@@ -200,10 +196,7 @@ export async function DELETE(
     }
 
     if (task.task_type !== 'off_system' || task.task_definition_id !== null) {
-      return NextResponse.json(
-        { error: 'Can only delete custom ad-hoc tasks' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Can only delete custom ad-hoc tasks' }, { status: 400 });
     }
 
     const { error: deleteError } = await supabase

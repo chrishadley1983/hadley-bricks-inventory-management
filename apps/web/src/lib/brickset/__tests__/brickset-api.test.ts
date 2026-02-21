@@ -89,9 +89,7 @@ describe('BricksetApiClient', () => {
   describe('getSets', () => {
     it('should fetch sets with no parameters', async () => {
       const client = new BricksetApiClient(validApiKey);
-      const mockSets = [
-        { setID: 1, number: '75192', numberVariant: 1, name: 'Millennium Falcon' },
-      ];
+      const mockSets = [{ setID: 1, number: '75192', numberVariant: 1, name: 'Millennium Falcon' }];
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -448,8 +446,14 @@ describe('BricksetApiClient', () => {
     it('should return additional images for a set', async () => {
       const client = new BricksetApiClient(validApiKey);
       const mockImages = [
-        { thumbnailURL: 'https://example.com/thumb1.jpg', imageURL: 'https://example.com/img1.jpg' },
-        { thumbnailURL: 'https://example.com/thumb2.jpg', imageURL: 'https://example.com/img2.jpg' },
+        {
+          thumbnailURL: 'https://example.com/thumb1.jpg',
+          imageURL: 'https://example.com/img1.jpg',
+        },
+        {
+          thumbnailURL: 'https://example.com/thumb2.jpg',
+          imageURL: 'https://example.com/img2.jpg',
+        },
       ];
 
       mockFetch.mockResolvedValueOnce({

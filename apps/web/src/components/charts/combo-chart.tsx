@@ -60,10 +60,7 @@ export function ComboChart({
 }: ComboChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <RechartsComposedChart
-        data={data}
-        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-      >
+      <RechartsComposedChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
         <XAxis
           dataKey={xAxisKey}
@@ -77,7 +74,7 @@ export function ComboChart({
         <Tooltip
           formatter={(value: number | undefined, name?: string) => [
             formatTooltip && value !== undefined ? formatTooltip(value) : (value ?? 0),
-            name ?? ''
+            name ?? '',
           ]}
           labelFormatter={formatXAxis}
           contentStyle={{

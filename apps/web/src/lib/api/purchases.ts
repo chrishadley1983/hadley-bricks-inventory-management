@@ -96,9 +96,7 @@ export async function fetchPurchase(id: string): Promise<Purchase> {
 /**
  * Create a new purchase
  */
-export async function createPurchase(
-  data: Omit<PurchaseInsert, 'user_id'>
-): Promise<Purchase> {
+export async function createPurchase(data: Omit<PurchaseInsert, 'user_id'>): Promise<Purchase> {
   const response = await fetch('/api/purchases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -117,10 +115,7 @@ export async function createPurchase(
 /**
  * Update a purchase
  */
-export async function updatePurchase(
-  id: string,
-  data: PurchaseUpdate
-): Promise<Purchase> {
+export async function updatePurchase(id: string, data: PurchaseUpdate): Promise<Purchase> {
   const response = await fetch(`/api/purchases/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -169,9 +164,7 @@ export interface BulkUpdatePurchaseInput {
 /**
  * Bulk update multiple purchases
  */
-export async function bulkUpdatePurchases(
-  input: BulkUpdatePurchaseInput
-): Promise<Purchase[]> {
+export async function bulkUpdatePurchases(input: BulkUpdatePurchaseInput): Promise<Purchase[]> {
   const response = await fetch('/api/purchases/bulk', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

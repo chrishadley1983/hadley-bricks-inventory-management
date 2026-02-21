@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2, Clock, AlertTriangle, DollarSign, ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  ArrowLeft,
+  Download,
+  Loader2,
+  Clock,
+  AlertTriangle,
+  DollarSign,
+  ExternalLink,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -53,7 +55,9 @@ const BRACKET_COLORS: Record<string, string> = {
   '180+ days': '#7c3aed',
 };
 
-function getBracketBadgeVariant(bracket: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getBracketBadgeVariant(
+  bracket: string
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (bracket.includes('180+')) return 'destructive';
   if (bracket.includes('91-180')) return 'destructive';
   if (bracket.includes('61-90')) return 'secondary';
@@ -76,13 +80,12 @@ function DrillDownSheet({ isOpen, onClose, bracket }: DrillDownSheetProps) {
       <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Badge variant={getBracketBadgeVariant(bracket.bracket)}>
-              {bracket.bracket}
-            </Badge>
+            <Badge variant={getBracketBadgeVariant(bracket.bracket)}>{bracket.bracket}</Badge>
             <span>Items</span>
           </SheetTitle>
           <SheetDescription>
-            {bracket.itemCount} items with {formatCurrency(bracket.potentialRevenueImpact)} potential revenue
+            {bracket.itemCount} items with {formatCurrency(bracket.potentialRevenueImpact)}{' '}
+            potential revenue
           </SheetDescription>
         </SheetHeader>
         <div className="mt-6">
@@ -114,9 +117,7 @@ function DrillDownSheet({ isOpen, onClose, bracket }: DrillDownSheetProps) {
                   <TableCell className="text-right font-medium text-orange-600">
                     {item.daysInStock}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(item.cost)}
-                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.cost)}</TableCell>
                   <TableCell className="text-right font-medium">
                     {formatCurrency(item.listingValue)}
                   </TableCell>
@@ -132,9 +133,7 @@ function DrillDownSheet({ isOpen, onClose, bracket }: DrillDownSheetProps) {
             </TableBody>
           </Table>
           {(!bracket.items || bracket.items.length === 0) && (
-            <p className="text-center text-muted-foreground py-8">
-              No items in this age bracket
-            </p>
+            <p className="text-center text-muted-foreground py-8">No items in this age bracket</p>
           )}
         </div>
       </SheetContent>
@@ -147,7 +146,9 @@ export default function InventoryAgingReportPage() {
 
   const { data: report, isLoading, error } = useInventoryAgingReport();
   const exportMutation = useExportReport();
-  const [selectedBracket, setSelectedBracket] = useState<InventoryAgingReport['brackets'][0] | null>(null);
+  const [selectedBracket, setSelectedBracket] = useState<
+    InventoryAgingReport['brackets'][0] | null
+  >(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const handleExport = (format: 'csv' | 'json') => {
@@ -171,26 +172,31 @@ export default function InventoryAgingReportPage() {
   };
 
   // Prepare chart data
-  const barChartData = report?.brackets.map((bracket) => ({
-    name: bracket.bracket,
-    items: bracket.itemCount,
-    value: bracket.totalCostValue,
-    color: BRACKET_COLORS[bracket.bracket] || '#6b7280',
-  })) || [];
+  const barChartData =
+    report?.brackets.map((bracket) => ({
+      name: bracket.bracket,
+      items: bracket.itemCount,
+      value: bracket.totalCostValue,
+      color: BRACKET_COLORS[bracket.bracket] || '#6b7280',
+    })) || [];
 
-  const pieChartData = report?.brackets.map((bracket) => ({
-    name: bracket.bracket,
-    value: bracket.totalCostValue,
-    color: BRACKET_COLORS[bracket.bracket] || '#6b7280',
-  })) || [];
+  const pieChartData =
+    report?.brackets.map((bracket) => ({
+      name: bracket.bracket,
+      value: bracket.totalCostValue,
+      color: BRACKET_COLORS[bracket.bracket] || '#6b7280',
+    })) || [];
 
   // Calculate slow-moving inventory (91+ days)
-  const slowMovingBrackets = report?.brackets.filter(
-    (b) => b.bracket.includes('91-180') || b.bracket.includes('180+')
-  ) || [];
+  const slowMovingBrackets =
+    report?.brackets.filter((b) => b.bracket.includes('91-180') || b.bracket.includes('180+')) ||
+    [];
   const slowMovingValue = slowMovingBrackets.reduce((sum, b) => sum + b.totalCostValue, 0);
   const slowMovingCount = slowMovingBrackets.reduce((sum, b) => sum + b.itemCount, 0);
-  const slowMovingRevenue = slowMovingBrackets.reduce((sum, b) => sum + b.potentialRevenueImpact, 0);
+  const slowMovingRevenue = slowMovingBrackets.reduce(
+    (sum, b) => sum + b.potentialRevenueImpact,
+    0
+  );
 
   return (
     <>
@@ -241,11 +247,7 @@ export default function InventoryAgingReportPage() {
                 format="number"
                 icon={<Clock className="h-4 w-4 text-muted-foreground" />}
               />
-              <StatCard
-                title="Total Value"
-                value={report?.totalValue || 0}
-                format="currency"
-              />
+              <StatCard title="Total Value" value={report?.totalValue || 0} format="currency" />
               <StatCard
                 title="Potential Revenue"
                 value={report?.totalPotentialRevenue || 0}
@@ -361,8 +363,9 @@ export default function InventoryAgingReportPage() {
                   </CardTitle>
                   <CardDescription className="text-orange-700">
                     You have {slowMovingCount} items worth {formatCurrency(slowMovingValue)} that
-                    have been in stock for over 90 days, representing {formatCurrency(slowMovingRevenue)} in
-                    potential revenue. Consider reviewing pricing or running promotions.
+                    have been in stock for over 90 days, representing{' '}
+                    {formatCurrency(slowMovingRevenue)} in potential revenue. Consider reviewing
+                    pricing or running promotions.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -370,66 +373,66 @@ export default function InventoryAgingReportPage() {
 
             {/* Oldest Items - from 180+ days bracket */}
             {report?.brackets.find((b) => b.bracket.includes('180+'))?.items &&
-             (report.brackets.find((b) => b.bracket.includes('180+'))?.items?.length ?? 0) > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Oldest Items in Stock</CardTitle>
-                  <CardDescription>
-                    Items that have been in inventory over 180 days
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Days in Stock</TableHead>
-                        <TableHead className="text-right">Cost</TableHead>
-                        <TableHead className="text-right">List Value</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {report.brackets
-                        .find((b) => b.bracket.includes('180+'))
-                        ?.items?.slice(0, 10)
-                        .map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{item.setNumber}</p>
-                                <p className="text-sm text-muted-foreground truncate max-w-[200px]">
-                                  {item.itemName}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">{item.status}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-orange-600">
-                              {item.daysInStock}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.cost)}
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-green-600">
-                              {formatCurrency(item.listingValue)}
-                            </TableCell>
-                            <TableCell>
-                              <Link href={`/inventory/${item.id}`}>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
+              (report.brackets.find((b) => b.bracket.includes('180+'))?.items?.length ?? 0) > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Oldest Items in Stock</CardTitle>
+                    <CardDescription>
+                      Items that have been in inventory over 180 days
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Days in Stock</TableHead>
+                          <TableHead className="text-right">Cost</TableHead>
+                          <TableHead className="text-right">List Value</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {report.brackets
+                          .find((b) => b.bracket.includes('180+'))
+                          ?.items?.slice(0, 10)
+                          .map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{item.setNumber}</p>
+                                  <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                    {item.itemName}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{item.status}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-orange-600">
+                                {item.daysInStock}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(item.cost)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-green-600">
+                                {formatCurrency(item.listingValue)}
+                              </TableCell>
+                              <TableCell>
+                                <Link href={`/inventory/${item.id}`}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
           </>
         )}
       </div>

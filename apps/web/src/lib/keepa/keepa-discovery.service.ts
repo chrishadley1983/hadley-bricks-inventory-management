@@ -11,10 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { KeepaClient, type KeepaProduct } from './keepa-client';
-import {
-  extractSetNumber,
-  calculateTitleMatchConfidence,
-} from '@/lib/utils/levenshtein';
+import { extractSetNumber, calculateTitleMatchConfidence } from '@/lib/utils/levenshtein';
 
 /** Safety margin: stop 60s before Vercel's 300s limit */
 const TIMEOUT_SAFETY_MS = 240_000;
@@ -54,11 +51,7 @@ export class KeepaDiscoveryService {
    * @param limit - Max sets to process (0 = all within timeout)
    * @param dryRun - Preview without writing
    */
-  async discoverByEan(
-    offset = 0,
-    limit = 0,
-    dryRun = false
-  ): Promise<DiscoveryResult> {
+  async discoverByEan(offset = 0, limit = 0, dryRun = false): Promise<DiscoveryResult> {
     const startTime = Date.now();
     const stats: DiscoveryStats = {
       processed: 0,
@@ -80,7 +73,9 @@ export class KeepaDiscoveryService {
       return { success: true, phase: 'ean', stats, resume: null };
     }
 
-    console.log(`[KeepaDiscovery:EAN] Processing ${unmatchedSets.length} sets with EANs (offset=${offset})`);
+    console.log(
+      `[KeepaDiscovery:EAN] Processing ${unmatchedSets.length} sets with EANs (offset=${offset})`
+    );
 
     // 3. Process in batches of 100 EANs
     const batchSize = 100;
@@ -176,11 +171,7 @@ export class KeepaDiscoveryService {
    * @param maxPages - Max pages to process (0 = all within timeout)
    * @param dryRun - Preview without writing
    */
-  async discoverByFinder(
-    startPage = 0,
-    maxPages = 0,
-    dryRun = false
-  ): Promise<DiscoveryResult> {
+  async discoverByFinder(startPage = 0, maxPages = 0, dryRun = false): Promise<DiscoveryResult> {
     const startTime = Date.now();
     const stats: DiscoveryStats = {
       processed: 0,
@@ -210,7 +201,9 @@ export class KeepaDiscoveryService {
       setNumberMap.set(cleanNum, set);
     }
 
-    console.log(`[KeepaDiscovery:Finder] ${unmatchedSets.length} unmatched sets, ${knownAsins.size} known ASINs`);
+    console.log(
+      `[KeepaDiscovery:Finder] ${unmatchedSets.length} unmatched sets, ${knownAsins.size} known ASINs`
+    );
 
     // 3. Page through Product Finder
     let page = startPage;
@@ -266,16 +259,18 @@ export class KeepaDiscoveryService {
                 if (eanMatch) {
                   stats.matched++;
                   if (!dryRun) {
-                    const errs = await this.upsertSeededAsins([{
-                      brickset_set_id: eanMatch.id,
-                      asin: product.asin,
-                      discovery_status: 'found',
-                      match_method: 'ean',
-                      match_confidence: 100,
-                      amazon_title: product.title ?? null,
-                      last_discovery_attempt_at: new Date().toISOString(),
-                      discovery_attempts: 1,
-                    }]);
+                    const errs = await this.upsertSeededAsins([
+                      {
+                        brickset_set_id: eanMatch.id,
+                        asin: product.asin,
+                        discovery_status: 'found',
+                        match_method: 'ean',
+                        match_confidence: 100,
+                        amazon_title: product.title ?? null,
+                        last_discovery_attempt_at: new Date().toISOString(),
+                        discovery_attempts: 1,
+                      },
+                    ]);
                     stats.errors.push(...errs);
                   }
                   continue;
@@ -287,16 +282,18 @@ export class KeepaDiscoveryService {
                   if (titleMatch) {
                     stats.matched++;
                     if (!dryRun) {
-                      const errs = await this.upsertSeededAsins([{
-                        brickset_set_id: titleMatch.set.id,
-                        asin: product.asin,
-                        discovery_status: 'found',
-                        match_method: titleMatch.confidence >= 85 ? 'title_exact' : 'title_fuzzy',
-                        match_confidence: titleMatch.confidence,
-                        amazon_title: product.title,
-                        last_discovery_attempt_at: new Date().toISOString(),
-                        discovery_attempts: 1,
-                      }]);
+                      const errs = await this.upsertSeededAsins([
+                        {
+                          brickset_set_id: titleMatch.set.id,
+                          asin: product.asin,
+                          discovery_status: 'found',
+                          match_method: titleMatch.confidence >= 85 ? 'title_exact' : 'title_fuzzy',
+                          match_confidence: titleMatch.confidence,
+                          amazon_title: product.title,
+                          last_discovery_attempt_at: new Date().toISOString(),
+                          discovery_attempts: 1,
+                        },
+                      ]);
                       stats.errors.push(...errs);
                     }
                     continue;

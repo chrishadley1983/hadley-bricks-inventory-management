@@ -29,10 +29,7 @@ export function buildBricklinkUrl(setNumber: string): string {
  * @param condition - 'N' for New, 'U' for Used
  * @returns URL to BrickLink price guide page
  */
-export function buildBricklinkPriceGuideUrl(
-  setNumber: string,
-  condition: 'N' | 'U' = 'N'
-): string {
+export function buildBricklinkPriceGuideUrl(setNumber: string, condition: 'N' | 'U' = 'N'): string {
   const condParam = condition === 'N' ? 'new_or_used=N' : 'new_or_used=U';
   return `https://www.bricklink.com/v2/catalog/catalogitem.page?S=${encodeURIComponent(setNumber)}#T=P&${condParam}`;
 }

@@ -114,9 +114,27 @@ describe('EmailService', () => {
         itemCount: 3,
         priceVerificationTime: 45000, // 45 seconds
         itemDetails: [
-          { sku: 'SKU-001', asin: 'B0001', setNumber: '75192', itemName: 'Star Wars Set', price: 44.99 },
-          { sku: 'SKU-002', asin: 'B0002', setNumber: '10297', itemName: 'Boutique Hotel', price: 199.99 },
-          { sku: 'SKU-003', asin: 'B0003', setNumber: '42115', itemName: 'Lamborghini', price: 349.99 },
+          {
+            sku: 'SKU-001',
+            asin: 'B0001',
+            setNumber: '75192',
+            itemName: 'Star Wars Set',
+            price: 44.99,
+          },
+          {
+            sku: 'SKU-002',
+            asin: 'B0002',
+            setNumber: '10297',
+            itemName: 'Boutique Hotel',
+            price: 199.99,
+          },
+          {
+            sku: 'SKU-003',
+            asin: 'B0003',
+            setNumber: '42115',
+            itemName: 'Lamborghini',
+            price: 349.99,
+          },
         ],
       };
 

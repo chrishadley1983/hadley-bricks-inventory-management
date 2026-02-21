@@ -89,9 +89,7 @@ describe('MigrationService', () => {
           { SKU: 'NEW-001', 'Set Number': '75192' },
           { SKU: 'NEW-002', 'Set Number': '10294' },
         ])
-        .mockResolvedValueOnce([
-          { SKU: 'USED-001', 'Set Number': '75192' },
-        ]);
+        .mockResolvedValueOnce([{ SKU: 'USED-001', 'Set Number': '75192' }]);
 
       // Mock no existing records
       mockFrom.mockImplementation(() => ({
@@ -108,9 +106,7 @@ describe('MigrationService', () => {
         single: vi.fn(() => Promise.resolve({ data: null, error: null })),
         insert: vi.fn(() => ({
           select: vi.fn(() => ({
-            single: vi.fn(() =>
-              Promise.resolve({ data: { id: 'new-id' }, error: null })
-            ),
+            single: vi.fn(() => Promise.resolve({ data: { id: 'new-id' }, error: null })),
           })),
         })),
       });
@@ -128,12 +124,8 @@ describe('MigrationService', () => {
 
     it('should calculate totals correctly', async () => {
       vi.mocked(mockSheetsClient.readSheet)
-        .mockResolvedValueOnce([
-          { SKU: 'NEW-001', 'Set Number': '75192' },
-        ])
-        .mockResolvedValueOnce([
-          { SKU: 'USED-001', 'Set Number': '75192' },
-        ]);
+        .mockResolvedValueOnce([{ SKU: 'NEW-001', 'Set Number': '75192' }])
+        .mockResolvedValueOnce([{ SKU: 'USED-001', 'Set Number': '75192' }]);
 
       mockFrom.mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -260,9 +252,7 @@ describe('MigrationService', () => {
       mockFrom.mockReturnValueOnce({
         insert: vi.fn(() => ({
           select: vi.fn(() => ({
-            single: vi.fn(() =>
-              Promise.resolve({ data: { id: 'created-id' }, error: null })
-            ),
+            single: vi.fn(() => Promise.resolve({ data: { id: 'created-id' }, error: null })),
           })),
         })),
       });
@@ -288,9 +278,7 @@ describe('MigrationService', () => {
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn(() =>
-          Promise.resolve({ data: { id: 'existing-id' }, error: null })
-        ),
+        single: vi.fn(() => Promise.resolve({ data: { id: 'existing-id' }, error: null })),
       });
 
       // Second call - update
@@ -319,9 +307,7 @@ describe('MigrationService', () => {
       mockFrom.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn(() =>
-          Promise.resolve({ data: { id: 'existing-id' }, error: null })
-        ),
+        single: vi.fn(() => Promise.resolve({ data: { id: 'existing-id' }, error: null })),
       });
 
       const { newKitInventoryMapping } = await import('../sheet-mappings');
@@ -440,9 +426,7 @@ describe('MigrationService', () => {
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn(() =>
-          Promise.resolve({ data: { id: 'existing-id' }, error: null })
-        ),
+        single: vi.fn(() => Promise.resolve({ data: { id: 'existing-id' }, error: null })),
       });
 
       const { newKitInventoryMapping } = await import('../sheet-mappings');
@@ -468,17 +452,13 @@ describe('MigrationService', () => {
       mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn(() =>
-          Promise.resolve({ data: { id: 'existing-id' }, error: null })
-        ),
+        single: vi.fn(() => Promise.resolve({ data: { id: 'existing-id' }, error: null })),
       });
 
       // Update fails
       mockFrom.mockReturnValueOnce({
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({ error: { message: 'Update failed' } })
-        ),
+        eq: vi.fn(() => Promise.resolve({ error: { message: 'Update failed' } })),
       });
 
       const { newKitInventoryMapping } = await import('../sheet-mappings');

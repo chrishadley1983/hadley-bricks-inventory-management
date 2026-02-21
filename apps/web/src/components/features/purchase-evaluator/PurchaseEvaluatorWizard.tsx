@@ -20,7 +20,11 @@ import {
   calculateMaxPurchasePriceAmazon,
   calculateMaxPurchasePriceEbay,
 } from '@/lib/purchase-evaluator/reverse-calculations';
-import type { PhotoAnalysisItem, PrimaryAnalysisModel, AuctionSettings } from '@/lib/purchase-evaluator/photo-types';
+import type {
+  PhotoAnalysisItem,
+  PrimaryAnalysisModel,
+  AuctionSettings,
+} from '@/lib/purchase-evaluator/photo-types';
 import { DEFAULT_AUCTION_SETTINGS } from '@/lib/purchase-evaluator/photo-types';
 import { InputStep } from './steps/InputStep';
 import { ParseStep } from './steps/ParseStep';
@@ -60,10 +64,13 @@ export function PurchaseEvaluatorWizard() {
   const [step, setStep] = React.useState<ExtendedWizardStep>('input');
   const [evaluationMode, setEvaluationMode] = React.useState<EvaluationMode>('cost_known');
   const [parsedItems, setParsedItems] = React.useState<EvaluationInputItem[]>([]);
-  const [inputSource, setInputSource] = React.useState<'csv_upload' | 'clipboard_paste' | 'photo_analysis'>('csv_upload');
+  const [inputSource, setInputSource] = React.useState<
+    'csv_upload' | 'clipboard_paste' | 'photo_analysis'
+  >('csv_upload');
   const [defaultPlatform, setDefaultPlatform] = React.useState<TargetPlatform>('amazon');
   const [totalPurchasePrice, setTotalPurchasePrice] = React.useState<number | undefined>();
-  const [costAllocationMethod, setCostAllocationMethod] = React.useState<CostAllocationMethod>('per_item');
+  const [costAllocationMethod, setCostAllocationMethod] =
+    React.useState<CostAllocationMethod>('per_item');
   const [evaluationId, setEvaluationId] = React.useState<string | null>(null);
   const [evaluationName, setEvaluationName] = React.useState<string>('');
 
@@ -78,7 +85,8 @@ export function PurchaseEvaluatorWizard() {
   const [isAnalysisInProgress, setIsAnalysisInProgress] = React.useState<boolean>(false);
 
   // Auction mode state
-  const [auctionSettings, setAuctionSettings] = React.useState<AuctionSettings>(DEFAULT_AUCTION_SETTINGS);
+  const [auctionSettings, setAuctionSettings] =
+    React.useState<AuctionSettings>(DEFAULT_AUCTION_SETTINGS);
 
   // Fetch evaluation when we have an ID
   const { data: evaluation, refetch: refetchEvaluation } = useEvaluation(evaluationId);
@@ -105,7 +113,10 @@ export function PurchaseEvaluatorWizard() {
   const progressPercent = ((currentStepIndex + 1) / steps.length) * 100;
 
   // Handle parsed items from input step
-  const handleItemsParsed = (items: EvaluationInputItem[], source: 'csv_upload' | 'clipboard_paste') => {
+  const handleItemsParsed = (
+    items: EvaluationInputItem[],
+    source: 'csv_upload' | 'clipboard_paste'
+  ) => {
     setParsedItems(items);
     setInputSource(source);
     setStep('parse');
@@ -164,18 +175,21 @@ export function PurchaseEvaluatorWizard() {
       // In max_bid mode, auto-allocate costs based on max purchase price
       if (evaluationMode === 'max_bid' && evaluation.items && evaluation.items.length > 0) {
         // Calculate max purchase price for each item
-        const costUpdates = evaluation.items.map((item) => {
-          const sellPrice = getSellPrice(item);
-          if (!sellPrice || sellPrice <= 0) {
-            return { id: item.id, allocatedCost: null };
-          }
+        const costUpdates = evaluation.items
+          .map((item) => {
+            const sellPrice = getSellPrice(item);
+            if (!sellPrice || sellPrice <= 0) {
+              return { id: item.id, allocatedCost: null };
+            }
 
-          const maxPrice = item.targetPlatform === 'ebay'
-            ? calculateMaxPurchasePriceEbay(sellPrice, targetMarginPercent).maxPurchasePrice
-            : calculateMaxPurchasePriceAmazon(sellPrice, targetMarginPercent).maxPurchasePrice;
+            const maxPrice =
+              item.targetPlatform === 'ebay'
+                ? calculateMaxPurchasePriceEbay(sellPrice, targetMarginPercent).maxPurchasePrice
+                : calculateMaxPurchasePriceAmazon(sellPrice, targetMarginPercent).maxPurchasePrice;
 
-          return { id: item.id, allocatedCost: maxPrice };
-        }).filter((update) => update.allocatedCost !== null && update.allocatedCost > 0);
+            return { id: item.id, allocatedCost: maxPrice };
+          })
+          .filter((update) => update.allocatedCost !== null && update.allocatedCost > 0);
 
         // Update items with calculated costs
         if (costUpdates.length > 0) {
@@ -227,13 +241,15 @@ export function PurchaseEvaluatorWizard() {
   };
 
   // Handle updating items (cost override, ASIN selection, platform, sell price)
-  const handleUpdateItems = async (updates: Array<{
-    id: string;
-    allocatedCost?: number | null;
-    amazonAsin?: string;
-    targetPlatform?: TargetPlatform;
-    userSellPriceOverride?: number | null;
-  }>) => {
+  const handleUpdateItems = async (
+    updates: Array<{
+      id: string;
+      allocatedCost?: number | null;
+      amazonAsin?: string;
+      targetPlatform?: TargetPlatform;
+      userSellPriceOverride?: number | null;
+    }>
+  ) => {
     if (!evaluationId) return;
 
     try {
@@ -399,7 +415,9 @@ export function PurchaseEvaluatorWizard() {
                 {steps.slice(0, -1).map((s, i) => (
                   <span
                     key={s.key}
-                    className={i <= currentStepIndex ? 'text-primary font-medium' : 'text-muted-foreground'}
+                    className={
+                      i <= currentStepIndex ? 'text-primary font-medium' : 'text-muted-foreground'
+                    }
                   >
                     {s.label}
                   </span>
@@ -443,7 +461,9 @@ export function PurchaseEvaluatorWizard() {
           onAnalyze={handleAnalyzePhotos}
           isAnalyzing={isAnalysisInProgress || photoAnalysis.isAnalyzing}
           progressMessage={photoAnalysis.progressMessage}
-          canAnalyze={photoAnalysis.images.length > 0 && !isAnalysisInProgress && !photoAnalysis.isAnalyzing}
+          canAnalyze={
+            photoAnalysis.images.length > 0 && !isAnalysisInProgress && !photoAnalysis.isAnalyzing
+          }
         />
       )}
 
@@ -479,11 +499,7 @@ export function PurchaseEvaluatorWizard() {
       )}
 
       {step === 'lookup' && (
-        <LookupStep
-          progress={lookup.progress}
-          error={lookup.error}
-          isRunning={lookup.isRunning}
-        />
+        <LookupStep progress={lookup.progress} error={lookup.error} isRunning={lookup.isRunning} />
       )}
 
       {step === 'review' && evaluation && (

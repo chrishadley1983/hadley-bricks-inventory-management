@@ -72,14 +72,18 @@ export class EvaluationConversionService {
 
     // Check if already converted
     if (evaluation.status === 'converted' || evaluation.converted_at) {
-      return { code: 'ALREADY_CONVERTED', message: 'This evaluation has already been converted to a purchase' };
+      return {
+        code: 'ALREADY_CONVERTED',
+        message: 'This evaluation has already been converted to a purchase',
+      };
     }
 
     // Check if in a valid state for conversion
     if (evaluation.status !== 'completed' && evaluation.status !== 'saved') {
       return {
         code: 'INVALID_STATUS',
-        message: 'Evaluation must be completed or saved before converting. Please finish the price lookups first.',
+        message:
+          'Evaluation must be completed or saved before converting. Please finish the price lookups first.',
       };
     }
 
@@ -149,7 +153,10 @@ export class EvaluationConversionService {
 
     if (updateError) {
       // Log but don't fail - the conversion succeeded, just the status update failed
-      console.error('[EvaluationConversionService] Failed to update evaluation status:', updateError);
+      console.error(
+        '[EvaluationConversionService] Failed to update evaluation status:',
+        updateError
+      );
     }
 
     // Return the result
@@ -199,21 +206,27 @@ export class EvaluationConversionService {
       source: row.source,
       defaultPlatform: (row.default_platform as 'amazon' | 'ebay') || 'amazon',
       totalPurchasePrice: row.total_purchase_price,
-      costAllocationMethod: row.cost_allocation_method as 'per_item' | 'proportional' | 'equal' | null,
+      costAllocationMethod: row.cost_allocation_method as
+        | 'per_item'
+        | 'proportional'
+        | 'equal'
+        | null,
       itemCount: row.item_count ?? 0,
       totalCost: row.total_cost,
       totalExpectedRevenue: row.total_expected_revenue,
       overallMarginPercent: row.overall_margin_percent,
       overallRoiPercent: row.overall_roi_percent,
-      status: (row.status as 'draft' | 'in_progress' | 'completed' | 'saved' | 'converted') || 'draft',
+      status:
+        (row.status as 'draft' | 'in_progress' | 'completed' | 'saved' | 'converted') || 'draft',
       lookupCompletedAt: row.lookup_completed_at,
       convertedAt: row.converted_at ?? null,
       convertedPurchaseId: row.converted_purchase_id ?? null,
       // Photo evaluation fields - these columns may not exist in DB yet until migration is applied
       evaluationMode: (extendedRow.evaluation_mode as 'cost_known' | 'max_bid') ?? 'cost_known',
-      targetMarginPercent: extendedRow.target_margin_percent as number | null ?? null,
-      photoAnalysisJson: extendedRow.photo_analysis_json as Record<string, unknown> | null ?? null,
-      listingDescription: extendedRow.listing_description as string | null ?? null,
+      targetMarginPercent: (extendedRow.target_margin_percent as number | null) ?? null,
+      photoAnalysisJson:
+        (extendedRow.photo_analysis_json as Record<string, unknown> | null) ?? null,
+      listingDescription: (extendedRow.listing_description as string | null) ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

@@ -188,7 +188,10 @@ export function CostModellingPage() {
       if (error instanceof Error) {
         if (error.message.includes('Conflict')) {
           // E7: Concurrent edit warning
-          toast({ title: 'This scenario was modified elsewhere. Please refresh and try again.', variant: 'destructive' });
+          toast({
+            title: 'This scenario was modified elsewhere. Please refresh and try again.',
+            variant: 'destructive',
+          });
         } else {
           // E1: API error on save
           toast({ title: error.message, variant: 'destructive' });
@@ -227,16 +230,19 @@ export function CostModellingPage() {
   }, []);
 
   // Toggle compare mode
-  const handleCompareModeToggle = useCallback((enabled: boolean) => {
-    setCompareMode(enabled);
-    if (enabled && scenarios && scenarios.length > 1) {
-      // Select first different scenario for B
-      const otherScenario = scenarios.find((s) => s.id !== selectedScenarioId);
-      if (otherScenario) {
-        setScenarioBId(otherScenario.id);
+  const handleCompareModeToggle = useCallback(
+    (enabled: boolean) => {
+      setCompareMode(enabled);
+      if (enabled && scenarios && scenarios.length > 1) {
+        // Select first different scenario for B
+        const otherScenario = scenarios.find((s) => s.id !== selectedScenarioId);
+        if (otherScenario) {
+          setScenarioBId(otherScenario.id);
+        }
       }
-    }
-  }, [scenarios, selectedScenarioId]);
+    },
+    [scenarios, selectedScenarioId]
+  );
 
   // Loading state
   if (loadingScenarios) {
@@ -340,9 +346,7 @@ export function CostModellingPage() {
             loadingB={loadingScenarioB}
             deltas={comparisonDeltas}
           />
-          {comparisonDeltas && (
-            <ComparisonSummary deltas={comparisonDeltas} />
-          )}
+          {comparisonDeltas && <ComparisonSummary deltas={comparisonDeltas} />}
         </>
       ) : (
         <>
@@ -365,10 +369,7 @@ export function CostModellingPage() {
 
           {/* P&L Breakdown */}
           {calculationsA && formDataA && (
-            <PLBreakdown
-              calculations={calculationsA}
-              isVatRegistered={formDataA.isVatRegistered}
-            />
+            <PLBreakdown calculations={calculationsA} isVatRegistered={formDataA.isVatRegistered} />
           )}
 
           {/* Package Cost Matrix */}

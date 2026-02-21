@@ -5,7 +5,10 @@
  */
 
 // Services
-export { googleCalendarAuthService, GoogleCalendarAuthService } from './google-calendar-auth.service';
+export {
+  googleCalendarAuthService,
+  GoogleCalendarAuthService,
+} from './google-calendar-auth.service';
 export {
   googleCalendarApiService,
   GoogleCalendarApiService,

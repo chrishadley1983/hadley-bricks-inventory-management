@@ -11,10 +11,7 @@ import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import type { EbayInventoryItem } from '@/lib/ebay/types';
-import {
-  getExtendedFindingClient,
-  type PricingAnalysisResult,
-} from './ebay-finding.client';
+import { getExtendedFindingClient, type PricingAnalysisResult } from './ebay-finding.client';
 import {
   ANALYSE_LISTING_SYSTEM_PROMPT,
   createAnalyseListingMessage,
@@ -166,7 +163,8 @@ export class ListingOptimiserService {
     // Query platform_listings with quality data
     let query = supabase
       .from('platform_listings')
-      .select(`
+      .select(
+        `
         id,
         platform_item_id,
         title,
@@ -179,7 +177,8 @@ export class ListingOptimiserService {
         quality_score,
         quality_grade,
         ebay_data
-      `)
+      `
+      )
       .eq('user_id', userId)
       .eq('platform', 'ebay')
       .eq('listing_status', 'Active');
@@ -241,9 +240,7 @@ export class ListingOptimiserService {
             .in('id', inventoryIds);
 
           if (inventoryItems) {
-            const invMap = Object.fromEntries(
-              inventoryItems.map((i) => [i.id, i.cost])
-            );
+            const invMap = Object.fromEntries(inventoryItems.map((i) => [i.id, i.cost]));
 
             for (const mapping of mappings) {
               skuToInventoryMap[mapping.ebay_sku] = {
@@ -280,13 +277,15 @@ export class ListingOptimiserService {
     const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
     const transformed: OptimiserListing[] = (listings || []).map((listing) => {
-      const ebayData = listing.ebay_data as Record<string, unknown> || {};
+      const ebayData = (listing.ebay_data as Record<string, unknown>) || {};
 
       // Use eBay's listingStartDate for age calculation, fall back to created_at
       const listingStartDate = ebayData.listingStartDate
         ? new Date(ebayData.listingStartDate as string)
         : new Date(listing.created_at);
-      const listingAge = Math.floor((now.getTime() - listingStartDate.getTime()) / (1000 * 60 * 60 * 24));
+      const listingAge = Math.floor(
+        (now.getTime() - listingStartDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
 
       const sku = ebayData.sku as string | undefined;
       const inventoryData = sku ? skuToInventoryMap[sku] : null;
@@ -336,9 +335,7 @@ export class ListingOptimiserService {
     }
 
     if (filters?.hasWatchers !== undefined) {
-      filtered = filtered.filter((l) =>
-        filters.hasWatchers ? l.watchers > 0 : l.watchers === 0
-      );
+      filtered = filtered.filter((l) => (filters.hasWatchers ? l.watchers > 0 : l.watchers === 0));
     }
 
     // Calculate summary
@@ -390,15 +387,17 @@ export class ListingOptimiserService {
     // 2. Get inventory data if linked via SKU
     const supabase = await createClient();
 
-    let inventoryData: {
-      setNumber?: string;
-      theme?: string;
-      condition?: string;
-      pieceCount?: number;
-      hasBox?: boolean;
-      hasInstructions?: boolean;
-      costPrice?: number;
-    } | undefined;
+    let inventoryData:
+      | {
+          setNumber?: string;
+          theme?: string;
+          condition?: string;
+          pieceCount?: number;
+          hasBox?: boolean;
+          hasInstructions?: boolean;
+          costPrice?: number;
+        }
+      | undefined;
 
     if (listingDetails.sku) {
       // Look up SKU mapping
@@ -493,7 +492,13 @@ export class ListingOptimiserService {
 
     // 3. Run AI analysis
     log('Starting AI analysis');
-    const analysis = await this.runAiAnalysis(listingDetails, inventoryData, appliedSuggestions || undefined, descriptionTemplate, onProgress);
+    const analysis = await this.runAiAnalysis(
+      listingDetails,
+      inventoryData,
+      appliedSuggestions || undefined,
+      descriptionTemplate,
+      onProgress
+    );
     log('AI analysis complete', `Score: ${analysis.score}, Grade: ${analysis.grade}`);
 
     // 4. Get pricing analysis
@@ -596,9 +601,17 @@ export class ListingOptimiserService {
     // CRITICAL: Category changes are NOT supported by eBay's ReviseFixedPriceItem API
     // Check for any category-related suggestion field regardless of which category it comes under
     const fieldLower = suggestion.field.toLowerCase();
-    if (fieldLower === 'category' || fieldLower === 'categoryid' || fieldLower.includes('category')) {
-      console.log(`[ListingOptimiserService] Category changes not supported, field: ${suggestion.field}`);
-      throw new Error('Category changes are not supported via the eBay API. Please update the category manually on eBay.');
+    if (
+      fieldLower === 'category' ||
+      fieldLower === 'categoryid' ||
+      fieldLower.includes('category')
+    ) {
+      console.log(
+        `[ListingOptimiserService] Category changes not supported, field: ${suggestion.field}`
+      );
+      throw new Error(
+        'Category changes are not supported via the eBay API. Please update the category manually on eBay.'
+      );
     }
 
     switch (suggestion.category) {
@@ -611,7 +624,9 @@ export class ListingOptimiserService {
       case 'itemSpecifics':
         // IMPORTANT: eBay's ReviseFixedPriceItem replaces ALL item specifics, not just the one being changed
         // We must fetch current specifics, update the one we want, and send all of them back
-        console.log(`[ListingOptimiserService] Fetching current item specifics for ${itemId} to update ${suggestion.field}`);
+        console.log(
+          `[ListingOptimiserService] Fetching current item specifics for ${itemId} to update ${suggestion.field}`
+        );
 
         try {
           const currentListing = await this.tradingClient!.getItem(itemId);
@@ -628,11 +643,11 @@ export class ListingOptimiserService {
           if (existingIndex >= 0) {
             // Update existing specific
             updatedSpecifics = currentSpecifics.map((spec, idx) =>
-              idx === existingIndex
-                ? { name: spec.name, value: suggestion.suggestedValue }
-                : spec
+              idx === existingIndex ? { name: spec.name, value: suggestion.suggestedValue } : spec
             );
-            console.log(`[ListingOptimiserService] Updated existing specific "${suggestion.field}" at index ${existingIndex}`);
+            console.log(
+              `[ListingOptimiserService] Updated existing specific "${suggestion.field}" at index ${existingIndex}`
+            );
           } else {
             // Add new specific
             updatedSpecifics = [
@@ -642,24 +657,38 @@ export class ListingOptimiserService {
             console.log(`[ListingOptimiserService] Added new specific "${suggestion.field}"`);
           }
 
-          console.log(`[ListingOptimiserService] Sending ${updatedSpecifics.length} item specifics to eBay`);
+          console.log(
+            `[ListingOptimiserService] Sending ${updatedSpecifics.length} item specifics to eBay`
+          );
           request.itemSpecifics = updatedSpecifics;
         } catch (fetchError) {
-          console.error(`[ListingOptimiserService] Failed to fetch current item specifics:`, fetchError);
-          throw new Error(`Failed to fetch current listing data: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+          console.error(
+            `[ListingOptimiserService] Failed to fetch current item specifics:`,
+            fetchError
+          );
+          throw new Error(
+            `Failed to fetch current listing data: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`
+          );
         }
         break;
       case 'condition':
         // Check if this is a conditionDescription update vs conditionId update
         const fieldLowerCondition = suggestion.field.toLowerCase();
-        if (fieldLowerCondition.includes('description') || fieldLowerCondition === 'conditiondescription') {
+        if (
+          fieldLowerCondition.includes('description') ||
+          fieldLowerCondition === 'conditiondescription'
+        ) {
           // This is a condition DESCRIPTION update (the text field)
-          console.log(`[ListingOptimiserService] Updating condition description to: "${suggestion.suggestedValue.substring(0, 100)}..."`);
+          console.log(
+            `[ListingOptimiserService] Updating condition description to: "${suggestion.suggestedValue.substring(0, 100)}..."`
+          );
           request.conditionDescription = suggestion.suggestedValue;
         } else {
           // This is a condition ID update
           // Try to find a 4-digit condition ID anywhere in the string
-          console.log(`[ListingOptimiserService] Parsing condition ID from: "${suggestion.suggestedValue}"`);
+          console.log(
+            `[ListingOptimiserService] Parsing condition ID from: "${suggestion.suggestedValue}"`
+          );
           const conditionMatch = suggestion.suggestedValue.match(/\b(1000|1500|3000)\b/);
           if (conditionMatch) {
             const conditionId = parseInt(conditionMatch[1], 10);
@@ -672,7 +701,9 @@ export class ListingOptimiserService {
               console.log(`[ListingOptimiserService] Inferred condition ID 1000 (New) from text`);
               request.conditionId = 1000;
             } else if (lowerValue.includes('new') && lowerValue.includes('other')) {
-              console.log(`[ListingOptimiserService] Inferred condition ID 1500 (New Other) from text`);
+              console.log(
+                `[ListingOptimiserService] Inferred condition ID 1500 (New Other) from text`
+              );
               request.conditionId = 1500;
             } else if (lowerValue.includes('used')) {
               console.log(`[ListingOptimiserService] Inferred condition ID 3000 (Used) from text`);
@@ -680,10 +711,14 @@ export class ListingOptimiserService {
             } else {
               // If the suggested value looks like a description (long text), treat it as conditionDescription
               if (suggestion.suggestedValue.length > 20) {
-                console.log(`[ListingOptimiserService] Suggested value looks like a description, updating conditionDescription`);
+                console.log(
+                  `[ListingOptimiserService] Suggested value looks like a description, updating conditionDescription`
+                );
                 request.conditionDescription = suggestion.suggestedValue;
               } else {
-                throw new Error(`Could not parse condition from "${suggestion.suggestedValue}". Valid LEGO conditions are: New (1000), New (Other) (1500), or Used (3000).`);
+                throw new Error(
+                  `Could not parse condition from "${suggestion.suggestedValue}". Valid LEGO conditions are: New (1000), New (Other) (1500), or Used (3000).`
+                );
               }
             }
           }
@@ -706,15 +741,17 @@ export class ListingOptimiserService {
 
     // Check if the listing is inventory-based and requires Inventory API
     if (!result.success && result.errorMessage?.toLowerCase().includes('inventory-based')) {
-      console.log(`[ListingOptimiserService] Listing ${itemId} is inventory-based, falling back to Inventory API`);
+      console.log(
+        `[ListingOptimiserService] Listing ${itemId} is inventory-based, falling back to Inventory API`
+      );
       result = await this.applyChangeViaInventoryApi(userId, itemId, suggestion);
     }
 
     // Check for product catalog override warning
     // eBay returns success but with a warning when product catalog data overrides custom values
     if (result.success && result.warnings && result.warnings.length > 0) {
-      const productOverrideWarning = result.warnings.find(
-        (w) => w.includes('from the product were used instead')
+      const productOverrideWarning = result.warnings.find((w) =>
+        w.includes('from the product were used instead')
       );
 
       if (productOverrideWarning) {
@@ -723,7 +760,9 @@ export class ListingOptimiserService {
         const warningLower = productOverrideWarning.toLowerCase();
 
         if (warningLower.includes(fieldLower)) {
-          console.log(`[ListingOptimiserService] Product catalog override detected for "${suggestion.field}"`);
+          console.log(
+            `[ListingOptimiserService] Product catalog override detected for "${suggestion.field}"`
+          );
 
           // Return a failure result with a user-friendly message
           return {
@@ -748,18 +787,18 @@ export class ListingOptimiserService {
         .eq('platform_item_id', itemId);
 
       // Record the applied suggestion so AI doesn't re-suggest similar changes
-      await supabase
-        .from('listing_applied_suggestions')
-        .insert({
-          user_id: userId,
-          ebay_listing_id: itemId,
-          category: suggestion.category,
-          field: suggestion.field,
-          original_value: suggestion.currentValue || null,
-          applied_value: suggestion.suggestedValue,
-        });
+      await supabase.from('listing_applied_suggestions').insert({
+        user_id: userId,
+        ebay_listing_id: itemId,
+        category: suggestion.category,
+        field: suggestion.field,
+        original_value: suggestion.currentValue || null,
+        applied_value: suggestion.suggestedValue,
+      });
 
-      console.log(`[ListingOptimiserService] Recorded applied suggestion: ${suggestion.category}/${suggestion.field}`);
+      console.log(
+        `[ListingOptimiserService] Recorded applied suggestion: ${suggestion.category}/${suggestion.field}`
+      );
     }
 
     return result;
@@ -804,7 +843,8 @@ export class ListingOptimiserService {
       return {
         success: false,
         itemId,
-        errorMessage: 'Cannot update inventory-based listing: SKU not found. Please update this listing directly on eBay.',
+        errorMessage:
+          'Cannot update inventory-based listing: SKU not found. Please update this listing directly on eBay.',
       };
     }
 
@@ -814,7 +854,9 @@ export class ListingOptimiserService {
       // For description updates, update the inventory item's product description
       // Note: The Inventory API stores description on the inventory item, not the offer
       if (suggestion.category === 'description' || suggestion.category === 'seo') {
-        console.log(`[ListingOptimiserService] Updating inventory item description for SKU: ${sku}`);
+        console.log(
+          `[ListingOptimiserService] Updating inventory item description for SKU: ${sku}`
+        );
 
         // Get current inventory item
         const currentItem = await adapter.getInventoryItem(sku);
@@ -836,7 +878,9 @@ export class ListingOptimiserService {
         return {
           success: true,
           itemId,
-          warnings: ['Updated via Inventory API. Changes may take a few minutes to appear on eBay.'],
+          warnings: [
+            'Updated via Inventory API. Changes may take a few minutes to appear on eBay.',
+          ],
         };
       }
 
@@ -886,7 +930,9 @@ export class ListingOptimiserService {
       // Apply the update
       await adapter.createOrReplaceInventoryItem(sku, currentItem);
 
-      console.log(`[ListingOptimiserService] Successfully updated inventory item via Inventory API`);
+      console.log(
+        `[ListingOptimiserService] Successfully updated inventory item via Inventory API`
+      );
 
       return {
         success: true,
@@ -898,9 +944,10 @@ export class ListingOptimiserService {
       return {
         success: false,
         itemId,
-        errorMessage: error instanceof Error
-          ? `Inventory API error: ${error.message}`
-          : 'Failed to update listing via Inventory API',
+        errorMessage:
+          error instanceof Error
+            ? `Inventory API error: ${error.message}`
+            : 'Failed to update listing via Inventory API',
       };
     }
   }
@@ -961,7 +1008,10 @@ export class ListingOptimiserService {
       delete cleanItem.conditionDescription;
     }
 
-    console.log('[ListingOptimiserService] Cleaned inventory item (minimal):', JSON.stringify(cleanItem, null, 2));
+    console.log(
+      '[ListingOptimiserService] Cleaned inventory item (minimal):',
+      JSON.stringify(cleanItem, null, 2)
+    );
 
     return cleanItem;
   }
@@ -980,7 +1030,12 @@ export class ListingOptimiserService {
       hasInstructions?: boolean;
       costPrice?: number;
     },
-    appliedSuggestions?: { category: string; field: string; applied_value: string; applied_at: string }[],
+    appliedSuggestions?: {
+      category: string;
+      field: string;
+      applied_value: string;
+      applied_at: string;
+    }[],
     template?: DescriptionTemplate,
     onProgress?: AnalysisProgressCallback
   ): Promise<ListingAnalysisResponse> {
@@ -989,7 +1044,12 @@ export class ListingOptimiserService {
     }
 
     const client = getGeminiClient();
-    const userMessage = createAnalyseListingMessage(listing, inventoryData, appliedSuggestions, template);
+    const userMessage = createAnalyseListingMessage(
+      listing,
+      inventoryData,
+      appliedSuggestions,
+      template
+    );
 
     onProgress?.('Sending to Gemini 2.5 Pro');
 
@@ -1020,14 +1080,18 @@ export class ListingOptimiserService {
 
         // Check if we got a valid response
         if (responseText && responseText.trim().length > 0) {
-          console.log(`[ListingOptimiserService] Got response on attempt ${attempt}, length: ${responseText.length}`);
+          console.log(
+            `[ListingOptimiserService] Got response on attempt ${attempt}, length: ${responseText.length}`
+          );
 
           // Check for potential truncation - response should end with valid JSON closure
           const trimmed = responseText.trim();
           const endsWithValidJson = trimmed.endsWith('}') || trimmed.endsWith(']');
 
           if (!endsWithValidJson) {
-            console.warn(`[ListingOptimiserService] Response may be truncated - doesn't end with } or ], ends with: "${trimmed.slice(-20)}"`);
+            console.warn(
+              `[ListingOptimiserService] Response may be truncated - doesn't end with } or ], ends with: "${trimmed.slice(-20)}"`
+            );
           }
 
           break;
@@ -1040,16 +1104,19 @@ export class ListingOptimiserService {
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
           console.log(`[ListingOptimiserService] Waiting ${delay}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       } catch (error) {
         apiError = error instanceof Error ? error : new Error(String(error));
-        console.error(`[ListingOptimiserService] Gemini API error on attempt ${attempt}:`, apiError.message);
+        console.error(
+          `[ListingOptimiserService] Gemini API error on attempt ${attempt}:`,
+          apiError.message
+        );
 
         // Wait before retrying
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
@@ -1057,7 +1124,9 @@ export class ListingOptimiserService {
     // If we still have no response after all retries, throw
     if (!responseText || responseText.trim().length === 0) {
       console.error('[ListingOptimiserService] All Gemini API attempts failed with empty response');
-      throw new Error(`Gemini API returned empty response after ${maxRetries} attempts: ${apiError?.message || 'Unknown error'}`);
+      throw new Error(
+        `Gemini API returned empty response after ${maxRetries} attempts: ${apiError?.message || 'Unknown error'}`
+      );
     }
 
     onProgress?.('Parsing response');
@@ -1065,7 +1134,10 @@ export class ListingOptimiserService {
     // Extract JSON from response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[ListingOptimiserService] No JSON found in response:', responseText.substring(0, 500));
+      console.error(
+        '[ListingOptimiserService] No JSON found in response:',
+        responseText.substring(0, 500)
+      );
       throw new Error('Failed to parse AI response: no JSON found');
     }
 
@@ -1114,7 +1186,7 @@ export class ListingOptimiserService {
             return fixJsonString(cleaned.substring(start, end + 1));
           }
           return fixJsonString(s);
-        }
+        },
       },
       {
         name: 'quotes-fix',
@@ -1125,7 +1197,7 @@ export class ListingOptimiserService {
             .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // smart single quotes
             .replace(/'/g, "'"); // another variant
           return fixJsonString(fixed);
-        }
+        },
       },
       {
         name: 'escape-quotes-in-strings',
@@ -1136,15 +1208,17 @@ export class ListingOptimiserService {
 
           // Try to match and fix strings with unescaped internal quotes
           // Pattern: find strings that have unbalanced quotes
-          fixed = fixed.replace(/"suggestedValue"\s*:\s*"([^"]*)"([^,}\]]*)"([^"]*?)"/g,
+          fixed = fixed.replace(
+            /"suggestedValue"\s*:\s*"([^"]*)"([^,}\]]*)"([^"]*?)"/g,
             (match, p1, p2, p3) => {
               // Escape the internal quotes
               const combined = p1 + '\\"' + p2 + '\\"' + p3;
               return `"suggestedValue": "${combined}"`;
-            });
+            }
+          );
 
           return fixed;
-        }
+        },
       },
       {
         name: 'truncation-recovery',
@@ -1208,7 +1282,7 @@ export class ListingOptimiserService {
           }
 
           return fixed;
-        }
+        },
       },
     ];
 
@@ -1219,7 +1293,9 @@ export class ListingOptimiserService {
         const transformed = attempt.transform(jsonString);
         const parsed = JSON.parse(transformed) as ListingAnalysisResponse;
         if (attempt.name !== 'raw') {
-          console.log(`[ListingOptimiserService] JSON parsed successfully with ${attempt.name} strategy`);
+          console.log(
+            `[ListingOptimiserService] JSON parsed successfully with ${attempt.name} strategy`
+          );
         }
 
         // Post-processing: Filter out invalid suggestions
@@ -1228,8 +1304,7 @@ export class ListingOptimiserService {
           const originalCount = parsed.suggestions.length;
           parsed.suggestions = parsed.suggestions.filter((s) => {
             const isConditionDescription =
-              s.category === 'condition' &&
-              s.field.toLowerCase().includes('conditiondescription');
+              s.category === 'condition' && s.field.toLowerCase().includes('conditiondescription');
             if (isConditionDescription) {
               console.log(
                 '[ListingOptimiserService] Filtered out conditionDescription suggestion for New (1000) item - eBay does not allow this'
@@ -1257,18 +1332,32 @@ export class ListingOptimiserService {
     console.error('[ListingOptimiserService] All JSON parse attempts failed');
     console.error('[ListingOptimiserService] Last error:', lastError?.message);
     console.error('[ListingOptimiserService] JSON length:', jsonString.length);
-    console.error('[ListingOptimiserService] JSON (first 500 chars):', jsonString.substring(0, 500));
-    console.error('[ListingOptimiserService] JSON (last 500 chars):', jsonString.substring(Math.max(0, jsonString.length - 500)));
+    console.error(
+      '[ListingOptimiserService] JSON (first 500 chars):',
+      jsonString.substring(0, 500)
+    );
+    console.error(
+      '[ListingOptimiserService] JSON (last 500 chars):',
+      jsonString.substring(Math.max(0, jsonString.length - 500))
+    );
 
     // Try to identify the specific issue
     const errorMatch = lastError?.message.match(/position (\d+)/);
     if (errorMatch) {
       const pos = parseInt(errorMatch[1], 10);
-      const context = jsonString.substring(Math.max(0, pos - 100), Math.min(jsonString.length, pos + 100));
-      console.error(`[ListingOptimiserService] Error near position ${pos}:`, JSON.stringify(context));
+      const context = jsonString.substring(
+        Math.max(0, pos - 100),
+        Math.min(jsonString.length, pos + 100)
+      );
+      console.error(
+        `[ListingOptimiserService] Error near position ${pos}:`,
+        JSON.stringify(context)
+      );
     }
 
-    throw new Error(`Failed to parse AI response: invalid JSON - ${lastError?.message || 'unknown error'}`);
+    throw new Error(
+      `Failed to parse AI response: invalid JSON - ${lastError?.message || 'unknown error'}`
+    );
   }
 
   /**
@@ -1344,9 +1433,7 @@ export class ListingOptimiserService {
     }
 
     // Check item specifics for Brand = LEGO
-    const brandSpecific = listing.itemSpecifics.find(
-      (spec) => spec.name.toLowerCase() === 'brand'
-    );
+    const brandSpecific = listing.itemSpecifics.find((spec) => spec.name.toLowerCase() === 'brand');
     if (brandSpecific && brandSpecific.value.toLowerCase() === 'lego') {
       return true;
     }
@@ -1370,7 +1457,9 @@ export class ListingOptimiserService {
 
     const { data, error } = await supabase
       .from('listing_quality_reviews')
-      .select('id, quality_score, quality_grade, breakdown, suggestions, pricing_analysis, reviewed_at')
+      .select(
+        'id, quality_score, quality_grade, breakdown, suggestions, pricing_analysis, reviewed_at'
+      )
       .eq('user_id', userId)
       .eq('ebay_listing_id', listingId)
       .order('reviewed_at', { ascending: false })

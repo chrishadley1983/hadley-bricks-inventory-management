@@ -620,9 +620,7 @@ describe('MonzoAuthService', () => {
       });
       // Store credentials fails
       mockFrom.mockReturnValueOnce({
-        upsert: vi.fn(() =>
-          Promise.resolve({ error: { message: 'Database error' } })
-        ),
+        upsert: vi.fn(() => Promise.resolve({ error: { message: 'Database error' } })),
       });
 
       vi.mocked(createClient).mockResolvedValue({
@@ -732,9 +730,7 @@ describe('MonzoAuthService', () => {
       // Mock delete failure
       mockFrom.mockReturnValueOnce({
         delete: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({ error: { message: 'Database error' } })
-        ),
+        eq: vi.fn(() => Promise.resolve({ error: { message: 'Database error' } })),
       });
 
       vi.mocked(createClient).mockResolvedValue({
@@ -779,4 +775,3 @@ describe('MonzoAuthService', () => {
     });
   });
 });
-

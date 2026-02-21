@@ -173,9 +173,7 @@ describe('CacheService', () => {
         { ID: 'HB-NEW-001', 'Set Number': '75192', Name: 'Millennium Falcon' },
         { ID: 'HB-NEW-002', 'Set Number': '10294', Name: 'Titanic' },
       ];
-      const mockUsedKitData = [
-        { ID: 'HB-USED-001', 'Set Number': '76139', Name: 'Batmobile' },
-      ];
+      const mockUsedKitData = [{ ID: 'HB-USED-001', 'Set Number': '76139', Name: 'Batmobile' }];
 
       mockSheetsClient.readSheet
         .mockResolvedValueOnce(mockNewKitData)
@@ -243,9 +241,7 @@ describe('CacheService', () => {
         { 'Set Number': '76139', Name: 'Batmobile' }, // Missing ID
       ];
 
-      mockSheetsClient.readSheet
-        .mockResolvedValueOnce(mockData)
-        .mockResolvedValueOnce([]);
+      mockSheetsClient.readSheet.mockResolvedValueOnce(mockData).mockResolvedValueOnce([]);
 
       const deleteQuery = { eq: vi.fn().mockResolvedValue({ error: null }) };
 
@@ -393,32 +389,16 @@ describe('CacheService', () => {
   describe('singleton management', () => {
     it('should return same instance for same user', () => {
       resetCacheService();
-      const service1 = getCacheService(
-        mockSupabase as never,
-        mockSheetsClient as never,
-        'user-1'
-      );
-      const service2 = getCacheService(
-        mockSupabase as never,
-        mockSheetsClient as never,
-        'user-1'
-      );
+      const service1 = getCacheService(mockSupabase as never, mockSheetsClient as never, 'user-1');
+      const service2 = getCacheService(mockSupabase as never, mockSheetsClient as never, 'user-1');
 
       expect(service1).toBe(service2);
     });
 
     it('should create new instance for different user', () => {
       resetCacheService();
-      const service1 = getCacheService(
-        mockSupabase as never,
-        mockSheetsClient as never,
-        'user-1'
-      );
-      const service2 = getCacheService(
-        mockSupabase as never,
-        mockSheetsClient as never,
-        'user-2'
-      );
+      const service1 = getCacheService(mockSupabase as never, mockSheetsClient as never, 'user-1');
+      const service2 = getCacheService(mockSupabase as never, mockSheetsClient as never, 'user-2');
 
       expect(service1).not.toBe(service2);
     });

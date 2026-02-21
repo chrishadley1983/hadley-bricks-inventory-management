@@ -7,9 +7,7 @@ describe('AI Prompts', () => {
 
   describe('parse-purchase', () => {
     it('should export system prompt', async () => {
-      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import('../prompts/parse-purchase');
 
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toBeDefined();
       expect(typeof PARSE_PURCHASE_SYSTEM_PROMPT).toBe('string');
@@ -19,30 +17,22 @@ describe('AI Prompts', () => {
     });
 
     it('should export createParsePurchaseMessage function', async () => {
-      const { createParsePurchaseMessage } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { createParsePurchaseMessage } = await import('../prompts/parse-purchase');
 
       expect(typeof createParsePurchaseMessage).toBe('function');
     });
 
     it('should create message containing user text', async () => {
-      const { createParsePurchaseMessage } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { createParsePurchaseMessage } = await import('../prompts/parse-purchase');
 
-      const message = createParsePurchaseMessage(
-        'Bought 75192 from eBay for £450'
-      );
+      const message = createParsePurchaseMessage('Bought 75192 from eBay for £450');
 
       expect(message).toContain('Bought 75192 from eBay for £450');
       expect(message).toContain('Parse this purchase description');
     });
 
     it('system prompt should include expected fields', async () => {
-      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import('../prompts/parse-purchase');
 
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('short_description');
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('cost');
@@ -52,9 +42,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should recognize common sources', async () => {
-      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import('../prompts/parse-purchase');
 
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('eBay');
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('FB Marketplace');
@@ -63,9 +51,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should recognize UK currency', async () => {
-      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-purchase'
-      );
+      const { PARSE_PURCHASE_SYSTEM_PROMPT } = await import('../prompts/parse-purchase');
 
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('UK currency');
       expect(PARSE_PURCHASE_SYSTEM_PROMPT).toContain('£');
@@ -79,9 +65,7 @@ describe('AI Prompts', () => {
 
   describe('calculate-distance', () => {
     it('should export system prompt', async () => {
-      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import(
-        '../prompts/calculate-distance'
-      );
+      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import('../prompts/calculate-distance');
 
       expect(CALCULATE_DISTANCE_SYSTEM_PROMPT).toBeDefined();
       expect(typeof CALCULATE_DISTANCE_SYSTEM_PROMPT).toBe('string');
@@ -90,17 +74,13 @@ describe('AI Prompts', () => {
     });
 
     it('should export createCalculateDistanceMessage function', async () => {
-      const { createCalculateDistanceMessage } = await import(
-        '../prompts/calculate-distance'
-      );
+      const { createCalculateDistanceMessage } = await import('../prompts/calculate-distance');
 
       expect(typeof createCalculateDistanceMessage).toBe('function');
     });
 
     it('should create message with both postcodes', async () => {
-      const { createCalculateDistanceMessage } = await import(
-        '../prompts/calculate-distance'
-      );
+      const { createCalculateDistanceMessage } = await import('../prompts/calculate-distance');
 
       const message = createCalculateDistanceMessage('SW1A 1AA', 'M1 1AE');
 
@@ -110,9 +90,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should include expected response fields', async () => {
-      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import(
-        '../prompts/calculate-distance'
-      );
+      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import('../prompts/calculate-distance');
 
       expect(CALCULATE_DISTANCE_SYSTEM_PROMPT).toContain('from_postcode');
       expect(CALCULATE_DISTANCE_SYSTEM_PROMPT).toContain('to_postcode');
@@ -121,9 +99,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should specify miles as unit', async () => {
-      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import(
-        '../prompts/calculate-distance'
-      );
+      const { CALCULATE_DISTANCE_SYSTEM_PROMPT } = await import('../prompts/calculate-distance');
 
       expect(CALCULATE_DISTANCE_SYSTEM_PROMPT).toContain('miles');
     });
@@ -135,9 +111,7 @@ describe('AI Prompts', () => {
 
   describe('parse-inventory', () => {
     it('should export system prompt', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toBeDefined();
       expect(typeof PARSE_INVENTORY_SYSTEM_PROMPT).toBe('string');
@@ -145,30 +119,22 @@ describe('AI Prompts', () => {
     });
 
     it('should export createParseInventoryMessage function', async () => {
-      const { createParseInventoryMessage } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { createParseInventoryMessage } = await import('../prompts/parse-inventory');
 
       expect(typeof createParseInventoryMessage).toBe('function');
     });
 
     it('should create message containing user text', async () => {
-      const { createParseInventoryMessage } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { createParseInventoryMessage } = await import('../prompts/parse-inventory');
 
-      const message = createParseInventoryMessage(
-        '3x 75192 and 2x 10294 from eBay'
-      );
+      const message = createParseInventoryMessage('3x 75192 and 2x 10294 from eBay');
 
       expect(message).toContain('3x 75192 and 2x 10294 from eBay');
       expect(message).toContain('Parse this inventory description');
     });
 
     it('system prompt should support multiple items', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('MULTIPLE items');
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('items');
@@ -176,9 +142,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should recognize quantity patterns', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('3x 75192');
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('2 x 10294');
@@ -186,9 +150,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should recognize conditions', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('New');
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('Used');
@@ -196,9 +158,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should recognize status values', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('NOT YET RECEIVED');
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('BACKLOG');
@@ -207,9 +167,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should include shared_fields', async () => {
-      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import(
-        '../prompts/parse-inventory'
-      );
+      const { PARSE_INVENTORY_SYSTEM_PROMPT } = await import('../prompts/parse-inventory');
 
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('shared_fields');
       expect(PARSE_INVENTORY_SYSTEM_PROMPT).toContain('total_cost');
@@ -223,9 +181,7 @@ describe('AI Prompts', () => {
 
   describe('extract-set-numbers', () => {
     it('should export system prompt', async () => {
-      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import('../prompts/extract-set-numbers');
 
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toBeDefined();
       expect(typeof EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toBe('string');
@@ -233,17 +189,13 @@ describe('AI Prompts', () => {
     });
 
     it('should export createExtractSetNumbersMessage function', async () => {
-      const { createExtractSetNumbersMessage } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { createExtractSetNumbersMessage } = await import('../prompts/extract-set-numbers');
 
       expect(typeof createExtractSetNumbersMessage).toBe('function');
     });
 
     it('should create singular message for one image', async () => {
-      const { createExtractSetNumbersMessage } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { createExtractSetNumbersMessage } = await import('../prompts/extract-set-numbers');
 
       const message = createExtractSetNumbersMessage(1);
 
@@ -252,9 +204,7 @@ describe('AI Prompts', () => {
     });
 
     it('should create plural message for multiple images', async () => {
-      const { createExtractSetNumbersMessage } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { createExtractSetNumbersMessage } = await import('../prompts/extract-set-numbers');
 
       const message = createExtractSetNumbersMessage(3);
 
@@ -262,9 +212,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should explain set number format', async () => {
-      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import('../prompts/extract-set-numbers');
 
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('4 to 6 digit');
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('75192');
@@ -273,18 +221,14 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should include confidence scoring', async () => {
-      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import('../prompts/extract-set-numbers');
 
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('confidence score');
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('0.0 to 1.0');
     });
 
     it('system prompt should specify JSON response format', async () => {
-      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import('../prompts/extract-set-numbers');
 
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('extractions');
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('set_number');
@@ -292,9 +236,7 @@ describe('AI Prompts', () => {
     });
 
     it('system prompt should warn against guessing', async () => {
-      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import(
-        '../prompts/extract-set-numbers'
-      );
+      const { EXTRACT_SET_NUMBERS_SYSTEM_PROMPT } = await import('../prompts/extract-set-numbers');
 
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('Do not guess');
       expect(EXTRACT_SET_NUMBERS_SYSTEM_PROMPT).toContain('make up numbers');

@@ -19,11 +19,13 @@ function normalizeStatus(rawStatus: string | null): string {
   if (!rawStatus) return 'Pending';
   const lower = rawStatus.toLowerCase();
 
-  if (lower.includes('completed') || lower.includes('received') || lower.includes('delivered')) return 'Completed';
+  if (lower.includes('completed') || lower.includes('received') || lower.includes('delivered'))
+    return 'Completed';
   if (lower.includes('shipped') || lower.includes('dispatched')) return 'Shipped';
   if (lower.includes('packed') || lower.includes('ready')) return 'Packed';
   if (lower.includes('paid') || lower.includes('payment')) return 'Paid';
-  if (lower.includes('cancel') || lower.includes('npb') || lower.includes('refund')) return 'Cancelled';
+  if (lower.includes('cancel') || lower.includes('npb') || lower.includes('refund'))
+    return 'Cancelled';
 
   return 'Pending';
 }
@@ -89,19 +91,29 @@ export async function GET(request: NextRequest) {
       // Use internal_status if available, otherwise pattern match on status
       switch (status) {
         case 'Pending':
-          query = query.or('internal_status.eq.Pending,and(internal_status.is.null,status.not.ilike.%shipped%,status.not.ilike.%completed%,status.not.ilike.%cancel%,status.not.ilike.%delivered%)');
+          query = query.or(
+            'internal_status.eq.Pending,and(internal_status.is.null,status.not.ilike.%shipped%,status.not.ilike.%completed%,status.not.ilike.%cancel%,status.not.ilike.%delivered%)'
+          );
           break;
         case 'Paid':
-          query = query.or('internal_status.eq.Paid,and(internal_status.is.null,or(status.ilike.%paid%,status.ilike.%payment%))');
+          query = query.or(
+            'internal_status.eq.Paid,and(internal_status.is.null,or(status.ilike.%paid%,status.ilike.%payment%))'
+          );
           break;
         case 'Shipped':
-          query = query.or('internal_status.eq.Shipped,and(internal_status.is.null,or(status.ilike.%shipped%,status.ilike.%dispatched%))');
+          query = query.or(
+            'internal_status.eq.Shipped,and(internal_status.is.null,or(status.ilike.%shipped%,status.ilike.%dispatched%))'
+          );
           break;
         case 'Completed':
-          query = query.or('internal_status.eq.Completed,and(internal_status.is.null,or(status.ilike.%completed%,status.ilike.%received%,status.ilike.%delivered%))');
+          query = query.or(
+            'internal_status.eq.Completed,and(internal_status.is.null,or(status.ilike.%completed%,status.ilike.%received%,status.ilike.%delivered%))'
+          );
           break;
         case 'Cancelled':
-          query = query.or('internal_status.eq.Cancelled,and(internal_status.is.null,or(status.ilike.%cancel%,status.ilike.%refund%))');
+          query = query.or(
+            'internal_status.eq.Cancelled,and(internal_status.is.null,or(status.ilike.%cancel%,status.ilike.%refund%))'
+          );
           break;
       }
     }
@@ -124,7 +136,9 @@ export async function GET(request: NextRequest) {
         case 'unmatched':
           // Show orders with items that have ASIN but aren't linked
           // These are orders that are pending or partial linking, excluding complete
-          query = query.or('inventory_link_status.is.null,inventory_link_status.eq.pending,inventory_link_status.eq.partial');
+          query = query.or(
+            'inventory_link_status.is.null,inventory_link_status.eq.pending,inventory_link_status.eq.partial'
+          );
           break;
         case 'no_asin':
           // This requires checking order_items - we'll handle this with a raw query
@@ -135,7 +149,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply sorting
-    const sortColumn = sortBy === 'order_date' ? 'order_date' : sortBy === 'buyer_name' ? 'buyer_name' : 'total';
+    const sortColumn =
+      sortBy === 'order_date' ? 'order_date' : sortBy === 'buyer_name' ? 'buyer_name' : 'total';
     query = query.order(sortColumn, { ascending: sortOrder === 'asc', nullsFirst: false });
 
     // Apply pagination
@@ -145,17 +160,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GET /api/orders/amazon] Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch Amazon orders' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch Amazon orders' }, { status: 500 });
     }
 
     // Get all ASINs from order items to check for matches
-    const allAsins = (orders || [])
-      .flatMap((order: { items?: Array<{ item_number: string | null }> }) =>
+    const allAsins = (orders || []).flatMap(
+      (order: { items?: Array<{ item_number: string | null }> }) =>
         (order.items || []).map((item) => item.item_number).filter(Boolean)
-      ) as string[];
+    ) as string[];
 
     // Fetch inventory items that have matching ASINs
     let matchedAsins = new Set<string>();
@@ -178,34 +190,36 @@ export async function GET(request: NextRequest) {
       const uiStatus = order.internal_status || normalizeStatus(order.status);
 
       // Check match status for each order item
-      const itemsWithMatch = (order.items || []).map((item: {
-        item_number: string | null;
-        inventory_item_id: string | null;
-        amazon_linked_at: string | null;
-      }) => {
-        // If already linked, it's matched
-        if (item.amazon_linked_at) {
+      const itemsWithMatch = (order.items || []).map(
+        (item: {
+          item_number: string | null;
+          inventory_item_id: string | null;
+          amazon_linked_at: string | null;
+        }) => {
+          // If already linked, it's matched
+          if (item.amazon_linked_at) {
+            return {
+              ...item,
+              match_status: 'linked' as const,
+            };
+          }
+
+          // Check if ASIN exists in inventory
+          const hasAsinMatch = item.item_number && matchedAsins.has(item.item_number);
+
+          // Items without ASIN are considered "no_asin"
+          const matchStatus = !item.item_number
+            ? 'no_asin'
+            : hasAsinMatch
+              ? 'matched'
+              : 'unmatched';
+
           return {
             ...item,
-            match_status: 'linked' as const,
+            match_status: matchStatus,
           };
         }
-
-        // Check if ASIN exists in inventory
-        const hasAsinMatch = item.item_number && matchedAsins.has(item.item_number);
-
-        // Items without ASIN are considered "no_asin"
-        const matchStatus = !item.item_number
-          ? 'no_asin'
-          : hasAsinMatch
-            ? 'matched'
-            : 'unmatched';
-
-        return {
-          ...item,
-          match_status: matchStatus,
-        };
-      });
+      );
 
       // Calculate order-level match summary
       const itemsWithAsin = itemsWithMatch.filter(

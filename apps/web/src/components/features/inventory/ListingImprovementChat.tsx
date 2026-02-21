@@ -11,11 +11,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   MessageCircle,
@@ -40,18 +36,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
   return (
-    <div
-      className={cn(
-        'flex w-full',
-        isUser ? 'justify-end' : 'justify-start'
-      )}
-    >
+    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
           'max-w-[85%] rounded-lg px-3 py-2 text-sm',
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-foreground'
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
         )}
       >
         <div className="whitespace-pre-wrap break-words">{message.content}</div>
@@ -68,9 +57,18 @@ function ThinkingIndicator() {
     <div className="flex justify-start">
       <div className="bg-muted rounded-lg px-3 py-2">
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div
+            className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce"
+            style={{ animationDelay: '0ms' }}
+          />
+          <div
+            className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce"
+            style={{ animationDelay: '150ms' }}
+          />
+          <div
+            className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce"
+            style={{ animationDelay: '300ms' }}
+          />
         </div>
       </div>
     </div>
@@ -95,13 +93,7 @@ export function ListingImprovementChat({ auditId }: ListingImprovementChatProps)
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    messages,
-    sendMessage,
-    isLoading,
-    error,
-    clearChat,
-  } = useListingChat(auditId);
+  const { messages, sendMessage, isLoading, error, clearChat } = useListingChat(auditId);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -146,11 +138,7 @@ export function ListingImprovementChat({ auditId }: ListingImprovementChatProps)
                   </span>
                 )}
               </div>
-              {isOpen ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
+              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </CardTitle>
           </CardHeader>
         </CollapsibleTrigger>
@@ -158,10 +146,7 @@ export function ListingImprovementChat({ auditId }: ListingImprovementChatProps)
         <CollapsibleContent>
           <CardContent className="pt-0 pb-3">
             {/* Messages area */}
-            <ScrollArea
-              ref={scrollRef}
-              className="h-[250px] pr-4 mb-3"
-            >
+            <ScrollArea ref={scrollRef} className="h-[250px] pr-4 mb-3">
               <div className="space-y-3">
                 {/* Empty state with suggested questions */}
                 {messages.length === 0 && !isLoading && (
@@ -213,11 +198,7 @@ export function ListingImprovementChat({ auditId }: ListingImprovementChatProps)
                 disabled={isLoading}
                 className="flex-1"
               />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!inputValue.trim() || isLoading}
-              >
+              <Button type="submit" size="icon" disabled={!inputValue.trim() || isLoading}>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

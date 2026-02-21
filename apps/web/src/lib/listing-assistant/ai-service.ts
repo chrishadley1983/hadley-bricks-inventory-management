@@ -84,10 +84,7 @@ Output Schema:
   const ebaySoldText = ebaySoldData?.length
     ? ebaySoldData
         .slice(0, 5)
-        .map(
-          (s) =>
-            `- ${s.title}: £${s.soldPrice.toFixed(2)} (${s.soldDate}, ${s.condition})`
-        )
+        .map((s) => `- ${s.title}: £${s.soldPrice.toFixed(2)} (${s.soldDate}, ${s.condition})`)
         .join('\n')
     : 'No recent sales data available';
 
@@ -115,15 +112,11 @@ Please generate the eBay listing now.`;
 
   console.log('[AI Service] Generating listing with Claude Opus...');
 
-  const result = await sendMessageForJSON<GenerationResult>(
-    systemPrompt,
-    userPrompt,
-    {
-      model: 'claude-opus-4-20250514',
-      maxTokens: 4096,
-      temperature: 0.3,
-    }
-  );
+  const result = await sendMessageForJSON<GenerationResult>(systemPrompt, userPrompt, {
+    model: 'claude-opus-4-20250514',
+    maxTokens: 4096,
+    temperature: 0.3,
+  });
 
   return {
     ...result,
@@ -165,9 +158,7 @@ export async function generateListingWithImage(
 /**
  * Analyze a product image for eBay listing
  */
-export async function analyzeProductImage(
-  imageBase64: string
-): Promise<ImageAnalysisResult> {
+export async function analyzeProductImage(imageBase64: string): Promise<ImageAnalysisResult> {
   const prompt = `Analyze this product image for an eBay listing.
 
 1. Generate a 150-character SEO-optimized description suitable for an Image Alt-Tag.

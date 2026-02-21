@@ -102,9 +102,7 @@ describe('PurchaseEvaluatorService', () => {
       const itemsChain = mockSupabase._createChain();
       itemsChain.insert.mockResolvedValueOnce({ error: null });
 
-      mockSupabase.from
-        .mockReturnValueOnce(evalChain)
-        .mockReturnValueOnce(itemsChain);
+      mockSupabase.from.mockReturnValueOnce(evalChain).mockReturnValueOnce(itemsChain);
 
       const result = await service.createEvaluation('user-1', {
         name: 'Test Evaluation',
@@ -223,9 +221,7 @@ describe('PurchaseEvaluatorService', () => {
       const itemsChain = mockSupabase._createChain();
       itemsChain.insert.mockResolvedValueOnce({ error: null });
 
-      mockSupabase.from
-        .mockReturnValueOnce(evalChain)
-        .mockReturnValueOnce(itemsChain);
+      mockSupabase.from.mockReturnValueOnce(evalChain).mockReturnValueOnce(itemsChain);
 
       const result = await service.createEvaluation('user-1', {
         name: 'Photo Evaluation',
@@ -336,9 +332,7 @@ describe('PurchaseEvaluatorService', () => {
 
       mockSupabase.from.mockReturnValueOnce(listChain);
 
-      await expect(service.getEvaluations('user-1')).rejects.toThrow(
-        'Failed to fetch evaluations'
-      );
+      await expect(service.getEvaluations('user-1')).rejects.toThrow('Failed to fetch evaluations');
     });
   });
 
@@ -428,9 +422,7 @@ describe('PurchaseEvaluatorService', () => {
       const itemsChain = mockSupabase._createChain();
       itemsChain.order.mockResolvedValueOnce({ data: mockItems, error: null });
 
-      mockSupabase.from
-        .mockReturnValueOnce(evalChain)
-        .mockReturnValueOnce(itemsChain);
+      mockSupabase.from.mockReturnValueOnce(evalChain).mockReturnValueOnce(itemsChain);
 
       const result = await service.getEvaluation('user-1', 'eval-1');
 
@@ -486,9 +478,7 @@ describe('PurchaseEvaluatorService', () => {
         error: { message: 'Items fetch failed' },
       });
 
-      mockSupabase.from
-        .mockReturnValueOnce(evalChain)
-        .mockReturnValueOnce(itemsChain);
+      mockSupabase.from.mockReturnValueOnce(evalChain).mockReturnValueOnce(itemsChain);
 
       await expect(service.getEvaluation('user-1', 'eval-1')).rejects.toThrow(
         'Failed to fetch items'
@@ -570,9 +560,7 @@ describe('PurchaseEvaluatorService', () => {
 
       mockSupabase.from.mockReturnValueOnce(deleteChain);
 
-      await expect(
-        service.deleteEvaluation('user-1', 'eval-1')
-      ).resolves.toBeUndefined();
+      await expect(service.deleteEvaluation('user-1', 'eval-1')).resolves.toBeUndefined();
 
       expect(mockSupabase.from).toHaveBeenCalledWith('purchase_evaluations');
     });
@@ -922,18 +910,18 @@ describe('PurchaseEvaluatorService', () => {
     it('should throw error when evaluation not found', async () => {
       vi.spyOn(service, 'getEvaluation').mockResolvedValueOnce(null);
 
-      await expect(
-        service.allocateCosts('user-1', 'eval-1', 'proportional', 150)
-      ).rejects.toThrow('Evaluation not found');
+      await expect(service.allocateCosts('user-1', 'eval-1', 'proportional', 150)).rejects.toThrow(
+        'Evaluation not found'
+      );
     });
 
     it('should throw error when total price required but missing', async () => {
       const evalWithoutPrice = { ...mockEvaluationWithItems, totalPurchasePrice: null };
       vi.spyOn(service, 'getEvaluation').mockResolvedValueOnce(evalWithoutPrice);
 
-      await expect(
-        service.allocateCosts('user-1', 'eval-1', 'proportional')
-      ).rejects.toThrow('Total purchase price required');
+      await expect(service.allocateCosts('user-1', 'eval-1', 'proportional')).rejects.toThrow(
+        'Total purchase price required'
+      );
     });
   });
 

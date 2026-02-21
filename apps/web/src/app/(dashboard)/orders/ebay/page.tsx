@@ -22,13 +22,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -135,7 +129,10 @@ async function fetchEbayStatusSummary(): Promise<{ data: EbayStatusSummary }> {
   return response.json();
 }
 
-async function syncEbayOrders(): Promise<{ success: boolean; results: { orders: { ordersProcessed: number } } }> {
+async function syncEbayOrders(): Promise<{
+  success: boolean;
+  results: { orders: { ordersProcessed: number } };
+}> {
   const response = await fetch('/api/integrations/ebay/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -145,7 +142,15 @@ async function syncEbayOrders(): Promise<{ success: boolean; results: { orders: 
   return response.json();
 }
 
-async function confirmOrder(orderId: string, skipUnmatched: boolean = false): Promise<{ success: boolean; data?: { unmatchedItems: number }; error?: string; unmatchedItems?: string[] }> {
+async function confirmOrder(
+  orderId: string,
+  skipUnmatched: boolean = false
+): Promise<{
+  success: boolean;
+  data?: { unmatchedItems: number };
+  error?: string;
+  unmatchedItems?: string[];
+}> {
   const response = await fetch(`/api/orders/ebay/${orderId}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -154,7 +159,10 @@ async function confirmOrder(orderId: string, skipUnmatched: boolean = false): Pr
   return response.json();
 }
 
-async function confirmBulkOrders(orderIds: string[], skipUnmatched: boolean = false): Promise<{ success: boolean; data: { confirmed: number; failed: number } }> {
+async function confirmBulkOrders(
+  orderIds: string[],
+  skipUnmatched: boolean = false
+): Promise<{ success: boolean; data: { confirmed: number; failed: number } }> {
   const response = await fetch('/api/orders/ebay/confirm-bulk', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -200,9 +208,14 @@ export default function EbayOrdersPage() {
   const [pendingConfirmOrderId, setPendingConfirmOrderId] = useState<string | null>(null);
   const [unmatchedWarning, setUnmatchedWarning] = useState<string[] | null>(null);
   const [skuMatcherOpen, setSkuMatcherOpen] = useState(false);
-  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{ sku: string; title: string } | null>(null);
+  const [selectedItemForMatching, setSelectedItemForMatching] = useState<{
+    sku: string;
+    title: string;
+  } | null>(null);
   const [unmatchedItemsDialogOpen, setUnmatchedItemsDialogOpen] = useState(false);
-  const [selectedOrderUnmatchedItems, setSelectedOrderUnmatchedItems] = useState<Array<{ sku: string; title: string }>>([]);
+  const [selectedOrderUnmatchedItems, setSelectedOrderUnmatchedItems] = useState<
+    Array<{ sku: string; title: string }>
+  >([]);
 
   // Handle platform change - redirect to main orders page for other platforms
   const handlePlatformChange = (newPlatform: string) => {
@@ -318,9 +331,7 @@ export default function EbayOrdersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">eBay Orders</h2>
-            <p className="text-muted-foreground">
-              View and manage orders from your eBay account
-            </p>
+            <p className="text-muted-foreground">View and manage orders from your eBay account</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -332,10 +343,7 @@ export default function EbayOrdersPage() {
               Picking List
               <Download className="ml-2 h-4 w-4" />
             </Button>
-            <Button
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-            >
+            <Button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
               {syncMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -356,7 +364,8 @@ export default function EbayOrdersPage() {
           <Alert className="bg-green-50 border-green-200">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              Sync complete: {syncMutation.data.results?.orders?.ordersProcessed || 0} orders processed
+              Sync complete: {syncMutation.data.results?.orders?.ordersProcessed || 0} orders
+              processed
             </AlertDescription>
           </Alert>
         )}
@@ -401,9 +410,7 @@ export default function EbayOrdersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Order History</CardTitle>
-                <CardDescription>
-                  Browse and manage your eBay orders
-                </CardDescription>
+                <CardDescription>Browse and manage your eBay orders</CardDescription>
               </div>
 
               {/* Bulk Actions */}
@@ -513,10 +520,7 @@ export default function EbayOrdersPage() {
                     </TableRow>
                   ) : orders.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={10}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                         No eBay orders found. Try syncing your orders.
                       </TableCell>
                     </TableRow>
@@ -533,12 +537,13 @@ export default function EbayOrdersPage() {
                             aria-label={`Select order ${order.ebay_order_id}`}
                           />
                         </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {order.ebay_order_id}
-                        </TableCell>
+                        <TableCell className="font-mono text-sm">{order.ebay_order_id}</TableCell>
                         <TableCell>
                           <Link href="/orders">
-                            <Badge variant="outline" className="capitalize cursor-pointer hover:bg-muted">
+                            <Badge
+                              variant="outline"
+                              className="capitalize cursor-pointer hover:bg-muted"
+                            >
                               eBay
                             </Badge>
                           </Link>
@@ -547,8 +552,19 @@ export default function EbayOrdersPage() {
                           {format(new Date(order.creation_date), 'MMM d, yyyy')}
                         </TableCell>
                         <TableCell>{order.buyer_username}</TableCell>
-                        <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground" title={order.line_items?.map((item) => item.title).filter(Boolean).join(', ') || '-'}>
-                          {order.line_items?.map((item) => item.title).filter(Boolean).join(', ') || '-'}
+                        <TableCell
+                          className="max-w-[200px] truncate text-sm text-muted-foreground"
+                          title={
+                            order.line_items
+                              ?.map((item) => item.title)
+                              .filter(Boolean)
+                              .join(', ') || '-'
+                          }
+                        >
+                          {order.line_items
+                            ?.map((item) => item.title)
+                            .filter(Boolean)
+                            .join(', ') || '-'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -564,12 +580,18 @@ export default function EbayOrdersPage() {
                                   const noSkuItems = order.line_items
                                     .filter((li) => li.match_status === 'no_sku')
                                     .map((li) => ({ sku: '', title: li.title }));
-                                  setSelectedOrderUnmatchedItems([...unmatchedItems, ...noSkuItems]);
+                                  setSelectedOrderUnmatchedItems([
+                                    ...unmatchedItems,
+                                    ...noSkuItems,
+                                  ]);
                                   setUnmatchedItemsDialogOpen(true);
                                 }}
                                 className="hover:opacity-80 transition-opacity cursor-pointer"
                               >
-                                <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="text-orange-600 border-orange-300 bg-orange-50 text-xs"
+                                >
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                   {order.match_summary.unmatched} unmatched
                                 </Badge>
@@ -586,12 +608,18 @@ export default function EbayOrdersPage() {
                                   const noSkuItems = order.line_items
                                     .filter((li) => li.match_status === 'no_sku')
                                     .map((li) => ({ sku: '', title: li.title }));
-                                  setSelectedOrderUnmatchedItems([...unmatchedItems, ...noSkuItems]);
+                                  setSelectedOrderUnmatchedItems([
+                                    ...unmatchedItems,
+                                    ...noSkuItems,
+                                  ]);
                                   setUnmatchedItemsDialogOpen(true);
                                 }}
                                 className="hover:opacity-80 transition-opacity cursor-pointer"
                               >
-                                <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="text-red-600 border-red-300 bg-red-50 text-xs"
+                                >
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                   {order.match_summary.no_sku} No SKU
                                 </Badge>
@@ -616,9 +644,7 @@ export default function EbayOrdersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/orders/ebay/${order.id}`}>
-                                  View Details
-                                </Link>
+                                <Link href={`/orders/ebay/${order.id}`}>View Details</Link>
                               </DropdownMenuItem>
                               {order.ui_status === 'Paid' && (
                                 <>
@@ -702,12 +728,14 @@ export default function EbayOrdersPage() {
           <div className="py-4">
             <ul className="list-disc list-inside space-y-1 text-sm">
               {unmatchedWarning?.map((item, i) => (
-                <li key={i} className="text-muted-foreground">{item}</li>
+                <li key={i} className="text-muted-foreground">
+                  {item}
+                </li>
               ))}
             </ul>
             <p className="mt-4 text-sm">
-              You can either match these items first, or confirm the order anyway
-              (inventory won&apos;t be updated for unmatched items).
+              You can either match these items first, or confirm the order anyway (inventory
+              won&apos;t be updated for unmatched items).
             </p>
           </div>
           <DialogFooter>
@@ -715,13 +743,9 @@ export default function EbayOrdersPage() {
               Cancel
             </Button>
             <Link href="/settings/integrations">
-              <Button variant="secondary">
-                Match Items
-              </Button>
+              <Button variant="secondary">Match Items</Button>
             </Link>
-            <Button onClick={handleConfirmWithSkip}>
-              Confirm Anyway
-            </Button>
+            <Button onClick={handleConfirmWithSkip}>Confirm Anyway</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -734,40 +758,42 @@ export default function EbayOrdersPage() {
               <AlertCircle className="h-5 w-5 text-orange-500" />
               Unmatched Items
             </DialogTitle>
-            <DialogDescription>
-              These items need to be linked to inventory
-            </DialogDescription>
+            <DialogDescription>These items need to be linked to inventory</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-2">
-            {selectedOrderUnmatchedItems.filter((item) => item.sku).map((item, i) => (
-              <button
-                key={`sku-${i}`}
-                type="button"
-                className="w-full text-left p-3 rounded-md border hover:bg-muted transition-colors"
-                onClick={() => {
-                  setSelectedItemForMatching(item);
-                  setUnmatchedItemsDialogOpen(false);
-                  setSkuMatcherOpen(true);
-                }}
-              >
-                <div className="font-medium text-sm">{item.title}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  SKU: <span className="font-mono">{item.sku}</span>
+            {selectedOrderUnmatchedItems
+              .filter((item) => item.sku)
+              .map((item, i) => (
+                <button
+                  key={`sku-${i}`}
+                  type="button"
+                  className="w-full text-left p-3 rounded-md border hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setSelectedItemForMatching(item);
+                    setUnmatchedItemsDialogOpen(false);
+                    setSkuMatcherOpen(true);
+                  }}
+                >
+                  <div className="font-medium text-sm">{item.title}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    SKU: <span className="font-mono">{item.sku}</span>
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">Click to link to inventory</div>
+                </button>
+              ))}
+            {selectedOrderUnmatchedItems
+              .filter((item) => !item.sku)
+              .map((item, i) => (
+                <div
+                  key={`nosku-${i}`}
+                  className="w-full text-left p-3 rounded-md border bg-gray-50"
+                >
+                  <div className="font-medium text-sm">{item.title}</div>
+                  <div className="text-xs text-orange-600 mt-1">
+                    No SKU on eBay listing - add SKU in eBay to enable linking
+                  </div>
                 </div>
-                <div className="text-xs text-blue-600 mt-1">Click to link to inventory</div>
-              </button>
-            ))}
-            {selectedOrderUnmatchedItems.filter((item) => !item.sku).map((item, i) => (
-              <div
-                key={`nosku-${i}`}
-                className="w-full text-left p-3 rounded-md border bg-gray-50"
-              >
-                <div className="font-medium text-sm">{item.title}</div>
-                <div className="text-xs text-orange-600 mt-1">
-                  No SKU on eBay listing - add SKU in eBay to enable linking
-                </div>
-              </div>
-            ))}
+              ))}
             {selectedOrderUnmatchedItems.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 All items are matched.

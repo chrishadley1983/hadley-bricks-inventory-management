@@ -8,7 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { CostModellingRepository, scenarioToFormData } from '@/lib/repositories/cost-modelling.repository';
+import {
+  CostModellingRepository,
+  scenarioToFormData,
+} from '@/lib/repositories/cost-modelling.repository';
 
 const UpdateScenarioSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -60,21 +63,25 @@ const UpdateScenarioSchema = z.object({
   legoPartsPercentBl: z.number().min(0).max(1).optional(),
 
   // Package Costs
-  packageCosts: z.array(z.object({
-    packageType: z.enum([
-      'large_parcel_amazon',
-      'small_parcel_amazon',
-      'large_letter_amazon',
-      'large_parcel_ebay',
-      'small_parcel_ebay',
-      'large_letter_ebay',
-    ]),
-    postage: z.number().min(0),
-    cardboard: z.number().min(0),
-    bubbleWrap: z.number().min(0),
-    legoCard: z.number().min(0),
-    businessCard: z.number().min(0),
-  })).optional(),
+  packageCosts: z
+    .array(
+      z.object({
+        packageType: z.enum([
+          'large_parcel_amazon',
+          'small_parcel_amazon',
+          'large_letter_amazon',
+          'large_parcel_ebay',
+          'small_parcel_ebay',
+          'large_letter_ebay',
+        ]),
+        postage: z.number().min(0),
+        cardboard: z.number().min(0),
+        bubbleWrap: z.number().min(0),
+        legoCard: z.number().min(0),
+        businessCard: z.number().min(0),
+      })
+    )
+    .optional(),
 
   // For conflict detection
   knownUpdatedAt: z.string().optional(),
@@ -85,10 +92,7 @@ const UpdateScenarioSchema = z.object({
  * Returns full scenario with package costs
  * F4: Load all data for form
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -124,10 +128,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/cost-modelling/scenarios/[id]] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch scenario' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch scenario' }, { status: 500 });
   }
 }
 
@@ -137,10 +138,7 @@ export async function GET(
  * F5: Returns 200 on success
  * E7: Checks for concurrent edit conflict
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -199,10 +197,7 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json(
-      { error: 'Failed to update scenario' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to update scenario' }, { status: 500 });
   }
 }
 
@@ -233,10 +228,7 @@ export async function DELETE(
     // E5: Check if this is the last scenario
     const count = await repository.getScenarioCount(user.id);
     if (count <= 1) {
-      return NextResponse.json(
-        { error: 'Cannot delete the last scenario' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Cannot delete the last scenario' }, { status: 400 });
     }
 
     await repository.delete(id, user.id);
@@ -244,9 +236,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[DELETE /api/cost-modelling/scenarios/[id]] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete scenario' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delete scenario' }, { status: 500 });
   }
 }

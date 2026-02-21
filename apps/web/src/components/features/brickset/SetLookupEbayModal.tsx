@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ExternalLink, Star, Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -49,7 +44,9 @@ export function SetLookupEbayModal({
       setLoading(true);
       setError(null);
 
-      fetch(`/api/brickset/ebay-listings?setNumber=${encodeURIComponent(setNumber)}&condition=${condition}`)
+      fetch(
+        `/api/brickset/ebay-listings?setNumber=${encodeURIComponent(setNumber)}&condition=${condition}`
+      )
         .then((res) => {
           if (!res.ok) throw new Error('Failed to fetch eBay listings');
           return res.json();
@@ -92,14 +89,15 @@ export function SetLookupEbayModal({
               <DialogTitle className="text-lg font-bold">
                 eBay Listings ({isUsed ? 'Used' : 'New'}): {setNumber}
               </DialogTitle>
-              {setName && (
-                <p className="text-sm text-muted-foreground mt-1">{setName}</p>
-              )}
+              {setName && <p className="text-sm text-muted-foreground mt-1">{setName}</p>}
             </div>
-            <Badge variant="outline" className={cn(
-              "font-mono text-xs",
-              isUsed ? "border-orange-300 text-orange-700" : "border-purple-300 text-purple-700"
-            )}>
+            <Badge
+              variant="outline"
+              className={cn(
+                'font-mono text-xs',
+                isUsed ? 'border-orange-300 text-orange-700' : 'border-purple-300 text-purple-700'
+              )}
+            >
               {listings.length} listings
             </Badge>
           </div>
@@ -110,20 +108,41 @@ export function SetLookupEbayModal({
           <div className="rounded-lg border overflow-hidden flex-shrink-0">
             <div className="grid grid-cols-3 divide-x bg-muted/50">
               <div className="p-3 text-center">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Min Price</div>
-                <div className={cn("font-mono text-lg font-bold", isUsed ? "text-orange-600" : "text-purple-600")}>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Min Price
+                </div>
+                <div
+                  className={cn(
+                    'font-mono text-lg font-bold',
+                    isUsed ? 'text-orange-600' : 'text-purple-600'
+                  )}
+                >
                   {formatCurrency(stats.minPrice)}
                 </div>
               </div>
               <div className="p-3 text-center">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Price</div>
-                <div className={cn("font-mono text-lg font-bold", isUsed ? "text-orange-600" : "text-purple-600")}>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Avg Price
+                </div>
+                <div
+                  className={cn(
+                    'font-mono text-lg font-bold',
+                    isUsed ? 'text-orange-600' : 'text-purple-600'
+                  )}
+                >
                   {formatCurrency(stats.avgPrice)}
                 </div>
               </div>
               <div className="p-3 text-center">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Max Price</div>
-                <div className={cn("font-mono text-lg font-bold", isUsed ? "text-orange-600" : "text-purple-600")}>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Max Price
+                </div>
+                <div
+                  className={cn(
+                    'font-mono text-lg font-bold',
+                    isUsed ? 'text-orange-600' : 'text-purple-600'
+                  )}
+                >
                   {formatCurrency(stats.maxPrice)}
                 </div>
               </div>
@@ -134,8 +153,12 @@ export function SetLookupEbayModal({
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className={cn("h-8 w-8 animate-spin", isUsed ? "text-orange-600" : "text-purple-600")} />
-            <span className="ml-3 text-muted-foreground">Searching eBay {isUsed ? 'used' : 'new'} listings...</span>
+            <Loader2
+              className={cn('h-8 w-8 animate-spin', isUsed ? 'text-orange-600' : 'text-purple-600')}
+            />
+            <span className="ml-3 text-muted-foreground">
+              Searching eBay {isUsed ? 'used' : 'new'} listings...
+            </span>
           </div>
         )}
 
@@ -185,7 +208,12 @@ export function SetLookupEbayModal({
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div>
-                          <span className={cn("font-mono font-bold", isUsed ? "text-orange-600" : "text-purple-600")}>
+                          <span
+                            className={cn(
+                              'font-mono font-bold',
+                              isUsed ? 'text-orange-600' : 'text-purple-600'
+                            )}
+                          >
                             {formatCurrency(listing.totalPrice)}
                           </span>
                           {listing.shippingCost > 0 && (
@@ -220,8 +248,8 @@ export function SetLookupEbayModal({
                               listing.sellerFeedback >= 99
                                 ? 'text-green-600'
                                 : listing.sellerFeedback >= 95
-                                ? 'text-amber-600'
-                                : 'text-red-600'
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
                             )}
                           >
                             {listing.sellerFeedback.toFixed(1)}%
@@ -258,7 +286,13 @@ export function SetLookupEbayModal({
             Showing UK listings, {isUsed ? 'Used' : 'New'} condition, Buy It Now only
           </div>
           {ebaySearchUrl && (
-            <Button asChild className={cn(isUsed ? "bg-orange-600 hover:bg-orange-700" : "bg-purple-600 hover:bg-purple-700")} size="sm">
+            <Button
+              asChild
+              className={cn(
+                isUsed ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'
+              )}
+              size="sm"
+            >
               <a href={ebaySearchUrl} target="_blank" rel="noopener noreferrer">
                 View on eBay
                 <ExternalLink className="ml-2 h-4 w-4" />

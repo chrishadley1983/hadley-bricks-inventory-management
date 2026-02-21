@@ -157,9 +157,7 @@ describe('Orders API Routes', () => {
         totalPages: 1,
       });
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/orders?platform=bricklink'
-      );
+      const request = new NextRequest('http://localhost:3000/api/orders?platform=bricklink');
       const response = await GET(request);
 
       expect(response.status).toBe(200);
@@ -257,17 +255,14 @@ describe('Orders API Routes', () => {
         totalPages: 3,
       });
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/orders?page=2&pageSize=20'
-      );
+      const request = new NextRequest('http://localhost:3000/api/orders?page=2&pageSize=20');
       const response = await GET(request);
 
       expect(response.status).toBe(200);
-      expect(mockOrderRepo.findByUser).toHaveBeenCalledWith(
-        'test-user-id',
-        expect.any(Object),
-        { page: 2, pageSize: 20 }
-      );
+      expect(mockOrderRepo.findByUser).toHaveBeenCalledWith('test-user-id', expect.any(Object), {
+        page: 2,
+        pageSize: 20,
+      });
 
       const json = await response.json();
       expect(json.pagination.page).toBe(2);
@@ -285,9 +280,7 @@ describe('Orders API Routes', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      const request = new NextRequest(
-        'http://localhost:3000/api/orders?page=-1'
-      );
+      const request = new NextRequest('http://localhost:3000/api/orders?page=-1');
       const response = await GET(request);
 
       expect(response.status).toBe(400);

@@ -18,15 +18,14 @@ import {
   bulkApproveRemovals,
   fetchMinifigDashboard,
 } from '@/lib/api/minifig-sync';
-import type { MinifigSyncFilters } from '@/lib/api/minifig-sync';
+import type { MinifigSyncFilters, SyncItemUpdateData } from '@/lib/api/minifig-sync';
 
 // ── Query Key Factory ──────────────────────────────────
 
 export const minifigSyncKeys = {
   all: ['minifig-sync'] as const,
   lists: () => [...minifigSyncKeys.all, 'list'] as const,
-  list: (filters?: MinifigSyncFilters) =>
-    [...minifigSyncKeys.lists(), filters] as const,
+  list: (filters?: MinifigSyncFilters) => [...minifigSyncKeys.lists(), filters] as const,
   items: () => [...minifigSyncKeys.all, 'item'] as const,
   item: (id: string) => [...minifigSyncKeys.items(), id] as const,
   removals: () => [...minifigSyncKeys.all, 'removals'] as const,
@@ -179,13 +178,8 @@ export function useBulkApproveRemovals() {
 export function useUpdateSyncItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: { title?: string; description?: string; price?: number };
-    }) => updateSyncItem(id, data),
+    mutationFn: ({ id, data }: { id: string; data: SyncItemUpdateData }) =>
+      updateSyncItem(id, data),
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.item(id) });
       queryClient.invalidateQueries({ queryKey: minifigSyncKeys.lists() });

@@ -8,13 +8,7 @@
 // JSON Type (for Supabase compatibility)
 // ============================================================================
 
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 // ============================================================================
 // Sync Mode Types

@@ -97,7 +97,9 @@ export function AnalysisPanel({
   useEffect(() => {
     if (!result) return; // Guard for when result is null
 
-    console.log(`[AnalysisPanel] useEffect: allReviewed=${allReviewed}, suggestions.length=${suggestions.length}, hasTriggeredAllReviewed=${hasTriggeredAllReviewed}, hasOnAllReviewed=${!!onAllReviewed}`);
+    console.log(
+      `[AnalysisPanel] useEffect: allReviewed=${allReviewed}, suggestions.length=${suggestions.length}, hasTriggeredAllReviewed=${hasTriggeredAllReviewed}, hasOnAllReviewed=${!!onAllReviewed}`
+    );
     if (allReviewed && suggestions.length > 0 && !hasTriggeredAllReviewed && onAllReviewed) {
       console.log('[AnalysisPanel] ALL CONDITIONS MET - Triggering onAllReviewed NOW');
       setHasTriggeredAllReviewed(true);
@@ -110,24 +112,32 @@ export function AnalysisPanel({
 
   const handleApprove = () => {
     if (!currentSuggestion) return;
-    console.log(`[AnalysisPanel] Approving suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`);
+    console.log(
+      `[AnalysisPanel] Approving suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`
+    );
     onApprove(currentSuggestion);
     // Always advance to next (or past the end to show "all reviewed")
     setCurrentSuggestionIndex((prev) => {
       const next = prev + 1;
-      console.log(`[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`);
+      console.log(
+        `[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`
+      );
       return next;
     });
   };
 
   const handleSkip = () => {
     if (!currentSuggestion) return;
-    console.log(`[AnalysisPanel] Skipping suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`);
+    console.log(
+      `[AnalysisPanel] Skipping suggestion ${currentSuggestionIndex + 1}/${suggestions.length}`
+    );
     onSkip(currentSuggestion);
     // Always advance to next (or past the end to show "all reviewed")
     setCurrentSuggestionIndex((prev) => {
       const next = prev + 1;
-      console.log(`[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`);
+      console.log(
+        `[AnalysisPanel] Index advancing from ${prev} to ${next}, suggestions.length=${suggestions.length}, will be allReviewed=${next >= suggestions.length}`
+      );
       return next;
     });
   };
@@ -141,9 +151,7 @@ export function AnalysisPanel({
             <Badge variant={getGradeVariant(analysis.grade)} className="text-lg px-3 py-1">
               {analysis.grade}
             </Badge>
-            <span className="text-muted-foreground font-normal">
-              {analysis.score}/100
-            </span>
+            <span className="text-muted-foreground font-normal">{analysis.score}/100</span>
             {previousScore !== null && previousScore !== analysis.score && (
               <span className="flex items-center text-sm text-green-600">
                 <TrendingUp className="h-4 w-4 mr-1" />
@@ -151,9 +159,7 @@ export function AnalysisPanel({
               </span>
             )}
           </SheetTitle>
-          <SheetDescription>
-            Quality analysis and improvement suggestions
-          </SheetDescription>
+          <SheetDescription>Quality analysis and improvement suggestions</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
@@ -221,9 +227,7 @@ export function AnalysisPanel({
                 <div>
                   <span className="text-muted-foreground">Competitor Avg</span>
                   <p className="font-medium">
-                    {pricing.competitorAvgPrice
-                      ? `£${pricing.competitorAvgPrice.toFixed(2)}`
-                      : '-'}
+                    {pricing.competitorAvgPrice ? `£${pricing.competitorAvgPrice.toFixed(2)}` : '-'}
                   </p>
                 </div>
                 <div>
@@ -256,9 +260,7 @@ export function AnalysisPanel({
                   </div>
                   <div>
                     <span className="text-muted-foreground">Profit Margin</span>
-                    <p className="font-medium">
-                      {pricing.profitMargin?.toFixed(1) || '-'}%
-                    </p>
+                    <p className="font-medium">{pricing.profitMargin?.toFixed(1) || '-'}%</p>
                   </div>
                 </div>
               ) : (
@@ -305,9 +307,7 @@ export function AnalysisPanel({
                     </div>
 
                     {/* Issue */}
-                    <div className="text-sm text-muted-foreground">
-                      {currentSuggestion.issue}
-                    </div>
+                    <div className="text-sm text-muted-foreground">{currentSuggestion.issue}</div>
 
                     {/* Side by side comparison */}
                     <div className="grid grid-cols-2 gap-4">
@@ -526,7 +526,8 @@ function ScoreBar({
   feedback: string;
 }) {
   const percentage = (score / max) * 100;
-  const variant = percentage >= 80 ? 'bg-green-500' : percentage >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+  const variant =
+    percentage >= 80 ? 'bg-green-500' : percentage >= 60 ? 'bg-yellow-500' : 'bg-red-500';
 
   return (
     <div className="space-y-1">

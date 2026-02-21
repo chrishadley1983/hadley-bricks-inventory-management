@@ -5,10 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  ListingAssistantSettings,
-  UpdateSettingsInput,
-} from '@/lib/listing-assistant/types';
+import type { ListingAssistantSettings, UpdateSettingsInput } from '@/lib/listing-assistant/types';
 
 // ============================================
 // Query Keys
@@ -35,9 +32,7 @@ async function fetchSettings(): Promise<ListingAssistantSettings> {
   return data;
 }
 
-async function updateSettings(
-  input: UpdateSettingsInput
-): Promise<ListingAssistantSettings> {
+async function updateSettings(input: UpdateSettingsInput): Promise<ListingAssistantSettings> {
   const response = await fetch('/api/listing-assistant/settings', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

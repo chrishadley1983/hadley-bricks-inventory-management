@@ -103,10 +103,7 @@ export class QuickFileService {
   /**
    * Make API request to QuickFile
    */
-  private async makeRequest<T>(
-    endpoint: string,
-    body: Record<string, unknown>
-  ): Promise<T> {
+  private async makeRequest<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
     const submissionNumber = this.generateSubmissionNumber();
     const header = this.buildHeader(submissionNumber);
 

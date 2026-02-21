@@ -187,10 +187,7 @@ export class EbayNegotiationClient {
    * @param options Fetch options
    * @returns Parsed JSON response
    */
-  private async makeRequest<T>(
-    url: string,
-    options: RequestInit
-  ): Promise<T> {
+  private async makeRequest<T>(url: string, options: RequestInit): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -198,9 +195,9 @@ export class EbayNegotiationClient {
         const response = await fetch(url, {
           ...options,
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            Accept: 'application/json',
             'X-EBAY-C-MARKETPLACE-ID': this.marketplaceId,
             ...options.headers,
           },
@@ -209,9 +206,7 @@ export class EbayNegotiationClient {
         // Handle rate limiting with retry
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After');
-          const delayMs = retryAfter
-            ? parseInt(retryAfter, 10) * 1000
-            : RETRY_DELAY_MS * attempt;
+          const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY_MS * attempt;
 
           console.warn(
             `[EbayNegotiationClient] Rate limited, retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`
@@ -232,8 +227,8 @@ export class EbayNegotiationClient {
             // Response wasn't JSON
           }
 
-          const errorMessage = errorData?.errors?.[0]?.message
-            || `API request failed: ${response.status}`;
+          const errorMessage =
+            errorData?.errors?.[0]?.message || `API request failed: ${response.status}`;
 
           throw new EbayNegotiationApiError(
             errorMessage,
@@ -250,10 +245,7 @@ export class EbayNegotiationClient {
         lastError = error as Error;
 
         // Don't retry on non-retryable errors
-        if (
-          error instanceof EbayNegotiationApiError &&
-          !error.isRateLimitError()
-        ) {
+        if (error instanceof EbayNegotiationApiError && !error.isRateLimitError()) {
           throw error;
         }
 

@@ -12,12 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatCurrency } from '@/lib/utils';
 import type { EnrichedEligibleItem } from '@/lib/ebay/negotiation.types';
 
@@ -100,8 +95,8 @@ export function PlannedOffersTable({
           {eligibleItems.length === 0
             ? 'No listings are currently eligible for offers'
             : selectedIds.size > 0
-            ? `${selectedIds.size} of ${eligibleItems.length} listing(s) selected to send`
-            : `${eligibleItems.length} listing(s) available - select items to send offers`}
+              ? `${selectedIds.size} of ${eligibleItems.length} listing(s) selected to send`
+              : `${eligibleItems.length} listing(s) available - select items to send offers`}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -109,7 +104,10 @@ export function PlannedOffersTable({
           <div className="text-sm text-muted-foreground py-4 space-y-2">
             <p className="text-center font-medium">Why are there no eligible listings?</p>
             <ul className="list-disc list-inside space-y-1 text-left max-w-md mx-auto">
-              <li>eBay only returns listings with <strong>interested buyers</strong> (watchers, cart abandoners)</li>
+              <li>
+                eBay only returns listings with <strong>interested buyers</strong> (watchers, cart
+                abandoners)
+              </li>
               <li>Listings must be active for at least the minimum days configured in Settings</li>
               <li>Buyers may have already received offers recently</li>
             </ul>
@@ -121,7 +119,9 @@ export function PlannedOffersTable({
                 <TableHead className="w-[40px]">
                   <Checkbox
                     checked={someSelected ? 'indeterminate' : allSelected}
-                    onCheckedChange={(checked: boolean | 'indeterminate') => handleSelectAll(!!checked)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      handleSelectAll(!!checked)
+                    }
                     aria-label="Select all"
                   />
                 </TableHead>
@@ -145,7 +145,9 @@ export function PlannedOffersTable({
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(item.listingId)}
-                        onCheckedChange={(checked: boolean | 'indeterminate') => handleSelectItem(item.listingId, !!checked)}
+                        onCheckedChange={(checked: boolean | 'indeterminate') =>
+                          handleSelectItem(item.listingId, !!checked)
+                        }
                         aria-label={`Select ${item.title || item.listingId}`}
                       />
                     </TableCell>
@@ -163,9 +165,7 @@ export function PlannedOffersTable({
                           <TooltipTrigger asChild>
                             <div className="cursor-help">
                               {item.watcherCount > 0 && (
-                                <div className="text-sm">
-                                  👁 {item.watcherCount}
-                                </div>
+                                <div className="text-sm">👁 {item.watcherCount}</div>
                               )}
                               {item.previousOfferCount > 0 && (
                                 <div className="text-xs text-muted-foreground">
@@ -199,9 +199,7 @@ export function PlannedOffersTable({
                       {formatCurrency(currentPrice, 'GBP')}
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className="text-destructive">
-                        -{item.discountPercentage}%
-                      </span>
+                      <span className="text-destructive">-{item.discountPercentage}%</span>
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(offerPrice, 'GBP')}
@@ -215,8 +213,8 @@ export function PlannedOffersTable({
                                 item.score >= 70
                                   ? 'destructive'
                                   : item.score >= 50
-                                  ? 'default'
-                                  : 'secondary'
+                                    ? 'default'
+                                    : 'secondary'
                               }
                               className="cursor-help"
                             >
@@ -225,7 +223,9 @@ export function PlannedOffersTable({
                           </TooltipTrigger>
                           <TooltipContent side="left" className="text-xs">
                             <div className="space-y-1">
-                              <div className="font-semibold border-b pb-1 mb-1">Score Breakdown</div>
+                              <div className="font-semibold border-b pb-1 mb-1">
+                                Score Breakdown
+                              </div>
                               <div className="flex justify-between gap-4">
                                 <span>Listing Age:</span>
                                 <span className="font-mono">{item.scoreFactors.listing_age}</span>

@@ -111,9 +111,7 @@ export class AmazonFeedsClient {
       { contentType }
     );
 
-    console.log(
-      `[AmazonFeedsClient] Feed document created: ${response.feedDocumentId}`
-    );
+    console.log(`[AmazonFeedsClient] Feed document created: ${response.feedDocumentId}`);
     return response;
   }
 
@@ -129,9 +127,7 @@ export class AmazonFeedsClient {
     content: string,
     contentType: string = 'application/json'
   ): Promise<void> {
-    console.log(
-      `[AmazonFeedsClient] Uploading feed content (${content.length} bytes)...`
-    );
+    console.log(`[AmazonFeedsClient] Uploading feed content (${content.length} bytes)...`);
 
     const response = await fetch(uploadUrl, {
       method: 'PUT',
@@ -169,15 +165,11 @@ export class AmazonFeedsClient {
   ): Promise<CreateFeedResponse> {
     console.log(`[AmazonFeedsClient] Submitting feed (type: ${feedType})...`);
 
-    const response = await this.request<CreateFeedResponse>(
-      `${FEEDS_API_PATH}/feeds`,
-      'POST',
-      {
-        feedType,
-        marketplaceIds,
-        inputFeedDocumentId: feedDocumentId,
-      }
-    );
+    const response = await this.request<CreateFeedResponse>(`${FEEDS_API_PATH}/feeds`, 'POST', {
+      feedType,
+      marketplaceIds,
+      inputFeedDocumentId: feedDocumentId,
+    });
 
     console.log(`[AmazonFeedsClient] Feed submitted: ${response.feedId}`);
     return response;
@@ -190,10 +182,7 @@ export class AmazonFeedsClient {
    * @returns Feed status including processing state
    */
   async getFeedStatus(feedId: string): Promise<FeedStatusResponse> {
-    return this.request<FeedStatusResponse>(
-      `${FEEDS_API_PATH}/feeds/${feedId}`,
-      'GET'
-    );
+    return this.request<FeedStatusResponse>(`${FEEDS_API_PATH}/feeds/${feedId}`, 'GET');
   }
 
   /**
@@ -230,25 +219,19 @@ export class AmazonFeedsClient {
       }
 
       if (status.processingStatus === 'DONE') {
-        console.log(
-          `[AmazonFeedsClient] Feed complete: ${status.resultFeedDocumentId}`
-        );
+        console.log(`[AmazonFeedsClient] Feed complete: ${status.resultFeedDocumentId}`);
         return status;
       }
 
       if (this.isFeedTerminal(status.processingStatus)) {
-        throw new Error(
-          `Feed processing failed with status: ${status.processingStatus}`
-        );
+        throw new Error(`Feed processing failed with status: ${status.processingStatus}`);
       }
 
       // Wait before next poll
       await this.sleep(pollIntervalMs);
     }
 
-    throw new Error(
-      `Feed processing timed out after ${maxWaitMs / 1000} seconds`
-    );
+    throw new Error(`Feed processing timed out after ${maxWaitMs / 1000} seconds`);
   }
 
   // ==========================================================================
@@ -261,9 +244,7 @@ export class AmazonFeedsClient {
    * @param resultDocumentId - Result document ID from completed feed
    * @returns Document info including download URL
    */
-  async getFeedResultDocument(
-    resultDocumentId: string
-  ): Promise<FeedResultDocumentResponse> {
+  async getFeedResultDocument(resultDocumentId: string): Promise<FeedResultDocumentResponse> {
     return this.request<FeedResultDocumentResponse>(
       `${FEEDS_API_PATH}/documents/${resultDocumentId}`,
       'GET'
@@ -281,9 +262,7 @@ export class AmazonFeedsClient {
     documentUrl: string,
     isCompressed: boolean
   ): Promise<FeedProcessingReport> {
-    console.log(
-      `[AmazonFeedsClient] Downloading feed result (compressed: ${isCompressed})...`
-    );
+    console.log(`[AmazonFeedsClient] Downloading feed result (compressed: ${isCompressed})...`);
 
     const response = await fetch(documentUrl);
 
@@ -299,9 +278,7 @@ export class AmazonFeedsClient {
       content = await response.text();
     }
 
-    console.log(
-      `[AmazonFeedsClient] Feed result downloaded: ${content.length} characters`
-    );
+    console.log(`[AmazonFeedsClient] Feed result downloaded: ${content.length} characters`);
     console.log(`[AmazonFeedsClient] Feed result raw content:`, content);
 
     return JSON.parse(content) as FeedProcessingReport;
@@ -332,11 +309,7 @@ export class AmazonFeedsClient {
     await this.uploadFeedContent(document.url, content, 'application/json');
 
     // 3. Submit feed
-    const feed = await this.createFeed(
-      feedType,
-      document.feedDocumentId,
-      marketplaceIds
-    );
+    const feed = await this.createFeed(feedType, document.feedDocumentId, marketplaceIds);
 
     return {
       feedId: feed.feedId,
@@ -352,10 +325,7 @@ export class AmazonFeedsClient {
    */
   async getFeedResult(resultDocumentId: string): Promise<FeedProcessingReport> {
     const document = await this.getFeedResultDocument(resultDocumentId);
-    return this.downloadFeedResult(
-      document.url,
-      document.compressionAlgorithm === 'GZIP'
-    );
+    return this.downloadFeedResult(document.url, document.compressionAlgorithm === 'GZIP');
   }
 
   /**
@@ -391,11 +361,7 @@ export class AmazonFeedsClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body?: unknown
-  ): Promise<T> {
+  private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -423,9 +389,7 @@ export class AmazonFeedsClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
-      console.warn(
-        `[AmazonFeedsClient] Rate limited, waiting ${waitTime / 1000}s...`
-      );
+      console.warn(`[AmazonFeedsClient] Rate limited, waiting ${waitTime / 1000}s...`);
       await this.sleep(waitTime);
       return this.request<T>(path, method, body);
     }
@@ -501,10 +465,7 @@ export class AmazonFeedsClient {
       expiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
     };
 
-    console.log(
-      '[AmazonFeedsClient] Token refreshed, expires at:',
-      this.tokenData.expiresAt
-    );
+    console.log('[AmazonFeedsClient] Token refreshed, expires at:', this.tokenData.expiresAt);
 
     return this.tokenData.accessToken;
   }
@@ -528,9 +489,7 @@ export class AmazonFeedsClient {
       // Use native DecompressionStream API
       const stream = new DecompressionStream('gzip');
       const decompressedStream = new Response(data).body!.pipeThrough(stream);
-      const decompressedBuffer = await new Response(
-        decompressedStream
-      ).arrayBuffer();
+      const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
       return new TextDecoder().decode(decompressedBuffer);
     } catch (error) {
       console.error('[AmazonFeedsClient] Decompression failed:', error);
@@ -542,8 +501,6 @@ export class AmazonFeedsClient {
 /**
  * Factory function to create an Amazon Feeds client
  */
-export function createAmazonFeedsClient(
-  credentials: AmazonCredentials
-): AmazonFeedsClient {
+export function createAmazonFeedsClient(credentials: AmazonCredentials): AmazonFeedsClient {
   return new AmazonFeedsClient(credentials);
 }

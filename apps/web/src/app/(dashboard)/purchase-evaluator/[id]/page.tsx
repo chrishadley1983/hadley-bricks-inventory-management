@@ -19,12 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -34,7 +29,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useEvaluation, useDeleteEvaluation, useUpdateEvaluation } from '@/hooks/use-purchase-evaluator';
+import {
+  useEvaluation,
+  useDeleteEvaluation,
+  useUpdateEvaluation,
+} from '@/hooks/use-purchase-evaluator';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { EvaluationItem } from '@/lib/purchase-evaluator';
@@ -93,9 +92,8 @@ function getStatusBadge(item: EvaluationItem) {
     );
   }
   // Check platform-specific lookup status
-  const lookupStatus = item.targetPlatform === 'ebay'
-    ? item.ebayLookupStatus
-    : item.amazonLookupStatus;
+  const lookupStatus =
+    item.targetPlatform === 'ebay' ? item.ebayLookupStatus : item.amazonLookupStatus;
 
   if (lookupStatus === 'found') {
     return (
@@ -129,8 +127,7 @@ export default function EvaluationDetailPage() {
   const updateMutation = useUpdateEvaluation();
 
   // Check if evaluation can be converted
-  const canConvert =
-    evaluation?.status === 'completed' || evaluation?.status === 'saved';
+  const canConvert = evaluation?.status === 'completed' || evaluation?.status === 'saved';
   const isConverted = evaluation?.status === 'converted';
   const isConvertible = canConvert && !isConverted;
 
@@ -236,9 +233,7 @@ export default function EvaluationDetailPage() {
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
           <SummaryCard
             title={evaluation.evaluationMode === 'max_bid' ? 'Max Purchase Price' : 'Total Cost'}
-            value={
-              evaluation.totalCost != null ? formatCurrency(evaluation.totalCost, 'GBP') : '-'
-            }
+            value={evaluation.totalCost != null ? formatCurrency(evaluation.totalCost, 'GBP') : '-'}
             subValue={`${evaluation.itemCount} items`}
           />
           <SummaryCard
@@ -314,10 +309,13 @@ export default function EvaluationDetailPage() {
                             costAllocationMethod: 'proportional', // Distribute proportionally
                           });
                           // Recalculate costs and profitability
-                          const recalcResponse = await fetch(`/api/purchase-evaluator/${id}/recalculate`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                          });
+                          const recalcResponse = await fetch(
+                            `/api/purchase-evaluator/${id}/recalculate`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                            }
+                          );
                           if (!recalcResponse.ok) {
                             throw new Error('Failed to recalculate profitability');
                           }
@@ -346,11 +344,14 @@ export default function EvaluationDetailPage() {
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">At Actual Cost</p>
-                      <p className={`text-lg font-semibold ${
-                        evaluation.overallMarginPercent != null && evaluation.overallMarginPercent > 0
-                          ? 'text-green-600'
-                          : 'text-muted-foreground'
-                      }`}>
+                      <p
+                        className={`text-lg font-semibold ${
+                          evaluation.overallMarginPercent != null &&
+                          evaluation.overallMarginPercent > 0
+                            ? 'text-green-600'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
                         {evaluation.overallMarginPercent != null
                           ? `${evaluation.overallMarginPercent.toFixed(1)}% margin`
                           : 'Enter cost'}
@@ -387,7 +388,13 @@ export default function EvaluationDetailPage() {
                 {items.map((item) => {
                   // Get sell price: user override > platform price > was price
                   let sellPrice: number | null = null;
-                  let priceSource: 'override' | 'buybox' | 'was' | 'ebay_sold' | 'ebay_active' | null = null;
+                  let priceSource:
+                    | 'override'
+                    | 'buybox'
+                    | 'was'
+                    | 'ebay_sold'
+                    | 'ebay_active'
+                    | null = null;
                   if (item.userSellPriceOverride && item.userSellPriceOverride > 0) {
                     sellPrice = item.userSellPriceOverride;
                     priceSource = 'override';
@@ -411,11 +418,15 @@ export default function EvaluationDetailPage() {
                   }
 
                   // Check if we have Amazon data to show tooltip
-                  const hasAmazonData = item.targetPlatform === 'amazon' &&
-                    (item.amazonBuyBoxPrice || item.amazonSalesRank || item.amazonOfferCount !== null);
+                  const hasAmazonData =
+                    item.targetPlatform === 'amazon' &&
+                    (item.amazonBuyBoxPrice ||
+                      item.amazonSalesRank ||
+                      item.amazonOfferCount !== null);
 
                   // Check if we have eBay data to show tooltip
-                  const hasEbayData = item.targetPlatform === 'ebay' &&
+                  const hasEbayData =
+                    item.targetPlatform === 'ebay' &&
                     (item.ebaySoldAvgPrice || item.ebayAvgPrice || item.ebaySoldCount);
 
                   // Get velocity indicator for Amazon
@@ -432,7 +443,10 @@ export default function EvaluationDetailPage() {
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.setNumber}</TableCell>
-                      <TableCell className="max-w-[200px] truncate" title={item.setName || undefined}>
+                      <TableCell
+                        className="max-w-[200px] truncate"
+                        title={item.setName || undefined}
+                      >
                         {item.setName || '-'}
                       </TableCell>
                       <TableCell>{item.condition}</TableCell>
@@ -461,25 +475,36 @@ export default function EvaluationDetailPage() {
                                         {item.amazonBuyBoxPrice && (
                                           <>
                                             <span className="text-muted-foreground">Buy Box:</span>
-                                            <span>{formatCurrency(item.amazonBuyBoxPrice, 'GBP')}</span>
+                                            <span>
+                                              {formatCurrency(item.amazonBuyBoxPrice, 'GBP')}
+                                            </span>
                                           </>
                                         )}
                                         {item.amazonWasPrice && (
                                           <>
-                                            <span className="text-muted-foreground">Was Price:</span>
-                                            <span>{formatCurrency(item.amazonWasPrice, 'GBP')}</span>
+                                            <span className="text-muted-foreground">
+                                              Was Price:
+                                            </span>
+                                            <span>
+                                              {formatCurrency(item.amazonWasPrice, 'GBP')}
+                                            </span>
                                           </>
                                         )}
                                         {item.amazonSalesRank && (
                                           <>
-                                            <span className="text-muted-foreground">Sales Rank:</span>
+                                            <span className="text-muted-foreground">
+                                              Sales Rank:
+                                            </span>
                                             <span>#{item.amazonSalesRank.toLocaleString()}</span>
                                           </>
                                         )}
                                         {item.amazonOfferCount !== null && (
                                           <>
                                             <span className="text-muted-foreground">Sellers:</span>
-                                            <span>{item.amazonOfferCount} offer{item.amazonOfferCount !== 1 ? 's' : ''}</span>
+                                            <span>
+                                              {item.amazonOfferCount} offer
+                                              {item.amazonOfferCount !== 1 ? 's' : ''}
+                                            </span>
                                           </>
                                         )}
                                         {velocity && (
@@ -490,10 +515,14 @@ export default function EvaluationDetailPage() {
                                         )}
                                       </div>
                                       {priceSource === 'override' && (
-                                        <p className="mt-1 text-blue-500">Using manual price override</p>
+                                        <p className="mt-1 text-blue-500">
+                                          Using manual price override
+                                        </p>
                                       )}
                                       {priceSource === 'was' && (
-                                        <p className="mt-1 text-amber-500">No Buy Box - using Was Price</p>
+                                        <p className="mt-1 text-amber-500">
+                                          No Buy Box - using Was Price
+                                        </p>
                                       )}
                                     </>
                                   ) : (
@@ -503,30 +532,44 @@ export default function EvaluationDetailPage() {
                                         {item.ebaySoldAvgPrice && (
                                           <>
                                             <span className="text-muted-foreground">Sold Avg:</span>
-                                            <span>{formatCurrency(item.ebaySoldAvgPrice, 'GBP')}</span>
+                                            <span>
+                                              {formatCurrency(item.ebaySoldAvgPrice, 'GBP')}
+                                            </span>
                                           </>
                                         )}
                                         {item.ebaySoldCount && (
                                           <>
-                                            <span className="text-muted-foreground">Sold (30d):</span>
-                                            <span>{item.ebaySoldCount} item{item.ebaySoldCount !== 1 ? 's' : ''}</span>
+                                            <span className="text-muted-foreground">
+                                              Sold (30d):
+                                            </span>
+                                            <span>
+                                              {item.ebaySoldCount} item
+                                              {item.ebaySoldCount !== 1 ? 's' : ''}
+                                            </span>
                                           </>
                                         )}
                                         {item.ebayAvgPrice && (
                                           <>
-                                            <span className="text-muted-foreground">Active Avg:</span>
+                                            <span className="text-muted-foreground">
+                                              Active Avg:
+                                            </span>
                                             <span>{formatCurrency(item.ebayAvgPrice, 'GBP')}</span>
                                           </>
                                         )}
                                         {item.ebayListingCount && (
                                           <>
                                             <span className="text-muted-foreground">Active:</span>
-                                            <span>{item.ebayListingCount} listing{item.ebayListingCount !== 1 ? 's' : ''}</span>
+                                            <span>
+                                              {item.ebayListingCount} listing
+                                              {item.ebayListingCount !== 1 ? 's' : ''}
+                                            </span>
                                           </>
                                         )}
                                       </div>
                                       {priceSource === 'override' && (
-                                        <p className="mt-1 text-blue-500">Using manual price override</p>
+                                        <p className="mt-1 text-blue-500">
+                                          Using manual price override
+                                        </p>
                                       )}
                                     </>
                                   )}

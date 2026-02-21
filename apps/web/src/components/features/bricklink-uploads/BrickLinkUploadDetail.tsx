@@ -16,7 +16,11 @@ import {
   ExternalLink,
   Unlink,
 } from 'lucide-react';
-import { useBrickLinkUpload, useDeleteBrickLinkUpload, useUpdateBrickLinkUpload } from '@/hooks/use-bricklink-uploads';
+import {
+  useBrickLinkUpload,
+  useDeleteBrickLinkUpload,
+  useUpdateBrickLinkUpload,
+} from '@/hooks/use-bricklink-uploads';
 import { usePurchase } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -102,9 +106,10 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
 
   // Calculate profit and profit margin (as % of selling price)
   const profit = upload.cost ? upload.selling_price - upload.cost : 0;
-  const profitMargin = upload.selling_price > 0 && upload.cost
-    ? ((profit / upload.selling_price) * 100).toFixed(1)
-    : '0';
+  const profitMargin =
+    upload.selling_price > 0 && upload.cost
+      ? ((profit / upload.selling_price) * 100).toFixed(1)
+      : '0';
 
   return (
     <>
@@ -129,7 +134,8 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
               )}
             </h1>
             <p className="text-muted-foreground">
-              {upload.total_quantity.toLocaleString()} parts &middot; {formatCurrency(upload.selling_price)}
+              {upload.total_quantity.toLocaleString()} parts &middot;{' '}
+              {formatCurrency(upload.selling_price)}
             </p>
           </div>
           <div className="flex gap-2">
@@ -236,17 +242,22 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
               {upload.cost && upload.cost > 0 && (
                 <div className="rounded-lg border bg-muted/50 p-4">
                   <span className="text-sm text-muted-foreground">Margin</span>
-                  <p className={`text-xl font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {profit >= 0 ? '+' : ''}{formatCurrency(profit)} ({profitMargin}%)
+                  <p
+                    className={`text-xl font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    {profit >= 0 ? '+' : ''}
+                    {formatCurrency(profit)} ({profitMargin}%)
                   </p>
                 </div>
               )}
 
-              {(upload.remaining_quantity !== null && upload.remaining_quantity > 0) && (
+              {upload.remaining_quantity !== null && upload.remaining_quantity > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm text-muted-foreground">Remaining Qty</span>
-                    <p className="font-mono">{upload.remaining_quantity?.toLocaleString() ?? '-'}</p>
+                    <p className="font-mono">
+                      {upload.remaining_quantity?.toLocaleString() ?? '-'}
+                    </p>
                   </div>
                   <div>
                     <span className="text-sm text-muted-foreground">Remaining Value</span>
@@ -272,20 +283,12 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
                 </CardDescription>
               </div>
               {upload.purchase_id ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUnlinkDialog(true)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setShowUnlinkDialog(true)}>
                   <Unlink className="mr-2 h-4 w-4" />
                   Unlink
                 </Button>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowLinkDialog(true)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setShowLinkDialog(true)}>
                   <Link2 className="mr-2 h-4 w-4" />
                   Link to Purchase
                 </Button>
@@ -306,19 +309,24 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
                       {formatDate(linkedPurchase.purchase_date)} &middot;{' '}
                       {formatCurrency(linkedPurchase.cost)}
                       {linkedPurchase.source && (
-                        <> &middot; <Badge variant="outline" className="ml-1">{linkedPurchase.source}</Badge></>
+                        <>
+                          {' '}
+                          &middot;{' '}
+                          <Badge variant="outline" className="ml-1">
+                            {linkedPurchase.source}
+                          </Badge>
+                        </>
                       )}
                     </p>
                   </div>
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/purchases/${linkedPurchase.id}`}>
-                      View Purchase
-                    </Link>
+                    <Link href={`/purchases/${linkedPurchase.id}`}>View Purchase</Link>
                   </Button>
                 </div>
               ) : (
                 <p className="text-muted-foreground py-4 text-center">
-                  No purchase linked. Click &quot;Link to Purchase&quot; to associate this upload with a purchase.
+                  No purchase linked. Click &quot;Link to Purchase&quot; to associate this upload
+                  with a purchase.
                 </p>
               )}
             </CardContent>
@@ -408,7 +416,8 @@ export function BrickLinkUploadDetail({ id }: BrickLinkUploadDetailProps) {
           <DialogHeader>
             <DialogTitle>Unlink Purchase</DialogTitle>
             <DialogDescription>
-              Are you sure you want to unlink this upload from the purchase? The upload will no longer contribute to the purchase&apos;s profitability calculations.
+              Are you sure you want to unlink this upload from the purchase? The upload will no
+              longer contribute to the purchase&apos;s profitability calculations.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

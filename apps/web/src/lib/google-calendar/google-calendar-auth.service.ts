@@ -124,7 +124,8 @@ export class GoogleCalendarAuthService {
       console.error('[GoogleCalendarAuthService] Callback error:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to complete Google Calendar connection',
+        error:
+          error instanceof Error ? error.message : 'Failed to complete Google Calendar connection',
       };
     }
   }
@@ -340,9 +341,7 @@ export class GoogleCalendarAuthService {
     // Decrypt sensitive fields
     try {
       const decryptedAccessToken = await decrypt(data.access_token);
-      const decryptedRefreshToken = data.refresh_token
-        ? await decrypt(data.refresh_token)
-        : null;
+      const decryptedRefreshToken = data.refresh_token ? await decrypt(data.refresh_token) : null;
 
       return {
         ...data,

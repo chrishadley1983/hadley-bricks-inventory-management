@@ -19,9 +19,7 @@ export class MinifigConfigService {
   constructor(private supabase: SupabaseClient<Database>) {}
 
   async getConfig(): Promise<MinifigSyncConfig> {
-    const { data, error } = await this.supabase
-      .from('minifig_sync_config')
-      .select('key, value');
+    const { data, error } = await this.supabase.from('minifig_sync_config').select('key, value');
 
     if (error) {
       throw new Error(`Failed to load minifig sync config: ${error.message}`);
@@ -30,8 +28,7 @@ export class MinifigConfigService {
     const config = {} as Record<string, number>;
     for (const row of data ?? []) {
       const val = row.value;
-      config[row.key] =
-        typeof val === 'number' ? val : Number(val);
+      config[row.key] = typeof val === 'number' ? val : Number(val);
     }
 
     // Validate all keys present
@@ -44,13 +41,14 @@ export class MinifigConfigService {
     return config as unknown as MinifigSyncConfig;
   }
 
-  async updateConfig(
-    key: keyof MinifigSyncConfig,
-    value: number,
-  ): Promise<void> {
+  async updateConfig(key: keyof MinifigSyncConfig, value: number): Promise<void> {
     const { error } = await this.supabase
       .from('minifig_sync_config')
-      .update({ value: value as unknown as Database['public']['Tables']['minifig_sync_config']['Update']['value'], updated_at: new Date().toISOString() })
+      .update({
+        value:
+          value as unknown as Database['public']['Tables']['minifig_sync_config']['Update']['value'],
+        updated_at: new Date().toISOString(),
+      })
       .eq('key', key);
 
     if (error) {

@@ -40,7 +40,8 @@ const STATUS_OPTIONS = [
 ];
 
 export function MinifigItemsFilters({ filters, onFiltersChange }: MinifigItemsFiltersProps) {
-  const hasActiveFilters = filters.search || filters.meetsThreshold !== undefined || filters.listingStatus;
+  const hasActiveFilters =
+    filters.search || filters.meetsThreshold !== undefined || filters.listingStatus;
 
   const [searchValue, setSearchValue] = useState(filters.search || '');
 
@@ -63,11 +64,8 @@ export function MinifigItemsFilters({ filters, onFiltersChange }: MinifigItemsFi
     onFiltersChange({});
   };
 
-  const thresholdValue = filters.meetsThreshold === true
-    ? 'true'
-    : filters.meetsThreshold === false
-      ? 'false'
-      : 'all';
+  const thresholdValue =
+    filters.meetsThreshold === true ? 'true' : filters.meetsThreshold === false ? 'false' : 'all';
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -108,7 +106,8 @@ export function MinifigItemsFilters({ filters, onFiltersChange }: MinifigItemsFi
           onValueChange={(value: string) =>
             onFiltersChange({
               ...filters,
-              listingStatus: value === 'all' ? undefined : value as MinifigSyncFilters['listingStatus'],
+              listingStatus:
+                value === 'all' ? undefined : (value as MinifigSyncFilters['listingStatus']),
             })
           }
         >

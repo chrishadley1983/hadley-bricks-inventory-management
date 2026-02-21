@@ -4,13 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, Download, Loader2, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -51,11 +45,13 @@ export default function InventoryValuationReportPage() {
 
   // Prepare chart data by condition
   const conditionData = report?.byCondition
-    ? report.byCondition.map((c) => ({
-        name: c.condition,
-        value: c.costValue,
-        color: c.condition.toLowerCase() === 'new' ? '#10b981' : '#f59e0b',
-      })).filter((d) => d.value > 0)
+    ? report.byCondition
+        .map((c) => ({
+          name: c.condition,
+          value: c.costValue,
+          color: c.condition.toLowerCase() === 'new' ? '#10b981' : '#f59e0b',
+        }))
+        .filter((d) => d.value > 0)
     : [];
 
   return (
@@ -160,9 +156,7 @@ export default function InventoryValuationReportPage() {
               <Card className="lg:col-span-2">
                 <CardHeader>
                   <CardTitle>Top Items by Value</CardTitle>
-                  <CardDescription>
-                    Highest value items in your inventory
-                  </CardDescription>
+                  <CardDescription>Highest value items in your inventory</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -177,47 +171,41 @@ export default function InventoryValuationReportPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {report?.topValueItems
-                        .slice(0, 10)
-                        .map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{item.setNumber}</p>
-                                <p className="text-sm text-muted-foreground truncate max-w-[200px]">
-                                  {item.itemName}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  item.condition.toLowerCase() === 'new'
-                                    ? 'default'
-                                    : 'secondary'
-                                }
-                              >
-                                {item.condition}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{item.status}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.cost)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.listingValue)}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-medium ${
-                                item.potentialProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}
+                      {report?.topValueItems.slice(0, 10).map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{item.setNumber}</p>
+                              <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                {item.itemName}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                item.condition.toLowerCase() === 'new' ? 'default' : 'secondary'
+                              }
                             >
-                              {formatCurrency(item.potentialProfit)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                              {item.condition}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.cost)}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(item.listingValue)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-medium ${
+                              item.potentialProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {formatCurrency(item.potentialProfit)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -228,9 +216,7 @@ export default function InventoryValuationReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Breakdown by Condition</CardTitle>
-                <CardDescription>
-                  Value distribution across item conditions
-                </CardDescription>
+                <CardDescription>Value distribution across item conditions</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -249,9 +235,7 @@ export default function InventoryValuationReportPage() {
                         <TableCell>
                           <Badge
                             variant={
-                              condition.condition.toLowerCase() === 'new'
-                                ? 'default'
-                                : 'secondary'
+                              condition.condition.toLowerCase() === 'new' ? 'default' : 'secondary'
                             }
                           >
                             {condition.condition}
@@ -282,9 +266,7 @@ export default function InventoryValuationReportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Breakdown by Status</CardTitle>
-                <CardDescription>
-                  Value distribution across item statuses
-                </CardDescription>
+                <CardDescription>Value distribution across item statuses</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>

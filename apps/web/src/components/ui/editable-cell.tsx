@@ -195,7 +195,9 @@ export function EditableCell({
     <div ref={containerRef} className="flex items-center gap-1">
       <Input
         ref={inputRef}
-        type={type === 'date' ? 'date' : type === 'number' || type === 'currency' ? 'number' : 'text'}
+        type={
+          type === 'date' ? 'date' : type === 'number' || type === 'currency' ? 'number' : 'text'
+        }
         step={type === 'currency' ? '0.01' : undefined}
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}

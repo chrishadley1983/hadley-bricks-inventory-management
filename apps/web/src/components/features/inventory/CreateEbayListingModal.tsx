@@ -32,7 +32,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Upload, ImageIcon, AlertCircle, CheckCircle2, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  Loader2,
+  Upload,
+  ImageIcon,
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  Sparkles,
+  RefreshCw,
+} from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/utils';
 import { useCreateListing } from '@/hooks/use-create-listing';
@@ -75,7 +84,10 @@ interface LocalPhoto {
 /**
  * Generate default condition description template
  */
-function generateConditionDescription(condition: string | null | undefined, _setName: string | null | undefined): string {
+function generateConditionDescription(
+  condition: string | null | undefined,
+  _setName: string | null | undefined
+): string {
   const conditionText = condition || 'Used';
   return `In ${conditionText} condition. Please refer to photos.`;
 }
@@ -133,7 +145,9 @@ export function CreateEbayListingModal({
   const [scheduledDate, setScheduledDate] = useState('');
 
   // Policy selection state
-  const [selectedFulfillmentPolicyId, setSelectedFulfillmentPolicyId] = useState<string | undefined>();
+  const [selectedFulfillmentPolicyId, setSelectedFulfillmentPolicyId] = useState<
+    string | undefined
+  >();
 
   // Template selection state - 'ai' means use AI-generated format (no template)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('ai');
@@ -192,57 +206,53 @@ export function CreateEbayListingModal({
   const fulfillmentPolicies = policies?.fulfillment ?? [];
 
   // Find Small Parcel policy as default
-  const smallParcelPolicy = fulfillmentPolicies.find(p =>
+  const smallParcelPolicy = fulfillmentPolicies.find((p) =>
     p.name.toLowerCase().includes('small parcel')
   );
 
   // Use selected policy, or default to Small Parcel, or first available
-  const effectiveFulfillmentPolicyId = selectedFulfillmentPolicyId
-    ?? smallParcelPolicy?.id
-    ?? policies?.defaults.fulfillmentPolicyId;
+  const effectiveFulfillmentPolicyId =
+    selectedFulfillmentPolicyId ?? smallParcelPolicy?.id ?? policies?.defaults.fulfillmentPolicyId;
 
   /**
    * Handle photo upload - compresses images before adding to state
    */
-  const handlePhotoUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files;
-      if (!files) return;
+  const handlePhotoUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
 
-      setIsCompressing(true);
-      const newPhotos: LocalPhoto[] = [];
+    setIsCompressing(true);
+    const newPhotos: LocalPhoto[] = [];
 
-      try {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          if (!file.type.startsWith('image/')) continue;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
 
-          // Compress image to reduce payload size
-          const compressed = await compressImage(file, {
-            maxDimension: 1600,
-            quality: 0.8,
-            outputType: 'image/jpeg',
-          });
+        // Compress image to reduce payload size
+        const compressed = await compressImage(file, {
+          maxDimension: 1600,
+          quality: 0.8,
+          outputType: 'image/jpeg',
+        });
 
-          newPhotos.push({
-            id: `${Date.now()}-${i}`,
-            filename: file.name,
-            base64: compressed.base64,
-            mimeType: compressed.mimeType,
-            enhanced: false,
-            uploadStatus: 'pending',
-            originalSize: compressed.originalSize,
-            compressedSize: compressed.compressedSize,
-          });
-        }
-
-        setPhotos((prev) => [...prev, ...newPhotos].slice(0, 24)); // Max 24 photos
-      } finally {
-        setIsCompressing(false);
+        newPhotos.push({
+          id: `${Date.now()}-${i}`,
+          filename: file.name,
+          base64: compressed.base64,
+          mimeType: compressed.mimeType,
+          enhanced: false,
+          uploadStatus: 'pending',
+          originalSize: compressed.originalSize,
+          compressedSize: compressed.compressedSize,
+        });
       }
-    },
-    []
-  );
+
+      setPhotos((prev) => [...prev, ...newPhotos].slice(0, 24)); // Max 24 photos
+    } finally {
+      setIsCompressing(false);
+    }
+  }, []);
 
   /**
    * Upload photos to storage in batches
@@ -252,7 +262,9 @@ export function CreateEbayListingModal({
     // Work with a local copy of photos to track updates
     let workingPhotos = [...photos];
 
-    const pendingPhotos = workingPhotos.filter((p) => p.uploadStatus === 'pending' || p.uploadStatus === 'error');
+    const pendingPhotos = workingPhotos.filter(
+      (p) => p.uploadStatus === 'pending' || p.uploadStatus === 'error'
+    );
     if (pendingPhotos.length === 0) {
       // All photos already uploaded - return them directly
       const allUploaded = workingPhotos.every((p) => p.uploadStatus === 'uploaded');
@@ -274,9 +286,7 @@ export function CreateEbayListingModal({
         // Mark batch as uploading (for UI)
         setPhotos((prev) =>
           prev.map((p) =>
-            batch.find((b) => b.id === p.id)
-              ? { ...p, uploadStatus: 'uploading' as const }
-              : p
+            batch.find((b) => b.id === p.id) ? { ...p, uploadStatus: 'uploading' as const } : p
           )
         );
 
@@ -301,7 +311,11 @@ export function CreateEbayListingModal({
           // Mark all batch photos as error
           workingPhotos = workingPhotos.map((p) =>
             batch.find((b) => b.id === p.id)
-              ? { ...p, uploadStatus: 'error' as const, uploadError: errorData.error || 'Upload failed' }
+              ? {
+                  ...p,
+                  uploadStatus: 'error' as const,
+                  uploadError: errorData.error || 'Upload failed',
+                }
               : p
           );
           setPhotos(workingPhotos);
@@ -313,13 +327,19 @@ export function CreateEbayListingModal({
 
         // Update working photos with URLs
         workingPhotos = workingPhotos.map((p) => {
-          const result = data.results?.find((r: { id: string; success: boolean; url?: string; error?: string }) => r.id === p.id);
+          const result = data.results?.find(
+            (r: { id: string; success: boolean; url?: string; error?: string }) => r.id === p.id
+          );
           if (result) {
             if (result.success && result.url) {
               return { ...p, url: result.url, uploadStatus: 'uploaded' as const };
             } else {
               allSucceeded = false;
-              return { ...p, uploadStatus: 'error' as const, uploadError: result.error || 'Upload failed' };
+              return {
+                ...p,
+                uploadStatus: 'error' as const,
+                uploadError: result.error || 'Upload failed',
+              };
             }
           }
           return p;
@@ -455,13 +475,11 @@ export function CreateEbayListingModal({
             <p className="mt-2 text-2xl font-bold">{formatCurrency(result.price)}</p>
           </div>
           {/* Quality Review Button */}
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setShowQualityReview(true)}
-          >
+          <Button variant="outline" className="w-full" onClick={() => setShowQualityReview(true)}>
             <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
-            {result.qualityReviewPending ? 'View Quality Review (In Progress...)' : 'View Quality Review'}
+            {result.qualityReviewPending
+              ? 'View Quality Review (In Progress...)'
+              : 'View Quality Review'}
           </Button>
 
           {/* Quality Review Popup */}
@@ -551,18 +569,14 @@ export function CreateEbayListingModal({
           <div className="space-y-2">
             {progress.steps.map((step) => (
               <div key={step.id} className="flex items-center gap-2">
-                {step.status === 'completed' && (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                )}
+                {step.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
                 {step.status === 'in_progress' && (
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 )}
                 {step.status === 'pending' && (
                   <div className="h-4 w-4 rounded-full border border-muted-foreground" />
                 )}
-                {step.status === 'failed' && (
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                )}
+                {step.status === 'failed' && <AlertCircle className="h-4 w-4 text-destructive" />}
                 <span
                   className={
                     step.status === 'completed'
@@ -676,13 +690,13 @@ export function CreateEbayListingModal({
           <div className="space-y-2">
             <Label>Photos ({photos.length}/24)</Label>
             <div className="flex items-center justify-center rounded-lg border-2 border-dashed p-8">
-              <label className={`cursor-pointer text-center ${isCompressing ? 'pointer-events-none opacity-50' : ''}`}>
+              <label
+                className={`cursor-pointer text-center ${isCompressing ? 'pointer-events-none opacity-50' : ''}`}
+              >
                 {isCompressing ? (
                   <>
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Compressing images...
-                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">Compressing images...</p>
                   </>
                 ) : (
                   <>
@@ -726,7 +740,10 @@ export function CreateEbayListingModal({
                 {formatBytes(photos.reduce((sum, p) => sum + (p.compressedSize || 0), 0))}
                 {' (saved '}
                 {formatBytes(
-                  photos.reduce((sum, p) => sum + ((p.originalSize || 0) - (p.compressedSize || 0)), 0)
+                  photos.reduce(
+                    (sum, p) => sum + ((p.originalSize || 0) - (p.compressedSize || 0)),
+                    0
+                  )
                 )}
                 {')'}
               </div>
@@ -789,11 +806,7 @@ export function CreateEbayListingModal({
           )}
 
           <div className="flex items-center space-x-2">
-            <Switch
-              id="enhance"
-              checked={enhancePhotos}
-              onCheckedChange={setEnhancePhotos}
-            />
+            <Switch id="enhance" checked={enhancePhotos} onCheckedChange={setEnhancePhotos} />
             <Label htmlFor="enhance">Optimise photos for eBay</Label>
           </div>
         </TabsContent>
@@ -809,7 +822,9 @@ export function CreateEbayListingModal({
               disabled={templatesLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder={templatesLoading ? 'Loading templates...' : 'Select template'} />
+                <SelectValue
+                  placeholder={templatesLoading ? 'Loading templates...' : 'Select template'}
+                />
               </SelectTrigger>
               <SelectContent>
                 {/* AI Generated option */}
@@ -826,7 +841,9 @@ export function CreateEbayListingModal({
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{template.name}</span>
                       {template.is_default && (
-                        <Badge variant="secondary" className="text-xs">Default</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Default
+                        </Badge>
                       )}
                       <span className="text-muted-foreground text-xs">({template.type})</span>
                     </div>
@@ -884,7 +901,8 @@ export function CreateEbayListingModal({
             <CardContent className="py-3">
               {useAIConditionDescription ? (
                 <p className="text-sm text-muted-foreground italic">
-                  AI will generate a detailed condition description based on the item&apos;s condition and photos.
+                  AI will generate a detailed condition description based on the item&apos;s
+                  condition and photos.
                 </p>
               ) : (
                 <Textarea
@@ -950,13 +968,19 @@ export function CreateEbayListingModal({
               disabled={policiesLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder={policiesLoading ? 'Loading policies...' : 'Select postage policy'} />
+                <SelectValue
+                  placeholder={policiesLoading ? 'Loading policies...' : 'Select postage policy'}
+                />
               </SelectTrigger>
               <SelectContent>
                 {fulfillmentPolicies.map((policy) => (
                   <SelectItem key={policy.id} value={policy.id}>
                     {policy.name}
-                    {policy.isDefault && <Badge variant="secondary" className="ml-2 text-xs">Default</Badge>}
+                    {policy.isDefault && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        Default
+                      </Badge>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1064,4 +1088,3 @@ export function CreateEbayListingModal({
     </Dialog>
   );
 }
-

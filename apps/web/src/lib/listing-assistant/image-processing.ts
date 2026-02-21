@@ -170,11 +170,7 @@ function applySharpening(
   const output = new Uint8ClampedArray(data.length);
 
   // Sharpening kernel
-  const kernel = [
-    0, -intensity, 0,
-    -intensity, 1 + 4 * intensity, -intensity,
-    0, -intensity, 0,
-  ];
+  const kernel = [0, -intensity, 0, -intensity, 1 + 4 * intensity, -intensity, 0, -intensity, 0];
 
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
@@ -335,13 +331,19 @@ export function validateImageFile(file: File): ImageValidationResult {
   const warnings: string[] = [];
 
   // Check file type
-  if (!EBAY_IMAGE_SPECS.supportedFormats.includes(file.type as typeof EBAY_IMAGE_SPECS.supportedFormats[number])) {
+  if (
+    !EBAY_IMAGE_SPECS.supportedFormats.includes(
+      file.type as (typeof EBAY_IMAGE_SPECS.supportedFormats)[number]
+    )
+  ) {
     errors.push(`Unsupported format: ${file.type}. Use JPEG, PNG, or WebP.`);
   }
 
   // Check file size
   if (file.size > EBAY_IMAGE_SPECS.maxFileSizeBytes) {
-    errors.push(`File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Maximum is ${EBAY_IMAGE_SPECS.maxFileSizeMB}MB.`);
+    errors.push(
+      `File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Maximum is ${EBAY_IMAGE_SPECS.maxFileSizeMB}MB.`
+    );
   }
 
   return {

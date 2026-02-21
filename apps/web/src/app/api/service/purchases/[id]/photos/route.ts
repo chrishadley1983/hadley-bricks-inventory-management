@@ -15,19 +15,13 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
  * Content-Type: multipart/form-data
  * Body: photos (File[])
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withServiceAuth(request, ['write'], async (_keyInfo) => {
     try {
       const { id: purchaseId } = await params;
 
       if (!purchaseId) {
-        return NextResponse.json(
-          { error: 'Purchase ID is required' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Purchase ID is required' }, { status: 400 });
       }
 
       const supabase = createServiceRoleClient();
@@ -41,10 +35,7 @@ export async function POST(
         .single();
 
       if (purchaseError || !purchase) {
-        return NextResponse.json(
-          { error: 'Purchase not found' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
 
       // Parse multipart form data
@@ -52,10 +43,7 @@ export async function POST(
       const files = formData.getAll('photos') as File[];
 
       if (files.length === 0) {
-        return NextResponse.json(
-          { error: 'No photos provided' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'No photos provided' }, { status: 400 });
       }
 
       const uploadedUrls: string[] = [];
@@ -87,17 +75,15 @@ export async function POST(
           uploadedUrls.push(urlData.publicUrl);
 
           // Link photo to purchase in database
-          await supabase
-            .from('purchase_images')
-            .insert({
-              user_id: userId,
-              purchase_id: purchaseId,
-              storage_path: data.path,
-              public_url: urlData.publicUrl,
-              filename: file.name,
-              mime_type: file.type,
-              file_size: buffer.length,
-            });
+          await supabase.from('purchase_images').insert({
+            user_id: userId,
+            purchase_id: purchaseId,
+            storage_path: data.path,
+            public_url: urlData.publicUrl,
+            filename: file.name,
+            mime_type: file.type,
+            file_size: buffer.length,
+          });
         } catch (err) {
           failed.push({
             filename: file.name,
@@ -107,10 +93,7 @@ export async function POST(
       }
 
       if (uploadedUrls.length === 0 && failed.length > 0) {
-        return NextResponse.json(
-          { error: 'All uploads failed', failed },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'All uploads failed', failed }, { status: 500 });
       }
 
       return NextResponse.json(

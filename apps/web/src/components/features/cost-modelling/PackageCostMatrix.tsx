@@ -18,7 +18,11 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
-import type { CostModelScenarioFormData, PackageCostFormData, PackageType } from '@/types/cost-modelling';
+import type {
+  CostModelScenarioFormData,
+  PackageCostFormData,
+  PackageType,
+} from '@/types/cost-modelling';
 import { formatCurrency, calculatePackageTotal } from '@/lib/services/cost-calculations';
 import { DEFAULT_PACKAGE_COSTS } from '@/types/cost-modelling';
 
@@ -50,40 +54,46 @@ export function PackageCostMatrix({ data, fixedCostPerSale, onChange }: PackageC
   const packageCosts = data.packageCosts || DEFAULT_PACKAGE_COSTS;
 
   // Get cost for a specific package type and cost key
-  const getCost = (packageType: PackageType, costKey: keyof Omit<PackageCostFormData, 'id' | 'packageType'>): number => {
-    const pkg = packageCosts.find(p => p.packageType === packageType);
+  const getCost = (
+    packageType: PackageType,
+    costKey: keyof Omit<PackageCostFormData, 'id' | 'packageType'>
+  ): number => {
+    const pkg = packageCosts.find((p) => p.packageType === packageType);
     return pkg ? pkg[costKey] : 0;
   };
 
   // Handle cost change
-  const handleCostChange = useCallback((
-    packageType: PackageType,
-    costKey: keyof Omit<PackageCostFormData, 'id' | 'packageType'>,
-    value: string
-  ) => {
-    const numValue = Math.max(0, parseFloat(value) || 0);
+  const handleCostChange = useCallback(
+    (
+      packageType: PackageType,
+      costKey: keyof Omit<PackageCostFormData, 'id' | 'packageType'>,
+      value: string
+    ) => {
+      const numValue = Math.max(0, parseFloat(value) || 0);
 
-    const updatedCosts = packageCosts.map(pkg => {
-      if (pkg.packageType === packageType) {
-        return { ...pkg, [costKey]: numValue };
+      const updatedCosts = packageCosts.map((pkg) => {
+        if (pkg.packageType === packageType) {
+          return { ...pkg, [costKey]: numValue };
+        }
+        return pkg;
+      });
+
+      // If package type doesn't exist in array, add it
+      if (!updatedCosts.find((p) => p.packageType === packageType)) {
+        const defaultPkg = DEFAULT_PACKAGE_COSTS.find((p) => p.packageType === packageType);
+        if (defaultPkg) {
+          updatedCosts.push({ ...defaultPkg, [costKey]: numValue });
+        }
       }
-      return pkg;
-    });
 
-    // If package type doesn't exist in array, add it
-    if (!updatedCosts.find(p => p.packageType === packageType)) {
-      const defaultPkg = DEFAULT_PACKAGE_COSTS.find(p => p.packageType === packageType);
-      if (defaultPkg) {
-        updatedCosts.push({ ...defaultPkg, [costKey]: numValue });
-      }
-    }
-
-    onChange({ packageCosts: updatedCosts });
-  }, [packageCosts, onChange]);
+      onChange({ packageCosts: updatedCosts });
+    },
+    [packageCosts, onChange]
+  );
 
   // Calculate total for a package type (F28)
   const getTotal = (packageType: PackageType): number => {
-    const pkg = packageCosts.find(p => p.packageType === packageType);
+    const pkg = packageCosts.find((p) => p.packageType === packageType);
     if (!pkg) return fixedCostPerSale;
     return calculatePackageTotal(pkg, fixedCostPerSale);
   };
@@ -100,8 +110,8 @@ export function PackageCostMatrix({ data, fixedCostPerSale, onChange }: PackageC
               </TooltipTrigger>
               <TooltipContent>
                 <p className="max-w-xs">
-                  Costs per package type. Total includes fixed cost per sale
-                  ({formatCurrency(fixedCostPerSale)}) calculated from monthly fixed costs.
+                  Costs per package type. Total includes fixed cost per sale (
+                  {formatCurrency(fixedCostPerSale)}) calculated from monthly fixed costs.
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -113,10 +123,16 @@ export function PackageCostMatrix({ data, fixedCostPerSale, onChange }: PackageC
           <TableHeader>
             <TableRow>
               <TableHead className="w-32">Cost Type</TableHead>
-              <TableHead colSpan={3} className="text-center border-l bg-blue-50/50 dark:bg-blue-950/20">
+              <TableHead
+                colSpan={3}
+                className="text-center border-l bg-blue-50/50 dark:bg-blue-950/20"
+              >
                 Amazon
               </TableHead>
-              <TableHead colSpan={3} className="text-center border-l bg-orange-50/50 dark:bg-orange-950/20">
+              <TableHead
+                colSpan={3}
+                className="text-center border-l bg-orange-50/50 dark:bg-orange-950/20"
+              >
                 eBay
               </TableHead>
             </TableRow>

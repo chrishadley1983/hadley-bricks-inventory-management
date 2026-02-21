@@ -154,9 +154,7 @@ export function CsvImportWizard() {
               <FileSpreadsheet className="h-5 w-5" />
               CSV Import
             </CardTitle>
-            <CardDescription>
-              Import multiple inventory items from a CSV file
-            </CardDescription>
+            <CardDescription>Import multiple inventory items from a CSV file</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Template download */}
@@ -233,10 +231,9 @@ export function CsvImportWizard() {
               <div>notes</div>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              <span className="text-destructive">*</span> Required field.
-              Dates should be in YYYY-MM-DD format.
-              Condition: &quot;New&quot; or &quot;Used&quot;.
-              Status: &quot;NOT YET RECEIVED&quot;, &quot;BACKLOG&quot;, &quot;LISTED&quot;, or &quot;SOLD&quot;.
+              <span className="text-destructive">*</span> Required field. Dates should be in
+              YYYY-MM-DD format. Condition: &quot;New&quot; or &quot;Used&quot;. Status: &quot;NOT
+              YET RECEIVED&quot;, &quot;BACKLOG&quot;, &quot;LISTED&quot;, or &quot;SOLD&quot;.
             </p>
           </CardContent>
         </Card>
@@ -293,10 +290,7 @@ export function CsvImportWizard() {
               <ScrollArea className="h-[150px]">
                 <div className="space-y-2">
                   {parseErrors.map((error, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-2 text-sm"
-                    >
+                    <div key={index} className="flex items-start gap-2 text-sm">
                       <Badge variant="destructive" className="shrink-0">
                         Row {error.row}
                       </Badge>
@@ -351,11 +345,7 @@ export function CsvImportWizard() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {item.status ? (
-                              <Badge variant="secondary">{item.status}</Badge>
-                            ) : (
-                              '-'
-                            )}
+                            {item.status ? <Badge variant="secondary">{item.status}</Badge> : '-'}
                           </TableCell>
                           <TableCell>
                             {item.cost !== undefined ? `£${item.cost.toFixed(2)}` : '-'}
@@ -366,7 +356,9 @@ export function CsvImportWizard() {
                           <TableCell>{item.listing_platform || '-'}</TableCell>
                           <TableCell>{item.listing_date || '-'}</TableCell>
                           <TableCell>
-                            {item.listing_value !== undefined ? `£${item.listing_value.toFixed(2)}` : '-'}
+                            {item.listing_value !== undefined
+                              ? `£${item.listing_value.toFixed(2)}`
+                              : '-'}
                           </TableCell>
                           <TableCell>{item.sku || '-'}</TableCell>
                           <TableCell>{item.linked_lot || '-'}</TableCell>
@@ -444,9 +436,7 @@ export function CsvImportWizard() {
             <Button variant="outline" onClick={handleReset}>
               Import More
             </Button>
-            <Button onClick={() => router.push('/inventory')}>
-              View Inventory
-            </Button>
+            <Button onClick={() => router.push('/inventory')}>View Inventory</Button>
           </div>
         </CardContent>
       </Card>

@@ -21,9 +21,7 @@ export interface ProcessedImage {
  * Process a single image for eBay listing upload.
  * Fetches the image from URL, applies processing pipeline.
  */
-export async function processImageForEbay(
-  imageUrl: string,
-): Promise<ProcessedImage> {
+export async function processImageForEbay(imageUrl: string): Promise<ProcessedImage> {
   const response = await fetch(imageUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status} ${imageUrl}`);
@@ -36,9 +34,7 @@ export async function processImageForEbay(
 /**
  * Process an image buffer through the eBay pipeline.
  */
-export async function processBufferForEbay(
-  inputBuffer: Buffer,
-): Promise<ProcessedImage> {
+export async function processBufferForEbay(inputBuffer: Buffer): Promise<ProcessedImage> {
   const processed = await sharp(inputBuffer)
     .flatten({ background: { r: 255, g: 255, b: 255 } })
     .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
@@ -59,7 +55,7 @@ export async function processBufferForEbay(
  * Returns true if image is at least 800x800px.
  */
 export async function validateImageDimensions(
-  imageUrl: string,
+  imageUrl: string
 ): Promise<{ valid: boolean; width: number; height: number }> {
   try {
     const response = await fetch(imageUrl);

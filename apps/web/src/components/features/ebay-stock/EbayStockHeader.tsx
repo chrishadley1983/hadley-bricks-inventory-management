@@ -11,11 +11,7 @@ interface EbayStockHeaderProps {
   isRefreshing: boolean;
 }
 
-export function EbayStockHeader({
-  latestImport,
-  onRefresh,
-  isRefreshing,
-}: EbayStockHeaderProps) {
+export function EbayStockHeader({ latestImport, onRefresh, isRefreshing }: EbayStockHeaderProps) {
   const lastImportTime = latestImport?.completedAt
     ? formatDistanceToNow(new Date(latestImport.completedAt), { addSuffix: true })
     : null;
@@ -30,9 +26,7 @@ export function EbayStockHeader({
         {lastImportTime && (
           <p className="text-sm text-muted-foreground mt-1">
             Last imported: {lastImportTime}
-            {latestImport?.totalRows !== null && (
-              <span> ({latestImport?.totalRows} listings)</span>
-            )}
+            {latestImport?.totalRows !== null && <span> ({latestImport?.totalRows} listings)</span>}
           </p>
         )}
       </div>

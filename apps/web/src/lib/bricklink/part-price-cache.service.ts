@@ -92,8 +92,12 @@ export class PartPriceCacheService {
             colourName: row.colour_name,
             priceNew: row.price_new ? parseFloat(row.price_new) : null,
             priceUsed: row.price_used ? parseFloat(row.price_used) : null,
-            sellThroughRateNew: row.sell_through_rate_new ? parseFloat(row.sell_through_rate_new) : null,
-            sellThroughRateUsed: row.sell_through_rate_used ? parseFloat(row.sell_through_rate_used) : null,
+            sellThroughRateNew: row.sell_through_rate_new
+              ? parseFloat(row.sell_through_rate_new)
+              : null,
+            sellThroughRateUsed: row.sell_through_rate_used
+              ? parseFloat(row.sell_through_rate_used)
+              : null,
             stockAvailableNew: row.stock_available_new,
             stockAvailableUsed: row.stock_available_used,
             timesSoldNew: row.times_sold_new,
@@ -162,12 +166,10 @@ export class PartPriceCacheService {
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
 
-      const { error } = await this.supabase
-        .from('bricklink_part_price_cache')
-        .upsert(batch, {
-          onConflict: 'part_number,colour_id',
-          ignoreDuplicates: false,
-        });
+      const { error } = await this.supabase.from('bricklink_part_price_cache').upsert(batch, {
+        onConflict: 'part_number,colour_id',
+        ignoreDuplicates: false,
+      });
 
       if (error) {
         console.error('[PartPriceCacheService] Error upserting prices:', error);
@@ -208,7 +210,9 @@ export class PartPriceCacheService {
     if (error) {
       console.error('[PartPriceCacheService] Error deleting cached prices:', error);
     } else {
-      console.log(`[PartPriceCacheService] Deleted cache for ${uniquePartNumbers.length} part numbers`);
+      console.log(
+        `[PartPriceCacheService] Deleted cache for ${uniquePartNumbers.length} part numbers`
+      );
     }
   }
 }

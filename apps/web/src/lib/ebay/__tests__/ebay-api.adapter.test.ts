@@ -538,9 +538,7 @@ describe('EbayApiAdapter', () => {
 
       // getTransactions requires signature, but adapter has no signing keys
       // When API returns error mentioning signature, should provide helpful message
-      await expect(freshAdapter.getTransactions()).rejects.toThrow(
-        'Digital signature required'
-      );
+      await expect(freshAdapter.getTransactions()).rejects.toThrow('Digital signature required');
     });
 
     it('should retry on server errors with exponential backoff', async () => {
@@ -662,10 +660,7 @@ describe('EbayApiAdapter', () => {
       });
 
       it('should build filter for multiple statuses', () => {
-        const filter = EbayApiAdapter.buildFulfilmentStatusFilter([
-          'FULFILLED',
-          'IN_PROGRESS',
-        ]);
+        const filter = EbayApiAdapter.buildFulfilmentStatusFilter(['FULFILLED', 'IN_PROGRESS']);
         expect(filter).toBe('orderfulfillmentstatus:{FULFILLED|IN_PROGRESS}');
       });
     });
@@ -705,10 +700,7 @@ describe('EbayApiAdapter', () => {
       });
 
       it('should build filter for to date only', () => {
-        const filter = EbayApiAdapter.buildPayoutDateFilter(
-          undefined,
-          '2024-12-31T23:59:59Z'
-        );
+        const filter = EbayApiAdapter.buildPayoutDateFilter(undefined, '2024-12-31T23:59:59Z');
         expect(filter).toContain('payoutDate:[..');
       });
 
@@ -733,7 +725,9 @@ describe('EbayApiAdapter', () => {
     });
 
     it('should include error details from API', () => {
-      const apiErrors = [{ errorId: 15000, domain: 'API', category: 'REQUEST', message: 'Invalid filter' }];
+      const apiErrors = [
+        { errorId: 15000, domain: 'API', category: 'REQUEST', message: 'Invalid filter' },
+      ];
       const error = new EbayApiError('Test error', 400, apiErrors);
 
       expect(error.errors).toEqual(apiErrors);
@@ -842,10 +836,7 @@ describe('EbayApiAdapter', () => {
         status: 200,
         json: () =>
           Promise.resolve({
-            transactions: [
-              { transactionId: 'tx-1' },
-              { transactionId: 'tx-2' },
-            ],
+            transactions: [{ transactionId: 'tx-1' }, { transactionId: 'tx-2' }],
             total: 4,
           }),
       });
@@ -856,10 +847,7 @@ describe('EbayApiAdapter', () => {
         status: 200,
         json: () =>
           Promise.resolve({
-            transactions: [
-              { transactionId: 'tx-3' },
-              { transactionId: 'tx-4' },
-            ],
+            transactions: [{ transactionId: 'tx-3' }, { transactionId: 'tx-4' }],
             total: 4,
           }),
       });
@@ -1319,4 +1307,3 @@ describe('EbayApiAdapter', () => {
     });
   });
 });
-

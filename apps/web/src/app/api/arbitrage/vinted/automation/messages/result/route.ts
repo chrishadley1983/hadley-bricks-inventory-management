@@ -51,7 +51,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
     }
 
     if (message.status !== 'in_progress') {
-      return NextResponse.json({ error: `Message status is '${message.status}', expected 'in_progress'` }, { status: 409 });
+      return NextResponse.json(
+        { error: `Message status is '${message.status}', expected 'in_progress'` },
+        { status: 409 }
+      );
     }
 
     // Handle CAPTCHA: pause scanner, leave message as in_progress (will reset via stale check)

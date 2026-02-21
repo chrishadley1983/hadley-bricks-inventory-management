@@ -255,18 +255,10 @@ export function DiscountRulesEditor({
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleStartEdit(rule)}
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => handleStartEdit(rule)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(rule.id)}
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(rule.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -326,12 +318,7 @@ export function DiscountRulesEditor({
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleSave}
-                      disabled={isSubmitting}
-                    >
+                    <Button size="sm" variant="ghost" onClick={handleSave} disabled={isSubmitting}>
                       <Save className="h-4 w-4" />
                     </Button>
                     <Button

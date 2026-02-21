@@ -38,7 +38,9 @@ async function fetchCredentialsStatus(): Promise<CredentialsStatus> {
 /**
  * Save QuickFile credentials
  */
-async function saveCredentials(credentials: QuickFileCredentials): Promise<SaveCredentialsResponse> {
+async function saveCredentials(
+  credentials: QuickFileCredentials
+): Promise<SaveCredentialsResponse> {
   const response = await fetch('/api/integrations/quickfile/credentials', {
     method: 'POST',
     headers: {

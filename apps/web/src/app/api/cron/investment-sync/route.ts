@@ -77,7 +77,10 @@ export async function POST(request: NextRequest) {
     console.error('[InvestmentSync] Fatal error:', error);
     await execution.fail(error, 500);
     return NextResponse.json(
-      { error: 'Investment sync failed', details: error instanceof Error ? error.message : String(error) },
+      {
+        error: 'Investment sync failed',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

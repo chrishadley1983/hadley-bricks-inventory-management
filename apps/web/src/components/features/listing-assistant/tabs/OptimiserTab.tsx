@@ -155,10 +155,13 @@ export function OptimiserTab() {
   );
 
   // Handle skip suggestion
-  const handleSkip = useCallback((_suggestion: ListingSuggestion) => {
-    // Just move to next suggestion - no action needed
-    toast({ title: 'Skipped', description: 'Suggestion skipped' });
-  }, [toast]);
+  const handleSkip = useCallback(
+    (_suggestion: ListingSuggestion) => {
+      // Just move to next suggestion - no action needed
+      toast({ title: 'Skipped', description: 'Suggestion skipped' });
+    },
+    [toast]
+  );
 
   // Handle re-analyse (after applying changes)
   const handleReanalyse = useCallback(async () => {
@@ -219,14 +222,16 @@ export function OptimiserTab() {
     <Tabs defaultValue="listings" className="w-full">
       <TabsList>
         <TabsTrigger value="listings">Listings</TabsTrigger>
-        <TabsTrigger value="offers" data-testid="negotiation-tab">Offers</TabsTrigger>
+        <TabsTrigger value="offers" data-testid="negotiation-tab">
+          Offers
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="listings" className="mt-6 space-y-6">
         {/* Description */}
         <div className="text-sm text-muted-foreground">
-          Review and optimize your eBay listings to improve quality scores and visibility.
-          Select listings and click Analyse to get AI-powered improvement suggestions.
+          Review and optimize your eBay listings to improve quality scores and visibility. Select
+          listings and click Analyse to get AI-powered improvement suggestions.
         </div>
 
         {/* Filters and summary */}

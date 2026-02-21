@@ -31,10 +31,7 @@ export async function GET(
     const review = await service.getLatestReview(user.id, itemId);
 
     if (!review) {
-      return NextResponse.json(
-        { error: 'No review found', code: 'NOT_FOUND' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'No review found', code: 'NOT_FOUND' }, { status: 404 });
     }
 
     // 3. Return response

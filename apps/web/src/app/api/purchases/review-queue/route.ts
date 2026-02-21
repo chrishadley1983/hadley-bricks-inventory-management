@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
     // Fetch skipped items
     const { data, error, count } = await supabase
       .from('processed_purchase_emails')
-      .select('id, email_id, source, order_reference, email_subject, email_date, item_name, cost, seller_username, skip_reason, processed_at', { count: 'exact' })
+      .select(
+        'id, email_id, source, order_reference, email_subject, email_date, item_name, cost, seller_username, skip_reason, processed_at',
+        { count: 'exact' }
+      )
       .eq('status', 'skipped')
       .order('processed_at', { ascending: false })
       .range(offset, offset + pageSize - 1);

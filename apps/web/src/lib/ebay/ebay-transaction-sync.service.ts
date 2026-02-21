@@ -141,7 +141,12 @@ export class EbayTransactionSyncService {
    * Sync transactions from eBay Finances API
    */
   async syncTransactions(userId: string, options?: EbaySyncOptions): Promise<EbaySyncResult> {
-    console.log('[EbayTransactionSyncService] Starting transaction sync for user:', userId, 'options:', options);
+    console.log(
+      '[EbayTransactionSyncService] Starting transaction sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
@@ -244,7 +249,12 @@ export class EbayTransactionSyncService {
             limit: MAX_TRANSACTIONS_PER_PAGE,
             offset,
           });
-          console.log('[EbayTransactionSyncService] Received', response.transactions?.length || 0, 'transactions, total:', response.total);
+          console.log(
+            '[EbayTransactionSyncService] Received',
+            response.transactions?.length || 0,
+            'transactions, total:',
+            response.total
+          );
 
           allTransactions.push(...(response.transactions || []));
 
@@ -260,30 +270,42 @@ export class EbayTransactionSyncService {
         }
       }
 
-      console.log('[EbayTransactionSyncService] Total transactions fetched:', allTransactions.length);
+      console.log(
+        '[EbayTransactionSyncService] Total transactions fetched:',
+        allTransactions.length
+      );
 
       // Upsert transactions
       console.log('[EbayTransactionSyncService] Upserting transactions to database...');
       const { created, updated } = await this.upsertTransactions(userId, allTransactions);
-      console.log('[EbayTransactionSyncService] Upsert complete. Created:', created, 'Updated:', updated);
+      console.log(
+        '[EbayTransactionSyncService] Upsert complete. Created:',
+        created,
+        'Updated:',
+        updated
+      );
 
       // Update sync cursor to newest transaction date
-      const newestDate = allTransactions.length > 0
-        ? allTransactions.reduce((newest, tx) => {
-            const txDate = new Date(tx.transactionDate);
-            return txDate > newest ? txDate : newest;
-          }, new Date(0)).toISOString()
-        : fromDate;
+      const newestDate =
+        allTransactions.length > 0
+          ? allTransactions
+              .reduce((newest, tx) => {
+                const txDate = new Date(tx.transactionDate);
+                return txDate > newest ? txDate : newest;
+              }, new Date(0))
+              .toISOString()
+          : fromDate;
 
       // Update sync config with cursor
       if (newestDate) {
-        await supabase
-          .from('ebay_sync_config')
-          .upsert({
+        await supabase.from('ebay_sync_config').upsert(
+          {
             user_id: userId,
             transactions_date_cursor: newestDate,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
+          },
+          { onConflict: 'user_id' }
+        );
       }
 
       const completedAt = new Date();
@@ -346,7 +368,12 @@ export class EbayTransactionSyncService {
    * Sync payouts from eBay Finances API
    */
   async syncPayouts(userId: string, options?: EbaySyncOptions): Promise<EbaySyncResult> {
-    console.log('[EbayTransactionSyncService] Starting payout sync for user:', userId, 'options:', options);
+    console.log(
+      '[EbayTransactionSyncService] Starting payout sync for user:',
+      userId,
+      'options:',
+      options
+    );
     const startedAt = new Date();
     const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
@@ -447,7 +474,12 @@ export class EbayTransactionSyncService {
             limit: MAX_PAYOUTS_PER_PAGE,
             offset,
           });
-          console.log('[EbayTransactionSyncService] Received', response.payouts?.length || 0, 'payouts, total:', response.total);
+          console.log(
+            '[EbayTransactionSyncService] Received',
+            response.payouts?.length || 0,
+            'payouts, total:',
+            response.total
+          );
 
           allPayouts.push(...(response.payouts || []));
 
@@ -468,24 +500,33 @@ export class EbayTransactionSyncService {
       // Upsert payouts
       console.log('[EbayTransactionSyncService] Upserting payouts to database...');
       const { created, updated } = await this.upsertPayouts(userId, allPayouts);
-      console.log('[EbayTransactionSyncService] Payout upsert complete. Created:', created, 'Updated:', updated);
+      console.log(
+        '[EbayTransactionSyncService] Payout upsert complete. Created:',
+        created,
+        'Updated:',
+        updated
+      );
 
       // Update sync cursor
-      const newestDate = allPayouts.length > 0
-        ? allPayouts.reduce((newest, p) => {
-            const pDate = new Date(p.payoutDate);
-            return pDate > newest ? pDate : newest;
-          }, new Date(0)).toISOString()
-        : fromDate;
+      const newestDate =
+        allPayouts.length > 0
+          ? allPayouts
+              .reduce((newest, p) => {
+                const pDate = new Date(p.payoutDate);
+                return pDate > newest ? pDate : newest;
+              }, new Date(0))
+              .toISOString()
+          : fromDate;
 
       if (newestDate) {
-        await supabase
-          .from('ebay_sync_config')
-          .upsert({
+        await supabase.from('ebay_sync_config').upsert(
+          {
             user_id: userId,
             payouts_date_cursor: newestDate,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
+          },
+          { onConflict: 'user_id' }
+        );
       }
 
       const completedAt = new Date();
@@ -556,14 +597,15 @@ export class EbayTransactionSyncService {
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
-    await supabase
-      .from('ebay_sync_config')
-      .upsert({
+    await supabase.from('ebay_sync_config').upsert(
+      {
         user_id: userId,
         historical_import_started_at: new Date().toISOString(),
         historical_import_from_date: fromDate,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      },
+      { onConflict: 'user_id' }
+    );
 
     // Sync transactions and payouts
     const transactionsResult = await this.syncTransactions(userId, { fromDate, toDate });
@@ -594,8 +636,14 @@ export class EbayTransactionSyncService {
    * Get sync status for transactions and payouts
    */
   async getSyncStatus(userId: string): Promise<{
-    transactions: { isRunning: boolean; lastSync?: { status: string; completedAt?: Date; recordsProcessed?: number } };
-    payouts: { isRunning: boolean; lastSync?: { status: string; completedAt?: Date; recordsProcessed?: number } };
+    transactions: {
+      isRunning: boolean;
+      lastSync?: { status: string; completedAt?: Date; recordsProcessed?: number };
+    };
+    payouts: {
+      isRunning: boolean;
+      lastSync?: { status: string; completedAt?: Date; recordsProcessed?: number };
+    };
     config?: { autoSyncEnabled: boolean; nextSyncAt?: Date; historicalImportCompleted: boolean };
   }> {
     const supabase = await this.getSupabase();
@@ -607,7 +655,7 @@ export class EbayTransactionSyncService {
       .eq('user_id', userId)
       .eq('status', 'RUNNING');
 
-    const runningTypes = new Set(runningSyncs?.map(s => s.sync_type) || []);
+    const runningTypes = new Set(runningSyncs?.map((s) => s.sync_type) || []);
 
     // Get last transaction sync
     const { data: lastTxSync } = await supabase
@@ -639,25 +687,35 @@ export class EbayTransactionSyncService {
     return {
       transactions: {
         isRunning: runningTypes.has('TRANSACTIONS'),
-        lastSync: lastTxSync ? {
-          status: lastTxSync.status,
-          completedAt: lastTxSync.completed_at ? new Date(lastTxSync.completed_at) : undefined,
-          recordsProcessed: lastTxSync.records_processed || 0,
-        } : undefined,
+        lastSync: lastTxSync
+          ? {
+              status: lastTxSync.status,
+              completedAt: lastTxSync.completed_at ? new Date(lastTxSync.completed_at) : undefined,
+              recordsProcessed: lastTxSync.records_processed || 0,
+            }
+          : undefined,
       },
       payouts: {
         isRunning: runningTypes.has('PAYOUTS'),
-        lastSync: lastPayoutSync ? {
-          status: lastPayoutSync.status,
-          completedAt: lastPayoutSync.completed_at ? new Date(lastPayoutSync.completed_at) : undefined,
-          recordsProcessed: lastPayoutSync.records_processed || 0,
-        } : undefined,
+        lastSync: lastPayoutSync
+          ? {
+              status: lastPayoutSync.status,
+              completedAt: lastPayoutSync.completed_at
+                ? new Date(lastPayoutSync.completed_at)
+                : undefined,
+              recordsProcessed: lastPayoutSync.records_processed || 0,
+            }
+          : undefined,
       },
-      config: syncConfig ? {
-        autoSyncEnabled: syncConfig.auto_sync_enabled,
-        nextSyncAt: syncConfig.next_auto_sync_at ? new Date(syncConfig.next_auto_sync_at) : undefined,
-        historicalImportCompleted: !!syncConfig.historical_import_completed_at,
-      } : undefined,
+      config: syncConfig
+        ? {
+            autoSyncEnabled: syncConfig.auto_sync_enabled,
+            nextSyncAt: syncConfig.next_auto_sync_at
+              ? new Date(syncConfig.next_auto_sync_at)
+              : undefined,
+            historicalImportCompleted: !!syncConfig.historical_import_completed_at,
+          }
+        : undefined,
     };
   }
 
@@ -680,21 +738,26 @@ export class EbayTransactionSyncService {
 
     // Deduplicate transactions by transactionId (eBay API can return duplicates across pages)
     const uniqueTransactions = Array.from(
-      new Map(transactions.map(tx => [tx.transactionId, tx])).values()
+      new Map(transactions.map((tx) => [tx.transactionId, tx])).values()
     );
-    console.log(`[EbayTransactionSyncService] Deduplicated ${transactions.length} -> ${uniqueTransactions.length} transactions`);
+    console.log(
+      `[EbayTransactionSyncService] Deduplicated ${transactions.length} -> ${uniqueTransactions.length} transactions`
+    );
 
     // Get existing transaction IDs
     const { data: existingTransactions } = await supabase
       .from('ebay_transactions')
       .select('ebay_transaction_id')
       .eq('user_id', userId)
-      .in('ebay_transaction_id', uniqueTransactions.map(t => t.transactionId));
+      .in(
+        'ebay_transaction_id',
+        uniqueTransactions.map((t) => t.transactionId)
+      );
 
-    const existingIds = new Set(existingTransactions?.map(t => t.ebay_transaction_id) || []);
+    const existingIds = new Set(existingTransactions?.map((t) => t.ebay_transaction_id) || []);
 
     // Transform transactions
-    const transactionRows: TransactionRow[] = uniqueTransactions.map(tx => {
+    const transactionRows: TransactionRow[] = uniqueTransactions.map((tx) => {
       // Extract fees from orderLineItems
       const fees: Record<string, number> = {};
       let totalFees = 0;
@@ -717,9 +780,7 @@ export class EbayTransactionSyncService {
 
       // Calculate gross amount (what buyer paid)
       const netAmount = parseFloat(tx.amount.value);
-      const grossAmount = tx.bookingEntry === 'CREDIT'
-        ? netAmount + totalFees
-        : netAmount;
+      const grossAmount = tx.bookingEntry === 'CREDIT' ? netAmount + totalFees : netAmount;
 
       return {
         user_id: userId,
@@ -759,12 +820,10 @@ export class EbayTransactionSyncService {
     for (let i = 0; i < transactionRows.length; i += BATCH_SIZE) {
       const batch = transactionRows.slice(i, i + BATCH_SIZE);
 
-      const { error } = await supabase
-        .from('ebay_transactions')
-        .upsert(batch, {
-          onConflict: 'user_id,ebay_transaction_id',
-          ignoreDuplicates: false,
-        });
+      const { error } = await supabase.from('ebay_transactions').upsert(batch, {
+        onConflict: 'user_id,ebay_transaction_id',
+        ignoreDuplicates: false,
+      });
 
       if (error) {
         console.error('[EbayTransactionSyncService] Failed to upsert transactions:', error);
@@ -797,22 +856,25 @@ export class EbayTransactionSyncService {
     const supabase = await this.getSupabase();
 
     // Deduplicate payouts by payoutId (eBay API can return duplicates across pages)
-    const uniquePayouts = Array.from(
-      new Map(payouts.map(p => [p.payoutId, p])).values()
+    const uniquePayouts = Array.from(new Map(payouts.map((p) => [p.payoutId, p])).values());
+    console.log(
+      `[EbayTransactionSyncService] Deduplicated ${payouts.length} -> ${uniquePayouts.length} payouts`
     );
-    console.log(`[EbayTransactionSyncService] Deduplicated ${payouts.length} -> ${uniquePayouts.length} payouts`);
 
     // Get existing payout IDs
     const { data: existingPayouts } = await supabase
       .from('ebay_payouts')
       .select('ebay_payout_id')
       .eq('user_id', userId)
-      .in('ebay_payout_id', uniquePayouts.map(p => p.payoutId));
+      .in(
+        'ebay_payout_id',
+        uniquePayouts.map((p) => p.payoutId)
+      );
 
-    const existingIds = new Set(existingPayouts?.map(p => p.ebay_payout_id) || []);
+    const existingIds = new Set(existingPayouts?.map((p) => p.ebay_payout_id) || []);
 
     // Transform payouts
-    const payoutRows: PayoutRow[] = uniquePayouts.map(p => ({
+    const payoutRows: PayoutRow[] = uniquePayouts.map((p) => ({
       user_id: userId,
       ebay_payout_id: p.payoutId,
       payout_status: p.payoutStatus,
@@ -834,12 +896,10 @@ export class EbayTransactionSyncService {
     for (let i = 0; i < payoutRows.length; i += BATCH_SIZE) {
       const batch = payoutRows.slice(i, i + BATCH_SIZE);
 
-      const { error } = await supabase
-        .from('ebay_payouts')
-        .upsert(batch, {
-          onConflict: 'user_id,ebay_payout_id',
-          ignoreDuplicates: false,
-        });
+      const { error } = await supabase.from('ebay_payouts').upsert(batch, {
+        onConflict: 'user_id,ebay_payout_id',
+        ignoreDuplicates: false,
+      });
 
       if (error) {
         console.error('[EbayTransactionSyncService] Failed to upsert payouts:', error);
@@ -862,7 +922,7 @@ export class EbayTransactionSyncService {
    * Delay helper for rate limiting
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

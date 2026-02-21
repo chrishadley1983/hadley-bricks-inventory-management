@@ -30,9 +30,7 @@ export function DraftRestorationDialog({
   onRestore,
   onDiscard,
 }: DraftRestorationDialogProps) {
-  const formattedTime = draftTime
-    ? format(new Date(draftTime), 'MMM d, yyyy h:mm a')
-    : 'Unknown';
+  const formattedTime = draftTime ? format(new Date(draftTime), 'MMM d, yyyy h:mm a') : 'Unknown';
 
   return (
     <AlertDialog open={open}>
@@ -40,8 +38,8 @@ export function DraftRestorationDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Unsaved Draft Found</AlertDialogTitle>
           <AlertDialogDescription>
-            You have unsaved changes from {formattedTime}. Would you like to restore
-            this draft or discard it?
+            You have unsaved changes from {formattedTime}. Would you like to restore this draft or
+            discard it?
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
       }>;
     }
 
-    (orders as OrderWithItems[] || []).forEach((order) => {
+    ((orders as OrderWithItems[]) || []).forEach((order) => {
       order.items.forEach((item) => {
         if (item.item_number) {
           allAsins.add(item.item_number);
@@ -152,7 +152,9 @@ export async function GET(request: NextRequest) {
     if (allAsins.size > 0) {
       const { data } = await supabase
         .from('inventory_items')
-        .select('id, amazon_asin, set_number, item_name, storage_location, status, listing_platform, created_at')
+        .select(
+          'id, amazon_asin, set_number, item_name, storage_location, status, listing_platform, created_at'
+        )
         .eq('user_id', userId)
         .in('amazon_asin', Array.from(allAsins))
         .ilike('listing_platform', '%amazon%')
@@ -192,7 +194,7 @@ export async function GET(request: NextRequest) {
     const unknownLocationItems: AmazonPickingListItem[] = [];
     const matchesToPersist: Array<{ orderItemId: string; inventoryItemId: string }> = [];
 
-    for (const order of (orders as OrderWithItems[] || [])) {
+    for (const order of (orders as OrderWithItems[]) || []) {
       for (const lineItem of order.items) {
         let matchStatus: 'matched' | 'unmatched' = 'unmatched';
         let location: string | null = null;
@@ -280,14 +282,19 @@ export async function GET(request: NextRequest) {
           .eq('id', match.orderItemId);
 
         if (error) {
-          console.error(`[GET /api/picking-list/amazon] Failed to persist match for order item ${match.orderItemId}:`, error);
+          console.error(
+            `[GET /api/picking-list/amazon] Failed to persist match for order item ${match.orderItemId}:`,
+            error
+          );
           persistErrors.push(`${match.orderItemId}: ${error.message}`);
         } else {
           persistedCount++;
         }
       }
 
-      console.log(`[GET /api/picking-list/amazon] Persisted ${persistedCount}/${matchesToPersist.length} inventory matches`);
+      console.log(
+        `[GET /api/picking-list/amazon] Persisted ${persistedCount}/${matchesToPersist.length} inventory matches`
+      );
       if (persistErrors.length > 0) {
         console.error(`[GET /api/picking-list/amazon] Persist errors:`, persistErrors);
       }
@@ -353,7 +360,11 @@ function generateAmazonPickingListPDF(data: AmazonPickingListResponse): ArrayBuf
   // Metadata
   doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text(`Generated: ${date} | Total Items: ${data.totalItems} | Orders: ${data.totalOrders}`, 14, 28);
+  doc.text(
+    `Generated: ${date} | Total Items: ${data.totalItems} | Orders: ${data.totalOrders}`,
+    14,
+    28
+  );
 
   // Check for warnings
   const hasWarnings = data.unmatchedItems.length > 0 || data.unknownLocationItems.length > 0;

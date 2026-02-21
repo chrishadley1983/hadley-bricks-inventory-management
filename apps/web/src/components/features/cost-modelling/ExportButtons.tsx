@@ -49,9 +49,24 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
         [],
         ['Sales Volume (per month)'],
         ['Platform', 'Sales/Month', 'Avg Sale Value', 'Avg Postage Cost'],
-        ['BrickLink', String(formData.blSalesPerMonth), formData.blAvgSaleValue.toFixed(2), formData.blAvgPostageCost.toFixed(2)],
-        ['Amazon', String(formData.amazonSalesPerMonth), formData.amazonAvgSaleValue.toFixed(2), formData.amazonAvgPostageCost.toFixed(2)],
-        ['eBay', String(formData.ebaySalesPerMonth), formData.ebayAvgSaleValue.toFixed(2), formData.ebayAvgPostageCost.toFixed(2)],
+        [
+          'BrickLink',
+          String(formData.blSalesPerMonth),
+          formData.blAvgSaleValue.toFixed(2),
+          formData.blAvgPostageCost.toFixed(2),
+        ],
+        [
+          'Amazon',
+          String(formData.amazonSalesPerMonth),
+          formData.amazonAvgSaleValue.toFixed(2),
+          formData.amazonAvgPostageCost.toFixed(2),
+        ],
+        [
+          'eBay',
+          String(formData.ebaySalesPerMonth),
+          formData.ebayAvgSaleValue.toFixed(2),
+          formData.ebayAvgPostageCost.toFixed(2),
+        ],
         [],
         ['Fee Rates'],
         ['BrickLink', formatPercentage(formData.blFeeRate)],
@@ -137,7 +152,7 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
         ['COG Budget Per Week', calculations.cogBudgetPerWeek.toFixed(2)],
       ];
 
-      const csvContent = rows.map(row => row.join(',')).join('\n');
+      const csvContent = rows.map((row) => row.join(',')).join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -240,10 +255,40 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
         startY: yPos,
         head: [['Platform', 'Turnover', 'Fees', 'COG', 'Net']],
         body: [
-          ['BrickLink', formatCurrency(calculations.blTurnover), formatCurrency(calculations.blFees), formatCurrency(calculations.blCog), formatCurrency(calculations.blTurnover - calculations.blFees - calculations.blCog)],
-          ['Amazon', formatCurrency(calculations.amazonTurnover), formatCurrency(calculations.amazonFees), formatCurrency(calculations.amazonCog), formatCurrency(calculations.amazonTurnover - calculations.amazonFees - calculations.amazonCog)],
-          ['eBay', formatCurrency(calculations.ebayTurnover), formatCurrency(calculations.ebayFees), formatCurrency(calculations.ebayCog), formatCurrency(calculations.ebayTurnover - calculations.ebayFees - calculations.ebayCog)],
-          ['Total', formatCurrency(calculations.totalTurnover), formatCurrency(calculations.totalFees), formatCurrency(calculations.totalCog), formatCurrency(calculations.totalTurnover - calculations.totalFees - calculations.totalCog)],
+          [
+            'BrickLink',
+            formatCurrency(calculations.blTurnover),
+            formatCurrency(calculations.blFees),
+            formatCurrency(calculations.blCog),
+            formatCurrency(calculations.blTurnover - calculations.blFees - calculations.blCog),
+          ],
+          [
+            'Amazon',
+            formatCurrency(calculations.amazonTurnover),
+            formatCurrency(calculations.amazonFees),
+            formatCurrency(calculations.amazonCog),
+            formatCurrency(
+              calculations.amazonTurnover - calculations.amazonFees - calculations.amazonCog
+            ),
+          ],
+          [
+            'eBay',
+            formatCurrency(calculations.ebayTurnover),
+            formatCurrency(calculations.ebayFees),
+            formatCurrency(calculations.ebayCog),
+            formatCurrency(
+              calculations.ebayTurnover - calculations.ebayFees - calculations.ebayCog
+            ),
+          ],
+          [
+            'Total',
+            formatCurrency(calculations.totalTurnover),
+            formatCurrency(calculations.totalFees),
+            formatCurrency(calculations.totalCog),
+            formatCurrency(
+              calculations.totalTurnover - calculations.totalFees - calculations.totalCog
+            ),
+          ],
         ],
         theme: 'grid',
         styles: tableStyles,
@@ -328,7 +373,7 @@ export function ExportButtons({ formData, calculations }: ExportButtonsProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" disabled={isDisabled}>
-          {(exportingPdf || exportingCsv) ? (
+          {exportingPdf || exportingCsv ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Download className="mr-2 h-4 w-4" />

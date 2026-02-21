@@ -33,8 +33,7 @@ export async function fetchBrickLinkUploads(
   if (filters?.syncedFromBricqer !== undefined)
     params.set('syncedFromBricqer', String(filters.syncedFromBricqer));
   if (filters?.purchaseId) params.set('purchaseId', filters.purchaseId);
-  if (filters?.unlinked !== undefined)
-    params.set('unlinked', String(filters.unlinked));
+  if (filters?.unlinked !== undefined) params.set('unlinked', String(filters.unlinked));
   if (pagination?.page) params.set('page', String(pagination.page));
   if (pagination?.pageSize) params.set('pageSize', String(pagination.pageSize));
 
@@ -67,9 +66,7 @@ export async function fetchBrickLinkUpload(id: string): Promise<BrickLinkUpload>
 /**
  * Create a new upload
  */
-export async function createBrickLinkUpload(
-  data: BrickLinkUploadInsert
-): Promise<BrickLinkUpload> {
+export async function createBrickLinkUpload(data: BrickLinkUploadInsert): Promise<BrickLinkUpload> {
   const response = await fetch('/api/bricklink-uploads', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

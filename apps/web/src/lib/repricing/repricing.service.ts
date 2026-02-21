@@ -129,7 +129,9 @@ export class RepricingService {
     // 2. Get UNIQUE ASINs for pricing lookup (multiple SKUs can share the same ASIN)
     const allAsins = allListings.map((l) => l.platformItemId);
     const uniqueAsins = [...new Set(allAsins)];
-    console.log(`[RepricingService] ${allListings.length} listings, ${uniqueAsins.length} unique ASINs`);
+    console.log(
+      `[RepricingService] ${allListings.length} listings, ${uniqueAsins.length} unique ASINs`
+    );
 
     // 3. Get inventory costs by ASIN (for all listings)
     const costMap = await this.getInventoryCosts(uniqueAsins);
@@ -153,9 +155,7 @@ export class RepricingService {
       console.log('[RepricingService] Using cached pricing data');
       pricingMap = cachedData.pricingMap;
       summaryMap = cachedData.summaryMap;
-      cacheTimestamp = cachedData.oldestFetchedAt
-        ? new Date(cachedData.oldestFetchedAt)
-        : null;
+      cacheTimestamp = cachedData.oldestFetchedAt ? new Date(cachedData.oldestFetchedAt) : null;
       isCached = true;
     } else {
       // Fetch fresh data from Amazon API
@@ -188,9 +188,7 @@ export class RepricingService {
           );
 
           // Fetch competitive summary (slower API - 0.033 req/sec rate limit)
-          console.log(
-            '[RepricingService] Fetching competitive summary (slower API)...'
-          );
+          console.log('[RepricingService] Fetching competitive summary (slower API)...');
           const summaryData = await pricingClient.getCompetitiveSummary(
             uniqueAsins,
             UK_MARKETPLACE_ID
@@ -262,8 +260,7 @@ export class RepricingService {
         priceSource = 'lowest';
       }
 
-      const buyBoxDiff =
-        effectivePrice !== null ? yourPrice - effectivePrice : null;
+      const buyBoxDiff = effectivePrice !== null ? yourPrice - effectivePrice : null;
 
       return {
         asin: listing.platformItemId,
@@ -307,9 +304,7 @@ export class RepricingService {
     }
 
     if (filters.showOnlyBuyBoxLost) {
-      filteredItems = filteredItems.filter(
-        (i) => i.buyBoxPrice !== null && !i.buyBoxIsYours
-      );
+      filteredItems = filteredItems.filter((i) => i.buyBoxPrice !== null && !i.buyBoxIsYours);
     }
 
     // 7. Calculate summary from ALL items (before pagination)
@@ -317,9 +312,7 @@ export class RepricingService {
       totalListings: allItems.length,
       withCostData: allItems.filter((i) => i.inventoryCost !== null).length,
       buyBoxOwned: allItems.filter((i) => i.buyBoxIsYours).length,
-      buyBoxLost: allItems.filter(
-        (i) => i.buyBoxPrice !== null && !i.buyBoxIsYours
-      ).length,
+      buyBoxLost: allItems.filter((i) => i.buyBoxPrice !== null && !i.buyBoxIsYours).length,
       pricingDataAge: this.formatCacheAge(cacheTimestamp),
       pricingCachedAt: cacheTimestamp?.toISOString() ?? null,
       isCached,
@@ -361,8 +354,7 @@ export class RepricingService {
       console.error('[RepricingService] Error clearing cache:', error);
       return {
         success: false,
-        message:
-          error instanceof Error ? error.message : 'Failed to clear cache',
+        message: error instanceof Error ? error.message : 'Failed to clear cache',
       };
     }
   }
@@ -375,11 +367,7 @@ export class RepricingService {
    * @param productType - Product type (will be fetched from listing if not provided)
    * @returns Push result
    */
-  async pushPrice(
-    sku: string,
-    newPrice: number,
-    productType?: string
-  ): Promise<PushPriceResponse> {
+  async pushPrice(sku: string, newPrice: number, productType?: string): Promise<PushPriceResponse> {
     // Get current price for comparison
     const currentListing = await this.getListingBySku(sku);
     const previousPrice = currentListing?.price ?? 0;
@@ -404,11 +392,9 @@ export class RepricingService {
       let actualProductType = productType;
       if (!actualProductType) {
         console.log(`[RepricingService] Fetching product type for SKU: ${sku}`);
-        const listingDetails = await listingsClient.getListing(
-          sku,
-          UK_MARKETPLACE_ID,
-          ['summaries']
-        );
+        const listingDetails = await listingsClient.getListing(sku, UK_MARKETPLACE_ID, [
+          'summaries',
+        ]);
 
         if (listingDetails?.summaries?.[0]?.productType) {
           actualProductType = listingDetails.summaries[0].productType;
@@ -416,7 +402,9 @@ export class RepricingService {
         } else {
           // Fallback to TOY if we can't determine the product type
           actualProductType = 'TOY';
-          console.log(`[RepricingService] Could not determine product type, using fallback: ${actualProductType}`);
+          console.log(
+            `[RepricingService] Could not determine product type, using fallback: ${actualProductType}`
+          );
         }
       }
 
@@ -427,8 +415,7 @@ export class RepricingService {
         UK_MARKETPLACE_ID
       );
 
-      const success =
-        response.status === 'ACCEPTED' || response.status === 'VALID';
+      const success = response.status === 'ACCEPTED' || response.status === 'VALID';
 
       // If successful, update the platform_listings table to keep data aligned
       if (success) {
@@ -455,8 +442,7 @@ export class RepricingService {
         sku,
         previousPrice,
         newPrice,
-        message:
-          error instanceof Error ? error.message : 'Unknown error occurred',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   }
@@ -468,9 +454,7 @@ export class RepricingService {
   /**
    * Get ALL Amazon listings with qty >= minQuantity (no pagination at DB level)
    */
-  private async getAllAmazonListings(
-    filters: RepricingFilters
-  ): Promise<PlatformListingRow[]> {
+  private async getAllAmazonListings(filters: RepricingFilters): Promise<PlatformListingRow[]> {
     const pageSize = 1000; // Supabase limit
     let page = 0;
     const allListings: PlatformListingRow[] = [];
@@ -636,9 +620,7 @@ export class RepricingService {
   /**
    * Get a single listing by SKU
    */
-  private async getListingBySku(
-    sku: string
-  ): Promise<{ price: number | null } | null> {
+  private async getListingBySku(sku: string): Promise<{ price: number | null } | null> {
     const { data, error } = await this.supabase
       .from('platform_listings')
       .select('price')
@@ -660,10 +642,7 @@ export class RepricingService {
   /**
    * Update the price of a listing in platform_listings
    */
-  private async updateListingPrice(
-    sku: string,
-    newPrice: number
-  ): Promise<void> {
+  private async updateListingPrice(sku: string, newPrice: number): Promise<void> {
     const { error } = await this.supabase
       .from('platform_listings')
       .update({ price: newPrice, updated_at: new Date().toISOString() })
@@ -672,10 +651,7 @@ export class RepricingService {
       .eq('platform_sku', sku);
 
     if (error) {
-      console.error(
-        '[RepricingService] Error updating listing price:',
-        error
-      );
+      console.error('[RepricingService] Error updating listing price:', error);
       // Don't throw - the Amazon update succeeded, this is just local sync
     }
   }
@@ -745,14 +721,10 @@ export class RepricingService {
             lowestOffer: row.lowest_offer_price
               ? {
                   listingPrice: Number(row.lowest_offer_price),
-                  shippingPrice: row.lowest_offer_shipping
-                    ? Number(row.lowest_offer_shipping)
-                    : 0,
+                  shippingPrice: row.lowest_offer_shipping ? Number(row.lowest_offer_shipping) : 0,
                   totalPrice:
                     Number(row.lowest_offer_price) +
-                    (row.lowest_offer_shipping
-                      ? Number(row.lowest_offer_shipping)
-                      : 0),
+                    (row.lowest_offer_shipping ? Number(row.lowest_offer_shipping) : 0),
                   condition: row.lowest_offer_condition ?? 'New',
                 }
               : null,
@@ -804,11 +776,9 @@ export class RepricingService {
     const batchSize = 100;
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
-      const { error } = await this.supabase
-        .from('repricing_pricing_cache')
-        .upsert(batch, {
-          onConflict: 'user_id,asin',
-        });
+      const { error } = await this.supabase.from('repricing_pricing_cache').upsert(batch, {
+        onConflict: 'user_id,asin',
+      });
 
       if (error) {
         console.error('[RepricingService] Error saving cache:', error);
@@ -842,10 +812,7 @@ export class RepricingService {
    * Get Amazon credentials for the user
    */
   private async getAmazonCredentials(): Promise<AmazonCredentials | null> {
-    return this.credentialsRepo.getCredentials<AmazonCredentials>(
-      this.userId,
-      'amazon'
-    );
+    return this.credentialsRepo.getCredentials<AmazonCredentials>(this.userId, 'amazon');
   }
 
   /**

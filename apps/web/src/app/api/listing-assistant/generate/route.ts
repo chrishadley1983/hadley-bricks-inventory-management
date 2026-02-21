@@ -9,10 +9,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getTemplateById } from '@/lib/listing-assistant/templates.service';
 import { getEbaySoldPrices } from '@/lib/listing-assistant/ebay-finding.service';
-import {
-  generateListing,
-  analyzeProductImage,
-} from '@/lib/listing-assistant/ai-service';
+import { generateListing, analyzeProductImage } from '@/lib/listing-assistant/ai-service';
 import type { GenerateListingResponse } from '@/lib/listing-assistant/types';
 
 const GenerateListingSchema = z.object({

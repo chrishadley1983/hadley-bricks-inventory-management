@@ -159,7 +159,9 @@ describe('ArbitrageService', () => {
         ),
       });
 
-      await expect(service.getArbitrageData(userId)).rejects.toThrow('Failed to fetch arbitrage data');
+      await expect(service.getArbitrageData(userId)).rejects.toThrow(
+        'Failed to fetch arbitrage data'
+      );
     });
   });
 
@@ -302,9 +304,7 @@ describe('ArbitrageService', () => {
         eq: vi.fn().mockReturnThis(),
         in: vi.fn(() =>
           Promise.resolve({
-            data: [
-              { asin: 'B001234567', bricklink_set_number: '75192-1' },
-            ],
+            data: [{ asin: 'B001234567', bricklink_set_number: '75192-1' }],
             error: null,
           })
         ),
@@ -346,8 +346,18 @@ describe('ArbitrageService', () => {
         order: vi.fn(() =>
           Promise.resolve({
             data: [
-              { asin: 'B001234567', name: 'LEGO 75192 Millennium Falcon', image_url: null, added_at: '2025-01-01' },
-              { asin: 'B009876543', name: 'Some Other Product', image_url: null, added_at: '2025-01-02' },
+              {
+                asin: 'B001234567',
+                name: 'LEGO 75192 Millennium Falcon',
+                image_url: null,
+                added_at: '2025-01-01',
+              },
+              {
+                asin: 'B009876543',
+                name: 'Some Other Product',
+                image_url: null,
+                added_at: '2025-01-02',
+              },
             ],
             error: null,
           })

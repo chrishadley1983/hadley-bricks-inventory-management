@@ -74,8 +74,12 @@ export const timeTrackingKeys = {
   current: () => [...timeTrackingKeys.all, 'current'] as const,
   summary: () => [...timeTrackingKeys.all, 'summary'] as const,
   entries: () => [...timeTrackingKeys.all, 'entries'] as const,
-  entriesFiltered: (filters: { dateFrom?: string; dateTo?: string; category?: TimeCategory; page?: number }) =>
-    [...timeTrackingKeys.entries(), filters] as const,
+  entriesFiltered: (filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    category?: TimeCategory;
+    page?: number;
+  }) => [...timeTrackingKeys.entries(), filters] as const,
 };
 
 // ============================================================================
@@ -121,13 +125,15 @@ export function useTimeSummary() {
 /**
  * Get paginated time entries with optional filters
  */
-export function useTimeEntries(filters: {
-  dateFrom?: string;
-  dateTo?: string;
-  category?: TimeCategory;
-  page?: number;
-  limit?: number;
-} = {}) {
+export function useTimeEntries(
+  filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    category?: TimeCategory;
+    page?: number;
+    limit?: number;
+  } = {}
+) {
   return useQuery({
     queryKey: timeTrackingKeys.entriesFiltered(filters),
     queryFn: async (): Promise<TimeEntriesResponse> => {

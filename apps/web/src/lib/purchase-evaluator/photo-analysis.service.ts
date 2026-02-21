@@ -38,10 +38,7 @@ import type {
   BrickognizeItem,
 } from './photo-types';
 import { generatePhotoItemId } from './photo-types';
-import {
-  processImagesForChunking,
-  isChunkingAvailable,
-} from './image-chunking.service';
+import { processImagesForChunking, isChunkingAvailable } from './image-chunking.service';
 
 // ============================================
 // Configuration
@@ -120,10 +117,7 @@ export async function analyzePhotos(
   if (shouldChunk) {
     console.log('[PhotoAnalysis] Running smart image chunking pre-processor...');
     try {
-      const chunkingResult = await processImagesForChunking(
-        images,
-        options.forceChunking || false
-      );
+      const chunkingResult = await processImagesForChunking(images, options.forceChunking || false);
 
       if (chunkingResult.wasChunked) {
         // Use chunked images for analysis
@@ -163,7 +157,10 @@ export async function analyzePhotos(
     if (!isGeminiConfigured()) {
       throw new Error('Gemini is configured as primary model but GOOGLE_AI_API_KEY is not set');
     }
-    const geminiPrimary = await runGeminiPrimaryAnalysis(imagesToAnalyze, options.listingDescription);
+    const geminiPrimary = await runGeminiPrimaryAnalysis(
+      imagesToAnalyze,
+      options.listingDescription
+    );
     primaryResult = geminiPrimary;
   } else {
     // Use Claude Opus as primary (default)
@@ -177,9 +174,9 @@ export async function analyzePhotos(
     // If Gemini is primary, use Claude for verification (and vice versa)
     primaryModel === 'gemini'
       ? runClaudeVerification(imagesToAnalyze)
-      : (options.useGeminiVerification && isGeminiConfigured()
-          ? runGeminiVerification(imagesToAnalyze)
-          : null),
+      : options.useGeminiVerification && isGeminiConfigured()
+        ? runGeminiVerification(imagesToAnalyze)
+        : null,
     options.useBrickognize ? runBrickognizeIdentification(imagesToAnalyze) : null,
   ]);
 
@@ -193,7 +190,12 @@ export async function analyzePhotos(
 
   // Step 3: Merge and reconcile results
   console.log('[PhotoAnalysis] Merging results...');
-  const mergedItems = mergeModelResults(primaryResult, secondaryResult, brickognizeResult, primaryModel);
+  const mergedItems = mergeModelResults(
+    primaryResult,
+    secondaryResult,
+    brickognizeResult,
+    primaryModel
+  );
 
   // Step 4: Verification pass for high-confidence sets
   // This catches misidentifications where the model was confident but wrong
@@ -367,10 +369,7 @@ async function runVerificationPass(
   // Only verify sets with high confidence that haven't been flagged
   const setsToVerify = items.filter(
     (item) =>
-      item.itemType === 'set' &&
-      item.setNumber &&
-      item.confidenceScore >= 0.7 &&
-      !item.needsReview
+      item.itemType === 'set' && item.setNumber && item.confidenceScore >= 0.7 && !item.needsReview
   );
 
   if (setsToVerify.length === 0) {
@@ -449,10 +448,7 @@ async function runVerificationPass(
             needsReview: true,
             reviewReason: `Auto-corrected from ${item.setNumber}: ${verification.reason}`,
             confidenceScore: 0.8, // Reduce confidence since it needed correction
-            modelIdentifications: [
-              ...item.modelIdentifications,
-              verificationIdentification,
-            ],
+            modelIdentifications: [...item.modelIdentifications, verificationIdentification],
             modelsAgree: false,
           };
         } else {
@@ -462,10 +458,7 @@ async function runVerificationPass(
             needsReview: true,
             reviewReason: `Verification uncertain: ${verification.reason}`,
             confidenceScore: Math.max(0.5, item.confidenceScore - 0.2),
-            modelIdentifications: [
-              ...item.modelIdentifications,
-              verificationIdentification,
-            ],
+            modelIdentifications: [...item.modelIdentifications, verificationIdentification],
           };
         }
       }
@@ -621,22 +614,12 @@ function mergeModelResults(
     }
 
     // Calculate final confidence
-    const finalConfidence = Math.min(
-      MAX_CONFIDENCE,
-      primaryItem.confidenceScore + confidenceBoost
-    );
+    const finalConfidence = Math.min(MAX_CONFIDENCE, primaryItem.confidenceScore + confidenceBoost);
 
     // If models disagree significantly, flag for review
-    const needsReview =
-      primaryItem.needsReview ||
-      !modelsAgree ||
-      finalConfidence < 0.5;
+    const needsReview = primaryItem.needsReview || !modelsAgree || finalConfidence < 0.5;
 
-    const reviewReason = determineReviewReason(
-      primaryItem,
-      modelsAgree,
-      finalConfidence
-    );
+    const reviewReason = determineReviewReason(primaryItem, modelsAgree, finalConfidence);
 
     // Build merged item
     const mergedItem: PhotoAnalysisItem = {
@@ -678,9 +661,7 @@ function mergeModelResults(
     if (primaryItem.itemType === 'parts_lot' && brickognizeItems) {
       const partMatches = getPartMatches(brickognizeItems);
       if (partMatches.length > 0) {
-        mergedItem.partIds = partMatches.slice(0, 10).map(
-          (p) => p.externalIds?.bricklink || p.id
-        );
+        mergedItem.partIds = partMatches.slice(0, 10).map((p) => p.externalIds?.bricklink || p.id);
         mergedItem.brickognizeMatches = partMatches.slice(0, 5);
       }
     }
@@ -746,9 +727,7 @@ function collectWarnings(
   // Add warning if models disagreed
   const disagreementCount = mergedItems.filter((i) => !i.modelsAgree).length;
   if (disagreementCount > 0) {
-    warnings.push(
-      `AI models disagreed on ${disagreementCount} item(s) - please verify`
-    );
+    warnings.push(`AI models disagreed on ${disagreementCount} item(s) - please verify`);
   }
 
   return warnings;
@@ -757,10 +736,7 @@ function collectWarnings(
 /**
  * Create empty result when no images provided
  */
-function createEmptyResult(
-  startTime: number,
-  modelsUsed: AIModel[]
-): PhotoAnalysisResult {
+function createEmptyResult(startTime: number, modelsUsed: AIModel[]): PhotoAnalysisResult {
   return {
     items: [],
     overallNotes: 'No images provided for analysis',

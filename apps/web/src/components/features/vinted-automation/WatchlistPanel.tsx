@@ -27,16 +27,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useWatchlist, useRefreshWatchlist, type WatchlistItem } from '@/hooks/use-vinted-automation';
 import {
-  Target,
-  RefreshCw,
-  AlertCircle,
-  TrendingUp,
-  Crown,
-  Archive,
-  Search,
-} from 'lucide-react';
+  useWatchlist,
+  useRefreshWatchlist,
+  type WatchlistItem,
+} from '@/hooks/use-vinted-automation';
+import { Target, RefreshCw, AlertCircle, TrendingUp, Crown, Archive, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -90,8 +86,7 @@ export function WatchlistPanel() {
       item.set_number.toLowerCase().includes(search.toLowerCase()) ||
       item.asin?.toLowerCase().includes(search.toLowerCase());
 
-    const matchesSource =
-      sourceFilter === 'all' || item.source === sourceFilter;
+    const matchesSource = sourceFilter === 'all' || item.source === sourceFilter;
 
     return matchesSearch && matchesSource;
   });
@@ -102,12 +97,8 @@ export function WatchlistPanel() {
     const bViable = b.stats?.viable_found ?? 0;
     if (bViable !== aViable) return bViable - aViable;
 
-    const aLastViable = a.stats?.last_viable_at
-      ? new Date(a.stats.last_viable_at).getTime()
-      : 0;
-    const bLastViable = b.stats?.last_viable_at
-      ? new Date(b.stats.last_viable_at).getTime()
-      : 0;
+    const aLastViable = a.stats?.last_viable_at ? new Date(a.stats.last_viable_at).getTime() : 0;
+    const bLastViable = b.stats?.last_viable_at ? new Date(b.stats.last_viable_at).getTime() : 0;
     return bLastViable - aLastViable;
   });
 
@@ -129,8 +120,8 @@ export function WatchlistPanel() {
               </Badge>
             </CardTitle>
             <CardDescription>
-              {bestSellerCount} best sellers • {retiredCount} popular retired •{' '}
-              {totalViable} total opportunities found
+              {bestSellerCount} best sellers • {retiredCount} popular retired • {totalViable} total
+              opportunities found
             </CardDescription>
           </div>
 
@@ -140,9 +131,7 @@ export function WatchlistPanel() {
             variant="outline"
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${
-                refreshWatchlist.isPending ? 'animate-spin' : ''
-              }`}
+              className={`mr-2 h-4 w-4 ${refreshWatchlist.isPending ? 'animate-spin' : ''}`}
             />
             Refresh
           </Button>
@@ -202,9 +191,7 @@ export function WatchlistPanel() {
             <TableBody>
               {sortedItems.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-mono font-medium">
-                    {item.set_number}
-                  </TableCell>
+                  <TableCell className="font-mono font-medium">{item.set_number}</TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {item.asin || '-'}
                   </TableCell>
@@ -212,12 +199,8 @@ export function WatchlistPanel() {
                   <TableCell className="text-right text-sm text-muted-foreground">
                     {item.sales_rank?.toLocaleString() || '-'}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {item.stats?.total_scans ?? 0}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.stats?.listings_found ?? 0}
-                  </TableCell>
+                  <TableCell className="text-right">{item.stats?.total_scans ?? 0}</TableCell>
+                  <TableCell className="text-right">{item.stats?.listings_found ?? 0}</TableCell>
                   <TableCell className="text-right">
                     {(item.stats?.viable_found ?? 0) > 0 ? (
                       <span className="font-medium text-green-600 flex items-center justify-end gap-1">

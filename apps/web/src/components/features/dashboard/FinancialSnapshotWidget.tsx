@@ -17,7 +17,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; hideValue?: 
   unknown: { label: 'No Status', color: 'text-gray-400' },
 };
 
-const STATUS_ORDER = ['NOT YET RECEIVED', 'BACKLOG_VALUED', 'BACKLOG_UNVALUED', 'LISTED', 'SOLD', 'RETURNED', 'unknown'];
+const STATUS_ORDER = [
+  'NOT YET RECEIVED',
+  'BACKLOG_VALUED',
+  'BACKLOG_UNVALUED',
+  'LISTED',
+  'SOLD',
+  'RETURNED',
+  'unknown',
+];
 
 /**
  * Widget displaying financial overview with status breakdown in a grid
@@ -34,12 +42,11 @@ export function FinancialSnapshotWidget() {
   const listedInfo = data?.valueByStatus?.['LISTED'];
   const listedCost = listedInfo?.cost || 0;
   const listedValue = listedInfo?.listingValue || 0;
-  const listedMargin = listedValue > 0 ? Math.round(((listedValue - listedCost) / listedValue) * 100) : 0;
+  const listedMargin =
+    listedValue > 0 ? Math.round(((listedValue - listedCost) / listedValue) * 100) : 0;
 
   // Filter statuses based on excludeSold setting
-  const displayStatuses = excludeSold
-    ? STATUS_ORDER.filter((s) => s !== 'SOLD')
-    : STATUS_ORDER;
+  const displayStatuses = excludeSold ? STATUS_ORDER.filter((s) => s !== 'SOLD') : STATUS_ORDER;
 
   return (
     <Card className="relative">
@@ -101,8 +108,14 @@ export function FinancialSnapshotWidget() {
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Listed Margin (Before Fees)</span>
-                  <span className={cn('font-medium', listedMargin >= 0 ? 'text-green-600' : 'text-red-600')}>
-                    {listedMargin >= 0 ? '+' : ''}{listedMargin}%
+                  <span
+                    className={cn(
+                      'font-medium',
+                      listedMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                    )}
+                  >
+                    {listedMargin >= 0 ? '+' : ''}
+                    {listedMargin}%
                   </span>
                 </div>
               </div>

@@ -1,12 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,13 +16,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
-import {
-  Check,
-  X,
-  ExternalLink,
-  ShoppingCart,
-  Loader2,
-} from 'lucide-react';
+import { Check, X, ExternalLink, ShoppingCart, Loader2 } from 'lucide-react';
 import type { RemovalWithSyncItem } from '@/lib/api/minifig-sync';
 
 interface RemovalCardProps {
@@ -56,25 +45,34 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function getSoldOnLabel(soldOn: string | null): string {
   switch (soldOn) {
-    case 'EBAY': return 'eBay';
-    case 'BRICQER': return 'Bricqer';
-    default: return soldOn ?? 'Unknown';
+    case 'EBAY':
+      return 'eBay';
+    case 'BRICQER':
+      return 'Bricqer';
+    default:
+      return soldOn ?? 'Unknown';
   }
 }
 
 function getRemoveFromLabel(removeFrom: string | null): string {
   switch (removeFrom) {
-    case 'EBAY': return 'eBay listing';
-    case 'BRICQER': return 'Bricqer inventory';
-    default: return removeFrom ?? 'Unknown';
+    case 'EBAY':
+      return 'eBay listing';
+    case 'BRICQER':
+      return 'Bricqer inventory';
+    default:
+      return removeFrom ?? 'Unknown';
   }
 }
 
 function getSoldOnBadgeVariant(soldOn: string | null): 'default' | 'secondary' | 'destructive' {
   switch (soldOn) {
-    case 'EBAY': return 'default';
-    case 'BRICQER': return 'secondary';
-    default: return 'destructive';
+    case 'EBAY':
+      return 'default';
+    case 'BRICQER':
+      return 'secondary';
+    default:
+      return 'destructive';
   }
 }
 
@@ -147,7 +145,8 @@ export function RemovalCard({
         <div className="flex items-center gap-2 text-sm">
           <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
           <span>
-            Remove from: <span className="font-medium">{getRemoveFromLabel(removal.remove_from)}</span>
+            Remove from:{' '}
+            <span className="font-medium">{getRemoveFromLabel(removal.remove_from)}</span>
           </span>
         </div>
 
@@ -195,15 +194,13 @@ export function RemovalCard({
             <AlertDialogHeader>
               <AlertDialogTitle>Approve this removal?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove &quot;{syncItem?.name}&quot; from {getRemoveFromLabel(removal.remove_from)}.
-                This action cannot be undone.
+                This will remove &quot;{syncItem?.name}&quot; from{' '}
+                {getRemoveFromLabel(removal.remove_from)}. This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => onApprove(removal.id)}>
-                Approve
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => onApprove(removal.id)}>Approve</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -14,13 +14,18 @@ const UpdateConfigSchema = z.object({
   pomodoro_long_work: z.number().min(1).max(120).nullable().optional(),
   pomodoro_long_break: z.number().min(1).max(60).nullable().optional(),
   pomodoro_sessions_before_long_break: z.number().min(1).max(10).nullable().optional(),
-  time_categories: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    color: z.string(),
-    icon: z.string().optional(),
-    isDefault: z.boolean().optional(),
-  })).nullable().optional(),
+  time_categories: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        color: z.string(),
+        icon: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      })
+    )
+    .nullable()
+    .optional(),
   working_days: z.number().min(1).max(7).nullable().optional(),
   notifications_enabled: z.boolean().nullable().optional(),
   notification_dispatch_hours: z.number().nullable().optional(),

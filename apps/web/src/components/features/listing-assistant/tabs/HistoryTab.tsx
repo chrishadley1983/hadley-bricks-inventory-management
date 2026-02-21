@@ -131,15 +131,9 @@ export function HistoryTab() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {listing.price_range && (
-                    <Badge variant="outline">{listing.price_range}</Badge>
-                  )}
-                  <Badge className={CONDITION_COLORS[listing.condition]}>
-                    {listing.condition}
-                  </Badge>
-                  <Badge className={STATUS_COLORS[listing.status]}>
-                    {listing.status}
-                  </Badge>
+                  {listing.price_range && <Badge variant="outline">{listing.price_range}</Badge>}
+                  <Badge className={CONDITION_COLORS[listing.condition]}>{listing.condition}</Badge>
+                  <Badge className={STATUS_COLORS[listing.status]}>{listing.status}</Badge>
                 </div>
               </div>
             </CardHeader>
@@ -154,11 +148,7 @@ export function HistoryTab() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleCopy(listing)}
-                >
+                <Button variant="outline" size="sm" onClick={() => handleCopy(listing)}>
                   {copiedId === listing.id ? (
                     <>
                       <Check className="mr-2 h-3 w-3" />
@@ -183,11 +173,7 @@ export function HistoryTab() {
 
                 <div className="flex-1" />
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setDeleteConfirmId(listing.id)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(listing.id)}>
                   <Trash2 className="h-3 w-3 text-destructive" />
                 </Button>
               </div>
@@ -202,8 +188,7 @@ export function HistoryTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Listing</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this saved listing? This action cannot be
-              undone.
+              Are you sure you want to delete this saved listing? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

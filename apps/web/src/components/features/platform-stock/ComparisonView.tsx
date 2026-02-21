@@ -53,8 +53,7 @@ function formatDifference(diff: number): string {
 
 export function ComparisonView({ platform }: ComparisonViewProps) {
   const [filters, setFilters] = useState<ComparisonFilters>({});
-  const [selectedComparison, setSelectedComparison] =
-    useState<StockComparison | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState<StockComparison | null>(null);
 
   const { data, isLoading, error } = useStockComparison(platform, filters);
 
@@ -66,9 +65,7 @@ export function ComparisonView({ platform }: ComparisonViewProps) {
 
     // Hide items where both platform and inventory quantities are 0
     if (filters.hideZeroQuantities) {
-      result = result.filter(
-        (c) => !(c.platformQuantity === 0 && c.inventoryQuantity === 0)
-      );
+      result = result.filter((c) => !(c.platformQuantity === 0 && c.inventoryQuantity === 0));
     }
 
     return result;
@@ -80,8 +77,7 @@ export function ComparisonView({ platform }: ComparisonViewProps) {
       ...prev,
       discrepancyType: filter === 'all' ? undefined : filter,
       // Clear hideZeroQuantities when changing filter (unless staying on 'match')
-      hideZeroQuantities:
-        filter === 'match' ? prev.hideZeroQuantities : undefined,
+      hideZeroQuantities: filter === 'match' ? prev.hideZeroQuantities : undefined,
     }));
   };
 
@@ -149,10 +145,7 @@ export function ComparisonView({ platform }: ComparisonViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ComparisonFiltersComponent
-            filters={filters}
-            onFiltersChange={setFilters}
-          />
+          <ComparisonFiltersComponent filters={filters} onFiltersChange={setFilters} />
 
           {filteredComparisons.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -192,9 +185,7 @@ export function ComparisonView({ platform }: ComparisonViewProps) {
                         className="max-w-[300px] truncate"
                         title={comparison.platformTitle || undefined}
                       >
-                        {comparison.platformTitle ||
-                          comparison.inventoryItems[0]?.itemName ||
-                          '-'}
+                        {comparison.platformTitle || comparison.inventoryItems[0]?.itemName || '-'}
                       </TableCell>
                       <TableCell className="text-center font-medium">
                         {comparison.platformQuantity}
@@ -208,8 +199,8 @@ export function ComparisonView({ platform }: ComparisonViewProps) {
                             comparison.quantityDifference > 0
                               ? 'text-orange-600 font-medium'
                               : comparison.quantityDifference < 0
-                              ? 'text-red-600 font-medium'
-                              : 'text-green-600'
+                                ? 'text-red-600 font-medium'
+                                : 'text-green-600'
                           }
                         >
                           {formatDifference(comparison.quantityDifference)}
@@ -248,10 +239,7 @@ interface ComparisonDetailSheetProps {
   onClose: () => void;
 }
 
-function ComparisonDetailSheet({
-  comparison,
-  onClose,
-}: ComparisonDetailSheetProps) {
+function ComparisonDetailSheet({ comparison, onClose }: ComparisonDetailSheetProps) {
   if (!comparison) return null;
 
   return (
@@ -262,9 +250,7 @@ function ComparisonDetailSheet({
             {comparison.platformItemId}
             <DiscrepancyBadge type={comparison.discrepancyType} />
           </SheetTitle>
-          <SheetDescription>
-            {comparison.platformTitle || 'No title available'}
-          </SheetDescription>
+          <SheetDescription>{comparison.platformTitle || 'No title available'}</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
@@ -278,21 +264,15 @@ function ComparisonDetailSheet({
               </div>
               <div>
                 <p className="text-muted-foreground">Price</p>
-                <p className="font-medium">
-                  {formatPrice(comparison.platformPrice)}
-                </p>
+                <p className="font-medium">{formatPrice(comparison.platformPrice)}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">SKU</p>
-                <p className="font-mono text-xs">
-                  {comparison.platformSku || '-'}
-                </p>
+                <p className="font-mono text-xs">{comparison.platformSku || '-'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Fulfillment</p>
-                <Badge variant="outline">
-                  {comparison.platformFulfillmentChannel || '-'}
-                </Badge>
+                <Badge variant="outline">{comparison.platformFulfillmentChannel || '-'}</Badge>
               </div>
               <div>
                 <p className="text-muted-foreground">Status</p>
@@ -313,14 +293,10 @@ function ComparisonDetailSheet({
 
           {/* Inventory Data */}
           <div>
-            <h3 className="font-semibold mb-3">
-              Inventory ({comparison.inventoryQuantity} items)
-            </h3>
+            <h3 className="font-semibold mb-3">Inventory ({comparison.inventoryQuantity} items)</h3>
 
             {comparison.inventoryItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No matching inventory items found
-              </p>
+              <p className="text-sm text-muted-foreground">No matching inventory items found</p>
             ) : (
               <div className="space-y-3">
                 {comparison.inventoryItems.map((item) => (
@@ -361,9 +337,7 @@ function InventoryItemCard({ item }: InventoryItemCardProps) {
       <div className="flex items-start justify-between">
         <div>
           <p className="font-medium">{item.setNumber}</p>
-          <p className="text-sm text-muted-foreground line-clamp-1">
-            {item.itemName || 'No name'}
-          </p>
+          <p className="text-sm text-muted-foreground line-clamp-1">{item.itemName || 'No name'}</p>
         </div>
         <Badge variant="secondary">{item.condition || 'N/A'}</Badge>
       </div>

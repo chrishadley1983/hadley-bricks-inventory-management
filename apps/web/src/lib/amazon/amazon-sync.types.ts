@@ -11,22 +11,15 @@ import type { Database } from '@hadley-bricks/database';
 // DATABASE ROW TYPES
 // ============================================================================
 
-export type AmazonSyncQueueRow =
-  Database['public']['Tables']['amazon_sync_queue']['Row'];
-export type AmazonSyncQueueInsert =
-  Database['public']['Tables']['amazon_sync_queue']['Insert'];
-export type AmazonSyncQueueUpdate =
-  Database['public']['Tables']['amazon_sync_queue']['Update'];
+export type AmazonSyncQueueRow = Database['public']['Tables']['amazon_sync_queue']['Row'];
+export type AmazonSyncQueueInsert = Database['public']['Tables']['amazon_sync_queue']['Insert'];
+export type AmazonSyncQueueUpdate = Database['public']['Tables']['amazon_sync_queue']['Update'];
 
-export type AmazonSyncFeedRow =
-  Database['public']['Tables']['amazon_sync_feeds']['Row'];
-export type AmazonSyncFeedInsert =
-  Database['public']['Tables']['amazon_sync_feeds']['Insert'];
-export type AmazonSyncFeedUpdate =
-  Database['public']['Tables']['amazon_sync_feeds']['Update'];
+export type AmazonSyncFeedRow = Database['public']['Tables']['amazon_sync_feeds']['Row'];
+export type AmazonSyncFeedInsert = Database['public']['Tables']['amazon_sync_feeds']['Insert'];
+export type AmazonSyncFeedUpdate = Database['public']['Tables']['amazon_sync_feeds']['Update'];
 
-export type AmazonSyncFeedItemRow =
-  Database['public']['Tables']['amazon_sync_feed_items']['Row'];
+export type AmazonSyncFeedItemRow = Database['public']['Tables']['amazon_sync_feed_items']['Row'];
 export type AmazonSyncFeedItemInsert =
   Database['public']['Tables']['amazon_sync_feed_items']['Insert'];
 export type AmazonSyncFeedItemUpdate =
@@ -78,10 +71,10 @@ export type FeedStatus =
   | 'pending'
   | 'submitted'
   | 'processing'
-  | 'done'                   // Feed accepted by Amazon, but price may not be applied yet
-  | 'done_verifying'         // Verifying price on Amazon (up to 30 min delay)
-  | 'verified'               // Price verified on Amazon - fully complete
-  | 'verification_failed'    // Price not set correctly after verification period
+  | 'done' // Feed accepted by Amazon, but price may not be applied yet
+  | 'done_verifying' // Verifying price on Amazon (up to 30 min delay)
+  | 'verified' // Price verified on Amazon - fully complete
+  | 'verification_failed' // Price not set correctly after verification period
   | 'cancelled'
   | 'fatal'
   | 'error'
@@ -108,12 +101,12 @@ export type FeedStatus =
  */
 export type FeedItemStatus =
   | 'pending'
-  | 'accepted'               // Amazon accepted the message (new SKU - needs verification)
-  | 'verifying'              // Verifying price/quantity on Amazon
-  | 'success'                // Successfully updated and verified
-  | 'warning'                // Updated with warnings from Amazon
-  | 'error'                  // Failed with errors from Amazon
-  | 'verification_failed';   // Price/quantity not applied after timeout
+  | 'accepted' // Amazon accepted the message (new SKU - needs verification)
+  | 'verifying' // Verifying price/quantity on Amazon
+  | 'success' // Successfully updated and verified
+  | 'warning' // Updated with warnings from Amazon
+  | 'error' // Failed with errors from Amazon
+  | 'verification_failed'; // Price/quantity not applied after timeout
 
 // ============================================================================
 // QUEUE ITEM TYPES
@@ -166,7 +159,10 @@ export interface AggregatedQueueItem {
 /**
  * Sync feed with summary for list display (omits large payloads)
  */
-export type SyncFeed = Omit<AmazonSyncFeedRow, 'request_payload' | 'response_payload' | 'result_payload'>;
+export type SyncFeed = Omit<
+  AmazonSyncFeedRow,
+  'request_payload' | 'response_payload' | 'result_payload'
+>;
 
 /**
  * Feed item with additional display info
@@ -266,10 +262,7 @@ export interface ListingsFeedPatch {
  * - LISTING_PRODUCT_ONLY: Product facts only
  * - LISTING_OFFER_ONLY: Sales terms only (for offers on existing ASINs)
  */
-export type ListingsFeedRequirements =
-  | 'LISTING'
-  | 'LISTING_PRODUCT_ONLY'
-  | 'LISTING_OFFER_ONLY';
+export type ListingsFeedRequirements = 'LISTING' | 'LISTING_PRODUCT_ONLY' | 'LISTING_OFFER_ONLY';
 
 /**
  * JSON Listings Feed message for a single SKU
@@ -576,7 +569,12 @@ export interface TwoPhaseStepResult {
   feedId: string;
   status: TwoPhaseStatus;
   /** Current step that was just processed */
-  step: 'price_polling' | 'price_verification' | 'quantity_submission' | 'quantity_polling' | 'complete';
+  step:
+    | 'price_polling'
+    | 'price_verification'
+    | 'quantity_submission'
+    | 'quantity_polling'
+    | 'complete';
   /** Whether processing is complete (success or failure) */
   isComplete: boolean;
   /** Message describing what happened */

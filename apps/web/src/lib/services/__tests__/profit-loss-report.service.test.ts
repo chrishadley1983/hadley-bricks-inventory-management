@@ -87,13 +87,7 @@ describe('ProfitLossReportService', () => {
         endMonth: '2025-02',
       });
 
-      expect(result.months).toEqual([
-        '2024-10',
-        '2024-11',
-        '2024-12',
-        '2025-01',
-        '2025-02',
-      ]);
+      expect(result.months).toEqual(['2024-10', '2024-11', '2024-12', '2025-01', '2025-02']);
     });
 
     it('should initialize category totals to zero for all months', async () => {
@@ -220,15 +214,9 @@ describe('ProfitLossReportService', () => {
 
       // Count rows by category
       const incomeRows = result.rows.filter((r) => r.category === 'Income');
-      const sellingFeesRows = result.rows.filter(
-        (r) => r.category === 'Selling Fees'
-      );
-      const stockPurchaseRows = result.rows.filter(
-        (r) => r.category === 'Stock Purchase'
-      );
-      const packingRows = result.rows.filter(
-        (r) => r.category === 'Packing & Postage'
-      );
+      const sellingFeesRows = result.rows.filter((r) => r.category === 'Selling Fees');
+      const stockPurchaseRows = result.rows.filter((r) => r.category === 'Stock Purchase');
+      const packingRows = result.rows.filter((r) => r.category === 'Packing & Postage');
       const billsRows = result.rows.filter((r) => r.category === 'Bills');
 
       // Expected row counts per category

@@ -37,7 +37,6 @@ interface SyncAllResponse {
  * Get weekly stats from database
  */
 async function getWeeklyStats(userId: string, supabase: SupabaseClient): Promise<WeeklyStats> {
-  
   // Get start of current week (Monday)
   const now = new Date();
   const dayOfWeek = now.getDay();
@@ -45,7 +44,7 @@ async function getWeeklyStats(userId: string, supabase: SupabaseClient): Promise
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - daysFromMonday);
   weekStart.setHours(0, 0, 0, 0);
-  
+
   const weekStartIso = weekStart.toISOString();
 
   // Listed this week (inventory items created this week with status LISTED)
@@ -57,7 +56,8 @@ async function getWeeklyStats(userId: string, supabase: SupabaseClient): Promise
     .gte('created_at', weekStartIso);
 
   const listedCount = listedItems?.length || 0;
-  const listedValue = listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) || 0;
+  const listedValue =
+    listedItems?.reduce((sum, item) => sum + (Number(item.listing_value) || 0), 0) || 0;
 
   // Sold this week (from platform_orders fulfilled this week)
   const { data: soldOrders } = await supabase
@@ -92,7 +92,9 @@ async function fetchSyncSummary(userId: string, supabase: SupabaseClient): Promi
   // eBay sync logs - get latest of each type
   const { data: ebayLogs } = await supabase
     .from('ebay_sync_log')
-    .select('sync_type, status, records_processed, records_created, records_updated, error_message, completed_at')
+    .select(
+      'sync_type, status, records_processed, records_created, records_updated, error_message, completed_at'
+    )
     .eq('user_id', userId)
     .order('started_at', { ascending: false })
     .limit(10);
@@ -243,7 +245,12 @@ async function fetchSyncSummary(userId: string, supabase: SupabaseClient): Promi
     }
     for (const [platform, log] of stockByPlatform) {
       items.push({
-        platform: platform === 'ebay' ? 'eBay Stock' : platform === 'amazon' ? 'Amazon Stock' : `${platform} Stock`,
+        platform:
+          platform === 'ebay'
+            ? 'eBay Stock'
+            : platform === 'amazon'
+              ? 'Amazon Stock'
+              : `${platform} Stock`,
         type: 'stock',
         status: log.status === 'completed' ? 'COMPLETED' : 'FAILED',
         processed: log.processed_rows ?? 0,
@@ -259,7 +266,7 @@ async function fetchSyncSummary(userId: string, supabase: SupabaseClient): Promi
 
 /**
  * POST /api/workflow/sync-all
- * 
+ *
  * Runs all platform syncs and returns consolidated results with weekly stats.
  */
 export async function POST(request: NextRequest) {
@@ -294,19 +301,19 @@ export async function POST(request: NextRequest) {
         console.error('[sync-all] eBay auto sync error:', e.message);
         return null;
       }),
-      
+
       // Amazon sync
       amazonSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] Amazon orders error:', e.message);
         return null;
       }),
-      
+
       // BrickLink sync
       bricklinkSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] BrickLink orders error:', e.message);
         return null;
       }),
-      
+
       // BrickOwl sync
       brickowlSyncService.syncOrders(userId).catch((e: Error) => {
         console.error('[sync-all] BrickOwl orders error:', e.message);
@@ -320,7 +327,7 @@ export async function POST(request: NextRequest) {
     console.log('[sync-all] All syncs completed, fetching summary...');
 
     // Give a moment for logs to be written
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Fetch sync summary from database
     const syncResults = await fetchSyncSummary(userId, supabase);

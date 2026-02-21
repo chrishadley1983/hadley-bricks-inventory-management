@@ -62,25 +62,28 @@ export default function ListingOptimiserPage() {
       setPendingReanalyse(false);
 
       // Trigger re-analysis
-      analyseMutation.mutateAsync([currentListingId]).then((result) => {
-        if (result.results.length > 0) {
-          const newAnalysis = result.results[0];
+      analyseMutation
+        .mutateAsync([currentListingId])
+        .then((result) => {
+          if (result.results.length > 0) {
+            const newAnalysis = result.results[0];
 
-          setCurrentAnalysis((prev) => {
-            if (prev) {
-              setPreviousScore(prev.analysis.score);
-            }
-            return { ...newAnalysis };
-          });
+            setCurrentAnalysis((prev) => {
+              if (prev) {
+                setPreviousScore(prev.analysis.score);
+              }
+              return { ...newAnalysis };
+            });
 
-          toast({
-            title: 'Re-analysed',
-            description: `New score: ${newAnalysis.analysis.score}/100 (${newAnalysis.analysis.grade})`,
-          });
-        }
-      }).catch(() => {
-        // Error handled by mutation
-      });
+            toast({
+              title: 'Re-analysed',
+              description: `New score: ${newAnalysis.analysis.score}/100 (${newAnalysis.analysis.grade})`,
+            });
+          }
+        })
+        .catch(() => {
+          // Error handled by mutation
+        });
     }
   }, [pendingReanalyse, applyMutation.isPending, currentListingId, analyseMutation, toast]);
 
@@ -189,10 +192,13 @@ export default function ListingOptimiserPage() {
   );
 
   // Handle skip suggestion
-  const handleSkip = useCallback((_suggestion: ListingSuggestion) => {
-    // Just move to next suggestion - no action needed
-    toast({ title: 'Skipped', description: 'Suggestion skipped' });
-  }, [toast]);
+  const handleSkip = useCallback(
+    (_suggestion: ListingSuggestion) => {
+      // Just move to next suggestion - no action needed
+      toast({ title: 'Skipped', description: 'Suggestion skipped' });
+    },
+    [toast]
+  );
 
   // Handle re-analyse (from "Re-analyse" button after all suggestions reviewed)
   const handleReanalyse = useCallback(async () => {
@@ -301,7 +307,9 @@ export default function ListingOptimiserPage() {
         <Tabs defaultValue="optimiser" className="w-full">
           <TabsList>
             <TabsTrigger value="optimiser">Optimiser</TabsTrigger>
-            <TabsTrigger value="offers" data-testid="negotiation-tab">Offers</TabsTrigger>
+            <TabsTrigger value="offers" data-testid="negotiation-tab">
+              Offers
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="optimiser" className="mt-6 space-y-6">

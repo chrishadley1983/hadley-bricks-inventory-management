@@ -33,10 +33,7 @@ export async function POST() {
     }
 
     if (!session) {
-      return NextResponse.json(
-        { error: 'No active session to cancel' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active session to cancel' }, { status: 400 });
     }
 
     const now = new Date().toISOString();

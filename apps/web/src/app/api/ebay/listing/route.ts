@@ -59,11 +59,13 @@ const ListingCreationSchema = z.object({
   templateId: z.string().uuid().optional(),
   listingType: z.enum(['live', 'scheduled']),
   scheduledDate: z.string().optional(), // Validated manually below for scheduled listings
-  policyOverrides: z.object({
-    fulfillmentPolicyId: z.string().optional(),
-    paymentPolicyId: z.string().optional(),
-    returnPolicyId: z.string().optional(),
-  }).optional(),
+  policyOverrides: z
+    .object({
+      fulfillmentPolicyId: z.string().optional(),
+      paymentPolicyId: z.string().optional(),
+      returnPolicyId: z.string().optional(),
+    })
+    .optional(),
   conditionDescriptionOverride: z.string().optional(),
   storageLocation: z.string().optional(), // Storage location to update on inventory item
 });
@@ -110,20 +112,32 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse and validate request body
     const body = await request.json();
-    console.log('[POST /api/ebay/listing] Request body:', JSON.stringify({
-      ...body,
-      photos: body.photos?.map((p: { id: string; filename: string; mimeType: string; base64?: string }) => ({
-        id: p.id,
-        filename: p.filename,
-        mimeType: p.mimeType,
-        base64Length: p.base64?.length
-      }))
-    }, null, 2));
+    console.log(
+      '[POST /api/ebay/listing] Request body:',
+      JSON.stringify(
+        {
+          ...body,
+          photos: body.photos?.map(
+            (p: { id: string; filename: string; mimeType: string; base64?: string }) => ({
+              id: p.id,
+              filename: p.filename,
+              mimeType: p.mimeType,
+              base64Length: p.base64?.length,
+            })
+          ),
+        },
+        null,
+        2
+      )
+    );
 
     const parsed = ListingCreationSchema.safeParse(body);
 
     if (!parsed.success) {
-      console.error('[POST /api/ebay/listing] Validation errors:', JSON.stringify(parsed.error.flatten(), null, 2));
+      console.error(
+        '[POST /api/ebay/listing] Validation errors:',
+        JSON.stringify(parsed.error.flatten(), null, 2)
+      );
       return NextResponse.json(
         {
           error: 'Validation failed',
@@ -162,7 +176,12 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         const sendEvent = (
           type: 'progress' | 'complete' | 'error' | 'preview',
-          data: ListingCreationProgress | ListingCreationResult | ListingCreationError | ListingPreviewData | string
+          data:
+            | ListingCreationProgress
+            | ListingCreationResult
+            | ListingCreationError
+            | ListingPreviewData
+            | string
         ) => {
           const event = JSON.stringify({ type, data });
           controller.enqueue(encoder.encode(`data: ${event}\n\n`));

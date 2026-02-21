@@ -4,11 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { StockPickup } from '@/hooks/use-pickups';
-import {
-  getDaysInMonth,
-  getFirstDayOfMonth,
-  groupPickupsByDate,
-} from '@/hooks/use-pickups';
+import { getDaysInMonth, getFirstDayOfMonth, groupPickupsByDate } from '@/hooks/use-pickups';
 
 interface MiniCalendarProps {
   year: number;
@@ -104,10 +100,7 @@ export function MiniCalendar({
       {/* Day headers */}
       <div className="grid grid-cols-7 gap-1 mb-2">
         {DAYS.map((day) => (
-          <div
-            key={day}
-            className="text-xs text-muted-foreground text-center font-medium py-1"
-          >
+          <div key={day} className="text-xs text-muted-foreground text-center font-medium py-1">
             {day}
           </div>
         ))}
@@ -145,12 +138,8 @@ export function MiniCalendar({
               {/* Pickup indicators */}
               {hasPickups && !isSelected && (
                 <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-0.5">
-                  {hasScheduled && (
-                    <div className="h-1 w-1 rounded-full bg-blue-500" />
-                  )}
-                  {hasCompleted && (
-                    <div className="h-1 w-1 rounded-full bg-green-500" />
-                  )}
+                  {hasScheduled && <div className="h-1 w-1 rounded-full bg-blue-500" />}
+                  {hasCompleted && <div className="h-1 w-1 rounded-full bg-green-500" />}
                 </div>
               )}
               {hasPickups && isSelected && (

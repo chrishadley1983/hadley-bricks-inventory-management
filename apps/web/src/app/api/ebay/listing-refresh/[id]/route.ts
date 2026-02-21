@@ -13,10 +13,7 @@ import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.servi
  * GET /api/ebay/listing-refresh/[id]
  * Get a single refresh job with items
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

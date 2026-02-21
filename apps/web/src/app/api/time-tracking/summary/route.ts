@@ -33,7 +33,14 @@ export async function GET() {
     const weekStartISO = weekStart.toISOString();
 
     // Initialize category totals
-    const categories: TimeCategory[] = ['Development', 'Listing', 'Shipping', 'Sourcing', 'Admin', 'Other'];
+    const categories: TimeCategory[] = [
+      'Development',
+      'Listing',
+      'Shipping',
+      'Sourcing',
+      'Admin',
+      'Other',
+    ];
     const createCategoryObject = (): Record<TimeCategory, number> => ({
       Development: 0,
       Listing: 0,

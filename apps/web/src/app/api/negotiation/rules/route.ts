@@ -7,15 +7,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { NegotiationScoringService, MIN_DISCOUNT_PERCENTAGE } from '@/lib/ebay/negotiation-scoring.service';
+import {
+  NegotiationScoringService,
+  MIN_DISCOUNT_PERCENTAGE,
+} from '@/lib/ebay/negotiation-scoring.service';
 
-const CreateRuleSchema = z.object({
-  minScore: z.number().min(0).max(100),
-  maxScore: z.number().min(0).max(100),
-  discountPercentage: z.number().min(MIN_DISCOUNT_PERCENTAGE).max(50),
-}).refine((data) => data.minScore <= data.maxScore, {
-  message: 'minScore must be less than or equal to maxScore',
-});
+const CreateRuleSchema = z
+  .object({
+    minScore: z.number().min(0).max(100),
+    maxScore: z.number().min(0).max(100),
+    discountPercentage: z.number().min(MIN_DISCOUNT_PERCENTAGE).max(50),
+  })
+  .refine((data) => data.minScore <= data.maxScore, {
+    message: 'minScore must be less than or equal to maxScore',
+  });
 
 export async function GET(_request: NextRequest) {
   try {
@@ -42,12 +47,13 @@ export async function GET(_request: NextRequest) {
     }
 
     // Map to response format
-    const mappedRules = rules?.map((rule) => ({
-      id: rule.id,
-      minScore: rule.min_score,
-      maxScore: rule.max_score,
-      discountPercentage: rule.discount_percentage,
-    })) || [];
+    const mappedRules =
+      rules?.map((rule) => ({
+        id: rule.id,
+        minScore: rule.min_score,
+        maxScore: rule.max_score,
+        discountPercentage: rule.discount_percentage,
+      })) || [];
 
     return NextResponse.json({ data: mappedRules });
   } catch (error) {
@@ -129,14 +135,17 @@ export async function POST(request: NextRequest) {
       throw insertError;
     }
 
-    return NextResponse.json({
-      data: {
-        id: newRule.id,
-        minScore: newRule.min_score,
-        maxScore: newRule.max_score,
-        discountPercentage: newRule.discount_percentage,
+    return NextResponse.json(
+      {
+        data: {
+          id: newRule.id,
+          minScore: newRule.min_score,
+          maxScore: newRule.max_score,
+          discountPercentage: newRule.discount_percentage,
+        },
       },
-    }, { status: 201 });
+      { status: 201 }
+    );
   } catch (error) {
     console.error('[POST /api/negotiation/rules] Error:', error);
     return NextResponse.json(

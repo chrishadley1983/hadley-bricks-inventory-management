@@ -38,7 +38,7 @@ export class ListingStagingService {
   constructor(
     private supabase: SupabaseClient<Database>,
     private userId: string,
-    ebayAuth?: EbayAuthService,
+    ebayAuth?: EbayAuthService
   ) {
     this.configService = new MinifigConfigService(supabase);
     this.jobTracker = new MinifigJobTracker(supabase, userId);
@@ -49,7 +49,10 @@ export class ListingStagingService {
    * Create staged eBay listings for qualifying minifigs (F36).
    * Only processes items with meets_threshold=true AND listing_status='NOT_LISTED'.
    */
-  async createStagedListings(itemIds?: string[], options?: { onProgress?: SyncProgressCallback }): Promise<StagingResult> {
+  async createStagedListings(
+    itemIds?: string[],
+    options?: { onProgress?: SyncProgressCallback }
+  ): Promise<StagingResult> {
     const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('LISTING_CREATION');
     const errors: Array<{ item?: string; error: string }> = [];
@@ -60,7 +63,11 @@ export class ListingStagingService {
 
     try {
       // Get eBay access token
-      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking eBay credentials...' });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'credentials',
+        message: 'Checking eBay credentials...',
+      });
       const accessToken = await this.ebayAuth.getAccessToken(this.userId);
       if (!accessToken) {
         throw new Error('eBay credentials not configured or token expired');
@@ -73,11 +80,15 @@ export class ListingStagingService {
       });
 
       // Get business policies
-      await onProgress?.({ type: 'stage', stage: 'policies', message: 'Loading business policies...' });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'policies',
+        message: 'Loading business policies...',
+      });
       const policiesService = new EbayBusinessPoliciesService(
         this.supabase,
         this.userId,
-        this.ebayAuth,
+        this.ebayAuth
       );
       const policies = await policiesService.getPolicies();
       const defaultFulfillment = policies.fulfillment[0];
@@ -86,7 +97,7 @@ export class ListingStagingService {
 
       if (!defaultFulfillment || !defaultPayment || !defaultReturn) {
         throw new Error(
-          'eBay business policies not configured (need fulfillment, payment, and return policies)',
+          'eBay business policies not configured (need fulfillment, payment, and return policies)'
         );
       }
 
@@ -135,15 +146,11 @@ export class ListingStagingService {
         }
 
         try {
-          await this.stageItem(
-            item,
-            ebayAdapter,
-            {
-              fulfillmentPolicyId: defaultFulfillment.id,
-              paymentPolicyId: defaultPayment.id,
-              returnPolicyId: defaultReturn.id,
-            },
-          );
+          await this.stageItem(item, ebayAdapter, {
+            fulfillmentPolicyId: defaultFulfillment.id,
+            paymentPolicyId: defaultPayment.id,
+            returnPolicyId: defaultReturn.id,
+          });
           itemsStaged++;
         } catch (err) {
           // E6: Log error, keep status NOT_LISTED, continue batch
@@ -193,12 +200,13 @@ export class ListingStagingService {
       fulfillmentPolicyId: string;
       paymentPolicyId: string;
       returnPolicyId: string;
-    },
+    }
   ): Promise<void> {
     const sku = buildSku(item.bricqer_item_id); // I1: HB-MF-{bricqer_item_id}
     const price = Number(item.recommended_price);
     const autoAccept = Number(item.best_offer_auto_accept) || Math.round(price * 0.95 * 100) / 100;
-    const autoDecline = Number(item.best_offer_auto_decline) || Math.round(price * 0.75 * 100) / 100;
+    const autoDecline =
+      Number(item.best_offer_auto_decline) || Math.round(price * 0.75 * 100) / 100;
 
     // Generate AI-optimized listing content via Claude
     const genService = new ListingGenerationService();
@@ -213,12 +221,12 @@ export class ListingStagingService {
           pieceCount: 1,
           minifigureCount: 1,
         },
-        { style: 'Standard', price },
+        { style: 'Standard', price }
       );
     } catch (err) {
       console.warn(
         `[ListingStagingService] AI generation failed for ${item.bricklink_id}, skipping:`,
-        err instanceof Error ? err.message : err,
+        err instanceof Error ? err.message : err
       );
       throw err;
     }
@@ -297,6 +305,13 @@ export class ListingStagingService {
         ebay_offer_id: createOfferResponse.offerId,
         ebay_title: generated.title,
         ebay_description: generated.description,
+        ebay_condition: conditionEnum,
+        ebay_condition_description:
+          generated.conditionDescription ||
+          item.condition_notes ||
+          'Used minifigure in excellent condition',
+        ebay_category_id: generated.categoryId || EBAY_MINIFIG_CATEGORY_ID,
+        ebay_aspects: aspects,
         updated_at: new Date().toISOString(),
       })
       .eq('id', item.id)
@@ -309,7 +324,7 @@ export class ListingStagingService {
    * Adds Country/Region of Manufacture for LEGO items.
    */
   private mapItemSpecificsToAspects(
-    specifics: AIGeneratedListing['itemSpecifics'],
+    specifics: AIGeneratedListing['itemSpecifics']
   ): Record<string, string[]> {
     const aspects: Record<string, string[]> = {};
 

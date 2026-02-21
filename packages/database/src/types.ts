@@ -5944,8 +5944,12 @@ export type Database = {
           condition_notes: string | null
           created_at: string | null
           ebay_active_count: number | null
+          ebay_aspects: Json | null
           ebay_avg_shipping: number | null
           ebay_avg_sold_price: number | null
+          ebay_category_id: string | null
+          ebay_condition: string | null
+          ebay_condition_description: string | null
           ebay_description: string | null
           ebay_inventory_item_id: string | null
           ebay_listing_id: string | null
@@ -5978,8 +5982,12 @@ export type Database = {
           condition_notes?: string | null
           created_at?: string | null
           ebay_active_count?: number | null
+          ebay_aspects?: Json | null
           ebay_avg_shipping?: number | null
           ebay_avg_sold_price?: number | null
+          ebay_category_id?: string | null
+          ebay_condition?: string | null
+          ebay_condition_description?: string | null
           ebay_description?: string | null
           ebay_inventory_item_id?: string | null
           ebay_listing_id?: string | null
@@ -6012,8 +6020,12 @@ export type Database = {
           condition_notes?: string | null
           created_at?: string | null
           ebay_active_count?: number | null
+          ebay_aspects?: Json | null
           ebay_avg_shipping?: number | null
           ebay_avg_sold_price?: number | null
+          ebay_category_id?: string | null
+          ebay_condition?: string | null
+          ebay_condition_description?: string | null
           ebay_description?: string | null
           ebay_inventory_item_id?: string | null
           ebay_listing_id?: string | null
@@ -11535,6 +11547,25 @@ export type Database = {
           },
         ]
       }
+      v_profit_per_sale: {
+        Row: {
+          cost_of_goods: number | null
+          gross_revenue: number | null
+          line_items: number | null
+          linked_items: number | null
+          net_revenue: number | null
+          order_id: string | null
+          order_total: number | null
+          platform: string | null
+          platform_fees: number | null
+          profit: number | null
+          sale_date: string | null
+          status: string | null
+          uncosted_items: number | null
+          zero_net_items: number | null
+        }
+        Relationships: []
+      }
       v_unprocessed_ideas: {
         Row: {
           assigned_to: string | null
@@ -11962,6 +11993,25 @@ export type Database = {
       }
       get_player_id: { Args: never; Returns: string }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
+      get_profit_per_sale: {
+        Args: { from_date?: string }
+        Returns: {
+          cost_of_goods: number
+          gross_revenue: number
+          line_items: number
+          linked_items: number
+          net_revenue: number
+          order_id: string
+          order_total: number
+          platform: string
+          platform_fees: number
+          profit: number
+          sale_date: string
+          status: string
+          uncosted_items: number
+          zero_net_items: number
+        }[]
+      }
       get_remaining_limits: {
         Args: { p_user_id?: number }
         Returns: {

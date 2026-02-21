@@ -21,8 +21,10 @@ import type {
 
 // Use Supabase generated types for database operations
 type PlatformListingInsert = Database['public']['Tables']['platform_listings']['Insert'];
-type PlatformListingImportInsert = Database['public']['Tables']['platform_listing_imports']['Insert'];
-type PlatformListingImportUpdate = Database['public']['Tables']['platform_listing_imports']['Update'];
+type PlatformListingImportInsert =
+  Database['public']['Tables']['platform_listing_imports']['Insert'];
+type PlatformListingImportUpdate =
+  Database['public']['Tables']['platform_listing_imports']['Update'];
 type PlatformListingImportRow = Database['public']['Tables']['platform_listing_imports']['Row'];
 type PlatformListingRow = Database['public']['Tables']['platform_listings']['Row'];
 
@@ -183,9 +185,7 @@ export abstract class PlatformStockService {
       throw new Error(`Failed to fetch listings: ${error.message}`);
     }
 
-    const listings = (data || []).map((row) =>
-      this.mapListingRow(row as PlatformListingRow)
-    );
+    const listings = (data || []).map((row) => this.mapListingRow(row as PlatformListingRow));
 
     return {
       items: listings,
@@ -220,9 +220,7 @@ export abstract class PlatformStockService {
         throw new Error(`Failed to fetch listings: ${error.message}`);
       }
 
-      const listings = (data || []).map((row) =>
-        this.mapListingRow(row as PlatformListingRow)
-      );
+      const listings = (data || []).map((row) => this.mapListingRow(row as PlatformListingRow));
       allListings.push(...listings);
 
       hasMore = (data?.length ?? 0) === pageSize;
@@ -324,15 +322,10 @@ export abstract class PlatformStockService {
     for (let i = 0; i < listings.length; i += batchSize) {
       const batch = listings.slice(i, i + batchSize);
 
-      const { error } = await this.supabase
-        .from('platform_listings')
-        .insert(batch);
+      const { error } = await this.supabase.from('platform_listings').insert(batch);
 
       if (error) {
-        console.error(
-          `[PlatformStockService] Error inserting batch ${i / batchSize + 1}:`,
-          error
-        );
+        console.error(`[PlatformStockService] Error inserting batch ${i / batchSize + 1}:`, error);
         continue;
       }
 

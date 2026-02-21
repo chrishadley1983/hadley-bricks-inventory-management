@@ -4,13 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -85,9 +79,7 @@ export default function ReportSettingsPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold">Report Settings</h1>
-            <p className="text-muted-foreground">
-              Configure default settings for reports
-            </p>
+            <p className="text-muted-foreground">Configure default settings for reports</p>
           </div>
         </div>
 
@@ -101,9 +93,7 @@ export default function ReportSettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Business Details</CardTitle>
-                <CardDescription>
-                  Information displayed on exported reports
-                </CardDescription>
+                <CardDescription>Information displayed on exported reports</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -140,7 +130,9 @@ export default function ReportSettingsPage() {
                   <Label htmlFor="financialYearStartMonth">Financial Year Starts</Label>
                   <Select
                     value={String(settings?.financialYearStartMonth || 4)}
-                    onValueChange={(v: string) => handleSave('financialYearStartMonth', parseInt(v))}
+                    onValueChange={(v: string) =>
+                      handleSave('financialYearStartMonth', parseInt(v))
+                    }
                   >
                     <SelectTrigger id="financialYearStartMonth">
                       <SelectValue placeholder="Select month" />
@@ -168,16 +160,16 @@ export default function ReportSettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Display Options</CardTitle>
-                <CardDescription>
-                  Configure how reports are displayed
-                </CardDescription>
+                <CardDescription>Configure how reports are displayed</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="showComparison"
                     checked={settings?.showPreviousPeriodComparison ?? true}
-                    onCheckedChange={(checked: boolean) => handleSave('showPreviousPeriodComparison', checked)}
+                    onCheckedChange={(checked: boolean) =>
+                      handleSave('showPreviousPeriodComparison', checked)
+                    }
                   />
                   <Label htmlFor="showComparison" className="cursor-pointer">
                     Show period-over-period comparison by default
@@ -190,9 +182,7 @@ export default function ReportSettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Currency</CardTitle>
-                <CardDescription>
-                  Default currency for reports
-                </CardDescription>
+                <CardDescription>Default currency for reports</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -255,10 +245,13 @@ export default function ReportSettingsPage() {
                     type="number"
                     step="1"
                     defaultValue={settings?.dailyListingTarget || 200}
-                    onBlur={(e) => handleSave('dailyListingTarget', parseFloat(e.target.value) || 200)}
+                    onBlur={(e) =>
+                      handleSave('dailyListingTarget', parseFloat(e.target.value) || 200)
+                    }
                   />
                   <p className="text-xs text-muted-foreground">
-                    Target value of items to list per day. Used for listing performance tracking on the dashboard.
+                    Target value of items to list per day. Used for listing performance tracking on
+                    the dashboard.
                   </p>
                 </div>
               </CardContent>
@@ -289,8 +282,8 @@ export default function ReportSettingsPage() {
                     />
                   )}
                   <p className="text-xs text-muted-foreground">
-                    This address is used as the starting point when calculating route distances
-                    for purchase collections. Enter a full address or postcode.
+                    This address is used as the starting point when calculating route distances for
+                    purchase collections. Enter a full address or postcode.
                   </p>
                 </div>
                 {updateHomeAddressMutation.isPending && (

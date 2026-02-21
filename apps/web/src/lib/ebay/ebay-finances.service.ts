@@ -8,10 +8,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import { EbayAuthService } from './ebay-auth.service';
-import type {
-  EbayTransactionResponse,
-  EbayPayoutResponse,
-} from './types';
+import type { EbayTransactionResponse, EbayPayoutResponse } from './types';
 
 // ============================================================================
 // Types

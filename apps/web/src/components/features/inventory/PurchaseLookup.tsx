@@ -59,14 +59,7 @@ export function PurchaseLookup({
   placeholder = 'Search purchases...',
   className,
 }: PurchaseLookupProps) {
-  const {
-    searchTerm,
-    setSearchTerm,
-    results,
-    isLoading,
-    isOpen,
-    setIsOpen,
-  } = usePurchaseLookup();
+  const { searchTerm, setSearchTerm, results, isLoading, isOpen, setIsOpen } = usePurchaseLookup();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -135,9 +128,7 @@ export function PurchaseLookup({
             )}
           >
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <span className="truncate flex-1">
-              {displayValue || placeholder}
-            </span>
+            <span className="truncate flex-1">{displayValue || placeholder}</span>
           </Button>
         </PopoverTrigger>
         {selectedPurchase && (
@@ -151,11 +142,7 @@ export function PurchaseLookup({
           </button>
         )}
       </div>
-      <PopoverContent
-        className="w-[400px] p-0"
-        align="start"
-        onKeyDown={handleKeyDown}
-      >
+      <PopoverContent className="w-[400px] p-0" align="start" onKeyDown={handleKeyDown}>
         <div className="flex items-center border-b px-3">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <Input
@@ -202,9 +189,7 @@ export function PurchaseLookup({
                     value === purchase.id && 'bg-accent'
                   )}
                 >
-                  <div className="font-medium truncate">
-                    {purchase.short_description}
-                  </div>
+                  <div className="font-medium truncate">{purchase.short_description}</div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />

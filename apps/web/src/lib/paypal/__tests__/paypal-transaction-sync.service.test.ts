@@ -204,7 +204,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const result = await service.syncTransactions('user-123', { fullSync: true });
 
@@ -253,7 +255,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const result = await service.syncTransactions('user-123', {
         fromDate: '2024-01-01',
@@ -561,7 +565,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       // Mock API adapter with transactions that have fees
       const mockApiAdapter = {
@@ -636,7 +642,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       // Mock API with mixed transactions
       const mockApiAdapter = {
@@ -729,7 +737,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([]),
@@ -786,7 +796,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([
@@ -846,7 +858,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       // Same transaction ID twice (duplicate)
       const mockApiAdapter = {
@@ -921,7 +935,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([
@@ -990,7 +1006,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([
@@ -1069,10 +1087,14 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
-        getAllTransactionsInRange: vi.fn().mockRejectedValue(new Error('PayPal API rate limit exceeded')),
+        getAllTransactionsInRange: vi
+          .fn()
+          .mockRejectedValue(new Error('PayPal API rate limit exceeded')),
       };
       setPayPalApiAdapterMock(mockApiAdapter.getAllTransactionsInRange);
 
@@ -1114,7 +1136,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: true } as unknown as import('../types').PayPalCredentialsRow); // Sandbox mode
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: true,
+      } as unknown as import('../types').PayPalCredentialsRow); // Sandbox mode
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([]),
@@ -1206,7 +1230,9 @@ describe('PayPalTransactionSyncService', () => {
       } as unknown as Awaited<ReturnType<typeof createClient>>);
 
       vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
-      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({ sandbox: false } as unknown as import('../types').PayPalCredentialsRow);
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
 
       const mockApiAdapter = {
         getAllTransactionsInRange: vi.fn().mockResolvedValue([]),
@@ -1223,6 +1249,3 @@ describe('PayPalTransactionSyncService', () => {
     });
   });
 });
-
-
-

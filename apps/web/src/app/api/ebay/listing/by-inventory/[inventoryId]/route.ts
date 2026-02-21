@@ -45,10 +45,7 @@ export async function GET(
 
     // Validate inventoryId
     if (!inventoryId || inventoryId.length < 10) {
-      return NextResponse.json(
-        { audit: null, error: 'Invalid inventory ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ audit: null, error: 'Invalid inventory ID' }, { status: 400 });
     }
 
     // Create authenticated client
@@ -61,16 +58,14 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { audit: null, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ audit: null, error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch the most recent completed audit for this inventory item
     const { data: audit, error: fetchError } = await supabase
       .from('listing_creation_audit')
-      .select(`
+      .select(
+        `
         id,
         ebay_listing_id,
         generated_title,
@@ -87,7 +82,8 @@ export async function GET(
         description_style,
         created_at,
         completed_at
-      `)
+      `
+      )
       .eq('inventory_item_id', inventoryId)
       .eq('user_id', user.id)
       .eq('status', 'completed')
@@ -140,9 +136,6 @@ export async function GET(
     return NextResponse.json({ audit: response });
   } catch (error) {
     console.error('[GET /api/ebay/listing/by-inventory] Error:', error);
-    return NextResponse.json(
-      { audit: null, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ audit: null, error: 'Internal server error' }, { status: 500 });
   }
 }

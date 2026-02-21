@@ -145,10 +145,7 @@ describe('Gemini Client', () => {
       const { analyzeImagesWithGemini } = await import('../gemini-client');
 
       await expect(
-        analyzeImagesWithGemini(
-          [{ base64: 'data', mimeType: 'image/jpeg' }],
-          'Analyze'
-        )
+        analyzeImagesWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }], 'Analyze')
       ).rejects.toThrow('API error');
     });
 
@@ -248,9 +245,7 @@ describe('Gemini Client', () => {
 
       const { extractSetNumbersWithGemini } = await import('../gemini-client');
 
-      await extractSetNumbersWithGemini([
-        { base64: 'data', mimeType: 'image/jpeg' },
-      ]);
+      await extractSetNumbersWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }]);
 
       expect(mockGenerateContent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -351,10 +346,7 @@ describe('Gemini Client', () => {
 
       const { verifySetNumberWithGemini } = await import('../gemini-client');
 
-      await verifySetNumberWithGemini(
-        [{ base64: 'data', mimeType: 'image/jpeg' }],
-        '75192'
-      );
+      await verifySetNumberWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }], '75192');
 
       expect(mockGenerateContent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -370,27 +362,29 @@ describe('Gemini Client', () => {
 
   describe('analyzePhotosWithGemini', () => {
     // Helper to create a valid response structure
-    const createAnalysisResponse = (overrides: Partial<{
-      items: Array<{
-        itemType: string;
-        setNumber: string | null;
-        setName: string | null;
-        condition: string;
-        boxCondition: string | null;
-        sealStatus: string;
-        damageNotes: string[];
-        confidenceScore: number;
-        needsReview: boolean;
-        reviewReason: string | null;
-        rawDescription: string;
-        quantity: number;
-        minifigDescription: string | null;
-        partsEstimate: string | null;
-      }>;
-      overallNotes: string;
-      analysisConfidence: number;
-      warnings: string[];
-    }> = {}) => ({
+    const createAnalysisResponse = (
+      overrides: Partial<{
+        items: Array<{
+          itemType: string;
+          setNumber: string | null;
+          setName: string | null;
+          condition: string;
+          boxCondition: string | null;
+          sealStatus: string;
+          damageNotes: string[];
+          confidenceScore: number;
+          needsReview: boolean;
+          reviewReason: string | null;
+          rawDescription: string;
+          quantity: number;
+          minifigDescription: string | null;
+          partsEstimate: string | null;
+        }>;
+        overallNotes: string;
+        analysisConfidence: number;
+        warnings: string[];
+      }> = {}
+    ) => ({
       items: overrides.items ?? [
         {
           itemType: 'set',
@@ -422,9 +416,7 @@ describe('Gemini Client', () => {
 
       const { analyzePhotosWithGemini } = await import('../gemini-client');
 
-      const result = await analyzePhotosWithGemini([
-        { base64: 'data', mimeType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotosWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }]);
 
       expect(result.items[0].setNumber).toBe('75192');
       expect(result.items[0].condition).toBe('New');
@@ -443,9 +435,7 @@ describe('Gemini Client', () => {
 
       const { analyzePhotosWithGemini } = await import('../gemini-client');
 
-      const result = await analyzePhotosWithGemini([
-        { base64: 'data', mimeType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotosWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }]);
 
       expect(result.items).toEqual([]);
       expect(result.overallNotes).toBe('Cannot identify any LEGO sets');
@@ -453,22 +443,24 @@ describe('Gemini Client', () => {
 
     it('should handle singular image in prompt', async () => {
       const responseData = createAnalysisResponse({
-        items: [{
-          itemType: 'set',
-          setNumber: '60285',
-          setName: 'Sports Car',
-          condition: 'Used',
-          boxCondition: null,
-          sealStatus: 'Open Box',
-          damageNotes: ['Missing box'],
-          confidenceScore: 0.7,
-          needsReview: false,
-          reviewReason: null,
-          rawDescription: 'Used LEGO City car',
-          quantity: 1,
-          minifigDescription: null,
-          partsEstimate: null,
-        }],
+        items: [
+          {
+            itemType: 'set',
+            setNumber: '60285',
+            setName: 'Sports Car',
+            condition: 'Used',
+            boxCondition: null,
+            sealStatus: 'Open Box',
+            damageNotes: ['Missing box'],
+            confidenceScore: 0.7,
+            needsReview: false,
+            reviewReason: null,
+            rawDescription: 'Used LEGO City car',
+            quantity: 1,
+            minifigDescription: null,
+            partsEstimate: null,
+          },
+        ],
       });
       mockGenerateContent.mockResolvedValueOnce({
         text: JSON.stringify(responseData),
@@ -476,9 +468,7 @@ describe('Gemini Client', () => {
 
       const { analyzePhotosWithGemini } = await import('../gemini-client');
 
-      const result = await analyzePhotosWithGemini([
-        { base64: 'data', mimeType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotosWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }]);
 
       expect(result.items[0].condition).toBe('Used');
     });
@@ -528,9 +518,7 @@ describe('Gemini Client', () => {
 
       const { analyzePhotosWithGemini } = await import('../gemini-client');
 
-      const result = await analyzePhotosWithGemini([
-        { base64: 'data', mimeType: 'image/jpeg' },
-      ]);
+      const result = await analyzePhotosWithGemini([{ base64: 'data', mimeType: 'image/jpeg' }]);
 
       expect(result.items[0].setNumber).toBe('75192');
     });

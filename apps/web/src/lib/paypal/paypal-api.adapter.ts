@@ -73,7 +73,9 @@ export class PayPalApiAdapter {
    * Get transactions with date range and filtering
    * @see https://developer.paypal.com/docs/api/transaction-search/v1/
    */
-  async getTransactions(params: PayPalTransactionFetchParams): Promise<PayPalTransactionSearchResponse> {
+  async getTransactions(
+    params: PayPalTransactionFetchParams
+  ): Promise<PayPalTransactionSearchResponse> {
     const queryParams: Record<string, string | number | undefined> = {
       start_date: params.startDate,
       end_date: params.endDate,
@@ -256,7 +258,9 @@ export class PayPalApiAdapter {
           body: options.body ? JSON.stringify(options.body) : undefined,
         });
 
-        console.log(`[PayPalApiAdapter] Response status: ${response.status} ${response.statusText}`);
+        console.log(
+          `[PayPalApiAdapter] Response status: ${response.status} ${response.statusText}`
+        );
 
         // Handle rate limiting
         if (response.status === 429) {
@@ -273,7 +277,10 @@ export class PayPalApiAdapter {
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null);
           const errorResponse = errorBody as PayPalApiError | null;
-          console.error(`[PayPalApiAdapter] Error response:`, JSON.stringify(errorResponse, null, 2));
+          console.error(
+            `[PayPalApiAdapter] Error response:`,
+            JSON.stringify(errorResponse, null, 2)
+          );
 
           const errorMessage =
             errorResponse?.message || `HTTP ${response.status}: ${response.statusText}`;

@@ -28,11 +28,7 @@ export async function sendMessage(
     temperature?: number;
   } = {}
 ): Promise<string> {
-  const {
-    model = 'claude-sonnet-4-20250514',
-    maxTokens = 1024,
-    temperature = 0.3,
-  } = options;
+  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.3 } = options;
 
   const anthropic = getClaudeClient();
 
@@ -78,11 +74,7 @@ export async function sendMessageWithImage(
     temperature?: number;
   } = {}
 ): Promise<string> {
-  const {
-    model = 'claude-sonnet-4-20250514',
-    maxTokens = 1024,
-    temperature = 0.3,
-  } = options;
+  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.3 } = options;
 
   const anthropic = getClaudeClient();
 
@@ -133,11 +125,7 @@ export async function sendMessageWithImages(
     temperature?: number;
   } = {}
 ): Promise<string> {
-  const {
-    model = 'claude-sonnet-4-20250514',
-    maxTokens = 2048,
-    temperature = 0.3,
-  } = options;
+  const { model = 'claude-sonnet-4-20250514', maxTokens = 2048, temperature = 0.3 } = options;
 
   const anthropic = getClaudeClient();
 
@@ -257,11 +245,7 @@ export async function sendConversation(
     temperature?: number;
   } = {}
 ): Promise<string> {
-  const {
-    model = 'claude-sonnet-4-20250514',
-    maxTokens = 1024,
-    temperature = 0.5,
-  } = options;
+  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.5 } = options;
 
   const anthropic = getClaudeClient();
 

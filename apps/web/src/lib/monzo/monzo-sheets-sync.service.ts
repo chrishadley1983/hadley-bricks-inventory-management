@@ -109,7 +109,9 @@ export class MonzoSheetsSyncService {
     try {
       // Read transactions from Google Sheets
       const sheetsClient = getSheetsClient();
-      const sheetData = (await sheetsClient.readSheet(MONZO_SHEET_NAME)) as unknown as SheetMonzoTransaction[];
+      const sheetData = (await sheetsClient.readSheet(
+        MONZO_SHEET_NAME
+      )) as unknown as SheetMonzoTransaction[];
 
       console.log(`[MonzoSheetsSyncService] Read ${sheetData.length} transactions from sheets`);
 
@@ -154,7 +156,9 @@ export class MonzoSheetsSyncService {
         page++;
       }
 
-      console.log(`[MonzoSheetsSyncService] Found ${existingTransactions.length} existing transactions`);
+      console.log(
+        `[MonzoSheetsSyncService] Found ${existingTransactions.length} existing transactions`
+      );
 
       const existingMap = new Map(
         existingTransactions.map((t) => [
@@ -187,16 +191,12 @@ export class MonzoSheetsSyncService {
 
         // Check which ones exist
         const batchIds = batch.map((t) => t.monzo_transaction_id);
-        const existingInBatch = new Set(
-          batchIds.filter((id) => existingMap.has(id))
-        );
+        const existingInBatch = new Set(batchIds.filter((id) => existingMap.has(id)));
 
-        const { error: upsertError } = await supabase
-          .from('monzo_transactions')
-          .upsert(batch, {
-            onConflict: 'user_id,monzo_transaction_id',
-            ignoreDuplicates: false,
-          });
+        const { error: upsertError } = await supabase.from('monzo_transactions').upsert(batch, {
+          onConflict: 'user_id,monzo_transaction_id',
+          ignoreDuplicates: false,
+        });
 
         if (upsertError) {
           console.error('[MonzoSheetsSyncService] Upsert error:', upsertError);

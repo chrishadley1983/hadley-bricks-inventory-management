@@ -2,13 +2,7 @@
 
 import { RefreshCw, CloudOff, AlertTriangle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSyncTable, useSyncAll, useGlobalSyncStatus } from '@/hooks';
 import { SyncStatusBadge } from './SyncStatusBadge';
@@ -45,16 +39,14 @@ export function SyncControls({ compact = false, table }: SyncControlsProps) {
           <RefreshCw className="h-5 w-5" />
           Data Sync
         </CardTitle>
-        <CardDescription>
-          Sync data from Google Sheets to the local database cache
-        </CardDescription>
+        <CardDescription>Sync data from Google Sheets to the local database cache</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Automatic sync is disabled. Supabase is now the source of truth. Use
-            manual sync below only for one-time data imports from Google Sheets.
+            Automatic sync is disabled. Supabase is now the source of truth. Use manual sync below
+            only for one-time data imports from Google Sheets.
           </AlertDescription>
         </Alert>
 

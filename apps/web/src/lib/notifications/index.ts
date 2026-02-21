@@ -1,11 +1,7 @@
 export { PushoverService, pushoverService } from './pushover.service';
 export type { SyncFailureParams, SyncSuccessParams } from './pushover.service';
 
-export {
-  DiscordService,
-  discordService,
-  DiscordColors,
-} from './discord.service';
+export { DiscordService, discordService, DiscordColors } from './discord.service';
 export type {
   DiscordChannel,
   DiscordEmbed,

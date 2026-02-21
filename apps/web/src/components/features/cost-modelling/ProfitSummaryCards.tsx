@@ -7,7 +7,15 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Target, Wallet, Calendar, Coins, PoundSterling } from 'lucide-react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Wallet,
+  Calendar,
+  Coins,
+  PoundSterling,
+} from 'lucide-react';
 import { formatCurrency } from '@/lib/services/cost-calculations';
 import type { CalculatedResults, ComparisonDelta } from '@/types/cost-modelling';
 import { cn } from '@/lib/utils';
@@ -38,13 +46,7 @@ export function ProfitSummaryCards({
   comparisonDeltas,
   scenarioLabel,
 }: ProfitSummaryCardsProps) {
-  const {
-    totalTurnover,
-    netProfit,
-    takeHome,
-    weeklyTakeHome,
-    profitVsTarget,
-  } = calculations;
+  const { totalTurnover, netProfit, takeHome, weeklyTakeHome, profitVsTarget } = calculations;
 
   const isOnTarget = profitVsTarget >= 0;
 
@@ -55,7 +57,9 @@ export function ProfitSummaryCards({
   const needsSpacer = isCompareMode && scenarioLabel === 'A';
 
   // Get deltas from the comparison array
-  const revenueDelta = showDeltas ? getDeltaForMetric(comparisonDeltas, 'Annual Turnover') : undefined;
+  const revenueDelta = showDeltas
+    ? getDeltaForMetric(comparisonDeltas, 'Annual Turnover')
+    : undefined;
   const profitDelta = showDeltas ? getDeltaForMetric(comparisonDeltas, 'Net Profit') : undefined;
   const takeHomeDelta = showDeltas ? getDeltaForMetric(comparisonDeltas, 'Take-Home') : undefined;
   // Weekly delta is calculated from take-home delta
@@ -127,10 +131,7 @@ export function ProfitSummaryCards({
           <div className="text-lg font-bold">{formatCurrency(weeklyTakeHome)}</div>
           {/* F43: Delta indicator for Scenario B (weekly is take-home / 52), or spacer */}
           {weeklyDeltaValue !== undefined && takeHomeDelta ? (
-            <DeltaIndicator
-              delta={{ ...takeHomeDelta, delta: weeklyDeltaValue }}
-              higherIsBetter
-            />
+            <DeltaIndicator delta={{ ...takeHomeDelta, delta: weeklyDeltaValue }} higherIsBetter />
           ) : needsSpacer ? (
             <div className="h-4" aria-hidden="true" />
           ) : null}
@@ -146,12 +147,7 @@ export function ProfitSummaryCards({
         </CardHeader>
         <CardContent className="p-3 pt-0">
           {/* U7: Positive/negative colouring */}
-          <div
-            className={cn(
-              'text-lg font-bold',
-              isOnTarget ? 'text-green-600' : 'text-red-600'
-            )}
-          >
+          <div className={cn('text-lg font-bold', isOnTarget ? 'text-green-600' : 'text-red-600')}>
             {profitVsTarget >= 0 ? '+' : ''}
             {formatCurrency(profitVsTarget)}
           </div>
@@ -184,9 +180,12 @@ function DeltaIndicator({
   const isPositive = value > 0;
 
   // Use isBetter from delta if available, otherwise calculate based on higherIsBetter
-  const isBetter = 'isBetter' in delta && delta.isBetter !== undefined
-    ? delta.isBetter
-    : (higherIsBetter ? isPositive : !isPositive);
+  const isBetter =
+    'isBetter' in delta && delta.isBetter !== undefined
+      ? delta.isBetter
+      : higherIsBetter
+        ? isPositive
+        : !isPositive;
 
   // Don't show indicator for zero delta
   if (value === 0) return null;
@@ -198,11 +197,7 @@ function DeltaIndicator({
         isBetter ? 'text-green-600' : 'text-red-600'
       )}
     >
-      {isPositive ? (
-        <TrendingUp className="h-3 w-3" />
-      ) : (
-        <TrendingDown className="h-3 w-3" />
-      )}
+      {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
       {value >= 0 ? '+' : ''}
       {formatCurrency(Math.abs(value))}
     </div>

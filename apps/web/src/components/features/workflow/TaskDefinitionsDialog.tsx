@@ -42,11 +42,7 @@ import {
 } from '@/components/ui/accordion';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
   useTaskDefinitions,
@@ -122,7 +118,11 @@ function getNextScheduledDate(def: TaskDefinition): string {
             if (i === 1) return 'Tomorrow';
             const nextDate = new Date(today);
             nextDate.setDate(today.getDate() + i);
-            return nextDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+            return nextDate.toLocaleDateString('en-GB', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+            });
           }
         }
       }
@@ -134,7 +134,7 @@ function getNextScheduledDate(def: TaskDefinition): string {
     case 'quarterly':
       const quarterMonths = [0, 3, 6, 9]; // Jan, Apr, Jul, Oct
       const currentMonth = today.getMonth();
-      const nextQuarter = quarterMonths.find(m => m > currentMonth) ?? quarterMonths[0];
+      const nextQuarter = quarterMonths.find((m) => m > currentMonth) ?? quarterMonths[0];
       const nextQuarterDate = new Date(
         nextQuarter <= currentMonth ? today.getFullYear() + 1 : today.getFullYear(),
         nextQuarter,
@@ -144,7 +144,7 @@ function getNextScheduledDate(def: TaskDefinition): string {
     case 'biannual':
       const biannualMonths = [0, 6]; // Jan, Jul
       const currentMo = today.getMonth();
-      const nextBiannual = biannualMonths.find(m => m > currentMo) ?? biannualMonths[0];
+      const nextBiannual = biannualMonths.find((m) => m > currentMo) ?? biannualMonths[0];
       const nextBiannualDate = new Date(
         nextBiannual <= currentMo ? today.getFullYear() + 1 : today.getFullYear(),
         nextBiannual,
@@ -171,7 +171,7 @@ function TaskDefinitionRow({
   onDelete: () => void;
   isUpdating: boolean;
 }) {
-  const priorityOption = PRIORITY_OPTIONS.find(p => p.value === definition.priority);
+  const priorityOption = PRIORITY_OPTIONS.find((p) => p.value === definition.priority);
   const nextScheduled = getNextScheduledDate(definition);
 
   return (
@@ -185,7 +185,9 @@ function TaskDefinitionRow({
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{definition.name}</span>
           {definition.is_system && (
-            <Badge variant="secondary" className="text-xs">System</Badge>
+            <Badge variant="secondary" className="text-xs">
+              System
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
@@ -199,9 +201,7 @@ function TaskDefinitionRow({
               {definition.estimated_minutes}m
             </span>
           )}
-          <span className={priorityOption?.color}>
-            {priorityOption?.label}
-          </span>
+          <span className={priorityOption?.color}>{priorityOption?.label}</span>
         </div>
       </div>
 
@@ -210,17 +210,8 @@ function TaskDefinitionRow({
       </div>
 
       <div className="flex items-center gap-1">
-        <Switch
-          checked={definition.is_active}
-          onCheckedChange={onToggle}
-          disabled={isUpdating}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onEdit}
-        >
+        <Switch checked={definition.is_active} onCheckedChange={onToggle} disabled={isUpdating} />
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
           <Pencil className="h-4 w-4" />
         </Button>
         {!definition.is_system && (
@@ -279,10 +270,10 @@ function TaskDefinitionForm({
   const showDaysSelector = formData.frequency === 'twice_weekly' || formData.frequency === 'weekly';
 
   const toggleDay = (day: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       frequency_days: prev.frequency_days.includes(day)
-        ? prev.frequency_days.filter(d => d !== day)
+        ? prev.frequency_days.filter((d) => d !== day)
         : [...prev.frequency_days, day].sort((a, b) => a - b),
     }));
   };
@@ -294,7 +285,7 @@ function TaskDefinitionForm({
         <Input
           id="name"
           value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
           placeholder="e.g., Process orders"
         />
       </div>
@@ -304,7 +295,7 @@ function TaskDefinitionForm({
         <Textarea
           id="description"
           value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
           placeholder="What this task involves..."
           rows={2}
         />
@@ -315,13 +306,13 @@ function TaskDefinitionForm({
           <Label>Category</Label>
           <Select
             value={formData.category}
-            onValueChange={(value: string) => setFormData(prev => ({ ...prev, category: value }))}
+            onValueChange={(value: string) => setFormData((prev) => ({ ...prev, category: value }))}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORY_OPTIONS.map(opt => (
+              {CATEGORY_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -334,13 +325,15 @@ function TaskDefinitionForm({
           <Label>Priority</Label>
           <Select
             value={String(formData.priority)}
-            onValueChange={(value: string) => setFormData(prev => ({ ...prev, priority: parseInt(value) }))}
+            onValueChange={(value: string) =>
+              setFormData((prev) => ({ ...prev, priority: parseInt(value) }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PRIORITY_OPTIONS.map(opt => (
+              {PRIORITY_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={String(opt.value)}>
                   <span className={opt.color}>{opt.label}</span>
                 </SelectItem>
@@ -355,11 +348,14 @@ function TaskDefinitionForm({
           <Label>Frequency</Label>
           <Select
             value={formData.frequency}
-            onValueChange={(value: string) => setFormData(prev => ({
-              ...prev,
-              frequency: value as TaskDefinition['frequency'],
-              frequency_days: value === 'twice_weekly' || value === 'weekly' ? prev.frequency_days : [],
-            }))}
+            onValueChange={(value: string) =>
+              setFormData((prev) => ({
+                ...prev,
+                frequency: value as TaskDefinition['frequency'],
+                frequency_days:
+                  value === 'twice_weekly' || value === 'weekly' ? prev.frequency_days : [],
+              }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -378,7 +374,9 @@ function TaskDefinitionForm({
           <Label>Preferred Time</Label>
           <Select
             value={formData.ideal_time}
-            onValueChange={(value: string) => setFormData(prev => ({ ...prev, ideal_time: value as 'AM' | 'PM' | 'ANY' }))}
+            onValueChange={(value: string) =>
+              setFormData((prev) => ({ ...prev, ideal_time: value as 'AM' | 'PM' | 'ANY' }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -396,7 +394,7 @@ function TaskDefinitionForm({
         <div className="space-y-2">
           <Label>Days of Week</Label>
           <div className="flex gap-1">
-            {DAY_OPTIONS.map(day => (
+            {DAY_OPTIONS.map((day) => (
               <Button
                 key={day.value}
                 type="button"
@@ -420,10 +418,12 @@ function TaskDefinitionForm({
             type="number"
             min="1"
             value={formData.estimated_minutes ?? ''}
-            onChange={(e) => setFormData(prev => ({
-              ...prev,
-              estimated_minutes: e.target.value ? parseInt(e.target.value) : null
-            }))}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                estimated_minutes: e.target.value ? parseInt(e.target.value) : null,
+              }))
+            }
             placeholder="e.g., 30"
           />
         </div>
@@ -433,7 +433,7 @@ function TaskDefinitionForm({
           <Input
             id="deep_link_url"
             value={formData.deep_link_url}
-            onChange={(e) => setFormData(prev => ({ ...prev, deep_link_url: e.target.value }))}
+            onChange={(e) => setFormData((prev) => ({ ...prev, deep_link_url: e.target.value }))}
             placeholder="/orders"
           />
         </div>
@@ -442,7 +442,9 @@ function TaskDefinitionForm({
       <div className="flex items-center gap-2">
         <Switch
           checked={formData.is_active}
-          onCheckedChange={(checked: boolean) => setFormData(prev => ({ ...prev, is_active: checked }))}
+          onCheckedChange={(checked: boolean) =>
+            setFormData((prev) => ({ ...prev, is_active: checked }))
+          }
         />
         <Label>Active</Label>
       </div>
@@ -474,7 +476,7 @@ function FutureTaskRow({
   onDelete: () => void;
   isDeleting: boolean;
 }) {
-  const priorityOption = PRIORITY_OPTIONS.find(p => p.value === task.priority);
+  const priorityOption = PRIORITY_OPTIONS.find((p) => p.value === task.priority);
   const scheduledDate = parseISO(task.scheduledDate);
   const formattedDate = format(scheduledDate, 'EEE, d MMM yyyy');
 
@@ -483,7 +485,9 @@ function FutureTaskRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{task.name}</span>
-          <Badge variant="outline" className="text-xs">Custom</Badge>
+          <Badge variant="outline" className="text-xs">
+            Custom
+          </Badge>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
           <span className="flex items-center gap-1">
@@ -496,19 +500,12 @@ function FutureTaskRow({
               {task.estimatedMinutes}m
             </span>
           )}
-          <span className={priorityOption?.color}>
-            {priorityOption?.label}
-          </span>
+          <span className={priorityOption?.color}>{priorityOption?.label}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onEdit}
-        >
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
           <Pencil className="h-4 w-4" />
         </Button>
         <Button
@@ -561,7 +558,7 @@ function FutureTaskForm({
         <Input
           id="ft-name"
           value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
           placeholder="e.g., Call supplier"
         />
       </div>
@@ -571,7 +568,7 @@ function FutureTaskForm({
         <Textarea
           id="ft-description"
           value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
           placeholder="Additional details..."
           rows={2}
         />
@@ -582,13 +579,13 @@ function FutureTaskForm({
           <Label>Category</Label>
           <Select
             value={formData.category}
-            onValueChange={(value: string) => setFormData(prev => ({ ...prev, category: value }))}
+            onValueChange={(value: string) => setFormData((prev) => ({ ...prev, category: value }))}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORY_OPTIONS.map(opt => (
+              {CATEGORY_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -601,13 +598,15 @@ function FutureTaskForm({
           <Label>Priority</Label>
           <Select
             value={String(formData.priority)}
-            onValueChange={(value: string) => setFormData(prev => ({ ...prev, priority: parseInt(value) }))}
+            onValueChange={(value: string) =>
+              setFormData((prev) => ({ ...prev, priority: parseInt(value) }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PRIORITY_OPTIONS.map(opt => (
+              {PRIORITY_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={String(opt.value)}>
                   <span className={opt.color}>{opt.label}</span>
                 </SelectItem>
@@ -625,10 +624,12 @@ function FutureTaskForm({
             type="number"
             min="1"
             value={formData.estimated_minutes ?? ''}
-            onChange={(e) => setFormData(prev => ({
-              ...prev,
-              estimated_minutes: e.target.value ? parseInt(e.target.value) : null
-            }))}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                estimated_minutes: e.target.value ? parseInt(e.target.value) : null,
+              }))
+            }
             placeholder="e.g., 30"
           />
         </div>
@@ -637,10 +638,7 @@ function FutureTaskForm({
           <Label>Due Date *</Label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left font-normal"
-              >
+              <Button variant="outline" className="w-full justify-start text-left font-normal">
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {format(formData.scheduled_date, 'dd MMM yyyy')}
               </Button>
@@ -649,7 +647,9 @@ function FutureTaskForm({
               <Calendar
                 mode="single"
                 selected={formData.scheduled_date}
-                onSelect={(date) => date && setFormData(prev => ({ ...prev, scheduled_date: date }))}
+                onSelect={(date) =>
+                  date && setFormData((prev) => ({ ...prev, scheduled_date: date }))
+                }
                 disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                 initialFocus
               />
@@ -690,12 +690,15 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
   const futureTasks = futureTasksData?.tasks ?? [];
 
   // Group definitions by category
-  const groupedDefinitions = definitions.reduce((acc, def) => {
-    const category = def.category || 'Other';
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(def);
-    return acc;
-  }, {} as Record<string, TaskDefinition[]>);
+  const groupedDefinitions = definitions.reduce(
+    (acc, def) => {
+      const category = def.category || 'Other';
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(def);
+      return acc;
+    },
+    {} as Record<string, TaskDefinition[]>
+  );
 
   const handleToggleActive = async (def: TaskDefinition) => {
     try {
@@ -868,7 +871,7 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
 
             {isLoading || futureTasksLoading ? (
               <div className="space-y-3">
-                {[1, 2, 3].map(i => (
+                {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-20 w-full" />
                 ))}
               </div>
@@ -890,21 +893,28 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
               <ScrollArea className="h-[400px] pr-4">
                 <Accordion
                   type="multiple"
-                  defaultValue={[...Object.keys(groupedDefinitions), ...(futureTasks.length > 0 ? ['__future__'] : [])]}
+                  defaultValue={[
+                    ...Object.keys(groupedDefinitions),
+                    ...(futureTasks.length > 0 ? ['__future__'] : []),
+                  ]}
                   className="space-y-2"
                 >
                   {Object.entries(groupedDefinitions).map(([category, defs]) => (
-                    <AccordionItem key={category} value={category} className="border rounded-lg px-3">
+                    <AccordionItem
+                      key={category}
+                      value={category}
+                      className="border rounded-lg px-3"
+                    >
                       <AccordionTrigger className="hover:no-underline py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{category}</span>
                           <Badge variant="secondary" className="text-xs">
-                            {defs.filter(d => d.is_active).length}/{defs.length}
+                            {defs.filter((d) => d.is_active).length}/{defs.length}
                           </Badge>
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="space-y-2 pb-3">
-                        {defs.map(def => (
+                        {defs.map((def) => (
                           <TaskDefinitionRow
                             key={def.id}
                             definition={def}
@@ -919,7 +929,10 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
                   ))}
 
                   {futureTasks.length > 0 && (
-                    <AccordionItem value="__future__" className="border rounded-lg px-3 border-dashed">
+                    <AccordionItem
+                      value="__future__"
+                      className="border rounded-lg px-3 border-dashed"
+                    >
                       <AccordionTrigger className="hover:no-underline py-3">
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -933,7 +946,7 @@ export function TaskDefinitionsDialog({ open, onOpenChange }: TaskDefinitionsDia
                         <p className="text-xs text-muted-foreground mb-2">
                           One-time tasks scheduled for future dates
                         </p>
-                        {futureTasks.map(task => (
+                        {futureTasks.map((task) => (
                           <FutureTaskRow
                             key={task.id}
                             task={task}

@@ -22,12 +22,14 @@ import type { QualityReviewResult } from '@/lib/ebay/listing-creation.types';
  */
 const ChatRequestSchema = z.object({
   message: z.string().min(1, 'Message is required').max(2000, 'Message too long'),
-  conversationHistory: z.array(
-    z.object({
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-    })
-  ).max(20, 'Conversation history too long'),
+  conversationHistory: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string(),
+      })
+    )
+    .max(20, 'Conversation history too long'),
 });
 
 /**
@@ -47,10 +49,7 @@ export async function POST(
 
     // Validate auditId
     if (!auditId || auditId.length < 10) {
-      return NextResponse.json(
-        { response: '', error: 'Invalid audit ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ response: '', error: 'Invalid audit ID' }, { status: 400 });
     }
 
     // Create authenticated client
@@ -63,10 +62,7 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { response: '', error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ response: '', error: 'Unauthorized' }, { status: 401 });
     }
 
     // Validate request body
@@ -75,7 +71,10 @@ export async function POST(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { response: '', error: parsed.error.flatten().fieldErrors.message?.[0] || 'Invalid request' },
+        {
+          response: '',
+          error: parsed.error.flatten().fieldErrors.message?.[0] || 'Invalid request',
+        },
         { status: 400 }
       );
     }
@@ -85,7 +84,8 @@ export async function POST(
     // Fetch the audit record to get listing context
     const { data: audit, error: fetchError } = await supabase
       .from('listing_creation_audit')
-      .select(`
+      .select(
+        `
         id,
         generated_title,
         generated_description,
@@ -94,7 +94,8 @@ export async function POST(
         quality_feedback,
         listing_price,
         description_style
-      `)
+      `
+      )
       .eq('id', auditId)
       .eq('user_id', user.id)
       .eq('status', 'completed')
@@ -145,10 +146,7 @@ export async function POST(
     const systemPrompt = createListingImprovementSystemPrompt(context);
 
     // Build messages array for Claude
-    const messages: ChatMessage[] = [
-      ...conversationHistory,
-      { role: 'user', content: message },
-    ];
+    const messages: ChatMessage[] = [...conversationHistory, { role: 'user', content: message }];
 
     // Call Claude
     try {
@@ -167,9 +165,6 @@ export async function POST(
     }
   } catch (error) {
     console.error('[POST /api/ebay/listing/chat] Error:', error);
-    return NextResponse.json(
-      { response: '', error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ response: '', error: 'Internal server error' }, { status: 500 });
   }
 }

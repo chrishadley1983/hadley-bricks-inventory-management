@@ -139,9 +139,7 @@ async function fetchWorkflowConfig(): Promise<WorkflowConfig> {
 /**
  * Update workflow configuration
  */
-async function updateWorkflowConfig(
-  input: UpdateWorkflowConfigInput
-): Promise<WorkflowConfig> {
+async function updateWorkflowConfig(input: UpdateWorkflowConfigInput): Promise<WorkflowConfig> {
   const response = await fetch('/api/workflow/config', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

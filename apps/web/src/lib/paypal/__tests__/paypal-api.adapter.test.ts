@@ -248,9 +248,7 @@ describe('PayPalApiAdapter', () => {
         status: 200,
         json: () =>
           Promise.resolve({
-            transaction_details: [
-              { transaction_info: { transaction_id: 'TXN1' } },
-            ],
+            transaction_details: [{ transaction_info: { transaction_id: 'TXN1' } }],
             total_items: 2,
             total_pages: 2,
             page: 1,
@@ -263,9 +261,7 @@ describe('PayPalApiAdapter', () => {
         status: 200,
         json: () =>
           Promise.resolve({
-            transaction_details: [
-              { transaction_info: { transaction_id: 'TXN2' } },
-            ],
+            transaction_details: [{ transaction_info: { transaction_id: 'TXN2' } }],
             total_items: 2,
             total_pages: 2,
             page: 2,
@@ -325,11 +321,9 @@ describe('PayPalApiAdapter', () => {
           }),
       });
 
-      await adapter.getAllTransactionsInRange(
-        '2024-01-01T00:00:00Z',
-        '2024-01-15T23:59:59Z',
-        { onProgress }
-      );
+      await adapter.getAllTransactionsInRange('2024-01-01T00:00:00Z', '2024-01-15T23:59:59Z', {
+        onProgress,
+      });
 
       expect(onProgress).toHaveBeenCalled();
     });
@@ -360,15 +354,11 @@ describe('PayPalApiAdapter', () => {
         json: () => Promise.resolve({ transaction_details: [], total_pages: 1 }),
       });
 
-      await adapter.getAllTransactionsInRange(
-        '2024-01-01T00:00:00Z',
-        '2024-01-15T23:59:59Z',
-        {
-          fields: 'transaction_info',
-          transactionType: 'T0006',
-          transactionStatus: 'S',
-        }
-      );
+      await adapter.getAllTransactionsInRange('2024-01-01T00:00:00Z', '2024-01-15T23:59:59Z', {
+        fields: 'transaction_info',
+        transactionType: 'T0006',
+        transactionStatus: 'S',
+      });
 
       const calledUrl = new URL(mockFetch.mock.calls[0][0] as string);
       expect(calledUrl.searchParams.get('fields')).toBe('transaction_info');

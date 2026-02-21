@@ -22,7 +22,9 @@ const QuerySchema = z.object({
   forceRefresh: z.coerce.boolean().optional().default(false),
 });
 
-export async function GET(request: NextRequest): Promise<NextResponse<PartoutApiResponse | PartoutApiError>> {
+export async function GET(
+  request: NextRequest
+): Promise<NextResponse<PartoutApiResponse | PartoutApiError>> {
   try {
     // 1. Auth check
     const supabase = await createClient();
@@ -53,7 +55,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<PartoutApi
     }
 
     const { setNumber, forceRefresh } = parsed.data;
-    console.log(`[GET /api/bricklink/partout] Fetching partout for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`);
+    console.log(
+      `[GET /api/bricklink/partout] Fetching partout for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`
+    );
 
     // 3. Get BrickLink credentials
     const credentialsRepo = new CredentialsRepository(supabase);
@@ -77,7 +81,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<PartoutApi
     // 5. Get partout value
     const data = await partoutService.getPartoutValue(setNumber, { forceRefresh });
 
-    console.log(`[GET /api/bricklink/partout] Success: ${data.totalParts} parts, POV £${data.povNew.toFixed(2)} (new)`);
+    console.log(
+      `[GET /api/bricklink/partout] Success: ${data.totalParts} parts, POV £${data.povNew.toFixed(2)} (new)`
+    );
 
     return NextResponse.json({ data });
   } catch (error) {

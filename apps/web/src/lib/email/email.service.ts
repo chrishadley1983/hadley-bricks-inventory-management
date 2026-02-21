@@ -306,7 +306,7 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     if (items.length === 0) return;
 
     // Amazon FBM UK fee constants (self-contained, matches lib/arbitrage/calculations.ts)
-    const EFFECTIVE_FEE_RATE = 0.15 * 1.02 * 1.20; // 18.36%
+    const EFFECTIVE_FEE_RATE = 0.15 * 1.02 * 1.2; // 18.36%
     const SHIPPING_THRESHOLD = 14.0;
     const SHIPPING_LOW = 3.0;
     const SHIPPING_HIGH = 4.0;
@@ -342,8 +342,7 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     // Build HTML table rows
     const tableRows = rows
       .map((r) => {
-        const profitColor =
-          r.profit !== null ? (r.profit >= 0 ? '#27ae60' : '#e74c3c') : '#888';
+        const profitColor = r.profit !== null ? (r.profit >= 0 ? '#27ae60' : '#e74c3c') : '#888';
         return `<tr>
           <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_label}</td>
           <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_date}</td>
@@ -581,7 +580,8 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
           })
           .join('\n');
 
-        const purchaseLabel = result.purchaseDescription || result.purchaseSource || result.purchaseId;
+        const purchaseLabel =
+          result.purchaseDescription || result.purchaseSource || result.purchaseId;
         return `
           <tr style="background:#2c3e50;color:#fff;">
             <td style="padding:8px 10px;border:1px solid #2c3e50;" colspan="4">

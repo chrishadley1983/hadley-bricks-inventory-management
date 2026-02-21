@@ -22,7 +22,12 @@ export { EbayArbitrageSyncService } from './ebay-sync.service';
 export { ArbitrageWatchlistService } from './watchlist.service';
 export { KeepaPricingSyncService } from './keepa-pricing-sync.service';
 export { KeepaArbitrageSyncService } from './keepa-arbitrage-sync.service';
-export type { WatchlistItem, WatchlistRefreshResult, WatchlistStats, WatchlistSource } from './watchlist.service';
+export type {
+  WatchlistItem,
+  WatchlistRefreshResult,
+  WatchlistStats,
+  WatchlistSource,
+} from './watchlist.service';
 
 // eBay False-Positive Detector
 export { EbayFpDetectorService } from './ebay-fp-detector.service';

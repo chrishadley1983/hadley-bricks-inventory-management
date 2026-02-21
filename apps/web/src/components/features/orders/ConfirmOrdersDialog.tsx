@@ -162,10 +162,7 @@ async function confirmOrders(data: {
 }
 
 // eBay-specific API functions
-async function fetchEbayOrders(
-  status?: string,
-  search?: string
-): Promise<EbayOrdersResponse> {
+async function fetchEbayOrders(status?: string, search?: string): Promise<EbayOrdersResponse> {
   const params = new URLSearchParams({ page: '1', pageSize: '50' });
   if (status && status !== 'all') params.set('status', status);
   if (search) params.set('search', search);
@@ -229,22 +226,28 @@ function getEbayStatusColor(status: string): string {
 }
 
 // eBay-specific confirmation content component
-function EbayConfirmContent({
-  onOpenChange,
-}: {
-  onOpenChange: (open: boolean) => void;
-}) {
+function EbayConfirmContent({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient();
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>('Paid');
   const [searchQuery, setSearchQuery] = useState('');
   // Track orders that failed due to unmatched items for "confirm anyway" flow
   const [unmatchedFailedOrders, setUnmatchedFailedOrders] = useState<
-    Array<{ orderId: string; error: string; ebayOrderId?: string; buyerUsername?: string; itemTitles?: string[] }>
+    Array<{
+      orderId: string;
+      error: string;
+      ebayOrderId?: string;
+      buyerUsername?: string;
+      itemTitles?: string[];
+    }>
   >([]);
   const [selectedUnmatchedIds, setSelectedUnmatchedIds] = useState<Set<string>>(new Set());
 
-  const { data: ordersData, isLoading, error } = useQuery({
+  const {
+    data: ordersData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['ebay', 'orders', 'confirm-dialog', statusFilter, searchQuery],
     queryFn: () => fetchEbayOrders(statusFilter, searchQuery),
     refetchOnWindowFocus: false,
@@ -397,9 +400,7 @@ function EbayConfirmContent({
         <div className="py-8 text-center text-muted-foreground">
           <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
           <p>No eBay orders found.</p>
-          <p className="text-sm mt-2">
-            Try changing the status filter or syncing your orders.
-          </p>
+          <p className="text-sm mt-2">Try changing the status filter or syncing your orders.</p>
         </div>
       ) : (
         <>
@@ -407,7 +408,9 @@ function EbayConfirmContent({
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" />
-              <span>{orders.length} order{orders.length !== 1 ? 's' : ''} found</span>
+              <span>
+                {orders.length} order{orders.length !== 1 ? 's' : ''} found
+              </span>
             </div>
             {selectedOrderIds.size > 0 && (
               <div className="flex items-center gap-2">
@@ -460,8 +463,13 @@ function EbayConfirmContent({
                     <TableCell>
                       <div className="space-y-1">
                         {order.line_items?.slice(0, 3).map((item) => (
-                          <div key={item.id} className="text-xs truncate max-w-[200px]" title={item.title}>
-                            {item.sku ? `${item.sku}: ` : ''}{item.title} x{item.quantity}
+                          <div
+                            key={item.id}
+                            className="text-xs truncate max-w-[200px]"
+                            title={item.title}
+                          >
+                            {item.sku ? `${item.sku}: ` : ''}
+                            {item.title} x{item.quantity}
                           </div>
                         ))}
                         {order.line_items && order.line_items.length > 3 && (
@@ -494,7 +502,10 @@ function EbayConfirmContent({
           <AlertDescription className="text-green-800">
             Successfully confirmed {confirmMutation.data.data.confirmed} order(s).
             {confirmMutation.data.data.inventoryUpdated > 0 && (
-              <span> Updated {confirmMutation.data.data.inventoryUpdated} inventory item(s) to SOLD.</span>
+              <span>
+                {' '}
+                Updated {confirmMutation.data.data.inventoryUpdated} inventory item(s) to SOLD.
+              </span>
             )}
           </AlertDescription>
         </Alert>
@@ -509,8 +520,8 @@ function EbayConfirmContent({
               {unmatchedFailedOrders.length} order(s) have unmatched items
             </div>
             <p className="text-sm text-yellow-700 mt-1">
-              These orders have items that couldn&apos;t be matched to inventory. You can confirm them
-              anyway (inventory won&apos;t be updated for unmatched items).
+              These orders have items that couldn&apos;t be matched to inventory. You can confirm
+              them anyway (inventory won&apos;t be updated for unmatched items).
             </p>
 
             <div className="mt-3 space-y-2">
@@ -524,7 +535,10 @@ function EbayConfirmContent({
                     }
                     onCheckedChange={handleSelectAllUnmatched}
                   />
-                  <Label htmlFor="selectAllUnmatched" className="text-sm font-medium cursor-pointer">
+                  <Label
+                    htmlFor="selectAllUnmatched"
+                    className="text-sm font-medium cursor-pointer"
+                  >
                     Select all
                   </Label>
                 </div>
@@ -570,9 +584,13 @@ function EbayConfirmContent({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{order.ebayOrderId || order.orderId.slice(0, 8)}</span>
+                        <span className="text-sm font-medium">
+                          {order.ebayOrderId || order.orderId.slice(0, 8)}
+                        </span>
                         {order.buyerUsername && (
-                          <span className="text-xs text-muted-foreground">({order.buyerUsername})</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({order.buyerUsername})
+                          </span>
                         )}
                       </div>
                       {order.itemTitles && order.itemTitles.length > 0 && (
@@ -602,9 +620,11 @@ function EbayConfirmContent({
             <AlertDescription>
               <div className="font-medium">
                 {confirmMutation.data.data.confirmed} order(s) confirmed,{' '}
-                {confirmMutation.data.data.results.filter(
-                  (r) => !r.success && !r.error?.includes('unmatched')
-                ).length}{' '}
+                {
+                  confirmMutation.data.data.results.filter(
+                    (r) => !r.success && !r.error?.includes('unmatched')
+                  ).length
+                }{' '}
                 failed.
               </div>
               <ul className="list-disc list-inside mt-2 text-sm">
@@ -672,11 +692,7 @@ function EbayConfirmContent({
 }
 
 // Amazon-specific confirmation content component
-function AmazonConfirmContent({
-  onOpenChange,
-}: {
-  onOpenChange: (open: boolean) => void;
-}) {
+function AmazonConfirmContent({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient();
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [archiveLocation, setArchiveLocation] = useState(
@@ -709,9 +725,7 @@ function AmazonConfirmContent({
   const orders = data?.data?.orders ?? [];
   const summary = data?.data?.summary;
 
-  const displayedOrders = showUnmatchedOnly
-    ? orders.filter((o) => !o.allMatched)
-    : orders;
+  const displayedOrders = showUnmatchedOnly ? orders.filter((o) => !o.allMatched) : orders;
 
   // Helper function to check if an item is resolved (matched or manually selected)
   const isItemResolved = (item: OrderItemMatch): boolean => {
@@ -807,9 +821,7 @@ function AmazonConfirmContent({
         <div className="py-8 text-center text-muted-foreground">
           <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
           <p>No orders ready for confirmation.</p>
-          <p className="text-sm mt-2">
-            Orders must be in Shipped or Completed status to confirm.
-          </p>
+          <p className="text-sm mt-2">Orders must be in Shipped or Completed status to confirm.</p>
         </div>
       ) : (
         <>
@@ -834,7 +846,9 @@ function AmazonConfirmContent({
             <Checkbox
               id="showUnmatched"
               checked={showUnmatchedOnly}
-              onCheckedChange={(checked: boolean | 'indeterminate') => setShowUnmatchedOnly(checked === true)}
+              onCheckedChange={(checked: boolean | 'indeterminate') =>
+                setShowUnmatchedOnly(checked === true)
+              }
             />
             <Label htmlFor="showUnmatched" className="text-sm cursor-pointer">
               Show only orders with unmatched items
@@ -899,9 +913,7 @@ function AmazonConfirmContent({
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {order.orderDate
-                          ? format(new Date(order.orderDate), 'MMM d, yyyy')
-                          : '-'}
+                        {order.orderDate ? format(new Date(order.orderDate), 'MMM d, yyyy') : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-2">
@@ -913,10 +925,7 @@ function AmazonConfirmContent({
                             const displayInventory = item.matchedInventory || selectedCandidate;
 
                             return (
-                              <div
-                                key={item.orderItemId}
-                                className="space-y-1"
-                              >
+                              <div key={item.orderItemId} className="space-y-1">
                                 <div className="flex items-center gap-2 text-xs">
                                   {/* Show badge based on resolution status */}
                                   {item.matchStatus === 'matched' ? (
@@ -938,10 +947,15 @@ function AmazonConfirmContent({
                                 {displayInventory && (
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground ml-4">
                                     <MapPin className="h-3 w-3" />
-                                    <span>{displayInventory.storage_location || 'No location'}</span>
+                                    <span>
+                                      {displayInventory.storage_location || 'No location'}
+                                    </span>
                                     {/* Show pick list indicator if item was pre-linked (matched from pick list) */}
                                     {item.matchStatus === 'matched' && item.matchedInventory && (
-                                      <span className="flex items-center gap-1 text-blue-600 ml-2" title="Pre-linked via pick list">
+                                      <span
+                                        className="flex items-center gap-1 text-blue-600 ml-2"
+                                        title="Pre-linked via pick list"
+                                      >
                                         <ClipboardList className="h-3 w-3" />
                                         Pick list
                                       </span>
@@ -950,46 +964,60 @@ function AmazonConfirmContent({
                                 )}
 
                                 {/* Show dropdown for multiple matches */}
-                                {item.matchStatus === 'multiple' && item.matchCandidates && item.matchCandidates.length > 0 && (
-                                  <div className="ml-4">
-                                    <Select
-                                      value={selectedInventoryId || ''}
-                                      onValueChange={(value: string) => handleSelectInventory(item.orderItemId, value)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs w-[320px]">
-                                        <SelectValue placeholder={`Select from ${item.matchCandidates.length} options...`} />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {item.matchCandidates.map((candidate, index) => (
-                                          <SelectItem key={candidate.id} value={candidate.id}>
-                                            <div className="flex items-center gap-2">
-                                              {/* First item is the FIFO pick list recommendation */}
-                                              {index === 0 && (
-                                                <span className="flex items-center gap-1 text-blue-600" title="Pick list recommended (FIFO)">
-                                                  <ClipboardList className="h-3 w-3" />
+                                {item.matchStatus === 'multiple' &&
+                                  item.matchCandidates &&
+                                  item.matchCandidates.length > 0 && (
+                                    <div className="ml-4">
+                                      <Select
+                                        value={selectedInventoryId || ''}
+                                        onValueChange={(value: string) =>
+                                          handleSelectInventory(item.orderItemId, value)
+                                        }
+                                      >
+                                        <SelectTrigger className="h-8 text-xs w-[320px]">
+                                          <SelectValue
+                                            placeholder={`Select from ${item.matchCandidates.length} options...`}
+                                          />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {item.matchCandidates.map((candidate, index) => (
+                                            <SelectItem key={candidate.id} value={candidate.id}>
+                                              <div className="flex items-center gap-2">
+                                                {/* First item is the FIFO pick list recommendation */}
+                                                {index === 0 && (
+                                                  <span
+                                                    className="flex items-center gap-1 text-blue-600"
+                                                    title="Pick list recommended (FIFO)"
+                                                  >
+                                                    <ClipboardList className="h-3 w-3" />
+                                                  </span>
+                                                )}
+                                                <span className="font-mono text-xs">
+                                                  {candidate.set_number ||
+                                                    candidate.item_name ||
+                                                    candidate.id.slice(0, 8)}
                                                 </span>
-                                              )}
-                                              <span className="font-mono text-xs">
-                                                {candidate.set_number || candidate.item_name || candidate.id.slice(0, 8)}
-                                              </span>
-                                              {candidate.storage_location && (
-                                                <span className="flex items-center gap-1 text-muted-foreground">
-                                                  <MapPin className="h-3 w-3" />
-                                                  {candidate.storage_location}
-                                                </span>
-                                              )}
-                                              {candidate.condition && (
-                                                <Badge variant="outline" className="text-xs py-0 h-4">
-                                                  {candidate.condition}
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
+                                                {candidate.storage_location && (
+                                                  <span className="flex items-center gap-1 text-muted-foreground">
+                                                    <MapPin className="h-3 w-3" />
+                                                    {candidate.storage_location}
+                                                  </span>
+                                                )}
+                                                {candidate.condition && (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="text-xs py-0 h-4"
+                                                  >
+                                                    {candidate.condition}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
                               </div>
                             );
                           })}
@@ -997,9 +1025,7 @@ function AmazonConfirmContent({
                       </TableCell>
                       <TableCell>
                         {orderResolved ? (
-                          <Badge className="bg-green-100 text-green-800">
-                            Ready
-                          </Badge>
+                          <Badge className="bg-green-100 text-green-800">Ready</Badge>
                         ) : (
                           <Badge variant="outline" className="text-yellow-600">
                             {order.items.filter((i) => !isItemResolved(i)).length} need selection
@@ -1032,29 +1058,27 @@ function AmazonConfirmContent({
         <Alert className="bg-green-50 border-green-200">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            Successfully confirmed {confirmMutation.data.data.ordersProcessed} orders.
-            Updated {confirmMutation.data.data.inventoryUpdated} inventory items to
-            SOLD.
+            Successfully confirmed {confirmMutation.data.data.ordersProcessed} orders. Updated{' '}
+            {confirmMutation.data.data.inventoryUpdated} inventory items to SOLD.
           </AlertDescription>
         </Alert>
       )}
 
-      {confirmMutation.isSuccess &&
-        confirmMutation.data.data.errors.length > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Some errors occurred:
-              <ul className="list-disc list-inside mt-1">
-                {confirmMutation.data.data.errors.map((err, i) => (
-                  <li key={i} className="text-sm">
-                    {err}
-                  </li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+      {confirmMutation.isSuccess && confirmMutation.data.data.errors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Some errors occurred:
+            <ul className="list-disc list-inside mt-1">
+              {confirmMutation.data.data.errors.map((err, i) => (
+                <li key={i} className="text-sm">
+                  {err}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -1062,11 +1086,7 @@ function AmazonConfirmContent({
         </Button>
         <Button
           onClick={handleConfirm}
-          disabled={
-            selectedResolvedOrders.length === 0 ||
-            confirmMutation.isPending ||
-            isLoading
-          }
+          disabled={selectedResolvedOrders.length === 0 || confirmMutation.isPending || isLoading}
         >
           {confirmMutation.isPending ? (
             <>
@@ -1086,11 +1106,7 @@ function AmazonConfirmContent({
   );
 }
 
-export function ConfirmOrdersDialog({
-  open,
-  onOpenChange,
-  platform,
-}: ConfirmOrdersDialogProps) {
+export function ConfirmOrdersDialog({ open, onOpenChange, platform }: ConfirmOrdersDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
@@ -1100,8 +1116,7 @@ export function ConfirmOrdersDialog({
             Confirm Orders Processed - {platform === 'amazon' ? 'Amazon' : 'eBay'}
           </DialogTitle>
           <DialogDescription>
-            Select orders to confirm as fulfilled. Matched inventory will be updated to
-            SOLD status.
+            Select orders to confirm as fulfilled. Matched inventory will be updated to SOLD status.
           </DialogDescription>
         </DialogHeader>
 

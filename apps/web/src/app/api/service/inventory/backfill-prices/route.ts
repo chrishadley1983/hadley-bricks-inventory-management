@@ -67,7 +67,7 @@ async function handleBackfill(request: NextRequest) {
   // 2. Tier 1: Check price_snapshots for existing Keepa data
   //    Process in batches of 15 set_nums to stay well under Supabase 1000-row limit
   //    (each set can have 30+ snapshots, so 15 × 30 = ~450 rows per batch)
-  const setNums = items.map(i => `${i.set_number}-1`);
+  const setNums = items.map((i) => `${i.set_number}-1`);
   const dbPriceMap = new Map<string, number>();
 
   for (let i = 0; i < setNums.length; i += 15) {
@@ -104,17 +104,21 @@ async function handleBackfill(request: NextRequest) {
     }
   }
 
-  console.log(`[Backfill Prices] Keepa DB resolved ${results.length}/${items.length}, ${stillMissing.length} need API lookup`);
+  console.log(
+    `[Backfill Prices] Keepa DB resolved ${results.length}/${items.length}, ${stillMissing.length} need API lookup`
+  );
 
   // 3. Tier 2: Keepa API for remaining items
   if (stillMissing.length > 0) {
     const keepaClient = new KeepaClient();
     if (keepaClient.isConfigured()) {
-      const asins = stillMissing.map(i => i.amazon_asin!);
+      const asins = stillMissing.map((i) => i.amazon_asin!);
 
       for (let i = 0; i < asins.length; i += 10) {
         const batch = asins.slice(i, i + 10);
-        console.log(`[Backfill Prices] Keepa API batch ${Math.floor(i / 10) + 1}: ${batch.join(', ')}`);
+        console.log(
+          `[Backfill Prices] Keepa API batch ${Math.floor(i / 10) + 1}: ${batch.join(', ')}`
+        );
 
         try {
           const products = await keepaClient.fetchProducts(batch);
@@ -122,7 +126,7 @@ async function handleBackfill(request: NextRequest) {
           for (const product of products) {
             const pricing = keepaClient.extractCurrentPricing(product);
             const price = pricing.buyBoxPrice ?? pricing.lowestNewPrice;
-            const item = stillMissing.find(m => m.amazon_asin === product.asin);
+            const item = stillMissing.find((m) => m.amazon_asin === product.asin);
 
             if (item) {
               results.push({
@@ -137,8 +141,8 @@ async function handleBackfill(request: NextRequest) {
 
           // Mark any ASINs not returned by Keepa
           for (const asin of batch) {
-            if (!results.some(r => r.asin === asin)) {
-              const item = stillMissing.find(m => m.amazon_asin === asin);
+            if (!results.some((r) => r.asin === asin)) {
+              const item = stillMissing.find((m) => m.amazon_asin === asin);
               if (item) {
                 results.push({
                   id: item.id,
@@ -153,8 +157,8 @@ async function handleBackfill(request: NextRequest) {
         } catch (err) {
           console.warn(`[Backfill Prices] Keepa API batch failed:`, err);
           for (const asin of batch) {
-            const item = stillMissing.find(m => m.amazon_asin === asin);
-            if (item && !results.some(r => r.id === item.id)) {
+            const item = stillMissing.find((m) => m.amazon_asin === asin);
+            if (item && !results.some((r) => r.id === item.id)) {
               results.push({
                 id: item.id,
                 set_number: item.set_number,
@@ -183,7 +187,7 @@ async function handleBackfill(request: NextRequest) {
   // 4. Update inventory items with resolved prices
   let updatedCount = 0;
   if (!dryRun) {
-    const toUpdate = results.filter(r => r.price !== null && r.price > 0);
+    const toUpdate = results.filter((r) => r.price !== null && r.price > 0);
 
     for (const item of toUpdate) {
       const { error: updateError } = await supabase
@@ -192,10 +196,14 @@ async function handleBackfill(request: NextRequest) {
         .eq('id', item.id);
 
       if (updateError) {
-        console.warn(`[Backfill Prices] Failed to update ${item.set_number}: ${updateError.message}`);
+        console.warn(
+          `[Backfill Prices] Failed to update ${item.set_number}: ${updateError.message}`
+        );
       } else {
         updatedCount++;
-        console.log(`[Backfill Prices] Updated ${item.set_number}: £${item.price!.toFixed(2)} (${item.source})`);
+        console.log(
+          `[Backfill Prices] Updated ${item.set_number}: £${item.price!.toFixed(2)} (${item.source})`
+        );
       }
     }
   }
@@ -205,7 +213,7 @@ async function handleBackfill(request: NextRequest) {
     dryRun,
     processed: items.length,
     updated: updatedCount,
-    results: results.map(r => ({
+    results: results.map((r) => ({
       set_number: r.set_number,
       asin: r.asin,
       price: r.price,

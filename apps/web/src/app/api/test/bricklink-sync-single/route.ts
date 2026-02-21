@@ -29,10 +29,13 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (!mapping) {
-      return NextResponse.json({
-        error: 'No mapping found for ASIN',
-        asin,
-      }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: 'No mapping found for ASIN',
+          asin,
+        },
+        { status: 404 }
+      );
     }
 
     const setNumber = mapping.bricklink_set_number;
@@ -63,16 +66,22 @@ export async function GET(request: NextRequest) {
         unit_quantity: priceGuide.unit_quantity,
         total_quantity: priceGuide.total_quantity,
       },
-      storedData: storedData ? {
-        min_price: storedData.min_price,
-        avg_price: storedData.avg_price,
-        max_price: storedData.max_price,
-        total_lots: storedData.total_lots,
-        country_code: storedData.country_code,
-        snapshot_date: storedData.snapshot_date,
-        price_detail_count: Array.isArray(storedData.price_detail_json) ? storedData.price_detail_json.length : 0,
-        price_detail_sample: Array.isArray(storedData.price_detail_json) ? storedData.price_detail_json.slice(0, 3) : null,
-      } : null,
+      storedData: storedData
+        ? {
+            min_price: storedData.min_price,
+            avg_price: storedData.avg_price,
+            max_price: storedData.max_price,
+            total_lots: storedData.total_lots,
+            country_code: storedData.country_code,
+            snapshot_date: storedData.snapshot_date,
+            price_detail_count: Array.isArray(storedData.price_detail_json)
+              ? storedData.price_detail_json.length
+              : 0,
+            price_detail_sample: Array.isArray(storedData.price_detail_json)
+              ? storedData.price_detail_json.slice(0, 3)
+              : null,
+          }
+        : null,
     });
   } catch (error) {
     console.error('[GET /api/test/bricklink-sync-single] Error:', error);

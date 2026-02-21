@@ -180,9 +180,7 @@ async function fetchOpportunities(
   if (filters.status) params.set('status', filters.status);
   if (filters.limit) params.set('limit', filters.limit.toString());
 
-  const response = await fetch(
-    `/api/arbitrage/vinted/automation/opportunities?${params}`
-  );
+  const response = await fetch(`/api/arbitrage/vinted/automation/opportunities?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch opportunities');
   }
@@ -193,14 +191,11 @@ async function updateOpportunityStatus(
   id: string,
   status: Opportunity['status']
 ): Promise<{ opportunity: Opportunity }> {
-  const response = await fetch(
-    `/api/arbitrage/vinted/automation/opportunities/${id}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    }
-  );
+  const response = await fetch(`/api/arbitrage/vinted/automation/opportunities/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
   if (!response.ok) {
     throw new Error('Failed to update opportunity');
   }
@@ -215,9 +210,7 @@ async function fetchScanHistory(
   if (filters.status) params.set('status', filters.status);
   if (filters.limit) params.set('limit', filters.limit.toString());
 
-  const response = await fetch(
-    `/api/arbitrage/vinted/automation/history?${params}`
-  );
+  const response = await fetch(`/api/arbitrage/vinted/automation/history?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch scan history');
   }
@@ -267,9 +260,7 @@ export interface ScheduleResponse {
 
 type RegenerateScheduleResponse = ScheduleResponse;
 
-async function regenerateSchedule(
-  startInMinutes: number = 2
-): Promise<RegenerateScheduleResponse> {
+async function regenerateSchedule(startInMinutes: number = 2): Promise<RegenerateScheduleResponse> {
   const response = await fetch('/api/arbitrage/vinted/automation/regenerate-schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -286,9 +277,7 @@ async function fetchSchedule(date?: string): Promise<ScheduleResponse> {
   const params = new URLSearchParams();
   if (date) params.set('date', date);
 
-  const response = await fetch(
-    `/api/arbitrage/vinted/automation/schedule/web?${params}`
-  );
+  const response = await fetch(`/api/arbitrage/vinted/automation/schedule/web?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch schedule');
   }

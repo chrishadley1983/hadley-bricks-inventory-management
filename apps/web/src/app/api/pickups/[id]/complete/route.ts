@@ -13,10 +13,7 @@ const CompletePickupSchema = z.object({
  * POST /api/pickups/[id]/complete
  * Complete a pickup with outcome details
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = await createClient();

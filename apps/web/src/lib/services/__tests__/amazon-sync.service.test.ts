@@ -120,10 +120,7 @@ describe('AmazonSyncService', () => {
       const result = await service.testConnection(testUserId);
 
       expect(result).toBe(true);
-      expect(mockCredentialsRepo.getCredentials).toHaveBeenCalledWith(
-        testUserId,
-        'amazon'
-      );
+      expect(mockCredentialsRepo.getCredentials).toHaveBeenCalledWith(testUserId, 'amazon');
     });
 
     it('should return false when connection fails', async () => {
@@ -194,10 +191,7 @@ describe('AmazonSyncService', () => {
     it('should delete credentials', async () => {
       await service.deleteCredentials(testUserId);
 
-      expect(mockCredentialsRepo.deleteCredentials).toHaveBeenCalledWith(
-        testUserId,
-        'amazon'
-      );
+      expect(mockCredentialsRepo.deleteCredentials).toHaveBeenCalledWith(testUserId, 'amazon');
     });
   });
 
@@ -381,9 +375,7 @@ describe('AmazonSyncService', () => {
 
     it('should handle auth errors', async () => {
       const { AmazonAuthError } = await import('../../amazon');
-      mockAmazonClient.getAllOrders.mockRejectedValue(
-        new AmazonAuthError('Invalid credentials')
-      );
+      mockAmazonClient.getAllOrders.mockRejectedValue(new AmazonAuthError('Invalid credentials'));
 
       const result = await service.syncOrders(testUserId);
 
@@ -473,9 +465,7 @@ describe('AmazonSyncService', () => {
 
       // The mock normalizeOrder uses order.AmazonOrderId for platformOrderId
       expect(result.platformOrderId).toBe('408-1234567-8901234');
-      expect(mockAmazonClient.getOrderWithItems).toHaveBeenCalledWith(
-        '408-1234567-8901234'
-      );
+      expect(mockAmazonClient.getOrderWithItems).toHaveBeenCalledWith('408-1234567-8901234');
       expect(mockOrderRepo.upsert).toHaveBeenCalled();
     });
 
@@ -514,9 +504,7 @@ describe('AmazonSyncService', () => {
 
       expect(mockOrderRepo.replaceOrderItems).toHaveBeenCalledWith(
         'saved-order-id',
-        expect.arrayContaining([
-          expect.objectContaining({ item_number: 'B09ABC1234' }),
-        ])
+        expect.arrayContaining([expect.objectContaining({ item_number: 'B09ABC1234' })])
       );
     });
 

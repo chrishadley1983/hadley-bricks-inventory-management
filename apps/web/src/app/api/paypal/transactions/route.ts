@@ -8,7 +8,9 @@ const QuerySchema = z.object({
   search: z.string().optional(),
   fromDate: z.string().optional(),
   toDate: z.string().optional(),
-  sortBy: z.enum(['transaction_date', 'fee_amount', 'gross_amount', 'payer_name']).default('transaction_date'),
+  sortBy: z
+    .enum(['transaction_date', 'fee_amount', 'gross_amount', 'payer_name'])
+    .default('transaction_date'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 

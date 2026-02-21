@@ -10,12 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { PomodoroProgress } from './PomodoroProgress';
 import {
@@ -202,7 +197,8 @@ export function PomodoroPanel({ className }: PomodoroPanelProps) {
     resumeMutation.isPending ||
     cancelMutation.isPending;
 
-  const showIdleState = !session || session.status === 'completed' || session.status === 'cancelled';
+  const showIdleState =
+    !session || session.status === 'completed' || session.status === 'cancelled';
 
   return (
     <TooltipProvider>
@@ -250,12 +246,7 @@ export function PomodoroPanel({ className }: PomodoroPanelProps) {
         ) : (
           // Active/Paused state - show progress and controls
           <>
-            <PomodoroProgress
-              progress={progress}
-              size={32}
-              strokeWidth={3}
-              isBreak={isBreak}
-            />
+            <PomodoroProgress progress={progress} size={32} strokeWidth={3} isBreak={isBreak} />
 
             <div className="flex flex-col">
               <span className="font-mono text-sm font-medium tabular-nums">

@@ -39,10 +39,19 @@ const CONDITION_OPTIONS = [
 export function InventoryFilters({ filters, onFiltersChange }: InventoryFiltersProps) {
   const hasBasicFilters = filters.status || filters.condition || filters.platform || filters.search;
   const hasAdvancedFilters = !!(
-    filters.costRange || filters.listingValueRange || filters.soldGrossRange ||
-    filters.soldNetRange || filters.profitRange || filters.purchaseDateRange ||
-    filters.listingDateRange || filters.soldDateRange || filters.storageLocationFilter ||
-    filters.amazonAsinFilter || filters.linkedLotFilter || filters.notesFilter || filters.skuFilter
+    filters.costRange ||
+    filters.listingValueRange ||
+    filters.soldGrossRange ||
+    filters.soldNetRange ||
+    filters.profitRange ||
+    filters.purchaseDateRange ||
+    filters.listingDateRange ||
+    filters.soldDateRange ||
+    filters.storageLocationFilter ||
+    filters.amazonAsinFilter ||
+    filters.linkedLotFilter ||
+    filters.notesFilter ||
+    filters.skuFilter
   );
   const hasActiveFilters = hasBasicFilters || hasAdvancedFilters;
 

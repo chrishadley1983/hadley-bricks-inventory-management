@@ -13,11 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { RebrickableApiClient } from './rebrickable-api';
-import type {
-  RebrickableSet,
-  RebrickableTheme,
-  RebrickableSyncResult,
-} from './types';
+import type { RebrickableSet, RebrickableTheme, RebrickableSyncResult } from './types';
 
 export class RebrickableSyncService {
   private client: RebrickableApiClient;
@@ -67,11 +63,7 @@ export class RebrickableSyncService {
     console.log(`[RebrickableSync] Total sets available: ${totalAvailable}`);
 
     // Process first page
-    const firstResult = await this.upsertBatch(
-      firstPage.results,
-      themeMap,
-      existingSetNumbers
-    );
+    const firstResult = await this.upsertBatch(firstPage.results, themeMap, existingSetNumbers);
     inserted += firstResult.inserted;
     updated += firstResult.updated;
     skipped += firstResult.skipped;
@@ -90,11 +82,7 @@ export class RebrickableSyncService {
           results: RebrickableSet[];
         }>(nextUrl);
 
-        const batchResult = await this.upsertBatch(
-          pageData.results,
-          themeMap,
-          existingSetNumbers
-        );
+        const batchResult = await this.upsertBatch(pageData.results, themeMap, existingSetNumbers);
         inserted += batchResult.inserted;
         updated += batchResult.updated;
         skipped += batchResult.skipped;
@@ -133,23 +121,16 @@ export class RebrickableSyncService {
   }
 
   /** Build a map of theme_id -> { name, parentName } from Rebrickable themes */
-  private async buildThemeMap(): Promise<
-    Map<number, { name: string; parentName: string | null }>
-  > {
+  private async buildThemeMap(): Promise<Map<number, { name: string; parentName: string | null }>> {
     const themes = await this.client.getThemes();
     const themeById = new Map<number, RebrickableTheme>();
     for (const theme of themes) {
       themeById.set(theme.id, theme);
     }
 
-    const result = new Map<
-      number,
-      { name: string; parentName: string | null }
-    >();
+    const result = new Map<number, { name: string; parentName: string | null }>();
     for (const theme of themes) {
-      const parent = theme.parent_id
-        ? themeById.get(theme.parent_id)
-        : null;
+      const parent = theme.parent_id ? themeById.get(theme.parent_id) : null;
       result.set(theme.id, {
         name: theme.name,
         parentName: parent ? parent.name : null,
@@ -172,10 +153,7 @@ export class RebrickableSyncService {
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) {
-        console.error(
-          '[RebrickableSync] Error fetching existing sets:',
-          error.message
-        );
+        console.error('[RebrickableSync] Error fetching existing sets:', error.message);
         break;
       }
 
@@ -250,18 +228,13 @@ export class RebrickableSyncService {
     // Upsert new rows (includes image_url) in chunks of 500
     for (let i = 0; i < newRows.length; i += 500) {
       const chunk = newRows.slice(i, i + 500);
-      const { error: insertError } = await this.supabase
-        .from('brickset_sets')
-        .upsert(chunk, {
-          onConflict: 'set_number',
-          ignoreDuplicates: false,
-        });
+      const { error: insertError } = await this.supabase.from('brickset_sets').upsert(chunk, {
+        onConflict: 'set_number',
+        ignoreDuplicates: false,
+      });
 
       if (insertError) {
-        console.error(
-          `[RebrickableSync] Insert upsert error (batch ${i}):`,
-          insertError.message
-        );
+        console.error(`[RebrickableSync] Insert upsert error (batch ${i}):`, insertError.message);
         errors += chunk.length;
       } else {
         inserted += chunk.length;
@@ -274,18 +247,13 @@ export class RebrickableSyncService {
     // Upsert existing rows (no image_url — preserves Brickset images) in chunks of 500
     for (let i = 0; i < existingRows.length; i += 500) {
       const chunk = existingRows.slice(i, i + 500);
-      const { error: updateError } = await this.supabase
-        .from('brickset_sets')
-        .upsert(chunk, {
-          onConflict: 'set_number',
-          ignoreDuplicates: false,
-        });
+      const { error: updateError } = await this.supabase.from('brickset_sets').upsert(chunk, {
+        onConflict: 'set_number',
+        ignoreDuplicates: false,
+      });
 
       if (updateError) {
-        console.error(
-          `[RebrickableSync] Update upsert error (batch ${i}):`,
-          updateError.message
-        );
+        console.error(`[RebrickableSync] Update upsert error (batch ${i}):`, updateError.message);
         errors += chunk.length;
       } else {
         updated += chunk.length;

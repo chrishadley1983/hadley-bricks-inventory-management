@@ -11,11 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  useSchedule,
-  useScanHistory,
-  type ScheduledScan,
-} from '@/hooks/use-vinted-automation';
+import { useSchedule, useScanHistory, type ScheduledScan } from '@/hooks/use-vinted-automation';
 import {
   Calendar,
   Search,
@@ -81,9 +77,10 @@ export function ScheduleViewer() {
     if (!schedule?.scans) return [];
 
     const now = new Date();
-    const todayScans = historyData?.scans?.filter(
-      (s) => s.completed_at && format(new Date(s.completed_at), 'yyyy-MM-dd') === today
-    ) ?? [];
+    const todayScans =
+      historyData?.scans?.filter(
+        (s) => s.completed_at && format(new Date(s.completed_at), 'yyyy-MM-dd') === today
+      ) ?? [];
 
     return schedule.scans.map((scan) => {
       // Parse scheduled time to full date
@@ -193,7 +190,9 @@ export function ScheduleViewer() {
             </div>
             <div className="flex items-center gap-1">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>{stats.completed}/{stats.total}</span>
+              <span>
+                {stats.completed}/{stats.total}
+              </span>
             </div>
           </div>
         </div>
@@ -202,9 +201,7 @@ export function ScheduleViewer() {
         {scheduleLoading ? (
           <ScheduleViewerSkeleton />
         ) : scansWithStatus.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No scans scheduled for today
-          </div>
+          <div className="text-center py-8 text-muted-foreground">No scans scheduled for today</div>
         ) : (
           <ScrollArea className="h-[500px] pr-4">
             <div className="space-y-4">

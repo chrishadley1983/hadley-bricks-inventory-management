@@ -27,10 +27,7 @@ export async function POST() {
       .single();
 
     if (findError || !entry) {
-      return NextResponse.json(
-        { error: 'No active time entry to stop' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active time entry to stop' }, { status: 400 });
     }
 
     // Calculate duration

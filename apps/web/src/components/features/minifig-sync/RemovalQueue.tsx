@@ -88,9 +88,7 @@ export function RemovalQueue() {
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Pending Removals</h2>
-          <Badge variant={pendingCount > 0 ? 'destructive' : 'secondary'}>
-            {pendingCount}
-          </Badge>
+          <Badge variant={pendingCount > 0 ? 'destructive' : 'secondary'}>{pendingCount}</Badge>
         </div>
 
         {/* Bulk Approve (F58) */}
@@ -110,15 +108,13 @@ export function RemovalQueue() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Approve all {pendingCount} removals?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will execute all pending removals, deleting listings from the
-                  respective platforms. This action cannot be undone.
+                  This will execute all pending removals, deleting listings from the respective
+                  platforms. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleBulkApprove}>
-                  Approve All
-                </AlertDialogAction>
+                <AlertDialogAction onClick={handleBulkApprove}>Approve All</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

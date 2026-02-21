@@ -74,13 +74,18 @@ if (!isBrowser) {
 function writePerfEntry(entry: PerfLogEntry): void {
   // Console log as before
   const contextStr = entry.context
-    ? ' ' + Object.entries(entry.context).map(([k, v]) => `${k}=${v}`).join(' ')
+    ? ' ' +
+      Object.entries(entry.context)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ')
     : '';
 
   if (entry.type === 'end') {
     console.log(`[PERF] [${entry.scope}] TOTAL: ${entry.durationMs.toFixed(1)}ms`);
   } else if (entry.type === 'log') {
-    console.log(`[PERF] [${entry.scope}] ${entry.label} @${entry.durationMs.toFixed(0)}ms${contextStr}`);
+    console.log(
+      `[PERF] [${entry.scope}] ${entry.label} @${entry.durationMs.toFixed(0)}ms${contextStr}`
+    );
   } else {
     console.log(`[PERF] [${entry.scope}] ${entry.label}: ${entry.durationMs.toFixed(1)}ms`);
   }
@@ -166,11 +171,18 @@ export async function perfAsync<T>(label: string, fn: () => Promise<T>): Promise
 /**
  * Log performance with additional context (e.g., row count)
  */
-export function perfLog(label: string, durationMs: number, context?: Record<string, number | string>): void {
+export function perfLog(
+  label: string,
+  durationMs: number,
+  context?: Record<string, number | string>
+): void {
   if (!isEnabled) return;
 
   const contextStr = context
-    ? ' ' + Object.entries(context).map(([k, v]) => `${k}=${v}`).join(' ')
+    ? ' ' +
+      Object.entries(context)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ')
     : '';
   console.log(`[PERF] ${label}: ${durationMs.toFixed(1)}ms${contextStr}`);
 }

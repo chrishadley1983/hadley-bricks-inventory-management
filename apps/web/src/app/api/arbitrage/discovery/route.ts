@@ -107,10 +107,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/arbitrage/discovery] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -145,15 +142,9 @@ export async function POST(request: NextRequest) {
 
     // Get Amazon credentials
     const credentialsRepo = new CredentialsRepository(supabase);
-    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(
-      user.id,
-      'amazon'
-    );
+    const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(user.id, 'amazon');
     if (!credentials) {
-      return NextResponse.json(
-        { error: 'Amazon credentials not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Amazon credentials not configured' }, { status: 400 });
     }
 
     // Create discovery service with service role client (bypasses RLS for seeded_asins writes)
@@ -238,8 +229,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
       }
     } catch (jobError) {
-      const errorMessage =
-        jobError instanceof Error ? jobError.message : 'Unknown error';
+      const errorMessage = jobError instanceof Error ? jobError.message : 'Unknown error';
       await updateSyncStatus(supabase, user.id, 'failed', {
         error_message: errorMessage,
       });
@@ -278,14 +268,12 @@ async function updateSyncStatus(
     ...extras,
   };
 
-  await supabase
-    .from('arbitrage_sync_status')
-    .upsert(
-      {
-        user_id: userId,
-        job_type: 'seeded_discovery',
-        ...updateData,
-      },
-      { onConflict: 'user_id,job_type' }
-    );
+  await supabase.from('arbitrage_sync_status').upsert(
+    {
+      user_id: userId,
+      job_type: 'seeded_discovery',
+      ...updateData,
+    },
+    { onConflict: 'user_id,job_type' }
+  );
 }

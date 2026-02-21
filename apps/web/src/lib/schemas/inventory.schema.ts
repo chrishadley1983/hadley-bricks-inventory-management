@@ -4,12 +4,7 @@ import { SELLING_PLATFORMS } from '@hadley-bricks/database';
 /**
  * Status options for inventory items
  */
-export const INVENTORY_STATUS_OPTIONS = [
-  'NOT YET RECEIVED',
-  'BACKLOG',
-  'LISTED',
-  'SOLD',
-] as const;
+export const INVENTORY_STATUS_OPTIONS = ['NOT YET RECEIVED', 'BACKLOG', 'LISTED', 'SOLD'] as const;
 
 export type InventoryStatus = (typeof INVENTORY_STATUS_OPTIONS)[number];
 
@@ -75,26 +70,35 @@ export type InventoryFormValues = z.infer<typeof inventoryFormSchema>;
 export const inventoryCsvRowSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
   item_name: z.string().optional(),
-  condition: z.string().optional().transform((val) => {
-    if (!val) return undefined;
-    const normalized = val.trim().toLowerCase();
-    if (normalized === 'new' || normalized === 'n') return 'New';
-    if (normalized === 'used' || normalized === 'u') return 'Used';
-    return undefined;
-  }),
-  status: z.string().optional().transform((val) => {
-    if (!val) return undefined;
-    const normalized = val.trim().toUpperCase().replace(/\s+/g, ' ');
-    if (INVENTORY_STATUS_OPTIONS.includes(normalized as InventoryStatus)) {
-      return normalized as InventoryStatus;
-    }
-    return undefined;
-  }),
-  cost: z.string().optional().transform((val) => {
-    if (!val) return undefined;
-    const num = parseFloat(val.replace(/[£$,]/g, ''));
-    return isNaN(num) ? undefined : num;
-  }),
+  condition: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      const normalized = val.trim().toLowerCase();
+      if (normalized === 'new' || normalized === 'n') return 'New';
+      if (normalized === 'used' || normalized === 'u') return 'Used';
+      return undefined;
+    }),
+  status: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      const normalized = val.trim().toUpperCase().replace(/\s+/g, ' ');
+      if (INVENTORY_STATUS_OPTIONS.includes(normalized as InventoryStatus)) {
+        return normalized as InventoryStatus;
+      }
+      return undefined;
+    }),
+  cost: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      const num = parseFloat(val.replace(/[£$,]/g, ''));
+      return isNaN(num) ? undefined : num;
+    }),
   source: z.string().optional(),
   purchase_date: z.string().optional(),
   purchase_id: z.string().optional(),
@@ -115,9 +119,11 @@ export function parseFormToApiData(values: InventoryFormValues): Partial<Invento
   const { listing_platform, ...rest } = values;
 
   // Validate listing_platform is a valid selling platform
-  const validPlatform = listing_platform && SELLING_PLATFORMS.includes(listing_platform as typeof SELLING_PLATFORMS[number])
-    ? (listing_platform as typeof SELLING_PLATFORMS[number])
-    : undefined;
+  const validPlatform =
+    listing_platform &&
+    SELLING_PLATFORMS.includes(listing_platform as (typeof SELLING_PLATFORMS)[number])
+      ? (listing_platform as (typeof SELLING_PLATFORMS)[number])
+      : undefined;
 
   return {
     ...rest,

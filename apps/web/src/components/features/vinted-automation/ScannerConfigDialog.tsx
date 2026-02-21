@@ -34,7 +34,8 @@ import { useScannerStatus, useUpdateScannerConfig } from '@/hooks/use-vinted-aut
 import { Loader2 } from 'lucide-react';
 
 // Helper to normalize time to HH:MM format (strips seconds if present)
-const timeSchema = z.string()
+const timeSchema = z
+  .string()
   .regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Must be a valid time (HH:MM)')
   .transform((val) => val.slice(0, 5));
 
@@ -53,10 +54,7 @@ interface ScannerConfigDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function ScannerConfigDialog({
-  open,
-  onOpenChange,
-}: ScannerConfigDialogProps) {
+export function ScannerConfigDialog({ open, onOpenChange }: ScannerConfigDialogProps) {
   const { data } = useScannerStatus();
   const updateConfig = useUpdateScannerConfig();
 
@@ -113,9 +111,7 @@ export function ScannerConfigDialog({
                 name="broad_sweep_cog_threshold"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Broad Sweep Threshold: {field.value}%
-                    </FormLabel>
+                    <FormLabel>Broad Sweep Threshold: {field.value}%</FormLabel>
                     <FormControl>
                       <Slider
                         value={[field.value]}
@@ -138,9 +134,7 @@ export function ScannerConfigDialog({
                 name="watchlist_cog_threshold"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Watchlist Threshold: {field.value}%
-                    </FormLabel>
+                    <FormLabel>Watchlist Threshold: {field.value}%</FormLabel>
                     <FormControl>
                       <Slider
                         value={[field.value]}
@@ -163,9 +157,7 @@ export function ScannerConfigDialog({
                 name="near_miss_threshold"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Near Miss Threshold: {field.value}%
-                    </FormLabel>
+                    <FormLabel>Near Miss Threshold: {field.value}%</FormLabel>
                     <FormControl>
                       <Slider
                         value={[field.value]}
@@ -223,17 +215,11 @@ export function ScannerConfigDialog({
             </div>
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={updateConfig.isPending}>
-                {updateConfig.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {updateConfig.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>
             </DialogFooter>

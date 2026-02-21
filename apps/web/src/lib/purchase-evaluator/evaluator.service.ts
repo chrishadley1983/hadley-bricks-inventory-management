@@ -36,7 +36,8 @@ import { CredentialsRepository } from '../repositories';
 type PurchaseEvaluationRow = Database['public']['Tables']['purchase_evaluations']['Row'];
 type PurchaseEvaluationItemRow = Database['public']['Tables']['purchase_evaluation_items']['Row'];
 type PurchaseEvaluationInsert = Database['public']['Tables']['purchase_evaluations']['Insert'];
-type PurchaseEvaluationItemInsert = Database['public']['Tables']['purchase_evaluation_items']['Insert'];
+type PurchaseEvaluationItemInsert =
+  Database['public']['Tables']['purchase_evaluation_items']['Insert'];
 
 // ============================================
 // Row Mapping Functions
@@ -59,16 +60,17 @@ function mapEvaluationRow(row: PurchaseEvaluationRow): PurchaseEvaluation {
     totalExpectedRevenue: row.total_expected_revenue,
     overallMarginPercent: row.overall_margin_percent,
     overallRoiPercent: row.overall_roi_percent,
-    status: (row.status as 'draft' | 'in_progress' | 'completed' | 'saved' | 'converted') || 'draft',
+    status:
+      (row.status as 'draft' | 'in_progress' | 'completed' | 'saved' | 'converted') || 'draft',
     lookupCompletedAt: row.lookup_completed_at,
     // Conversion tracking - these columns may not exist in DB yet until migration is applied
-    convertedAt: extendedRow.converted_at as string | null ?? null,
-    convertedPurchaseId: extendedRow.converted_purchase_id as string | null ?? null,
+    convertedAt: (extendedRow.converted_at as string | null) ?? null,
+    convertedPurchaseId: (extendedRow.converted_purchase_id as string | null) ?? null,
     // Photo evaluation fields - these columns may not exist in DB yet until migration is applied
     evaluationMode: (extendedRow.evaluation_mode as 'cost_known' | 'max_bid') ?? 'cost_known',
-    targetMarginPercent: extendedRow.target_margin_percent as number | null ?? null,
-    photoAnalysisJson: extendedRow.photo_analysis_json as Record<string, unknown> | null ?? null,
-    listingDescription: extendedRow.listing_description as string | null ?? null,
+    targetMarginPercent: (extendedRow.target_margin_percent as number | null) ?? null,
+    photoAnalysisJson: (extendedRow.photo_analysis_json as Record<string, unknown> | null) ?? null,
+    listingDescription: (extendedRow.listing_description as string | null) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -91,15 +93,27 @@ function mapItemRow(row: PurchaseEvaluationItemRow): EvaluationItem {
     imageUrl: row.image_url,
     targetPlatform: (row.target_platform as 'amazon' | 'ebay') || 'amazon',
     amazonAsin: row.amazon_asin,
-    amazonAsinSource: row.amazon_asin_source as 'ean_lookup' | 'upc_lookup' | 'keyword_search' | 'manual' | null,
-    amazonAsinConfidence: row.amazon_asin_confidence as 'exact' | 'probable' | 'manual' | 'multiple' | null,
+    amazonAsinSource: row.amazon_asin_source as
+      | 'ean_lookup'
+      | 'upc_lookup'
+      | 'keyword_search'
+      | 'manual'
+      | null,
+    amazonAsinConfidence: row.amazon_asin_confidence as
+      | 'exact'
+      | 'probable'
+      | 'manual'
+      | 'multiple'
+      | null,
     amazonAlternativeAsins: row.amazon_alternative_asins as AlternativeAsin[] | null,
     amazonBuyBoxPrice: row.amazon_buy_box_price,
     amazonMyPrice: row.amazon_my_price,
     amazonWasPrice: row.amazon_was_price,
     amazonOfferCount: row.amazon_offer_count,
     amazonSalesRank: row.amazon_sales_rank,
-    amazonLookupStatus: (row.amazon_lookup_status as 'pending' | 'found' | 'not_found' | 'multiple' | 'error') || 'pending',
+    amazonLookupStatus:
+      (row.amazon_lookup_status as 'pending' | 'found' | 'not_found' | 'multiple' | 'error') ||
+      'pending',
     amazonLookupError: row.amazon_lookup_error,
     ebayMinPrice: row.ebay_min_price,
     ebayAvgPrice: row.ebay_avg_price,
@@ -109,7 +123,8 @@ function mapItemRow(row: PurchaseEvaluationItemRow): EvaluationItem {
     ebaySoldAvgPrice: row.ebay_sold_avg_price,
     ebaySoldMaxPrice: row.ebay_sold_max_price,
     ebaySoldCount: row.ebay_sold_count,
-    ebayLookupStatus: (row.ebay_lookup_status as 'pending' | 'found' | 'not_found' | 'error') || 'pending',
+    ebayLookupStatus:
+      (row.ebay_lookup_status as 'pending' | 'found' | 'not_found' | 'error') || 'pending',
     ebayLookupError: row.ebay_lookup_error,
     expectedSellPrice: row.expected_sell_price,
     cogPercent: row.cog_percent,
@@ -258,9 +273,12 @@ export class PurchaseEvaluatorService {
     const updateData: Partial<PurchaseEvaluationRow> = {};
 
     if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.defaultPlatform !== undefined) updateData.default_platform = updates.defaultPlatform;
-    if (updates.totalPurchasePrice !== undefined) updateData.total_purchase_price = updates.totalPurchasePrice;
-    if (updates.costAllocationMethod !== undefined) updateData.cost_allocation_method = updates.costAllocationMethod;
+    if (updates.defaultPlatform !== undefined)
+      updateData.default_platform = updates.defaultPlatform;
+    if (updates.totalPurchasePrice !== undefined)
+      updateData.total_purchase_price = updates.totalPurchasePrice;
+    if (updates.costAllocationMethod !== undefined)
+      updateData.cost_allocation_method = updates.costAllocationMethod;
     if (updates.status !== undefined) updateData.status = updates.status;
 
     const { data, error } = await this.supabase
@@ -510,7 +528,12 @@ export class PurchaseEvaluatorService {
 
       // Allocate costs after Amazon lookup (uses Buy Box / Was Price)
       if (evaluation.costAllocationMethod === 'proportional' && evaluation.totalPurchasePrice) {
-        await this.allocateCosts(userId, evaluationId, 'proportional', evaluation.totalPurchasePrice);
+        await this.allocateCosts(
+          userId,
+          evaluationId,
+          'proportional',
+          evaluation.totalPurchasePrice
+        );
       }
 
       // Phase 3: eBay lookups
@@ -573,9 +596,7 @@ export class PurchaseEvaluatorService {
 
       try {
         // Look up set in Brickset
-        const set = apiKey
-          ? await bricksetCache.getSet(item.setNumber, apiKey)
-          : null;
+        const set = apiKey ? await bricksetCache.getSet(item.setNumber, apiKey) : null;
 
         if (set) {
           await this.supabase
@@ -722,7 +743,8 @@ export class PurchaseEvaluatorService {
           updates.amazon_asin = asin;
           updates.amazon_asin_source = asinSource;
           updates.amazon_asin_confidence = asinConfidence;
-          updates.amazon_alternative_asins = alternatives.length > 0 ? JSON.parse(JSON.stringify(alternatives)) : null;
+          updates.amazon_alternative_asins =
+            alternatives.length > 0 ? JSON.parse(JSON.stringify(alternatives)) : null;
           updates.needs_review = asinConfidence === 'multiple';
           updates.amazon_lookup_status = 'found';
 
@@ -738,10 +760,7 @@ export class PurchaseEvaluatorService {
       }
 
       // Update item with ASIN data
-      await this.supabase
-        .from('purchase_evaluation_items')
-        .update(updates)
-        .eq('id', item.id);
+      await this.supabase.from('purchase_evaluation_items').update(updates).eq('id', item.id);
 
       onProgress(i + 1);
     }
@@ -779,7 +798,9 @@ export class PurchaseEvaluatorService {
         // Get competitive summary for wasPrice (much slower API - 35s between batches)
         // Only do this if we have a small number of ASINs to avoid very long waits
         if (asins.length <= 20) {
-          console.log(`[PurchaseEvaluator] Fetching competitive summary (wasPrice) for ${asins.length} ASINs...`);
+          console.log(
+            `[PurchaseEvaluator] Fetching competitive summary (wasPrice) for ${asins.length} ASINs...`
+          );
           const summaryData = await pricingClient.getCompetitiveSummary(asins);
 
           const summaryByAsin = new Map(summaryData.map((s) => [s.asin, s]));
@@ -794,7 +815,9 @@ export class PurchaseEvaluatorService {
             }
           }
         } else {
-          console.log(`[PurchaseEvaluator] Skipping competitive summary (${asins.length} ASINs would take too long)`);
+          console.log(
+            `[PurchaseEvaluator] Skipping competitive summary (${asins.length} ASINs would take too long)`
+          );
         }
       } catch (error) {
         console.error('[PurchaseEvaluator] Batch pricing lookup failed:', error);
@@ -837,11 +860,13 @@ export class PurchaseEvaluatorService {
             : await browseClient.searchLegoSetUsed(item.set_number);
 
         if (activeResults.itemSummaries && activeResults.itemSummaries.length > 0) {
-          const prices = activeResults.itemSummaries.map((listing) => {
-            const price = parseFloat(listing.price?.value || '0');
-            const shipping = parseFloat(listing.shippingOptions?.[0]?.shippingCost?.value || '0');
-            return price + shipping;
-          }).filter((p) => p > 0);
+          const prices = activeResults.itemSummaries
+            .map((listing) => {
+              const price = parseFloat(listing.price?.value || '0');
+              const shipping = parseFloat(listing.shippingOptions?.[0]?.shippingCost?.value || '0');
+              return price + shipping;
+            })
+            .filter((p) => p > 0);
 
           if (prices.length > 0) {
             updates.ebay_min_price = Math.min(...prices);
@@ -856,11 +881,7 @@ export class PurchaseEvaluatorService {
         await delay(1500);
 
         // Get sold listings (Finding API)
-        const soldResults = await findingClient.findCompletedItems(
-          item.set_number,
-          condition,
-          30
-        );
+        const soldResults = await findingClient.findCompletedItems(item.set_number, condition, 30);
 
         if (soldResults.soldCount > 0) {
           updates.ebay_sold_min_price = soldResults.minPrice;
@@ -886,10 +907,7 @@ export class PurchaseEvaluatorService {
         updates.ebay_lookup_error = error instanceof Error ? error.message : 'Unknown error';
       }
 
-      await this.supabase
-        .from('purchase_evaluation_items')
-        .update(updates)
-        .eq('id', item.id);
+      await this.supabase.from('purchase_evaluation_items').update(updates).eq('id', item.id);
 
       onProgress(i + 1);
     }

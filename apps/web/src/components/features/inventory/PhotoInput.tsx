@@ -231,9 +231,7 @@ export function PhotoInput() {
   // Update a single item field
   const updateItem = (id: string, field: keyof ExtractedItem, value: string | number) => {
     setExtractedItems((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
+      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -270,7 +268,9 @@ export function PhotoInput() {
     setIsCreating(true);
 
     // Prepare items for creation
-    const listingValue = sharedFields.listing_value ? parseFloat(sharedFields.listing_value) : undefined;
+    const listingValue = sharedFields.listing_value
+      ? parseFloat(sharedFields.listing_value)
+      : undefined;
     const itemsToCreate = extractedItems.map((item) => ({
       set_number: item.set_number,
       item_name: item.item_name || undefined,
@@ -457,9 +457,7 @@ export function PhotoInput() {
       <Card>
         <CardHeader>
           <CardTitle>Shared Fields</CardTitle>
-          <CardDescription>
-            These values will be applied to all items below
-          </CardDescription>
+          <CardDescription>These values will be applied to all items below</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Row 1: Purchase info */}
@@ -469,9 +467,7 @@ export function PhotoInput() {
               <Input
                 placeholder="e.g., eBay, Car Boot"
                 value={sharedFields.source}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, source: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, source: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -479,9 +475,7 @@ export function PhotoInput() {
               <Input
                 type="date"
                 value={sharedFields.purchase_date}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, purchase_date: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, purchase_date: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -512,9 +506,7 @@ export function PhotoInput() {
               <label className="text-sm font-medium">Status</label>
               <Select
                 value={sharedFields.status}
-                onValueChange={(value: string) =>
-                  setSharedFields((s) => ({ ...s, status: value }))
-                }
+                onValueChange={(value: string) => setSharedFields((s) => ({ ...s, status: value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
@@ -546,9 +538,7 @@ export function PhotoInput() {
               <Input
                 type="date"
                 value={sharedFields.listing_date}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, listing_date: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, listing_date: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -558,9 +548,7 @@ export function PhotoInput() {
                 step="0.01"
                 placeholder="0.00"
                 value={sharedFields.listing_value}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, listing_value: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, listing_value: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -581,9 +569,7 @@ export function PhotoInput() {
               <Input
                 placeholder="SKU reference"
                 value={sharedFields.sku}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, sku: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, sku: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -591,9 +577,7 @@ export function PhotoInput() {
               <Input
                 placeholder="Lot reference"
                 value={sharedFields.linked_lot}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, linked_lot: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, linked_lot: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -601,9 +585,7 @@ export function PhotoInput() {
               <Input
                 placeholder="e.g., B08XYZ1234"
                 value={sharedFields.amazon_asin}
-                onChange={(e) =>
-                  setSharedFields((s) => ({ ...s, amazon_asin: e.target.value }))
-                }
+                onChange={(e) => setSharedFields((s) => ({ ...s, amazon_asin: e.target.value }))}
               />
             </div>
           </div>
@@ -661,9 +643,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.set_number}
-                            onChange={(e) =>
-                              updateItem(item.id, 'set_number', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'set_number', e.target.value)}
                             placeholder="75192"
                             className="h-8"
                           />
@@ -671,9 +651,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.item_name}
-                            onChange={(e) =>
-                              updateItem(item.id, 'item_name', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'item_name', e.target.value)}
                             placeholder="Item name"
                             className="h-8"
                           />
@@ -683,9 +661,7 @@ export function PhotoInput() {
                             type="number"
                             step="0.01"
                             value={item.cost}
-                            onChange={(e) =>
-                              updateItem(item.id, 'cost', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'cost', e.target.value)}
                             placeholder="0.00"
                             className="h-8"
                           />
@@ -734,9 +710,7 @@ export function PhotoInput() {
                           <Input
                             type="date"
                             value={item.listing_date}
-                            onChange={(e) =>
-                              updateItem(item.id, 'listing_date', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'listing_date', e.target.value)}
                             className="h-8"
                           />
                         </TableCell>
@@ -745,9 +719,7 @@ export function PhotoInput() {
                             type="number"
                             step="0.01"
                             value={item.listing_value}
-                            onChange={(e) =>
-                              updateItem(item.id, 'listing_value', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'listing_value', e.target.value)}
                             placeholder="0.00"
                             className="h-8"
                           />
@@ -755,9 +727,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.sku}
-                            onChange={(e) =>
-                              updateItem(item.id, 'sku', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'sku', e.target.value)}
                             placeholder="SKU"
                             className="h-8"
                           />
@@ -765,9 +735,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.linked_lot}
-                            onChange={(e) =>
-                              updateItem(item.id, 'linked_lot', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'linked_lot', e.target.value)}
                             placeholder="Lot ref"
                             className="h-8"
                           />
@@ -775,9 +743,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.amazon_asin}
-                            onChange={(e) =>
-                              updateItem(item.id, 'amazon_asin', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'amazon_asin', e.target.value)}
                             placeholder="ASIN"
                             className="h-8"
                           />
@@ -785,9 +751,7 @@ export function PhotoInput() {
                         <TableCell>
                           <Input
                             value={item.notes}
-                            onChange={(e) =>
-                              updateItem(item.id, 'notes', e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, 'notes', e.target.value)}
                             placeholder="Notes"
                             className="h-8"
                           />
@@ -833,7 +797,9 @@ export function PhotoInput() {
         </Button>
         <Button
           onClick={handleCreate}
-          disabled={extractedItems.length === 0 || extractedItems.some((i) => !i.set_number) || isCreating}
+          disabled={
+            extractedItems.length === 0 || extractedItems.some((i) => !i.set_number) || isCreating
+          }
         >
           {isCreating ? (
             <>

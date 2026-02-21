@@ -1,12 +1,7 @@
 'use client';
 
 import { ExternalLink, Package, Truck } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -86,15 +81,14 @@ export function AmazonOffersModal({
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-start justify-between">
             <div>
-              <DialogTitle className="text-lg font-bold">
-                Amazon Offers: {setNumber}
-              </DialogTitle>
-              {setName && (
-                <p className="text-sm text-muted-foreground mt-1">{setName}</p>
-              )}
+              <DialogTitle className="text-lg font-bold">Amazon Offers: {setNumber}</DialogTitle>
+              {setName && <p className="text-sm text-muted-foreground mt-1">{setName}</p>}
             </div>
             <div className="flex gap-2">
-              <Badge variant="outline" className="font-mono text-xs border-amber-300 text-amber-700">
+              <Badge
+                variant="outline"
+                className="font-mono text-xs border-amber-300 text-amber-700"
+              >
                 {offers.length} offers
               </Badge>
               {asin && (
@@ -141,11 +135,12 @@ export function AmazonOffersModal({
                         index === 0 ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
                       }`}
                     >
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {index + 1}
-                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{index + 1}</td>
                       <td className="px-3 py-2">
-                        <div className="font-mono text-xs truncate max-w-[120px]" title={offer.sellerId}>
+                        <div
+                          className="font-mono text-xs truncate max-w-[120px]"
+                          title={offer.sellerId}
+                        >
                           {offer.sellerId.slice(0, 10)}...
                         </div>
                       </td>
@@ -177,7 +172,9 @@ export function AmazonOffersModal({
         {/* Footer */}
         {asin && (
           <div className="flex items-center justify-between border-t pt-4 flex-shrink-0 text-xs text-muted-foreground">
-            <span>ASIN: <span className="font-mono">{asin}</span></span>
+            <span>
+              ASIN: <span className="font-mono">{asin}</span>
+            </span>
             <span>Prices include VAT where applicable</span>
           </div>
         )}

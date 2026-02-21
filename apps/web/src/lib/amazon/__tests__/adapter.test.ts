@@ -116,7 +116,9 @@ describe('Amazon Adapter', () => {
       });
 
       it('should pass through unknown statuses as-is', () => {
-        const order = createMockOrder({ OrderStatus: 'UnknownStatus' as AmazonOrder['OrderStatus'] });
+        const order = createMockOrder({
+          OrderStatus: 'UnknownStatus' as AmazonOrder['OrderStatus'],
+        });
 
         const result = normalizeOrder(order);
 
@@ -151,17 +153,20 @@ describe('Amazon Adapter', () => {
         ['A1RKKUPIHCS9HS', 'Amazon ES', 'EUR'],
         ['ATVPDKIKX0DER', 'Amazon US', 'USD'],
         ['A2EUQ1WTGCTBG2', 'Amazon CA', 'CAD'],
-      ])('should handle %s marketplace correctly', (marketplaceId, expectedName, expectedCurrency) => {
-        const order = createMockOrder({
-          MarketplaceId: marketplaceId,
-          OrderTotal: undefined, // Force fallback to marketplace currency
-        });
+      ])(
+        'should handle %s marketplace correctly',
+        (marketplaceId, expectedName, expectedCurrency) => {
+          const order = createMockOrder({
+            MarketplaceId: marketplaceId,
+            OrderTotal: undefined, // Force fallback to marketplace currency
+          });
 
-        const result = normalizeOrder(order);
+          const result = normalizeOrder(order);
 
-        expect(result.marketplace).toBe(expectedName);
-        expect(result.currency).toBe(expectedCurrency);
-      });
+          expect(result.marketplace).toBe(expectedName);
+          expect(result.currency).toBe(expectedCurrency);
+        }
+      );
 
       it('should handle unknown marketplace ID', () => {
         const order = createMockOrder({ MarketplaceId: 'UNKNOWN123' });

@@ -62,10 +62,7 @@ export async function POST(request: NextRequest) {
     try {
       csvContent = await fs.readFile(csvPath, 'utf-8');
     } catch {
-      return NextResponse.json(
-        { error: `CSV file not found at ${csvPath}` },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: `CSV file not found at ${csvPath}` }, { status: 404 });
     }
 
     // Parse CSV
@@ -115,7 +112,9 @@ export async function POST(request: NextRequest) {
       barcodeData.push({ setNumber, ean: validEan, upc: validUpc });
     }
 
-    console.log(`[import-barcodes-csv] Parsed ${barcodeData.length} sets with barcode data from CSV`);
+    console.log(
+      `[import-barcodes-csv] Parsed ${barcodeData.length} sets with barcode data from CSV`
+    );
 
     // Get sets that need updating (missing EAN or UPC)
     // IMPORTANT: Supabase returns max 1000 rows by default, so we paginate
@@ -123,7 +122,12 @@ export async function POST(request: NextRequest) {
     const pageSize = 1000;
     let page = 0;
     let hasMore = true;
-    const setsToUpdate: Array<{ id: string; set_number: string; ean: string | null; upc: string | null }> = [];
+    const setsToUpdate: Array<{
+      id: string;
+      set_number: string;
+      ean: string | null;
+      upc: string | null;
+    }> = [];
 
     console.log(`[import-barcodes-csv] Fetching sets with missing barcodes (limit: ${limit})...`);
 
@@ -143,7 +147,9 @@ export async function POST(request: NextRequest) {
       hasMore = (data?.length ?? 0) === pageSize;
       page++;
 
-      console.log(`[import-barcodes-csv] Page ${page}: fetched ${data?.length ?? 0} sets, total: ${setsToUpdate.length}`);
+      console.log(
+        `[import-barcodes-csv] Page ${page}: fetched ${data?.length ?? 0} sets, total: ${setsToUpdate.length}`
+      );
     }
 
     // Trim to limit if we fetched more
@@ -230,7 +236,9 @@ export async function POST(request: NextRequest) {
 
       // Log progress
       if ((i + batchSize) % 1000 === 0 || i + batchSize >= updates.length) {
-        console.log(`[import-barcodes-csv] Progress: ${Math.min(i + batchSize, updates.length)}/${updates.length}`);
+        console.log(
+          `[import-barcodes-csv] Progress: ${Math.min(i + batchSize, updates.length)}/${updates.length}`
+        );
       }
     }
 

@@ -65,7 +65,7 @@ const BundleSchema = z.object({
 
 const BatchImportSchema = z.object({
   items: z.array(ImportItemSchema).default([]),
-  bundles: z.array(BundleSchema).default([]),  // Bundle groups: 1 purchase per bundle, N inventory items
+  bundles: z.array(BundleSchema).default([]), // Bundle groups: 1 purchase per bundle, N inventory items
   skip_items: z.array(SkipItemSchema).default([]), // Items to mark as skipped
   automated: z.boolean().optional().default(false),
   storage_location: z.string().optional().default('TBC'),
@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
               cost: bundle.total_cost,
               payment_method: bundle.payment_method,
               purchase_date: bundle.purchase_date,
-              short_description: `Bundle: ${bundle.items.map(i => i.set_number).join(', ')}`,
+              short_description: `Bundle: ${bundle.items.map((i) => i.set_number).join(', ')}`,
               description: `Bundle of ${bundle.items.length} sets from ${bundle.seller_username || bundle.source}`,
               reference: bundle.order_reference,
             })
@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
               error_message: bundlePurchaseError?.message || 'Failed to create bundle purchase',
               email_subject: bundle.email_subject,
               email_date: bundle.email_date,
-              item_name: bundle.items.map(i => i.set_name).join(', '),
+              item_name: bundle.items.map((i) => i.set_name).join(', '),
               cost: bundle.total_cost,
               seller_username: bundle.seller_username,
             });
@@ -386,12 +386,12 @@ export async function POST(request: NextRequest) {
           }
 
           // 2. Allocate costs proportionally by list_price, fallback to equal split
-          const allHaveListPrice = bundle.items.every(i => i.list_price != null);
+          const allHaveListPrice = bundle.items.every((i) => i.list_price != null);
           let allocatedCosts: number[];
 
           if (allHaveListPrice) {
             const totalListPrice = bundle.items.reduce((sum, i) => sum + (i.list_price || 0), 0);
-            allocatedCosts = bundle.items.map(i => {
+            allocatedCosts = bundle.items.map((i) => {
               const proportion = (i.list_price || 0) / totalListPrice;
               return Math.round(proportion * bundle.total_cost * 100) / 100;
             });
@@ -479,7 +479,7 @@ export async function POST(request: NextRequest) {
               error_message: 'Failed to create all inventory items in bundle',
               email_subject: bundle.email_subject,
               email_date: bundle.email_date,
-              item_name: bundle.items.map(i => i.set_name).join(', '),
+              item_name: bundle.items.map((i) => i.set_name).join(', '),
               cost: bundle.total_cost,
               seller_username: bundle.seller_username,
             });
@@ -503,7 +503,7 @@ export async function POST(request: NextRequest) {
             status: 'imported',
             email_subject: bundle.email_subject,
             email_date: bundle.email_date,
-            item_name: bundle.items.map(i => `${i.set_number} ${i.set_name}`).join(', '),
+            item_name: bundle.items.map((i) => `${i.set_number} ${i.set_name}`).join(', '),
             cost: bundle.total_cost,
             seller_username: bundle.seller_username,
           });
@@ -545,7 +545,7 @@ export async function POST(request: NextRequest) {
             error_message: err instanceof Error ? err.message : 'Unknown error',
             email_subject: bundle.email_subject,
             email_date: bundle.email_date,
-            item_name: bundle.items.map(i => i.set_name).join(', '),
+            item_name: bundle.items.map((i) => i.set_name).join(', '),
             cost: bundle.total_cost,
             seller_username: bundle.seller_username,
           });
@@ -600,12 +600,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Calculate totals
-      const totalEstimatedProfit = totalExpectedRevenue > 0
-        ? Math.round(totalExpectedRevenue * 0.85 - totalInvested)
-        : null;
-      const overallRoi = totalInvested > 0 && totalEstimatedProfit
-        ? Math.round((totalEstimatedProfit / totalInvested) * 100)
-        : null;
+      const totalEstimatedProfit =
+        totalExpectedRevenue > 0 ? Math.round(totalExpectedRevenue * 0.85 - totalInvested) : null;
+      const overallRoi =
+        totalInvested > 0 && totalEstimatedProfit
+          ? Math.round((totalEstimatedProfit / totalInvested) * 100)
+          : null;
 
       // If all items failed and nothing was skipped, return error
       if (created.length === 0 && failed.length > 0 && skipped.length === 0) {

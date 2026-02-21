@@ -132,7 +132,13 @@ export function BrickLinkUploadForm({ mode, initialData, onSuccess }: BrickLinkU
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={mode === 'edit' && initialData ? `/bricklink-uploads/${initialData.id}` : '/bricklink-uploads'}>
+            <Link
+              href={
+                mode === 'edit' && initialData
+                  ? `/bricklink-uploads/${initialData.id}`
+                  : '/bricklink-uploads'
+              }
+            >
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -292,8 +298,11 @@ export function BrickLinkUploadForm({ mode, initialData, onSuccess }: BrickLinkU
               {cost > 0 && (
                 <div className="rounded-lg border bg-muted/50 p-3">
                   <div className="text-sm text-muted-foreground">Calculated Margin</div>
-                  <div className={`text-lg font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {profit >= 0 ? '+' : ''}{profit.toFixed(2)} ({profitMargin}%)
+                  <div
+                    className={`text-lg font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    {profit >= 0 ? '+' : ''}
+                    {profit.toFixed(2)} ({profitMargin}%)
                   </div>
                 </div>
               )}
@@ -337,7 +346,13 @@ export function BrickLinkUploadForm({ mode, initialData, onSuccess }: BrickLinkU
         {/* Form Actions */}
         <div className="flex justify-end gap-4">
           <Button variant="outline" type="button" asChild>
-            <Link href={mode === 'edit' && initialData ? `/bricklink-uploads/${initialData.id}` : '/bricklink-uploads'}>
+            <Link
+              href={
+                mode === 'edit' && initialData
+                  ? `/bricklink-uploads/${initialData.id}`
+                  : '/bricklink-uploads'
+              }
+            >
               Cancel
             </Link>
           </Button>

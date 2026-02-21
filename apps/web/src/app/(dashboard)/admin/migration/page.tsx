@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle, AlertCircle, RefreshCw, Database, FileSpreadsheet } from 'lucide-react';
+import {
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Database,
+  FileSpreadsheet,
+} from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 
 interface ConnectionStatus {
@@ -252,10 +259,7 @@ export default function MigrationPage() {
               {isMigrating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Dry Run (Preview)
             </Button>
-            <Button
-              disabled={!connectionStatus?.sheets.connected || isMigrating}
-              variant="default"
-            >
+            <Button disabled={!connectionStatus?.sheets.connected || isMigrating} variant="default">
               Run Full Migration
             </Button>
           </div>

@@ -50,7 +50,11 @@ function createMockSupabaseClient() {
     from: vi.fn(() => mockQueryBuilder),
     _queryBuilder: mockQueryBuilder,
     setQueryResult: (result: { data?: any; error?: any; count?: number | null }) => {
-      queryResult = { data: result.data ?? null, error: result.error ?? null, count: result.count ?? null };
+      queryResult = {
+        data: result.data ?? null,
+        error: result.error ?? null,
+        count: result.count ?? null,
+      };
     },
     setSingleResult: (result: { data?: any; error?: any }) => {
       queryResult = { ...queryResult, data: result.data ?? null, error: result.error ?? null };
@@ -384,7 +388,11 @@ describe('BricksetCacheService', () => {
   describe('getSet', () => {
     it('should normalize set number without variant suffix', async () => {
       mockSupabase.setSingleResult({
-        data: { set_number: '75192-1', set_name: 'Test', last_fetched_at: new Date().toISOString() },
+        data: {
+          set_number: '75192-1',
+          set_name: 'Test',
+          last_fetched_at: new Date().toISOString(),
+        },
         error: null,
       });
 
@@ -410,7 +418,11 @@ describe('BricksetCacheService', () => {
       const staleDate = new Date();
       staleDate.setDate(staleDate.getDate() - 45);
       mockSupabase.setSingleResult({
-        data: { set_number: '75192-1', set_name: 'Stale Test', last_fetched_at: staleDate.toISOString() },
+        data: {
+          set_number: '75192-1',
+          set_name: 'Stale Test',
+          last_fetched_at: staleDate.toISOString(),
+        },
         error: null,
       });
 
@@ -443,7 +455,9 @@ describe('BricksetCacheService', () => {
       const { createServiceRoleClient } = await import('../../supabase/server');
       const mockServiceClient = createMockSupabaseClient();
       mockServiceClient._queryBuilder.upsert.mockResolvedValueOnce({ error: null });
-      vi.mocked(createServiceRoleClient).mockReturnValueOnce(mockServiceClient as unknown as SupabaseClient);
+      vi.mocked(createServiceRoleClient).mockReturnValueOnce(
+        mockServiceClient as unknown as SupabaseClient
+      );
 
       const result = await service.batchInsertSets(sets as any);
 
@@ -460,7 +474,9 @@ describe('BricksetCacheService', () => {
       const { createServiceRoleClient } = await import('../../supabase/server');
       const mockServiceClient = createMockSupabaseClient();
       mockServiceClient._queryBuilder.upsert.mockResolvedValue({ error: null });
-      vi.mocked(createServiceRoleClient).mockReturnValue(mockServiceClient as unknown as SupabaseClient);
+      vi.mocked(createServiceRoleClient).mockReturnValue(
+        mockServiceClient as unknown as SupabaseClient
+      );
 
       const result = await service.batchInsertSets(sets as any);
 
@@ -480,7 +496,9 @@ describe('BricksetCacheService', () => {
       mockServiceClient._queryBuilder.upsert.mockResolvedValueOnce({
         error: { message: 'Insert error' },
       });
-      vi.mocked(createServiceRoleClient).mockReturnValueOnce(mockServiceClient as unknown as SupabaseClient);
+      vi.mocked(createServiceRoleClient).mockReturnValueOnce(
+        mockServiceClient as unknown as SupabaseClient
+      );
 
       const result = await service.batchInsertSets(sets as any);
 

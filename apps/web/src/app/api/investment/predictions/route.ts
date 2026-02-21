@@ -33,7 +33,10 @@ export async function GET(request: NextRequest) {
 
     // Auth check
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -66,7 +69,9 @@ export async function GET(request: NextRequest) {
 
     let setFilter = supabase
       .from('brickset_sets')
-      .select('set_number, set_name, theme, year_from, pieces, uk_retail_price, retirement_status, expected_retirement_date, exclusivity_tier, image_url, has_amazon_listing')
+      .select(
+        'set_number, set_name, theme, year_from, pieces, uk_retail_price, retirement_status, expected_retirement_date, exclusivity_tier, image_url, has_amazon_listing'
+      )
       .in('set_number', setNums);
 
     if (theme) {
@@ -85,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     const { data: sets } = await setFilter;
     const setMap = new Map<string, Record<string, unknown>>();
-    for (const s of (sets ?? [])) {
+    for (const s of sets ?? []) {
       const r = s as unknown as Record<string, unknown>;
       setMap.set(r.set_number as string, r);
     }

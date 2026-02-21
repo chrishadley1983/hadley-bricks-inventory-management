@@ -21,8 +21,21 @@ vi.mock('../../brickowl', () => ({
     }
   },
   BrickOwlRateLimitError: class BrickOwlRateLimitError extends Error {
-    rateLimitInfo: { remaining: number; resetTime: Date; dailyLimit: number; dailyRemaining: number };
-    constructor(message: string, rateLimitInfo: { remaining: number; resetTime: Date; dailyLimit: number; dailyRemaining: number }) {
+    rateLimitInfo: {
+      remaining: number;
+      resetTime: Date;
+      dailyLimit: number;
+      dailyRemaining: number;
+    };
+    constructor(
+      message: string,
+      rateLimitInfo: {
+        remaining: number;
+        resetTime: Date;
+        dailyLimit: number;
+        dailyRemaining: number;
+      }
+    ) {
       super(message);
       this.rateLimitInfo = rateLimitInfo;
       this.name = 'BrickOwlRateLimitError';

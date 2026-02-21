@@ -157,7 +157,9 @@ export function DataTable<TData, TValue>({
             table.getIsAllPageRowsSelected() ||
             (table.getIsSomePageRowsSelected() && 'indeterminate')
           }
-          onCheckedChange={(value: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!value)}
+          onCheckedChange={(value: boolean | 'indeterminate') =>
+            table.toggleAllPageRowsSelected(!!value)
+          }
           aria-label="Select all"
         />
       ),
@@ -209,7 +211,10 @@ export function DataTable<TData, TValue>({
   }, [selectedRows, onRowSelectionChange]);
 
   const getColumnDisplayName = (columnId: string): string => {
-    return columnDisplayNames[columnId] || columnId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return (
+      columnDisplayNames[columnId] ||
+      columnId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    );
   };
 
   const pageSizeOptions = pagination?.pageSizeOptions || PAGE_SIZE_OPTIONS;
@@ -234,9 +239,7 @@ export function DataTable<TData, TValue>({
           {/* Bulk Actions - shown when rows are selected */}
           {enableRowSelection && selectedRows.length > 0 && (
             <div className="flex items-center gap-2 ml-2">
-              <span className="text-sm text-muted-foreground">
-                {selectedRows.length} selected
-              </span>
+              <span className="text-sm text-muted-foreground">{selectedRows.length} selected</span>
               {bulkActions?.onEdit && selectedRows.length === 1 && (
                 <Button
                   variant="outline"

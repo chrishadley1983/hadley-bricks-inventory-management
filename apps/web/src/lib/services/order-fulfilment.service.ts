@@ -293,9 +293,7 @@ export class OrderFulfilmentService {
       }
 
       // Filter out already-linked items
-      const availableMatches = (matches ?? []).filter(
-        (item) => !linkedInventoryIds.has(item.id)
-      );
+      const availableMatches = (matches ?? []).filter((item) => !linkedInventoryIds.has(item.id));
 
       if (availableMatches.length === 1) {
         return {
@@ -348,9 +346,7 @@ export class OrderFulfilmentService {
       }
 
       // Filter out already-linked items
-      const availableMatches = (matches ?? []).filter(
-        (item) => !linkedInventoryIds.has(item.id)
-      );
+      const availableMatches = (matches ?? []).filter((item) => !linkedInventoryIds.has(item.id));
 
       if (availableMatches.length === 1) {
         return {
@@ -418,7 +414,11 @@ export class OrderFulfilmentService {
 
           if (!inventoryId) {
             // Auto-match by ASIN or SKU
-            const match = await this.matchSingleItem(userId, orderItem, order.platform as 'amazon' | 'ebay');
+            const match = await this.matchSingleItem(
+              userId,
+              orderItem,
+              order.platform as 'amazon' | 'ebay'
+            );
             inventoryId = match.matchedInventoryId || undefined;
           }
 
@@ -445,12 +445,10 @@ export class OrderFulfilmentService {
 
             // Prorate shipping and fees for multi-item orders
             // For single item, use full amounts; for multi, divide equally (simple approach)
-            const itemShipping = orderItemCount === 1
-              ? (order.shipping ?? 0)
-              : (order.shipping ?? 0) / orderItemCount;
-            const itemFees = orderItemCount === 1
-              ? (order.fees ?? 0)
-              : (order.fees ?? 0) / orderItemCount;
+            const itemShipping =
+              orderItemCount === 1 ? (order.shipping ?? 0) : (order.shipping ?? 0) / orderItemCount;
+            const itemFees =
+              orderItemCount === 1 ? (order.fees ?? 0) : (order.fees ?? 0) / orderItemCount;
 
             // Gross = item price + shipping received
             const grossAmount = itemPrice + itemShipping;
@@ -504,7 +502,10 @@ export class OrderFulfilmentService {
             await amazonLinkingService.processShippedOrder(orderId, { mode: 'picklist' });
           } catch (linkingError) {
             // Log but don't fail the fulfillment - financials can be added later
-            console.error(`[OrderFulfilment] Amazon linking error for order ${orderId}:`, linkingError);
+            console.error(
+              `[OrderFulfilment] Amazon linking error for order ${orderId}:`,
+              linkingError
+            );
           }
         }
 

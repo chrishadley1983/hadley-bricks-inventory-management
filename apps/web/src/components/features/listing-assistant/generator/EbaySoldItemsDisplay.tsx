@@ -10,11 +10,7 @@ interface EbaySoldItemsDisplayProps {
 
 export function EbaySoldItemsDisplay({ items }: EbaySoldItemsDisplayProps) {
   if (!items || items.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-2">
-        No recent sold items found.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground py-2">No recent sold items found.</p>;
   }
 
   return (

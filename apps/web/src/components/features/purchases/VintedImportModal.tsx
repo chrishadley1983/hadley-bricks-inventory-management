@@ -34,7 +34,13 @@ import {
   type InventoryItemReviewData,
 } from './VintedInventoryReviewCard';
 
-type Step = 'upload' | 'processing' | 'review-purchases' | 'review-inventory' | 'importing' | 'complete';
+type Step =
+  | 'upload'
+  | 'processing'
+  | 'review-purchases'
+  | 'review-inventory'
+  | 'importing'
+  | 'complete';
 
 interface VintedImportModalProps {
   open: boolean;
@@ -255,16 +261,12 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
 
   // Handle purchase selection change
   const handlePurchaseSelectionChange = useCallback((index: number, selected: boolean) => {
-    setPurchases((prev) =>
-      prev.map((p) => (p.index === index ? { ...p, selected } : p))
-    );
+    setPurchases((prev) => prev.map((p) => (p.index === index ? { ...p, selected } : p)));
   }, []);
 
   // Handle purchase date change
   const handlePurchaseDateChange = useCallback((index: number, date: string) => {
-    setPurchases((prev) =>
-      prev.map((p) => (p.index === index ? { ...p, purchaseDate: date } : p))
-    );
+    setPurchases((prev) => prev.map((p) => (p.index === index ? { ...p, purchaseDate: date } : p)));
   }, []);
 
   // Move to inventory review
@@ -294,9 +296,7 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
   // Handle inventory item change
   const handleInventoryItemChange = useCallback((updated: InventoryItemReviewData) => {
     setInventoryItems((prev) =>
-      prev.map((item) =>
-        item.purchaseIndex === updated.purchaseIndex ? updated : item
-      )
+      prev.map((item) => (item.purchaseIndex === updated.purchaseIndex ? updated : item))
     );
   }, []);
 
@@ -309,9 +309,7 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
       // Build import data
       const selectedPurchases = purchases.filter((p) => p.selected);
       const importData = selectedPurchases.map((purchase) => {
-        const inventoryItem = inventoryItems.find(
-          (item) => item.purchaseIndex === purchase.index
-        );
+        const inventoryItem = inventoryItems.find((item) => item.purchaseIndex === purchase.index);
 
         return {
           title: purchase.title,
@@ -350,9 +348,7 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
   // Counts
   const selectedCount = purchases.filter((p) => p.selected).length;
   const inventoryToCreate = inventoryItems.filter((i) => !i.skipCreation).length;
-  const missingSetNumbers = inventoryItems.filter(
-    (i) => !i.skipCreation && !i.setNumber
-  ).length;
+  const missingSetNumbers = inventoryItems.filter((i) => !i.skipCreation && !i.setNumber).length;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -368,9 +364,12 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
           </DialogTitle>
           <DialogDescription>
             {step === 'upload' && 'Upload a screenshot of your Vinted purchases to import them'}
-            {step === 'processing' && 'Extracting purchase details and matching with Monzo transactions'}
-            {step === 'review-purchases' && `Found ${purchases.length} purchases. Select which ones to import.`}
-            {step === 'review-inventory' && `Configure inventory items for ${selectedCount} selected purchases`}
+            {step === 'processing' &&
+              'Extracting purchase details and matching with Monzo transactions'}
+            {step === 'review-purchases' &&
+              `Found ${purchases.length} purchases. Select which ones to import.`}
+            {step === 'review-inventory' &&
+              `Configure inventory items for ${selectedCount} selected purchases`}
             {step === 'importing' && 'Creating purchases and inventory items...'}
             {step === 'complete' && 'Your purchases have been imported successfully'}
           </DialogDescription>
@@ -433,15 +432,11 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
                   <p className="text-muted-foreground mb-2">
                     Paste, drag and drop, or click to browse
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    JPEG, PNG, WebP, GIF (max 10MB)
-                  </p>
+                  <p className="text-xs text-muted-foreground">JPEG, PNG, WebP, GIF (max 10MB)</p>
                 </div>
               )}
 
-              {error && (
-                <p className="mt-4 text-sm text-destructive text-center">{error}</p>
-              )}
+              {error && <p className="mt-4 text-sm text-destructive text-center">{error}</p>}
             </div>
           )}
 
@@ -451,19 +446,25 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
               <Loader2 className="h-12 w-12 mx-auto animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">
                 {syncMonzoMutation.isPending && 'Syncing Monzo transactions...'}
-                {!syncMonzoMutation.isPending && processScreenshot.isParsing && 'Extracting purchases from screenshot...'}
-                {!syncMonzoMutation.isPending && processScreenshot.isMatching && 'Matching with Monzo transactions...'}
-                {!syncMonzoMutation.isPending && processScreenshot.isCheckingDuplicates && 'Checking for duplicates...'}
+                {!syncMonzoMutation.isPending &&
+                  processScreenshot.isParsing &&
+                  'Extracting purchases from screenshot...'}
+                {!syncMonzoMutation.isPending &&
+                  processScreenshot.isMatching &&
+                  'Matching with Monzo transactions...'}
+                {!syncMonzoMutation.isPending &&
+                  processScreenshot.isCheckingDuplicates &&
+                  'Checking for duplicates...'}
               </p>
               <Progress
                 value={
                   syncMonzoMutation.isPending
                     ? 10
                     : processScreenshot.isParsing
-                    ? 40
-                    : processScreenshot.isMatching
-                    ? 70
-                    : 90
+                      ? 40
+                      : processScreenshot.isMatching
+                        ? 70
+                        : 90
                 }
                 className="mt-4 max-w-xs mx-auto"
               />
@@ -505,9 +506,7 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
           {step === 'importing' && (
             <div className="p-8 text-center">
               <Loader2 className="h-12 w-12 mx-auto animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">
-                Creating purchases and inventory items...
-              </p>
+              <p className="text-muted-foreground">Creating purchases and inventory items...</p>
             </div>
           )}
 
@@ -518,15 +517,18 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
               <div className="space-y-2 text-muted-foreground">
                 <p className="flex items-center justify-center gap-2">
                   <ShoppingCart className="h-4 w-4" />
-                  Created {importSummary.purchases} purchase{importSummary.purchases !== 1 ? 's' : ''}
+                  Created {importSummary.purchases} purchase
+                  {importSummary.purchases !== 1 ? 's' : ''}
                 </p>
                 <p className="flex items-center justify-center gap-2">
                   <Package className="h-4 w-4" />
-                  Created {importSummary.inventoryItems} inventory item{importSummary.inventoryItems !== 1 ? 's' : ''}
+                  Created {importSummary.inventoryItems} inventory item
+                  {importSummary.inventoryItems !== 1 ? 's' : ''}
                 </p>
                 {importSummary.skipped > 0 && (
                   <p className="text-sm">
-                    ({importSummary.skipped} inventory item{importSummary.skipped !== 1 ? 's' : ''} skipped)
+                    ({importSummary.skipped} inventory item{importSummary.skipped !== 1 ? 's' : ''}{' '}
+                    skipped)
                   </p>
                 )}
               </div>
@@ -605,9 +607,7 @@ export function VintedImportModal({ open, onOpenChange }: VintedImportModalProps
               >
                 Import More
               </Button>
-              <Button onClick={() => router.push('/purchases')}>
-                View Purchases
-              </Button>
+              <Button onClick={() => router.push('/purchases')}>View Purchases</Button>
             </>
           )}
         </DialogFooter>

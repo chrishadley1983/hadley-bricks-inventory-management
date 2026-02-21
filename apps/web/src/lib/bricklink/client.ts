@@ -110,7 +110,10 @@ export class BrickLinkClient {
    * RFC 3986 percent encoding
    */
   private percentEncode(str: string): string {
-    return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+    return encodeURIComponent(str).replace(
+      /[!'()*]/g,
+      (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+    );
   }
 
   /**
@@ -239,10 +242,7 @@ export class BrickLinkClient {
         throw new BrickLinkApiError('Request timeout', 408);
       }
 
-      throw new BrickLinkApiError(
-        error instanceof Error ? error.message : 'Unknown error',
-        500
-      );
+      throw new BrickLinkApiError(error instanceof Error ? error.message : 'Unknown error', 500);
     }
   }
 
@@ -298,9 +298,7 @@ export class BrickLinkClient {
     }
 
     if (params?.status) {
-      queryParams.status = Array.isArray(params.status)
-        ? params.status.join(',')
-        : params.status;
+      queryParams.status = Array.isArray(params.status) ? params.status.join(',') : params.status;
     }
 
     if (params?.filed !== undefined) {
@@ -309,7 +307,12 @@ export class BrickLinkClient {
 
     console.log('[BrickLinkClient.getOrders] Query params:', JSON.stringify(queryParams));
     const result = await this.request<BrickLinkOrderSummary[]>('GET', '/orders', queryParams);
-    console.log('[BrickLinkClient.getOrders] First order seller_name:', result[0]?.seller_name, 'buyer_name:', result[0]?.buyer_name);
+    console.log(
+      '[BrickLinkClient.getOrders] First order seller_name:',
+      result[0]?.seller_name,
+      'buyer_name:',
+      result[0]?.buyer_name
+    );
     return result;
   }
 
@@ -414,7 +417,11 @@ export class BrickLinkClient {
     // Endpoint: /items/{type}/{no}/price
     const endpoint = `/items/${params.type}/${encodeURIComponent(params.no)}/price`;
 
-    console.log('[BrickLinkClient.getPriceGuide] Fetching price guide for:', params.type, params.no);
+    console.log(
+      '[BrickLinkClient.getPriceGuide] Fetching price guide for:',
+      params.type,
+      params.no
+    );
     return this.request<BrickLinkPriceGuide>('GET', endpoint, queryParams);
   }
 

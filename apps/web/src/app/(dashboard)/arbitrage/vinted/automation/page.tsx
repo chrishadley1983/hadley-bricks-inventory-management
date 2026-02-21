@@ -57,9 +57,7 @@ export default function VintedAutomationPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Vinted Scanner Automation</h1>
-          <p className="text-muted-foreground">
-            Automated arbitrage scanning with notifications
-          </p>
+          <p className="text-muted-foreground">Automated arbitrage scanning with notifications</p>
         </div>
         <Button variant="outline" onClick={() => setConfigDialogOpen(true)}>
           <Settings className="mr-2 h-4 w-4" />
@@ -102,10 +100,7 @@ export default function VintedAutomationPage() {
       </Tabs>
 
       {/* Configuration Dialog */}
-      <ScannerConfigDialog
-        open={configDialogOpen}
-        onOpenChange={setConfigDialogOpen}
-      />
+      <ScannerConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
     </div>
   );
 }

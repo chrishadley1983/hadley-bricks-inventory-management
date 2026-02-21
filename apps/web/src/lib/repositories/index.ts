@@ -12,7 +12,6 @@ export type { PurchaseFilters } from './purchase.repository';
 export { OrderRepository } from './order.repository';
 export type { OrderFilters, OrderWithItems } from './order.repository';
 
-
 export { CredentialsRepository } from './credentials.repository';
 
 export { MileageRepository } from './mileage.repository';

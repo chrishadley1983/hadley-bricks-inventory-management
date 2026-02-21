@@ -223,13 +223,9 @@ export class CostAllocationService {
 
       if (oldRounded !== newRounded) {
         // Update the database
-        const table =
-          item.type === 'inventory_item' ? 'inventory_items' : 'bricklink_uploads';
+        const table = item.type === 'inventory_item' ? 'inventory_items' : 'bricklink_uploads';
 
-        await this.supabase
-          .from(table)
-          .update({ cost: item.newCost })
-          .eq('id', item.id);
+        await this.supabase.from(table).update({ cost: item.newCost }).eq('id', item.id);
 
         changes.push({
           id: item.id,

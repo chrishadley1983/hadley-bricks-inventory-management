@@ -62,7 +62,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Call Claude Vision to parse the screenshot
-    console.log(`[POST /api/purchases/parse-vinted-screenshot] Analyzing screenshot for user ${user.id}`);
+    console.log(
+      `[POST /api/purchases/parse-vinted-screenshot] Analyzing screenshot for user ${user.id}`
+    );
 
     const result = await sendMessageWithImagesForJSON<ParseVintedScreenshotResponse>(
       PARSE_VINTED_SCREENSHOT_SYSTEM_PROMPT,
@@ -90,10 +92,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error) {
       if (error.message.includes('ANTHROPIC_API_KEY')) {
-        return NextResponse.json(
-          { error: 'AI service not configured' },
-          { status: 503 }
-        );
+        return NextResponse.json({ error: 'AI service not configured' }, { status: 503 });
       }
 
       if (error.message.includes('rate limit')) {
@@ -105,7 +104,10 @@ export async function POST(request: NextRequest) {
 
       if (error.message.includes('Failed to parse')) {
         return NextResponse.json(
-          { error: 'Failed to parse screenshot. Please ensure the image clearly shows Vinted purchases.' },
+          {
+            error:
+              'Failed to parse screenshot. Please ensure the image clearly shows Vinted purchases.',
+          },
           { status: 422 }
         );
       }

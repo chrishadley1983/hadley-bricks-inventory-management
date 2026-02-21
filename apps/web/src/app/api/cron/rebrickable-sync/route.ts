@@ -72,14 +72,13 @@ export async function POST(request: NextRequest) {
       success: result.errors === 0,
     });
 
-    console.log(
-      `[Cron RebrickableSync] Complete in ${duration}ms:`,
-      JSON.stringify(result)
-    );
+    console.log(`[Cron RebrickableSync] Complete in ${duration}ms:`, JSON.stringify(result));
 
     await execution.complete(
       { inserted: result.inserted, updated: result.updated, themes: result.theme_map_size },
-      200, result.total_processed, result.errors
+      200,
+      result.total_processed,
+      result.errors
     );
 
     return NextResponse.json({
@@ -87,8 +86,7 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
-    const errorMsg =
-      error instanceof Error ? error.message : 'Unknown error';
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     const duration = Date.now() - startTime;
 
     console.error(`[Cron RebrickableSync] Failed after ${duration}ms:`, error);
@@ -102,10 +100,7 @@ export async function POST(request: NextRequest) {
         priority: 'high',
       });
     } catch (discordError) {
-      console.error(
-        '[Cron RebrickableSync] Failed to send Discord alert:',
-        discordError
-      );
+      console.error('[Cron RebrickableSync] Failed to send Discord alert:', discordError);
     }
 
     return NextResponse.json(

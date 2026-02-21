@@ -47,7 +47,7 @@ export class ResearchService {
 
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string,
+    private userId: string
   ) {
     this.configService = new MinifigConfigService(supabase);
     this.cacheService = new PriceCacheService(supabase);
@@ -65,7 +65,10 @@ export class ResearchService {
    * Research pricing for all (or specific) sync items.
    * Uses 4-step priority: Terapeak cache -> Live Terapeak -> BrickLink cache -> Live BrickLink.
    */
-  async researchAll(itemIds?: string[], options?: { onProgress?: SyncProgressCallback }): Promise<ResearchJobResult> {
+  async researchAll(
+    itemIds?: string[],
+    options?: { onProgress?: SyncProgressCallback }
+  ): Promise<ResearchJobResult> {
     const onProgress = options?.onProgress;
     const jobId = await this.jobTracker.start('MARKET_RESEARCH');
     const errors: Array<{ item?: string; error: string }> = [];
@@ -82,7 +85,11 @@ export class ResearchService {
       const config = await this.configService.getConfig();
       const pricingEngine = new PricingEngine(config);
 
-      await onProgress?.({ type: 'stage', stage: 'credentials', message: 'Checking credentials...' });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'credentials',
+        message: 'Checking credentials...',
+      });
       const client = await this.getBrickLinkClient();
 
       // Get items to research (must have a bricklink_id) — paginated (M1)
@@ -135,13 +142,14 @@ export class ResearchService {
           if (terapeakAvailable) {
             try {
               const scraper = this.getTerapeakScraper();
-              const terapeakResult = await scraper.research(
-                item.name || '',
-                bricklinkId,
-              );
+              const terapeakResult = await scraper.research(item.name || '', bricklinkId);
 
               if (terapeakResult) {
-                await this.cacheService.upsert(bricklinkId, terapeakResult, config.price_cache_months);
+                await this.cacheService.upsert(
+                  bricklinkId,
+                  terapeakResult,
+                  config.price_cache_months
+                );
                 await this.updateItemFromResearch(item, terapeakResult, pricingEngine, config);
                 itemsResearched++;
                 continue;
@@ -152,10 +160,15 @@ export class ResearchService {
                 console.warn('[Research] Terapeak session expired — disabling for rest of batch');
                 terapeakAvailable = false;
               } else if (isPlaywrightUnavailable(terapeakErr)) {
-                console.warn('[Research] Playwright unavailable — disabling Terapeak for this batch');
+                console.warn(
+                  '[Research] Playwright unavailable — disabling Terapeak for this batch'
+                );
                 terapeakAvailable = false;
               } else {
-                console.warn(`[Research] Terapeak error for ${bricklinkId}, falling back to BrickLink:`, terapeakErr);
+                console.warn(
+                  `[Research] Terapeak error for ${bricklinkId}, falling back to BrickLink:`,
+                  terapeakErr
+                );
               }
               // Fall through to BrickLink
             }
@@ -236,21 +249,30 @@ export class ResearchService {
     // Try Terapeak first
     try {
       const scraper = this.getTerapeakScraper();
-      const terapeakResult = await scraper.research(
-        item.name || '',
-        item.bricklink_id,
-      );
+      const terapeakResult = await scraper.research(item.name || '', item.bricklink_id);
 
       if (terapeakResult) {
-        await this.cacheService.upsert(item.bricklink_id, terapeakResult, config.price_cache_months);
-        await this.updateItemFromResearch(item as MinifigSyncItem, terapeakResult, pricingEngine, config);
+        await this.cacheService.upsert(
+          item.bricklink_id,
+          terapeakResult,
+          config.price_cache_months
+        );
+        await this.updateItemFromResearch(
+          item as MinifigSyncItem,
+          terapeakResult,
+          pricingEngine,
+          config
+        );
         return;
       }
     } catch (err) {
       if (err instanceof TerapeakSessionExpiredError || isPlaywrightUnavailable(err)) {
         console.warn('[ForceRefresh] Terapeak unavailable, falling back to BrickLink');
       } else {
-        console.warn(`[ForceRefresh] Terapeak error for ${item.bricklink_id}, falling back to BrickLink:`, err);
+        console.warn(
+          `[ForceRefresh] Terapeak error for ${item.bricklink_id}, falling back to BrickLink:`,
+          err
+        );
       }
     }
 
@@ -258,27 +280,17 @@ export class ResearchService {
     const client = await this.getBrickLinkClient();
     const result = await this.fetchBrickLinkData(item.bricklink_id, client);
 
-    await this.cacheService.upsert(
-      item.bricklink_id,
-      result,
-      config.price_cache_months,
-    );
+    await this.cacheService.upsert(item.bricklink_id, result, config.price_cache_months);
 
-    await this.updateItemFromResearch(
-      item as MinifigSyncItem,
-      result,
-      pricingEngine,
-      config,
-    );
+    await this.updateItemFromResearch(item as MinifigSyncItem, result, pricingEngine, config);
   }
 
   private async getBrickLinkClient(): Promise<BrickLinkClient> {
     const credentialsRepo = new CredentialsRepository(this.supabase);
-    const credentials =
-      await credentialsRepo.getCredentials<BrickLinkCredentials>(
-        this.userId,
-        'bricklink',
-      );
+    const credentials = await credentialsRepo.getCredentials<BrickLinkCredentials>(
+      this.userId,
+      'bricklink'
+    );
 
     if (!credentials) {
       throw new Error('BrickLink credentials not configured');
@@ -292,7 +304,7 @@ export class ResearchService {
    */
   private async fetchBrickLinkData(
     bricklinkId: string,
-    client: BrickLinkClient,
+    client: BrickLinkClient
   ): Promise<BrickLinkResearchResult> {
     const soldGuide = await this.callWithRetry(() =>
       client.getPriceGuide({
@@ -301,7 +313,7 @@ export class ResearchService {
         newOrUsed: 'U',
         guideType: 'sold',
         currencyCode: 'GBP',
-      }),
+      })
     );
 
     const avgSoldPrice = parseFloat(soldGuide.avg_price) || 0;
@@ -322,10 +334,7 @@ export class ResearchService {
    * Retry with exponential backoff on rate-limit errors (E4).
    * Up to 3 retries: 1s, 2s, 4s delays.
    */
-  private async callWithRetry<T>(
-    fn: () => Promise<T>,
-    maxRetries = 3,
-  ): Promise<T> {
+  private async callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -350,13 +359,11 @@ export class ResearchService {
     item: MinifigSyncItem,
     result: ResearchResult,
     pricingEngine: PricingEngine,
-    _config: MinifigSyncConfig,
+    _config: MinifigSyncConfig
   ): Promise<void> {
     // Use conservative defaults when BrickLink data has no sell-through/shipping info (M8)
-    const avgShipping =
-      result.source === 'terapeak' ? result.avgShipping : 1.50;
-    const sellThroughRate =
-      result.source === 'terapeak' ? result.sellThroughRate : 50;
+    const avgShipping = result.source === 'terapeak' ? result.avgShipping : 1.5;
+    const sellThroughRate = result.source === 'terapeak' ? result.sellThroughRate : 50;
 
     const meetsThreshold = pricingEngine.evaluateThreshold({
       soldCount: result.soldCount,
@@ -378,8 +385,7 @@ export class ResearchService {
         bricqerPrice: Number(item.bricqer_price),
       });
 
-      const thresholds =
-        pricingEngine.calculateBestOfferThresholds(recommendedPrice);
+      const thresholds = pricingEngine.calculateBestOfferThresholds(recommendedPrice);
       autoAccept = thresholds.autoAccept;
       autoDecline = thresholds.autoDecline;
     }
@@ -404,27 +410,17 @@ export class ResearchService {
     item: MinifigSyncItem,
     cached: MinifigPriceCache,
     pricingEngine: PricingEngine,
-    _config: MinifigSyncConfig,
+    _config: MinifigSyncConfig
   ): Promise<void> {
     const isTerapeak = cached.source === 'terapeak';
 
-    const avgSoldPrice = Number(
-      isTerapeak
-        ? cached.terapeak_avg_sold_price
-        : cached.bricklink_avg_sold_price,
-    ) || 0;
-    const soldCount = Number(
-      isTerapeak
-        ? cached.terapeak_sold_count
-        : cached.bricklink_sold_count,
-    ) || 0;
+    const avgSoldPrice =
+      Number(isTerapeak ? cached.terapeak_avg_sold_price : cached.bricklink_avg_sold_price) || 0;
+    const soldCount =
+      Number(isTerapeak ? cached.terapeak_sold_count : cached.bricklink_sold_count) || 0;
     // Use conservative defaults when BrickLink data has no sell-through/shipping info (M8)
-    const avgShipping = isTerapeak
-      ? Number(cached.terapeak_avg_shipping) || 0
-      : 1.50;
-    const sellThroughRate = isTerapeak
-      ? Number(cached.terapeak_sell_through_rate) || 0
-      : 50;
+    const avgShipping = isTerapeak ? Number(cached.terapeak_avg_shipping) || 0 : 1.5;
+    const sellThroughRate = isTerapeak ? Number(cached.terapeak_sell_through_rate) || 0 : 50;
     const maxSoldPrice = Number(cached.terapeak_max_sold_price) || avgSoldPrice;
 
     const meetsThreshold = pricingEngine.evaluateThreshold({
@@ -445,8 +441,7 @@ export class ResearchService {
         bricqerPrice: Number(item.bricqer_price),
       });
 
-      const thresholds =
-        pricingEngine.calculateBestOfferThresholds(recommendedPrice);
+      const thresholds = pricingEngine.calculateBestOfferThresholds(recommendedPrice);
       autoAccept = thresholds.autoAccept;
       autoDecline = thresholds.autoDecline;
     }

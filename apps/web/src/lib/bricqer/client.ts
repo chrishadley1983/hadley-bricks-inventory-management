@@ -178,10 +178,14 @@ export class BricqerClient {
           // Cap wait at 5 minutes for serverless environments
           const cappedWaitMs = Math.min(waitMs, 5 * 60 * 1000);
           if (waitMs > cappedWaitMs) {
-            console.log(`[Bricqer] Rate limited for ${Math.round(waitMs / 1000)}s — too long to wait, throwing`);
+            console.log(
+              `[Bricqer] Rate limited for ${Math.round(waitMs / 1000)}s — too long to wait, throwing`
+            );
             throw error;
           }
-          console.log(`[Bricqer] Rate limited. Waiting ${Math.round(cappedWaitMs / 1000)}s until reset (rate limit wait ${rateLimitWaits}/${maxRateLimitWaits})`);
+          console.log(
+            `[Bricqer] Rate limited. Waiting ${Math.round(cappedWaitMs / 1000)}s until reset (rate limit wait ${rateLimitWaits}/${maxRateLimitWaits})`
+          );
           await this.sleep(cappedWaitMs);
           continue;
         }
@@ -192,7 +196,9 @@ export class BricqerClient {
           break;
         }
         const delay = BASE_RETRY_DELAY * Math.pow(2, errorRetries - 1);
-        console.log(`[Bricqer] Retrying request in ${delay}ms (attempt ${errorRetries}/${MAX_RETRIES})`);
+        console.log(
+          `[Bricqer] Retrying request in ${delay}ms (attempt ${errorRetries}/${MAX_RETRIES})`
+        );
         await this.sleep(delay);
       }
     }
@@ -298,8 +304,11 @@ export class BricqerClient {
     // If we have fewer than 5 remaining requests, wait for the reset
     if (remaining <= 5) {
       const waitMs = Math.max(0, resetTime.getTime() - Date.now()) + 1000; // +1s buffer
-      if (waitMs > 0 && waitMs < 120000) { // Cap at 2 minutes to avoid infinite waits
-        console.log(`[Bricqer] Rate limit low (${remaining} remaining). Waiting ${Math.round(waitMs / 1000)}s for reset...`);
+      if (waitMs > 0 && waitMs < 120000) {
+        // Cap at 2 minutes to avoid infinite waits
+        console.log(
+          `[Bricqer] Rate limit low (${remaining} remaining). Waiting ${Math.round(waitMs / 1000)}s for reset...`
+        );
         await this.sleep(waitMs);
       }
     }
@@ -366,9 +375,7 @@ export class BricqerClient {
     const queryParams: Record<string, string | number | boolean | undefined> = {};
 
     if (params?.status) {
-      queryParams.status = Array.isArray(params.status)
-        ? params.status.join(',')
-        : params.status;
+      queryParams.status = Array.isArray(params.status) ? params.status.join(',') : params.status;
     }
 
     if (params?.payment_status) {
@@ -434,9 +441,7 @@ export class BricqerClient {
 
     // Handle status (can be string or array)
     if (params.status) {
-      result.status = Array.isArray(params.status)
-        ? params.status.join(',')
-        : params.status;
+      result.status = Array.isArray(params.status) ? params.status.join(',') : params.status;
     }
     if (params.payment_status) result.payment_status = params.payment_status;
     if (params.created_after) result.created_after = params.created_after;
@@ -453,7 +458,9 @@ export class BricqerClient {
    * Get all orders with pagination
    * Uses page-based pagination (page=1, page=2, etc.) with limit=100 per page
    */
-  async getAllOrders(params?: Omit<BricqerOrderListParams, 'limit' | 'offset' | 'page'>): Promise<BricqerOrder[]> {
+  async getAllOrders(
+    params?: Omit<BricqerOrderListParams, 'limit' | 'offset' | 'page'>
+  ): Promise<BricqerOrder[]> {
     const allOrders: BricqerOrder[] = [];
     let page = 1;
     const limit = 100;
@@ -573,9 +580,7 @@ export class BricqerClient {
   /**
    * Get inventory items (paginated)
    */
-  async getInventoryItems(
-    params?: BricqerInventoryListParams
-  ): Promise<BricqerInventoryItem[]> {
+  async getInventoryItems(params?: BricqerInventoryListParams): Promise<BricqerInventoryItem[]> {
     const response = await this.request<
       BricqerPaginatedResponse<BricqerInventoryItem> | BricqerInventoryItem[]
     >('/inventory/item/', {
@@ -686,9 +691,9 @@ export class BricqerClient {
    * Get all storage locations
    */
   async getStorageLocations(): Promise<BricqerStorage[]> {
-    const response = await this.request<BricqerStorage[] | BricqerPaginatedResponse<BricqerStorage>>(
-      '/inventory/storage/'
-    );
+    const response = await this.request<
+      BricqerStorage[] | BricqerPaginatedResponse<BricqerStorage>
+    >('/inventory/storage/');
 
     if (Array.isArray(response)) {
       return response;
@@ -734,12 +739,11 @@ export class BricqerClient {
    * Get purchases
    */
   async getPurchases(limit?: number): Promise<BricqerPurchase[]> {
-    const response = await this.request<BricqerPurchase[] | BricqerPaginatedResponse<BricqerPurchase>>(
-      '/inventory/purchase/',
-      {
-        params: limit ? { limit } : undefined,
-      }
-    );
+    const response = await this.request<
+      BricqerPurchase[] | BricqerPaginatedResponse<BricqerPurchase>
+    >('/inventory/purchase/', {
+      params: limit ? { limit } : undefined,
+    });
 
     if (Array.isArray(response)) {
       return response;

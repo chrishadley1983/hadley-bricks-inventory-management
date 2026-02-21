@@ -50,10 +50,7 @@ function deduplicateTransactions(transactions: AmazonTransactionRow[]): AmazonTr
       transactionMap.set(key, tx);
     } else {
       // Prefer RELEASED over DEFERRED
-      if (
-        tx.transaction_status === 'RELEASED' &&
-        existing.transaction_status === 'DEFERRED'
-      ) {
+      if (tx.transaction_status === 'RELEASED' && existing.transaction_status === 'DEFERRED') {
         transactionMap.set(key, tx);
       }
       // If both are same status, keep the more recent one
@@ -132,7 +129,8 @@ export class AmazonFeeReconciliationService {
       while (hasMore) {
         let query = this.supabase
           .from('inventory_items')
-          .select(`
+          .select(
+            `
             id,
             set_number,
             sold_order_id,
@@ -141,7 +139,8 @@ export class AmazonFeeReconciliationService {
             sold_fees_amount,
             sold_net_amount,
             sold_postage_received
-          `)
+          `
+          )
           .eq('user_id', userId)
           .eq('status', 'SOLD')
           .eq('sold_platform', 'amazon')
@@ -156,7 +155,9 @@ export class AmazonFeeReconciliationService {
         const { data, error: fetchError } = await query;
 
         if (fetchError) {
-          result.errors.push(`Failed to fetch inventory items page ${page + 1}: ${fetchError.message}`);
+          result.errors.push(
+            `Failed to fetch inventory items page ${page + 1}: ${fetchError.message}`
+          );
           return result;
         }
 
@@ -165,7 +166,9 @@ export class AmazonFeeReconciliationService {
         page++;
       }
 
-      console.log(`[AmazonFeeReconciliation] Fetched ${itemsToReconcile.length} total inventory items across ${page} pages`);
+      console.log(
+        `[AmazonFeeReconciliation] Fetched ${itemsToReconcile.length} total inventory items across ${page} pages`
+      );
 
       if (!itemsToReconcile || itemsToReconcile.length === 0) {
         result.success = true;
@@ -177,7 +180,9 @@ export class AmazonFeeReconciliationService {
       // Get the sold_order_ids - these could be either:
       // 1. Internal UUIDs (from new orders that went through the fulfilment flow)
       // 2. Amazon order IDs directly (from legacy/imported data)
-      const soldOrderIds = [...new Set(itemsToReconcile.map(item => item.sold_order_id).filter(Boolean))];
+      const soldOrderIds = [
+        ...new Set(itemsToReconcile.map((item) => item.sold_order_id).filter(Boolean)),
+      ];
 
       // Separate UUIDs from Amazon order IDs (Amazon order IDs are like "206-1234567-1234567")
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -231,7 +236,8 @@ export class AmazonFeeReconciliationService {
         const batch = amazonOrderIds.slice(i, i + BATCH_SIZE);
         const { data: transactions, error: txError } = await this.supabase
           .from('amazon_transactions')
-          .select(`
+          .select(
+            `
             amazon_order_id,
             transaction_type,
             transaction_status,
@@ -248,13 +254,16 @@ export class AmazonFeeReconciliationService {
             other_fees,
             quantity,
             asin
-          `)
+          `
+          )
           .eq('user_id', userId)
           .in('transaction_type', ['Shipment', 'Sale'])
           .in('amazon_order_id', batch);
 
         if (txError) {
-          result.errors.push(`Failed to fetch transactions batch ${i / BATCH_SIZE + 1}: ${txError.message}`);
+          result.errors.push(
+            `Failed to fetch transactions batch ${i / BATCH_SIZE + 1}: ${txError.message}`
+          );
           continue;
         }
 
@@ -263,12 +272,16 @@ export class AmazonFeeReconciliationService {
         }
       }
 
-      console.log(`[AmazonFeeReconciliation] Fetched ${allTransactions.length} transactions for ${amazonOrderIds.length} orders`);
+      console.log(
+        `[AmazonFeeReconciliation] Fetched ${allTransactions.length} transactions for ${amazonOrderIds.length} orders`
+      );
 
       // Deduplicate transactions - prefer RELEASED over DEFERRED for same order+type
       // This prevents double-counting when both DEFERRED and RELEASED exist for the same sale
       const dedupedTransactions = deduplicateTransactions(allTransactions);
-      console.log(`[AmazonFeeReconciliation] After deduplication: ${dedupedTransactions.length} transactions`);
+      console.log(
+        `[AmazonFeeReconciliation] After deduplication: ${dedupedTransactions.length} transactions`
+      );
 
       // Create a map of Amazon order ID to transaction data
       // For multi-item orders, we might have multiple transactions per order
@@ -314,14 +327,23 @@ export class AmazonFeeReconciliationService {
           const tx = orderTransactions[0];
           netAmount = tx.net_amount ?? tx.total_amount ?? 0;
           totalFees = tx.total_fees ?? 0;
-          grossAmount = tx.gross_sales_amount ?? (netAmount + totalFees);
+          grossAmount = tx.gross_sales_amount ?? netAmount + totalFees;
           shippingCredit = tx.shipping_credit ?? 0;
         } else {
           // Multiple transactions - sum them all (could be partial shipments)
-          netAmount = orderTransactions.reduce((sum, tx) => sum + (tx.net_amount ?? tx.total_amount ?? 0), 0);
+          netAmount = orderTransactions.reduce(
+            (sum, tx) => sum + (tx.net_amount ?? tx.total_amount ?? 0),
+            0
+          );
           totalFees = orderTransactions.reduce((sum, tx) => sum + (tx.total_fees ?? 0), 0);
-          grossAmount = orderTransactions.reduce((sum, tx) => sum + (tx.gross_sales_amount ?? 0), 0);
-          shippingCredit = orderTransactions.reduce((sum, tx) => sum + (tx.shipping_credit ?? 0), 0);
+          grossAmount = orderTransactions.reduce(
+            (sum, tx) => sum + (tx.gross_sales_amount ?? 0),
+            0
+          );
+          shippingCredit = orderTransactions.reduce(
+            (sum, tx) => sum + (tx.shipping_credit ?? 0),
+            0
+          );
 
           // If gross wasn't calculated in transactions, derive it
           if (grossAmount === 0) {
@@ -347,7 +369,9 @@ export class AmazonFeeReconciliationService {
         }
 
         result.itemsUpdated++;
-        console.log(`[AmazonFeeReconciliation] Updated ${item.set_number}: fees=${totalFees}, net=${netAmount}`);
+        console.log(
+          `[AmazonFeeReconciliation] Updated ${item.set_number}: fees=${totalFees}, net=${netAmount}`
+        );
       }
 
       result.success = result.errors.length === 0;
@@ -368,13 +392,15 @@ export class AmazonFeeReconciliationService {
     // Find items missing fee data
     const { data: items } = await this.supabase
       .from('inventory_items')
-      .select(`
+      .select(
+        `
         id,
         set_number,
         sold_order_id,
         sold_price,
         sold_net_amount
-      `)
+      `
+      )
       .eq('user_id', userId)
       .eq('status', 'SOLD')
       .eq('sold_platform', 'amazon')
@@ -387,7 +413,7 @@ export class AmazonFeeReconciliationService {
     }
 
     // Get sold_order_ids - could be UUIDs or direct Amazon order IDs
-    const soldOrderIds = [...new Set(items.map(i => i.sold_order_id).filter(Boolean))];
+    const soldOrderIds = [...new Set(items.map((i) => i.sold_order_id).filter(Boolean))];
 
     // Separate UUIDs from direct Amazon order IDs
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -427,13 +453,17 @@ export class AmazonFeeReconciliationService {
     const amazonOrderIds = [...new Set(Array.from(orderMap.values()))];
     const { data: transactions } = await this.supabase
       .from('amazon_transactions')
-      .select('amazon_order_id, transaction_type, transaction_status, posted_date, net_amount, total_fees, gross_sales_amount, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee, shipping_credit, other_fees, quantity, asin')
+      .select(
+        'amazon_order_id, transaction_type, transaction_status, posted_date, net_amount, total_fees, gross_sales_amount, total_amount, referral_fee, fba_fulfillment_fee, fba_per_unit_fee, fba_weight_fee, shipping_credit, other_fees, quantity, asin'
+      )
       .eq('user_id', userId)
       .in('transaction_type', ['Shipment', 'Sale'])
       .in('amazon_order_id', amazonOrderIds);
 
     // Deduplicate transactions before processing
-    const dedupedTransactions = deduplicateTransactions((transactions ?? []) as AmazonTransactionRow[]);
+    const dedupedTransactions = deduplicateTransactions(
+      (transactions ?? []) as AmazonTransactionRow[]
+    );
 
     const txMap = new Map<string, { net: number; fees: number; gross: number }>();
     for (const tx of dedupedTransactions) {

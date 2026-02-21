@@ -7,11 +7,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  KeepaClient,
-  type KeepaProduct,
-  type KeepaImportResult,
-} from './keepa-client';
+import { KeepaClient, type KeepaProduct, type KeepaImportResult } from './keepa-client';
 
 export interface KeepaImportOptions {
   /** Specific ASINs to import */
@@ -74,7 +70,9 @@ export class KeepaImportService {
         const setNum = asinToSetNum.get(asin);
         return !setNum || !alreadyImported.has(setNum);
       });
-      console.log(`[KeepaImport] Skipping ${beforeCount - asins.length} ASINs with existing price data, ${asins.length} remaining`);
+      console.log(
+        `[KeepaImport] Skipping ${beforeCount - asins.length} ASINs with existing price data, ${asins.length} remaining`
+      );
     }
 
     // Process in batches of 10 (Keepa max per request)
@@ -215,7 +213,7 @@ export class KeepaImportService {
         continue;
       }
 
-      for (const row of (data ?? [])) {
+      for (const row of data ?? []) {
         const record = row as unknown as Record<string, unknown>;
         const asin = record.amazon_asin as string;
         const setNum = record.set_number as string;
@@ -386,9 +384,8 @@ export class KeepaImportService {
         return {
           asin: product.asin,
           snapshots_imported: imported,
-          date_range: imported > 0
-            ? { from: snapshots[0].date, to: snapshots[imported - 1].date }
-            : null,
+          date_range:
+            imported > 0 ? { from: snapshots[0].date, to: snapshots[imported - 1].date } : null,
           error: error.message,
         };
       }

@@ -26,7 +26,7 @@ export class PriceCacheService {
    */
   async lookupBySource(
     bricklinkId: string,
-    source: 'terapeak' | 'bricklink',
+    source: 'terapeak' | 'bricklink'
   ): Promise<MinifigPriceCache | null> {
     const { data } = await this.supabase
       .from('minifig_price_cache')
@@ -57,11 +57,7 @@ export class PriceCacheService {
    * Upsert a cache entry from research results.
    * Calculates expires_at as now + cacheMonths.
    */
-  async upsert(
-    bricklinkId: string,
-    result: ResearchResult,
-    cacheMonths: number,
-  ): Promise<void> {
+  async upsert(bricklinkId: string, result: ResearchResult, cacheMonths: number): Promise<void> {
     const now = new Date();
     const expiresAt = new Date(now);
     expiresAt.setMonth(expiresAt.getMonth() + cacheMonths);
@@ -133,9 +129,6 @@ export class PriceCacheService {
    * Delete a cache entry (for force-refresh).
    */
   async invalidate(bricklinkId: string): Promise<void> {
-    await this.supabase
-      .from('minifig_price_cache')
-      .delete()
-      .eq('bricklink_id', bricklinkId);
+    await this.supabase.from('minifig_price_cache').delete().eq('bricklink_id', bricklinkId);
   }
 }

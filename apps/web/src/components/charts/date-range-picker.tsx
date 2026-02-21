@@ -170,7 +170,11 @@ export function DateRangePicker({
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
             mode="range"
-            selected={dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined}
+            selected={
+              dateRange.from && dateRange.to
+                ? { from: dateRange.from, to: dateRange.to }
+                : undefined
+            }
             onSelect={handleDateSelect}
             numberOfMonths={2}
           />
