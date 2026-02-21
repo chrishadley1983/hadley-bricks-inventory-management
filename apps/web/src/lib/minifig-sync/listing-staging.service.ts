@@ -13,7 +13,6 @@ import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.s
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
 import { ListingGenerationService } from '@/lib/ebay/listing-generation.service';
 import type { AIGeneratedListing } from '@/lib/ebay/listing-creation.types';
-import { RebrickableApiClient } from '@/lib/rebrickable';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
 import { buildSku } from './types';
@@ -397,30 +396,33 @@ export class ListingStagingService {
   }
 
   /**
-   * Source up to 4 images from Brave Search, BrickLink, Rebrickable, and Bricqer.
+   * Source up to 3 images: BrickLink catalogue + 2 Brave photos (front + back).
    * Serverless-compatible (HTTP APIs only, no Playwright).
    */
   private async sourceImagesServerless(
     bricklinkId: string,
     name?: string | null,
-    bricqerImageUrl?: string | null
+    _bricqerImageUrl?: string | null
   ): Promise<SourcedImage[]> {
     const images: SourcedImage[] = [];
-    const MAX_IMAGES = 4;
-    const MAX_BRAVE_IMAGES = 3;
 
-    // 1. Brave Image Search — three queries for front, back, and alternate views
+    // 1. BrickLink catalogue image (always first — reliable, consistent)
+    images.push({
+      url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
+      source: 'bricklink',
+      type: 'stock',
+    });
+
+    // 2. Brave Image Search — 2 queries (front + back) for 2 diverse photos
     const braveApiKey = process.env.BRAVE_API_KEY;
-    if (braveApiKey && images.length < MAX_IMAGES) {
+    if (braveApiKey) {
       const usedDomains = new Set<string>();
       const braveQueries = [
-        `LEGO ${name || ''} ${bricklinkId} minifigure front -site:ebay.com -site:ebay.co.uk`,
-        `LEGO ${name || ''} ${bricklinkId} minifigure back -site:ebay.com -site:ebay.co.uk`,
-        `LEGO ${bricklinkId} minifig -site:ebay.com -site:ebay.co.uk`,
+        `LEGO ${name || ''} ${bricklinkId} minifigure front`,
+        `LEGO ${name || ''} ${bricklinkId} minifigure back`,
       ];
 
       for (const query of braveQueries) {
-        if (images.length >= MAX_BRAVE_IMAGES) break;
         try {
           const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=10&safesearch=off`;
           const response = await fetch(url, {
@@ -432,11 +434,10 @@ export class ListingStagingService {
             const results = data.results ?? [];
 
             for (const result of results) {
-              if (images.length >= MAX_BRAVE_IMAGES) break;
               const imageUrl = result.properties?.url || result.thumbnail?.src;
               if (!imageUrl) continue;
-              // Skip eBay, BrickLink, and Rebrickable URLs (catalogue dupes)
-              if (/ebay|bricklink|rebrickable/i.test(imageUrl)) continue;
+              // Skip eBay and BrickLink (we already have the BrickLink catalogue image)
+              if (/ebay|bricklink/i.test(imageUrl)) continue;
               // Skip tiny thumbnails
               const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
               if (w > 0 && w < 200) continue;
@@ -446,12 +447,11 @@ export class ListingStagingService {
                 if (usedDomains.has(domain)) continue;
                 usedDomains.add(domain);
               } catch {
-                // Invalid URL — skip
                 continue;
               }
 
               images.push({ url: imageUrl, source: 'brave', type: 'sourced' });
-              break; // One image per query for front/back diversity
+              break; // One image per query
             }
           }
         } catch (err) {
@@ -463,46 +463,6 @@ export class ListingStagingService {
       }
     }
 
-    // 2. BrickLink catalogue image (static URL, always available)
-    const hasBrickLink = images.length < MAX_IMAGES;
-    if (hasBrickLink) {
-      images.push({
-        url: `https://img.bricklink.com/ItemImage/MN/0/${bricklinkId}.png`,
-        source: 'bricklink',
-        type: 'stock',
-      });
-    }
-
-    // 3. Rebrickable catalogue image — skip if BrickLink already added
-    //    (both render the same front-view catalogue image)
-    if (!hasBrickLink && images.length < MAX_IMAGES) {
-      const rebrickableApiKey = process.env.REBRICKABLE_API_KEY;
-      if (rebrickableApiKey) {
-        try {
-          const client = new RebrickableApiClient(rebrickableApiKey);
-          const minifig = await client.getMinifig(bricklinkId);
-          if (minifig.set_img_url) {
-            images.push({
-              url: minifig.set_img_url,
-              source: 'rebrickable',
-              type: 'stock',
-            });
-          }
-        } catch {
-          // Rebrickable lookup failed — continue without
-        }
-      }
-    }
-
-    // 4. Bricqer stored image
-    if (images.length < MAX_IMAGES && bricqerImageUrl) {
-      images.push({
-        url: bricqerImageUrl,
-        source: 'bricqer',
-        type: 'original',
-      });
-    }
-
-    return images.slice(0, MAX_IMAGES);
+    return images;
   }
 }
