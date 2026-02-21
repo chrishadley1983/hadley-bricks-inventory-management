@@ -11,8 +11,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Upload, ClipboardPaste, Sparkles } from 'lucide-react';
-import { enhanceMinifigPhoto, type EnhanceProgress } from '@/lib/utils/background-removal';
+import { Loader2, Upload, ClipboardPaste, Crop } from 'lucide-react';
+import { enhanceMinifigPhoto } from '@/lib/utils/background-removal';
 import { compressImage } from '@/lib/utils/image-compression';
 import type { SourcedImage } from '@/lib/minifig-sync/types';
 
@@ -23,7 +23,7 @@ interface PhotoEnhanceDialogProps {
   onEnhanced: (image: SourcedImage) => void;
 }
 
-type Step = 'input' | 'processing' | 'preview';
+type Step = 'input' | 'preview';
 
 export function PhotoEnhanceDialog({
   open,
@@ -35,7 +35,6 @@ export function PhotoEnhanceDialog({
   const [sourcePreview, setSourcePreview] = useState<string | null>(null);
   const [resultPreview, setResultPreview] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-  const [progressMsg, setProgressMsg] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,7 +52,6 @@ export function PhotoEnhanceDialog({
         return null;
       });
       setResultBlob(null);
-      setProgressMsg('');
       setError(null);
       setIsUploading(false);
     }
@@ -84,28 +82,17 @@ export function PhotoEnhanceDialog({
   const processFile = useCallback(async (file: File) => {
     setError(null);
 
-    // Show source preview
     const srcUrl = URL.createObjectURL(file);
     setSourcePreview(srcUrl);
-    setStep('processing');
-    setProgressMsg('Removing background...');
 
     try {
-      const enhanced = await enhanceMinifigPhoto(file, (p: EnhanceProgress) => {
-        if (p.stage === 'removing-background') {
-          const pct = p.progress ? Math.round(p.progress * 100) : 0;
-          setProgressMsg(`Removing background... ${pct}%`);
-        } else {
-          setProgressMsg('Adding wood background...');
-        }
-      });
-
-      const resultUrl = URL.createObjectURL(enhanced);
+      const trimmed = await enhanceMinifigPhoto(file);
+      const resultUrl = URL.createObjectURL(trimmed);
       setResultPreview(resultUrl);
-      setResultBlob(enhanced);
+      setResultBlob(trimmed);
       setStep('preview');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Enhancement failed');
+      setError(err instanceof Error ? err.message : 'Trim failed');
       setStep('input');
       URL.revokeObjectURL(srcUrl);
       setSourcePreview(null);
@@ -147,8 +134,7 @@ export function PhotoEnhanceDialog({
 
     setIsUploading(true);
     try {
-      // Compress for upload
-      const file = new File([resultBlob], `enhanced-${Date.now()}.jpg`, {
+      const file = new File([resultBlob], `trimmed-${Date.now()}.jpg`, {
         type: 'image/jpeg',
       });
       const compressed = await compressImage(file, {
@@ -157,8 +143,7 @@ export function PhotoEnhanceDialog({
         outputType: 'image/jpeg',
       });
 
-      // Upload via eBay upload endpoint
-      const imageId = `enhanced-${Date.now()}`;
+      const imageId = `trimmed-${Date.now()}`;
       const response = await fetch('/api/ebay/upload-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,11 +191,11 @@ export function PhotoEnhanceDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            Enhance Photo
+            <Crop className="h-5 w-5" />
+            Trim Photo
           </DialogTitle>
           <DialogDescription>
-            Remove the background and add a wood surface backdrop.
+            Auto-crop borders, text, and whitespace from a screenshot.
           </DialogDescription>
         </DialogHeader>
 
@@ -223,8 +208,8 @@ export function PhotoEnhanceDialog({
         {step === 'input' && (
           <div className="flex flex-col items-center gap-4 py-8">
             <p className="text-sm text-muted-foreground text-center">
-              Paste a screenshot or upload a photo. The background will be removed
-              and replaced with a wood surface.
+              Paste a screenshot or upload a photo. Uniform borders and
+              whitespace will be trimmed automatically.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={handlePasteButton}>
@@ -252,25 +237,6 @@ export function PhotoEnhanceDialog({
           </div>
         )}
 
-        {step === 'processing' && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">{progressMsg}</p>
-            {sourcePreview && (
-              <div className="w-48 h-48 rounded-lg overflow-hidden border bg-muted">
-                <Image
-                  src={sourcePreview}
-                  alt="Source"
-                  width={192}
-                  height={192}
-                  className="w-full h-full object-contain"
-                  unoptimized
-                />
-              </div>
-            )}
-          </div>
-        )}
-
         {step === 'preview' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -295,7 +261,7 @@ export function PhotoEnhanceDialog({
                   {resultPreview && (
                     <Image
                       src={resultPreview}
-                      alt="Enhanced"
+                      alt="Trimmed"
                       width={400}
                       height={400}
                       className="w-full h-full object-contain"
@@ -327,7 +293,7 @@ export function PhotoEnhanceDialog({
               {isUploading ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Crop className="h-4 w-4 mr-2" />
               )}
               Add to Listing
             </Button>
