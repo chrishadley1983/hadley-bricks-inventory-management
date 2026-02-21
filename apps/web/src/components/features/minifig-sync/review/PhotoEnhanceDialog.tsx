@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -208,6 +209,9 @@ export function PhotoEnhanceDialog({
             <Sparkles className="h-5 w-5" />
             Enhance Photo
           </DialogTitle>
+          <DialogDescription>
+            Remove the background and add a wood surface backdrop.
+          </DialogDescription>
         </DialogHeader>
 
         {error && (
