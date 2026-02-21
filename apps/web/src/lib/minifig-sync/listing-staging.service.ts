@@ -243,7 +243,7 @@ export class ListingStagingService {
           conditionNotes: item.condition_notes || undefined,
           pieceCount: 1,
           minifigureCount: 1,
-          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 19003 (not 183447). Condition must be USED (3000) not USED_EXCELLENT.',
+          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 19003 (not 183447). Use condition USED_EXCELLENT (3000).',
         },
         { style: 'Minimalist', price }
       );
@@ -279,9 +279,8 @@ export class ListingStagingService {
     // Map AI-generated item specifics to eBay aspects format
     const aspects = this.mapItemSpecificsToAspects(generated.itemSpecifics);
 
-    // Minifig category (19003) only allows NEW or USED on eBay
-    const conditionEnum: 'NEW' | 'USED' =
-      generated.conditionId === 1000 ? 'NEW' : 'USED';
+    // eBay Inventory API requires specific sub-conditions (USED is not valid)
+    const conditionEnum = generated.conditionId === 1000 ? 'NEW' : 'USED_EXCELLENT';
 
     // Create inventory item (F37)
     const inventoryItem: EbayInventoryItem = {
