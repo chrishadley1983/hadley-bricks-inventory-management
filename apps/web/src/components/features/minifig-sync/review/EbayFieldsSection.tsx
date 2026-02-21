@@ -10,22 +10,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+// eBay minifigure category (19003) only allows New or Used
 const CONDITION_OPTIONS = [
   { value: 'NEW', label: 'New' },
-  { value: 'LIKE_NEW', label: 'Like New' },
-  { value: 'NEW_OTHER', label: 'New (Other)' },
-  { value: 'NEW_WITH_DEFECTS', label: 'New with Defects' },
-  { value: 'MANUFACTURER_REFURBISHED', label: 'Manufacturer Refurbished' },
-  { value: 'CERTIFIED_REFURBISHED', label: 'Certified Refurbished' },
-  { value: 'EXCELLENT_REFURBISHED', label: 'Excellent - Refurbished' },
-  { value: 'VERY_GOOD_REFURBISHED', label: 'Very Good - Refurbished' },
-  { value: 'GOOD_REFURBISHED', label: 'Good - Refurbished' },
-  { value: 'SELLER_REFURBISHED', label: 'Seller Refurbished' },
-  { value: 'USED_EXCELLENT', label: 'Used - Excellent' },
-  { value: 'USED_VERY_GOOD', label: 'Used - Very Good' },
-  { value: 'USED_GOOD', label: 'Used - Good' },
-  { value: 'USED_ACCEPTABLE', label: 'Used - Acceptable' },
-  { value: 'FOR_PARTS_OR_NOT_WORKING', label: 'For Parts or Not Working' },
+  { value: 'USED', label: 'Used' },
 ];
 
 interface EbayFieldsSectionProps {
@@ -72,7 +60,7 @@ export function EbayFieldsSection({
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Condition</label>
           <Select
-            value={condition || 'USED_EXCELLENT'}
+            value={condition || 'USED'}
             onValueChange={onConditionChange}
             disabled={isUpdating}
           >
