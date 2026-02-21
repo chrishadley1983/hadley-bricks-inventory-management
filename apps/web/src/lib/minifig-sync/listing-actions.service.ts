@@ -9,7 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
-import type { EbayConditionEnum } from '@/lib/ebay/types';
+import type { EbayConditionEnum, EbayInventoryItem } from '@/lib/ebay/types';
 import type { MinifigSyncItem } from './types';
 
 interface QualityCheckResult {
@@ -289,29 +289,9 @@ export class ListingActionsService {
 
       if (inventoryFieldsChanged) {
         try {
-          const currentItem = await adapter.getInventoryItem(item.ebay_sku);
-          // Strip read-only fields that eBay returns in GET but rejects in PUT
-          delete currentItem.sku;
-          delete currentItem.locale;
-          if (updates.title) {
-            currentItem.product.title = updates.title;
-          }
-          if (updates.description) {
-            currentItem.product.description = updates.description;
-          }
-          if (updates.condition) {
-            currentItem.condition = updates.condition as EbayConditionEnum;
-          }
-          if (updates.conditionDescription) {
-            currentItem.conditionDescription = updates.conditionDescription;
-          }
-          if (updates.aspects) {
-            currentItem.product.aspects = updates.aspects;
-          }
-          if (updates.images) {
-            currentItem.product.imageUrls = updates.images.map((img) => img.url);
-          }
-          await adapter.createOrReplaceInventoryItem(item.ebay_sku, currentItem);
+          // Re-read item from DB to get the latest values after the update above
+          const freshItem = await this.getItem(itemId);
+          await this.syncInventoryItemToEbay(adapter, freshItem);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error('[ListingActionsService] eBay inventory item update failed:', msg);
@@ -413,7 +393,8 @@ export class ListingActionsService {
 
   /**
    * Sync the inventory item from DB state to eBay before publishing.
-   * Picks up any edits the user made during review (images, title, description, etc.).
+   * Builds a clean item from DB values (same shape as staging) rather than
+   * GET-modify-PUT, which is fragile due to unknown read-only fields.
    */
   private async syncInventoryItemToEbay(
     adapter: EbayApiAdapter,
@@ -421,32 +402,31 @@ export class ListingActionsService {
   ): Promise<void> {
     if (!item.ebay_sku) return;
 
-    try {
-      const rawItem = await adapter.getInventoryItem(item.ebay_sku);
-      // Strip read-only fields that eBay returns in GET but rejects in PUT
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { sku: _s, locale: _l, groupIds: _g, inventoryItemGroupKeys: _k, ...currentItem } = rawItem as Record<string, unknown> & typeof rawItem;
+    const images = item.images as Array<{ url: string }> | null;
+    const imageUrls = images?.map((img) => img.url) ?? [];
+    const aspects = item.ebay_aspects as Record<string, string[]> | null;
 
-      // Overwrite with DB values
-      if (item.name) currentItem.product.title = item.ebay_title || item.name;
-      if (item.ebay_description) currentItem.product.description = item.ebay_description;
-      if (item.ebay_condition) currentItem.condition = item.ebay_condition as EbayConditionEnum;
-      if (item.ebay_condition_description) currentItem.conditionDescription = item.ebay_condition_description;
+    const inventoryItem: EbayInventoryItem = {
+      product: {
+        title: item.ebay_title || item.name || '',
+        description: item.ebay_description || '',
+        ...(imageUrls.length > 0 && { imageUrls }),
+        ...(aspects && { aspects }),
+      },
+      condition: (item.ebay_condition as EbayConditionEnum) || 'USED_EXCELLENT',
+      conditionDescription:
+        item.ebay_condition_description ||
+        item.condition_notes ||
+        'Used, complete - in excellent condition',
+      availability: {
+        shipToLocationAvailability: {
+          quantity: 1,
+        },
+      },
+    };
 
-      const images = item.images as Array<{ url: string }> | null;
-      if (images?.length) {
-        currentItem.product.imageUrls = images.map((img) => img.url);
-      }
-
-      const aspects = item.ebay_aspects as Record<string, string[]> | null;
-      if (aspects) currentItem.product.aspects = aspects;
-
-      await adapter.createOrReplaceInventoryItem(item.ebay_sku, currentItem);
-      console.log(`[ListingActionsService] Synced inventory item to eBay for SKU ${item.ebay_sku}`);
-    } catch (err) {
-      // Don't block publishing — the staging version is still valid
-      console.warn('[ListingActionsService] syncInventoryItemToEbay failed (non-fatal):', err instanceof Error ? err.message : err);
-    }
+    await adapter.createOrReplaceInventoryItem(item.ebay_sku, inventoryItem);
+    console.log(`[ListingActionsService] Synced inventory item to eBay for SKU ${item.ebay_sku}`);
   }
 
   /**
