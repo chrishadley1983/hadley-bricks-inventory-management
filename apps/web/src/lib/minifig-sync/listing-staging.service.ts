@@ -274,7 +274,7 @@ export class ListingStagingService {
       conditionDescription:
         generated.conditionDescription ||
         item.condition_notes ||
-        'Used minifigure in excellent condition',
+        'Used, complete - in excellent condition',
       availability: {
         shipToLocationAvailability: {
           quantity: 1,
@@ -331,7 +331,7 @@ export class ListingStagingService {
         ebay_condition_description:
           generated.conditionDescription ||
           item.condition_notes ||
-          'Used minifigure in excellent condition',
+          'Used, complete - in excellent condition',
         ebay_category_id: generated.categoryId || EBAY_MINIFIG_CATEGORY_ID,
         ebay_aspects: aspects,
         updated_at: new Date().toISOString(),
@@ -389,40 +389,56 @@ export class ListingStagingService {
     const MAX_IMAGES = 4;
     const MAX_BRAVE_IMAGES = 2;
 
-    // 1. Brave Image Search (up to 2 non-stock photos, excluding eBay)
+    // 1. Brave Image Search — two queries for front + back diversity
     const braveApiKey = process.env.BRAVE_API_KEY;
     if (braveApiKey && images.length < MAX_IMAGES) {
-      try {
-        const query = `LEGO ${name || ''} ${bricklinkId} minifigure -site:ebay.com -site:ebay.co.uk`;
-        const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=10&safesearch=off`;
-        const response = await fetch(url, {
-          headers: { 'X-Subscription-Token': braveApiKey },
-        });
+      const usedDomains = new Set<string>();
+      const braveQueries = [
+        `LEGO ${name || ''} ${bricklinkId} minifigure front -site:ebay.com -site:ebay.co.uk`,
+        `LEGO ${name || ''} ${bricklinkId} minifigure back -site:ebay.com -site:ebay.co.uk`,
+      ];
 
-        if (response.ok) {
-          const data = await response.json();
-          const results = data.results ?? [];
-          let added = 0;
+      for (const query of braveQueries) {
+        if (images.length >= MAX_BRAVE_IMAGES) break;
+        try {
+          const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=10&safesearch=off`;
+          const response = await fetch(url, {
+            headers: { 'X-Subscription-Token': braveApiKey },
+          });
 
-          for (const result of results) {
-            if (added >= MAX_BRAVE_IMAGES) break;
-            const imageUrl = result.properties?.url || result.thumbnail?.src;
-            if (!imageUrl) continue;
-            // Skip eBay URLs
-            if (/ebay/i.test(imageUrl)) continue;
-            // Skip tiny thumbnails
-            const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
-            if (w > 0 && w < 200) continue;
+          if (response.ok) {
+            const data = await response.json();
+            const results = data.results ?? [];
 
-            images.push({ url: imageUrl, source: 'brave', type: 'sourced' });
-            added++;
+            for (const result of results) {
+              if (images.length >= MAX_BRAVE_IMAGES) break;
+              const imageUrl = result.properties?.url || result.thumbnail?.src;
+              if (!imageUrl) continue;
+              // Skip eBay URLs
+              if (/ebay/i.test(imageUrl)) continue;
+              // Skip tiny thumbnails
+              const w = result.properties?.width ?? result.thumbnail?.width ?? 0;
+              if (w > 0 && w < 200) continue;
+              // Skip duplicate domains to ensure visual diversity
+              try {
+                const domain = new URL(imageUrl).hostname;
+                if (usedDomains.has(domain)) continue;
+                usedDomains.add(domain);
+              } catch {
+                // Invalid URL — skip
+                continue;
+              }
+
+              images.push({ url: imageUrl, source: 'brave', type: 'sourced' });
+              break; // One image per query for front/back diversity
+            }
           }
+        } catch (err) {
+          console.warn(
+            `[ListingStagingService] Brave image search failed for ${bricklinkId}:`,
+            err instanceof Error ? err.message : err
+          );
         }
-      } catch (err) {
-        console.warn(
-          `[ListingStagingService] Brave image search failed for ${bricklinkId}:`,
-          err instanceof Error ? err.message : err
-        );
       }
     }
 
