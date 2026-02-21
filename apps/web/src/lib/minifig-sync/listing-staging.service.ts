@@ -347,7 +347,22 @@ export class ListingStagingService {
       },
     };
 
-    const createOfferResponse = await ebayAdapter.createOffer(offer);
+    // Create offer, or reuse existing one if it already exists on eBay
+    let offerId: string;
+    try {
+      const createOfferResponse = await ebayAdapter.createOffer(offer);
+      offerId = createOfferResponse.offerId;
+    } catch (err) {
+      // eBay returns "Offer entity already exists. [offerId=XXX]" if offer exists for this SKU
+      const existingId = this.extractExistingOfferId(err);
+      if (existingId) {
+        console.log(`[ListingStagingService] Offer already exists (${existingId}), updating instead`);
+        await ebayAdapter.updateOffer(existingId, offer);
+        offerId = existingId;
+      } else {
+        throw err;
+      }
+    }
 
     // Update sync item to STAGED (F39) — NO publish call (I2)
     await this.supabase
@@ -355,7 +370,7 @@ export class ListingStagingService {
       .update({
         listing_status: 'STAGED',
         ebay_sku: sku,
-        ebay_offer_id: createOfferResponse.offerId,
+        ebay_offer_id: offerId,
         ebay_title: generated.title,
         ebay_description: generated.description,
         ebay_condition: conditionEnum,
@@ -369,6 +384,16 @@ export class ListingStagingService {
       })
       .eq('id', item.id)
       .eq('user_id', this.userId);
+  }
+
+  /**
+   * Extract existing offer ID from an "Offer already exists" eBay error.
+   * Error message format: "Offer entity already exists. [offerId=989142392016]"
+   */
+  private extractExistingOfferId(err: unknown): string | null {
+    const message = err instanceof Error ? err.message : String(err);
+    const match = message.match(/offerId=(\d+)/);
+    return match ? match[1] : null;
   }
 
   /**
