@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Send, Search, Loader2 } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
+import { toast } from 'sonner';
 import {
   useMinifigSyncItems,
   usePublishListing,
@@ -40,31 +41,48 @@ export function SingleListingReview() {
   const currentItem = items?.[currentIndex];
 
   const handlePublish = useCallback(
-    (id: string) => {
-      publishMutation.mutate(id);
-      // Don't advance index — the published item will be removed from the list
-      // and the next item will shift into the current position
+    async (id: string) => {
+      try {
+        await publishMutation.mutateAsync(id);
+        toast.success('Listing published to eBay');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to publish');
+      }
     },
     [publishMutation]
   );
 
   const handleReject = useCallback(
-    (id: string) => {
-      rejectMutation.mutate(id);
+    async (id: string) => {
+      try {
+        await rejectMutation.mutateAsync(id);
+        toast.success('Listing rejected');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to reject');
+      }
     },
     [rejectMutation]
   );
 
   const handleRefreshPricing = useCallback(
-    (id: string) => {
-      refreshMutation.mutate(id);
+    async (id: string) => {
+      try {
+        await refreshMutation.mutateAsync(id);
+        toast.success('Pricing refreshed');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to refresh pricing');
+      }
     },
     [refreshMutation]
   );
 
   const handleUpdate = useCallback(
-    (id: string, data: SyncItemUpdateData) => {
-      updateMutation.mutate({ id, data });
+    async (id: string, data: SyncItemUpdateData) => {
+      try {
+        await updateMutation.mutateAsync({ id, data });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update');
+      }
     },
     [updateMutation]
   );
