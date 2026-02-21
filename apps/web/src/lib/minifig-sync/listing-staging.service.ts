@@ -159,12 +159,19 @@ export class ListingStagingService {
         } catch (err) {
           // E6: Log error, keep status NOT_LISTED, continue batch
           itemsErrored++;
-          // Extract detailed eBay error message if available
+          // Extract detailed eBay error message including parameters
           let errorDetail = err instanceof Error ? err.message : String(err);
           if (err && typeof err === 'object' && 'errors' in err) {
-            const ebayErrors = (err as { errors?: Array<{ message?: string; longMessage?: string }> }).errors;
-            if (ebayErrors?.[0]?.longMessage) {
-              errorDetail = ebayErrors[0].longMessage;
+            const ebayErrors = (err as { errors?: Array<{ message?: string; longMessage?: string; errorId?: number; parameters?: Array<{ name: string; value: string }> }> }).errors;
+            if (ebayErrors && ebayErrors.length > 0) {
+              const parts = ebayErrors.map((e) => {
+                let msg = e.longMessage || e.message || '';
+                if (e.parameters?.length) {
+                  msg += ' [' + e.parameters.map((p) => `${p.name}=${p.value}`).join(', ') + ']';
+                }
+                return msg;
+              });
+              errorDetail = parts.join(' | ');
             }
           }
           errors.push({
