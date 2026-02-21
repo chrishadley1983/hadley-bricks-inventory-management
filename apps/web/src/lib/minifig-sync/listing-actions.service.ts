@@ -206,6 +206,7 @@ export class ListingActionsService {
 
   /**
    * Update editable fields on a sync item and sync to eBay (F46).
+   * Returns warnings if eBay sync failed (DB update always succeeds).
    */
   async updateItem(
     itemId: string,
@@ -221,7 +222,7 @@ export class ListingActionsService {
       bestOfferAutoAccept?: number;
       bestOfferAutoDecline?: number;
     }
-  ): Promise<void> {
+  ): Promise<{ ebayWarnings: string[] }> {
     const item = await this.getItem(itemId);
 
     const dbUpdates: Record<string, unknown> = {
@@ -267,6 +268,8 @@ export class ListingActionsService {
       .eq('id', itemId)
       .eq('user_id', this.userId);
 
+    const ebayWarnings: string[] = [];
+
     // If item has an eBay offer, update it too (F46)
     if (item.ebay_offer_id && item.ebay_sku) {
       const adapter = await this.getEbayAdapter();
@@ -302,8 +305,10 @@ export class ListingActionsService {
             currentItem.product.imageUrls = updates.images.map((img) => img.url);
           }
           await adapter.createOrReplaceInventoryItem(item.ebay_sku, currentItem);
-        } catch {
-          // Best effort — don't fail the whole operation
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error('[ListingActionsService] eBay inventory item update failed:', msg);
+          ebayWarnings.push(`eBay inventory sync failed: ${msg}`);
         }
       }
 
@@ -343,11 +348,15 @@ export class ListingActionsService {
             };
           }
           await adapter.updateOffer(item.ebay_offer_id, offerUpdate);
-        } catch {
-          // Best effort
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error('[ListingActionsService] eBay offer update failed:', msg);
+          ebayWarnings.push(`eBay offer sync failed: ${msg}`);
         }
       }
     }
+
+    return { ebayWarnings };
   }
 
   /**

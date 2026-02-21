@@ -87,8 +87,12 @@ export function ReviewQueue() {
   ) => {
     setActiveItemId(id);
     try {
-      await updateMutation.mutateAsync({ id, data });
-      toast.success('Item updated');
+      const result = await updateMutation.mutateAsync({ id, data });
+      if (result?.ebayWarnings?.length) {
+        result.ebayWarnings.forEach((w) => toast.warning(w));
+      } else {
+        toast.success('Item updated');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update');
     } finally {
