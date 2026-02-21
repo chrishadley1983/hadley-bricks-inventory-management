@@ -388,9 +388,20 @@ export class ListingStagingService {
 
   /**
    * Extract existing offer ID from an "Offer already exists" eBay error.
-   * Error message format: "Offer entity already exists. [offerId=989142392016]"
+   * The EbayApiError stores the offerId in its errors[].parameters array.
    */
   private extractExistingOfferId(err: unknown): string | null {
+    // Check EbayApiError's errors array for offerId parameter
+    if (err && typeof err === 'object' && 'errors' in err) {
+      const errors = (err as { errors?: Array<{ parameters?: Array<{ name: string; value: string }> }> }).errors;
+      if (errors) {
+        for (const e of errors) {
+          const param = e.parameters?.find((p) => p.name === 'offerId');
+          if (param) return param.value;
+        }
+      }
+    }
+    // Fallback: try regex on message string
     const message = err instanceof Error ? err.message : String(err);
     const match = message.match(/offerId=(\d+)/);
     return match ? match[1] : null;
