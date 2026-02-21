@@ -97,9 +97,17 @@ function loadImage(blob: Blob): Promise<HTMLImageElement> {
 const COLOUR_TOLERANCE = 30;
 
 /**
+ * Fraction of pixels in a row/column that must match the border colour
+ * for that row/column to be considered part of the border.
+ * 0.92 means rows with up to 8% non-background pixels (e.g. watermark text)
+ * are still treated as border and trimmed.
+ */
+const BORDER_ROW_THRESHOLD = 0.92;
+
+/**
  * Find the bounding box of the actual content by trimming uniform-coloured
- * borders inward from each edge. Works with white, light grey, or any solid
- * border colour — samples each edge's dominant colour independently.
+ * borders inward from each edge. Uses a threshold so rows/columns with
+ * small amounts of text (watermarks, captions) are still treated as border.
  */
 function findContentBounds(
   ctx: CanvasRenderingContext2D,
@@ -119,43 +127,60 @@ function findContentBounds(
     Math.abs(a[1] - b[1]) < COLOUR_TOLERANCE &&
     Math.abs(a[2] - b[2]) < COLOUR_TOLERANCE;
 
+  /** Check if a row is mostly the reference colour (above threshold). */
+  const isRowBorder = (y: number, ref: [number, number, number]): boolean => {
+    let matchCount = 0;
+    for (let x = 0; x < width; x++) {
+      if (similar(px(x, y), ref)) matchCount++;
+    }
+    return matchCount / width >= BORDER_ROW_THRESHOLD;
+  };
+
+  /** Check if a column (between top..bottom) is mostly the reference colour. */
+  const isColBorder = (
+    x: number,
+    ref: [number, number, number],
+    yStart: number,
+    yEnd: number
+  ): boolean => {
+    const span = yEnd - yStart;
+    if (span <= 0) return true;
+    let matchCount = 0;
+    for (let y = yStart; y < yEnd; y++) {
+      if (similar(px(x, y), ref)) matchCount++;
+    }
+    return matchCount / span >= BORDER_ROW_THRESHOLD;
+  };
+
   // Scan from top — sample top-left corner as reference colour
   const topRef = px(0, 0);
   let top = 0;
-  outer_top: for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (!similar(px(x, y), topRef)) break outer_top;
-    }
+  for (let y = 0; y < height; y++) {
+    if (!isRowBorder(y, topRef)) break;
     top = y + 1;
   }
 
   // Scan from bottom
   const botRef = px(0, height - 1);
   let bottom = height;
-  outer_bot: for (let y = height - 1; y >= top; y--) {
-    for (let x = 0; x < width; x++) {
-      if (!similar(px(x, y), botRef)) break outer_bot;
-    }
+  for (let y = height - 1; y >= top; y--) {
+    if (!isRowBorder(y, botRef)) break;
     bottom = y;
   }
 
   // Scan from left
   const leftRef = px(0, Math.floor(height / 2));
   let left = 0;
-  outer_left: for (let x = 0; x < width; x++) {
-    for (let y = top; y < bottom; y++) {
-      if (!similar(px(x, y), leftRef)) break outer_left;
-    }
+  for (let x = 0; x < width; x++) {
+    if (!isColBorder(x, leftRef, top, bottom)) break;
     left = x + 1;
   }
 
   // Scan from right
   const rightRef = px(width - 1, Math.floor(height / 2));
   let right = width;
-  outer_right: for (let x = width - 1; x >= left; x--) {
-    for (let y = top; y < bottom; y++) {
-      if (!similar(px(x, y), rightRef)) break outer_right;
-    }
+  for (let x = width - 1; x >= left; x--) {
+    if (!isColBorder(x, rightRef, top, bottom)) break;
     right = x;
   }
 
