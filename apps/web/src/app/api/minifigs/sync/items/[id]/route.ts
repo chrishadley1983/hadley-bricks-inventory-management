@@ -70,20 +70,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const service = new ListingActionsService(supabase, user.id);
-    await service.updateItem(id, parsed.data);
+    const result = await service.updateItem(id, parsed.data);
 
-    return NextResponse.json({ data: { success: true } });
+    return NextResponse.json({
+      data: {
+        success: true,
+        ...(result.ebayWarnings.length > 0 && { ebayWarnings: result.ebayWarnings }),
+      },
+    });
   } catch (error) {
     console.error('[PATCH /api/minifigs/sync/items/:id] Error:', error);
     return NextResponse.json(
       {
         error: 'Failed to update item',
-        details:
-          process.env.NODE_ENV === 'development'
-            ? error instanceof Error
-              ? error.message
-              : String(error)
-            : undefined,
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

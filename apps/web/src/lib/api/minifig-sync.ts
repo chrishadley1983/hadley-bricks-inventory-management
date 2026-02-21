@@ -160,8 +160,8 @@ export interface SyncItemUpdateData {
 export async function updateSyncItem(
   id: string,
   data: SyncItemUpdateData
-): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>(`/api/minifigs/sync/items/${id}`, {
+): Promise<{ success: boolean; ebayWarnings?: string[] }> {
+  return apiFetch<{ success: boolean; ebayWarnings?: string[] }>(`/api/minifigs/sync/items/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
