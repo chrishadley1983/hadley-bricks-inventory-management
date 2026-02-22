@@ -68,7 +68,7 @@ export interface AmazonNetSaleCalculation {
 
 export interface LinkingResult {
   orderId: string;
-  status: 'complete' | 'partial' | 'pending';
+  status: 'complete' | 'partial' | 'pending' | 'skipped';
   orderItemsProcessed: number;
   autoLinked: number;
   queuedForResolution: number;
@@ -214,6 +214,20 @@ export class AmazonInventoryLinkingService {
       }
 
       if (!orderItems || orderItems.length === 0) {
+        // Check if this order should have items but they were never fetched
+        const { data: orderData } = await this.supabase
+          .from('platform_orders')
+          .select('items_count')
+          .eq('id', orderId)
+          .single();
+
+        if (!orderData?.items_count || orderData.items_count === 0) {
+          // Items were never fetched — skip, don't mark complete
+          result.status = 'skipped';
+          return result;
+        }
+
+        // Items exist in order but all already linked
         result.status = 'complete';
         return result;
       }

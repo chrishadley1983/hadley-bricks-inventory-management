@@ -317,19 +317,20 @@ export class AmazonSyncService {
     const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
     const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
 
-    // Check if existing order is missing items and needs them for dispatch
-    // This handles backfilling items for orders synced before the dispatch-items fix
+    // Check if existing order is missing items and needs backfill
+    // This covers ALL non-cancelled statuses, not just dispatch orders
+    const existing = await this.orderRepo.findByPlatformOrderId(
+      userId,
+      'amazon',
+      orderSummary.AmazonOrderId
+    );
     let needsItemsBackfill = false;
-    if (needsItemsForDispatch) {
-      const existing = await this.orderRepo.findByPlatformOrderId(
-        userId,
-        'amazon',
-        orderSummary.AmazonOrderId
-      );
-      if (existing && existing.items_count === 0) {
+    if (existing && existing.items_count === 0) {
+      const terminalStatuses = ['Canceled', 'Cancelled/Refunded'];
+      if (!terminalStatuses.includes(orderSummary.OrderStatus)) {
         needsItemsBackfill = true;
         console.log(
-          `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`
+          `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0, status=${orderSummary.OrderStatus})`
         );
       }
     }
@@ -379,7 +380,7 @@ export class AmazonSyncService {
       currency: normalized.currency,
       shipping_address:
         normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
-      items_count: normalized.items.length,
+      items_count: shouldFetchItems ? normalized.items.length : (existing?.items_count ?? 0),
       dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
         ...normalized.rawData,
