@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayOrderSyncService, EbayAutoSyncService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
+import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
 import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
 import { AmazonArbitrageSyncService } from '@/lib/arbitrage/amazon-sync.service';
@@ -698,14 +699,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 5: Get weekly stats
+    // Step 5: Run Amazon inventory linking (after orders + items are synced)
+    if (userIds.length > 0) {
+      const userId = userIds[0];
+      try {
+        console.log('[Cron FullSync] Running Amazon inventory linking...');
+        const linkingService = new AmazonInventoryLinkingService(supabase, userId);
+        const linkingResult = await withTimeout(
+          linkingService.processHistoricalOrders({ mode: 'auto', includeSold: true }),
+          30000, // 30s timeout - linking should be fast (only null status orders)
+          'Amazon Inventory Linking'
+        );
+        console.log('[Cron FullSync] Amazon linking complete:', {
+          processed: linkingResult.ordersProcessed,
+          complete: linkingResult.ordersComplete,
+          autoLinked: linkingResult.totalAutoLinked,
+        });
+      } catch (linkErr) {
+        console.error('[Cron FullSync] Amazon linking error:', linkErr);
+      }
+    }
+
+    // Step 6: Get weekly stats
     console.log('[Cron FullSync] Calculating weekly stats...');
     results.weeklyStats = await getWeeklyStats(supabase);
 
-    // Step 6: Calculate total duration
+    // Step 7: Calculate total duration
     results.totalDurationMs = Date.now() - startTime;
 
-    // Step 7: Send Discord notification
+    // Step 8: Send Discord notification
     console.log('[Cron FullSync] Sending Discord notification...');
     await sendDiscordReport(results);
 
