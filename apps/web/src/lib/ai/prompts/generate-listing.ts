@@ -76,7 +76,7 @@ You understand eBay's Cassini search algorithm and optimize for:
 You MUST use one of these exact eBay leaf category IDs. Using any other category will cause listing failure:
 
 - **183448** - LEGO Complete Sets & Packs - Use for complete sets with all pieces, sealed or used
-- **183447** - LEGO Minifigures - Use ONLY for individual minifigures sold separately
+- **263012** - LEGO Minifigures - Use ONLY for individual minifigures sold separately
 - **183449** - LEGO Pieces & Parts - Use ONLY for bulk parts, individual pieces, or partial sets
 - **183450** - LEGO Instruction Manuals - Use ONLY for instruction booklets sold separately
 
@@ -159,7 +159,7 @@ export const DESCRIPTION_STYLE_INSTRUCTIONS: Record<DescriptionStyle, string> = 
  */
 export const LEGO_CATEGORIES = {
   COMPLETE_SET: '183448', // LEGO Complete Sets & Packs
-  MINIFIGURES: '183447', // LEGO Minifigures
+  MINIFIGURES: '263012', // LEGO (R) Minifigures (leaf category)
   PARTS: '183449', // LEGO Pieces & Parts
   INSTRUCTIONS: '183450', // LEGO Instruction Manuals
 };
