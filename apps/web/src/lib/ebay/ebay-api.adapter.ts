@@ -317,7 +317,7 @@ export class EbayApiAdapter {
       body: item,
       headers: {
         'Content-Language': 'en-GB',
-        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+        'Accept-Language': 'en-GB',
       },
     });
   }
@@ -352,7 +352,7 @@ export class EbayApiAdapter {
       body: offer,
       headers: {
         'Content-Language': 'en-GB',
-        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+        'Accept-Language': 'en-GB',
       },
     });
   }
@@ -369,7 +369,7 @@ export class EbayApiAdapter {
         body: offer,
         headers: {
           'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          'Accept-Language': 'en-GB',
         },
       }
     );
@@ -381,7 +381,13 @@ export class EbayApiAdapter {
    */
   async getOffer(offerId: string): Promise<EbayOfferResponse> {
     return this.request<EbayOfferResponse>(
-      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`
+      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`,
+      {
+        headers: {
+          'Content-Language': 'en-GB',
+          'Accept-Language': 'en-GB',
+        },
+      }
     );
   }
 
@@ -397,7 +403,7 @@ export class EbayApiAdapter {
           params: { sku },
           headers: {
             'Content-Language': 'en-GB',
-            'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+            'Accept-Language': 'en-GB',
           },
         }
       );
@@ -419,7 +425,7 @@ export class EbayApiAdapter {
         method: 'POST',
         headers: {
           'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          'Accept-Language': 'en-GB',
         },
       }
     );
@@ -436,7 +442,7 @@ export class EbayApiAdapter {
         method: 'POST',
         headers: {
           'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          'Accept-Language': 'en-GB',
         },
       }
     );
@@ -453,7 +459,7 @@ export class EbayApiAdapter {
   async getInventoryLocations(): Promise<{ locations: EbayInventoryLocation[] }> {
     return this.request<{ locations: EbayInventoryLocation[] }>(`${INVENTORY_API_PATH}/location`, {
       headers: {
-        'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+        'Accept-Language': 'en-GB',
       },
     });
   }
@@ -473,7 +479,7 @@ export class EbayApiAdapter {
         body: location,
         headers: {
           'Content-Language': 'en-GB',
-          'Accept-Language': 'en-US', // Must use en-US, NOT en-GB (eBay API bug)
+          'Accept-Language': 'en-GB',
         },
       }
     );

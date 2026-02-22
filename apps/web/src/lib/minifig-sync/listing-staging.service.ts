@@ -19,7 +19,7 @@ import { buildSku } from './types';
 import type { MinifigSyncItem, SourcedImage } from './types';
 import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
-const EBAY_MINIFIG_CATEGORY_ID = '19003'; // eBay category for LEGO Minifigures
+const EBAY_MINIFIG_CATEGORY_ID = '263012'; // LEGO (R) Minifigures (leaf category under LEGO Building Toys)
 
 interface StagingResult {
   jobId: string;
@@ -254,7 +254,7 @@ export class ListingStagingService {
           conditionNotes: item.condition_notes || undefined,
           pieceCount: 1,
           minifigureCount: 1,
-          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 19003 (not 183447). Use condition USED_EXCELLENT (3000).',
+          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 263012 (LEGO Minifigures leaf category). Use condition USED_EXCELLENT (3000).',
         },
         { style: 'Minimalist', price }
       );
@@ -289,6 +289,10 @@ export class ListingStagingService {
 
     // Map AI-generated item specifics to eBay aspects format
     const aspects = this.mapItemSpecificsToAspects(generated.itemSpecifics);
+
+    // Force-set Brand and Country of Origin (deterministic, not AI-dependent)
+    aspects['Brand'] = ['LEGO'];
+    aspects['Country/Region of Manufacture'] = ['Denmark'];
 
     // eBay Inventory API requires specific sub-conditions (USED is not valid)
     const conditionEnum = generated.conditionId === 1000 ? 'NEW' : 'USED_EXCELLENT';
