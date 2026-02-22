@@ -11,7 +11,7 @@ import type { AmazonCredentials } from '@/lib/amazon/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { PlatformStockService } from '../platform-stock.service';
 import { AmazonReportsClient } from './amazon-reports.client';
-import { parseAmazonListingsReport } from './amazon-report-parser';
+import { parseAmazonListingsReport, type ParsedAmazonListing } from './amazon-report-parser';
 import type {
   StockPlatform,
   ListingImport,
@@ -89,14 +89,23 @@ export class AmazonStockService extends PlatformStockService {
         console.warn('[AmazonStockService] Parse errors:', parseResult.errors.slice(0, 5));
       }
 
-      // 5. Delete old listings
+      // 5. Deduplicate by ASIN before inserting
+      // Amazon reports one row per SKU, but multiple SKUs can share an ASIN.
+      // The platform_listings table has a unique constraint on (user_id, platform, platform_item_id),
+      // so we must merge duplicates: sum quantities, keep the highest-quantity SKU as primary.
+      const deduplicated = this.deduplicateByAsin(parseResult.listings);
+      console.log(
+        `[AmazonStockService] Deduplicated ${parseResult.listings.length} rows → ${deduplicated.length} unique ASINs`
+      );
+
+      // 6. Delete old listings
       console.log('[AmazonStockService] Clearing old listings...');
       await this.deleteOldListings();
 
-      // 6. Insert new listings
-      console.log(`[AmazonStockService] Inserting ${parseResult.listings.length} listings...`);
+      // 7. Insert new listings
+      console.log(`[AmazonStockService] Inserting ${deduplicated.length} listings...`);
 
-      const listingRows: PlatformListingInsert[] = parseResult.listings.map((listing) => ({
+      const listingRows: PlatformListingInsert[] = deduplicated.map((listing) => ({
         user_id: this.userId,
         platform: 'amazon',
         platform_sku: listing.sellerSku || null,
@@ -116,7 +125,7 @@ export class AmazonStockService extends PlatformStockService {
 
       const inserted = await this.insertListingsBatch(importId, listingRows);
 
-      // 7. Mark import complete
+      // 8. Mark import complete
       await this.updateImportRecord(importId, {
         status: 'completed',
         total_rows: parseResult.totalRows,
@@ -418,6 +427,76 @@ export class AmazonStockService extends PlatformStockService {
   // ==========================================================================
   // PRIVATE HELPER METHODS
   // ==========================================================================
+
+  /**
+   * Deduplicate parsed listings by ASIN
+   *
+   * Amazon reports one row per SKU, but multiple SKUs can share the same ASIN
+   * (e.g., same product listed in different conditions or re-listed with a new SKU).
+   * The platform_listings table enforces one row per ASIN, so we merge duplicates:
+   * - Sum quantities across all SKUs for the same ASIN
+   * - Keep the SKU with the highest quantity as the primary record
+   * - Use the highest price (most likely the active listing price)
+   * - Prefer 'Active' status over others
+   */
+  private deduplicateByAsin(listings: ParsedAmazonListing[]): ParsedAmazonListing[] {
+    const byAsin = new Map<string, ParsedAmazonListing[]>();
+
+    for (const listing of listings) {
+      const asin = listing.asin;
+      if (!asin) continue;
+      const existing = byAsin.get(asin);
+      if (existing) {
+        existing.push(listing);
+      } else {
+        byAsin.set(asin, [listing]);
+      }
+    }
+
+    const deduplicated: ParsedAmazonListing[] = [];
+
+    for (const [asin, group] of byAsin) {
+      if (group.length === 1) {
+        deduplicated.push(group[0]);
+        continue;
+      }
+
+      // Sum quantities across all SKUs
+      const totalQuantity = group.reduce((sum, l) => sum + l.quantity, 0);
+
+      // Pick the primary record: prefer Active status, then highest quantity
+      const primary = group.sort((a, b) => {
+        // Active listings first
+        if (a.listingStatus === 'Active' && b.listingStatus !== 'Active') return -1;
+        if (b.listingStatus === 'Active' && a.listingStatus !== 'Active') return 1;
+        // Then by quantity descending
+        return b.quantity - a.quantity;
+      })[0];
+
+      // Use highest non-null price
+      const prices = group.map((l) => l.price).filter((p): p is number => p !== null);
+      const bestPrice = prices.length > 0 ? Math.max(...prices) : null;
+
+      deduplicated.push({
+        ...primary,
+        quantity: totalQuantity,
+        price: bestPrice,
+      });
+
+      console.log(
+        `[AmazonStockService] Merged ${group.length} SKUs for ASIN ${asin}: qty=${totalQuantity}, sku=${primary.sellerSku}`
+      );
+    }
+
+    // Also include listings without an ASIN (SKU-only, rare but possible)
+    for (const listing of listings) {
+      if (!listing.asin) {
+        deduplicated.push(listing);
+      }
+    }
+
+    return deduplicated;
+  }
 
   /**
    * Get Amazon credentials for the user
