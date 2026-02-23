@@ -4206,6 +4206,299 @@ export type Database = {
           },
         ]
       }
+      instagram_content_ideas: {
+        Row: {
+          content_pillar: string
+          created_at: string | null
+          description: string | null
+          id: number
+          idea_source: string
+          images: string[] | null
+          priority: string | null
+          source_url: string | null
+          status: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+          user_id: string
+          videos: string[] | null
+        }
+        Insert: {
+          content_pillar: string
+          created_at?: string | null
+          description?: string | null
+          id?: never
+          idea_source?: string
+          images?: string[] | null
+          priority?: string | null
+          source_url?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+          videos?: string[] | null
+        }
+        Update: {
+          content_pillar?: string
+          created_at?: string | null
+          description?: string | null
+          id?: never
+          idea_source?: string
+          images?: string[] | null
+          priority?: string | null
+          source_url?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+          videos?: string[] | null
+        }
+        Relationships: []
+      }
+      instagram_news_items: {
+        Row: {
+          created_at: string | null
+          discovered_at: string | null
+          id: number
+          linked_idea_id: number | null
+          news_type: string
+          relevance_score: number | null
+          source_platform: string
+          source_url: string
+          status: string | null
+          summary: string
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          discovered_at?: string | null
+          id?: never
+          linked_idea_id?: number | null
+          news_type: string
+          relevance_score?: number | null
+          source_platform: string
+          source_url: string
+          status?: string | null
+          summary: string
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          discovered_at?: string | null
+          id?: never
+          linked_idea_id?: number | null
+          news_type?: string
+          relevance_score?: number | null
+          source_platform?: string
+          source_url?: string
+          status?: string | null
+          summary?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_news_items_linked_idea_id_fkey"
+            columns: ["linked_idea_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_content_ideas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_posts: {
+        Row: {
+          batch_id: string | null
+          batch_position: number | null
+          caption: string
+          condition: string | null
+          content_pillar: string | null
+          created_at: string | null
+          hashtags: string[] | null
+          id: string
+          idea_id: number | null
+          ig_media_container_id: string | null
+          ig_media_id: string | null
+          image_type: string | null
+          image_url: string | null
+          inventory_item_id: string | null
+          item_name: string
+          listing_platform: string | null
+          listing_price: number | null
+          minifigs: number | null
+          pieces: number | null
+          post_type: string | null
+          publish_error: string | null
+          published_at: string | null
+          retail_price: number | null
+          scheduled_for: string | null
+          set_number: string | null
+          status: string | null
+          subtheme: string | null
+          theme: string | null
+          updated_at: string | null
+          user_id: string | null
+          year_released: number | null
+        }
+        Insert: {
+          batch_id?: string | null
+          batch_position?: number | null
+          caption: string
+          condition?: string | null
+          content_pillar?: string | null
+          created_at?: string | null
+          hashtags?: string[] | null
+          id?: string
+          idea_id?: number | null
+          ig_media_container_id?: string | null
+          ig_media_id?: string | null
+          image_type?: string | null
+          image_url?: string | null
+          inventory_item_id?: string | null
+          item_name: string
+          listing_platform?: string | null
+          listing_price?: number | null
+          minifigs?: number | null
+          pieces?: number | null
+          post_type?: string | null
+          publish_error?: string | null
+          published_at?: string | null
+          retail_price?: number | null
+          scheduled_for?: string | null
+          set_number?: string | null
+          status?: string | null
+          subtheme?: string | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          year_released?: number | null
+        }
+        Update: {
+          batch_id?: string | null
+          batch_position?: number | null
+          caption?: string
+          condition?: string | null
+          content_pillar?: string | null
+          created_at?: string | null
+          hashtags?: string[] | null
+          id?: string
+          idea_id?: number | null
+          ig_media_container_id?: string | null
+          ig_media_id?: string | null
+          image_type?: string | null
+          image_url?: string | null
+          inventory_item_id?: string | null
+          item_name?: string
+          listing_platform?: string | null
+          listing_price?: number | null
+          minifigs?: number | null
+          pieces?: number | null
+          post_type?: string | null
+          publish_error?: string | null
+          published_at?: string | null
+          retail_price?: number | null
+          scheduled_for?: string | null
+          set_number?: string | null
+          status?: string | null
+          subtheme?: string | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          year_released?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_posts_idea_id_fkey"
+            columns: ["idea_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_content_ideas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_posts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_posts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_stories: {
+        Row: {
+          caption: string
+          created_at: string | null
+          id: number
+          image_url: string | null
+          post_id: string
+          scheduled_for: string | null
+          status: string | null
+          sticker_options: string[] | null
+          sticker_text: string | null
+          sticker_type: string | null
+          story_position: number
+          story_type: string
+          updated_at: string | null
+          user_id: string
+          video_url: string | null
+        }
+        Insert: {
+          caption: string
+          created_at?: string | null
+          id?: never
+          image_url?: string | null
+          post_id: string
+          scheduled_for?: string | null
+          status?: string | null
+          sticker_options?: string[] | null
+          sticker_text?: string | null
+          sticker_type?: string | null
+          story_position: number
+          story_type: string
+          updated_at?: string | null
+          user_id: string
+          video_url?: string | null
+        }
+        Update: {
+          caption?: string
+          created_at?: string | null
+          id?: never
+          image_url?: string | null
+          post_id?: string
+          scheduled_for?: string | null
+          status?: string | null
+          sticker_options?: string[] | null
+          sticker_text?: string | null
+          sticker_type?: string | null
+          story_position?: number
+          story_type?: string
+          updated_at?: string | null
+          user_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_stories_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           amazon_asin: string | null
@@ -8611,6 +8904,270 @@ export type Database = {
           {
             foreignKeyName: "service_api_keys_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_config: {
+        Row: {
+          api_version: string
+          auto_sync_new_listings: boolean | null
+          client_id: string
+          client_secret: string
+          created_at: string
+          default_discount_pct: number | null
+          id: string
+          location_id: string | null
+          shop_domain: string
+          sync_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_version?: string
+          auto_sync_new_listings?: boolean | null
+          client_id: string
+          client_secret: string
+          created_at?: string
+          default_discount_pct?: number | null
+          id?: string
+          location_id?: string | null
+          shop_domain: string
+          sync_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_version?: string
+          auto_sync_new_listings?: boolean | null
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          default_discount_pct?: number | null
+          id?: string
+          location_id?: string | null
+          shop_domain?: string
+          sync_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_products: {
+        Row: {
+          created_at: string
+          id: string
+          image_source: string | null
+          image_urls: Json | null
+          inventory_item_id: string
+          last_synced_at: string | null
+          shopify_compare_at_price: number | null
+          shopify_description: string | null
+          shopify_handle: string | null
+          shopify_inventory_item_id: string | null
+          shopify_price: number | null
+          shopify_product_id: string
+          shopify_status: string
+          shopify_title: string | null
+          shopify_variant_id: string | null
+          sync_error: string | null
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_source?: string | null
+          image_urls?: Json | null
+          inventory_item_id: string
+          last_synced_at?: string | null
+          shopify_compare_at_price?: number | null
+          shopify_description?: string | null
+          shopify_handle?: string | null
+          shopify_inventory_item_id?: string | null
+          shopify_price?: number | null
+          shopify_product_id: string
+          shopify_status?: string
+          shopify_title?: string | null
+          shopify_variant_id?: string | null
+          sync_error?: string | null
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_source?: string | null
+          image_urls?: Json | null
+          inventory_item_id?: string
+          last_synced_at?: string | null
+          shopify_compare_at_price?: number | null
+          shopify_description?: string | null
+          shopify_handle?: string | null
+          shopify_inventory_item_id?: string | null
+          shopify_price?: number | null
+          shopify_product_id?: string
+          shopify_status?: string
+          shopify_title?: string | null
+          shopify_variant_id?: string | null
+          sync_error?: string | null
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: true
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: true
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_products_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_sync_log: {
+        Row: {
+          completed_at: string | null
+          duration_ms: number | null
+          errors: Json | null
+          id: string
+          items_archived: number | null
+          items_created: number | null
+          items_failed: number | null
+          items_processed: number | null
+          items_updated: number | null
+          started_at: string
+          sync_type: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          errors?: Json | null
+          id?: string
+          items_archived?: number | null
+          items_created?: number | null
+          items_failed?: number | null
+          items_processed?: number | null
+          items_updated?: number | null
+          started_at?: string
+          sync_type: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          errors?: Json | null
+          id?: string
+          items_archived?: number | null
+          items_created?: number | null
+          items_failed?: number | null
+          items_processed?: number | null
+          items_updated?: number | null
+          started_at?: string
+          sync_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_sync_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_sync_queue: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          error_message: string | null
+          id: string
+          inventory_item_id: string | null
+          max_attempts: number
+          payload: Json | null
+          priority: number
+          processed_at: string | null
+          scheduled_for: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          max_attempts?: number
+          payload?: Json | null
+          priority?: number
+          processed_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          max_attempts?: number
+          payload?: Json | null
+          priority?: number
+          processed_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_sync_queue_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_sync_queue_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_sync_queue_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

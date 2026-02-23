@@ -22,7 +22,8 @@
     "validate:reconcile": "tsx scripts/reconcile-data.ts",
     "sheets:test": "tsx scripts/test-sheets-connection.ts",
     "seed:brickset": "tsx src/scripts/seed-brickset-data.ts",
-    "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts"
+    "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts",
+    "setup:shopify": "tsx scripts/setup-shopify.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
