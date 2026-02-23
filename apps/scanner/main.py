@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskID
 from rich.table import Table
 from rich.text import Text
 
@@ -757,13 +758,34 @@ async def main_set_check(config: ScannerConfig) -> None:
         sys.exit(1)
 
     set_num = config.check_set
-    console.print(f"[bold]Set Check Mode:[/bold] Loading parts for set {set_num}...")
+    console.print(f"[bold]Set Check Mode:[/bold] {set_num}")
 
-    # F2: Fetch parts list from Rebrickable
+    # F2: Fetch parts list from Rebrickable with progress bar
     rb_client = RebrickableClient(config.rebrickable_api_key)
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total} parts"),
+        console=console,
+    )
     try:
-        set_info = await asyncio.to_thread(rb_client.get_set_info, set_num)
-        parts = await asyncio.to_thread(rb_client.get_set_parts, set_num)
+        with progress:
+            # Step 1: Fetch set info
+            info_task = progress.add_task("Fetching set info...", total=None)
+            set_info = await asyncio.to_thread(rb_client.get_set_info, set_num)
+            progress.update(info_task, description=f"[green]{set_info['name']}[/green]", completed=1, total=1)
+
+            # Step 2: Fetch parts with progress callback
+            parts_task = progress.add_task("Loading parts...", total=set_info.get("num_parts", 100))
+
+            def _on_progress(fetched: int, total: int) -> None:
+                progress.update(parts_task, completed=fetched, total=total)
+
+            parts = await asyncio.to_thread(
+                rb_client.get_set_parts, set_num, False, _on_progress,
+            )
+            progress.update(parts_task, completed=len(parts), total=len(parts), description="[green]Parts loaded[/green]")
     except SetNotFoundError as e:
         # E1: Invalid set number
         console.print(f"[red]{e}[/red]", file=sys.stderr)

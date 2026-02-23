@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import requests
 
@@ -72,7 +72,12 @@ class RebrickableClient:
             "set_img_url": data.get("set_img_url"),
         }
 
-    def get_set_parts(self, set_num: str, inc_minifig_parts: bool = False) -> list[dict]:
+    def get_set_parts(
+        self,
+        set_num: str,
+        inc_minifig_parts: bool = False,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> list[dict]:
         """Fetch all parts for a set, handling pagination.
 
         Each part dict contains:
@@ -82,12 +87,14 @@ class RebrickableClient:
         Args:
             set_num: Rebrickable set number (e.g., "75192-1")
             inc_minifig_parts: Whether to include individual minifig parts
+            on_progress: Optional callback(fetched_so_far, total) called per page
 
         Returns list of part dicts.
         """
         all_parts: list[dict] = []
         page = 1
         page_size = 1000
+        total_count: int | None = None
 
         while True:
             url = f"{REBRICKABLE_BASE_URL}/lego/sets/{set_num}/parts/"
@@ -121,6 +128,8 @@ class RebrickableClient:
 
             data = resp.json()
             results = data.get("results", [])
+            if total_count is None:
+                total_count = data.get("count", 0)
 
             for item in results:
                 part_data = item.get("part", {})
@@ -145,6 +154,9 @@ class RebrickableClient:
                     "quantity": item.get("quantity", 1),
                     "is_spare": item.get("is_spare", False),
                 })
+
+            if on_progress and total_count:
+                on_progress(len(all_parts), total_count)
 
             # Check for more pages
             if data.get("next") is None:
