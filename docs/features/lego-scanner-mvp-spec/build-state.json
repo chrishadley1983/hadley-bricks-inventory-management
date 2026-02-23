@@ -1,0 +1,15 @@
+{
+  "feature": "lego-scanner-mvp-spec",
+  "branch": "feature/lego-scanner-mvp-spec",
+  "status": "CONVERGED",
+  "iteration": 2,
+  "maxIterations": 5,
+  "lastVerifyResult": {
+    "verdict": "PASS",
+    "autoVerifyPassed": 16,
+    "autoVerifyTotal": 16,
+    "humanVerifyPending": 3,
+    "failures": []
+  },
+  "timestamp": "2026-02-23T15:30:00Z"
+}
