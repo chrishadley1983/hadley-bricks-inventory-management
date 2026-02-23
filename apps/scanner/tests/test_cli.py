@@ -25,7 +25,7 @@ class TestConfig:
         assert config.phone_port == 8080
         assert config.camera_fps == 3
         assert config.confidence_threshold == 0.70
-        assert config.min_contour_area == 500
+        assert config.min_contour_area == 5000
         assert config.max_contour_area == 50000
         assert config.brickognize_max_rps == 2
         assert config.brickognize_top_n == 5
@@ -61,17 +61,19 @@ class TestConfig:
 
     def test_validate_missing_supabase_url(self):
         """Validation catches missing Supabase URL."""
-        config = ScannerConfig(phone_ip="10.0.0.1", supabase_url="", supabase_key="")
+        with patch.dict("os.environ", {"NEXT_PUBLIC_SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}, clear=False):
+            config = ScannerConfig(phone_ip="10.0.0.1", supabase_url="", supabase_key="")
         errors = config.validate()
         assert any("supabase" in e.lower() for e in errors)
 
     def test_validate_missing_supabase_key(self):
         """Validation catches missing Supabase key."""
-        config = ScannerConfig(
-            phone_ip="10.0.0.1",
-            supabase_url="https://x.supabase.co",
-            supabase_key="",
-        )
+        with patch.dict("os.environ", {"SUPABASE_SERVICE_ROLE_KEY": ""}, clear=False):
+            config = ScannerConfig(
+                phone_ip="10.0.0.1",
+                supabase_url="https://x.supabase.co",
+                supabase_key="",
+            )
         errors = config.validate()
         assert any("supabase" in e.lower() for e in errors)
 

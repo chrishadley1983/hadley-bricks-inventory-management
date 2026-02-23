@@ -30,7 +30,7 @@ def config() -> ScannerConfig:
         phone_port=8080,
         camera_fps=3,
         confidence_threshold=0.70,
-        min_contour_area=500,
+        min_contour_area=5000,
         max_contour_area=50000,
         brickognize_max_rps=2,
         brickognize_top_n=5,

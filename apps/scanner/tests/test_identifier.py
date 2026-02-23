@@ -28,7 +28,7 @@ class TestBrickognizeClient:
     @pytest.mark.asyncio
     async def test_identify_success(self, client: BrickognizeClient, jpeg_bytes: bytes):
         """Successful API call parses response into BrickognizeResponse."""
-        api_response = {
+        parts_response = {
             "id": "listing-001",
             "bounding_box": {"x": 0, "y": 0, "w": 100, "h": 100},
             "items": [
@@ -49,17 +49,35 @@ class TestBrickognizeClient:
                 },
             ],
         }
+        figs_response = {
+            "id": "listing-002",
+            "bounding_box": {},
+            "items": [],
+        }
 
-        mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.json = AsyncMock(return_value=api_response)
-        mock_ctx = MagicMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_parts_resp = AsyncMock()
+        mock_parts_resp.status = 200
+        mock_parts_resp.json = AsyncMock(return_value=parts_response)
+        mock_parts_ctx = MagicMock()
+        mock_parts_ctx.__aenter__ = AsyncMock(return_value=mock_parts_resp)
+        mock_parts_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_figs_resp = AsyncMock()
+        mock_figs_resp.status = 200
+        mock_figs_resp.json = AsyncMock(return_value=figs_response)
+        mock_figs_ctx = MagicMock()
+        mock_figs_ctx.__aenter__ = AsyncMock(return_value=mock_figs_resp)
+        mock_figs_ctx.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.closed = False
-        mock_session.post = MagicMock(return_value=mock_ctx)
+
+        def route_post(url, **kwargs):
+            if "figs" in url:
+                return mock_figs_ctx
+            return mock_parts_ctx
+
+        mock_session.post = MagicMock(side_effect=route_post)
 
         with patch.object(client, "_get_session", return_value=mock_session):
             with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -72,8 +90,54 @@ class TestBrickognizeClient:
         assert result.items[0].score == 0.92
 
     @pytest.mark.asyncio
+    async def test_identify_figs_wins_when_higher_score(self, client: BrickognizeClient, jpeg_bytes: bytes):
+        """Figs endpoint result is returned when it has a higher score."""
+        parts_response = {
+            "id": "listing-001",
+            "bounding_box": {},
+            "items": [{"id": "3001", "name": "Brick 2 x 4", "score": 0.50, "type": "part"}],
+        }
+        figs_response = {
+            "id": "listing-002",
+            "bounding_box": {},
+            "items": [{"id": "sw0565", "name": "Astromech Droid, Chopper", "score": 0.94, "type": "fig"}],
+        }
+
+        mock_parts_resp = AsyncMock()
+        mock_parts_resp.status = 200
+        mock_parts_resp.json = AsyncMock(return_value=parts_response)
+        mock_parts_ctx = MagicMock()
+        mock_parts_ctx.__aenter__ = AsyncMock(return_value=mock_parts_resp)
+        mock_parts_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_figs_resp = AsyncMock()
+        mock_figs_resp.status = 200
+        mock_figs_resp.json = AsyncMock(return_value=figs_response)
+        mock_figs_ctx = MagicMock()
+        mock_figs_ctx.__aenter__ = AsyncMock(return_value=mock_figs_resp)
+        mock_figs_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+
+        def route_post(url, **kwargs):
+            if "figs" in url:
+                return mock_figs_ctx
+            return mock_parts_ctx
+
+        mock_session.post = MagicMock(side_effect=route_post)
+
+        with patch.object(client, "_get_session", return_value=mock_session):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await client.identify(jpeg_bytes)
+
+        assert result.items[0].id == "sw0565"
+        assert result.items[0].type == "fig"
+        assert result.items[0].score == 0.94
+
+    @pytest.mark.asyncio
     async def test_identify_empty_items(self, client: BrickognizeClient, jpeg_bytes: bytes):
-        """API returns empty items list when no match found."""
+        """API returns empty items list when no match found on either endpoint."""
         api_response = {
             "id": "listing-002",
             "bounding_box": {"x": 0, "y": 0, "w": 50, "h": 50},

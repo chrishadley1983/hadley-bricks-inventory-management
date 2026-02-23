@@ -69,9 +69,16 @@ async def detection_loop(
         current_objects = tracker.update(contours)
         current_ids = set(current_objects.keys())
 
-        # Add frames for currently tracked pieces
+        # Build centroid-to-bbox lookup from current contours
+        bbox_lookup: dict[tuple[float, float], tuple[int, int, int, int]] = {}
+        for c in contours:
+            bbox_lookup[c.centroid] = c.bounding_rect
+
+        # Add frames only for pieces actively detected this frame
         for track_id, centroid in current_objects.items():
-            selector.add_frame(track_id, frame, centroid, detector.roi)
+            bbox = bbox_lookup.get(centroid)
+            if bbox is not None:
+                selector.add_frame(track_id, frame, centroid, bbox, detector.roi)
 
         # Check for pieces that left the frame (deregistered)
         departed = previous_ids - current_ids

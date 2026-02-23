@@ -35,9 +35,10 @@ class ScannerConfig:
 
     # Detection
     confidence_threshold: float = 0.70
-    min_contour_area: int = 500
+    min_contour_area: int = 5000
     max_contour_area: int = 50000
     calibration_frames: int = 30
+    bg_subtract_threshold: int = 49
 
     # Brickognize
     brickognize_max_rps: int = 2
@@ -77,9 +78,10 @@ def load_config() -> ScannerConfig:
         camera_fps=int(os.environ.get("CAMERA_FPS", "3")),
         camera_resolution=os.environ.get("CAMERA_RESOLUTION", "1280x720"),
         confidence_threshold=float(os.environ.get("CONFIDENCE_THRESHOLD", "0.70")),
-        min_contour_area=int(os.environ.get("MIN_CONTOUR_AREA", "500")),
+        min_contour_area=int(os.environ.get("MIN_CONTOUR_AREA", "5000")),
         max_contour_area=int(os.environ.get("MAX_CONTOUR_AREA", "50000")),
         calibration_frames=int(os.environ.get("CALIBRATION_FRAMES", "30")),
+        bg_subtract_threshold=int(os.environ.get("BG_SUBTRACT_THRESHOLD", "49")),
         brickognize_max_rps=int(os.environ.get("BRICKOGNIZE_MAX_RPS", "2")),
         brickognize_top_n=int(os.environ.get("BRICKOGNIZE_TOP_N", "5")),
         image_retention_days=int(os.environ.get("IMAGE_RETENTION_DAYS", "90")),

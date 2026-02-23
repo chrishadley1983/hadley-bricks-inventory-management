@@ -11,13 +11,14 @@ from models import Contour
 
 
 class TestPieceDetector:
-    """F3: MOG2 background subtraction detects pieces."""
+    """F3: Static background subtraction detects pieces."""
 
-    def test_init_creates_bg_subtractor(self, config: ScannerConfig):
+    def test_init_creates_detector(self, config: ScannerConfig):
         detector = PieceDetector(config)
-        assert detector.bg_subtractor is not None
+        assert detector._bg_gray is None  # not trained yet
         assert detector.min_area == config.min_contour_area
         assert detector.max_area == config.max_contour_area
+        assert detector._bg_threshold == config.bg_subtract_threshold
 
     def test_train_background(self, config: ScannerConfig, sample_frame: np.ndarray):
         """Training feeds frames to MOG2 model without error."""
@@ -38,20 +39,20 @@ class TestPieceDetector:
         assert len(contours) <= 1
 
     def test_detect_with_blob(self, config: ScannerConfig):
-        """Detection finds a white blob on trained dark background."""
+        """Detection finds a large white blob on trained dark background."""
+        config.min_contour_area = 500  # Lower for this test
         detector = PieceDetector(config)
         bg = np.full((480, 640, 3), 50, dtype=np.uint8)
 
         # Train on dark background
         detector.train_background([bg.copy() for _ in range(20)])
 
-        # Add a white blob
+        # Add a large white blob (200x150 = 30000px area)
         frame = bg.copy()
-        frame[150:220, 200:300] = 255
+        frame[100:250, 150:350] = 255
 
         contours = detector.detect(frame)
         assert isinstance(contours, list)
-        # The blob should be detected (area ~7000, above min_area=500)
         for c in contours:
             assert isinstance(c, Contour)
             assert c.area > 0
@@ -59,6 +60,7 @@ class TestPieceDetector:
 
     def test_detect_filters_by_roi(self, config: ScannerConfig):
         """Contours outside ROI are filtered out."""
+        config.min_contour_area = 500  # Lower for this test
         detector = PieceDetector(config)
         # Set ROI to right half of frame
         detector.roi = (320, 0, 320, 480)
@@ -68,10 +70,10 @@ class TestPieceDetector:
 
         # Blob on left side (outside ROI)
         frame = bg.copy()
-        frame[150:220, 50:150] = 255
+        frame[100:250, 50:200] = 255
 
         contours = detector.detect(frame)
-        # Should filter out contour since centroid (~100, 185) is outside ROI (320-640)
+        # Should filter out contour since centroid (~125, 175) is outside ROI (320-640)
         roi_contours = [c for c in contours if c.centroid[0] >= 320]
         assert len(roi_contours) == 0
 
@@ -81,13 +83,28 @@ class TestPieceDetector:
         bg = np.full((480, 640, 3), 50, dtype=np.uint8)
         detector.train_background([bg.copy() for _ in range(20)])
 
-        # Tiny blob (5x5 = 25px area, below min_area=500)
+        # Small blob (20x20 = 400px area, below min_area=5000)
         frame = bg.copy()
-        frame[200:205, 300:305] = 255
+        frame[200:220, 300:320] = 255
 
         contours = detector.detect(frame)
         small = [c for c in contours if c.area < config.min_contour_area]
         assert len(small) == 0
+
+    def test_detect_filters_edge_contours(self, config: ScannerConfig):
+        """Contours touching frame edges are filtered out."""
+        config.min_contour_area = 500
+        detector = PieceDetector(config)
+        bg = np.full((480, 640, 3), 50, dtype=np.uint8)
+        detector.train_background([bg.copy() for _ in range(20)])
+
+        # Blob touching left edge (x=0-60, within 80px margin)
+        frame = bg.copy()
+        frame[200:300, 0:60] = 255
+
+        contours = detector.detect(frame)
+        edge_contours = [c for c in contours if c.bounding_rect[0] < PieceDetector.EDGE_MARGIN]
+        assert len(edge_contours) == 0
 
 
 class TestCentroidTracker:
@@ -168,17 +185,18 @@ class TestBestFrameSelector:
     def test_add_and_get_best_frame(self, sample_frame: np.ndarray):
         selector = BestFrameSelector()
         roi = (0, 0, 640, 480)
+        bbox = (200, 150, 80, 60)
 
         # Add frames with different sharpness
         blurry = sample_frame.copy()
-        selector.add_frame(1, blurry, (320.0, 240.0), roi)
+        selector.add_frame(1, blurry, (320.0, 240.0), bbox, roi)
 
         # Sharp frame (add texture)
         import cv2
         sharp = sample_frame.copy()
         cv2.rectangle(sharp, (100, 100), (200, 200), (0, 0, 0), 2)
         cv2.rectangle(sharp, (300, 300), (400, 400), (255, 255, 255), 2)
-        selector.add_frame(1, sharp, (320.0, 240.0), roi)
+        selector.add_frame(1, sharp, (320.0, 240.0), bbox, roi)
 
         result = selector.get_best_frame(1)
         assert result is not None
@@ -193,7 +211,7 @@ class TestBestFrameSelector:
 
     def test_remove_cleans_up(self, sample_frame: np.ndarray):
         selector = BestFrameSelector()
-        selector.add_frame(1, sample_frame, (320.0, 240.0), None)
+        selector.add_frame(1, sample_frame, (320.0, 240.0), None, None)
         assert 1 in selector.piece_frames
 
         selector.remove(1)
