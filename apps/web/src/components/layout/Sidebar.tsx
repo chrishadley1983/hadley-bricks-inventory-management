@@ -20,6 +20,7 @@ import {
   BarChart3,
   Landmark,
   Link2,
+  Store,
   Search,
   CalendarDays,
   Layers,
@@ -106,7 +107,10 @@ const navSections: NavSection[] = [
     id: 'admin',
     title: 'Admin',
     defaultOpen: false,
-    items: [{ href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 }],
+    items: [
+      { href: '/admin/shopify', label: 'Shopify Sync', icon: Store },
+      { href: '/settings/inventory-resolution', label: 'Inventory Resolution', icon: Link2 },
+    ],
   },
 ];
 
