@@ -336,10 +336,11 @@ def extract_dominant_color(
         pixels = tiny_center.reshape(-1, 3).astype(np.float64)
         return pixels.mean(axis=0).astype(np.uint8), len(pixels)
 
-    # Stage 4: Upper-quartile color extraction
+    # Stage 4: Upper-percentile color extraction
     # Camera lighting consistently makes pieces appear darker than their true color.
-    # Take the 75th percentile of each RGB channel from brightness-filtered pixels.
-    # This picks the "well-lit face" of the piece rather than shadowed sides.
+    # Take the 60th percentile of each RGB channel from brightness-filtered pixels.
+    # This picks the "well-lit face" of the piece, compensating for camera dimming
+    # without overshooting into specular highlights (which 75th percentile does).
     brightness = fg_rgb.sum(axis=1)
     p_low = np.percentile(brightness, 30)
     trimmed = fg_rgb[brightness >= p_low]
@@ -347,7 +348,7 @@ def extract_dominant_color(
     if len(trimmed) < 10:
         trimmed = fg_rgb  # Fallback to all foreground
 
-    dominant = np.percentile(trimmed, 75, axis=0)
+    dominant = np.percentile(trimmed, 60, axis=0)
     return dominant.astype(np.uint8), len(trimmed)
 
 
@@ -383,19 +384,23 @@ def match_color(
     for color in candidates:
         color_rgb = np.array(color["rgb"], dtype=np.uint8)
 
-        # For transparent colors on dark belt, adjust expected color
-        # The camera sees a blend of piece color and belt showing through
         if color["is_trans"]:
-            # Blend: ~40% piece color + ~60% belt
+            # For transparent colors, try both raw and belt-blended targets.
+            # Thin transparent pieces (visors) look close to their catalog color,
+            # while thick transparent pieces show more belt bleed-through.
+            # Use whichever gives a better match.
+            raw_lab = _rgb_to_lab(color_rgb)
             adjusted = (
                 np.array(color["rgb"], dtype=np.float64) * 0.4
                 + np.array(belt_color, dtype=np.float64) * 0.6
             )
-            color_lab = _rgb_to_lab(adjusted.astype(np.uint8))
+            blended_lab = _rgb_to_lab(adjusted.astype(np.uint8))
+            de_raw = delta_e_ciede2000(extracted_lab, raw_lab)
+            de_blended = delta_e_ciede2000(extracted_lab, blended_lab)
+            de = min(de_raw, de_blended)
         else:
             color_lab = _rgb_to_lab(color_rgb)
-
-        de = delta_e_ciede2000(extracted_lab, color_lab)
+            de = delta_e_ciede2000(extracted_lab, color_lab)
 
         if de < best_delta_e:
             best_delta_e = de
