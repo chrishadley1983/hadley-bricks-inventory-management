@@ -276,10 +276,11 @@ def extract_dominant_color(
 ) -> tuple[np.ndarray, int]:
     """Extract dominant color from a cropped piece image on a dark belt.
 
-    Uses a three-stage approach:
-    1. Center crop to reduce belt-to-piece pixel ratio (padding is 80px)
-    2. LAB-distance filter to separate foreground from belt
-    3. K-means clustering (k=2) to isolate the piece color from residual noise
+    Uses a four-stage approach:
+    1. Estimate belt color from crop corners
+    2. Center crop (inner 40%) to reduce belt-to-piece pixel ratio
+    3. LAB-distance filter to separate foreground from belt
+    4. 60th percentile extraction from brightness-trimmed pixels
 
     Args:
         crop: BGR image of the cropped piece

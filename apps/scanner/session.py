@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import json
 import logging
@@ -32,12 +33,14 @@ class SessionManager:
         """Create scanner_sessions row with status='calibrating'. Returns session_id."""
         self.start_time = datetime.now(timezone.utc)
 
-        result = self.supabase.table("scanner_sessions").insert({
-            "user_id": self.user_id,
-            "status": "calibrating",
-            "confidence_threshold": confidence_threshold,
-            "camera_config_json": camera_config,
-        }).execute()
+        result = await asyncio.to_thread(
+            lambda: self.supabase.table("scanner_sessions").insert({
+                "user_id": self.user_id,
+                "status": "calibrating",
+                "confidence_threshold": confidence_threshold,
+                "camera_config_json": camera_config,
+            }).execute()
+        )
 
         self.session_id = result.data[0]["id"]
         logger.info(f"Session started: {self.session_id}")
@@ -47,9 +50,11 @@ class SessionManager:
         """Update session status."""
         if not self.session_id:
             return
-        self.supabase.table("scanner_sessions").update({
-            "status": status,
-        }).eq("id", self.session_id).execute()
+        await asyncio.to_thread(
+            lambda: self.supabase.table("scanner_sessions").update({
+                "status": status,
+            }).eq("id", self.session_id).execute()
+        )
         logger.info(f"Session status: {status}")
 
     async def record_piece(self, result: IdentificationResult) -> str:
@@ -72,22 +77,28 @@ class SessionManager:
             "frame_sharpness": float(result.frame_sharpness) if result.frame_sharpness else None,
         }
 
-        insert_result = self.supabase.table("scanner_pieces").insert(piece_data).execute()
+        insert_result = await asyncio.to_thread(
+            lambda: self.supabase.table("scanner_pieces").insert(piece_data).execute()
+        )
         piece_id = insert_result.data[0]["id"]
 
         # Upload image to storage
         if result.image_bytes:
             image_path = f"{self.session_id}/{piece_id}.jpg"
             try:
-                self.supabase.storage.from_("scanner-images").upload(
-                    image_path,
-                    result.image_bytes,
-                    file_options={"content-type": "image/jpeg"},
+                await asyncio.to_thread(
+                    lambda: self.supabase.storage.from_("scanner-images").upload(
+                        image_path,
+                        result.image_bytes,
+                        file_options={"content-type": "image/jpeg"},
+                    )
                 )
                 # Update piece with image path
-                self.supabase.table("scanner_pieces").update({
-                    "image_path": image_path,
-                }).eq("id", piece_id).execute()
+                await asyncio.to_thread(
+                    lambda: self.supabase.table("scanner_pieces").update({
+                        "image_path": image_path,
+                    }).eq("id", piece_id).execute()
+                )
             except Exception as e:
                 logger.warning(f"Failed to upload image for piece {piece_id}: {e}")
 
@@ -107,11 +118,13 @@ class SessionManager:
 
         summary = self._build_summary(duration)
 
-        self.supabase.table("scanner_sessions").update({
-            "ended_at": end_time.isoformat(),
-            "status": "completed",
-            "summary_json": summary.model_dump(),
-        }).eq("id", self.session_id).execute()
+        await asyncio.to_thread(
+            lambda: self.supabase.table("scanner_sessions").update({
+                "ended_at": end_time.isoformat(),
+                "status": "completed",
+                "summary_json": summary.model_dump(),
+            }).eq("id", self.session_id).execute()
+        )
 
         logger.info(f"Session ended: {summary.total_pieces} pieces in {duration:.0f}s")
         return summary
@@ -120,10 +133,12 @@ class SessionManager:
         """Abort the session."""
         if not self.session_id:
             return
-        self.supabase.table("scanner_sessions").update({
-            "ended_at": datetime.now(timezone.utc).isoformat(),
-            "status": "aborted",
-        }).eq("id", self.session_id).execute()
+        await asyncio.to_thread(
+            lambda: self.supabase.table("scanner_sessions").update({
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "status": "aborted",
+            }).eq("id", self.session_id).execute()
+        )
 
     def _build_summary(self, duration_seconds: float) -> SessionSummary:
         """Build summary from recorded pieces."""

@@ -126,7 +126,7 @@ async def main():
 
             # Color identification (constrained by Brickognize part ID)
             part_id = result.brickognize_item_id
-            color_info = identify_color(best_frame, part_id=part_id)
+            color_info = await asyncio.to_thread(identify_color, best_frame, part_id)
             color_results[track_id] = color_info
 
             if result.status == "accepted":

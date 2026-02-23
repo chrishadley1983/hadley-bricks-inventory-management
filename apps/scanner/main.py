@@ -311,13 +311,15 @@ async def review_mode(session: SessionManager) -> None:
 
                 # Update in Supabase
                 try:
-                    session.supabase.table("scanner_pieces").update({
-                        "reviewed_at": datetime.now(timezone.utc).isoformat(),
-                        "reviewed_item_id": selected.id,
-                        "status": "accepted",
-                    }).eq("session_id", session.session_id).eq(
-                        "brickognize_listing_id", piece.brickognize_listing_id
-                    ).execute()
+                    await asyncio.to_thread(
+                        lambda: session.supabase.table("scanner_pieces").update({
+                            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                            "reviewed_item_id": selected.id,
+                            "status": "accepted",
+                        }).eq("session_id", session.session_id).eq(
+                            "brickognize_listing_id", piece.brickognize_listing_id
+                        ).execute()
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to update review: {e}")
 
@@ -328,13 +330,15 @@ async def review_mode(session: SessionManager) -> None:
                 piece.brickognize_item_id = manual_id
                 piece.status = "accepted"
                 try:
-                    session.supabase.table("scanner_pieces").update({
-                        "reviewed_at": datetime.now(timezone.utc).isoformat(),
-                        "reviewed_item_id": manual_id,
-                        "status": "accepted",
-                    }).eq("session_id", session.session_id).eq(
-                        "brickognize_listing_id", piece.brickognize_listing_id
-                    ).execute()
+                    await asyncio.to_thread(
+                        lambda: session.supabase.table("scanner_pieces").update({
+                            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                            "reviewed_item_id": manual_id,
+                            "status": "accepted",
+                        }).eq("session_id", session.session_id).eq(
+                            "brickognize_listing_id", piece.brickognize_listing_id
+                        ).execute()
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to update review: {e}")
                 console.print(f"  [green]Manually set: {manual_id}[/green]")
