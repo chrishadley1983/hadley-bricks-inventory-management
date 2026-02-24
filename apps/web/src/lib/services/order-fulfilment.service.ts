@@ -23,6 +23,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, PlatformOrder, OrderItem, InventoryItem } from '@hadley-bricks/database';
 import { OrderRepository, InventoryRepository } from '../repositories';
 import { AmazonInventoryLinkingService } from '../amazon/amazon-inventory-linking.service';
+import { archiveShopifyOnSold } from '../shopify/archive-on-sold';
 
 /**
  * Matching result for a single order item
@@ -482,6 +483,7 @@ export class OrderFulfilmentService {
               .eq('id', orderItem.id);
 
             inventoryItemsUpdated.push(inventoryId);
+            archiveShopifyOnSold(this.supabase, userId, inventoryId);
             result.inventoryUpdated++;
           }
         }

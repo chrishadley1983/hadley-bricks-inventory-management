@@ -5,6 +5,7 @@ import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { BricqerClient } from '@/lib/bricqer/client';
 import type { BricqerCredentials } from '@/lib/bricqer/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
+import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -100,9 +101,9 @@ export async function POST() {
           syncItem?.bricqer_item_id &&
           bricqerClient
         ) {
-          // Remove from Bricqer inventory (C1)
+          // Reduce quantity on Bricqer (or delete if qty reaches 0)
           try {
-            await bricqerClient.deleteInventoryItem(Number(syncItem.bricqer_item_id));
+            await bricqerClient.reduceInventoryQuantity(Number(syncItem.bricqer_item_id), 1);
           } catch {
             // Item may already be removed or sold through Bricqer
           }
@@ -130,6 +131,25 @@ export async function POST() {
             })
             .eq('id', removal.minifig_sync_id as string)
             .eq('user_id', user.id);
+
+          // Archive matching Shopify product (non-blocking)
+          // Use status=SOLD to target the item that was actually sold, not a sibling
+          const bricklinkId = syncItem.bricklink_id as string | null;
+          if (bricklinkId) {
+            const { data: invItem } = await supabase
+              .from('inventory_items')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('set_number', bricklinkId)
+              .eq('status', 'SOLD')
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (invItem) {
+              archiveShopifyOnSold(supabase, user.id, invItem.id);
+            }
+          }
         }
 
         approved++;
