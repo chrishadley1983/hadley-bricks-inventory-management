@@ -1,11 +1,27 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-02-12T12:00:00Z",
+  "lastRun": "2026-02-23T20:00:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 11,
-  "averageCriteriaPerFeature": 65,
+  "featuresDefinedCount": 13,
+  "averageCriteriaPerFeature": 61,
   "recentFeatures": [
+    {
+      "name": "scanner-set-check",
+      "criteriaCount": 15,
+      "autoVerifyCount": 15,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-02-23T20:00:00Z",
+      "note": "Set completeness checker: Rebrickable API parts list, interactive check mode during scanning, BrickLink wishlist XML export, color ID mapping"
+    },
+    {
+      "name": "lego-scanner-mvp-spec",
+      "criteriaCount": 19,
+      "autoVerifyCount": 16,
+      "humanVerifyCount": 3,
+      "definedAt": "2026-02-23T12:00:00Z",
+      "note": "Standalone Python conveyor belt scanner: camera polling, MOG2 detection, centroid tracking, Brickognize API, Supabase persistence, Rich CLI. 8 modules, async pipeline, 2 new DB tables + storage bucket"
+    },
     {
       "name": "vercel-optimisation",
       "criteriaCount": 15,
