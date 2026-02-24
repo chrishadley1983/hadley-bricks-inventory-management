@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskID
 from rich.table import Table
 from rich.text import Text
 
@@ -29,7 +30,14 @@ from identifier import (
     frame_to_jpeg_bytes,
 )
 from models import IdentificationResult, SessionSummary
+from rebrickable import RebrickableClient, RebrickableError, SetNotFoundError
 from session import SessionManager
+from set_check import (
+    MatchResult,
+    SetChecklist,
+    build_set_check_dashboard,
+    format_missing_table,
+)
 
 console = Console()
 logger = logging.getLogger("scanner")
@@ -552,6 +560,402 @@ async def main(config: ScannerConfig) -> None:
     await identifier.close()
 
 
+# ---------------------------------------------------------------------------
+# Set-check mode: result processing, keyboard handler, check mode, main
+# ---------------------------------------------------------------------------
+
+async def set_check_result_loop(
+    result_queue: asyncio.Queue,
+    checklist: SetChecklist,
+    recent_matches: list[tuple[str, str, MatchResult]],
+    stop_event: asyncio.Event,
+) -> None:
+    """Process identification results against the set checklist.
+
+    For each identified piece, runs color identification then matches
+    against the checklist. Reuses existing identification pipeline (I1)
+    and integrates color identification (I2).
+    """
+    from color import identify_color
+
+    while not stop_event.is_set():
+        try:
+            result: IdentificationResult = await asyncio.wait_for(
+                result_queue.get(), timeout=1.0
+            )
+        except asyncio.TimeoutError:
+            continue
+
+        # E4: Unrecognised pieces are skipped
+        if result.status == "error" or not result.brickognize_item_id:
+            recent_matches.append(("Unrecognised", "", MatchResult.EXTRA))
+            logger.info(f"Unrecognised piece (track {result.track_id}), skipped")
+            continue
+
+        part_id = result.brickognize_item_id
+        part_name = result.item_name or part_id
+
+        # I2: Color identification from the best frame crop
+        color_id = -1
+        color_name = "Unknown"
+        if result.image_bytes:
+            try:
+                import cv2
+                import numpy as np
+                nparr = np.frombuffer(result.image_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    color_info = await asyncio.to_thread(
+                        identify_color, frame, part_id
+                    )
+                    color_id = color_info["id"]
+                    color_name = color_info["name"]
+            except Exception as e:
+                logger.warning(f"Color identification failed for {part_id}: {e}")
+
+        # F4: Match against checklist
+        match_result = checklist.mark_found(part_id, color_id)
+        recent_matches.append((part_name, color_name, match_result))
+
+        found, expected = checklist.get_progress()
+        if match_result == MatchResult.FOUND:
+            logger.info(f"Found: {part_id} {color_name} ({found}/{expected})")
+        elif match_result == MatchResult.COMPLETE:
+            logger.info(f"Already have enough: {part_id} {color_name}")
+        else:
+            logger.info(f"Extra: {part_id} {color_name} (not in set)")
+
+
+async def set_check_keyboard_handler(
+    checklist: SetChecklist,
+    config: ScannerConfig,
+    status_ref: list[str],
+    stop_event: asyncio.Event,
+    live_ref: list,
+) -> None:
+    """Keyboard handler for set-check mode. Adds C key for interactive check mode."""
+    try:
+        import msvcrt
+
+        while not stop_event.is_set():
+            if msvcrt.kbhit():
+                key = msvcrt.getch().decode("utf-8", errors="ignore").upper()
+
+                if key == " ":
+                    if status_ref[0] == "scanning":
+                        status_ref[0] = "paused"
+                    elif status_ref[0] == "paused":
+                        status_ref[0] = "scanning"
+
+                elif key == "C":
+                    # F6: Interactive check mode
+                    status_ref[0] = "checking"
+                    # Stop live display temporarily
+                    if live_ref and live_ref[0]:
+                        live_ref[0].stop()
+
+                    await _interactive_check_mode(checklist, config, status_ref, stop_event)
+
+                    # Resume live display
+                    if live_ref and live_ref[0] and not stop_event.is_set():
+                        live_ref[0].start()
+
+                elif key in ("S", "Q"):
+                    stop_event.set()
+
+                elif key == "T":
+                    console.print(
+                        f"\nCurrent threshold: {config.confidence_threshold:.2f}"
+                    )
+                    try:
+                        new_val = float(
+                            console.input("New threshold (0.0-1.0): ").strip()
+                        )
+                        if 0.0 <= new_val <= 1.0:
+                            config.confidence_threshold = new_val
+                            console.print(f"Threshold set to {new_val:.2f}")
+                        else:
+                            console.print("[red]Invalid value[/red]")
+                    except ValueError:
+                        console.print("[red]Invalid number[/red]")
+
+            await asyncio.sleep(0.1)
+
+    except ImportError:
+        logger.warning("msvcrt not available, keyboard shortcuts disabled")
+        while not stop_event.is_set():
+            await asyncio.sleep(1.0)
+
+
+async def _interactive_check_mode(
+    checklist: SetChecklist,
+    config: ScannerConfig,
+    status_ref: list[str],
+    stop_event: asyncio.Event,
+) -> None:
+    """F6: Interactive check mode — shows missing parts, offers export or resume."""
+    while True:
+        console.print()
+        missing_table = format_missing_table(checklist)
+        console.print(missing_table)
+
+        found, expected = checklist.get_progress()
+        console.print()
+        console.print(
+            f"[bold]Progress:[/bold] {found}/{expected} parts found  |  "
+            f"{len(checklist.get_missing())} unique parts still missing"
+        )
+        console.print()
+        console.print("[bold]Options:[/bold]")
+        console.print("  [R] Resume scanning")
+        console.print("  [W] Export wishlist to BrickLink XML")
+        console.print("  [Q] Quit")
+        console.print()
+
+        choice = console.input("Choose: ").strip().upper()
+
+        if choice == "R":
+            status_ref[0] = "scanning"
+            return
+
+        elif choice == "W":
+            # F7: BrickLink wishlist XML export
+            output_path = Path(f"set-check-{checklist.set_num}.xml")
+            count = checklist.export_bricklink_xml(output_path)
+            if count > 0:
+                console.print(
+                    f"[green]Exported {count} missing parts to {output_path}[/green]"
+                )
+                console.print(
+                    "[dim]Upload this file to BrickLink: "
+                    "My BrickLink > Wanted > Upload[/dim]"
+                )
+            else:
+                console.print("[green]No missing parts to export![/green]")
+            # Stay in check mode — show menu again
+
+        elif choice == "Q":
+            stop_event.set()
+            return
+
+        else:
+            console.print("[dim]Invalid choice[/dim]")
+
+
+async def main_set_check(config: ScannerConfig) -> None:
+    """Main orchestrator for set-check mode.
+
+    Reuses existing camera, detection, and identification pipelines (I1).
+    Replaces persistence loop with set-check result loop.
+    """
+    # E3: Validate Rebrickable API key
+    if not config.rebrickable_api_key:
+        console.print(
+            "[red]REBRICKABLE_API_KEY not set. "
+            "Get a free key at https://rebrickable.com/api/[/red]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    set_num = config.check_set
+    console.print(f"[bold]Set Check Mode:[/bold] {set_num}")
+
+    # F2: Fetch parts list from Rebrickable with progress bar
+    rb_client = RebrickableClient(config.rebrickable_api_key)
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total} parts"),
+        console=console,
+    )
+    try:
+        with progress:
+            # Step 1: Fetch set info
+            info_task = progress.add_task("Fetching set info...", total=None)
+            set_info = await asyncio.to_thread(rb_client.get_set_info, set_num)
+            progress.update(info_task, description=f"[green]{set_info['name']}[/green]", completed=1, total=1)
+
+            # Step 2: Fetch parts with progress callback
+            parts_task = progress.add_task("Loading parts...", total=set_info.get("num_parts", 100))
+
+            def _on_progress(fetched: int, total: int) -> None:
+                progress.update(parts_task, completed=fetched, total=total)
+
+            parts = await asyncio.to_thread(
+                rb_client.get_set_parts, set_num, False, _on_progress,
+            )
+            progress.update(parts_task, completed=len(parts), total=len(parts), description="[green]Parts loaded[/green]")
+    except SetNotFoundError as e:
+        # E1: Invalid set number
+        console.print(f"[red]{e}[/red]", file=sys.stderr)
+        sys.exit(1)
+    except RebrickableError as e:
+        # E2: API failure
+        console.print(f"[red]{e}[/red]", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        console.print(
+            f"[red]Failed to fetch parts list from Rebrickable: {e}. "
+            "Check your API key and network connection.[/red]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    finally:
+        rb_client.close()
+
+    # F3: Create checklist
+    non_spare = [p for p in parts if not p.get("is_spare", False)]
+    spare = [p for p in parts if p.get("is_spare", False)]
+    checklist = SetChecklist(parts, set_info["name"], set_num)
+    found, expected = checklist.get_progress()
+
+    console.print(
+        f"[green]Loaded:[/green] {set_info['name']} ({set_info['year']})"
+    )
+    console.print(
+        f"[green]Parts:[/green] {expected} pieces across "
+        f"{checklist.total_unique_parts} unique part+color combos "
+        f"(+ {sum(p['quantity'] for p in spare)} spares)"
+    )
+
+    # Validate config for scanning
+    errors = config.validate()
+    if errors:
+        for err in errors:
+            console.print(f"[red]Config error: {err}[/red]")
+        return
+
+    # Lookup user_id
+    if not config.user_id:
+        try:
+            config.user_id = lookup_user_id(config)
+        except Exception as e:
+            console.print(f"[red]Cannot determine user: {e}[/red]")
+            return
+
+    # Initialize modules (I1: reuse existing pipeline)
+    camera = CameraClient(config)
+    detector = PieceDetector(config)
+    tracker = CentroidTracker()
+    selector = BestFrameSelector()
+    identifier = BrickognizeClient(config)
+
+    # Health check
+    console.print("[bold]Checking camera connection...[/bold]")
+    if not await camera.health_check():
+        console.print("[red]Cannot reach camera. Check IP Webcam is running.[/red]")
+        await camera.close()
+        return
+
+    console.print("[green]Camera connected.[/green]")
+
+    # Calibration (reuses existing calibration flow)
+    console.print("\n[bold]Starting calibration...[/bold]")
+    console.print("Ensure the belt is EMPTY, then press Enter.")
+    input()
+
+    calibration = CalibrationFlow(camera, config)
+    cal_result = await calibration.run()
+
+    if cal_result.lighting_warning:
+        console.print(f"[yellow]Warning: {cal_result.lighting_warning}[/yellow]")
+    if cal_result.contrast_warning:
+        console.print(f"[yellow]Warning: {cal_result.contrast_warning}[/yellow]")
+
+    detector.train_background(cal_result.background_frames)
+    detector.roi = cal_result.roi
+
+    console.print("[green]Calibration complete. Scanning...[/green]\n")
+
+    # Create async queues
+    frame_queue: asyncio.Queue = asyncio.Queue(maxsize=30)
+    best_frame_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+    result_queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+
+    stop_event = asyncio.Event()
+    status_ref = ["scanning"]
+    start_time = datetime.now(timezone.utc)
+    recent_matches: list[tuple[str, str, MatchResult]] = []
+    live_ref: list = [None]
+
+    # Launch pipeline tasks (I1: same camera, detection, identification loops)
+    tasks = [
+        asyncio.create_task(camera_loop(camera, frame_queue, stop_event)),
+        asyncio.create_task(
+            detection_loop(detector, tracker, selector, frame_queue, best_frame_queue, stop_event)
+        ),
+        asyncio.create_task(
+            identification_loop(identifier, best_frame_queue, result_queue, config, stop_event)
+        ),
+        asyncio.create_task(
+            set_check_result_loop(result_queue, checklist, recent_matches, stop_event)
+        ),
+        asyncio.create_task(
+            set_check_keyboard_handler(checklist, config, status_ref, stop_event, live_ref)
+        ),
+    ]
+
+    # F5: Rich Live display with set-check dashboard
+    try:
+        def _elapsed() -> str:
+            delta = (datetime.now(timezone.utc) - start_time).total_seconds()
+            mins, secs = divmod(int(delta), 60)
+            return f"{mins:02d}:{secs:02d}"
+
+        with Live(
+            build_set_check_dashboard(checklist, status_ref[0], _elapsed(), recent_matches),
+            refresh_per_second=2,
+            console=console,
+        ) as live:
+            live_ref[0] = live
+            while not stop_event.is_set():
+                live.update(
+                    build_set_check_dashboard(checklist, status_ref[0], _elapsed(), recent_matches)
+                )
+                await asyncio.sleep(0.5)
+    except KeyboardInterrupt:
+        stop_event.set()
+
+    live_ref[0] = None
+
+    # Cancel all pipeline tasks
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Show final missing parts table
+    console.print()
+    missing_table = format_missing_table(checklist)
+    console.print(missing_table)
+
+    found, expected = checklist.get_progress()
+    if found == expected:
+        console.print("\n[bold green]Set is complete![/bold green]")
+    else:
+        console.print(
+            f"\n[bold]{found}/{expected} parts found. "
+            f"{len(checklist.get_missing())} unique parts still missing.[/bold]"
+        )
+        # Offer final export
+        try:
+            choice = console.input(
+                "Export missing parts to BrickLink XML? [Y/n]: "
+            ).strip().upper()
+            if choice in ("", "Y", "YES"):
+                output_path = Path(f"set-check-{checklist.set_num}.xml")
+                count = checklist.export_bricklink_xml(output_path)
+                console.print(
+                    f"[green]Exported {count} missing parts to {output_path}[/green]"
+                )
+        except (KeyboardInterrupt, EOFError):
+            pass
+
+    # Cleanup
+    await camera.close()
+    await identifier.close()
+
+
 def run():
     """Entry point."""
     logging.basicConfig(
@@ -560,7 +964,12 @@ def run():
     )
 
     config = parse_cli_args()
-    asyncio.run(main(config))
+
+    # Branch: set-check mode vs standard scanning mode
+    if config.check_set:
+        asyncio.run(main_set_check(config))
+    else:
+        asyncio.run(main(config))
 
 
 if __name__ == "__main__":

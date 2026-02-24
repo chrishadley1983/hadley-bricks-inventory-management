@@ -47,6 +47,10 @@ class ScannerConfig:
     # Storage
     image_retention_days: int = 90
 
+    # Set check mode
+    check_set: str | None = None
+    rebrickable_api_key: str = ""
+
     # Runtime (set after init)
     user_id: str = ""
 
@@ -55,6 +59,8 @@ class ScannerConfig:
             self.supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "")
         if not self.supabase_key:
             self.supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if not self.rebrickable_api_key:
+            self.rebrickable_api_key = os.environ.get("REBRICKABLE_API_KEY", "")
 
     def validate(self) -> list[str]:
         """Return list of validation errors, empty if valid."""
@@ -85,6 +91,7 @@ def load_config() -> ScannerConfig:
         brickognize_max_rps=int(os.environ.get("BRICKOGNIZE_MAX_RPS", "2")),
         brickognize_top_n=int(os.environ.get("BRICKOGNIZE_TOP_N", "5")),
         image_retention_days=int(os.environ.get("IMAGE_RETENTION_DAYS", "90")),
+        rebrickable_api_key=os.environ.get("REBRICKABLE_API_KEY", ""),
     )
 
 
@@ -98,6 +105,12 @@ def parse_cli_args(args: list[str] | None = None) -> ScannerConfig:
         "--threshold", type=float, help="Confidence threshold (0.0-1.0)"
     )
     parser.add_argument("--fps", type=int, help="Frames per second to capture")
+    parser.add_argument(
+        "--check-set",
+        type=str,
+        metavar="SET_NUM",
+        help="Set check mode: verify completeness of a LEGO set (e.g., 75192-1)",
+    )
 
     parsed = parser.parse_args(args)
     config = load_config()
@@ -109,5 +122,7 @@ def parse_cli_args(args: list[str] | None = None) -> ScannerConfig:
         config.confidence_threshold = parsed.threshold
     if parsed.fps is not None:
         config.camera_fps = parsed.fps
+    if parsed.check_set is not None:
+        config.check_set = parsed.check_set
 
     return config
