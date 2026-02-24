@@ -47,6 +47,7 @@ export interface PurchaseImportEmailItem {
   list_price: number | null;
   purchase_date: string;
   purchase_label: string; // e.g. "£18.89 Bundle" or "£11.23 (Vinted)" — only on first item per purchase
+  forwarded_from?: string; // e.g. "ph2026@proton.me" if from a forwarded email
 }
 
 export interface PurchaseImportSummaryParams {
@@ -343,8 +344,11 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     const tableRows = rows
       .map((r) => {
         const profitColor = r.profit !== null ? (r.profit >= 0 ? '#27ae60' : '#e74c3c') : '#888';
+        const fwdBadge = r.forwarded_from
+          ? ' <span style="background:#e8daef;color:#6c3483;font-size:10px;padding:1px 4px;border-radius:3px;vertical-align:middle;">FWD</span>'
+          : '';
         return `<tr>
-          <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_label}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_label}${fwdBadge}</td>
           <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${r.purchase_date}</td>
           <td style="padding:6px 10px;border:1px solid #ddd;">${r.set_number}</td>
           <td style="padding:6px 10px;border:1px solid #ddd;">${r.set_name}</td>

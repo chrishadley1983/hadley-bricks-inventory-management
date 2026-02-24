@@ -75,6 +75,7 @@ interface ScanCandidate {
   bundle_group?: string;
   bundle_total_cost?: number;
   bundle_index?: number;
+  forwarded_from?: string;
 }
 
 interface EnrichedCandidate {
@@ -95,6 +96,7 @@ interface EnrichedCandidate {
   bundle_group?: string;
   bundle_total_cost?: number;
   bundle_index?: number;
+  forwarded_from?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -244,6 +246,7 @@ export async function POST(request: NextRequest) {
           bundle_group: candidate.bundle_group,
           bundle_total_cost: candidate.bundle_total_cost,
           bundle_index: candidate.bundle_index,
+          forwarded_from: candidate.forwarded_from,
         });
       } catch (err) {
         console.warn(`[Cron EmailPurchases] Failed to enrich ${candidate.set_number}:`, err);
@@ -264,6 +267,7 @@ export async function POST(request: NextRequest) {
           bundle_group: candidate.bundle_group,
           bundle_total_cost: candidate.bundle_total_cost,
           bundle_index: candidate.bundle_index,
+          forwarded_from: candidate.forwarded_from,
         });
       }
     }
@@ -463,6 +467,9 @@ export async function POST(request: NextRequest) {
         const vintedOrders = new Map<string, { seller_username: string }>();
         for (const item of enriched) {
           if (item.source === 'Vinted' && item.seller_username && item.order_reference) {
+            // Skip seller messaging for forwarded emails (different Vinted account)
+            if (item.forwarded_from) continue;
+
             const emailDate = item.email_date ? new Date(item.email_date) : null;
             if (emailDate && emailDate > messagingCutoff) {
               vintedOrders.set(item.order_reference, { seller_username: item.seller_username });
@@ -636,6 +643,7 @@ export async function POST(request: NextRequest) {
             list_price: c.list_price,
             purchase_date: purchaseDate,
             purchase_label: purchaseLabel,
+            forwarded_from: e?.forwarded_from,
           };
         });
 
