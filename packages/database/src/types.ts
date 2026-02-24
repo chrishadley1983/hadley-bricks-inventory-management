@@ -8718,6 +8718,112 @@ export type Database = {
           },
         ]
       }
+      scanner_pieces: {
+        Row: {
+          bounding_box_json: Json | null
+          brickognize_item_id: string | null
+          brickognize_listing_id: string | null
+          confidence: number | null
+          created_at: string
+          frame_sharpness: number | null
+          id: string
+          image_path: string | null
+          item_category: string | null
+          item_name: string | null
+          reviewed_at: string | null
+          reviewed_item_id: string | null
+          session_id: string
+          status: string
+          top_results_json: Json | null
+        }
+        Insert: {
+          bounding_box_json?: Json | null
+          brickognize_item_id?: string | null
+          brickognize_listing_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          frame_sharpness?: number | null
+          id?: string
+          image_path?: string | null
+          item_category?: string | null
+          item_name?: string | null
+          reviewed_at?: string | null
+          reviewed_item_id?: string | null
+          session_id: string
+          status?: string
+          top_results_json?: Json | null
+        }
+        Update: {
+          bounding_box_json?: Json | null
+          brickognize_item_id?: string | null
+          brickognize_listing_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          frame_sharpness?: number | null
+          id?: string
+          image_path?: string | null
+          item_category?: string | null
+          item_name?: string | null
+          reviewed_at?: string | null
+          reviewed_item_id?: string | null
+          session_id?: string
+          status?: string
+          top_results_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scanner_pieces_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "scanner_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scanner_sessions: {
+        Row: {
+          camera_config_json: Json | null
+          confidence_threshold: number
+          created_at: string
+          ended_at: string | null
+          id: string
+          started_at: string
+          status: string
+          summary_json: Json | null
+          user_id: string
+        }
+        Insert: {
+          camera_config_json?: Json | null
+          confidence_threshold?: number
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary_json?: Json | null
+          user_id: string
+        }
+        Update: {
+          camera_config_json?: Json | null
+          confidence_threshold?: number
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary_json?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scanner_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scraped_metrics: {
         Row: {
           billing_period_end: string | null
@@ -8959,6 +9065,42 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_description_cache: {
+        Row: {
+          created_at: string | null
+          description_html: string
+          inventory_item_id: string
+          set_number: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description_html: string
+          inventory_item_id: string
+          set_number?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description_html?: string
+          inventory_item_id?: string
+          set_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_description_cache_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: true
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_description_cache_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: true
+            referencedRelation: "inventory_items_with_age"
             referencedColumns: ["id"]
           },
         ]

@@ -15,6 +15,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
 
 // ============================================================================
 // Types
@@ -318,6 +319,7 @@ export class EbayInventoryLinkingService {
             result.lineItemsProcessed++;
             const netSale = await this.calculateNetSale(order.ebay_order_id, lineItem);
             await this.markInventoryAsSold(lineItem.inventory_item_id!, lineItem, order, netSale);
+            archiveShopifyOnSold(this.supabase, this.userId, lineItem.inventory_item_id!);
             result.autoLinked++;
           }
         }
@@ -333,6 +335,7 @@ export class EbayInventoryLinkingService {
           // Auto-link successful
           const netSale = await this.calculateNetSale(order.ebay_order_id, lineItem);
           await this.markInventoryAsSold(matchResult.inventoryId, lineItem, order, netSale);
+          archiveShopifyOnSold(this.supabase, this.userId, matchResult.inventoryId);
           await this.linkLineItemToInventory(
             lineItem.id,
             matchResult.inventoryId,
@@ -1098,6 +1101,7 @@ export class EbayInventoryLinkingService {
         order,
         netSale
       );
+      archiveShopifyOnSold(this.supabase, this.userId, inventoryId);
     }
 
     // Link the first inventory item to the line item (for single-qty, this is the only one)

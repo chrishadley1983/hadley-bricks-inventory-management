@@ -19,6 +19,7 @@ import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
 import { AmazonArbitrageSyncService } from '@/lib/arbitrage/amazon-sync.service';
 import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import { ShopifySyncService } from '@/lib/shopify/sync.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
@@ -57,6 +58,7 @@ interface WeeklyStats {
 interface FullSyncResults {
   platformSyncs: SyncResult[];
   inventoryAsinSync: SyncResult | null;
+  shopifyArchiveSync: SyncResult | null;
   stuckJobs: StuckJob[];
   stuckJobsReset: number;
   weeklyStats: WeeklyStats;
@@ -462,6 +464,18 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     inventoryAsinText = `❌ ${results.inventoryAsinSync.error ?? 'Failed'}`;
   }
 
+  // Build Shopify archive sync section
+  let shopifyArchiveText: string;
+  if (!results.shopifyArchiveSync) {
+    shopifyArchiveText = '⏭️ Not available';
+  } else if (results.shopifyArchiveSync.status === 'success') {
+    shopifyArchiveText = `✅ ${results.shopifyArchiveSync.updated ?? 0} archived, ${results.shopifyArchiveSync.created ?? 0} created`;
+  } else if (results.shopifyArchiveSync.status === 'skipped') {
+    shopifyArchiveText = '⏭️ Skipped - No Shopify config';
+  } else {
+    shopifyArchiveText = `❌ ${results.shopifyArchiveSync.error ?? 'Failed'}`;
+  }
+
   // Build weekly stats section
   const weeklyStatsText = [
     `📦 **Listed:** ${results.weeklyStats.listedCount} items (£${results.weeklyStats.listedValue.toFixed(2)})`,
@@ -479,6 +493,9 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     '',
     '## 📦 INVENTORY ASIN SYNC',
     inventoryAsinText,
+    '',
+    '## 🏪 SHOPIFY ARCHIVE SYNC',
+    shopifyArchiveText,
     '',
     '## 📈 WEEKLY STATS',
     weeklyStatsText,
@@ -523,6 +540,7 @@ export async function POST(request: NextRequest) {
     const results: FullSyncResults = {
       platformSyncs: [],
       inventoryAsinSync: null,
+      shopifyArchiveSync: null,
       stuckJobs: [],
       stuckJobsReset: 0,
       weeklyStats: { listedCount: 0, listedValue: 0, soldCount: 0, soldValue: 0, backlogCount: 0 },
@@ -698,14 +716,53 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 5: Get weekly stats
+    // Step 5: Shopify archive safety-net — archive products for items no longer LISTED
+    if (userIds.length > 0) {
+      const userId = userIds[0];
+      console.log('[Cron FullSync] Running Shopify archive safety-net...');
+      try {
+        const shopifySync = new ShopifySyncService(supabase, userId);
+        const batchResult = await withTimeout(
+          shopifySync.batchSync(100),
+          60000,
+          'Shopify Archive Sync'
+        );
+        results.shopifyArchiveSync = {
+          platform: 'Shopify Archive',
+          status: 'success',
+          processed: batchResult.items_processed,
+          created: batchResult.items_created,
+          updated: batchResult.items_archived,
+        };
+        console.log(
+          `[Cron FullSync] Shopify archive: ${batchResult.items_archived} archived, ${batchResult.items_created} created`
+        );
+
+        if (batchResult.items_archived > 0) {
+          discordService.sendSyncStatus({
+            title: '🏪 Shopify Safety-Net Archive',
+            message: `Archived **${batchResult.items_archived}** product(s) that were no longer LISTED.\nThese were missed by the direct sale hooks.`,
+            success: true,
+          }).catch(() => {});
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        results.shopifyArchiveSync = {
+          platform: 'Shopify Archive',
+          status: errorMsg.includes('config') || errorMsg.includes('disabled') ? 'skipped' : 'failed',
+          error: errorMsg,
+        };
+      }
+    }
+
+    // Step 6: Get weekly stats
     console.log('[Cron FullSync] Calculating weekly stats...');
     results.weeklyStats = await getWeeklyStats(supabase);
 
-    // Step 6: Calculate total duration
+    // Step 7: Calculate total duration
     results.totalDurationMs = Date.now() - startTime;
 
-    // Step 7: Send Discord notification
+    // Step 8: Send Discord notification
     console.log('[Cron FullSync] Sending Discord notification...');
     await sendDiscordReport(results);
 

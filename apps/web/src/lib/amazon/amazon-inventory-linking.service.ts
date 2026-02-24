@@ -17,6 +17,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
 
 // ============================================================================
 // Types
@@ -245,6 +246,9 @@ export class AmazonInventoryLinkingService {
           );
 
           await this.markInventoryAsSold(matchResult.inventoryIds, orderItem, order, netSale);
+          for (const invId of matchResult.inventoryIds) {
+            archiveShopifyOnSold(this.supabase, this.userId, invId);
+          }
 
           await this.linkOrderItemToInventory(
             orderItem.id,
@@ -969,6 +973,9 @@ export class AmazonInventoryLinkingService {
 
     // Mark inventory as sold
     await this.markInventoryAsSold(inventoryItemIds, orderItem, order, netSale);
+    for (const invId of inventoryItemIds) {
+      archiveShopifyOnSold(this.supabase, this.userId, invId);
+    }
 
     // Link order item to first inventory
     await this.linkOrderItemToInventory(orderItem.id, inventoryItemIds[0], 'manual');

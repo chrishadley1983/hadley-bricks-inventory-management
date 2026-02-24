@@ -215,6 +215,33 @@ export class ShopifyClient {
     return this.request('GET', '/locations.json');
   }
 
+  // ── Theme/Asset Operations ─────────────────────────────────
+
+  async getThemes(): Promise<{ themes: Array<{ id: number; name: string; role: string }> }> {
+    return this.request('GET', '/themes.json');
+  }
+
+  async putAsset(
+    themeId: string,
+    key: string,
+    value: string
+  ): Promise<unknown> {
+    return this.request('PUT', `/themes/${themeId}/assets.json`, {
+      asset: { key, value },
+    });
+  }
+
+  async getAsset(
+    themeId: string,
+    key: string
+  ): Promise<{ asset: { key: string; value: string } } | null> {
+    try {
+      return await this.request('GET', `/themes/${themeId}/assets.json?asset[key]=${encodeURIComponent(key)}`);
+    } catch {
+      return null;
+    }
+  }
+
   // ── GraphQL ───────────────────────────────────────────────
 
   /** Make an authenticated GraphQL request to the Shopify Admin API */

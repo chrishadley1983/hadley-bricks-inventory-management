@@ -62,6 +62,7 @@ export interface ShopifyProductPayload {
     vendor: string;
     product_type: string;
     tags: string;
+    handle?: string;
     status: 'active' | 'draft' | 'archived';
     variants: Array<{
       price: string;
@@ -72,7 +73,13 @@ export interface ShopifyProductPayload {
       weight?: number;
       weight_unit?: string;
     }>;
-    images?: Array<{ src: string }>;
+    images?: Array<{ src?: string; attachment?: string; filename?: string; alt?: string }>;
+    metafields?: Array<{
+      namespace: string;
+      key: string;
+      value: string;
+      type: string;
+    }>;
   };
 }
 
@@ -103,10 +110,25 @@ export interface PriceResult {
   compare_at_price: number | null;
 }
 
+/** A single resolved image — either a URL or base64 data */
+export interface ResolvedImage {
+  src?: string;
+  attachment?: string;
+  filename?: string;
+}
+
 /** Image resolution result */
 export interface ImageResolutionResult {
   urls: string[];
-  source: 'ebay' | 'brickset' | 'brave' | 'manual' | 'none';
+  images: ResolvedImage[];
+  source: 'ebay' | 'brickset' | 'bricklink' | 'brave' | 'manual' | 'none';
+}
+
+/** eBay listing data fetched from Browse API */
+export interface EbayListingData {
+  images: string[];
+  description: string | null;
+  title: string | null;
 }
 
 /** Sync operation result */
