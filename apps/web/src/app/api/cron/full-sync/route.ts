@@ -735,7 +735,7 @@ export async function POST(request: NextRequest) {
           updated: batchResult.items_archived,
         };
         console.log(
-          `[Cron FullSync] Shopify archive: ${batchResult.items_archived} archived, ${batchResult.items_created} created`
+          `[Cron FullSync] Shopify: ${batchResult.items_archived} archived, ${batchResult.items_created} created, ${batchResult.items_added_to_group} added to groups`
         );
 
         if (batchResult.items_archived > 0) {
