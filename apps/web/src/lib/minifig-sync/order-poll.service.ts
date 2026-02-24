@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
-import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { BricqerClient } from '@/lib/bricqer/client';
 import type { BricqerCredentials } from '@/lib/bricqer/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
@@ -27,12 +27,14 @@ interface PollResult {
 
 export class OrderPollService {
   private jobTracker: MinifigJobTracker;
+  private ebayAuthService: EbayAuthService;
 
   constructor(
     private supabase: SupabaseClient<Database>,
     private userId: string
   ) {
     this.jobTracker = new MinifigJobTracker(supabase, userId);
+    this.ebayAuthService = new EbayAuthService(undefined, supabase);
   }
 
   /**
@@ -53,7 +55,7 @@ export class OrderPollService {
       const lastCursor = await this.jobTracker.getLatestCursor(jobType);
 
       // Get eBay access token
-      const accessToken = await ebayAuthService.getAccessToken(this.userId);
+      const accessToken = await this.ebayAuthService.getAccessToken(this.userId);
       if (!accessToken) {
         throw new Error('eBay credentials not configured or token expired');
       }
