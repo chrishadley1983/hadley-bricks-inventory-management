@@ -120,7 +120,7 @@ export class BricqerClient {
   private async request<T>(
     endpoint: string,
     options: {
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       params?: Record<string, string | number | boolean | undefined>;
       body?: unknown;
     } = {}
@@ -677,6 +677,23 @@ export class BricqerClient {
    */
   async getInventoryItem(itemId: number): Promise<BricqerInventoryItem> {
     return this.request<BricqerInventoryItem>(`/inventory/item/${itemId}/`);
+  }
+
+  /**
+   * Reduce quantity of an inventory item by a given amount.
+   * Uses PATCH to update remainingQuantity.
+   */
+  async reduceInventoryQuantity(itemId: number, reduceBy: number = 1): Promise<'reduced' | 'zeroed'> {
+    const item = await this.getInventoryItem(itemId);
+    const currentQty = item.remainingQuantity ?? item.quantity ?? 0;
+    const newQty = Math.max(0, currentQty - reduceBy);
+
+    await this.request<BricqerInventoryItem>(`/inventory/item/${itemId}/`, {
+      method: 'PATCH',
+      body: { remainingQuantity: newQty },
+    });
+
+    return newQty === 0 ? 'zeroed' : 'reduced';
   }
 
   /**

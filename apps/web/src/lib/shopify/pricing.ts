@@ -32,7 +32,7 @@ export function calculateShopifyPrice(
 
   return {
     price: Math.max(shopifyPrice, 0.99),
-    compare_at_price: listingValue,
+    compare_at_price: null,
   };
 }
 

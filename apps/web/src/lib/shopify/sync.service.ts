@@ -6,8 +6,10 @@ import {
   buildShopifyDescription,
   buildShopifyTitle,
   buildShopifyTags,
+  buildSeoDescription,
+  getOrGenerateAIDescription,
 } from './descriptions';
-import { resolveImages } from './images';
+import { resolveImages, fetchEbayListing } from './images';
 import type {
   ShopifyConfig,
   ShopifyProductPayload,
@@ -110,33 +112,96 @@ export class ShopifySyncService {
           break;
         }
       }
+
+      // For minifigures without a direct brickset_sets match, derive theme
+      // from the BrickLink prefix (e.g. sw→Star Wars, hp→Harry Potter)
+      if (!bricksetData && isMinifigure(item)) {
+        const theme = getMinifigTheme(item.set_number);
+        if (theme) {
+          bricksetData = {
+            set_number: item.set_number,
+            theme,
+            subtheme: null,
+            pieces: null,
+            minifigs: null,
+            year_from: null,
+            uk_retail_price: null,
+          };
+        }
+      }
     }
 
-    // Resolve images
-    const imageResult = await resolveImages(this.supabase, {
-      id: item.id,
-      set_number: item.set_number,
-      item_name: item.item_name,
-      ebay_listing_id: item.ebay_listing_id,
-      listing_platform: item.listing_platform,
+    // Fetch eBay listing data (photos + description) if this is an eBay item
+    let ebayListing = null;
+    if (item.listing_platform === 'ebay' && item.ebay_listing_id) {
+      ebayListing = await fetchEbayListing(item.ebay_listing_id);
+    }
+
+    // Resolve images (pass eBay data so all photos are used)
+    const imageResult = await resolveImages(
+      this.supabase,
+      {
+        id: item.id,
+        set_number: item.set_number,
+        item_name: item.item_name,
+        ebay_listing_id: item.ebay_listing_id,
+        listing_platform: item.listing_platform,
+      },
+      ebayListing
+    );
+
+    // Calculate pricing — minifigures use exact listing price (no discount)
+    const minifig = isMinifigure(item);
+    const priceResult = minifig
+      ? { price: item.listing_value ?? 0, compare_at_price: null }
+      : calculateShopifyPrice(item.listing_value ?? 0, config.default_discount_pct ?? 10);
+
+    // Get or generate AI description (checks cache, then generates via Claude Haiku)
+    // Used for Amazon items (no eBay description) and minifigs without eBay data
+    const aiDesc = item.set_number && item.set_number !== 'NA'
+      ? await getOrGenerateAIDescription(this.supabase, item.id, item.set_number, {
+          item_name: item.item_name,
+          condition: item.condition,
+          theme: bricksetData?.theme ?? null,
+          subtheme: bricksetData?.subtheme ?? null,
+          pieces: bricksetData?.pieces ?? null,
+          minifigs: bricksetData?.minifigs ?? null,
+          year: bricksetData?.year_from ?? null,
+          rrp: bricksetData?.uk_retail_price ?? null,
+        })
+      : null;
+
+    // Build product payload (pass eBay description for badge/title/tag detection)
+    const ebayDesc = ebayListing?.description ?? null;
+    const title = buildShopifyTitle(item, bricksetData, ebayDesc);
+    const description = buildShopifyDescription(item, bricksetData, ebayDesc, aiDesc);
+    const tags = buildShopifyTags(item, bricksetData, ebayDesc);
+
+    // Build metafields for storefront filtering
+    const metafields = buildMetafields(item, bricksetData);
+
+    // Add SEO meta description (plain text, max 160 chars)
+    const seoDesc = buildSeoDescription(item, bricksetData);
+    metafields.push({
+      namespace: 'global',
+      key: 'description_tag',
+      value: seoDesc,
+      type: 'single_line_text_field',
     });
 
-    // Calculate pricing
-    const discountPct = config.default_discount_pct ?? 10;
-    const priceResult = calculateShopifyPrice(item.listing_value ?? 0, discountPct);
+    const handle = buildHandle(item, title, priceResult.price);
 
-    // Build product payload
-    const title = buildShopifyTitle(item, bricksetData);
-    const description = buildShopifyDescription(item, bricksetData);
-    const tags = buildShopifyTags(item, bricksetData);
+    // Add alt text to images
+    const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
 
     const payload: ShopifyProductPayload = {
       product: {
         title,
         body_html: description,
-        vendor: 'Hadley Bricks',
-        product_type: 'LEGO Set',
+        vendor: 'LEGO',
+        product_type: minifig ? 'Minifigure' : 'LEGO Set',
         tags,
+        handle,
         status: 'active',
         variants: [
           {
@@ -149,9 +214,10 @@ export class ShopifySyncService {
             requires_shipping: true,
           },
         ],
-        ...(imageResult.urls.length > 0
-          ? { images: imageResult.urls.map((src) => ({ src })) }
+        ...(imagesWithAlt.length > 0
+          ? { images: imagesWithAlt }
           : {}),
+        metafields,
       },
     };
 
@@ -203,6 +269,233 @@ export class ShopifySyncService {
         {
           user_id: this.userId,
           inventory_item_id: item.id,
+          shopify_product_id: '',
+          sync_status: 'error',
+          sync_error: errorMsg.substring(0, 500),
+        },
+        { onConflict: 'inventory_item_id' }
+      );
+
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  // ── CREATE (GROUP) ──────────────────────────────────────────────
+
+  /**
+   * Push a group of identical items (same set, condition, price) as a single
+   * Shopify product with quantity = group size.
+   *
+   * Uses the first item as the "representative" for product data.
+   * All items in the group get a shopify_products mapping row pointing
+   * to the same shopify_product_id.
+   */
+  async createProductForGroup(
+    inventoryItemIds: string[],
+    quantity: number
+  ): Promise<SyncResult> {
+    if (inventoryItemIds.length === 0) {
+      return { success: false, error: 'Empty group' };
+    }
+
+    // Use first item as representative — createProduct builds the payload
+    const representativeId = inventoryItemIds[0];
+    const client = await this.getClient();
+    const config = this.getConfig();
+
+    // Fetch representative item
+    const { data: item, error: itemError } = await this.supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('id', representativeId)
+      .single();
+
+    if (itemError || !item) {
+      return { success: false, error: `Item not found: ${representativeId}` };
+    }
+
+    // Check none already synced (only count non-error entries with a real product ID)
+    const { data: existingAny } = await this.supabase
+      .from('shopify_products')
+      .select('id')
+      .in('inventory_item_id', inventoryItemIds)
+      .neq('shopify_product_id', '')
+      .eq('sync_status', 'synced')
+      .limit(1);
+
+    if (existingAny && existingAny.length > 0) {
+      return { success: false, error: 'One or more items already synced' };
+    }
+
+    // Get Brickset data
+    let bricksetData = null;
+    if (item.set_number && item.set_number !== 'NA') {
+      const variants = [`${item.set_number}-1`, item.set_number];
+      for (const v of variants) {
+        const { data } = await this.supabase
+          .from('brickset_sets')
+          .select('set_number, theme, subtheme, pieces, minifigs, year_from, uk_retail_price')
+          .eq('set_number', v)
+          .limit(1)
+          .single();
+        if (data) {
+          bricksetData = data;
+          break;
+        }
+      }
+
+      if (!bricksetData && isMinifigure(item)) {
+        const theme = getMinifigTheme(item.set_number);
+        if (theme) {
+          bricksetData = {
+            set_number: item.set_number,
+            theme,
+            subtheme: null,
+            pieces: null,
+            minifigs: null,
+            year_from: null,
+            uk_retail_price: null,
+          };
+        }
+      }
+    }
+
+    // Fetch eBay listing data
+    let ebayListing = null;
+    if (item.listing_platform === 'ebay' && item.ebay_listing_id) {
+      ebayListing = await fetchEbayListing(item.ebay_listing_id);
+    }
+
+    // Resolve images
+    const imageResult = await resolveImages(
+      this.supabase,
+      {
+        id: item.id,
+        set_number: item.set_number,
+        item_name: item.item_name,
+        ebay_listing_id: item.ebay_listing_id,
+        listing_platform: item.listing_platform,
+      },
+      ebayListing
+    );
+
+    // Calculate pricing
+    const minifig = isMinifigure(item);
+    const priceResult = minifig
+      ? { price: item.listing_value ?? 0, compare_at_price: null }
+      : calculateShopifyPrice(item.listing_value ?? 0, config.default_discount_pct ?? 10);
+
+    // AI description
+    const aiDesc = item.set_number && item.set_number !== 'NA'
+      ? await getOrGenerateAIDescription(this.supabase, item.id, item.set_number, {
+          item_name: item.item_name,
+          condition: item.condition,
+          theme: bricksetData?.theme ?? null,
+          subtheme: bricksetData?.subtheme ?? null,
+          pieces: bricksetData?.pieces ?? null,
+          minifigs: bricksetData?.minifigs ?? null,
+          year: bricksetData?.year_from ?? null,
+          rrp: bricksetData?.uk_retail_price ?? null,
+        })
+      : null;
+
+    // Build product payload
+    const ebayDesc = ebayListing?.description ?? null;
+    const title = buildShopifyTitle(item, bricksetData, ebayDesc);
+    const description = buildShopifyDescription(item, bricksetData, ebayDesc, aiDesc);
+    const tags = buildShopifyTags(item, bricksetData, ebayDesc);
+    const metafields = buildMetafields(item, bricksetData);
+    const handle = buildHandle(item, title, priceResult.price);
+
+    // Add SEO meta description (plain text, max 160 chars)
+    const seoDesc = buildSeoDescription(item, bricksetData);
+    metafields.push({
+      namespace: 'global',
+      key: 'description_tag',
+      value: seoDesc,
+      type: 'single_line_text_field',
+    });
+
+    // Add alt text to images
+    const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
+
+    const payload: ShopifyProductPayload = {
+      product: {
+        title,
+        body_html: description,
+        vendor: 'LEGO',
+        product_type: minifig ? 'Minifigure' : 'LEGO Set',
+        tags,
+        handle,
+        status: 'active',
+        variants: [
+          {
+            price: formatShopifyPrice(priceResult.price),
+            ...(priceResult.compare_at_price
+              ? { compare_at_price: formatShopifyPrice(priceResult.compare_at_price) }
+              : {}),
+            sku: item.sku ?? item.id.substring(0, 8),
+            inventory_management: 'shopify',
+            requires_shipping: true,
+          },
+        ],
+        ...(imagesWithAlt.length > 0
+          ? { images: imagesWithAlt }
+          : {}),
+        metafields,
+      },
+    };
+
+    try {
+      const response = await client.createProduct(payload);
+      const product = response.product;
+      const variant = product.variants[0];
+
+      // Set inventory level to GROUP SIZE (not 1)
+      if (config.location_id && variant?.inventory_item_id) {
+        try {
+          await client.setInventoryLevel(
+            String(variant.inventory_item_id),
+            config.location_id,
+            quantity
+          );
+        } catch (invErr) {
+          console.warn(`[ShopifySync] Failed to set inventory for group ${item.set_number}:`, invErr);
+        }
+      }
+
+      // Save a mapping row for EACH item in the group (upsert to handle pre-existing error rows)
+      const mappingRows = inventoryItemIds.map((iid) => ({
+        user_id: this.userId,
+        inventory_item_id: iid,
+        shopify_product_id: String(product.id),
+        shopify_variant_id: variant ? String(variant.id) : null,
+        shopify_inventory_item_id: variant ? String(variant.inventory_item_id) : null,
+        shopify_handle: product.handle,
+        shopify_status: product.status,
+        shopify_price: priceResult.price,
+        shopify_compare_at_price: priceResult.compare_at_price,
+        shopify_title: title,
+        shopify_description: description,
+        image_source: imageResult.source,
+        image_urls: imageResult.urls,
+        last_synced_at: new Date().toISOString(),
+        sync_status: 'synced' as const,
+      }));
+
+      await this.supabase
+        .from('shopify_products')
+        .upsert(mappingRows, { onConflict: 'inventory_item_id' });
+
+      return { success: true, shopifyProductId: String(product.id) };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+
+      // Record error for representative item
+      await this.supabase.from('shopify_products').upsert(
+        {
+          user_id: this.userId,
+          inventory_item_id: representativeId,
           shopify_product_id: '',
           sync_status: 'error',
           sync_error: errorMsg.substring(0, 500),
@@ -599,4 +892,218 @@ export class ShopifySyncService {
       last_sync: lastLog.data?.completed_at || null,
     };
   }
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+
+/** BrickLink-style minifigure set_number prefixes */
+const MINIFIG_PREFIXES = [
+  'sw', 'col', 'coltlbm', 'coltlnm', 'colhp', 'colmar', 'coldis',
+  'colsh', 'coltgb', 'fig', 'gen', 'hp', 'iaj', 'jw', 'loc', 'lor',
+  'njo', 'poc', 'pot', 'sh', 'scd', 'tnt', 'tlm', 'sim',
+];
+
+/** Map BrickLink minifig prefix → LEGO theme name */
+const MINIFIG_PREFIX_TO_THEME: Record<string, string> = {
+  sw: 'Star Wars',
+  hp: 'Harry Potter',
+  colhp: 'Harry Potter',
+  njo: 'Ninjago',
+  sh: 'Super Heroes',
+  colsh: 'Super Heroes',
+  lor: 'The Lord of the Rings',
+  loc: 'Legends of Chima',
+  jw: 'Jurassic World',
+  poc: 'Pirates of the Caribbean',
+  iaj: 'Indiana Jones',
+  tlm: 'The LEGO Movie',
+  coltlbm: 'The LEGO Batman Movie',
+  coltlnm: 'The LEGO Ninjago Movie',
+  sim: 'The Simpsons',
+  col: 'Collectable Minifigures',
+  colmar: 'Marvel',
+  coldis: 'Disney',
+  coltgb: 'Team GB',
+  scd: 'Scooby-Doo',
+  tnt: 'Teenage Mutant Ninja Turtles',
+  pot: 'Prince of Persia',
+  fig: 'Minifigures',
+  gen: 'Miscellaneous',
+};
+
+/**
+ * Detect whether an inventory item is a minifigure (vs a set).
+ * Checks set_number prefix patterns and item_name keywords.
+ */
+function isMinifigure(item: { set_number: string | null; item_name: string | null }): boolean {
+  // Check set_number prefix first (most reliable indicator)
+  const setNum = (item.set_number ?? '').toLowerCase();
+  if (MINIFIG_PREFIXES.some((p) => setNum.startsWith(p) && /^[a-z]+\d/.test(setNum))) {
+    return true;
+  }
+
+  // Name-based detection: only classify as minifigure if the name indicates it IS a
+  // minifigure product, not just a set that includes minifigures
+  const name = (item.item_name ?? '').toLowerCase();
+  const hasMinifigWord = name.includes('minifigure') || name.includes('minifig');
+  if (!hasMinifigWord) return false;
+
+  // If the name also contains set-type words, it's a set that mentions minifigs, not a minifig itself
+  const setIndicators = [' set', 'building toy', 'playset', 'building game', 'building kit',
+    'starter pack', 'bundle', 'display', 'diorama', 'modular'];
+  if (setIndicators.some((s) => name.includes(s))) return false;
+
+  return true;
+}
+
+/**
+ * Get LEGO theme name from a BrickLink-style minifig set_number.
+ * e.g. "SW0810" → "Star Wars", "hp394" → "Harry Potter"
+ */
+function getMinifigTheme(setNumber: string): string | null {
+  const lower = setNumber.toLowerCase();
+  // Try longest prefixes first (coltlbm before col)
+  const sorted = Object.keys(MINIFIG_PREFIX_TO_THEME).sort((a, b) => b.length - a.length);
+  for (const prefix of sorted) {
+    if (lower.startsWith(prefix)) {
+      return MINIFIG_PREFIX_TO_THEME[prefix];
+    }
+  }
+  return null;
+}
+
+/**
+ * Build a unique Shopify handle (URL slug) for a product.
+ * Includes set_number and condition to avoid collisions when the same set
+ * exists in both New and Used conditions.
+ */
+function buildHandle(
+  item: { set_number: string | null; condition: string | null },
+  title: string,
+  price?: number
+): string {
+  // Slugify the title
+  let handle = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  // Ensure condition is in the handle
+  const cond = (item.condition ?? 'new').toLowerCase();
+  if (!handle.includes(cond)) {
+    handle += `-${cond}`;
+  }
+
+  // Append price to handle to differentiate same-set/condition at different prices
+  if (price != null) {
+    // Format as e.g. "36-99" for £36.99
+    const priceSlug = price.toFixed(2).replace('.', '-');
+    handle += `-${priceSlug}`;
+  }
+
+  return handle;
+}
+
+/**
+ * Build product metafields for storefront filtering.
+ * Creates: theme, year, condition (price range is built into Shopify).
+ */
+function buildMetafields(
+  item: { condition: string | null; set_number?: string | null },
+  bricksetData?: { theme: string | null; subtheme: string | null; year_from: number | null } | null
+): Array<{ namespace: string; key: string; value: string; type: string }> {
+  const metafields: Array<{ namespace: string; key: string; value: string; type: string }> = [];
+
+  // Theme
+  if (bricksetData?.theme) {
+    metafields.push({
+      namespace: 'custom',
+      key: 'theme',
+      value: bricksetData.theme,
+      type: 'single_line_text_field',
+    });
+  }
+
+  // Subtheme
+  if (bricksetData?.subtheme) {
+    metafields.push({
+      namespace: 'custom',
+      key: 'subtheme',
+      value: bricksetData.subtheme,
+      type: 'single_line_text_field',
+    });
+  }
+
+  // Year
+  if (bricksetData?.year_from) {
+    metafields.push({
+      namespace: 'custom',
+      key: 'year',
+      value: String(bricksetData.year_from),
+      type: 'number_integer',
+    });
+  }
+
+  // Condition
+  const isUsed =
+    item.condition?.toLowerCase() === 'used' ||
+    item.condition?.toLowerCase() === 'u';
+  metafields.push({
+    namespace: 'custom',
+    key: 'condition',
+    value: isUsed ? 'Used' : 'New',
+    type: 'single_line_text_field',
+  });
+
+  // Set number (MPN) — used by Shopify for Product schema `mpn` field
+  if (item.set_number && item.set_number !== 'NA') {
+    const displayNumber = item.set_number.replace(/-1$/, '');
+    metafields.push({
+      namespace: 'custom',
+      key: 'set_number',
+      value: displayNumber,
+      type: 'single_line_text_field',
+    });
+  }
+
+  return metafields;
+}
+
+/**
+ * Position-based alt text suffixes for product images.
+ * Provides unique, descriptive alt text for each image position.
+ */
+const IMAGE_ALT_SUFFIXES = [
+  'box front',
+  'built set',
+  'minifigures',
+  'set details',
+  'alternate view',
+  'close-up',
+  'rear view',
+  'play features',
+  'contents',
+  'side view',
+];
+
+/**
+ * Add unique alt text to each product image based on position.
+ * Prevents Shopify from defaulting all images to the product title.
+ */
+function addImageAltText(
+  images: Array<{ src?: string; attachment?: string; filename?: string }>,
+  productTitle: string,
+  setNumber: string | null
+): Array<{ src?: string; attachment?: string; filename?: string; alt?: string }> {
+  const setNum = setNumber && setNumber !== 'NA'
+    ? setNumber.replace(/-1$/, '')
+    : null;
+
+  return images.map((img, i) => {
+    const suffix = IMAGE_ALT_SUFFIXES[i] ?? `view ${i + 1}`;
+    const alt = setNum
+      ? `${productTitle} - ${suffix}`
+      : `${productTitle} - ${suffix}`;
+    return { ...img, alt };
+  });
 }
