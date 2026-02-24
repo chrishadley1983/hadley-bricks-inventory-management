@@ -507,6 +507,89 @@ export class ShopifySyncService {
     }
   }
 
+  // ── ADD TO EXISTING GROUP ────────────────────────────────────
+
+  /**
+   * Add new inventory items to an existing Shopify product group.
+   *
+   * When items share the same (set_number, condition, listing_value) as items
+   * already synced to a Shopify product, this method:
+   * 1. Inserts mapping rows for the new items (same shopify_product_id)
+   * 2. Updates the Shopify inventory quantity to the new total
+   */
+  async addItemsToExistingGroup(
+    newItemIds: string[],
+    existingProductId: string
+  ): Promise<SyncResult> {
+    if (newItemIds.length === 0) {
+      return { success: false, error: 'No new items to add' };
+    }
+
+    const client = await this.getClient();
+    const config = this.getConfig();
+
+    // Look up the existing mapping to get variant/inventory IDs
+    const { data: existingMapping, error: mapError } = await this.supabase
+      .from('shopify_products')
+      .select('*')
+      .eq('shopify_product_id', existingProductId)
+      .eq('sync_status', 'synced')
+      .limit(1)
+      .single();
+
+    if (mapError || !existingMapping) {
+      return { success: false, error: `No synced mapping found for product ${existingProductId}` };
+    }
+
+    // Count total items that will be in the group after adding new ones
+    const { count: existingCount } = await this.supabase
+      .from('shopify_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('shopify_product_id', existingProductId)
+      .eq('sync_status', 'synced');
+
+    const newTotal = (existingCount ?? 0) + newItemIds.length;
+
+    try {
+      // Insert mapping rows for new items (upsert to handle pre-existing error rows)
+      const mappingRows = newItemIds.map((iid) => ({
+        user_id: this.userId,
+        inventory_item_id: iid,
+        shopify_product_id: existingMapping.shopify_product_id,
+        shopify_variant_id: existingMapping.shopify_variant_id,
+        shopify_inventory_item_id: existingMapping.shopify_inventory_item_id,
+        shopify_handle: existingMapping.shopify_handle,
+        shopify_status: existingMapping.shopify_status,
+        shopify_price: existingMapping.shopify_price,
+        shopify_compare_at_price: existingMapping.shopify_compare_at_price,
+        shopify_title: existingMapping.shopify_title,
+        shopify_description: existingMapping.shopify_description,
+        image_source: existingMapping.image_source,
+        image_urls: existingMapping.image_urls,
+        last_synced_at: new Date().toISOString(),
+        sync_status: 'synced' as const,
+      }));
+
+      await this.supabase
+        .from('shopify_products')
+        .upsert(mappingRows, { onConflict: 'inventory_item_id' });
+
+      // Update Shopify inventory quantity
+      if (config.location_id && existingMapping.shopify_inventory_item_id) {
+        await client.setInventoryLevel(
+          existingMapping.shopify_inventory_item_id,
+          config.location_id,
+          newTotal
+        );
+      }
+
+      return { success: true, shopifyProductId: existingProductId };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: errorMsg };
+    }
+  }
+
   // ── ARCHIVE ───────────────────────────────────────────────────
 
   /**
@@ -639,6 +722,7 @@ export class ShopifySyncService {
     const summary: BatchSyncSummary = {
       items_processed: 0,
       items_created: 0,
+      items_added_to_group: 0,
       items_updated: 0,
       items_archived: 0,
       items_failed: 0,
@@ -672,7 +756,7 @@ export class ShopifySyncService {
       }
     }
 
-    // 2. Create products for LISTED items not yet on Shopify
+    // 2. Create products for LISTED items not yet on Shopify (with grouping)
     const { data: existingMappings } = await this.supabase
       .from('shopify_products')
       .select('inventory_item_id')
@@ -680,29 +764,101 @@ export class ShopifySyncService {
 
     const existingIds = new Set(existingMappings?.map((m) => m.inventory_item_id) || []);
 
-    const { data: listedItems } = await this.supabase
-      .from('inventory_items')
-      .select('id')
-      .eq('user_id', this.userId)
-      .eq('status', 'LISTED')
-      .not('set_number', 'is', null)
-      .neq('set_number', 'NA')
-      .limit(limit + existingIds.size);
+    // Fetch unsynced LISTED items with grouping fields (paginate for >1000)
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    const unsyncedItems: Array<{
+      id: string;
+      set_number: string | null;
+      condition: string | null;
+      listing_value: number | null;
+    }> = [];
 
-    const itemsToCreate = (listedItems || []).filter(
-      (item) => !existingIds.has(item.id)
-    ).slice(0, limit);
+    while (hasMore) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('id, set_number, condition, listing_value')
+        .eq('user_id', this.userId)
+        .eq('status', 'LISTED')
+        .not('set_number', 'is', null)
+        .neq('set_number', 'NA')
+        .order('created_at', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    for (const item of itemsToCreate) {
-      summary.items_processed++;
-      const result = await this.createProduct(item.id);
-      if (result.success) {
-        summary.items_created++;
+      for (const item of data ?? []) {
+        if (!existingIds.has(item.id)) {
+          unsyncedItems.push(item);
+        }
+      }
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+    }
+
+    // Group by (set_number, condition, listing_value)
+    const groups = new Map<string, typeof unsyncedItems>();
+    for (const item of unsyncedItems) {
+      const key = `${item.set_number}|${(item.condition ?? 'N').toUpperCase()}|${item.listing_value ?? 0}`;
+      const group = groups.get(key);
+      if (group) {
+        group.push(item);
       } else {
-        summary.items_failed++;
+        groups.set(key, [item]);
+      }
+    }
+
+    // Process up to `limit` groups
+    let groupsProcessed = 0;
+    for (const [key, group] of groups) {
+      if (groupsProcessed >= limit) break;
+      groupsProcessed++;
+
+      const ids = group.map((g) => g.id);
+      const rep = group[0];
+
+      // Check if any sibling with the same key is already synced
+      const { data: syncedSiblings } = await this.supabase
+        .from('shopify_products')
+        .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
+        .eq('user_id', this.userId)
+        .eq('sync_status', 'synced')
+        .neq('shopify_product_id', '')
+        .eq('inventory_items.set_number', rep.set_number!)
+        .eq('inventory_items.condition', rep.condition!)
+        .eq('inventory_items.listing_value', rep.listing_value!)
+        .limit(1);
+
+      const existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+
+      let result: SyncResult;
+
+      if (existingProductId) {
+        // Add to existing group
+        result = await this.addItemsToExistingGroup(ids, existingProductId);
+        if (result.success) {
+          summary.items_added_to_group += ids.length;
+        }
+      } else if (ids.length === 1) {
+        // New single item
+        result = await this.createProduct(ids[0]);
+        if (result.success) {
+          summary.items_created++;
+        }
+      } else {
+        // New group
+        result = await this.createProductForGroup(ids, ids.length);
+        if (result.success) {
+          summary.items_created++;
+        }
+      }
+
+      summary.items_processed += ids.length;
+
+      if (!result.success) {
+        summary.items_failed += ids.length;
         summary.errors.push({
-          item_id: item.id,
-          error: result.error || 'Create failed',
+          item_id: ids[0],
+          error: result.error || `Failed to sync group ${key}`,
         });
       }
     }
@@ -736,6 +892,7 @@ export class ShopifySyncService {
     const summary: BatchSyncSummary = {
       items_processed: 0,
       items_created: 0,
+      items_added_to_group: 0,
       items_updated: 0,
       items_archived: 0,
       items_failed: 0,
