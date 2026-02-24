@@ -38,6 +38,7 @@ interface PurchaseCandidate {
   bundle_group?: string; // Shared group ID for bundle items (original order_reference)
   bundle_total_cost?: number; // Total cost of the bundle
   bundle_index?: number; // 1-based index within bundle
+  forwarded_from?: string; // Set when email was forwarded (e.g. 'ph2026@proton.me')
 }
 
 // Hadley API base URL (fallback for local dev without Gmail OAuth creds)
@@ -193,6 +194,86 @@ function extractAllSetNumbers(text: string): string[] {
     }
   }
   return results;
+}
+
+/**
+ * Normalize a forwarded Vinted receipt email (e.g. from Proton Mail).
+ * Strips forwarding artifacts so the result can be parsed by parseVintedEmail.
+ *
+ * Proton forwarding format:
+ *   Subject: "Fw: Your receipt for \"Item Name\""
+ *   Body: Proton header + "------- Forwarded Message -------" + original email quoted with "> "
+ */
+function normalizeForwardedEmail(email: {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+  body?: string;
+}): {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+  body?: string;
+} {
+  // Strip "Fw: " or "Fwd: " prefix from subject
+  let subject = email.subject.replace(/^Fw(?:d)?:\s*/i, '');
+
+  // Normalize straight quotes to Unicode quotes that parseVintedEmail expects
+  // Proton uses "Item Name" but Vinted originals use „Item Name"
+  subject = subject.replace(
+    /Your receipt for\s*"(.+?)"/i,
+    (_, name) => `Your receipt for \u201E${name}\u201C`
+  );
+
+  let body = email.body || '';
+
+  // Extract the forwarded message body (after the Proton header block)
+  const fwdMarker = body.indexOf('------- Forwarded Message -------');
+  if (fwdMarker !== -1) {
+    // Skip past the forwarding headers (From:, Date:, Subject:, To: lines)
+    const afterMarker = body.substring(fwdMarker);
+    // Find the first empty line after the headers, which starts the original body
+    const headerEnd = afterMarker.match(/\nTo:[^\n]*\n\s*\n/);
+    if (headerEnd) {
+      body = afterMarker.substring(headerEnd.index! + headerEnd[0].length);
+    } else {
+      // Fallback: skip past the marker line itself
+      const markerEnd = afterMarker.indexOf('\n');
+      body = markerEnd !== -1 ? afterMarker.substring(markerEnd + 1) : afterMarker;
+    }
+  }
+
+  // Strip "> " quote prefixes from each line
+  body = body
+    .split('\n')
+    .map((line) => line.replace(/^>\s?/, ''))
+    .join('\n');
+
+  // Extract original email date from the forwarding headers if available
+  // Format: "Date: On Tuesday, 24 February 2026 at 09:25"
+  let emailDate = email.date;
+  const origDateMatch = (email.body || '').match(
+    /Date:\s*On\s+\w+,\s+(\d{1,2}\s+\w+\s+\d{4})\s+at\s+([\d:]+)/i
+  );
+  if (origDateMatch) {
+    const parsed = new Date(`${origDateMatch[1]} ${origDateMatch[2]} UTC`);
+    if (!isNaN(parsed.getTime())) {
+      emailDate = parsed.toISOString();
+    }
+  }
+
+  return {
+    id: email.id,
+    subject,
+    from: email.from,
+    date: emailDate,
+    snippet: email.snippet,
+    body,
+  };
 }
 
 /**
@@ -568,6 +649,83 @@ export async function GET(request: NextRequest) {
           allCandidates.push({
             ...candidate,
             status: 'new',
+          } as PurchaseCandidate);
+        }
+      }
+
+      // Search forwarded Vinted emails from Proton Mail (ph2026@proton.me)
+      const protonEmails = await fetchEmails(
+        `from:ph2026@proton.me subject:"receipt for" newer_than:${days}d`
+      );
+      totalFetched += protonEmails.length;
+      console.log(
+        `[scan-emails] Fetched ${protonEmails.length} forwarded Vinted emails from Proton`
+      );
+
+      for (const rawEmail of protonEmails) {
+        const email = normalizeForwardedEmail(rawEmail);
+
+        // Skip emails before cutoff date
+        const emailDate = new Date(email.date);
+        if (emailDate < CUTOFF_DATE) {
+          totalCutoffSkipped++;
+          console.log(
+            `[scan-emails] Skipped forwarded Vinted email before cutoff: "${email.subject}" (${email.date})`
+          );
+          continue;
+        }
+
+        const candidates = parseVintedEmail(email);
+        if (candidates.length === 0) {
+          console.warn(
+            `[scan-emails] Failed to parse forwarded Vinted email: id=${email.id} subject="${email.subject}" date=${email.date}`
+          );
+          continue;
+        }
+        totalParsed++;
+
+        for (const candidate of candidates) {
+          if (!candidate.email_id) continue;
+
+          // Check 1: Already processed (by email_id)
+          const { data: processedEmail } = await supabase
+            .from('processed_purchase_emails')
+            .select('id, status')
+            .eq('email_id', candidate.email_id)
+            .limit(1)
+            .single();
+
+          if (processedEmail) {
+            allCandidates.push({
+              ...candidate,
+              status: 'already_processed',
+              forwarded_from: 'ph2026@proton.me',
+            } as PurchaseCandidate);
+            continue;
+          }
+
+          // Check 2: Already imported (by order_reference - catches dupes vs direct Vinted emails)
+          if (candidate.order_reference) {
+            const { data: existingPurchase } = await supabase
+              .from('purchases')
+              .select('id')
+              .eq('reference', candidate.order_reference)
+              .limit(1);
+
+            if (existingPurchase && existingPurchase.length > 0) {
+              allCandidates.push({
+                ...candidate,
+                status: 'already_imported',
+                forwarded_from: 'ph2026@proton.me',
+              } as PurchaseCandidate);
+              continue;
+            }
+          }
+
+          allCandidates.push({
+            ...candidate,
+            status: 'new',
+            forwarded_from: 'ph2026@proton.me',
           } as PurchaseCandidate);
         }
       }
