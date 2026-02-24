@@ -32,6 +32,7 @@ interface SyncResult {
 interface BatchSyncSummary {
   items_processed: number;
   items_created: number;
+  items_added_to_group: number;
   items_updated: number;
   items_archived: number;
   items_failed: number;

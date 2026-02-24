@@ -104,9 +104,10 @@ export function ShopifySyncControls() {
               )}
               Sync Complete ({(lastResult.duration_ms / 1000).toFixed(1)}s)
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-muted-foreground">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm text-muted-foreground">
               <div>Processed: {lastResult.items_processed}</div>
               <div>Created: {lastResult.items_created}</div>
+              <div>Added to group: {lastResult.items_added_to_group ?? 0}</div>
               <div>Archived: {lastResult.items_archived}</div>
               <div className={lastResult.items_failed > 0 ? 'text-red-500' : ''}>
                 Failed: {lastResult.items_failed}
