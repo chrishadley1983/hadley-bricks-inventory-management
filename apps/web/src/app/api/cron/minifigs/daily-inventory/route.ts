@@ -16,12 +16,12 @@ export const maxDuration = 300;
  * 4. Research refresh (expired cache)
  * 5. Repricing (Mondays only)
  */
-export async function GET(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
     const authHeader = request.headers.get('Authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: results });
   } catch (error) {
-    console.error('[GET /api/cron/minifigs/daily-inventory] Error:', error);
+    console.error('[/api/cron/minifigs/daily-inventory] Error:', error);
     return NextResponse.json(
       {
         error: 'Daily inventory pull failed',
@@ -92,4 +92,12 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest) {
+  return handler(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handler(request);
 }
