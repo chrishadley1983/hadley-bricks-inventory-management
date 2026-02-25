@@ -50,9 +50,19 @@ function getStepDisplayInfo(result: TwoPhaseStepResult): { label: string; progre
     case 'quantity_submission':
       return { label: 'Submitting quantity update...', progress: 70 };
     case 'quantity_polling':
-      return { label: 'Waiting for Amazon to process quantity update...', progress: 85 };
+      return { label: 'Waiting for Amazon to process quantity update...', progress: 80 };
+    case 'quantity_verification': {
+      if (vp && vp.total > 0) {
+        const pct = 85 + Math.round((vp.verified / vp.total) * 10); // 85-95% range
+        return {
+          label: `Verifying live: ${vp.verified} / ${vp.total} confirmed on Amazon`,
+          progress: pct,
+        };
+      }
+      return { label: 'Verifying price and quantity are live on Amazon...', progress: 90 };
+    }
     case 'complete':
-      return { label: 'Sync complete!', progress: 100 };
+      return { label: 'Sync complete! All prices and quantities verified live.', progress: 100 };
     default:
       return { label: 'Processing...', progress: 10 };
   }

@@ -37,7 +37,7 @@ export interface SyncFailureParams {
   feedId: string;
   itemCount: number;
   reason: string;
-  phase: 'price_verification' | 'price_rejected' | 'quantity_rejected';
+  phase: 'price_verification' | 'price_rejected' | 'quantity_rejected' | 'quantity_verification';
 }
 
 export interface SyncSuccessParams {
@@ -138,6 +138,7 @@ export class PushoverService {
       price_verification: 'Price verification timeout',
       price_rejected: 'Price feed rejected',
       quantity_rejected: 'Quantity feed rejected',
+      quantity_verification: 'Quantity verification timeout',
     };
 
     await this.send({
