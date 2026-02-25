@@ -361,22 +361,30 @@ export function InventoryForm({
   }, [form, toast, selectedSetEan]);
 
   const onSubmit = async (values: InventoryFormValues) => {
-    const costNum = values.cost ? parseFloat(values.cost) : undefined;
-    const listingValueNum = values.listing_value ? parseFloat(values.listing_value) : undefined;
+    try {
+      const costNum = values.cost ? parseFloat(values.cost) : undefined;
+      const listingValueNum = values.listing_value ? parseFloat(values.listing_value) : undefined;
 
-    const data = {
-      ...values,
-      cost: costNum && !isNaN(costNum) ? costNum : undefined,
-      listing_value: listingValueNum && !isNaN(listingValueNum) ? listingValueNum : undefined,
-      purchase_id: values.purchase_id || undefined,
-    };
+      const data = {
+        ...values,
+        cost: costNum && !isNaN(costNum) ? costNum : undefined,
+        listing_value: listingValueNum && !isNaN(listingValueNum) ? listingValueNum : undefined,
+        purchase_id: values.purchase_id || undefined,
+      };
 
-    if (mode === 'edit' && itemId) {
-      await updateMutation.mutateAsync({ id: itemId, data });
-      router.push(`/inventory/${itemId}`);
-    } else {
-      const result = await createMutation.mutateAsync(data);
-      router.push(`/inventory/${result.id}`);
+      if (mode === 'edit' && itemId) {
+        await updateMutation.mutateAsync({ id: itemId, data });
+        router.push(`/inventory/${itemId}`);
+      } else {
+        const result = await createMutation.mutateAsync(data);
+        router.push(`/inventory/${result.id}`);
+      }
+    } catch (error) {
+      toast({
+        title: `Failed to ${mode === 'edit' ? 'update' : 'create'} item`,
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
     }
   };
 
