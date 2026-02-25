@@ -1266,6 +1266,7 @@ export class AmazonSyncService {
     let allVerified = true;
     const failedSkus: string[] = [];
     let verifiedCount = 0;
+    let pricePatchesSent = 0;
 
     for (const item of aggregatedItems) {
       try {
@@ -1299,19 +1300,53 @@ export class AmazonSyncService {
         const liveQuantity = fulfillment?.quantity;
         const quantityMatch = liveQuantity === item.totalQuantity;
 
-        if (!priceMatch || !quantityMatch) {
+        if (priceMatch && quantityMatch) {
+          verifiedCount++;
+          console.log(
+            `[AmazonSyncService] Quantity verification passed for ${item.amazonSku}: ` +
+              `price=£${livePrice}, qty=${liveQuantity}`
+          );
+        } else if (!priceMatch && item.isNewSku && liveQuantity !== undefined && liveQuantity > 0) {
+          // New SKU has quantity but price wasn't applied by the UPDATE operation.
+          // Amazon silently drops price from UPDATE operations for new offers.
+          // Fix: send a direct PATCH to set the price (same format that works for existing SKUs).
+          console.log(
+            `[AmazonSyncService] New SKU ${item.amazonSku} has qty=${liveQuantity} but no price ` +
+              `(expected £${item.price}, got ${livePrice}). Sending price PATCH...`
+          );
+          try {
+            const patchResult = await listingsClient.updatePrice(
+              item.amazonSku,
+              item.price,
+              item.productType,
+              'A1F83G8C2ARO7P'
+            );
+            pricePatchesSent++;
+            console.log(
+              `[AmazonSyncService] Price PATCH for ${item.amazonSku}: status=${patchResult.status}`
+            );
+            if (patchResult.status === 'INVALID' || patchResult.status === 'ERROR') {
+              console.error(
+                `[AmazonSyncService] Price PATCH issues for ${item.amazonSku}:`,
+                JSON.stringify(patchResult.issues, null, 2)
+              );
+            }
+          } catch (patchError) {
+            console.error(
+              `[AmazonSyncService] Price PATCH failed for ${item.amazonSku}:`,
+              patchError
+            );
+          }
+          // Still mark as not verified - will check on next poll after PATCH propagates
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+        } else {
           allVerified = false;
           failedSkus.push(item.amazonSku);
           console.log(
             `[AmazonSyncService] Quantity verification pending for ${item.amazonSku}: ` +
               `price expected=${item.price} got=${livePrice} (${priceMatch ? 'OK' : 'MISMATCH'}), ` +
               `qty expected=${item.totalQuantity} got=${liveQuantity} (${quantityMatch ? 'OK' : 'MISMATCH'})`
-          );
-        } else {
-          verifiedCount++;
-          console.log(
-            `[AmazonSyncService] Quantity verification passed for ${item.amazonSku}: ` +
-              `price=£${livePrice}, qty=${liveQuantity}`
           );
         }
       } catch (error) {
@@ -1322,6 +1357,13 @@ export class AmazonSyncService {
           error
         );
       }
+    }
+
+    if (pricePatchesSent > 0) {
+      console.log(
+        `[AmazonSyncService] Sent ${pricePatchesSent} price PATCH(es) for new SKUs missing price. ` +
+          `Will verify on next poll.`
+      );
     }
 
     if (!allVerified) {
