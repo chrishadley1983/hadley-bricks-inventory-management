@@ -521,7 +521,8 @@ export type SyncPhase = 'price' | 'quantity';
  * - quantity_pending: Quantity feed not yet submitted
  * - quantity_submitted: Quantity feed submitted
  * - quantity_processing: Amazon processing quantity
- * - completed: Both phases complete
+ * - quantity_verifying: Verifying price + quantity are live on Amazon
+ * - completed: Both phases complete (price + quantity verified live)
  * - failed: Either phase failed
  */
 export type TwoPhaseStatus =
@@ -533,6 +534,7 @@ export type TwoPhaseStatus =
   | 'quantity_pending'
   | 'quantity_submitted'
   | 'quantity_processing'
+  | 'quantity_verifying'
   | 'completed'
   | 'failed';
 
@@ -574,6 +576,7 @@ export interface TwoPhaseStepResult {
     | 'price_verification'
     | 'quantity_submission'
     | 'quantity_polling'
+    | 'quantity_verification'
     | 'complete';
   /** Whether processing is complete (success or failure) */
   isComplete: boolean;

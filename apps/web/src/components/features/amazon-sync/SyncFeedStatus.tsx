@@ -142,12 +142,19 @@ const STATUS_CONFIG: Record<
     color: 'text-blue-500',
     description: 'Amazon processing quantity update',
   },
+  quantity_verifying: {
+    icon: Loader2,
+    label: 'Verifying Live',
+    variant: 'default',
+    color: 'text-amber-500',
+    description: 'Verifying price and quantity are live on Amazon',
+  },
   completed: {
     icon: CheckCircle2,
     label: 'Completed',
     variant: 'default',
     color: 'text-green-500',
-    description: 'Two-phase sync completed successfully',
+    description: 'Price and quantity verified live on Amazon',
   },
   failed: {
     icon: XCircle,
