@@ -54,11 +54,20 @@ interface WeeklyStats {
   backlogCount: number;
 }
 
+/** Shopify alignment stats */
+interface ShopifyAlignment {
+  listedOnShopify: number;
+  listedTotal: number;
+  mismatches: number;
+  orphanedProducts: number;
+}
+
 /** Full sync results */
 interface FullSyncResults {
   platformSyncs: SyncResult[];
   inventoryAsinSync: SyncResult | null;
   shopifyArchiveSync: SyncResult | null;
+  shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
   stuckJobsReset: number;
   weeklyStats: WeeklyStats;
@@ -282,6 +291,48 @@ async function resetStuckJobs(
 }
 
 /** Get weekly stats (aligned with /api/workflow/metrics) */
+async function getShopifyAlignment(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<ShopifyAlignment> {
+  // LISTED items eligible for Shopify (has set_number, not Strictly Briks)
+  const { count: listedTotal } = await supabase
+    .from('inventory_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'LISTED')
+    .not('set_number', 'is', null)
+    .neq('set_number', 'NA');
+
+  // LISTED items that ARE on Shopify (active)
+  const { count: listedOnShopify } = await supabase
+    .from('shopify_products')
+    .select('id', { count: 'exact', head: true })
+    .neq('shopify_status', 'archived');
+
+  // LISTED items missing from Shopify
+  const { data: missing } = await supabase
+    .from('inventory_items')
+    .select('id, shopify_products!left(id)')
+    .eq('status', 'LISTED')
+    .not('set_number', 'is', null)
+    .neq('set_number', 'NA')
+    .is('shopify_products.id', null)
+    .limit(1000);
+
+  // Non-LISTED items still active on Shopify (should be archived)
+  const { count: orphanedProducts } = await supabase
+    .from('shopify_products')
+    .select('id, inventory_items!inner(status)', { count: 'exact', head: true })
+    .neq('shopify_status', 'archived')
+    .neq('inventory_items.status', 'LISTED');
+
+  return {
+    listedOnShopify: listedOnShopify ?? 0,
+    listedTotal: listedTotal ?? 0,
+    mismatches: missing?.length ?? 0,
+    orphanedProducts: orphanedProducts ?? 0,
+  };
+}
+
 async function getWeeklyStats(
   supabase: ReturnType<typeof createServiceRoleClient>
 ): Promise<WeeklyStats> {
@@ -476,6 +527,22 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     shopifyArchiveText = `❌ ${results.shopifyArchiveSync.error ?? 'Failed'}`;
   }
 
+  // Build Shopify alignment section
+  let shopifyAlignmentText: string;
+  if (!results.shopifyAlignment) {
+    shopifyAlignmentText = '⏭️ Not available';
+  } else {
+    const { listedOnShopify, listedTotal, mismatches, orphanedProducts } = results.shopifyAlignment;
+    const aligned = mismatches === 0 && orphanedProducts === 0;
+    const statusEmoji = aligned ? '✅' : '⚠️';
+    shopifyAlignmentText = [
+      `${statusEmoji} **${listedOnShopify}** of **${listedTotal}** eligible items on Shopify`,
+      mismatches > 0 ? `⚠️ **${mismatches}** LISTED items missing from Shopify` : null,
+      orphanedProducts > 0 ? `⚠️ **${orphanedProducts}** sold/non-LISTED items still active on Shopify` : null,
+      aligned ? '🟢 Fully aligned' : null,
+    ].filter(Boolean).join('\n');
+  }
+
   // Build weekly stats section
   const weeklyStatsText = [
     `📦 **Listed:** ${results.weeklyStats.listedCount} items (£${results.weeklyStats.listedValue.toFixed(2)})`,
@@ -494,8 +561,11 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     '## 📦 INVENTORY ASIN SYNC',
     inventoryAsinText,
     '',
-    '## 🏪 SHOPIFY ARCHIVE SYNC',
+    '## 🏪 SHOPIFY SYNC',
     shopifyArchiveText,
+    '',
+    '## 🔗 SHOPIFY ALIGNMENT',
+    shopifyAlignmentText,
     '',
     '## 📈 WEEKLY STATS',
     weeklyStatsText,
@@ -541,6 +611,7 @@ export async function POST(request: NextRequest) {
       platformSyncs: [],
       inventoryAsinSync: null,
       shopifyArchiveSync: null,
+      shopifyAlignment: null,
       stuckJobs: [],
       stuckJobsReset: 0,
       weeklyStats: { listedCount: 0, listedValue: 0, soldCount: 0, soldValue: 0, backlogCount: 0 },
@@ -755,14 +826,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 6: Get weekly stats
+    // Step 6: Shopify alignment check
+    console.log('[Cron FullSync] Checking Shopify alignment...');
+    try {
+      results.shopifyAlignment = await getShopifyAlignment(supabase);
+      console.log(
+        `[Cron FullSync] Shopify alignment: ${results.shopifyAlignment.listedOnShopify}/${results.shopifyAlignment.listedTotal} on Shopify, ${results.shopifyAlignment.mismatches} missing, ${results.shopifyAlignment.orphanedProducts} orphaned`
+      );
+    } catch (error) {
+      console.error('[Cron FullSync] Shopify alignment check failed:', error);
+    }
+
+    // Step 7: Get weekly stats
     console.log('[Cron FullSync] Calculating weekly stats...');
     results.weeklyStats = await getWeeklyStats(supabase);
 
-    // Step 7: Calculate total duration
+    // Step 8: Calculate total duration
     results.totalDurationMs = Date.now() - startTime;
 
-    // Step 8: Send Discord notification
+    // Step 9: Send Discord notification
     console.log('[Cron FullSync] Sending Discord notification...');
     await sendDiscordReport(results);
 
