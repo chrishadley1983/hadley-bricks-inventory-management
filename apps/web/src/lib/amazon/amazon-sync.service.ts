@@ -1038,7 +1038,21 @@ export class AmazonSyncService {
     const failedSkus: string[] = [];
     let verifiedCount = 0;
 
-    for (const item of aggregatedItems) {
+    // New SKUs (quantity=0) won't have an active offer on Amazon until Phase 2
+    // adds quantity, so the Listings API won't return price data for them.
+    // Skip verification for new SKUs - the feed ACCEPTED status is sufficient.
+    const itemsToVerify = aggregatedItems.filter((item) => !item.isNewSku);
+    const skippedNewSkus = aggregatedItems.filter((item) => item.isNewSku);
+
+    if (skippedNewSkus.length > 0) {
+      console.log(
+        `[AmazonSyncService] Skipping price verification for ${skippedNewSkus.length} new SKU(s) ` +
+          `(quantity=0, no active offer yet): ${skippedNewSkus.map((s) => s.amazonSku).join(', ')}`
+      );
+      verifiedCount += skippedNewSkus.length;
+    }
+
+    for (const item of itemsToVerify) {
       try {
         const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
           'offers',
