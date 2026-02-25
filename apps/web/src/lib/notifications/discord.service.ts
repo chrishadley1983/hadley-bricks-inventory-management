@@ -388,6 +388,7 @@ export class DiscordService {
       price_verification: 'Price verification timeout',
       price_rejected: 'Price feed rejected',
       quantity_rejected: 'Quantity feed rejected',
+      quantity_verification: 'Quantity verification timeout',
     };
 
     await this.sendAlert({

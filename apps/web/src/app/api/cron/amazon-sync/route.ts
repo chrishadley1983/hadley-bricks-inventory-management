@@ -18,6 +18,7 @@
  * - price_verifying: Verify price is live, then submit quantity
  * - quantity_submitted: Poll for quantity feed completion
  * - quantity_polling: Continue polling quantity feed
+ * - quantity_verifying: Verify price + quantity are live on Amazon
  *
  * Recommended schedule: Every 1-2 minutes during business hours
  * Example: "* /2 * * * *" (every 2 minutes)
@@ -39,6 +40,7 @@ const PROCESSABLE_STEPS = [
   'price_verifying',
   'quantity_submitted',
   'quantity_polling',
+  'quantity_verifying',
 ];
 
 export async function POST(request: NextRequest) {

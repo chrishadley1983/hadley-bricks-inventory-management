@@ -904,6 +904,9 @@ export class AmazonSyncService {
       case 'quantity_polling':
         return this.processQuantityPollingStep(feedId, userEmail);
 
+      case 'quantity_verifying':
+        return this.processQuantityVerificationStep(feedId, userEmail);
+
       case 'complete':
         return {
           feedId,
@@ -1189,10 +1192,24 @@ export class AmazonSyncService {
     }
 
     if (quantityFeed.status === 'done' || quantityFeed.status === 'done_verifying') {
-      // SUCCESS - complete the two-phase sync
-      // Note: 'done_verifying' means new SKUs need price verification, but since we already
-      // verified prices in the price_verifying step, this is still a success for the quantity feed.
-      return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
+      // Quantity feed accepted by Amazon - now verify that prices AND quantities
+      // are actually live on Amazon before marking complete.
+      // This is especially important for new SKUs which had their price verification
+      // skipped in the price_verifying step (no active offer until quantity is added).
+      await this.updateFeedRecord(feedId, {
+        two_phase_step: 'quantity_verifying',
+      } as Parameters<typeof this.updateFeedRecord>[1]);
+
+      return {
+        feedId,
+        status: 'quantity_processing',
+        step: 'quantity_polling',
+        isComplete: false,
+        message: 'Quantity feed accepted, verifying price and quantity are live on Amazon',
+        priceFeed: await this.getFeed(feedId),
+        quantityFeed,
+        nextPollDelay: 30000, // 30 seconds for verification
+      };
     }
 
     // Quantity feed failed
@@ -1202,6 +1219,187 @@ export class AmazonSyncService {
       quantityFeed.error_message || 'Quantity feed rejected by Amazon',
       'quantity'
     );
+  }
+
+  /**
+   * Process quantity verification step
+   *
+   * After Phase 2 quantity feed is accepted, verify ALL items have live
+   * price AND quantity on Amazon before marking the sync as complete.
+   * This catches cases where Amazon accepts the feed but hasn't propagated
+   * the changes yet (especially for new SKUs).
+   */
+  private async processQuantityVerificationStep(
+    feedId: string,
+    userEmail: string
+  ): Promise<TwoPhaseStepResult> {
+    // Reconstruct items from Phase 1 feed items (same pattern as price verification)
+    console.log('[AmazonSyncService] Starting quantity verification - checking all items on Amazon');
+    const feedItems = await this.getFeedItems(feedId);
+
+    if (feedItems.length === 0) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'No items found for quantity verification');
+    }
+
+    // Reconstruct aggregated items from feed items
+    const aggregatedItems = feedItems.map((item) => ({
+      asin: item.asin,
+      amazonSku: item.amazon_sku,
+      price: Number(item.submitted_price),
+      queueQuantity: item.submitted_quantity,
+      existingAmazonQuantity: 0,
+      totalQuantity: item.submitted_quantity,
+      inventoryItemIds: item.inventory_item_ids,
+      queueItemIds: [] as string[],
+      itemNames: [] as string[],
+      productType: DEFAULT_PRODUCT_TYPE,
+      isNewSku: item.is_new_sku ?? false,
+    }));
+
+    // Get credentials for Listings API
+    const credentials = await this.getAmazonCredentials();
+    if (!credentials) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Amazon credentials not available');
+    }
+
+    const listingsClient = new AmazonListingsClient(credentials);
+    let allVerified = true;
+    const failedSkus: string[] = [];
+    let verifiedCount = 0;
+
+    for (const item of aggregatedItems) {
+      try {
+        const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
+          'offers',
+          'fulfillmentAvailability',
+        ]);
+
+        if (!listing) {
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+          console.warn(
+            `[AmazonSyncService] Quantity verification: getListing returned null for ${item.amazonSku}`
+          );
+          continue;
+        }
+
+        // Check price
+        const offer = listing.offers?.find((o) => o.marketplaceId === 'A1F83G8C2ARO7P');
+        const livePrice =
+          offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
+        const priceMatch =
+          livePrice !== undefined &&
+          !isNaN(livePrice) &&
+          Math.abs(livePrice - item.price) < 0.01;
+
+        // Check quantity
+        const fulfillment = listing.fulfillmentAvailability?.find(
+          (f) => f.fulfillmentChannelCode === 'DEFAULT'
+        );
+        const liveQuantity = fulfillment?.quantity;
+        const quantityMatch = liveQuantity === item.totalQuantity;
+
+        if (!priceMatch || !quantityMatch) {
+          allVerified = false;
+          failedSkus.push(item.amazonSku);
+          console.log(
+            `[AmazonSyncService] Quantity verification pending for ${item.amazonSku}: ` +
+              `price expected=${item.price} got=${livePrice} (${priceMatch ? 'OK' : 'MISMATCH'}), ` +
+              `qty expected=${item.totalQuantity} got=${liveQuantity} (${quantityMatch ? 'OK' : 'MISMATCH'})`
+          );
+        } else {
+          verifiedCount++;
+          console.log(
+            `[AmazonSyncService] Quantity verification passed for ${item.amazonSku}: ` +
+              `price=£${livePrice}, qty=${liveQuantity}`
+          );
+        }
+      } catch (error) {
+        allVerified = false;
+        failedSkus.push(item.amazonSku);
+        console.error(
+          `[AmazonSyncService] Error verifying ${item.amazonSku}:`,
+          error
+        );
+      }
+    }
+
+    if (!allVerified) {
+      // Still waiting - check timeout
+      const feed = await this.getFeedWithTwoPhaseState(feedId);
+      const startedAt = feed?.two_phase_started_at
+        ? new Date(feed.two_phase_started_at).getTime()
+        : Date.now();
+      const elapsed = Date.now() - startedAt;
+
+      // Use the same 2-hour timeout as the overall two-phase sync
+      if (elapsed > TWO_PHASE_DEFAULTS.priceVerificationTimeout) {
+        // Timeout - fail with verification error
+        const reason = `Quantity verification failed for: ${failedSkus.join(', ')}`;
+
+        await this.updateFeedRecord(feedId, {
+          two_phase_step: 'failed',
+          status: 'verification_failed',
+          error_message: reason,
+          completed_at: new Date().toISOString(),
+        } as Parameters<typeof this.updateFeedRecord>[1]);
+
+        await emailService.sendTwoPhaseFailure({
+          userEmail,
+          feedId,
+          failedSkus,
+          submittedPrice: aggregatedItems[0]?.price ?? 0,
+          verificationDuration: TWO_PHASE_DEFAULTS.priceVerificationTimeout,
+          itemDetails: this.buildItemDetails(aggregatedItems),
+        });
+
+        await discordService.sendSyncFailure({
+          feedId,
+          itemCount: failedSkus.length,
+          reason: `Price/quantity not live after ${Math.round(elapsed / 60000)} mins`,
+          phase: 'quantity_verification',
+        });
+
+        return {
+          feedId,
+          status: 'failed',
+          step: 'quantity_verification',
+          isComplete: true,
+          message: `Quantity verification timeout: ${reason}`,
+          error: reason,
+          priceFeed: await this.getFeed(feedId),
+        };
+      }
+
+      return {
+        feedId,
+        status: 'quantity_submitted',
+        step: 'quantity_verification',
+        isComplete: false,
+        message: `Waiting for price/quantity to appear on Amazon (${verifiedCount}/${aggregatedItems.length} verified, ${Math.round(elapsed / 1000)}s elapsed)`,
+        priceFeed: await this.getFeed(feedId),
+        nextPollDelay: 30000,
+        verificationProgress: {
+          total: aggregatedItems.length,
+          verified: verifiedCount,
+          pendingSkus: failedSkus,
+        },
+      };
+    }
+
+    // All items verified - complete the two-phase sync
+    console.log(
+      `[AmazonSyncService] All ${aggregatedItems.length} items verified on Amazon - completing sync`
+    );
+
+    const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
+    const quantityFeedId = priceFeed?.quantity_feed_id;
+
+    if (!quantityFeedId) {
+      return this.failTwoPhaseSync(feedId, userEmail, 'Quantity feed ID not found during verification');
+    }
+
+    return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
   }
 
   /**
