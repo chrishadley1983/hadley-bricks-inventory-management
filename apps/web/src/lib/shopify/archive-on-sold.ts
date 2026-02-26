@@ -67,7 +67,6 @@ export async function archiveShopifyOnSold(
 
         // Decrement Shopify inventory quantity
         try {
-          const syncService = new ShopifySyncService(supabase, userId);
           const { data: config } = await supabase
             .from('shopify_config')
             .select('location_id')
