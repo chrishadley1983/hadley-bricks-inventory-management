@@ -148,7 +148,7 @@ export class ListingCreationService {
         return this.validateInventoryItem(request.inventoryItemId);
       });
 
-      // Step 2: Research (Brickset API)
+      // Step 2: Research (Brickset API) - skips Brickset for non-LEGO items
       const research = await this.executeStep('research', onProgress, async () => {
         return this.fetchResearchData(item.set_number);
       });
@@ -652,10 +652,21 @@ export class ListingCreationService {
    * Fetch research data from Brickset API with AI fallback
    * Returns enriched product data for AI listing generation
    *
-   * 1. First tries Brickset API (most accurate)
-   * 2. Falls back to Claude AI knowledge if Brickset fails or has insufficient data
+   * 1. For non-LEGO items (set_number === 'NA'), skip Brickset entirely
+   * 2. First tries Brickset API (most accurate) for LEGO items
+   * 3. Falls back to Claude AI knowledge if Brickset fails or has insufficient data
    */
-  private async fetchResearchData(setNumber: string): Promise<ListingResearchData | null> {
+  private async fetchResearchData(
+    setNumber: string
+  ): Promise<ListingResearchData | null> {
+    // Non-LEGO items: skip Brickset entirely (it only has LEGO data)
+    if (setNumber === 'NA') {
+      console.log(
+        '[ListingCreationService] Non-LEGO item (set_number=NA), skipping Brickset lookup'
+      );
+      return null;
+    }
+
     let bricksetData: ListingResearchData | null = null;
 
     // Step 1: Try Brickset API first
@@ -963,12 +974,16 @@ Return JSON with these fields (omit any you're not confident about):
     const merchantLocationKey = await this.getOrCreateMerchantLocation(adapter);
     console.log('[ListingCreationService] Using merchant location:', merchantLocationKey);
 
+    // Detect non-LEGO items (set_number is 'NA' for non-LEGO)
+    const isNonLego = item.set_number === 'NA';
+
     // Step 1: Create or update inventory item
     // Use the inventory item's condition directly (not AI-generated)
-    // For LEGO categories, eBay only supports NEW or USED
-    const ebayCondition = this.mapConditionToEbayEnum(item.condition);
+    // For LEGO categories, eBay only supports NEW or USED_EXCELLENT
+    // For non-LEGO categories, support finer-grained conditions
+    const ebayCondition = this.mapConditionToEbayEnum(item.condition, isNonLego);
     console.log(
-      `[ListingCreationService] Condition mapping: "${item.condition}" -> "${ebayCondition}"`
+      `[ListingCreationService] Condition mapping: "${item.condition}" -> "${ebayCondition}" (isNonLego=${isNonLego})`
     );
 
     const inventoryItemRequest = {
@@ -1008,7 +1023,7 @@ Return JSON with these fields (omit any you're not confident about):
     }
 
     // Validate category ID is a valid leaf category
-    const validatedCategoryId = this.validateCategoryId(listing.categoryId);
+    const validatedCategoryId = this.validateCategoryId(listing.categoryId, isNonLego);
 
     const offerRequest = {
       sku,
@@ -1093,9 +1108,17 @@ Return JSON with these fields (omit any you're not confident about):
 
   /**
    * Validate and ensure category ID is a valid eBay leaf category
-   * Falls back to LEGO Complete Sets & Packs if invalid
+   * For LEGO items: validates against known LEGO categories, falls back to Complete Sets
+   * For non-LEGO items: trusts the AI's suggested category as-is
    */
-  private validateCategoryId(categoryId: string): string {
+  private validateCategoryId(categoryId: string, isNonLego: boolean): string {
+    // Non-LEGO items: trust the AI's category suggestion
+    if (isNonLego) {
+      console.log(`[ListingCreationService] Non-LEGO item, using AI category: ${categoryId}`);
+      return categoryId;
+    }
+
+    // LEGO items: validate against known LEGO categories
     const validCategories = Object.values(LEGO_CATEGORIES);
 
     if (validCategories.includes(categoryId)) {
@@ -1104,7 +1127,7 @@ Return JSON with these fields (omit any you're not confident about):
 
     // Log the invalid category and fall back to complete sets
     console.warn(
-      `[ListingCreationService] Invalid category ID "${categoryId}" - falling back to LEGO Complete Sets & Packs (${LEGO_CATEGORIES.COMPLETE_SET})`
+      `[ListingCreationService] Invalid LEGO category "${categoryId}" - falling back to LEGO Complete Sets & Packs (${LEGO_CATEGORIES.COMPLETE_SET})`
     );
 
     return LEGO_CATEGORIES.COMPLETE_SET;
@@ -1119,8 +1142,12 @@ Return JSON with these fields (omit any you're not confident about):
    * Map inventory item condition to eBay condition enum.
    * eBay's API doesn't accept plain "USED" - it requires USED_EXCELLENT or similar.
    * For LEGO categories, we use NEW or USED_EXCELLENT.
+   * For non-LEGO categories, we support the full range of condition values.
    */
-  private mapConditionToEbayEnum(condition: string | null | undefined): 'NEW' | 'USED_EXCELLENT' {
+  private mapConditionToEbayEnum(
+    condition: string | null | undefined,
+    isNonLego = false
+  ): EbayConditionEnum {
     if (!condition) {
       return 'USED_EXCELLENT';
     }
@@ -1129,7 +1156,16 @@ Return JSON with these fields (omit any you're not confident about):
     if (normalised === 'new' || normalised.includes('sealed') || normalised.includes('brand new')) {
       return 'NEW';
     }
-    // Everything else is USED_EXCELLENT (eBay doesn't accept plain "USED")
+    // For non-LEGO items, support finer-grained condition values
+    if (isNonLego) {
+      if (normalised.includes('like new') || normalised.includes('open box')) return 'LIKE_NEW';
+      if (normalised.includes('very good')) return 'USED_VERY_GOOD';
+      if (normalised.includes('good')) return 'USED_GOOD';
+      if (normalised.includes('acceptable')) return 'USED_ACCEPTABLE';
+      if (normalised.includes('parts') || normalised.includes('incomplete'))
+        return 'FOR_PARTS_OR_NOT_WORKING';
+    }
+    // Default: USED_EXCELLENT (eBay doesn't accept plain "USED" for LEGO categories)
     return 'USED_EXCELLENT';
   }
 
