@@ -1023,7 +1023,11 @@ Return JSON with these fields (omit any you're not confident about):
     }
 
     // Validate category ID is a valid leaf category
-    const validatedCategoryId = this.validateCategoryId(listing.categoryId, isNonLego);
+    const validatedCategoryId = await this.validateCategoryId(
+      listing.categoryId,
+      isNonLego,
+      listing.title
+    );
 
     const offerRequest = {
       sku,
@@ -1107,30 +1111,168 @@ Return JSON with these fields (omit any you're not confident about):
   }
 
   /**
-   * Validate and ensure category ID is a valid eBay leaf category
-   * For LEGO items: validates against known LEGO categories, falls back to Complete Sets
-   * For non-LEGO items: trusts the AI's suggested category as-is
+   * Known non-leaf category IDs that the AI may suggest, mapped to correct leaf categories.
+   * These are common parent categories that are NOT valid for listing.
    */
-  private validateCategoryId(categoryId: string, isNonLego: boolean): string {
-    // Non-LEGO items: trust the AI's category suggestion
-    if (isNonLego) {
-      console.log(`[ListingCreationService] Non-LEGO item, using AI category: ${categoryId}`);
+  private static readonly NON_LEAF_CATEGORY_FIXES: Record<string, string> = {
+    '11743': '19854', // Playmobil (parent) → Playmobil (leaf under Preschool Toys)
+    '183446': '258040', // Building Toys (parent) → Construction Toy Complete Sets & Packs (leaf)
+    '246': '261068', // Action Figures (parent) → Action Figures (leaf)
+    '183450': '183449', // LEGO Instruction Manuals (not leaf) → LEGO Pieces & Parts (leaf)
+  };
+
+  /**
+   * Validate and ensure category ID is a valid eBay leaf category.
+   * For LEGO items: validates against known LEGO categories, falls back to Complete Sets.
+   * For non-LEGO items: checks against known non-leaf fixes, then validates via Taxonomy API.
+   */
+  private async validateCategoryId(
+    categoryId: string,
+    isNonLego: boolean,
+    listingTitle?: string
+  ): Promise<string> {
+    // Check known non-leaf category fixes first (works for both LEGO and non-LEGO)
+    const knownFix = ListingCreationService.NON_LEAF_CATEGORY_FIXES[categoryId];
+    if (knownFix) {
+      console.warn(
+        `[ListingCreationService] Category "${categoryId}" is not a leaf category - using known fix: ${knownFix}`
+      );
+      return knownFix;
+    }
+
+    if (!isNonLego) {
+      // LEGO items: validate against known LEGO categories
+      const validCategories = Object.values(LEGO_CATEGORIES);
+      if (validCategories.includes(categoryId)) {
+        return categoryId;
+      }
+
+      console.warn(
+        `[ListingCreationService] Invalid LEGO category "${categoryId}" - falling back to LEGO Complete Sets & Packs (${LEGO_CATEGORIES.COMPLETE_SET})`
+      );
+      return LEGO_CATEGORIES.COMPLETE_SET;
+    }
+
+    // Non-LEGO items: validate via eBay Taxonomy API using an application token
+    try {
+      const leafCategoryId = await this.validateCategoryViaApi(categoryId, listingTitle);
+      if (leafCategoryId) {
+        return leafCategoryId;
+      }
+    } catch (error) {
+      console.warn(
+        `[ListingCreationService] Taxonomy API validation failed, using AI category as-is:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+
+    // Fallback: use AI suggestion (may fail at publish if not a leaf)
+    console.log(`[ListingCreationService] Non-LEGO item, using AI category: ${categoryId}`);
+    return categoryId;
+  }
+
+  /**
+   * Validate a category ID is a leaf category using the eBay Taxonomy API.
+   * Uses a Client Credentials (application) token which has Commerce scope.
+   * Returns the validated category ID, or a suggested leaf category if the original isn't a leaf.
+   */
+  private async validateCategoryViaApi(
+    categoryId: string,
+    listingTitle?: string
+  ): Promise<string | null> {
+    const appToken = await this.getApplicationToken();
+    if (!appToken) {
+      return null;
+    }
+
+    // Check if the category is a leaf by trying to get its item aspects
+    const aspectsUrl = `https://api.ebay.com/commerce/taxonomy/v1/category_tree/3/get_item_aspects_for_category?category_id=${categoryId}`;
+    const aspectsResponse = await fetch(aspectsUrl, {
+      headers: { Authorization: `Bearer ${appToken}` },
+    });
+
+    if (aspectsResponse.ok) {
+      console.log(
+        `[ListingCreationService] Category ${categoryId} confirmed as leaf via Taxonomy API`
+      );
       return categoryId;
     }
 
-    // LEGO items: validate against known LEGO categories
-    const validCategories = Object.values(LEGO_CATEGORIES);
-
-    if (validCategories.includes(categoryId)) {
-      return categoryId;
-    }
-
-    // Log the invalid category and fall back to complete sets
+    // Category is not a leaf - try to find the right one using the listing title
     console.warn(
-      `[ListingCreationService] Invalid LEGO category "${categoryId}" - falling back to LEGO Complete Sets & Packs (${LEGO_CATEGORIES.COMPLETE_SET})`
+      `[ListingCreationService] Category ${categoryId} is NOT a leaf category (status ${aspectsResponse.status})`
     );
 
-    return LEGO_CATEGORIES.COMPLETE_SET;
+    if (listingTitle) {
+      const suggestUrl = `https://api.ebay.com/commerce/taxonomy/v1/category_tree/3/get_category_suggestions?q=${encodeURIComponent(listingTitle)}`;
+      const suggestResponse = await fetch(suggestUrl, {
+        headers: { Authorization: `Bearer ${appToken}` },
+      });
+
+      if (suggestResponse.ok) {
+        const data = (await suggestResponse.json()) as {
+          categorySuggestions?: Array<{
+            category: { categoryId: string; categoryName: string };
+          }>;
+        };
+        const suggestion = data.categorySuggestions?.[0];
+        if (suggestion) {
+          console.log(
+            `[ListingCreationService] Taxonomy API suggests leaf category: ${suggestion.category.categoryId} (${suggestion.category.categoryName})`
+          );
+          return suggestion.category.categoryId;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get an eBay application (Client Credentials) token for Taxonomy API access.
+   * This token doesn't require user authorization.
+   */
+  private async getApplicationToken(): Promise<string | null> {
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const clientSecret = process.env.EBAY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.warn(
+        '[ListingCreationService] EBAY_CLIENT_ID/SECRET not configured, cannot validate category'
+      );
+      return null;
+    }
+
+    try {
+      const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${basicAuth}`,
+        },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          scope: 'https://api.ebay.com/oauth/api_scope',
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn(
+          `[ListingCreationService] Failed to get application token: ${response.status}`
+        );
+        return null;
+      }
+
+      const data = (await response.json()) as { access_token: string };
+      return data.access_token;
+    } catch (error) {
+      console.warn(
+        '[ListingCreationService] Error getting application token:',
+        error instanceof Error ? error.message : error
+      );
+      return null;
+    }
   }
 
   /**
