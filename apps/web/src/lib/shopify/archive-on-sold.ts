@@ -42,7 +42,8 @@ export async function archiveShopifyOnSold(
       .from('shopify_products')
       .select('inventory_item_id')
       .eq('shopify_product_id', mapping.shopify_product_id)
-      .neq('inventory_item_id', inventoryItemId);
+      .neq('inventory_item_id', inventoryItemId)
+      .eq('shopify_status', 'active');
 
     if (siblings && siblings.length > 0) {
       // Grouped product — check if any sibling is still LISTED
@@ -51,11 +52,73 @@ export async function archiveShopifyOnSold(
         .from('inventory_items')
         .select('id')
         .in('id', siblingIds)
-        .eq('status', 'LISTED')
-        .limit(1);
+        .eq('status', 'LISTED');
 
       if (activeItems && activeItems.length > 0) {
-        // Other items still active on this product — skip archive, let batchSync handle it
+        // Other items still active — mark this mapping as archived and decrement inventory
+        await supabase
+          .from('shopify_products')
+          .update({
+            shopify_status: 'archived',
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString(),
+          })
+          .eq('inventory_item_id', inventoryItemId);
+
+        // Decrement Shopify inventory quantity
+        try {
+          const syncService = new ShopifySyncService(supabase, userId);
+          const { data: config } = await supabase
+            .from('shopify_config')
+            .select('location_id')
+            .eq('user_id', userId)
+            .single();
+
+          if (config?.location_id && mapping.shopify_product_id) {
+            // Get the inventory_item_id from the mapping to get the variant's inventory item
+            const { data: fullMapping } = await supabase
+              .from('shopify_products')
+              .select('shopify_inventory_item_id')
+              .eq('inventory_item_id', inventoryItemId)
+              .single();
+
+            if (fullMapping?.shopify_inventory_item_id) {
+              const { ShopifyClient } = await import('./client');
+              const { data: fullConfig } = await supabase
+                .from('shopify_config')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+              if (fullConfig) {
+                const client = new ShopifyClient(fullConfig as never);
+                await client.setInventoryLevel(
+                  fullMapping.shopify_inventory_item_id,
+                  config.location_id,
+                  activeItems.length
+                );
+              }
+            }
+          }
+        } catch (invErr) {
+          console.warn(
+            `[archiveShopifyOnSold] Failed to decrement inventory for grouped product:`,
+            invErr instanceof Error ? invErr.message : invErr
+          );
+        }
+
+        const { data: item } = await supabase
+          .from('inventory_items')
+          .select('set_number, item_name, sold_platform')
+          .eq('id', inventoryItemId)
+          .single();
+
+        discordService.sendSyncStatus({
+          title: '🏪 Shopify Group Quantity Reduced',
+          message: `**${item?.item_name ?? 'Unknown'} (${item?.set_number ?? '?'})** sold on ${item?.sold_platform ?? 'unknown'}. Shopify quantity reduced to ${activeItems.length}.`,
+          success: true,
+        }).catch(() => {});
+
         return;
       }
     }
