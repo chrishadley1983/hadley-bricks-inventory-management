@@ -732,10 +732,10 @@ export class ShopifySyncService {
 
     await this.getClient();
 
-    // 1. Archive products for items no longer LISTED
+    // 1. Archive/decrement products for items no longer LISTED
     const { data: toArchive } = await this.supabase
       .from('shopify_products')
-      .select('inventory_item_id, shopify_status, inventory_items!inner(status)')
+      .select('inventory_item_id, shopify_product_id, shopify_status, shopify_inventory_item_id, inventory_items!inner(status)')
       .eq('user_id', this.userId)
       .neq('shopify_status', 'archived')
       .neq('inventory_items.status', 'LISTED');
@@ -743,15 +743,74 @@ export class ShopifySyncService {
     if (toArchive) {
       for (const item of toArchive) {
         summary.items_processed++;
-        const result = await this.archiveProduct(item.inventory_item_id);
-        if (result.success) {
-          summary.items_archived++;
+
+        // Check if this is a grouped product with LISTED siblings
+        const { data: listedSiblings } = await this.supabase
+          .from('shopify_products')
+          .select('id, shopify_inventory_item_id')
+          .eq('shopify_product_id', item.shopify_product_id)
+          .neq('inventory_item_id', item.inventory_item_id)
+          .eq('shopify_status', 'active');
+
+        // Count how many siblings are still LISTED in inventory
+        let activeSiblingCount = 0;
+        if (listedSiblings && listedSiblings.length > 0) {
+          const siblingIds = listedSiblings.map((s) => s.id);
+          const { data: listedItems } = await this.supabase
+            .from('shopify_products')
+            .select('inventory_item_id, inventory_items!inner(status)')
+            .in('id', siblingIds)
+            .eq('inventory_items.status', 'LISTED');
+          activeSiblingCount = listedItems?.length ?? 0;
+        }
+
+        if (activeSiblingCount > 0) {
+          // Grouped product with active siblings — just mark this mapping as archived
+          // and decrement inventory quantity instead of archiving the whole product
+          try {
+            await this.supabase
+              .from('shopify_products')
+              .update({
+                shopify_status: 'archived',
+                sync_status: 'synced',
+                last_synced_at: new Date().toISOString(),
+              })
+              .eq('inventory_item_id', item.inventory_item_id);
+
+            // Decrement Shopify inventory to reflect the remaining LISTED count
+            const config = this.getConfig();
+            if (config.location_id && item.shopify_inventory_item_id) {
+              const client = await this.getClient();
+              await client.setInventoryLevel(
+                item.shopify_inventory_item_id,
+                config.location_id,
+                activeSiblingCount
+              );
+            }
+
+            summary.items_archived++;
+            console.log(
+              `[ShopifySync] Decremented group product ${item.shopify_product_id}: removed sold item, ${activeSiblingCount} remain`
+            );
+          } catch (err) {
+            summary.items_failed++;
+            summary.errors.push({
+              item_id: item.inventory_item_id,
+              error: `Group decrement failed: ${err instanceof Error ? err.message : String(err)}`,
+            });
+          }
         } else {
-          summary.items_failed++;
-          summary.errors.push({
-            item_id: item.inventory_item_id,
-            error: result.error || 'Archive failed',
-          });
+          // No active siblings — archive the entire Shopify product
+          const result = await this.archiveProduct(item.inventory_item_id);
+          if (result.success) {
+            summary.items_archived++;
+          } else {
+            summary.items_failed++;
+            summary.errors.push({
+              item_id: item.inventory_item_id,
+              error: result.error || 'Archive failed',
+            });
+          }
         }
       }
     }
