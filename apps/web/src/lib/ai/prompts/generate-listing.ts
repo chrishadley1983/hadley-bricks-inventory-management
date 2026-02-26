@@ -10,7 +10,7 @@ import type { DescriptionStyle } from '@/lib/ebay/listing-creation.types';
 /**
  * System prompt for generating eBay listings
  */
-export const GENERATE_LISTING_SYSTEM_PROMPT = `You are an expert eBay listing specialist for LEGO products. Your task is to generate optimized eBay listing content that maximizes visibility, buyer engagement, and sales conversion.
+export const GENERATE_LISTING_SYSTEM_PROMPT = `You are an expert eBay listing specialist for toys and collectibles, with deep expertise in LEGO products. Your task is to generate optimized eBay listing content that maximizes visibility, buyer engagement, and sales conversion.
 
 ## eBay Optimization Expertise
 
@@ -80,7 +80,17 @@ You MUST use one of these exact eBay leaf category IDs. Using any other category
 - **183449** - LEGO Pieces & Parts - Use ONLY for bulk parts, individual pieces, or partial sets
 - **183450** - LEGO Instruction Manuals - Use ONLY for instruction booklets sold separately
 
-For 99% of listings (complete LEGO sets), use category ID "183448".
+For 99% of LEGO listings (complete LEGO sets), use category ID "183448".
+
+## NON-LEGO ITEMS
+
+When the set number is "NA" or the brand is not LEGO:
+- Use appropriate eBay category IDs (NOT LEGO categories above)
+- Common Toys & Hobbies categories: "11743" (Playmobil), "183446" (Building Toys), "246" (Action Figures)
+- Set Brand to the actual brand (e.g., "Playmobil", "Mega Bloks", "Cobi")
+- Do NOT include LEGO-specific item specifics (LEGO Theme, LEGO Set Number, LEGO Set Name, LEGO Character, MPN)
+- Include relevant item specifics for the brand/category instead (e.g., "Product Line", "Model Number", "Character/Story")
+- Use the "Toys & Hobbies" category tree for most toy brands
 
 ## Response Format
 
@@ -217,18 +227,18 @@ export function createGenerateListingMessage(
   research?: ListingResearchData
 ): string {
   const styleInstructions = DESCRIPTION_STYLE_INSTRUCTIONS[style];
+  const isNonLego = item.setNumber === 'NA';
 
   // Build context sections
   let message = `## TASK
-Generate an optimized eBay listing for this LEGO item.
-
+Generate an optimized eBay listing for this ${isNonLego ? 'item' : 'LEGO item'}.
+${isNonLego ? '\n**IMPORTANT: This is NOT a LEGO item.** Do NOT use LEGO categories. Select an appropriate eBay category for the brand/product type. Do NOT include LEGO-specific item specifics (LEGO Theme, LEGO Set Number, MPN, LEGO Set Name, LEGO Character). Set Brand to the actual brand name.\n' : ''}
 ## STYLE INSTRUCTIONS
 ${styleInstructions}
 
 ## INVENTORY ITEM DATA
-- Set Number: ${item.setNumber}
-- Set Name: ${item.setName}
-- Theme: ${item.theme}
+${isNonLego ? '' : `- Set Number: ${item.setNumber}\n`}- Item Name: ${item.setName}
+${!isNonLego ? `- Theme: ${item.theme}` : ''}
 - Condition: ${item.condition}
 ${item.conditionNotes ? `- Condition Notes: ${item.conditionNotes}` : ''}
 ${item.pieceCount ? `- Piece Count: ${item.pieceCount}` : ''}
