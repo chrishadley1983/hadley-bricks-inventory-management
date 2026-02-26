@@ -85,8 +85,8 @@ For 99% of LEGO listings (complete LEGO sets), use category ID "183448".
 ## NON-LEGO ITEMS
 
 When the set number is "NA" or the brand is not LEGO:
-- Use appropriate eBay category IDs (NOT LEGO categories above)
-- Common Toys & Hobbies categories: "11743" (Playmobil), "183446" (Building Toys), "246" (Action Figures)
+- Use appropriate eBay LEAF category IDs (NOT LEGO categories above). CRITICAL: Only use leaf categories - non-leaf categories will cause listing failure.
+- Common LEAF categories: "19854" (Playmobil), "258040" (Construction Toy Complete Sets & Packs - for Mega Bloks, Cobi, K'Nex), "261068" (Action Figures)
 - Set Brand to the actual brand (e.g., "Playmobil", "Mega Bloks", "Cobi")
 - Do NOT include LEGO-specific item specifics (LEGO Theme, LEGO Set Number, LEGO Set Name, LEGO Character, MPN)
 - Include relevant item specifics for the brand/category instead (e.g., "Product Line", "Model Number", "Character/Story")
