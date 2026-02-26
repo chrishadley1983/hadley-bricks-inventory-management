@@ -1,13 +1,14 @@
 /**
  * POST /api/cron/full-sync
  *
- * Scheduled cron job that runs twice daily (7:45 AM and 1:45 PM UK time) to:
+ * Scheduled cron job that runs 6 times daily (every 4 hours) to:
  * 1. Run full platform syncs (eBay, Amazon, BrickLink, Brick Owl)
  * 2. Sync Amazon inventory ASINs to tracked_asins
  * 3. Detect and reset stuck jobs (running > 30 minutes)
- * 4. Send a comprehensive Discord status report
+ * 4. Shopify batch sync (archive sold items, create new products)
+ * 5. Send a comprehensive Discord status report
  *
- * Schedule: "45 7,13 * * *" (UTC - adjust for BST)
+ * Schedule: "45 3,7,11,15,19,23 * * *" (UTC)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -795,14 +796,14 @@ export async function POST(request: NextRequest) {
         const shopifySync = new ShopifySyncService(supabase, userId);
         const batchResult = await withTimeout(
           shopifySync.batchSync(100),
-          60000,
-          'Shopify Archive Sync'
+          180000,
+          'Shopify Batch Sync'
         );
         results.shopifyArchiveSync = {
-          platform: 'Shopify Archive',
+          platform: 'Shopify Batch Sync',
           status: 'success',
           processed: batchResult.items_processed,
-          created: batchResult.items_created,
+          created: batchResult.items_created + batchResult.items_added_to_group,
           updated: batchResult.items_archived,
         };
         console.log(

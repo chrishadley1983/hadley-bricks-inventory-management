@@ -134,6 +134,7 @@ function Create-SchedulerJob {
 }
 
 # Fire-and-forget jobs (direct to Vercel)
+Create-SchedulerJob -Name "full-sync" -Schedule "45 3,7,11,15,19,23 * * *" -Uri "$APP_URL/api/cron/full-sync" -Description "Full platform sync + Shopify batch sync, 6x daily (every 4 hours)"
 Create-SchedulerJob -Name "amazon-two-phase-sync" -Schedule "*/5 * * * *" -Uri "$APP_URL/api/cron/amazon-sync" -Description "Amazon two-phase order sync"
 Create-SchedulerJob -Name "ebay-negotiation-sync" -Schedule "0 8,12,16,20 * * *" -Uri "$APP_URL/api/cron/negotiation" -Description "eBay automated negotiation offers"
 Create-SchedulerJob -Name "vinted-cleanup" -Schedule "0 0 * * *" -Uri "$APP_URL/api/cron/vinted-cleanup" -Description "Vinted sold items cleanup"
@@ -162,7 +163,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Created 15 Cloud Scheduler jobs:" -ForegroundColor White
+Write-Host "Created 16 Cloud Scheduler jobs:" -ForegroundColor White
 gcloud scheduler jobs list --location=$REGION --format="table(name,schedule,state)"
 
 Write-Host ""
