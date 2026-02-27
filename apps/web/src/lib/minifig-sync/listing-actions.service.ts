@@ -85,6 +85,31 @@ export class ListingActionsService {
       const listingId = publishResult.listingId;
       const listingUrl = `https://www.ebay.co.uk/itm/${listingId}`;
 
+      // Create inventory_items record so eBay resolution, P&L, and reporting can find this minifig
+      const { error: invError } = await this.supabase
+        .from('inventory_items')
+        .insert({
+          set_number: item.bricklink_id || item.name || 'UNKNOWN',
+          item_name: item.name,
+          condition: 'Used',
+          status: 'LISTED',
+          source: 'Minifig Sync',
+          cost: item.bricqer_price ? Number(item.bricqer_price) : null,
+          listing_date: new Date().toISOString(),
+          listing_value: item.recommended_price ? Number(item.recommended_price) : null,
+          listing_platform: 'eBay',
+          sku: item.ebay_sku,
+          storage_location: item.storage_location,
+          ebay_listing_id: listingId,
+          ebay_listing_url: listingUrl,
+          user_id: this.userId,
+        });
+
+      if (invError) {
+        console.error('[ListingActionsService] Failed to create inventory_items record:', invError.message);
+        // Non-fatal: the eBay listing is already live, so we log and continue
+      }
+
       // Update sync item (F42)
       await this.supabase
         .from('minifig_sync_items')
