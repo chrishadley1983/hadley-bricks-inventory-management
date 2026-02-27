@@ -15,7 +15,7 @@
 
 ### Actions
 
-1. Created worktree at `C:\Users\Chris Hadley\hadley-bricks-feature-full-sync-job`
+1. Created worktree at `C:\Users\Chris Hadley\claude-projects\hadley-bricks-feature-full-sync-job`
 2. Analyzed existing cron pattern from `/api/cron/amazon-sync`
 3. Analyzed existing sync services and Discord service
 4. Created `/api/cron/full-sync/route.ts` with:

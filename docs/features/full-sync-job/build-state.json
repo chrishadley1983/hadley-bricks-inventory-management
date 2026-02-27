@@ -6,7 +6,7 @@
   "startedAt": "2026-01-29T16:20:00Z",
   "completedAt": "2026-01-29T16:35:00Z",
   "branch": "feature/full-sync-job",
-  "worktree": "C:\\Users\\Chris Hadley\\hadley-bricks-feature-full-sync-job",
+  "worktree": "C:\\Users\\Chris Hadley\\claude-projects\\hadley-bricks-feature-full-sync-job",
   "commits": [
     {
       "sha": "c206c45",
