@@ -246,28 +246,17 @@ export class AmazonSyncService {
       // Process orders
       for (const orderSummary of orders) {
         try {
-          const orderId = orderSummary.AmazonOrderId;
+          const { isNew } = await this.processOrder(
+            userId,
+            client,
+            orderSummary,
+            options.includeItems ?? false
+          );
 
-          // Check if order already exists
-          const existing = await this.orderRepo.findByPlatformOrderId(userId, 'amazon', orderId);
-
-          // Log status changes for debugging
-          if (existing) {
-            const amazonStatus = orderSummary.OrderStatus;
-            const existingStatus = existing.status;
-            if (amazonStatus !== existingStatus) {
-              console.log(
-                `[AmazonSyncService] Order ${orderId} status change: ${existingStatus} -> ${amazonStatus}`
-              );
-            }
-          }
-
-          await this.processOrder(userId, client, orderSummary, options.includeItems ?? false);
-
-          if (existing) {
-            result.ordersUpdated++;
-          } else {
+          if (isNew) {
             result.ordersCreated++;
+          } else {
+            result.ordersUpdated++;
           }
         } catch (orderError) {
           const errorMsg = orderError instanceof Error ? orderError.message : 'Unknown error';
@@ -303,47 +292,62 @@ export class AmazonSyncService {
 
   /**
    * Process a single order
+   * @returns whether this was a new order (created) vs existing (updated)
    */
   private async processOrder(
     userId: string,
     client: AmazonClient,
     orderSummary: AmazonOrder,
     includeItems: boolean
-  ): Promise<void> {
+  ): Promise<{ isNew: boolean }> {
     let normalized: NormalizedAmazonOrder;
 
-    // Always fetch items for orders awaiting dispatch (Unshipped, PartiallyShipped)
-    // These need item details for the dispatch workflow UI
-    const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
-    const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
+    // Check if order already exists and whether it has items
+    const existing = await this.orderRepo.findByPlatformOrderId(
+      userId,
+      'amazon',
+      orderSummary.AmazonOrderId
+    );
 
-    // Check if existing order is missing items and needs them for dispatch
-    // This handles backfilling items for orders synced before the dispatch-items fix
-    let needsItemsBackfill = false;
-    if (needsItemsForDispatch) {
-      const existing = await this.orderRepo.findByPlatformOrderId(
-        userId,
-        'amazon',
-        orderSummary.AmazonOrderId
+    // Log status changes for debugging
+    if (existing && orderSummary.OrderStatus !== existing.status) {
+      console.log(
+        `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} status change: ${existing.status} -> ${orderSummary.OrderStatus}`
       );
-      if (existing && existing.items_count === 0) {
-        needsItemsBackfill = true;
-        console.log(
-          `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`
-        );
-      }
     }
 
-    const shouldFetchItems = includeItems || needsItemsForDispatch || needsItemsBackfill;
+    // Always fetch items for:
+    // 1. includeItems explicitly requested
+    // 2. New orders (no existing record) - ensures all orders get item names
+    // 3. Orders awaiting dispatch (Unshipped, PartiallyShipped)
+    // 4. Existing orders missing items (backfill)
+    const isNewOrder = !existing;
+    const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
+    const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
+    const needsItemsBackfill = existing?.items_count === 0;
+
+    if (needsItemsBackfill) {
+      console.log(
+        `[AmazonSyncService] Order ${orderSummary.AmazonOrderId} needs items backfill (items_count=0)`
+      );
+    }
+
+    const shouldFetchItems =
+      includeItems || isNewOrder || needsItemsForDispatch || needsItemsBackfill;
 
     if (shouldFetchItems) {
       // Fetch full order with items
       const orderId = orderSummary.AmazonOrderId;
       const items = await client.getOrderItems(orderId);
       normalized = normalizeOrder(orderSummary, items);
-      if (needsItemsForDispatch && !includeItems) {
+      if (!includeItems) {
+        const reason = isNewOrder
+          ? 'new order'
+          : needsItemsBackfill
+            ? 'backfill'
+            : 'dispatch';
         console.log(
-          `[AmazonSyncService] Fetched items for dispatch order ${orderId} (status: ${orderSummary.OrderStatus})`
+          `[AmazonSyncService] Fetched items for ${reason} order ${orderId} (status: ${orderSummary.OrderStatus})`
         );
       }
     } else {
@@ -414,6 +418,8 @@ export class AmazonSyncService {
     } else if (shouldFetchItems) {
       console.log(`[AmazonSyncService] Order ${normalized.platformOrderId} has no items to save`);
     }
+
+    return { isNew: isNewOrder };
   }
 
   /**
