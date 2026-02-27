@@ -119,7 +119,7 @@ Stores state between listing creation phases for preview confirmation.
 
 The worktree can now be removed:
 ```powershell
-git worktree remove "C:\Users\Chris Hadley\hadley-bricks-feature-ebay-listing-quality-loop"
+git worktree remove "C:\Users\Chris Hadley\claude-projects\hadley-bricks-feature-ebay-listing-quality-loop"
 ```
 
 ---

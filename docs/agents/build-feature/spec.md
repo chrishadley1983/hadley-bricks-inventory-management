@@ -464,7 +464,7 @@ git branch --show-current
 - HUMAN_VERIFY: 1
 
 **App status:** ✅ Running on localhost:3000
-**Worktree:** C:\Users\Chris Hadley\hadley-bricks-feature-inventory-export
+**Worktree:** C:\Users\Chris Hadley\claude-projects\hadley-bricks-feature-inventory-export
 **Git branch:** feature/inventory-export
 **Git status:** ✅ Clean
 **Session isolation:** ✅ Worktree (safe for concurrent sessions)

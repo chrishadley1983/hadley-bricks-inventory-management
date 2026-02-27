@@ -458,7 +458,7 @@ npm install
 git worktree list
 
 # If worktree exists, just switch to it
-cd "C:\Users\Chris Hadley\hadley-bricks-fix-$slug"
+cd "C:\Users\Chris Hadley\claude-projects\hadley-bricks-fix-$slug"
 
 # Verify branch
 git branch --show-current
@@ -475,7 +475,7 @@ git branch --show-current
 ```powershell
 # MUST run this check before any code changes
 $currentDir = Get-Location
-$mainRepo = "C:\Users\Chris Hadley\hadley-bricks-inventory-management"
+$mainRepo = "C:\Users\Chris Hadley\claude-projects\hadley-bricks-inventory-management"
 
 if ($currentDir -eq $mainRepo) {
     # STOP - DO NOT PROCEED
