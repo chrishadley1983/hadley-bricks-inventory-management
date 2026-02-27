@@ -111,7 +111,7 @@ async function main() {
       cost: item.bricqer_price ? Number(item.bricqer_price) : null,
       listing_date: (item.updated_at as string) || new Date().toISOString(),
       listing_value: item.recommended_price ? Number(item.recommended_price) : null,
-      listing_platform: 'eBay',
+      listing_platform: 'ebay',
       sku,
       storage_location: item.storage_location as string | null,
       ebay_listing_id: item.ebay_listing_id as string | null,

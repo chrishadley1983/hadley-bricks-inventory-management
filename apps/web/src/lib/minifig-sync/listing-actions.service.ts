@@ -97,7 +97,7 @@ export class ListingActionsService {
           cost: item.bricqer_price ? Number(item.bricqer_price) : null,
           listing_date: new Date().toISOString(),
           listing_value: item.recommended_price ? Number(item.recommended_price) : null,
-          listing_platform: 'eBay',
+          listing_platform: 'ebay',
           sku: item.ebay_sku,
           storage_location: item.storage_location,
           ebay_listing_id: listingId,
