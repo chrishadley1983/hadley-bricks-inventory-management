@@ -68,5 +68,5 @@ All 26 AUTO_VERIFY criteria passed. See `docs/features/ebay-arbitrage-cleanup/do
 
 ## Notes
 
-- The worktree directory `C:/Users/Chris Hadley/hadley-bricks-feature-ebay-arbitrage-cleanup` can be manually deleted to free disk space
+- The worktree directory `C:/Users/Chris Hadley/claude-projects/hadley-bricks-feature-ebay-arbitrage-cleanup` can be manually deleted to free disk space
 - Migration adds `ebay_fp_cleanup` to the job_type constraint in arbitrage_sync_status

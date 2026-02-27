@@ -123,7 +123,6 @@ async function main() {
   const possiblePaths = [
     process.env.GOOGLE_CREDENTIALS_PATH,
     resolve(__dirname, '../google-credentials.json'),
-    'C:/Users/Chris Hadley/Downloads/gen-lang-client-0823893317-af39140849cd.json',
   ].filter(Boolean) as string[];
 
   let serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;

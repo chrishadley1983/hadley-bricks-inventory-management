@@ -248,7 +248,7 @@ apps/web/src/components/layout/Sidebar.tsx  (added Shopify Sync nav link)
 packages/database/src/types.ts              (regenerated with shopify tables)
 ```
 
-### Shopify Theme Files (at C:\Users\Chris Hadley\hadley-bricks-shopify\)
+### Shopify Theme Files (at C:\Users\Chris Hadley\claude-projects\hadley-bricks-shopify\)
 ```
 config/settings_data.json       (brand palette, typography, colour schemes)
 sections/header-group.json      (announcement bar, navigation)

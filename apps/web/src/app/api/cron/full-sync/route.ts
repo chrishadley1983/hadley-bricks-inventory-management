@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayOrderSyncService, EbayAutoSyncService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
+import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
 import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
 import { AmazonArbitrageSyncService } from '@/lib/arbitrage/amazon-sync.service';
@@ -67,6 +68,7 @@ interface ShopifyAlignment {
 interface FullSyncResults {
   platformSyncs: SyncResult[];
   inventoryAsinSync: SyncResult | null;
+  amazonLinking: { autoLinked: number; queuedForResolution: number; autoCompleted: number } | null;
   shopifyArchiveSync: SyncResult | null;
   shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
@@ -516,6 +518,19 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     inventoryAsinText = `❌ ${results.inventoryAsinSync.error ?? 'Failed'}`;
   }
 
+  // Build Amazon inventory linking section
+  let amazonLinkingText: string;
+  if (!results.amazonLinking) {
+    amazonLinkingText = '⏭️ No orders to link';
+  } else {
+    const { autoLinked, queuedForResolution, autoCompleted } = results.amazonLinking;
+    const parts: string[] = [];
+    if (autoLinked > 0) parts.push(`✅ **${autoLinked}** auto-linked`);
+    if (queuedForResolution > 0) parts.push(`🔍 **${queuedForResolution}** queued for resolution`);
+    if (autoCompleted > 0) parts.push(`📦 **${autoCompleted}** auto-completed`);
+    amazonLinkingText = parts.length > 0 ? parts.join(', ') : '✅ No unlinked orders found';
+  }
+
   // Build Shopify archive sync section
   let shopifyArchiveText: string;
   if (!results.shopifyArchiveSync) {
@@ -561,6 +576,9 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     '',
     '## 📦 INVENTORY ASIN SYNC',
     inventoryAsinText,
+    '',
+    '## 🔗 AMAZON INVENTORY LINKING',
+    amazonLinkingText,
     '',
     '## 🏪 SHOPIFY SYNC',
     shopifyArchiveText,
@@ -611,6 +629,7 @@ export async function POST(request: NextRequest) {
     const results: FullSyncResults = {
       platformSyncs: [],
       inventoryAsinSync: null,
+      amazonLinking: null,
       shopifyArchiveSync: null,
       shopifyAlignment: null,
       stuckJobs: [],
@@ -785,6 +804,38 @@ export async function POST(request: NextRequest) {
           status: errorMsg.includes('credentials') ? 'skipped' : 'failed',
           error: errorMsg,
         };
+      }
+
+      // Step 4b: Run Amazon Inventory Linking (match orders to inventory, mark SOLD, archive Shopify)
+      console.log('[Cron FullSync] Running Amazon Inventory Linking...');
+      try {
+        const linkingService = new AmazonInventoryLinkingService(supabase, userId);
+
+        const linkingResult = await withTimeout(
+          linkingService.processHistoricalOrders({ mode: 'auto', includeSold: true }),
+          90000,
+          'Amazon Inventory Linking'
+        );
+
+        const autoCompleteResult = await withTimeout(
+          linkingService.autoCompleteOldOrders(14),
+          SYNC_TIMEOUT,
+          'Amazon Auto-Complete Old Orders'
+        );
+
+        results.amazonLinking = {
+          autoLinked: linkingResult.totalAutoLinked,
+          queuedForResolution: linkingResult.totalQueuedForResolution,
+          autoCompleted: autoCompleteResult.completed,
+        };
+
+        console.log(
+          `[Cron FullSync] Amazon linking: ${linkingResult.totalAutoLinked} auto-linked, ${linkingResult.totalQueuedForResolution} queued, ${autoCompleteResult.completed} auto-completed`
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Cron FullSync] Amazon Inventory Linking failed:', errorMsg);
+        // Non-fatal - don't block the rest of the sync
       }
     }
 

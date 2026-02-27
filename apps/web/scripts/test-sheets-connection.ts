@@ -30,7 +30,6 @@ async function main() {
     process.env.GOOGLE_CREDENTIALS_PATH,
     resolve(__dirname, '../google-credentials.json'),
     resolve(__dirname, '../../../google-credentials.json'),
-    'C:/Users/Chris Hadley/Downloads/gen-lang-client-0823893317-af39140849cd.json',
   ].filter(Boolean) as string[];
 
   for (const credPath of possiblePaths) {
