@@ -40,6 +40,7 @@ interface SyncQueueResponse {
     totalItems: number;
     uniqueAsins: number;
     totalQuantity: number;
+    totalUploadValue: number;
   };
 }
 
