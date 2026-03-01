@@ -55,6 +55,7 @@ export async function GET() {
           totalItems: items.length,
           uniqueAsins: aggregated.length,
           totalQuantity: aggregated.reduce((sum, a) => sum + a.totalQuantity, 0),
+          totalUploadValue: items.reduce((sum, item) => sum + (item.local_price ?? 0), 0),
         },
       },
     });

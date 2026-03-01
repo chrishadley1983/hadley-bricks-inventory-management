@@ -32,7 +32,8 @@ const SyncQueueSummary = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCardSkeleton />
         <StatCardSkeleton />
         <StatCardSkeleton />
         <StatCardSkeleton />
@@ -167,6 +168,7 @@ export default function AmazonSyncPage() {
                   totalItems={queueData?.summary.totalItems ?? 0}
                   uniqueAsins={queueData?.summary.uniqueAsins ?? 0}
                   totalQuantity={queueData?.summary.totalQuantity ?? 0}
+                  totalUploadValue={queueData?.summary.totalUploadValue ?? 0}
                   aggregated={queueData?.aggregated ?? []}
                 />
 
