@@ -28,6 +28,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import { discordService } from '@/lib/notifications';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
@@ -151,6 +152,15 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error(`[Cron AmazonSync] Error processing feed ${feed.id}:`, error);
+
+        // Fire-and-forget Discord alert so feed errors aren't silent
+        discordService
+          .sendAlert({
+            title: '🔴 Amazon Sync Cron Error',
+            message: `Feed ${feed.id} failed during ${feed.two_phase_step}:\n${errorMsg}`,
+            priority: 'high',
+          })
+          .catch(() => {});
 
         results.push({
           feedId: feed.id,
