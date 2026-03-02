@@ -46,14 +46,36 @@ def scrape_tracking(days: int = 28) -> dict[str, dict]:
             browser.close()
 
 
+def _dismiss_cookie_modal(page: Page) -> None:
+    """Dismiss the Tealium GDPR cookie consent modal if present."""
+    try:
+        modal = page.locator("#__tealiumGDPRecModal")
+        if modal.count() > 0 and modal.first.is_visible():
+            accept_btn = modal.locator('button:has-text("Accept"), button:has-text("OK"), button:has-text("Got it"), button:has-text("Allow")')
+            if accept_btn.count() > 0:
+                accept_btn.first.click(force=True)
+                log.info("Dismissed Tealium GDPR cookie modal")
+                time.sleep(1)
+                return
+            # Fallback: force-remove the modal via JS
+        # Also try removing via JS if buttons didn't work or aren't found
+        page.evaluate('document.getElementById("__tealiumGDPRecModal")?.remove()')
+        page.evaluate('document.querySelectorAll(".privacy_prompt_footer, .privacy_prompt_content").forEach(e => e.remove())')
+        log.info("Removed Tealium GDPR modal via JS")
+    except Exception as e:
+        log.debug("Cookie modal dismissal: %s", e)
+
+
 def _login(page: Page) -> None:
     """Navigate to manifested orders, handle login if redirected."""
     log.info("Navigating to Click & Drop manifested orders")
     page.goto(MANIFESTED_ORDERS_URL, wait_until="networkidle", timeout=30000)
+    _dismiss_cookie_modal(page)
 
     # Check if redirected to login
     if LOGIN_URL_PREFIX in page.url:
         log.info("Login required, entering credentials")
+        _dismiss_cookie_modal(page)
         # Fill email if empty
         email_input = page.locator('input[type="email"], input[name="email"], #email')
         if email_input.count() > 0:
