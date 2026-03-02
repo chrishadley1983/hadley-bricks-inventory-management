@@ -1,0 +1,5 @@
+playwright==1.50.0
+supabase==2.13.0
+openpyxl==3.1.5
+weasyprint==63.1
+google-cloud-storage==2.19.0

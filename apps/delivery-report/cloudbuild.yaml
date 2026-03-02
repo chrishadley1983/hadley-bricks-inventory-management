@@ -1,0 +1,37 @@
+steps:
+  # Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west2-docker.pkg.dev/$PROJECT_ID/hadley-bricks/delivery-report:$COMMIT_SHA'
+      - '-t'
+      - 'europe-west2-docker.pkg.dev/$PROJECT_ID/hadley-bricks/delivery-report:latest'
+      - '.'
+    dir: 'apps/delivery-report'
+
+  # Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-west2-docker.pkg.dev/$PROJECT_ID/hadley-bricks/delivery-report'
+
+  # Update Cloud Run Job
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'update'
+      - 'delivery-report'
+      - '--image'
+      - 'europe-west2-docker.pkg.dev/$PROJECT_ID/hadley-bricks/delivery-report:$COMMIT_SHA'
+      - '--region'
+      - 'europe-west2'
+
+images:
+  - 'europe-west2-docker.pkg.dev/$PROJECT_ID/hadley-bricks/delivery-report'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
