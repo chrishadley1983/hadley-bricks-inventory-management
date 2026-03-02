@@ -73,31 +73,88 @@ def _login(page: Page) -> None:
     _dismiss_cookie_modal(page)
 
     # Check if redirected to login
-    if LOGIN_URL_PREFIX in page.url:
-        log.info("Login required, entering credentials")
-        _dismiss_cookie_modal(page)
-        # Fill email if empty
-        email_input = page.locator('input[type="email"], input[name="email"], #email')
-        if email_input.count() > 0:
-            current = email_input.first.input_value()
-            if not current:
-                email_input.first.fill(CLICK_DROP_EMAIL)
+    if LOGIN_URL_PREFIX not in page.url:
+        log.info("Already logged in (no redirect to auth)")
+        return
 
-        # Fill password if empty
-        pw_input = page.locator('input[type="password"], input[name="password"], #password')
-        if pw_input.count() > 0:
-            current = pw_input.first.input_value()
-            if not current:
-                pw_input.first.fill(CLICK_DROP_PASSWORD)
+    log.info("Login required at: %s", page.url)
+    _dismiss_cookie_modal(page)
+    time.sleep(1)
 
-        # Click sign in
-        sign_in = page.locator('button:has-text("Sign In"), input[type="submit"]')
-        if sign_in.count() > 0:
-            sign_in.first.click()
+    # Log visible form elements for debugging
+    inputs = page.locator("input").all()
+    log.info("Found %d input fields: %s", len(inputs), [
+        f"{i.get_attribute('type') or 'text'}[{i.get_attribute('name') or i.get_attribute('id') or '?'}]"
+        for i in inputs[:6]
+    ])
 
-        # Wait for redirect back to manifested orders
-        page.wait_for_url(f"**{MANIFESTED_ORDERS_URL}**", timeout=15000)
+    # Fill email — try multiple selectors
+    email_filled = False
+    for sel in ['input[type="email"]', 'input[name="email"]', '#email', 'input[name="username"]', '#username']:
+        el = page.locator(sel)
+        if el.count() > 0 and el.first.is_visible():
+            el.first.fill(CLICK_DROP_EMAIL)
+            email_filled = True
+            log.info("Filled email via: %s", sel)
+            break
+
+    if not email_filled:
+        log.error("Could not find email input field")
+
+    # Fill password — try multiple selectors
+    pw_filled = False
+    for sel in ['input[type="password"]', 'input[name="password"]', '#password']:
+        el = page.locator(sel)
+        if el.count() > 0 and el.first.is_visible():
+            el.first.fill(CLICK_DROP_PASSWORD)
+            pw_filled = True
+            log.info("Filled password via: %s", sel)
+            break
+
+    if not pw_filled:
+        # Might be a multi-step login — click Next/Continue first
+        log.info("No password field visible, checking for Next/Continue button")
+        for sel in ['button:has-text("Next")', 'button:has-text("Continue")', 'input[type="submit"]']:
+            btn = page.locator(sel)
+            if btn.count() > 0 and btn.first.is_visible():
+                btn.first.click()
+                log.info("Clicked '%s', waiting for password step", sel)
+                time.sleep(3)
+                _dismiss_cookie_modal(page)
+                break
+
+        # Retry password
+        for sel in ['input[type="password"]', 'input[name="password"]', '#password']:
+            el = page.locator(sel)
+            if el.count() > 0 and el.first.is_visible():
+                el.first.fill(CLICK_DROP_PASSWORD)
+                pw_filled = True
+                log.info("Filled password via: %s (after next step)", sel)
+                break
+
+    # Click sign in
+    clicked = False
+    for sel in ['button:has-text("Sign In")', 'button:has-text("Sign in")', 'button:has-text("Log in")', 'input[type="submit"]', 'button[type="submit"]']:
+        btn = page.locator(sel)
+        if btn.count() > 0 and btn.first.is_visible():
+            btn.first.click()
+            clicked = True
+            log.info("Clicked sign-in via: %s", sel)
+            break
+
+    if not clicked:
+        log.error("Could not find sign-in button")
+
+    # Wait for redirect back to manifested orders (longer timeout)
+    try:
+        page.wait_for_url(f"**{MANIFESTED_ORDERS_URL}**", timeout=30000)
         log.info("Login successful")
+    except Exception:
+        log.error("Login redirect failed. Current URL: %s", page.url)
+        # Log page snippet for debugging
+        body_text = page.inner_text("body")[:500]
+        log.error("Page text: %s", body_text)
+        raise
 
 
 def _download_xls(page: Page) -> Path | None:
