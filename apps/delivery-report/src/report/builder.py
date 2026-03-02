@@ -63,7 +63,7 @@ def _status_badge(status_text: str) -> str:
         bg, color = "#F1F5F9", "#64748B"
     return (
         f'<span style="background-color:{bg};color:{color};padding:4px 10px;'
-        f'border-radius:4px;font-weight:500;font-size:12px;white-space:nowrap;">'
+        f'border-radius:4px;font-weight:500;font-size:8px;white-space:nowrap;">'
         f"{status_text}</span>"
     )
 
@@ -219,7 +219,7 @@ def build_email_body(
             </td></tr>
         </table>
 
-        <table width="100%" cellpadding="0" cellspacing="0">
+        <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
             <tr>
                 <td width="33%" style="padding:0 8px 0 0;">
                     <table width="100%" cellpadding="0" cellspacing="0" style="background:{WHITE};border:{CARD_BORDER};border-radius:{CARD_RADIUS};border-top:4px solid {now_border};text-align:center;">
@@ -241,11 +241,11 @@ def build_email_body(
                         </td></tr>
                     </table>
                 </td>
-                <td width="33%" style="padding:0 0 0 8px;">
+                <td width="34%" style="padding:0 0 0 8px;">
                     <table width="100%" cellpadding="0" cellspacing="0" style="background:{WHITE};border:{CARD_BORDER};border-radius:{CARD_RADIUS};border-top:4px solid {target_border};text-align:center;">
                         <tr><td style="padding:20px 16px;text-align:center;">
                             <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{WARM_GRAY};font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">When OTDR hits 90%</div>
-                            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:700;color:{DARK_GRAY};margin-top:8px;">{otdr_90_date}</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:700;color:{DARK_GRAY};margin-top:8px;">{otdr_90_date}</div>
                             <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{MEDIUM_GRAY};margin-top:6px;">Projected {otdr_90_pct}%</div>
                             <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:4px;">{otdr_90_window}</div>
                         </td></tr>
@@ -305,7 +305,7 @@ def build_full_report(
     if logo_b64:
         logo_img = (
             f'<img src="data:image/png;base64,{logo_b64}" '
-            f'width="56" height="56" alt="Hadley Bricks" '
+            f'width="40" height="40" alt="Hadley Bricks" '
             f'style="vertical-align:middle;" />'
         )
 
@@ -318,8 +318,8 @@ def build_full_report(
     for o in late_orders:
         late_rows += f"""<tr>
             <td>{o['order_date']}</td>
-            <td>{o['item']}</td>
-            <td style="font-family:monospace;color:{WARM_GRAY};">{o['order_no']}</td>
+            <td style="overflow-wrap:break-word;">{o['item']}</td>
+            <td style="font-family:monospace;color:{WARM_GRAY};font-size:8px;word-break:break-all;">{o['order_no']}</td>
             <td>{o['expected']}</td>
             <td style="color:{ALERT_RED};font-weight:600;">{o['actual']}</td>
             <td>{o.get('drop_off', '')}</td>
@@ -329,9 +329,9 @@ def build_full_report(
     for o in all_orders:
         all_rows += f"""<tr>
             <td>{o['order_date']}</td>
-            <td>{o['item']}</td>
-            <td style="font-family:monospace;color:{WARM_GRAY};font-size:12px;">{o['order_no']}</td>
-            <td>{o.get('tracking', '')}</td>
+            <td style="overflow-wrap:break-word;">{o['item']}</td>
+            <td style="font-family:monospace;color:{WARM_GRAY};font-size:8px;word-break:break-all;">{o['order_no']}</td>
+            <td style="font-family:monospace;font-size:8px;word-break:break-all;">{o.get('tracking', '')}</td>
             <td>{o['expected']}</td>
             <td>{o.get('actual', '')}</td>
             <td>{_status_badge(o.get('status', 'Unknown'))}</td>
@@ -344,8 +344,8 @@ def build_full_report(
             <div class="section-title">Late orders (impacting OTDR)</div>
             <table class="table">
                 <thead><tr>
-                    <th>Order date</th><th>Item</th><th>Order no</th>
-                    <th>Expected</th><th>Actual</th><th>OTDR drop-off</th>
+                    <th style="width:11%;">Order date</th><th style="width:30%;">Item</th><th style="width:19%;">Order no</th>
+                    <th style="width:13%;">Expected</th><th style="width:13%;">Actual</th><th style="width:14%;">OTDR drop-off</th>
                 </tr></thead>
                 <tbody>{late_rows}</tbody>
             </table>
@@ -357,37 +357,42 @@ def build_full_report(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>Hadley Bricks — Amazon Delivery Performance</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        @page {{ size: A4 portrait; margin: 15mm 12mm; }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background-color: {CREAM}; color: {DARK_GRAY}; padding: 24px; font-size: 14px; line-height: 24px; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background: {WHITE}; border: 1px solid {LIGHT_GRAY}; border-radius: 12px; box-shadow: {CARD_SHADOW}; }}
-        .header {{ border-bottom: 3px solid {GOLDEN_YELLOW}; padding: 28px 32px; background: {WHITE}; display: flex; justify-content: space-between; align-items: center; }}
-        .header-left {{ display: flex; align-items: center; gap: 14px; }}
-        .header h1 {{ font-size: 24px; font-weight: 700; line-height: 32px; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background-color: {WHITE}; color: {DARK_GRAY}; padding: 0; font-size: 11px; line-height: 1.5; }}
+        .container {{ max-width: 100%; margin: 0 auto; background: {WHITE}; }}
+        .header {{ border-bottom: 3px solid {GOLDEN_YELLOW}; padding: 16px 20px; background: {WHITE}; display: flex; justify-content: space-between; align-items: center; }}
+        .header-left {{ display: flex; align-items: center; gap: 10px; }}
+        .header h1 {{ font-size: 18px; font-weight: 700; line-height: 24px; }}
         .header h1 .brand {{ color: {GOLDEN_YELLOW}; }}
-        .date-badge {{ background-color: {LIGHT_YELLOW}; border: 1px solid #FDE68A; color: #92400E; padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; }}
-        .content {{ padding: 32px; }}
-        .section {{ margin-bottom: 36px; }}
-        .section-title {{ font-size: 18px; font-weight: 600; margin-bottom: 16px; color: {DARK_GRAY}; }}
-        .section-subtitle {{ font-size: 12px; color: {WARM_GRAY}; margin-bottom: 16px; }}
-        .summary-cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }}
-        .card {{ background: {WHITE}; border: {CARD_BORDER}; border-radius: {CARD_RADIUS}; padding: 20px; text-align: center; box-shadow: {CARD_SHADOW}; }}
-        .card-value {{ font-size: 28px; font-weight: 700; margin: 8px 0 2px; }}
-        .card-label {{ font-size: 12px; color: {WARM_GRAY}; font-weight: 500; }}
-        .card-sub {{ font-size: 11px; color: {MEDIUM_GRAY}; }}
-        .otdr-cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }}
-        .otdr-card {{ background: {WHITE}; border: {CARD_BORDER}; border-radius: {CARD_RADIUS}; padding: 20px; text-align: center; box-shadow: {CARD_SHADOW}; }}
-        .otdr-card .card-value {{ font-size: 32px; }}
-        .otdr-card .card-label {{ text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }}
-        .table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+        .date-badge {{ background-color: {LIGHT_YELLOW}; border: 1px solid #FDE68A; color: #92400E; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; }}
+        .content {{ padding: 16px 20px; }}
+        .section {{ margin-bottom: 20px; }}
+        .section-title {{ font-size: 14px; font-weight: 600; margin-bottom: 10px; color: {DARK_GRAY}; }}
+        .section-subtitle {{ font-size: 10px; color: {WARM_GRAY}; margin-bottom: 10px; }}
+        .summary-cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }}
+        .card {{ background: {WHITE}; border: {CARD_BORDER}; border-radius: 8px; padding: 12px 8px; text-align: center; }}
+        .card-value {{ font-size: 22px; font-weight: 700; margin: 4px 0 2px; }}
+        .card-label {{ font-size: 10px; color: {WARM_GRAY}; font-weight: 500; }}
+        .card-sub {{ font-size: 9px; color: {MEDIUM_GRAY}; }}
+        .otdr-cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }}
+        .otdr-card {{ background: {WHITE}; border: {CARD_BORDER}; border-radius: 8px; padding: 14px 8px; text-align: center; }}
+        .otdr-card .card-value {{ font-size: 24px; }}
+        .otdr-card .card-label {{ text-transform: uppercase; letter-spacing: 0.5px; font-size: 9px; }}
+        .table {{ width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed; }}
         .table thead {{ background-color: {OFF_WHITE}; border-bottom: 2px solid {LIGHT_GRAY}; }}
-        .table th {{ padding: 12px 16px; text-align: left; font-weight: 600; color: {WARM_GRAY}; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }}
-        .table td {{ padding: 12px 16px; border-bottom: 1px solid {LIGHT_GRAY}; }}
-        .table tbody tr:hover {{ background-color: {LIGHT_YELLOW}; }}
-        .footer {{ padding: 16px 32px; background-color: {OFF_WHITE}; border-top: 1px solid {LIGHT_GRAY}; border-radius: 0 0 12px 12px; font-size: 11px; color: {MEDIUM_GRAY}; }}
-        @media (max-width: 900px) {{ .summary-cards {{ grid-template-columns: repeat(2, 1fr); }} .otdr-cards {{ grid-template-columns: 1fr; }} }}
-        @media print {{ body {{ background: white; padding: 0; }} .container {{ box-shadow: none; border: none; }} }}
+        .table th {{ padding: 6px 5px; text-align: left; font-weight: 600; color: {WARM_GRAY}; text-transform: uppercase; letter-spacing: 0.3px; font-size: 8px; overflow: hidden; }}
+        .table td {{ padding: 5px 5px; border-bottom: 1px solid {LIGHT_GRAY}; overflow-wrap: break-word; word-wrap: break-word; }}
+        .table tbody tr {{ page-break-inside: avoid; }}
+        .col-date {{ width: 9%; }}
+        .col-item {{ width: 28%; }}
+        .col-order {{ width: 16%; }}
+        .col-tracking {{ width: 15%; word-break: break-all; }}
+        .col-expected {{ width: 9%; }}
+        .col-actual {{ width: 9%; }}
+        .col-status {{ width: 14%; }}
+        .footer {{ padding: 10px 20px; background-color: {OFF_WHITE}; border-top: 1px solid {LIGHT_GRAY}; font-size: 9px; color: {MEDIUM_GRAY}; }}
     </style>
 </head>
 <body>
@@ -439,7 +444,7 @@ def build_full_report(
                 </div>
                 <div class="otdr-card" style="border-top:4px solid {target_border};">
                     <div class="card-label">When OTDR hits 90%</div>
-                    <div class="card-value">{otdr_90_date}</div>
+                    <div class="card-value" style="font-size:18px;">{otdr_90_date}</div>
                     <div class="card-sub">Projected {otdr_90_pct}%</div>
                     <div class="card-sub" style="margin-top:4px;">{otdr_90_window}</div>
                 </div>
@@ -450,8 +455,8 @@ def build_full_report(
             <div class="section-title">All orders</div>
             <table class="table">
                 <thead><tr>
-                    <th>Order date</th><th>Item</th><th>Order no</th>
-                    <th>Tracking</th><th>Expected</th><th>Actual</th><th>Status</th>
+                    <th class="col-date">Order date</th><th class="col-item">Item</th><th class="col-order">Order no</th>
+                    <th class="col-tracking">Tracking</th><th class="col-expected">Expected</th><th class="col-actual">Actual</th><th class="col-status">Status</th>
                 </tr></thead>
                 <tbody>{all_rows}</tbody>
             </table>
