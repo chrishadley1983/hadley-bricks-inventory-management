@@ -265,6 +265,14 @@ export class AmazonSyncService {
         }
       }
 
+      // Verify dispatch orders haven't shipped outside the sync window
+      await this.verifyDispatchOrderStatuses(
+        userId,
+        client,
+        options.includeItems ?? false,
+        result
+      );
+
       result.success = result.errors.length === 0;
       console.log('[AmazonSyncService] Sync completed:', {
         success: result.success,
@@ -324,7 +332,9 @@ export class AmazonSyncService {
     const isNewOrder = !existing;
     const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
     const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
-    const needsItemsBackfill = existing?.items_count === 0;
+    const terminalStatuses = ['Canceled', 'Cancelled/Refunded'];
+    const needsItemsBackfill = existing?.items_count === 0
+      && !terminalStatuses.includes(orderSummary.OrderStatus);
 
     if (needsItemsBackfill) {
       console.log(
@@ -383,7 +393,7 @@ export class AmazonSyncService {
       currency: normalized.currency,
       shipping_address:
         normalized.shippingAddress as unknown as Database['public']['Tables']['platform_orders']['Insert']['shipping_address'],
-      items_count: normalized.items.length,
+      items_count: shouldFetchItems ? normalized.items.length : (existing?.items_count ?? 0),
       dispatch_by: normalized.latestShipDate?.toISOString() ?? null,
       raw_data: {
         ...normalized.rawData,
@@ -420,6 +430,77 @@ export class AmazonSyncService {
     }
 
     return { isNew: isNewOrder };
+  }
+
+  /**
+   * Verify that orders awaiting dispatch haven't shipped outside the sync window.
+   * Amazon's getOrders list endpoint has eventual consistency — status changes may not
+   * appear in list queries immediately. This method uses getOrder (single lookup) which
+   * returns real-time status, catching orders that the incremental sync missed.
+   */
+  private async verifyDispatchOrderStatuses(
+    userId: string,
+    client: AmazonClient,
+    includeItems: boolean,
+    result: SyncResult
+  ): Promise<void> {
+    // Query for orders still showing as awaiting dispatch
+    const { data: dispatchOrders, error } = await this.supabase
+      .from('platform_orders')
+      .select('platform_order_id, internal_status, status')
+      .eq('user_id', userId)
+      .eq('platform', 'amazon')
+      .in('internal_status', ['Paid', 'Processing']);
+
+    if (error) {
+      console.error('[AmazonSyncService] Failed to query dispatch orders:', error.message);
+      return;
+    }
+
+    if (!dispatchOrders || dispatchOrders.length === 0) {
+      return;
+    }
+
+    console.log(
+      `[AmazonSyncService] Verifying ${dispatchOrders.length} dispatch order(s) for status changes`
+    );
+
+    const activeAmazonStatuses = ['Unshipped', 'PartiallyShipped'];
+    let statusChanges = 0;
+
+    for (const dispatchOrder of dispatchOrders) {
+      try {
+        const order = await client.getOrder(dispatchOrder.platform_order_id);
+
+        if (!activeAmazonStatuses.includes(order.OrderStatus)) {
+          console.log(
+            `[AmazonSyncService] Dispatch order ${dispatchOrder.platform_order_id} ` +
+            `actually has status ${order.OrderStatus} — updating`
+          );
+
+          const { isNew } = await this.processOrder(userId, client, order, includeItems);
+          if (isNew) {
+            result.ordersCreated++;
+          } else {
+            result.ordersUpdated++;
+          }
+          result.ordersProcessed++;
+          statusChanges++;
+        }
+
+        // Rate limit between API calls
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (orderError) {
+        const errorMsg = orderError instanceof Error ? orderError.message : 'Unknown error';
+        result.errors.push(`Verify ${dispatchOrder.platform_order_id}: ${errorMsg}`);
+      }
+    }
+
+    if (statusChanges > 0) {
+      console.log(
+        `[AmazonSyncService] Dispatch verification: ${statusChanges}/${dispatchOrders.length} had status changes`
+      );
+    }
   }
 
   /**
