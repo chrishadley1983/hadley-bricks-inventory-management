@@ -135,19 +135,9 @@ export class BrickLinkStoreDealService {
       });
     }
 
-    // Delete old listings for this set before inserting fresh ones
-    const { error: deleteError } = await this.supabase
-      .from('bricklink_store_listings')
-      .delete()
-      .eq('user_id', userId)
-      .eq('bricklink_set_number', setNumber);
-
-    if (deleteError) {
-      console.error('[BrickLinkStoreDealService.scrapeAndStore] Delete error:', deleteError);
-      throw new Error(`Failed to delete old listings: ${deleteError.message}`);
-    }
-
-    // Batch insert
+    // Upsert new rows first, then prune stale ones (atomic-safe: if crash
+    // occurs after upsert but before prune, we just have extra rows rather
+    // than losing all cached data for this set).
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { error } = await this.supabase
@@ -157,6 +147,21 @@ export class BrickLinkStoreDealService {
       if (error) {
         console.error('[BrickLinkStoreDealService.scrapeAndStore] Upsert error:', error);
         throw new Error(`Failed to upsert listings: ${error.message}`);
+      }
+    }
+
+    // Remove stale rows (stores no longer in the fresh scrape)
+    if (rows.length > 0) {
+      const { error: pruneError } = await this.supabase
+        .from('bricklink_store_listings')
+        .delete()
+        .eq('user_id', userId)
+        .eq('bricklink_set_number', setNumber)
+        .lt('scraped_at', now);
+
+      if (pruneError) {
+        console.error('[BrickLinkStoreDealService.scrapeAndStore] Prune error:', pruneError);
+        // Non-fatal: stale rows remain but fresh data is already saved
       }
     }
 

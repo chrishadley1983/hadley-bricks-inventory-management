@@ -13,7 +13,7 @@
 
 import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, chmodSync } from 'fs';
 
 const PROFILE_DIR = join(homedir(), '.hadley-bricks', 'bricklink-profile');
 const MIN_DELAY_MS = 5000; // 5s between requests (conservative for BrickLink)
@@ -52,6 +52,9 @@ export class BrickLinkStoreScraper {
       );
     }
 
+    // Restrict profile directory permissions (owner-only) to protect session cookies
+    try { chmodSync(PROFILE_DIR, 0o700); } catch { /* Windows ignores chmod */ }
+
     const { chromium } = await import('playwright');
 
     await this.enforceRateLimit();
@@ -86,6 +89,8 @@ export class BrickLinkStoreScraper {
         'BrickLink browser profile not found. Run `npm run bricklink:login` first.'
       );
     }
+
+    try { chmodSync(PROFILE_DIR, 0o700); } catch { /* Windows ignores chmod */ }
 
     const { chromium } = await import('playwright');
     const results = new Map<string, StoreListingRow[]>();

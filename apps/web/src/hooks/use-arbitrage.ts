@@ -95,8 +95,10 @@ async function fetchArbitrageData(
   const response = await fetch(`/api/arbitrage?${params.toString()}`);
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch arbitrage data');
+    const text = await response.text();
+    let msg = `Failed to fetch arbitrage data (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -107,8 +109,10 @@ async function fetchArbitrageItem(asin: string): Promise<ArbitrageItem> {
   const response = await fetch(`/api/arbitrage/${asin}`);
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch item');
+    const text = await response.text();
+    let msg = `Failed to fetch item (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -119,8 +123,10 @@ async function fetchExcludedAsins(): Promise<ExcludedAsin[]> {
   const response = await fetch('/api/arbitrage/excluded');
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch excluded ASINs');
+    const text = await response.text();
+    let msg = `Failed to fetch excluded ASINs (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -131,8 +137,10 @@ async function fetchUnmappedAsins(): Promise<UnmappedResponse> {
   const response = await fetch('/api/arbitrage/unmapped');
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch unmapped ASINs');
+    const text = await response.text();
+    let msg = `Failed to fetch unmapped ASINs (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -143,8 +151,10 @@ async function fetchSyncStatus(): Promise<SyncStatusResponse> {
   const response = await fetch('/api/arbitrage/sync');
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch sync status');
+    const text = await response.text();
+    let msg = `Failed to fetch sync status (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -159,8 +169,10 @@ async function fetchSummary(minMargin?: number, maxCog?: number): Promise<Summar
   const response = await fetch(`/api/arbitrage/summary${queryString ? `?${queryString}` : ''}`);
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch summary');
+    const text = await response.text();
+    let msg = `Failed to fetch summary (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -179,8 +191,10 @@ async function excludeAsin(input: { asin: string; reason?: string }): Promise<vo
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to exclude ASIN');
+    const text = await response.text();
+    let msg = `Failed to exclude ASIN (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 }
 
@@ -192,8 +206,10 @@ async function restoreAsin(asin: string): Promise<void> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to restore ASIN');
+    const text = await response.text();
+    let msg = `Failed to restore ASIN (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 }
 
@@ -208,8 +224,10 @@ async function setBlPriceOverride(input: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to set BL price override');
+    const text = await response.text();
+    let msg = `Failed to set BL price override (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -228,8 +246,10 @@ async function createMapping(input: { asin: string; bricklinkSetNumber: string }
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create mapping');
+    const text = await response.text();
+    let msg = `Failed to create mapping (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -244,8 +264,10 @@ async function deleteMapping(asin: string): Promise<void> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to delete mapping');
+    const text = await response.text();
+    let msg = `Failed to delete mapping (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 }
 
@@ -257,8 +279,10 @@ async function triggerSync(jobType: SyncJobType | 'all'): Promise<SyncResult> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to trigger sync');
+    const text = await response.text();
+    let msg = `Failed to trigger sync (${response.status})`;
+    try { msg = JSON.parse(text).error || msg; } catch {}
+    throw new Error(msg);
   }
 
   const json = await response.json();
@@ -469,8 +493,10 @@ function createStreamingSyncMutation(
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to start sync');
+      const text = await response.text();
+      let msg = `Failed to start sync (${response.status})`;
+      try { msg = JSON.parse(text).error || msg; } catch {}
+      throw new Error(msg);
     }
 
     const reader = response.body?.getReader();
@@ -813,8 +839,10 @@ export function useScrapeStoreListings() {
         method: 'POST',
       });
       if (!response.ok) {
-        const json = await response.json();
-        throw new Error(json.error || 'Failed to scrape store listings');
+        const text = await response.text();
+        let msg = `Failed to scrape store listings (${response.status})`;
+        try { msg = JSON.parse(text).error || msg; } catch {}
+        throw new Error(msg);
       }
       return response.json();
     },
