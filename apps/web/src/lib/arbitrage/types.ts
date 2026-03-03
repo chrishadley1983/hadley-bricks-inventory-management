@@ -17,7 +17,8 @@ export type SyncJobType =
   | 'bricklink_pricing'
   | 'asin_mapping'
   | 'ebay_pricing'
-  | 'seeded_discovery';
+  | 'seeded_discovery'
+  | 'bricklink_store_scrape';
 export type SyncJobStatus = 'idle' | 'running' | 'completed' | 'failed';
 export type ItemType = 'inventory' | 'seeded';
 export type DiscoveryStatus = 'pending' | 'found' | 'not_found' | 'multiple' | 'excluded';
