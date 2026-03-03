@@ -2,7 +2,7 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 28 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Uses 30 weighted scoring signals. Listings scoring >= 50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -33,7 +33,9 @@
  * 25. Split From Set - 30 pts
  * 26. No Minifigures - 30 pts
  * 27. Promotional Item - 25 pts
- * 28. Min-to-Avg Price Ratio (<10%) - 25 pts
+ * 28. Keyword Stuffed (3+ set numbers) - 25 pts
+ * 29. Complementary Product (fills/completes) - 30 pts
+ * 30. Min-to-Avg Price Ratio (<10%) - 25 pts
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -68,7 +70,7 @@ const THIRD_PARTY_KEYWORDS =
   /\b(for\s+lego|compatible\s+with|compatible\s+for|fits\s+lego|to\s+fit\s+lego|replacement\s+sticker)\b/i;
 const BUNDLE_LOT_KEYWORDS = /\b(job\s*lot|bulk\s+lot|bundle\s+lot|joblot|mixed\s+lot)\b/i;
 const CUSTOM_MOC_KEYWORDS = /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creation)\b/i;
-const MULTI_QUANTITY_PATTERN = /\bx\s*[2-9]\b|\b[2-9]\s*x\s+(?!.*\bin[- ]1\b)/i;
+const MULTI_QUANTITY_PATTERN = /\bx\s*(?:[2-9]|[1-9]\d+)\b|\b(?:[2-9]|[1-9]\d+)\s*x\b(?!.*\bin[- ]1\b)/i;
 const BOOK_MAGAZINE_KEYWORDS =
   /\b(annual|activity\s+book|magazine|encyclop\w*|handbook|ultimate\s+guide)\b/i;
 const STICKER_POSTER_KEYWORDS =
@@ -80,6 +82,7 @@ const ADVENT_DAY_KEYWORDS = /\b(choose\s+your\s+day|pick\s+your\s+day)\b/i;
 const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,5}\b)/i;
 const NO_MINIFIGS_KEYWORDS = /\bno\s+(minifig(ure)?s?|mini\s*figs?|figs?|figures?)\b/i;
 const PROMOTIONAL_KEYWORDS = /\b(metal\s*box|shaped\s*box|promotional\s+tin)\b/i;
+const COMPLEMENTARY_KEYWORDS = /\b(fills?|fill\s+up|to\s+fill|to\s+complete|completes?)\b/i;
 
 // Stop words for name matching
 const STOP_WORDS = new Set([
@@ -326,21 +329,36 @@ export class EbayFpDetectorService {
       }
     }
 
+    // Keyword stuffing check (runs regardless of whether target set number is in title)
+    if (setNumber) {
+      const allTitleNumbers: string[] = [];
+      let kMatch;
+      const kRegex = new RegExp(SET_NUMBER_PATTERN.source, 'g');
+      while ((kMatch = kRegex.exec(title)) !== null) {
+        allTitleNumbers.push(kMatch[1]);
+      }
+      const uniqueValidSets = new Set(allTitleNumbers.filter((n) => validSetNumbers.has(n)));
+      if (uniqueValidSets.size >= 3) {
+        score += SIGNAL_WEIGHTS.KEYWORD_STUFFED;
+        signals.push({
+          signal: 'KEYWORD_STUFFED',
+          points: SIGNAL_WEIGHTS.KEYWORD_STUFFED,
+          description: `Keyword stuffing: ${uniqueValidSets.size} different set numbers in title`,
+        });
+      }
+    }
+
     // 12. Name mismatch check
     if (setName && setNumber) {
-      const setWords = new Set(
-        (setName.match(/\b[a-zA-Z]{3,}\b/g) || [])
-          .map((w) => w.toLowerCase())
-          .filter((w) => !STOP_WORDS.has(w))
-      );
+      // Extract words including hyphenated compounds (AT-AT, X-Wing) and 2+ char words
+      const extractSignificantWords = (text: string): Set<string> => {
+        const words = text.match(/[a-zA-Z]+(?:-[a-zA-Z]+)+|[a-zA-Z]{2,}/g) || [];
+        return new Set(words.map((w) => w.toLowerCase()).filter((w) => !STOP_WORDS.has(w)));
+      };
+      const setWords = extractSignificantWords(setName);
+      const titleWords = extractSignificantWords(title);
 
-      const titleWords = new Set(
-        (title.match(/\b[a-zA-Z]{3,}\b/g) || [])
-          .map((w) => w.toLowerCase())
-          .filter((w) => !STOP_WORDS.has(w))
-      );
-
-      if (setWords.size >= 2) {
+      if (setWords.size >= 1) {
         const overlap = [...setWords].filter((w) => titleWords.has(w));
         const overlapRatio = overlap.length / setWords.size;
 
@@ -536,7 +554,17 @@ export class EbayFpDetectorService {
       });
     }
 
-    // 28. Min-to-avg price ratio check
+    // 29. Complementary product detection ("fills 75313", "to complete your AT-AT")
+    if (COMPLEMENTARY_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.COMPLEMENTARY_PRODUCT;
+      signals.push({
+        signal: 'COMPLEMENTARY_PRODUCT',
+        points: SIGNAL_WEIGHTS.COMPLEMENTARY_PRODUCT,
+        description: 'Complementary product (fills/completes another set)',
+      });
+    }
+
+    // 30. Min-to-avg price ratio check
     if (avgPrice && avgPrice > 0 && totalPrice > 0 && totalPrice / avgPrice < 0.1) {
       score += SIGNAL_WEIGHTS.MIN_TO_AVG_RATIO;
       signals.push({
