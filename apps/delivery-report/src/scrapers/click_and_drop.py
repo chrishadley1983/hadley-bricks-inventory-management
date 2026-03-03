@@ -162,55 +162,147 @@ def _login(page: Page) -> None:
     # Wait for redirect back to manifested orders (longer timeout)
     try:
         page.wait_for_url(f"**{MANIFESTED_ORDERS_URL}**", timeout=30000)
-        log.info("Login successful")
-    except Exception:
-        log.error("Login redirect failed. Current URL: %s", page.url)
-        # Log page snippet for debugging
-        body_text = page.inner_text("body")[:500]
-        log.error("Page text: %s", body_text)
-        raise
+        log.info("Login successful, waiting for page content to load")
+        # SPA keeps making requests so networkidle never fires; use domcontentloaded
+        # plus explicit sleep for JS rendering
+        page.wait_for_load_state("domcontentloaded", timeout=15000)
+        time.sleep(5)  # Allow SPA to fetch and render manifested orders data
+        log.info("Page loaded. Current URL: %s", page.url)
+    except Exception as e:
+        if "Timeout" in str(e) and MANIFESTED_ORDERS_URL.rstrip("/") in page.url:
+            # URL redirect succeeded but load state timed out — continue anyway
+            log.warning("Load state timed out but URL looks correct, continuing")
+            time.sleep(3)
+        else:
+            log.error("Login redirect failed. Current URL: %s", page.url)
+            body_text = page.inner_text("body")[:500]
+            log.error("Page text: %s", body_text)
+            raise
 
 
 def _download_xls(page: Page) -> Path | None:
-    """Click the Export/Download button and save the XLS file."""
+    """Click the Export/Download button, handle the date-range modal, and save the XLS.
+
+    The Click & Drop "Export to XLS" button opens a modal dialog with a date-range
+    selector (defaulting to "Last 30 days") and a submit button. We must:
+    1. Click the initial "Export to XLS" button on the page
+    2. Wait for the modal to appear in #modal-root
+    3. Click the "Export to XLS" submit button inside the modal
+    4. Capture the resulting download
+    """
     log.info("Looking for XLS export button")
 
-    # Try various button selectors
-    export_selectors = [
-        'button:has-text("Export")',
-        'a:has-text("Export")',
-        'button:has-text("Download")',
-        'a:has-text("Download XLS")',
-        '[data-testid="export"]',
-    ]
+    # Dismiss GDPR modal that reappears on the manifested orders page
+    _dismiss_cookie_modal(page)
 
-    for selector in export_selectors:
-        btn = page.locator(selector)
-        if btn.count() > 0:
-            log.info("Found export button: %s", selector)
-            with page.expect_download(timeout=30000) as download_info:
-                btn.first.click()
-            download = download_info.value
+    # Wait for the table or export controls to appear (SPA may still be loading)
+    try:
+        page.wait_for_selector("table, button:has-text('Export')", timeout=15000)
+        time.sleep(1)
+    except Exception:
+        log.warning("Timed out waiting for table/export controls")
 
-            # Save to temp file
-            tmp = Path(tempfile.mkdtemp()) / download.suggested_filename
-            download.save_as(str(tmp))
-            log.info("Downloaded XLS: %s (%d bytes)", tmp.name, tmp.stat().st_size)
-            return tmp
+    _dismiss_cookie_modal(page)
 
-    log.warning("No export button found on page")
-    return None
+    # Step 1: Click the "Export to XLS" button on the main page
+    btn = page.locator('button:has-text("Export to XLS")')
+    if btn.count() == 0:
+        log.warning("No 'Export to XLS' button found on page")
+        body_text = page.inner_text("body")[:800]
+        log.warning("Page text preview: %s", body_text)
+        return None
+
+    log.info("Clicking 'Export to XLS' button to open modal")
+    btn.first.click()
+
+    # Step 2: Wait for the export modal to appear in #modal-root
+    try:
+        page.wait_for_selector("#modal-root #modal-panel", timeout=10000)
+        log.info("Export modal appeared")
+    except Exception:
+        log.warning("Export modal did not appear after clicking button")
+        return None
+
+    time.sleep(1)  # Allow modal to fully render
+
+    # Log modal content for debugging
+    modal_text = page.evaluate("""() => {
+        const root = document.getElementById('modal-root');
+        return root ? root.textContent.trim().substring(0, 300) : '';
+    }""")
+    log.info("Modal text: %s", modal_text)
+
+    # Step 3: Click the submit "Export to XLS" button inside the modal
+    modal_submit = page.locator('#modal-root button[type="submit"]')
+    if modal_submit.count() == 0:
+        # Fallback: any button with "Export" text inside the modal
+        modal_submit = page.locator('#modal-root button:has-text("Export")')
+
+    if modal_submit.count() == 0:
+        log.warning("No submit button found in export modal")
+        return None
+
+    log.info("Clicking modal submit button to trigger download")
+    try:
+        with page.expect_download(timeout=60000) as download_info:
+            modal_submit.first.click()
+        download = download_info.value
+        tmp = Path(tempfile.mkdtemp()) / download.suggested_filename
+        download.save_as(str(tmp))
+        log.info("Downloaded XLS: %s (%d bytes)", tmp.name, tmp.stat().st_size)
+        return tmp
+    except Exception as e:
+        log.error("Download failed after clicking modal submit: %s", e)
+        return None
+
+
+def _read_xls_xlrd(xls_path: Path) -> list[tuple]:
+    """Read old-format .xls file using xlrd. Returns list of row tuples."""
+    import xlrd
+
+    wb = xlrd.open_workbook(str(xls_path))
+    ws = wb.sheet_by_index(0)
+    rows = []
+    for i in range(ws.nrows):
+        row_values = []
+        for j in range(ws.ncols):
+            cell = ws.cell(i, j)
+            # Convert xlrd date cells to datetime objects
+            if cell.ctype == xlrd.XL_CELL_DATE:
+                try:
+                    dt_tuple = xlrd.xldate_as_tuple(cell.value, wb.datemode)
+                    row_values.append(datetime(*dt_tuple))
+                except Exception:
+                    row_values.append(cell.value)
+            else:
+                row_values.append(cell.value)
+        rows.append(tuple(row_values))
+    return rows
+
+
+def _read_xlsx_openpyxl(xls_path: Path) -> list[tuple]:
+    """Read .xlsx file using openpyxl. Returns list of row tuples."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(str(xls_path), read_only=True)
+    ws = wb.active
+    return list(ws.iter_rows(values_only=True))
 
 
 def _parse_xls(xls_path: Path, days: int = 28) -> dict[str, dict]:
-    """Parse the Click & Drop XLS export using openpyxl."""
-    import openpyxl
+    """Parse the Click & Drop XLS export.
 
+    Uses xlrd for .xls (old binary format) and openpyxl for .xlsx.
+    Click & Drop exports old-format .xls files.
+    """
     log.info("Parsing XLS: %s", xls_path)
-    wb = openpyxl.load_workbook(str(xls_path), read_only=True)
-    ws = wb.active
 
-    rows = list(ws.iter_rows(values_only=True))
+    suffix = xls_path.suffix.lower()
+    if suffix == ".xls":
+        rows = _read_xls_xlrd(xls_path)
+    else:
+        rows = _read_xlsx_openpyxl(xls_path)
+
     if not rows:
         log.warning("XLS file is empty")
         return {}
@@ -289,11 +381,20 @@ def _scrape_dom(page: Page, days: int = 28) -> dict[str, dict]:
     """Fallback: scrape the HTML table (page 1 only, up to 500 rows)."""
     log.info("Falling back to DOM scraping")
 
-    # Wait for table to load
-    page.wait_for_selector("table", timeout=15000)
+    # Wait for table with actual rows to load (SPA may still be rendering)
+    try:
+        page.wait_for_selector("table tbody tr", timeout=20000)
+    except Exception:
+        log.warning("No table rows found after 20s wait")
+        # Log what IS on the page
+        tables = page.locator("table").all()
+        log.info("Found %d <table> elements", len(tables))
+        body_text = page.inner_text("body")[:1000]
+        log.info("Page text: %s", body_text)
     time.sleep(2)
 
     rows = page.locator("table tbody tr").all()
+    log.info("Found %d table rows", len(rows))
     results = {}
 
     for row in rows:
