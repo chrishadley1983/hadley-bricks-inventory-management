@@ -108,6 +108,7 @@ export const SIGNAL_WEIGHTS = {
   ELEVATED_COG: 10,
   COMPLEMENTARY_PRODUCT: 30,
   KEYWORD_STUFFED: 25,
+  OPENED_SET: 50,
 } as const;
 
 /**
