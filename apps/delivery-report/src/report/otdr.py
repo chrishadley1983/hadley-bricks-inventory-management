@@ -208,17 +208,22 @@ def build_all_orders_list(orders: list[dict]) -> list[dict]:
         status = order.get("rm_status", "Unknown")
 
         # Determine on-time status
-        if "delivered" in status.lower():
+        status_lower = status.lower()
+        if "delivered" in status_lower:
             if exp and delivery:
                 on_time_status = "On time" if delivery <= exp else "Late"
             else:
                 on_time_status = "Delivered"
-        elif status.lower() in ("not dispatched yet", "not checked"):
-            on_time_status = "Pending"
-        elif "expired" in status.lower():
+        elif status_lower in ("not dispatched yet",):
+            on_time_status = "Not dispatched"
+        elif status_lower in ("not checked",):
+            on_time_status = "Not checked"
+        elif "expired" in status_lower:
             on_time_status = "Expired"
-        elif "transit" in status.lower() or "ready" in status.lower():
+        elif "transit" in status_lower or "ready" in status_lower:
             on_time_status = "In transit"
+        elif status_lower == "unknown":
+            on_time_status = "Unknown"
         else:
             on_time_status = status
 
