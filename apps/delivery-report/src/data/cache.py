@@ -6,6 +6,26 @@ from datetime import date, datetime, timedelta
 log = logging.getLogger(__name__)
 
 
+def _map_cd_status(cd_status: str) -> str | None:
+    """Map Click & Drop status to an RM-style status when RM is unavailable.
+
+    Returns None if the cd_status doesn't map to anything meaningful.
+    """
+    if not cd_status:
+        return None
+    t = cd_status.lower().strip()
+    if "delivered" in t:
+        return "Delivered (CD)"
+    if any(kw in t for kw in ("transit", "despatched", "dispatched", "got it", "we have")):
+        return "In Transit (CD)"
+    if "ready" in t:
+        return "In Transit (CD)"
+    # Any other non-empty status — use it directly
+    if t:
+        return f"{cd_status.strip()} (CD)"
+    return None
+
+
 def categorise_orders(
     merged_orders: list[dict],
     cache: dict[str, dict],
@@ -106,6 +126,14 @@ def build_cache_rows(
         rm_status = rm.get("rm_status") or cached.get("rm_status") or "Not checked"
         rm_delivery_date = rm.get("rm_delivery_date") or cached.get("rm_delivery_date")
         tracking = order.get("tracking_number") or cached.get("tracking_number")
+
+        # Fallback: when RM returns "Unknown" (e.g. bot-blocked by Akamai),
+        # use Click & Drop status if available
+        if rm_status == "Unknown" and order.get("cd_status"):
+            mapped = _map_cd_status(order["cd_status"])
+            if mapped:
+                log.debug("RM Unknown for %s, using CD fallback: %s → %s", oid, order["cd_status"], mapped)
+                rm_status = mapped
 
         if not tracking:
             rm_status = "Not dispatched yet" if _is_recent(order) else "Not checked"
