@@ -8,7 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 
 const ApproveItemSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
@@ -140,14 +141,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
 
-    // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Auth check (supports both API key and session cookie)
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -200,7 +196,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: purchase, error: purchaseError } = await serviceSupabase
       .from('purchases')
       .insert({
-        user_id: user.id,
+        user_id: auth.userId,
         source: emailRecord.source,
         cost: totalCost,
         payment_method: emailRecord.source === 'Vinted' ? 'Vinted Wallet' : 'PayPal',
@@ -265,7 +261,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const { data: inventory, error: inventoryError } = await serviceSupabase
         .from('inventory_items')
         .insert({
-          user_id: user.id,
+          user_id: auth.userId,
           set_number: enriched.set_number,
           item_name: enriched.set_name,
           condition: enriched.condition,
