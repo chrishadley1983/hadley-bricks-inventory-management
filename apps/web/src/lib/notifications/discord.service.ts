@@ -9,6 +9,7 @@
  * - #opportunities: Vinted arbitrage opportunities
  * - #sync-status: Sync started, sync complete, pricing updates, offers sent
  * - #daily-summary: End-of-day summaries
+ * - #peter-chat: Peter bot channel for actionable notifications
  *
  * Setup:
  * 1. Create webhooks in Discord server: Edit Channel → Integrations → Webhooks
@@ -17,6 +18,7 @@
  *    - DISCORD_WEBHOOK_OPPORTUNITIES
  *    - DISCORD_WEBHOOK_SYNC_STATUS
  *    - DISCORD_WEBHOOK_DAILY_SUMMARY
+ *    - DISCORD_WEBHOOK_PETER_CHAT
  */
 
 // Re-export types from Pushover for compatibility
@@ -44,7 +46,12 @@ export const DiscordColors = {
 } as const;
 
 /** Discord channel types for routing */
-export type DiscordChannel = 'alerts' | 'opportunities' | 'sync-status' | 'daily-summary';
+export type DiscordChannel =
+  | 'alerts'
+  | 'opportunities'
+  | 'sync-status'
+  | 'daily-summary'
+  | 'peter-chat';
 
 /** Discord embed field structure */
 export interface DiscordEmbedField {
@@ -121,6 +128,7 @@ export class DiscordService {
       opportunities: process.env.DISCORD_WEBHOOK_OPPORTUNITIES,
       'sync-status': process.env.DISCORD_WEBHOOK_SYNC_STATUS,
       'daily-summary': process.env.DISCORD_WEBHOOK_DAILY_SUMMARY,
+      'peter-chat': process.env.DISCORD_WEBHOOK_PETER_CHAT,
     };
     this.appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
