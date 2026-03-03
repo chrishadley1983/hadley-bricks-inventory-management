@@ -401,6 +401,7 @@ export function normalizeInventoryItem(
     batchId: item.batchId,
     purchaseId: item.purchaseId,
     remarks: item.remarks,
+    comments: item.comments,
     rawData: item,
   };
 }
