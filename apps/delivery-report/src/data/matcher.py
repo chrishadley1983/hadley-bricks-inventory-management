@@ -55,8 +55,8 @@ def match_orders(
         if expected and "T" in str(expected):
             expected = str(expected)[:10]
 
-        # Item name from cache (not in SP-API order data)
-        item_name = cached.get("item_name") or "Unknown"
+        # Item name: prefer order_items join, fall back to cache
+        item_name = order.get("item_name") or cached.get("item_name") or "Unknown"
 
         merged_order = {
             "platform_order_id": oid,

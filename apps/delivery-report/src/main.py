@@ -224,6 +224,7 @@ def main() -> None:
                 "delivered": stats["delivered"],
                 "in_transit": stats["in_transit"],
                 "otdr_now": otdr_now["pct"],
+                "cd_tracking_matches": len(cd_tracking),
                 "rm_lookups": len(tracking_numbers),
                 "phantoms_removed": len(phantoms),
             },
