@@ -37,6 +37,12 @@ export type { EbaySyncResult, EbaySyncOptions } from './ebay-transaction-sync.se
 export { EbayOrderSyncService, ebayOrderSyncService } from './ebay-order-sync.service';
 export type { EbayOrderSyncResult, EbayOrderSyncOptions } from './ebay-order-sync.service';
 
+export { EbayInventoryLinkingService } from './ebay-inventory-linking.service';
+export type {
+  LinkingResult as EbayLinkingResult,
+  BulkLinkingResult as EbayBulkLinkingResult,
+} from './ebay-inventory-linking.service';
+
 export { EbayAutoSyncService, ebayAutoSyncService } from './ebay-auto-sync.service';
 export type {
   EbaySyncConfig,

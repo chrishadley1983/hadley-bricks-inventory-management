@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { EbayOrderSyncService, EbayAutoSyncService } from '@/lib/ebay';
+import { EbayOrderSyncService, EbayAutoSyncService, EbayInventoryLinkingService } from '@/lib/ebay';
 import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
 import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
@@ -69,6 +69,7 @@ interface FullSyncResults {
   platformSyncs: SyncResult[];
   inventoryAsinSync: SyncResult | null;
   amazonLinking: { autoLinked: number; queuedForResolution: number; autoCompleted: number } | null;
+  ebayLinking: { autoLinked: number; queuedForResolution: number } | null;
   shopifyArchiveSync: SyncResult | null;
   shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
@@ -531,6 +532,18 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     amazonLinkingText = parts.length > 0 ? parts.join(', ') : '✅ No unlinked orders found';
   }
 
+  // Build eBay inventory linking section
+  let ebayLinkingText: string;
+  if (!results.ebayLinking) {
+    ebayLinkingText = '⏭️ No orders to link';
+  } else {
+    const { autoLinked, queuedForResolution } = results.ebayLinking;
+    const parts: string[] = [];
+    if (autoLinked > 0) parts.push(`✅ **${autoLinked}** auto-linked`);
+    if (queuedForResolution > 0) parts.push(`🔍 **${queuedForResolution}** queued for resolution`);
+    ebayLinkingText = parts.length > 0 ? parts.join(', ') : '✅ No unlinked orders found';
+  }
+
   // Build Shopify archive sync section
   let shopifyArchiveText: string;
   if (!results.shopifyArchiveSync) {
@@ -554,9 +567,13 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     shopifyAlignmentText = [
       `${statusEmoji} **${listedOnShopify}** of **${listedTotal}** eligible items on Shopify`,
       mismatches > 0 ? `⚠️ **${mismatches}** LISTED items missing from Shopify` : null,
-      orphanedProducts > 0 ? `⚠️ **${orphanedProducts}** sold/non-LISTED items still active on Shopify` : null,
+      orphanedProducts > 0
+        ? `⚠️ **${orphanedProducts}** sold/non-LISTED items still active on Shopify`
+        : null,
       aligned ? '🟢 Fully aligned' : null,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   // Build weekly stats section
@@ -579,6 +596,9 @@ async function sendDiscordReport(results: FullSyncResults): Promise<void> {
     '',
     '## 🔗 AMAZON INVENTORY LINKING',
     amazonLinkingText,
+    '',
+    '## 🔗 EBAY INVENTORY LINKING',
+    ebayLinkingText,
     '',
     '## 🏪 SHOPIFY SYNC',
     shopifyArchiveText,
@@ -630,6 +650,7 @@ export async function POST(request: NextRequest) {
       platformSyncs: [],
       inventoryAsinSync: null,
       amazonLinking: null,
+      ebayLinking: null,
       shopifyArchiveSync: null,
       shopifyAlignment: null,
       stuckJobs: [],
@@ -837,6 +858,31 @@ export async function POST(request: NextRequest) {
         console.error('[Cron FullSync] Amazon Inventory Linking failed:', errorMsg);
         // Non-fatal - don't block the rest of the sync
       }
+
+      // Step 4c: Run eBay Inventory Linking (match orders to inventory, mark SOLD, archive Shopify)
+      console.log('[Cron FullSync] Running eBay Inventory Linking...');
+      try {
+        const ebayLinkingService = new EbayInventoryLinkingService(supabase, userId);
+
+        const ebayLinkingResult = await withTimeout(
+          ebayLinkingService.processHistoricalOrders({ includePaid: true }),
+          90000,
+          'eBay Inventory Linking'
+        );
+
+        results.ebayLinking = {
+          autoLinked: ebayLinkingResult.totalAutoLinked,
+          queuedForResolution: ebayLinkingResult.totalQueuedForResolution,
+        };
+
+        console.log(
+          `[Cron FullSync] eBay linking: ${ebayLinkingResult.totalAutoLinked} auto-linked, ${ebayLinkingResult.totalQueuedForResolution} queued`
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Cron FullSync] eBay Inventory Linking failed:', errorMsg);
+        // Non-fatal - don't block the rest of the sync
+      }
     }
 
     // Step 5: Shopify archive safety-net — archive products for items no longer LISTED
@@ -862,17 +908,20 @@ export async function POST(request: NextRequest) {
         );
 
         if (batchResult.items_archived > 0) {
-          discordService.sendSyncStatus({
-            title: '🏪 Shopify Safety-Net Archive',
-            message: `Archived **${batchResult.items_archived}** product(s) that were no longer LISTED.\nThese were missed by the direct sale hooks.`,
-            success: true,
-          }).catch(() => {});
+          discordService
+            .sendSyncStatus({
+              title: '🏪 Shopify Safety-Net Archive',
+              message: `Archived **${batchResult.items_archived}** product(s) that were no longer LISTED.\nThese were missed by the direct sale hooks.`,
+              success: true,
+            })
+            .catch(() => {});
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         results.shopifyArchiveSync = {
           platform: 'Shopify Archive',
-          status: errorMsg.includes('config') || errorMsg.includes('disabled') ? 'skipped' : 'failed',
+          status:
+            errorMsg.includes('config') || errorMsg.includes('disabled') ? 'skipped' : 'failed',
           error: errorMsg,
         };
       }
