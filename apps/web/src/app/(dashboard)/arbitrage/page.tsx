@@ -3,7 +3,7 @@
 import { useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { AlertCircle, CheckCircle2, Clock, CalendarClock, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, CalendarClock, RefreshCw, Store } from 'lucide-react';
 import { usePerfPage } from '@/hooks/use-perf';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import {
   ArbitrageDetailModal,
   ExcludedAsinsModal,
 } from '@/components/features/arbitrage';
+import { ExcludedBrickLinkStoresModal } from '@/components/features/arbitrage/ExcludedBrickLinkStoresModal';
 import { EbayDetailModal } from '@/components/features/arbitrage/EbayDetailModal';
 import {
   useArbitrageData,
@@ -83,6 +84,7 @@ function ArbitragePageContent() {
   // Modal states
   const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
+  const [excludedStoresModalOpen, setExcludedStoresModalOpen] = useState(false);
 
   // BrickLink filters (COG-based)
   const [blFilters, setBlFilters] = useState<ArbitrageFilterOptions>({
@@ -294,6 +296,19 @@ function ArbitragePageContent() {
               )}
             </div>
 
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setExcludedStoresModalOpen(true)}
+                className="gap-1.5"
+              >
+                <Store className="h-3.5 w-3.5" />
+                Excluded Stores
+              </Button>
+            </div>
+
             {/* Sync Status */}
             <SyncStatusCard
               syncStatus={syncStatus?.syncStatus}
@@ -452,6 +467,12 @@ function ArbitragePageContent() {
         <ExcludedAsinsModal
           isOpen={excludedModalOpen}
           onClose={() => setExcludedModalOpen(false)}
+        />
+
+        {/* Excluded BrickLink Stores Modal */}
+        <ExcludedBrickLinkStoresModal
+          isOpen={excludedStoresModalOpen}
+          onClose={() => setExcludedStoresModalOpen(false)}
         />
       </div>
     </>

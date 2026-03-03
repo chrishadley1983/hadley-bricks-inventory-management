@@ -29,6 +29,10 @@ export type {
   WatchlistSource,
 } from './watchlist.service';
 
+// BrickLink Store Deals
+export { BrickLinkStoreExclusionService } from './bricklink-store-exclusion.service';
+export { BrickLinkStoreDealService } from './bricklink-store-deal.service';
+
 // eBay False-Positive Detector
 export { EbayFpDetectorService } from './ebay-fp-detector.service';
 export * from './ebay-fp-detector.types';

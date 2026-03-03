@@ -1177,6 +1177,71 @@ export type Database = {
         }
         Relationships: []
       }
+      bricklink_store_listings: {
+        Row: {
+          bricklink_set_number: string
+          condition: string | null
+          currency_code: string | null
+          estimated_shipping: number | null
+          estimated_total: number | null
+          id: string
+          min_buy: number | null
+          quantity: number
+          scraped_at: string
+          shipping_tier: string | null
+          ships_to_uk: boolean | null
+          store_country: string | null
+          store_feedback: number | null
+          store_name: string
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          bricklink_set_number: string
+          condition?: string | null
+          currency_code?: string | null
+          estimated_shipping?: number | null
+          estimated_total?: number | null
+          id?: string
+          min_buy?: number | null
+          quantity?: number
+          scraped_at?: string
+          shipping_tier?: string | null
+          ships_to_uk?: boolean | null
+          store_country?: string | null
+          store_feedback?: number | null
+          store_name: string
+          unit_price: number
+          user_id: string
+        }
+        Update: {
+          bricklink_set_number?: string
+          condition?: string | null
+          currency_code?: string | null
+          estimated_shipping?: number | null
+          estimated_total?: number | null
+          id?: string
+          min_buy?: number | null
+          quantity?: number
+          scraped_at?: string
+          shipping_tier?: string | null
+          ships_to_uk?: boolean | null
+          store_country?: string | null
+          store_feedback?: number | null
+          store_name?: string
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricklink_store_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bricklink_sync_config: {
         Row: {
           auto_sync_enabled: boolean
@@ -2582,6 +2647,54 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_tracking_cache: {
+        Row: {
+          created_at: string
+          dispatch_by: string | null
+          expected_delivery: string | null
+          id: string
+          item_name: string | null
+          last_checked: string | null
+          needs_recheck: boolean
+          order_date: string | null
+          platform_order_id: string
+          rm_delivery_date: string | null
+          rm_status: string | null
+          tracking_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_by?: string | null
+          expected_delivery?: string | null
+          id?: string
+          item_name?: string | null
+          last_checked?: string | null
+          needs_recheck?: boolean
+          order_date?: string | null
+          platform_order_id: string
+          rm_delivery_date?: string | null
+          rm_status?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_by?: string | null
+          expected_delivery?: string | null
+          id?: string
+          item_name?: string | null
+          last_checked?: string | null
+          needs_recheck?: boolean
+          order_date?: string | null
+          platform_order_id?: string
+          rm_delivery_date?: string | null
+          rm_status?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ebay_business_policies: {
         Row: {
           cached_at: string | null
@@ -3680,6 +3793,38 @@ export type Database = {
           weekday?: number
         }
         Relationships: []
+      }
+      excluded_bricklink_stores: {
+        Row: {
+          excluded_at: string
+          id: string
+          reason: string | null
+          store_name: string
+          user_id: string
+        }
+        Insert: {
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          store_name: string
+          user_id: string
+        }
+        Update: {
+          excluded_at?: string
+          id?: string
+          reason?: string | null
+          store_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "excluded_bricklink_stores_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       excluded_ebay_listings: {
         Row: {

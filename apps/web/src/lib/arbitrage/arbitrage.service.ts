@@ -579,6 +579,7 @@ export class ArbitrageService {
       ebay_pricing: null,
       asin_mapping: null,
       seeded_discovery: null,
+      bricklink_store_scrape: null,
     };
 
     // Map database job types to UI-expected job types
