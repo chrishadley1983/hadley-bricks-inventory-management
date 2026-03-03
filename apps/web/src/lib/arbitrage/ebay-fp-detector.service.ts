@@ -2,7 +2,7 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 30 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Uses 31 weighted scoring signals. Listings scoring >= 50 are excluded.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -34,8 +34,9 @@
  * 26. No Minifigures - 30 pts
  * 27. Promotional Item - 25 pts
  * 28. Keyword Stuffed (3+ set numbers) - 25 pts
- * 29. Complementary Product (fills/completes) - 30 pts
+ * 29. Complementary Product (fills another set) - 30 pts
  * 30. Min-to-Avg Price Ratio (<10%) - 25 pts
+ * 31. Opened Set (not factory sealed) - 50 pts
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -82,7 +83,9 @@ const ADVENT_DAY_KEYWORDS = /\b(choose\s+your\s+day|pick\s+your\s+day)\b/i;
 const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,5}\b)/i;
 const NO_MINIFIGS_KEYWORDS = /\bno\s+(minifig(ure)?s?|mini\s*figs?|figs?|figures?)\b/i;
 const PROMOTIONAL_KEYWORDS = /\b(metal\s*box|shaped\s*box|promotional\s+tin)\b/i;
-const COMPLEMENTARY_KEYWORDS = /\b(fills?|fill\s+up|to\s+fill|to\s+complete|completes?)\b/i;
+const COMPLEMENTARY_KEYWORDS = /\b(fills?|fill\s+up|to\s+fill|to\s+complete)\b/i;
+const OPENED_SET_KEYWORDS =
+  /\b(complete\s+with\s+(box|instructions?|manual|booklet)|100\s*%\s*complete|complete\s+set\s+with|built\s+(once|and\s+displayed|then\s+dismantled)|pre[\s-]?owned|used\s+set|previously\s+built|assembled\s+once|box\s+opened|opened\s+box|open\s+box|retired\s+display)\b/i;
 
 // Stop words for name matching
 const STOP_WORDS = new Set([
@@ -561,6 +564,16 @@ export class EbayFpDetectorService {
         signal: 'COMPLEMENTARY_PRODUCT',
         points: SIGNAL_WEIGHTS.COMPLEMENTARY_PRODUCT,
         description: 'Complementary product (fills/completes another set)',
+      });
+    }
+
+    // 31. Opened/used set indicators (auto-exclude: not factory sealed)
+    if (OPENED_SET_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.OPENED_SET;
+      signals.push({
+        signal: 'OPENED_SET',
+        points: SIGNAL_WEIGHTS.OPENED_SET,
+        description: 'Opened/used set — not factory sealed (cannot resell as new)',
       });
     }
 
