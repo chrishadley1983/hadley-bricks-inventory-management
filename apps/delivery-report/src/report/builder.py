@@ -53,14 +53,24 @@ def _otdr_border_color(pct: float) -> str:
 
 def _status_badge(status_text: str) -> str:
     t = status_text.lower()
-    if "late" in t:
-        bg, color = "#FEE2E2", "#991B1B"
-    elif "pending" in t or "transit" in t or "recheck" in t:
-        bg, color = "#FEF3C7", "#92400E"
+    if "on time" in t:
+        bg, color = "#DCFCE7", "#166534"  # green
+    elif "late" in t:
+        bg, color = "#FEE2E2", "#991B1B"  # red
     elif "delivered" in t:
-        bg, color = "#DCFCE7", "#166534"
+        bg, color = "#D1FAE5", "#065F46"  # green (slightly different shade)
+    elif "transit" in t:
+        bg, color = "#DBEAFE", "#1E40AF"  # blue
+    elif "not dispatched" in t:
+        bg, color = "#FEF3C7", "#92400E"  # amber
+    elif "not checked" in t or "pending" in t:
+        bg, color = "#F1F5F9", "#64748B"  # gray
+    elif "expired" in t:
+        bg, color = "#FEF3C7", "#78350F"  # dark amber
+    elif "unknown" in t:
+        bg, color = "#F3E8FF", "#6B21A8"  # purple
     else:
-        bg, color = "#F1F5F9", "#64748B"
+        bg, color = "#F1F5F9", "#64748B"  # gray
     return (
         f'<span style="background-color:{bg};color:{color};padding:4px 10px;'
         f'border-radius:4px;font-weight:500;font-size:8px;white-space:nowrap;">'
