@@ -88,6 +88,17 @@ export function ListingReviewDetail({
 
   return (
     <div className="space-y-4">
+      {/* Condition Notes Alert */}
+      {item.condition_notes && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Condition Note</p>
+            <p className="text-sm text-amber-700">{item.condition_notes}</p>
+          </div>
+        </div>
+      )}
+
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-[55%_45%] gap-6">
         {/* LEFT COLUMN */}

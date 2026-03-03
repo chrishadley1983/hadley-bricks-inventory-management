@@ -294,6 +294,12 @@ export function ReviewCard({
                 {item.ebay_sku}
               </Badge>
             </div>
+            {item.condition_notes && (
+              <div className="flex items-center gap-1 mt-1.5 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                <span className="text-xs truncate">{item.condition_notes}</span>
+              </div>
+            )}
           </div>
 
           {!quality.passed && (
