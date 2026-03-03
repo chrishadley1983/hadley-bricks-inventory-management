@@ -319,6 +319,7 @@ export interface BricqerItemDefinition {
   legoCategoryId?: number;
   primaryColorId?: number;
   weight?: number;
+  comment?: string;
 }
 
 /** Bricqer inventory item */
@@ -345,7 +346,6 @@ export interface BricqerInventoryItem {
   remainingQuantity?: number;
   price?: string | number;
   remarks?: string;
-  comments?: string;
   batchId?: number;
   purchaseId?: number;
   created?: string;
@@ -445,7 +445,7 @@ export interface NormalizedBricqerInventoryItem {
   batchId?: number;
   purchaseId?: number;
   remarks?: string;
-  comments?: string;
+  comment?: string;
   rawData: BricqerInventoryItem;
 }
 
