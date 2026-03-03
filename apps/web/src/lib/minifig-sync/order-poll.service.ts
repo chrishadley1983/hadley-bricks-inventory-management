@@ -172,28 +172,30 @@ export class OrderPollService {
 
               // Use name from pre-fetched map (CR-011)
               const syncItemName = syncItem.name || syncItem.bricklink_id || 'Unknown Minifig';
-              discordService
-                .send('alerts', {
-                  title: '🔔 Minifig Sold on eBay',
-                  description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
-                  color: DiscordColors.GREEN,
-                  fields: [
-                    { name: 'Platform', value: 'eBay', inline: true },
-                    {
-                      name: 'Sale Price',
-                      value: `£${parseFloat(salePrice).toFixed(2)}`,
-                      inline: true,
-                    },
-                    {
-                      name: 'Action',
-                      value: '[Review Removal](/minifigs/removals)',
-                      inline: false,
-                    },
-                  ],
-                })
-                .catch(() => {
-                  /* non-blocking */
-                });
+              const ebaySaleEmbed = {
+                title: '🔔 Minifig Sold on eBay',
+                description: `**${syncItemName}** sold for £${parseFloat(salePrice).toFixed(2)} on eBay.\nRemoval from Bricqer queued for review.`,
+                color: DiscordColors.GREEN,
+                fields: [
+                  { name: 'Platform', value: 'eBay', inline: true },
+                  {
+                    name: 'Sale Price',
+                    value: `£${parseFloat(salePrice).toFixed(2)}`,
+                    inline: true,
+                  },
+                  {
+                    name: 'Action',
+                    value: '[Review Removal](/minifigs/removals)',
+                    inline: false,
+                  },
+                ],
+              };
+              discordService.send('alerts', ebaySaleEmbed).catch(() => {
+                /* non-blocking */
+              });
+              discordService.send('peter-chat', ebaySaleEmbed).catch(() => {
+                /* non-blocking */
+              });
 
               // Update sync item status (F50)
               await this.supabase
@@ -367,24 +369,26 @@ export class OrderPollService {
               // Discord notification (F60) — use name from pre-fetched map (CR-011)
               const syncItemName =
                 matchingItem.name || matchingItem.bricklink_id || 'Unknown Minifig';
-              discordService
-                .send('alerts', {
-                  title: '🔔 Minifig Sold on Bricqer',
-                  description: `**${syncItemName}** sold for £${(price ?? 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
-                  color: DiscordColors.GREEN,
-                  fields: [
-                    { name: 'Platform', value: 'Bricqer', inline: true },
-                    { name: 'Sale Price', value: `£${(price ?? 0).toFixed(2)}`, inline: true },
-                    {
-                      name: 'Action',
-                      value: '[Review Removal](/minifigs/removals)',
-                      inline: false,
-                    },
-                  ],
-                })
-                .catch(() => {
-                  /* non-blocking */
-                });
+              const bricqerSaleEmbed = {
+                title: '🔔 Minifig Sold on Bricqer',
+                description: `**${syncItemName}** sold for £${(price ?? 0).toFixed(2)} on Bricqer.\nRemoval from eBay queued for review.`,
+                color: DiscordColors.GREEN,
+                fields: [
+                  { name: 'Platform', value: 'Bricqer', inline: true },
+                  { name: 'Sale Price', value: `£${(price ?? 0).toFixed(2)}`, inline: true },
+                  {
+                    name: 'Action',
+                    value: '[Review Removal](/minifigs/removals)',
+                    inline: false,
+                  },
+                ],
+              };
+              discordService.send('alerts', bricqerSaleEmbed).catch(() => {
+                /* non-blocking */
+              });
+              discordService.send('peter-chat', bricqerSaleEmbed).catch(() => {
+                /* non-blocking */
+              });
 
               // Update sync item status (F53)
               await this.supabase

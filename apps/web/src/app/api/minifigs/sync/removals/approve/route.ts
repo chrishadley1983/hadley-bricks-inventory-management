@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { BricqerClient } from '@/lib/bricqer/client';
@@ -17,14 +18,14 @@ const RequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     const body = await request.json();
     const parsed = RequestSchema.safeParse(body);
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
       .from('minifig_removal_queue')
       .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)')
       .eq('id', parsed.data.removalId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
 
     if (fetchError || !removal) {
@@ -58,12 +59,12 @@ export async function POST(request: NextRequest) {
     const syncItem = removal.minifig_sync_items as Record<string, unknown> | null;
 
     if (removal.remove_from === 'EBAY' && syncItem?.ebay_offer_id) {
-      const accessToken = await ebayAuthService.getAccessToken(user.id);
+      const accessToken = await ebayAuthService.getAccessToken(userId);
       if (accessToken) {
         const adapter = new EbayApiAdapter({
           accessToken,
           marketplaceId: 'EBAY_GB',
-          userId: user.id,
+          userId: userId,
         });
 
         try {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
       // Reduce quantity on Bricqer (or delete if qty reaches 0)
       const credentialsRepo = new CredentialsRepository(supabase);
       const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(
-        user.id,
+        userId,
         'bricqer'
       );
       if (bricqerCreds) {
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
         reviewed_at: now,
       })
       .eq('id', parsed.data.removalId)
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     // Update sync item status
     if (syncItem) {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
           updated_at: now,
         })
         .eq('id', removal.minifig_sync_id)
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       // Archive matching Shopify product (non-blocking)
       // Use status=SOLD to target the item that was actually sold, not a sibling
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
         const { data: invItem } = await supabase
           .from('inventory_items')
           .select('id')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('set_number', bricklinkId)
           .eq('status', 'SOLD')
           .order('updated_at', { ascending: false })
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (invItem) {
-          archiveShopifyOnSold(supabase, user.id, invItem.id);
+          archiveShopifyOnSold(supabase, userId, invItem.id);
         }
       }
     }

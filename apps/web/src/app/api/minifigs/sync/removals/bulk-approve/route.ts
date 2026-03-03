@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { BricqerClient } from '@/lib/bricqer/client';
@@ -10,16 +11,16 @@ import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     // Get all pending removals — paginated (M2)
     const removals: Array<Record<string, unknown>> = [];
@@ -31,7 +32,7 @@ export async function POST() {
         const { data, error: fetchError } = await supabase
           .from('minifig_removal_queue')
           .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('status', 'PENDING')
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -56,19 +57,19 @@ export async function POST() {
     const needsBricqer = removals.some((r) => r.remove_from === 'BRICQER');
 
     if (needsEbay) {
-      const accessToken = await ebayAuthService.getAccessToken(user.id);
+      const accessToken = await ebayAuthService.getAccessToken(userId);
       if (accessToken) {
         ebayAdapter = new EbayApiAdapter({
           accessToken,
           marketplaceId: 'EBAY_GB',
-          userId: user.id,
+          userId: userId,
         });
       }
     }
     if (needsBricqer) {
       const credentialsRepo = new CredentialsRepository(supabase);
       const bricqerCreds = await credentialsRepo.getCredentials<BricqerCredentials>(
-        user.id,
+        userId,
         'bricqer'
       );
       if (bricqerCreds) {
@@ -118,7 +119,7 @@ export async function POST() {
             reviewed_at: now,
           })
           .eq('id', removal.id as string)
-          .eq('user_id', user.id);
+          .eq('user_id', userId);
 
         // Update sync item status
         if (syncItem) {
@@ -130,7 +131,7 @@ export async function POST() {
               updated_at: now,
             })
             .eq('id', removal.minifig_sync_id as string)
-            .eq('user_id', user.id);
+            .eq('user_id', userId);
 
           // Archive matching Shopify product (non-blocking)
           // Use status=SOLD to target the item that was actually sold, not a sibling
@@ -139,7 +140,7 @@ export async function POST() {
             const { data: invItem } = await supabase
               .from('inventory_items')
               .select('id')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('set_number', bricklinkId)
               .eq('status', 'SOLD')
               .order('updated_at', { ascending: false })
@@ -147,7 +148,7 @@ export async function POST() {
               .single();
 
             if (invItem) {
-              archiveShopifyOnSold(supabase, user.id, invItem.id);
+              archiveShopifyOnSold(supabase, userId, invItem.id);
             }
           }
         }

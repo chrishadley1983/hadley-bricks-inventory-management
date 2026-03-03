@@ -35,6 +35,7 @@ export async function GET() {
       opportunities: { sent: false },
       'sync-status': { sent: false },
       'daily-summary': { sent: false },
+      'peter-chat': { sent: false },
     };
 
     // Test #alerts channel
