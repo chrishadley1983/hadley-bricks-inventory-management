@@ -6,6 +6,7 @@ const mockAmazonClient = {
   testConnection: vi.fn(),
   getOrders: vi.fn(),
   getAllOrders: vi.fn(),
+  getOrder: vi.fn(),
   getOrderItems: vi.fn(),
   getOrderWithItems: vi.fn(),
   getUnshippedOrders: vi.fn(),
@@ -234,10 +235,11 @@ describe('AmazonSyncService', () => {
       mockOrderRepo.findByPlatformOrderId.mockResolvedValue(null);
       mockOrderRepo.upsert.mockResolvedValue({ id: 'saved-order-id' });
 
-      // Mock getMostRecentSyncDate (supabase query)
+      // Mock supabase query chain (handles both getMostRecentSyncDate and verifyDispatchOrderStatuses)
       (mockSupabase as { from: typeof vi.fn }).from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       });
@@ -410,6 +412,7 @@ describe('AmazonSyncService', () => {
       (mockSupabase as { from: typeof vi.fn }).from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({
           data: [{ synced_at: '2024-12-19T10:00:00Z' }],
@@ -438,6 +441,119 @@ describe('AmazonSyncService', () => {
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('status change: Unshipped -> Shipped')
       );
+    });
+
+    it('should preserve items_count when items are not fetched', async () => {
+      // Existing order with items, status is Shipped (no item fetch needed)
+      mockOrderRepo.findByPlatformOrderId.mockResolvedValue({
+        id: 'existing-order',
+        status: 'Shipped',
+        items_count: 3,
+      });
+
+      mockAmazonClient.getAllOrders.mockResolvedValue([
+        {
+          AmazonOrderId: '408-1234567-8901234',
+          OrderStatus: 'Shipped',
+        },
+      ]);
+
+      await service.syncOrders(testUserId);
+
+      expect(mockOrderRepo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items_count: 3,
+        })
+      );
+    });
+
+    it('should not backfill items for cancelled orders with items_count=0', async () => {
+      mockOrderRepo.findByPlatformOrderId.mockResolvedValue({
+        id: 'existing-order',
+        status: 'Canceled',
+        items_count: 0,
+      });
+
+      mockAmazonClient.getAllOrders.mockResolvedValue([
+        {
+          AmazonOrderId: '408-1234567-8901234',
+          OrderStatus: 'Canceled',
+        },
+      ]);
+
+      await service.syncOrders(testUserId);
+
+      expect(mockAmazonClient.getOrderItems).not.toHaveBeenCalled();
+    });
+
+    it('should verify dispatch orders and update those that shipped', async () => {
+      mockAmazonClient.getAllOrders.mockResolvedValue([]);
+
+      // Mock supabase: no sync date, but dispatch orders exist
+      const mockIn = vi.fn().mockResolvedValue({
+        data: [
+          { platform_order_id: '206-1111111-1111111', internal_status: 'Paid', status: 'Paid' },
+        ],
+        error: null,
+      });
+      (mockSupabase as { from: typeof vi.fn }).from = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: mockIn,
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      });
+
+      // getOrder returns Shipped status
+      mockAmazonClient.getOrder.mockResolvedValue({
+        AmazonOrderId: '206-1111111-1111111',
+        OrderStatus: 'Shipped',
+        LastUpdateDate: '2024-12-20T12:00:00Z',
+      });
+
+      mockOrderRepo.findByPlatformOrderId.mockResolvedValue({
+        id: 'existing-order',
+        status: 'Unshipped',
+        items_count: 2,
+      });
+
+      const result = await service.syncOrders(testUserId);
+
+      expect(mockAmazonClient.getOrder).toHaveBeenCalledWith('206-1111111-1111111');
+      expect(result.ordersUpdated).toBe(1);
+      expect(result.ordersProcessed).toBe(1);
+    });
+
+    it('should not update dispatch orders still awaiting shipment', async () => {
+      mockAmazonClient.getAllOrders.mockResolvedValue([]);
+
+      const mockIn = vi.fn().mockResolvedValue({
+        data: [
+          { platform_order_id: '206-2222222-2222222', internal_status: 'Paid', status: 'Paid' },
+        ],
+        error: null,
+      });
+      (mockSupabase as { from: typeof vi.fn }).from = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: mockIn,
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      });
+
+      // getOrder still returns Unshipped
+      mockAmazonClient.getOrder.mockResolvedValue({
+        AmazonOrderId: '206-2222222-2222222',
+        OrderStatus: 'Unshipped',
+        LastUpdateDate: '2024-12-20T10:00:00Z',
+      });
+
+      const result = await service.syncOrders(testUserId);
+
+      expect(mockAmazonClient.getOrder).toHaveBeenCalledWith('206-2222222-2222222');
+      // Should NOT have processed through processOrder
+      expect(mockOrderRepo.upsert).not.toHaveBeenCalled();
+      expect(result.ordersProcessed).toBe(0);
     });
   });
 
@@ -601,6 +717,7 @@ describe('AmazonSyncService', () => {
       (mockSupabase as { from: typeof vi.fn }).from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       });
