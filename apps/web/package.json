@@ -24,7 +24,8 @@
     "seed:brickset": "tsx src/scripts/seed-brickset-data.ts",
     "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts",
     "bricklink:login": "tsx scripts/capture-bricklink-session.ts",
-    "setup:shopify": "tsx scripts/setup-shopify.ts"
+    "setup:shopify": "tsx scripts/setup-shopify.ts",
+    "validate:fp": "tsx scripts/validate-fp-detector.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
