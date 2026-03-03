@@ -3,6 +3,8 @@
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
  * Uses 31 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Patterns expanded to catch: bare instruction manuals, empty box, advent day/micro builds,
+ * copy/replica/clone listings.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -57,7 +59,7 @@ const MINIFIG_KEYWORDS = /\b(minifig|minifigure|figure|fig|figurine|mini fig)\b/
 const INSTRUCTIONS_KEYWORDS = /\b(instruction|manual|booklet|directions)\b/i;
 const PARTS_KEYWORDS = /\b(part|piece|brick|plate|tile|slope|wedge|axle|technic)\b/i;
 const INCOMPLETE_KEYWORDS =
-  /\b(spares?|missing|incomplete|partial|damaged|opened|no box|ex[\s-]?display|shop\s+display|unsealed|open\s+box|box\s+only)\b/i;
+  /\b(spares?|missing|incomplete|partial|damaged|opened|no box|empty\s+box|ex[\s-]?display|shop\s+display|unsealed|open\s+box|box\s+only)\b/i;
 const KEYRING_KEYWORDS = /\b(keyring|key ring|keychain|key chain|key light|torch)\b/i;
 const ITEM_ONLY_PATTERN =
   /\b(sticker|part|parts|piece|pieces|build|builds|minifig|minifigure|figure|manual|instruction|booklet|box|packaging|light kit|led)\s*(sheet|s)?\s+only\b/i;
@@ -70,7 +72,8 @@ const DISPLAY_ACCESSORY_KEYWORDS =
 const THIRD_PARTY_KEYWORDS =
   /\b(for\s+lego|compatible\s+with|compatible\s+for|fits\s+lego|to\s+fit\s+lego|replacement\s+sticker)\b/i;
 const BUNDLE_LOT_KEYWORDS = /\b(job\s*lot|bulk\s+lot|bundle\s+lot|joblot|mixed\s+lot)\b/i;
-const CUSTOM_MOC_KEYWORDS = /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creation)\b/i;
+const CUSTOM_MOC_KEYWORDS =
+  /\b(moc|custom\s+build|custom\s+moc|my\s+own\s+creation|copy|replica|generic\s+bricks?|lego\s+inspired)\b/i;
 const MULTI_QUANTITY_PATTERN = /\bx\s*(?:[2-9]|[1-9]\d+)\b|\b(?:[2-9]|[1-9]\d+)\s*x\b(?!.*\bin[- ]1\b)/i;
 const BOOK_MAGAZINE_KEYWORDS =
   /\b(annual|activity\s+book|magazine|encyclop\w*|handbook|ultimate\s+guide)\b/i;
@@ -79,7 +82,8 @@ const STICKER_POSTER_KEYWORDS =
 
 // New detection patterns (signals 23-27)
 const POLYBAG_KEYWORDS = /\b(poly\s*bag|paper\s*bag|foil\s*(bag|pack)|promo\s*bag)\b/i;
-const ADVENT_DAY_KEYWORDS = /\b(choose\s+your\s+day|pick\s+your\s+day)\b/i;
+const ADVENT_DAY_KEYWORDS =
+  /\b(choose\s+your\s+day|pick\s+your\s+day|day\s+\d{1,2}\b|micro\s+build|advent\s+micro)\b/i;
 const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,5}\b)/i;
 const NO_MINIFIGS_KEYWORDS = /\bno\s+(minifig(ure)?s?|mini\s*figs?|figs?|figures?)\b/i;
 const PROMOTIONAL_KEYWORDS = /\b(metal\s*box|shaped\s*box|promotional\s+tin)\b/i;
@@ -287,7 +291,8 @@ export class EbayFpDetectorService {
     if (INSTRUCTIONS_KEYWORDS.test(title)) {
       if (
         /\b(only|just|booklet|vgc|good\s+condition)\b/i.test(title) ||
-        /\b(?:for|from)\s+\d{4,5}\b/i.test(title)
+        /\b(?:for|from)\s+\d{4,5}\b/i.test(title) ||
+        /\b(instruction\s+manual|instruction\s+book)\b/i.test(title)
       ) {
         score += SIGNAL_WEIGHTS.INSTRUCTIONS_ONLY;
         signals.push({
