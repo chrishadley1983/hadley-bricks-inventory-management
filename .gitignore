@@ -92,6 +92,9 @@ scripts/ml/reports/
 # Vercel env export
 .env.vercel
 
+# Python
+__pycache__/
+
 # Temp scratch files
 _tmp_*.txt
 _launch_*.ps1

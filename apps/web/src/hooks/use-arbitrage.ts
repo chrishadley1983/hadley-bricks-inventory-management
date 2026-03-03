@@ -68,6 +68,10 @@ export const arbitrageKeys = {
     [...arbitrageKeys.all, 'summary', minMargin, maxCog] as const,
   ebayExclusions: (setNumber?: string) =>
     [...arbitrageKeys.all, 'ebay-exclusions', setNumber] as const,
+  storeListingsAll: () => [...arbitrageKeys.all, 'store-listings'] as const,
+  storeListings: (setNumber: string) =>
+    [...arbitrageKeys.all, 'store-listings', setNumber] as const,
+  storeExclusions: () => [...arbitrageKeys.all, 'store-exclusions'] as const,
 };
 
 // ============================================================================
@@ -680,6 +684,144 @@ export function useRestoreEbayListing() {
       });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: arbitrageKeys.items() });
+    },
+  });
+}
+
+// ============================================================================
+// BRICKLINK STORE DEAL FINDER HOOKS
+// ============================================================================
+
+export interface BrickLinkStoreListing {
+  id: string;
+  bricklinkSetNumber: string;
+  storeName: string;
+  storeCountry: string | null;
+  storeFeedback: number | null;
+  unitPrice: number;
+  quantity: number;
+  minBuy: number | null;
+  shipsToUk: boolean | null;
+  condition: string;
+  currencyCode: string;
+  estimatedShipping: number;
+  estimatedTotal: number;
+  shippingTier: string;
+  scrapedAt: string;
+  isExcluded: boolean;
+}
+
+export interface ExcludedBrickLinkStore {
+  id: string;
+  storeName: string;
+  reason: string | null;
+  excludedAt: string;
+}
+
+/**
+ * Fetch cached store listings for a specific set
+ */
+export function useStoreListings(setNumber: string | null) {
+  return useQuery({
+    queryKey: arbitrageKeys.storeListings(setNumber ?? ''),
+    queryFn: async (): Promise<BrickLinkStoreListing[]> => {
+      const response = await fetch(`/api/arbitrage/bricklink-stores/${setNumber}`);
+      if (!response.ok) throw new Error('Failed to fetch store listings');
+      const json = await response.json();
+      return json.data ?? [];
+    },
+    enabled: !!setNumber,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch excluded BrickLink stores
+ */
+export function useExcludedBrickLinkStores() {
+  return useQuery({
+    queryKey: arbitrageKeys.storeExclusions(),
+    queryFn: async (): Promise<ExcludedBrickLinkStore[]> => {
+      const response = await fetch('/api/arbitrage/bricklink-store-exclusions');
+      if (!response.ok) throw new Error('Failed to fetch excluded stores');
+      const json = await response.json();
+      return json.data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Exclude a BrickLink store
+ */
+export function useExcludeBrickLinkStore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { storeName: string; reason?: string }) => {
+      const response = await fetch('/api/arbitrage/bricklink-store-exclusions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error('Failed to exclude store');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.storeExclusions() });
+      queryClient.invalidateQueries({
+        queryKey: arbitrageKeys.storeListingsAll(),
+      });
+    },
+  });
+}
+
+/**
+ * Restore an excluded BrickLink store
+ */
+export function useRestoreBrickLinkStore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (storeName: string) => {
+      const response = await fetch('/api/arbitrage/bricklink-store-exclusions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeName }),
+      });
+      if (!response.ok) throw new Error('Failed to restore store');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: arbitrageKeys.storeExclusions() });
+      queryClient.invalidateQueries({
+        queryKey: arbitrageKeys.storeListingsAll(),
+      });
+    },
+  });
+}
+
+/**
+ * Trigger a store listing scrape for a single set
+ */
+export function useScrapeStoreListings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (setNumber: string) => {
+      const response = await fetch(`/api/arbitrage/bricklink-stores/${setNumber}`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const json = await response.json();
+        throw new Error(json.error || 'Failed to scrape store listings');
+      }
+      return response.json();
+    },
+    onSuccess: (_, setNumber) => {
+      queryClient.invalidateQueries({
+        queryKey: arbitrageKeys.storeListings(setNumber),
+      });
     },
   });
 }

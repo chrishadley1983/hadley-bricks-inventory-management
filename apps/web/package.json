@@ -23,6 +23,7 @@
     "sheets:test": "tsx scripts/test-sheets-connection.ts",
     "seed:brickset": "tsx src/scripts/seed-brickset-data.ts",
     "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts",
+    "bricklink:login": "tsx scripts/capture-bricklink-session.ts",
     "setup:shopify": "tsx scripts/setup-shopify.ts"
   },
   "dependencies": {

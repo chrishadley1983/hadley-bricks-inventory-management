@@ -20,6 +20,7 @@ import {
 } from '@/lib/arbitrage/calculations';
 import { buildBricklinkUrl } from '@/lib/arbitrage/bricklink-url';
 import { useSetBlPriceOverride } from '@/hooks/use-arbitrage';
+import { StoreListingsPanel } from './StoreListingsPanel';
 
 interface ArbitrageDetailModalProps {
   item: ArbitrageItem | null;
@@ -496,6 +497,14 @@ export function ArbitrageDetailModal({
                 </div>
               </TooltipProvider>
             </div>
+
+            {/* Store Listings */}
+            {item.bricklinkSetNumber && (
+              <>
+                <Separator />
+                <StoreListingsPanel setNumber={item.bricklinkSetNumber} />
+              </>
+            )}
           </div>
         </ScrollArea>
 

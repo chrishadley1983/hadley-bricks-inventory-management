@@ -53,7 +53,10 @@ def get_cancelled_order_ids(days: int = 28) -> set[str]:
 
 
 def get_active_orders(days: int = 28) -> list[dict]:
-    """Get all Amazon orders in the given window, paginating past 1000-row limit."""
+    """Get all Amazon orders in the given window, paginating past 1000-row limit.
+
+    Includes item names from order_items via PostgREST embedded join.
+    """
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     all_orders = []
     page_size = 1000
@@ -63,7 +66,7 @@ def get_active_orders(days: int = 28) -> list[dict]:
         result = (
             get_client()
             .table("platform_orders")
-            .select("platform_order_id, order_date, dispatch_by, raw_data")
+            .select("platform_order_id, order_date, dispatch_by, raw_data, order_items(item_name)")
             .eq("platform", "amazon")
             .gt("order_date", cutoff)
             .order("order_date", desc=True)
@@ -73,6 +76,11 @@ def get_active_orders(days: int = 28) -> list[dict]:
         rows = result.data or []
         for row in rows:
             raw = row.get("raw_data") or {}
+
+            # Extract item name from joined order_items (take first item)
+            order_items = row.get("order_items") or []
+            item_name = order_items[0]["item_name"] if order_items else None
+
             all_orders.append(
                 {
                     "platform_order_id": row["platform_order_id"],
@@ -80,6 +88,7 @@ def get_active_orders(days: int = 28) -> list[dict]:
                     "dispatch_by": row.get("dispatch_by"),
                     "expected_delivery": raw.get("LatestDeliveryDate"),
                     "order_status": raw.get("OrderStatus"),
+                    "item_name": item_name,
                 }
             )
 
