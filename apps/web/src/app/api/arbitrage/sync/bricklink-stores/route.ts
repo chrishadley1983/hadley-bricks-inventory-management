@@ -15,7 +15,7 @@ export const maxDuration = 300;
 
 const BatchScrapeSchema = z.object({
   minMarginPercent: z.number().optional().default(25),
-  setNumbers: z.array(z.string()).optional(),
+  setNumbers: z.array(z.string().regex(/^\d{3,7}(-\d+)?$/)).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
           encoder.encode(`data: ${JSON.stringify({ type: 'error', message })}\n\n`)
         );
       } finally {
-        await writer.close();
+        try { await writer.close(); } catch { /* client may have disconnected */ }
       }
     })();
 
