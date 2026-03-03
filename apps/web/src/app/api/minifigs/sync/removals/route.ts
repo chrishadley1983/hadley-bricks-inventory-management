@@ -1,18 +1,19 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { validateAuth } from '@/lib/api/validate-auth';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const auth = await validateAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const isApiKeyAuth = !!request.headers.get('x-api-key');
+    const supabase = isApiKeyAuth ? createServiceRoleClient() : await createClient();
+    const userId = auth.userId;
 
     // Paginated fetch to handle >1000 pending removals (M2)
     const allRemovals: Array<Record<string, unknown>> = [];
@@ -25,7 +26,7 @@ export async function GET() {
         .select(
           '*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(id, name, bricklink_id, bricqer_image_url, ebay_listing_url, ebay_sku, images)'
         )
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('status', 'PENDING')
         .order('created_at', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
