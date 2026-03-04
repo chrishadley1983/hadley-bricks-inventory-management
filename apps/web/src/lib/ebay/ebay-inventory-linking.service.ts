@@ -1172,7 +1172,7 @@ export class EbayInventoryLinkingService {
         .length || 0;
     const pendingItems = pendingQueue?.length || 0;
 
-    let status: 'pending' | 'partial' | 'complete' | 'skipped';
+    let status: 'pending' | 'partial' | 'complete' | 'skipped' | 'pre_linked' | 'no_inventory' | 'cancelled';
 
     if (pendingItems === 0 && linkedItems === totalItems) {
       status = 'complete';
