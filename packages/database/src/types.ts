@@ -7649,6 +7649,33 @@ export type Database = {
           },
         ]
       }
+      picklist_snapshots: {
+        Row: {
+          created_at: string
+          data: Json
+          generated_at: string
+          id: string
+          platform: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          generated_at?: string
+          id?: string
+          platform: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          generated_at?: string
+          id?: string
+          platform?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       platform_credentials: {
         Row: {
           created_at: string
