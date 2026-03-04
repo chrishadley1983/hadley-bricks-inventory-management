@@ -51,6 +51,7 @@ export interface PickingListResponse {
   totalItems: number;
   totalOrders: number;
   generatedAt: string;
+  pickUrl?: string;
 }
 
 /**
@@ -263,14 +264,45 @@ export async function GET(request: NextRequest) {
       return setA.localeCompare(setB);
     });
 
+    const generatedAt = new Date().toISOString();
     const response: PickingListResponse = {
       items: pickingListItems,
       unmatchedItems,
       unknownLocationItems,
       totalItems: pickingListItems.reduce((sum, item) => sum + item.quantity, 0),
       totalOrders: eligibleOrders.length,
-      generatedAt: new Date().toISOString(),
+      generatedAt,
+      pickUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://hadley-bricks-inventory-management.vercel.app'}/pick/ebay`,
     };
+
+    // Save snapshot for interactive pick list page (fire-and-forget)
+    const serviceClient = createServiceRoleClient();
+    serviceClient
+      .from('picklist_snapshots')
+      .insert({
+        platform: 'ebay' as const,
+        data: JSON.parse(JSON.stringify(response)),
+        generated_at: generatedAt,
+        user_id: userId,
+      })
+      .then(({ error: snapError }) => {
+        if (snapError) {
+          console.error('[GET /api/picking-list/ebay] Failed to save snapshot:', snapError);
+          return;
+        }
+        // Clean up old snapshots, keep only the latest
+        serviceClient
+          .from('picklist_snapshots')
+          .delete()
+          .eq('user_id', userId)
+          .eq('platform', 'ebay')
+          .lt('generated_at', generatedAt)
+          .then(({ error: cleanupError }) => {
+            if (cleanupError) {
+              console.error('[GET /api/picking-list/ebay] Failed to clean old snapshots:', cleanupError);
+            }
+          });
+      });
 
     // If PDF format requested, generate PDF
     if (format === 'pdf') {
