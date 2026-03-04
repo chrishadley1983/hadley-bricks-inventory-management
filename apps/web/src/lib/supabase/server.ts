@@ -30,6 +30,23 @@ export async function createClient() {
 }
 
 /**
+ * Create a Supabase client using the anon key without cookies.
+ * Used for public pages that don't require authentication (e.g. interactive pick lists).
+ */
+export function createPublicClient() {
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+}
+
+/**
  * Create a Supabase client with service role privileges.
  * This bypasses RLS and should only be used for admin operations.
  *

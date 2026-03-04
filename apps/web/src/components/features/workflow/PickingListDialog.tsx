@@ -87,6 +87,12 @@ export function PickingListDialog({ open, onOpenChange, platform }: PickingListD
                   <Download className="h-4 w-4 mr-1" />
                   {isDownloading ? 'Downloading...' : 'PDF'}
                 </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`/pick/${platform}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Interactive
+                  </a>
+                </Button>
               </div>
             )}
           </div>
