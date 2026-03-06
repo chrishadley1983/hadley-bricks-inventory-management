@@ -101,9 +101,15 @@ export class ListingStagingService {
       );
       const policies = await policiesService.getPolicies();
       // Use the smart defaults from identifyDefaults() which prefers returnsAccepted policies
-      const defaultFulfillment = policies.fulfillment.find((p) => p.id === policies.defaults.fulfillmentPolicyId) || policies.fulfillment[0];
-      const defaultPayment = policies.payment.find((p) => p.id === policies.defaults.paymentPolicyId) || policies.payment[0];
-      const defaultReturn = policies.return.find((p) => p.id === policies.defaults.returnPolicyId) || policies.return[0];
+      const defaultFulfillment =
+        policies.fulfillment.find((p) => p.id === policies.defaults.fulfillmentPolicyId) ||
+        policies.fulfillment[0];
+      const defaultPayment =
+        policies.payment.find((p) => p.id === policies.defaults.paymentPolicyId) ||
+        policies.payment[0];
+      const defaultReturn =
+        policies.return.find((p) => p.id === policies.defaults.returnPolicyId) ||
+        policies.return[0];
 
       if (!defaultFulfillment || !defaultPayment || !defaultReturn) {
         throw new Error(
@@ -141,7 +147,11 @@ export class ListingStagingService {
       // Apply limit if specified
       const itemsToProcess = options?.limit ? items.slice(0, options.limit) : items;
 
-      await onProgress?.({ type: 'stage', stage: 'staging', message: `Creating eBay listings (${itemsToProcess.length} of ${items.length} qualifying)...` });
+      await onProgress?.({
+        type: 'stage',
+        stage: 'staging',
+        message: `Creating eBay listings (${itemsToProcess.length} of ${items.length} qualifying)...`,
+      });
       for (let i = 0; i < itemsToProcess.length; i++) {
         const item = itemsToProcess[i] as MinifigSyncItem;
         itemsProcessed++;
@@ -172,7 +182,16 @@ export class ListingStagingService {
           // Extract detailed eBay error message including parameters
           let errorDetail = err instanceof Error ? err.message : String(err);
           if (err && typeof err === 'object' && 'errors' in err) {
-            const ebayErrors = (err as { errors?: Array<{ message?: string; longMessage?: string; errorId?: number; parameters?: Array<{ name: string; value: string }> }> }).errors;
+            const ebayErrors = (
+              err as {
+                errors?: Array<{
+                  message?: string;
+                  longMessage?: string;
+                  errorId?: number;
+                  parameters?: Array<{ name: string; value: string }>;
+                }>;
+              }
+            ).errors;
             if (ebayErrors && ebayErrors.length > 0) {
               const parts = ebayErrors.map((e) => {
                 let msg = e.longMessage || e.message || '';
@@ -254,7 +273,8 @@ export class ListingStagingService {
           conditionNotes: item.condition_notes || undefined,
           pieceCount: 1,
           minifigureCount: 1,
-          notes: 'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 263012 (LEGO Minifigures leaf category). Use condition USED_EXCELLENT (3000).',
+          notes:
+            'This is an INDIVIDUAL MINIFIGURE listing, NOT a set. Keep the description very short and lean — max 80 words. Do NOT include "What\'s Included" lists, "Perfect For" sections, or "Authenticity Guaranteed" sections. Just state what it is, its condition briefly ("Used, complete - in excellent condition"), and one short paragraph of appeal. Use category 263012 (LEGO Minifigures leaf category). Use condition USED_EXCELLENT (3000).',
         },
         { style: 'Minimalist', price }
       );
@@ -277,7 +297,10 @@ export class ListingStagingService {
       if (sourced.length > 0) {
         await this.supabase
           .from('minifig_sync_items')
-          .update({ images: sourced as unknown as Database['public']['Tables']['minifig_sync_items']['Update']['images'] })
+          .update({
+            images:
+              sourced as unknown as Database['public']['Tables']['minifig_sync_items']['Update']['images'],
+          })
           .eq('id', item.id);
         // Update local reference for getImageUrls below
         (item as Record<string, unknown>).images = sourced;
@@ -394,7 +417,10 @@ export class ListingStagingService {
         await ebayAdapter.updateOffer(knownOfferId, offer);
         return knownOfferId;
       } catch (err) {
-        console.warn(`[ListingStagingService] Failed to update known offer ${knownOfferId}:`, err instanceof Error ? err.message : err);
+        console.warn(
+          `[ListingStagingService] Failed to update known offer ${knownOfferId}:`,
+          err instanceof Error ? err.message : err
+        );
         // Offer might have been deleted on eBay — fall through to create/query
       }
     }
@@ -403,7 +429,9 @@ export class ListingStagingService {
     const existingOffers = await ebayAdapter.getOffersBySku(sku);
     if (existingOffers.length > 0) {
       const existingId = existingOffers[0].offerId;
-      console.log(`[ListingStagingService] Found existing offer ${existingId} for SKU ${sku}, updating`);
+      console.log(
+        `[ListingStagingService] Found existing offer ${existingId} for SKU ${sku}, updating`
+      );
       await ebayAdapter.updateOffer(existingId, offer);
       return existingId;
     }

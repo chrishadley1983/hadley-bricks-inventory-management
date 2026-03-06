@@ -1,19 +1,8 @@
 'use client';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Package,
-  Archive,
-  AlertTriangle,
-  Clock,
-  Store,
-} from 'lucide-react';
+import { Package, Archive, AlertTriangle, Clock, Store } from 'lucide-react';
 import type { ShopifySyncStatus } from '@/hooks/use-shopify-sync';
 
 interface ShopifySyncSummaryProps {
@@ -46,9 +35,7 @@ export function ShopifySyncSummary({ status }: ShopifySyncSummaryProps) {
           <Package className="h-4 w-4 text-green-600" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-green-600">
-            {status.active}
-          </div>
+          <div className="text-2xl font-bold text-green-600">{status.active}</div>
         </CardContent>
       </Card>
 
@@ -58,9 +45,7 @@ export function ShopifySyncSummary({ status }: ShopifySyncSummaryProps) {
           <Archive className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-muted-foreground">
-            {status.archived}
-          </div>
+          <div className="text-2xl font-bold text-muted-foreground">{status.archived}</div>
         </CardContent>
       </Card>
 

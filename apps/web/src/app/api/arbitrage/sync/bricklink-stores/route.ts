@@ -56,10 +56,7 @@ export async function POST(request: NextRequest) {
         // Determine which sets to scrape
         let setNumbers = parsed.data.setNumbers;
         if (!setNumbers || setNumbers.length === 0) {
-          setNumbers = await service.getPromisingSetNumbers(
-            user.id,
-            parsed.data.minMarginPercent
-          );
+          setNumbers = await service.getPromisingSetNumbers(user.id, parsed.data.minMarginPercent);
         }
 
         await writer.write(
@@ -134,16 +131,24 @@ export async function POST(request: NextRequest) {
         console.error('[POST /api/arbitrage/sync/bricklink-stores] Error:', error);
 
         // Update sync status to failed
-        await arbitrageService.updateSyncStatus(user.id, 'bricklink_store_scrape', {
-          status: 'failed',
-          errorMessage: message,
-        }).catch(() => {/* ignore status update errors */});
+        await arbitrageService
+          .updateSyncStatus(user.id, 'bricklink_store_scrape', {
+            status: 'failed',
+            errorMessage: message,
+          })
+          .catch(() => {
+            /* ignore status update errors */
+          });
 
         await writer.write(
           encoder.encode(`data: ${JSON.stringify({ type: 'error', message })}\n\n`)
         );
       } finally {
-        try { await writer.close(); } catch { /* client may have disconnected */ }
+        try {
+          await writer.close();
+        } catch {
+          /* client may have disconnected */
+        }
       }
     })();
 

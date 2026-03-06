@@ -19,10 +19,7 @@ function roundToX99(price: number): number {
  * @param discountPct - Percentage discount for direct sales (default 10%)
  * @returns Price and compare_at_price for Shopify
  */
-export function calculateShopifyPrice(
-  listingValue: number,
-  discountPct = 10
-): PriceResult {
+export function calculateShopifyPrice(listingValue: number, discountPct = 10): PriceResult {
   if (!listingValue || listingValue <= 0) {
     return { price: 0, compare_at_price: null };
   }

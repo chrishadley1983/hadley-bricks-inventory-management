@@ -7,9 +7,7 @@ import type { ImageResolutionResult, ResolvedImage, EbayListingData } from './ty
  * Uses client credentials (no user auth needed).
  * Returns null if the listing can't be fetched.
  */
-export async function fetchEbayListing(
-  ebayListingId: string
-): Promise<EbayListingData | null> {
+export async function fetchEbayListing(ebayListingId: string): Promise<EbayListingData | null> {
   const clientId = process.env.EBAY_CLIENT_ID;
   const clientSecret = process.env.EBAY_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -81,9 +79,30 @@ export async function fetchEbayListing(
 // ── Minifigure detection ──────────────────────────────────
 
 const MINIFIG_PREFIXES = [
-  'sw', 'col', 'coltlbm', 'coltlnm', 'colhp', 'colmar', 'coldis',
-  'colsh', 'coltgb', 'fig', 'gen', 'hp', 'iaj', 'jw', 'loc', 'lor',
-  'njo', 'poc', 'pot', 'sh', 'scd', 'tnt', 'tlm', 'sim',
+  'sw',
+  'col',
+  'coltlbm',
+  'coltlnm',
+  'colhp',
+  'colmar',
+  'coldis',
+  'colsh',
+  'coltgb',
+  'fig',
+  'gen',
+  'hp',
+  'iaj',
+  'jw',
+  'loc',
+  'lor',
+  'njo',
+  'poc',
+  'pot',
+  'sh',
+  'scd',
+  'tnt',
+  'tlm',
+  'sim',
 ];
 
 function isMinifigure(item: { set_number: string | null; item_name: string | null }): boolean {
@@ -162,8 +181,9 @@ export async function resolveImages(
         // Shopify can't fetch from BrickLink directly, so we download and upload as base64
         // BrickLink expects zero-padded 4-digit numbers, e.g. njo0208 not njo208
         const lower = item.set_number.toLowerCase();
-        const zeroPadded = lower.replace(/(\D+)(\d+)/, (_m, prefix, num) =>
-          `${prefix}${(num as string).padStart(4, '0')}`
+        const zeroPadded = lower.replace(
+          /(\D+)(\d+)/,
+          (_m, prefix, num) => `${prefix}${(num as string).padStart(4, '0')}`
         );
 
         const minifigCandidates = [
@@ -253,7 +273,11 @@ function extractEbayImageUrls(rawData: Record<string, unknown>): string[] {
   }
   if (Array.isArray(rawData.additionalImages)) {
     for (const img of rawData.additionalImages) {
-      if (typeof img === 'object' && img && typeof (img as Record<string, unknown>).imageUrl === 'string') {
+      if (
+        typeof img === 'object' &&
+        img &&
+        typeof (img as Record<string, unknown>).imageUrl === 'string'
+      ) {
         urls.push((img as Record<string, unknown>).imageUrl as string);
       }
     }
@@ -341,8 +365,10 @@ async function getBricksetGalleryImages(setNumber: string): Promise<string[]> {
 
   const candidates = [
     `https://images.brickset.com/sets/AdditionalImages/${baseSet}/${numOnly}_main.jpg`,
-    ...Array.from({ length: 7 }, (_, i) =>
-      `https://images.brickset.com/sets/AdditionalImages/${baseSet}/${numOnly}_alt${i + 1}.jpg`
+    ...Array.from(
+      { length: 7 },
+      (_, i) =>
+        `https://images.brickset.com/sets/AdditionalImages/${baseSet}/${numOnly}_alt${i + 1}.jpg`
     ),
   ];
 
@@ -417,9 +443,7 @@ async function isUrlAccessible(url: string): Promise<boolean> {
  * Backfill ebay_listing_id from platform_listings for items missing it.
  * Run once before initial sync.
  */
-export async function backfillEbayListingIds(
-  supabase: SupabaseClient<Database>
-): Promise<number> {
+export async function backfillEbayListingIds(supabase: SupabaseClient<Database>): Promise<number> {
   const { data, error } = await supabase.rpc('backfill_ebay_listing_ids' as never);
 
   if (error) {

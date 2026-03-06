@@ -62,7 +62,8 @@ export function ArbitrageDetailModal({
   }, [item?.asin, item?.blMinPrice, item?.minBlPriceOverride]);
 
   // Parse override value
-  const overrideValue = overrideInput && !isNaN(parseFloat(overrideInput)) ? parseFloat(overrideInput) : null;
+  const overrideValue =
+    overrideInput && !isNaN(parseFloat(overrideInput)) ? parseFloat(overrideInput) : null;
   const hasOverrideChanged = (overrideValue ?? null) !== (item?.minBlPriceOverride ?? null);
 
   // Handle saving override

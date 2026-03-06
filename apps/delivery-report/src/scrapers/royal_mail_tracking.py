@@ -100,34 +100,66 @@ def _extract_status(page: Page, tracking: str) -> dict:
     """Extract tracking status from the RM tracking page."""
     text = page.inner_text("body").lower()
 
+    # Check for Akamai challenge / blocked page
+    if len(text) < 100 or "access denied" in text or "enable javascript" in text:
+        log.debug("Short/blocked page text for %s, waiting extra 3s", tracking)
+        time.sleep(3)
+        text = page.inner_text("body").lower()
+        if len(text) < 100:
+            return {"rm_status": "Unknown", "rm_delivery_date": None}
+
     # Check for data expiry
     if "unable to confirm the status" in text or "tracking information not available" in text:
         return {"rm_status": "RM data expired", "rm_delivery_date": None}
 
-    # Check for delivered
-    if "delivered" in text:
-        delivery_date = _extract_date(page)
-        return {"rm_status": "Delivered", "rm_delivery_date": delivery_date}
+    # Try the main status heading first (most reliable)
+    heading_status = _extract_status_heading(page)
+    if heading_status:
+        if heading_status == "delivered":
+            return {"rm_status": "Delivered", "rm_delivery_date": _extract_date(page)}
+        if heading_status == "in transit":
+            return {"rm_status": "In transit", "rm_delivery_date": None}
+        if heading_status == "ready for delivery":
+            return {"rm_status": "Ready for Delivery", "rm_delivery_date": None}
 
-    # Check for in-transit statuses
-    if "ready for delivery" in text:
-        return {"rm_status": "Ready for Delivery", "rm_delivery_date": None}
+    # Fallback: body text — check non-delivered statuses FIRST to avoid
+    # false positives from "delivered" appearing in page boilerplate
     if "in transit" in text:
         return {"rm_status": "In transit", "rm_delivery_date": None}
+    if "ready for delivery" in text:
+        return {"rm_status": "Ready for Delivery", "rm_delivery_date": None}
     if "we have your item" in text:
         return {"rm_status": "We have your item", "rm_delivery_date": None}
     if "item dispatched" in text:
         return {"rm_status": "Item dispatched", "rm_delivery_date": None}
 
-    # If we got page text but couldn't identify status, retry once
-    if len(text) < 100:
-        log.debug("Short page text for %s, waiting extra 3s", tracking)
-        time.sleep(3)
-        text = page.inner_text("body").lower()
-        if "delivered" in text:
-            return {"rm_status": "Delivered", "rm_delivery_date": _extract_date(page)}
+    # Check for delivered last (avoids false positives from boilerplate)
+    if "delivered" in text:
+        delivery_date = _extract_date(page)
+        return {"rm_status": "Delivered", "rm_delivery_date": delivery_date}
 
     return {"rm_status": "Unknown", "rm_delivery_date": None}
+
+
+KNOWN_STATUSES = {"delivered", "in transit", "ready for delivery"}
+
+
+def _extract_status_heading(page: Page) -> str | None:
+    """Try to extract the main status heading from the RM tracking page.
+
+    The RM Angular SPA renders the status as a prominent heading (h1/h2).
+    Returns the normalised status string, or None if not found.
+    """
+    for selector in ["h1", "h2", "h3", "[class*='status']"]:
+        try:
+            elements = page.locator(selector)
+            for i in range(min(elements.count(), 5)):
+                text = elements.nth(i).inner_text().strip().lower()
+                if text in KNOWN_STATUSES:
+                    return text
+        except Exception:
+            continue
+    return None
 
 
 def _extract_date(page: Page) -> str | None:

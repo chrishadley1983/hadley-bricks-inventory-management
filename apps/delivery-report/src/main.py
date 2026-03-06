@@ -100,6 +100,7 @@ def main() -> None:
         from src.report.otdr import (
             build_all_orders_list,
             calculate_otdr,
+            compute_e2e_stats,
             compute_summary_stats,
             get_late_orders_with_dropoff,
             project_90_percent,
@@ -122,6 +123,7 @@ def main() -> None:
         otdr_90 = project_90_percent(final_orders, today)
         late_orders = get_late_orders_with_dropoff(final_orders, today)
         all_orders_list = build_all_orders_list(final_orders)
+        e2e_stats = compute_e2e_stats(final_orders)
 
         email_html = build_email_body(
             date_str=date_str,
@@ -142,6 +144,11 @@ def main() -> None:
             otdr_90_pct=otdr_90["pct"],
             otdr_90_window=otdr_90["window_str"],
             late_orders=late_orders,
+            e2e_expected_days=e2e_stats["avg_expected_days"],
+            e2e_actual_days=e2e_stats["avg_actual_days"],
+            e2e_delta_days=e2e_stats["avg_delta_days"],
+            e2e_sample_size=e2e_stats["sample_size"],
+            e2e_period_str=e2e_stats["period_str"],
         )
 
         full_html = build_full_report(
@@ -164,6 +171,11 @@ def main() -> None:
             otdr_90_window=otdr_90["window_str"],
             late_orders=late_orders,
             all_orders=all_orders_list,
+            e2e_expected_days=e2e_stats["avg_expected_days"],
+            e2e_actual_days=e2e_stats["avg_actual_days"],
+            e2e_delta_days=e2e_stats["avg_delta_days"],
+            e2e_sample_size=e2e_stats["sample_size"],
+            e2e_period_str=e2e_stats["period_str"],
         )
 
         pdf_bytes = html_to_pdf(full_html)

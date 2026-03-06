@@ -240,6 +240,61 @@ def build_all_orders_list(orders: list[dict]) -> list[dict]:
     return result
 
 
+def compute_e2e_stats(orders: list[dict]) -> dict:
+    """
+    Compute end-to-end delivery timeline stats.
+
+    Returns avg days for order→expected, order→actual, and the delta.
+    Only includes delivered orders with both expected_delivery and rm_delivery_date.
+    """
+    samples = []
+    order_dates: list[date] = []
+    for order in orders:
+        status = (order.get("rm_status") or "").lower()
+        if "delivered" not in status:
+            continue
+
+        order_dt = _parse_date(order.get("order_date"))
+        expected = _parse_date(order.get("expected_delivery"))
+        actual = _parse_date(order.get("rm_delivery_date"))
+
+        if not (order_dt and expected and actual):
+            continue
+
+        expected_days = (expected - order_dt).days
+        actual_days = (actual - order_dt).days
+        delta_days = actual_days - expected_days
+
+        samples.append({
+            "expected_days": expected_days,
+            "actual_days": actual_days,
+            "delta_days": delta_days,
+        })
+        order_dates.append(order_dt)
+
+    if not samples:
+        return {
+            "avg_expected_days": 0.0,
+            "avg_actual_days": 0.0,
+            "avg_delta_days": 0.0,
+            "sample_size": 0,
+            "period_str": "N/A",
+        }
+
+    n = len(samples)
+    earliest = min(order_dates)
+    latest = max(order_dates)
+    period_str = f"{earliest.strftime('%d %b')} \u2013 {latest.strftime('%d %b %Y')}"
+
+    return {
+        "avg_expected_days": round(sum(s["expected_days"] for s in samples) / n, 1),
+        "avg_actual_days": round(sum(s["actual_days"] for s in samples) / n, 1),
+        "avg_delta_days": round(sum(s["delta_days"] for s in samples) / n, 1),
+        "sample_size": n,
+        "period_str": period_str,
+    }
+
+
 def _parse_date(val) -> date | None:
     if val is None:
         return None

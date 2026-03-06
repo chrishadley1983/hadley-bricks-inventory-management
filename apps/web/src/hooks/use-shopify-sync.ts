@@ -126,7 +126,12 @@ async function processQueue(batchSize?: number): Promise<BatchSyncSummary> {
 }
 
 async function updateConfig(
-  updates: Partial<Pick<ShopifyConfig, 'sync_enabled' | 'auto_sync_new_listings' | 'default_discount_pct' | 'location_id'>>
+  updates: Partial<
+    Pick<
+      ShopifyConfig,
+      'sync_enabled' | 'auto_sync_new_listings' | 'default_discount_pct' | 'location_id'
+    >
+  >
 ): Promise<ShopifyConfig> {
   const res = await fetch('/api/shopify-sync/config', {
     method: 'PATCH',

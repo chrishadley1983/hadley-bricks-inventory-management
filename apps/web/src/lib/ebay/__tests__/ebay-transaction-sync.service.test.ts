@@ -791,16 +791,14 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi
-                        .fn()
-                        .mockResolvedValue({
-                          data: {
-                            status: 'COMPLETED',
-                            completed_at: '2024-01-15T10:00:00Z',
-                            records_processed: 100,
-                          },
-                          error: null,
-                        }),
+                      single: vi.fn().mockResolvedValue({
+                        data: {
+                          status: 'COMPLETED',
+                          completed_at: '2024-01-15T10:00:00Z',
+                          records_processed: 100,
+                        },
+                        error: null,
+                      }),
                     }),
                   }),
                 }),
@@ -817,16 +815,14 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi
-                        .fn()
-                        .mockResolvedValue({
-                          data: {
-                            status: 'COMPLETED',
-                            completed_at: '2024-01-15T10:00:00Z',
-                            records_processed: 20,
-                          },
-                          error: null,
-                        }),
+                      single: vi.fn().mockResolvedValue({
+                        data: {
+                          status: 'COMPLETED',
+                          completed_at: '2024-01-15T10:00:00Z',
+                          records_processed: 20,
+                        },
+                        error: null,
+                      }),
                     }),
                   }),
                 }),
@@ -839,12 +835,10 @@ describe('EbayTransactionSyncService', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi
-                .fn()
-                .mockResolvedValue({
-                  data: { auto_sync_enabled: true, historical_import_completed_at: '2024-01-01' },
-                  error: null,
-                }),
+              single: vi.fn().mockResolvedValue({
+                data: { auto_sync_enabled: true, historical_import_completed_at: '2024-01-01' },
+                error: null,
+              }),
             }),
           }),
         };
@@ -951,16 +945,14 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi
-                        .fn()
-                        .mockResolvedValue({
-                          data: {
-                            status: 'COMPLETED',
-                            completed_at: completedAt,
-                            records_processed: 100,
-                          },
-                          error: null,
-                        }),
+                      single: vi.fn().mockResolvedValue({
+                        data: {
+                          status: 'COMPLETED',
+                          completed_at: completedAt,
+                          records_processed: 100,
+                        },
+                        error: null,
+                      }),
                     }),
                   }),
                 }),
@@ -977,16 +969,14 @@ describe('EbayTransactionSyncService', () => {
                 eq: vi.fn().mockReturnValue({
                   order: vi.fn().mockReturnValue({
                     limit: vi.fn().mockReturnValue({
-                      single: vi
-                        .fn()
-                        .mockResolvedValue({
-                          data: {
-                            status: 'FAILED',
-                            completed_at: completedAt,
-                            records_processed: 0,
-                          },
-                          error: null,
-                        }),
+                      single: vi.fn().mockResolvedValue({
+                        data: {
+                          status: 'FAILED',
+                          completed_at: completedAt,
+                          records_processed: 0,
+                        },
+                        error: null,
+                      }),
                     }),
                   }),
                 }),

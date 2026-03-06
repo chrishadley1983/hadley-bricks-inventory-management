@@ -69,16 +69,14 @@ export class BrickLinkStoreExclusionService {
    * Exclude a store from deal finder results.
    */
   async excludeStore(userId: string, storeName: string, reason?: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('excluded_bricklink_stores')
-      .upsert(
-        {
-          user_id: userId,
-          store_name: storeName,
-          reason: reason ?? null,
-        },
-        { onConflict: 'user_id,store_name' }
-      );
+    const { error } = await this.supabase.from('excluded_bricklink_stores').upsert(
+      {
+        user_id: userId,
+        store_name: storeName,
+        reason: reason ?? null,
+      },
+      { onConflict: 'user_id,store_name' }
+    );
 
     if (error) {
       console.error('[BrickLinkStoreExclusionService.excludeStore] Error:', error);

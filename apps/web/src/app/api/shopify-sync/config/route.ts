@@ -33,10 +33,7 @@ export async function GET() {
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: 'Shopify not configured' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Shopify not configured' }, { status: 404 });
     }
 
     return NextResponse.json({ data });
@@ -81,10 +78,7 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: 'Failed to update config' },
-        { status: 422 }
-      );
+      return NextResponse.json({ error: 'Failed to update config' }, { status: 422 });
     }
 
     return NextResponse.json({ data });

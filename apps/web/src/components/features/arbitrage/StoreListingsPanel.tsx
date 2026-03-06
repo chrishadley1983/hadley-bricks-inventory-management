@@ -101,11 +101,7 @@ export function StoreListingsPanel({ setNumber }: StoreListingsPanelProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-          >
+          <Button variant="outline" size="sm" asChild>
             <a
               href={buildBricklinkUrl(setNumber)}
               target="_blank"
@@ -170,9 +166,7 @@ export function StoreListingsPanel({ setNumber }: StoreListingsPanelProps) {
                 <TableCell className="text-right font-mono text-sm">
                   {formatCurrency(listing.unitPrice, listing.currencyCode)}
                 </TableCell>
-                <TableCell className="text-right text-sm">
-                  {listing.quantity}
-                </TableCell>
+                <TableCell className="text-right text-sm">{listing.quantity}</TableCell>
                 <TableCell className="text-right text-sm text-muted-foreground">
                   {listing.minBuy ? formatCurrency(listing.minBuy, listing.currencyCode) : '-'}
                 </TableCell>
@@ -232,7 +226,8 @@ export function StoreListingsPanel({ setNumber }: StoreListingsPanelProps) {
       {excludedListings.length > 0 && (
         <div className="pt-2 border-t">
           <p className="text-xs text-muted-foreground mb-1">
-            {excludedListings.length} excluded store{excludedListings.length !== 1 ? 's' : ''} hidden
+            {excludedListings.length} excluded store{excludedListings.length !== 1 ? 's' : ''}{' '}
+            hidden
           </p>
         </div>
       )}

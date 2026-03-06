@@ -2,7 +2,7 @@
 Arbor email notification monitor: parses Arbor notification emails from Gmail
 for messages, payment reminders, consent requests, and attendance.
 
-Sends Pushover alerts for urgent items (consent deadlines, payment due).
+Sends WhatsApp alerts for urgent items (consent deadlines, payment due).
 Since Arbor has no parent API, we rely on email notifications as the data source.
 
 Run daily or as part of the weekly orchestrator.
@@ -18,26 +18,8 @@ import requests
 sys.path.insert(0, os.path.dirname(__file__))
 from config import (
     SUPABASE_URL, SUPABASE_KEY, ANTHROPIC_API_KEY,
-    PUSHOVER_USER_KEY, PUSHOVER_API_TOKEN
+    send_whatsapp,
 )
-
-
-def send_pushover(title: str, message: str, priority: int = 0):
-    """Send a Pushover notification."""
-    if not PUSHOVER_USER_KEY or not PUSHOVER_API_TOKEN:
-        print(f"[Pushover not configured] {title}: {message}")
-        return
-    try:
-        requests.post("https://api.pushover.net/1/messages.json", data={
-            "token": PUSHOVER_API_TOKEN,
-            "user": PUSHOVER_USER_KEY,
-            "title": title,
-            "message": message,
-            "priority": priority,
-        })
-        print(f"[Pushover sent] {title}")
-    except Exception as e:
-        print(f"Pushover error: {e}")
 
 
 def parse_arbor_email_with_claude(subject: str, body: str, sender: str) -> dict:
@@ -167,11 +149,11 @@ def main():
                 alert_msg += f"\nDeadline: {parsed['deadline']}"
             urgent_alerts.append({"title": f"School ({child})", "message": alert_msg})
 
-    # Send Pushover for urgent items
+    # Send WhatsApp for urgent items
     if urgent_alerts:
         print(f"\nSending {len(urgent_alerts)} urgent alert(s)...")
         for alert in urgent_alerts:
-            send_pushover(alert["title"], alert["message"], priority=0)
+            send_whatsapp(alert["title"], alert["message"], priority=0)
     else:
         print("\nNo urgent items requiring attention.")
 

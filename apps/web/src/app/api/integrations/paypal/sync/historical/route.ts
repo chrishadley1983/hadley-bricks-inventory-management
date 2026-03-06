@@ -4,11 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { paypalTransactionSyncService } from '@/lib/paypal';
 
 const HistoricalSyncSchema = z.object({
-  fromDate: z
-    .string()
-    .refine((date) => !isNaN(Date.parse(date)), {
-      message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-01)',
-    }),
+  fromDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
+    message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-01)',
+  }),
 });
 
 /**

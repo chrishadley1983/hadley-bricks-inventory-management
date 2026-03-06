@@ -53,18 +53,15 @@ export class ShopifyClient {
       return this.accessToken;
     }
 
-    const res = await fetch(
-      `https://${this.shopDomain}/admin/oauth/access_token`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-        }),
-      }
-    );
+    const res = await fetch(`https://${this.shopDomain}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+      }),
+    });
 
     if (!res.ok) {
       const text = await res.text();
@@ -122,19 +119,13 @@ export class ShopifyClient {
         await sleep(delay);
         return this.request<T>(method, path, body, attempt + 1);
       }
-      throw new RetryableError(
-        `Shopify server error after ${attempt} attempts`,
-        response.status
-      );
+      throw new RetryableError(`Shopify server error after ${attempt} attempts`, response.status);
     }
 
     // Validation error — don't retry
     if (response.status === 422) {
       const error = await response.json();
-      throw new ShopifyValidationError(
-        `Shopify validation error: ${JSON.stringify(error)}`,
-        error
-      );
+      throw new ShopifyValidationError(`Shopify validation error: ${JSON.stringify(error)}`, error);
     }
 
     // Not found
@@ -143,7 +134,10 @@ export class ShopifyClient {
     }
 
     // No content (e.g. DELETE)
-    if (response.status === 204 || response.status === 200 && response.headers.get('content-length') === '0') {
+    if (
+      response.status === 204 ||
+      (response.status === 200 && response.headers.get('content-length') === '0')
+    ) {
       return {} as T;
     }
 
@@ -169,11 +163,9 @@ export class ShopifyClient {
     productId: string,
     payload: Partial<ShopifyProductPayload['product']>
   ): Promise<ShopifyProductResponse> {
-    return this.request<ShopifyProductResponse>(
-      'PUT',
-      `/products/${productId}.json`,
-      { product: payload }
-    );
+    return this.request<ShopifyProductResponse>('PUT', `/products/${productId}.json`, {
+      product: payload,
+    });
   }
 
   async archiveProduct(productId: string): Promise<ShopifyProductResponse> {
@@ -221,11 +213,7 @@ export class ShopifyClient {
     return this.request('GET', '/themes.json');
   }
 
-  async putAsset(
-    themeId: string,
-    key: string,
-    value: string
-  ): Promise<unknown> {
+  async putAsset(themeId: string, key: string, value: string): Promise<unknown> {
     return this.request('PUT', `/themes/${themeId}/assets.json`, {
       asset: { key, value },
     });
@@ -236,7 +224,10 @@ export class ShopifyClient {
     key: string
   ): Promise<{ asset: { key: string; value: string } } | null> {
     try {
-      return await this.request('GET', `/themes/${themeId}/assets.json?asset[key]=${encodeURIComponent(key)}`);
+      return await this.request(
+        'GET',
+        `/themes/${themeId}/assets.json?asset[key]=${encodeURIComponent(key)}`
+      );
     } catch {
       return null;
     }
@@ -245,10 +236,7 @@ export class ShopifyClient {
   // ── GraphQL ───────────────────────────────────────────────
 
   /** Make an authenticated GraphQL request to the Shopify Admin API */
-  async graphql<T = unknown>(
-    query: string,
-    variables?: Record<string, unknown>
-  ): Promise<T> {
+  async graphql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const token = await this.getToken();
     await this.waitForBucket();
 

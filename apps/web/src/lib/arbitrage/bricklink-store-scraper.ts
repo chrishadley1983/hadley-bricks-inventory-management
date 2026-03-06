@@ -47,13 +47,15 @@ export class BrickLinkStoreScraper {
    */
   async scrapeListings(setNumber: string): Promise<StoreListingRow[]> {
     if (!existsSync(PROFILE_DIR)) {
-      throw new Error(
-        'BrickLink browser profile not found. Run `npm run bricklink:login` first.'
-      );
+      throw new Error('BrickLink browser profile not found. Run `npm run bricklink:login` first.');
     }
 
     // Restrict profile directory permissions (owner-only) to protect session cookies
-    try { chmodSync(PROFILE_DIR, 0o700); } catch { /* Windows ignores chmod */ }
+    try {
+      chmodSync(PROFILE_DIR, 0o700);
+    } catch {
+      /* Windows ignores chmod */
+    }
 
     const { chromium } = await import('playwright');
 
@@ -85,12 +87,14 @@ export class BrickLinkStoreScraper {
     onProgress?: (processed: number, total: number) => void
   ): Promise<Map<string, StoreListingRow[]>> {
     if (!existsSync(PROFILE_DIR)) {
-      throw new Error(
-        'BrickLink browser profile not found. Run `npm run bricklink:login` first.'
-      );
+      throw new Error('BrickLink browser profile not found. Run `npm run bricklink:login` first.');
     }
 
-    try { chmodSync(PROFILE_DIR, 0o700); } catch { /* Windows ignores chmod */ }
+    try {
+      chmodSync(PROFILE_DIR, 0o700);
+    } catch {
+      /* Windows ignores chmod */
+    }
 
     const { chromium } = await import('playwright');
     const results = new Map<string, StoreListingRow[]>();
@@ -179,9 +183,7 @@ export class BrickLinkStoreScraper {
    * The v2 catalog page renders listings in a table within #_idTabContentsS.
    * Each row contains: store name, price, quantity, country, min buy, feedback.
    */
-  private async extractListings(
-    page: import('playwright').Page
-  ): Promise<StoreListingRow[]> {
+  private async extractListings(page: import('playwright').Page): Promise<StoreListingRow[]> {
     const data = await page.evaluate(() => {
       const rows: Array<{
         storeName: string;
@@ -208,9 +210,7 @@ export class BrickLinkStoreScraper {
 
       // If no structured table found, try the alternative layout
       const allRows =
-        tableRows.length > 0
-          ? tableRows
-          : tabContent.querySelectorAll('[id^="itemTableRow"]');
+        tableRows.length > 0 ? tableRows : tabContent.querySelectorAll('[id^="itemTableRow"]');
 
       for (const row of allRows) {
         try {
@@ -299,9 +299,7 @@ export class BrickLinkStoreScraper {
           // Ships to UK indicator - check class names and data attributes
           // rather than computed styles (which return rgb() values)
           let shipsToUk: boolean | null = null;
-          const shipIndicator = row.querySelector(
-            '.ship-indicator, [title*="ship"], [data-ship]'
-          );
+          const shipIndicator = row.querySelector('.ship-indicator, [title*="ship"], [data-ship]');
           if (shipIndicator) {
             // Check for explicit class-based indicators
             if (
@@ -322,9 +320,7 @@ export class BrickLinkStoreScraper {
             const greenIndicator = row.querySelector(
               '[style*="green"], .text-green, .bg-green, [style*="#00"], [style*="rgb(0"]'
             );
-            const redIndicator = row.querySelector(
-              '[style*="red"], .text-red, .bg-red'
-            );
+            const redIndicator = row.querySelector('[style*="red"], .text-red, .bg-red');
             if (greenIndicator) shipsToUk = true;
             else if (redIndicator) shipsToUk = false;
           }
