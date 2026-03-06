@@ -50,17 +50,7 @@ export async function enhanceMinifigPhoto(imageBlob: Blob): Promise<Blob> {
   // Center the cropped region
   const offsetX = Math.round((side - finalW) / 2);
   const offsetY = Math.round((side - finalH) / 2);
-  outCtx.drawImage(
-    canvas,
-    padLeft,
-    padTop,
-    finalW,
-    finalH,
-    offsetX,
-    offsetY,
-    finalW,
-    finalH
-  );
+  outCtx.drawImage(canvas, padLeft, padTop, finalW, finalH, offsetX, offsetY, finalW, finalH);
 
   return new Promise<Blob>((resolve, reject) => {
     outCanvas.toBlob(

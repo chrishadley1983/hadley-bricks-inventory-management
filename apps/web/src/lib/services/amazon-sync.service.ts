@@ -266,12 +266,7 @@ export class AmazonSyncService {
       }
 
       // Verify dispatch orders haven't shipped outside the sync window
-      await this.verifyDispatchOrderStatuses(
-        userId,
-        client,
-        options.includeItems ?? false,
-        result
-      );
+      await this.verifyDispatchOrderStatuses(userId, client, options.includeItems ?? false, result);
 
       result.success = result.errors.length === 0;
       console.log('[AmazonSyncService] Sync completed:', {
@@ -333,8 +328,8 @@ export class AmazonSyncService {
     const dispatchStatuses = ['Unshipped', 'PartiallyShipped'];
     const needsItemsForDispatch = dispatchStatuses.includes(orderSummary.OrderStatus);
     const terminalStatuses = ['Canceled', 'Cancelled/Refunded'];
-    const needsItemsBackfill = existing?.items_count === 0
-      && !terminalStatuses.includes(orderSummary.OrderStatus);
+    const needsItemsBackfill =
+      existing?.items_count === 0 && !terminalStatuses.includes(orderSummary.OrderStatus);
 
     if (needsItemsBackfill) {
       console.log(
@@ -351,11 +346,7 @@ export class AmazonSyncService {
       const items = await client.getOrderItems(orderId);
       normalized = normalizeOrder(orderSummary, items);
       if (!includeItems) {
-        const reason = isNewOrder
-          ? 'new order'
-          : needsItemsBackfill
-            ? 'backfill'
-            : 'dispatch';
+        const reason = isNewOrder ? 'new order' : needsItemsBackfill ? 'backfill' : 'dispatch';
         console.log(
           `[AmazonSyncService] Fetched items for ${reason} order ${orderId} (status: ${orderSummary.OrderStatus})`
         );
@@ -475,7 +466,7 @@ export class AmazonSyncService {
         if (!activeAmazonStatuses.includes(order.OrderStatus)) {
           console.log(
             `[AmazonSyncService] Dispatch order ${dispatchOrder.platform_order_id} ` +
-            `actually has status ${order.OrderStatus} — updating`
+              `actually has status ${order.OrderStatus} — updating`
           );
 
           const { isNew } = await this.processOrder(userId, client, order, includeItems);

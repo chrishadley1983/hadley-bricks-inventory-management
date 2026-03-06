@@ -2,25 +2,10 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  RefreshCw,
-  Play,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-} from 'lucide-react';
-import {
-  useRunBatchSync,
-  useProcessSyncQueue,
-} from '@/hooks/use-shopify-sync';
+import { RefreshCw, Play, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useRunBatchSync, useProcessSyncQueue } from '@/hooks/use-shopify-sync';
 import type { BatchSyncSummary } from '@/hooks/use-shopify-sync';
 
 export function ShopifySyncControls() {
@@ -53,16 +38,11 @@ export function ShopifySyncControls() {
     <Card>
       <CardHeader>
         <CardTitle>Sync Controls</CardTitle>
-        <CardDescription>
-          Push products to Shopify and process the sync queue
-        </CardDescription>
+        <CardDescription>Push products to Shopify and process the sync queue</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={handleBatchSync}
-            disabled={isRunning}
-          >
+          <Button onClick={handleBatchSync} disabled={isRunning}>
             {batchSync.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -71,11 +51,7 @@ export function ShopifySyncControls() {
             Run Batch Sync
           </Button>
 
-          <Button
-            variant="outline"
-            onClick={handleProcessQueue}
-            disabled={isRunning}
-          >
+          <Button variant="outline" onClick={handleProcessQueue} disabled={isRunning}>
             {processQueue.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

@@ -244,9 +244,7 @@ async function fetchEbayOrders(
 }
 
 // Transform eBay order to PlatformOrder-like format for display
-function transformEbayOrderForDisplay(
-  ebayOrder: EbayOrder
-): PlatformOrder & {
+function transformEbayOrderForDisplay(ebayOrder: EbayOrder): PlatformOrder & {
   order_items?: Array<{
     id: string;
     item_name: string | null;

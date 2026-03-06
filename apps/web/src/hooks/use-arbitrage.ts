@@ -97,7 +97,9 @@ async function fetchArbitrageData(
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch arbitrage data (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -111,7 +113,9 @@ async function fetchArbitrageItem(asin: string): Promise<ArbitrageItem> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch item (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -125,7 +129,9 @@ async function fetchExcludedAsins(): Promise<ExcludedAsin[]> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch excluded ASINs (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -139,7 +145,9 @@ async function fetchUnmappedAsins(): Promise<UnmappedResponse> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch unmapped ASINs (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -153,7 +161,9 @@ async function fetchSyncStatus(): Promise<SyncStatusResponse> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch sync status (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -171,7 +181,9 @@ async function fetchSummary(minMargin?: number, maxCog?: number): Promise<Summar
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to fetch summary (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -193,7 +205,9 @@ async function excludeAsin(input: { asin: string; reason?: string }): Promise<vo
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to exclude ASIN (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 }
@@ -208,7 +222,9 @@ async function restoreAsin(asin: string): Promise<void> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to restore ASIN (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 }
@@ -226,7 +242,9 @@ async function setBlPriceOverride(input: {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to set BL price override (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -248,7 +266,9 @@ async function createMapping(input: { asin: string; bricklinkSetNumber: string }
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to create mapping (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -266,7 +286,9 @@ async function deleteMapping(asin: string): Promise<void> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to delete mapping (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 }
@@ -281,7 +303,9 @@ async function triggerSync(jobType: SyncJobType | 'all'): Promise<SyncResult> {
   if (!response.ok) {
     const text = await response.text();
     let msg = `Failed to trigger sync (${response.status})`;
-    try { msg = JSON.parse(text).error || msg; } catch {}
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {}
     throw new Error(msg);
   }
 
@@ -495,7 +519,9 @@ function createStreamingSyncMutation(
     if (!response.ok) {
       const text = await response.text();
       let msg = `Failed to start sync (${response.status})`;
-      try { msg = JSON.parse(text).error || msg; } catch {}
+      try {
+        msg = JSON.parse(text).error || msg;
+      } catch {}
       throw new Error(msg);
     }
 
@@ -841,7 +867,9 @@ export function useScrapeStoreListings() {
       if (!response.ok) {
         const text = await response.text();
         let msg = `Failed to scrape store listings (${response.status})`;
-        try { msg = JSON.parse(text).error || msg; } catch {}
+        try {
+          msg = JSON.parse(text).error || msg;
+        } catch {}
         throw new Error(msg);
       }
       return response.json();

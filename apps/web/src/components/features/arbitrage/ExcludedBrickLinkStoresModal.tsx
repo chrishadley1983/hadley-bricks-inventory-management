@@ -102,9 +102,7 @@ export function ExcludedBrickLinkStoresModal({
           ) : filteredStores.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Store className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">
-                {search ? 'No matching stores' : 'No excluded stores'}
-              </p>
+              <p className="text-sm">{search ? 'No matching stores' : 'No excluded stores'}</p>
             </div>
           ) : (
             <Table>

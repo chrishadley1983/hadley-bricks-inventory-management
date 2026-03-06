@@ -276,9 +276,7 @@ async function fetchMonzoStatus(): Promise<{
   return response.json();
 }
 
-async function syncMonzo(
-  type: 'full' | 'incremental' = 'incremental'
-): Promise<{
+async function syncMonzo(type: 'full' | 'incremental' = 'incremental'): Promise<{
   data?: {
     success: boolean;
     transactionsProcessed?: number;
@@ -337,9 +335,7 @@ async function testPayPalConnection(): Promise<{
   return response.json();
 }
 
-async function syncPayPal(
-  fullSync: boolean = false
-): Promise<{
+async function syncPayPal(fullSync: boolean = false): Promise<{
   success: boolean;
   transactionsProcessed?: number;
   transactionsCreated?: number;

@@ -112,11 +112,13 @@ export async function archiveShopifyOnSold(
           .eq('id', inventoryItemId)
           .single();
 
-        discordService.sendSyncStatus({
-          title: '🏪 Shopify Group Quantity Reduced',
-          message: `**${item?.item_name ?? 'Unknown'} (${item?.set_number ?? '?'})** sold on ${item?.sold_platform ?? 'unknown'}. Shopify quantity reduced to ${activeItems.length}.`,
-          success: true,
-        }).catch(() => {});
+        discordService
+          .sendSyncStatus({
+            title: '🏪 Shopify Group Quantity Reduced',
+            message: `**${item?.item_name ?? 'Unknown'} (${item?.set_number ?? '?'})** sold on ${item?.sold_platform ?? 'unknown'}. Shopify quantity reduced to ${activeItems.length}.`,
+            success: true,
+          })
+          .catch(() => {});
 
         return;
       }
@@ -139,11 +141,13 @@ export async function archiveShopifyOnSold(
         : 'Unknown product';
       const platform = item?.sold_platform ?? 'unknown';
 
-      discordService.sendSyncStatus({
-        title: '🏪 Shopify Product Archived',
-        message: `**${title}** removed from Shopify after selling on ${platform}.`,
-        success: true,
-      }).catch(() => {}); // Non-blocking
+      discordService
+        .sendSyncStatus({
+          title: '🏪 Shopify Product Archived',
+          message: `**${title}** removed from Shopify after selling on ${platform}.`,
+          success: true,
+        })
+        .catch(() => {}); // Non-blocking
     }
   } catch (error) {
     // Never throw — sale flow must always succeed

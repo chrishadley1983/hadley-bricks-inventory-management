@@ -816,7 +816,12 @@ describe('EbayApiAdapter', () => {
     it('should return offers for a given SKU', async () => {
       const mockOffers = {
         offers: [
-          { offerId: '123456', sku: 'HB-MF-9426-U302-13', marketplaceId: 'EBAY_GB', format: 'FIXED_PRICE' },
+          {
+            offerId: '123456',
+            sku: 'HB-MF-9426-U302-13',
+            marketplaceId: 'EBAY_GB',
+            format: 'FIXED_PRICE',
+          },
         ],
         total: 1,
       };
@@ -839,7 +844,17 @@ describe('EbayApiAdapter', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        json: () => Promise.resolve({ errors: [{ errorId: 25710, domain: 'API_INVENTORY', category: 'REQUEST', message: 'No offers found' }] }),
+        json: () =>
+          Promise.resolve({
+            errors: [
+              {
+                errorId: 25710,
+                domain: 'API_INVENTORY',
+                category: 'REQUEST',
+                message: 'No offers found',
+              },
+            ],
+          }),
       });
 
       const result = await adapter.getOffersBySku('HB-MF-NONEXISTENT');

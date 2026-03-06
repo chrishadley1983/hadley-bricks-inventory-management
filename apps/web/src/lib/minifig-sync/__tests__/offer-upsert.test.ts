@@ -67,7 +67,14 @@ describe('Offer Upsert Logic (createOrUpdateOffer scenarios)', () => {
         statusText: 'Not Found',
         json: () =>
           Promise.resolve({
-            errors: [{ errorId: 25002, domain: 'API_INVENTORY', category: 'REQUEST', message: 'Offer not found' }],
+            errors: [
+              {
+                errorId: 25002,
+                domain: 'API_INVENTORY',
+                category: 'REQUEST',
+                message: 'Offer not found',
+              },
+            ],
           }),
       });
 
@@ -77,7 +84,9 @@ describe('Offer Upsert Logic (createOrUpdateOffer scenarios)', () => {
         status: 200,
         json: () =>
           Promise.resolve({
-            offers: [{ offerId: '999999', sku: TEST_SKU, marketplaceId: 'EBAY_GB', format: 'FIXED_PRICE' }],
+            offers: [
+              { offerId: '999999', sku: TEST_SKU, marketplaceId: 'EBAY_GB', format: 'FIXED_PRICE' },
+            ],
             total: 1,
           }),
       });
@@ -200,7 +209,17 @@ describe('Offer Upsert Logic (createOrUpdateOffer scenarios)', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        json: () => Promise.resolve({ errors: [{ errorId: 25710, domain: 'API_INVENTORY', category: 'REQUEST', message: 'No offers found' }] }),
+        json: () =>
+          Promise.resolve({
+            errors: [
+              {
+                errorId: 25710,
+                domain: 'API_INVENTORY',
+                category: 'REQUEST',
+                message: 'No offers found',
+              },
+            ],
+          }),
       });
 
       const result = await adapter.getOffersBySku(TEST_SKU);

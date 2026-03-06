@@ -210,9 +210,7 @@ export class AsinMatchingService {
       getCompetitivePricing: (
         asins: string[]
       ) => Promise<Array<{ asin: string; buyBoxPrice: number | null }>>;
-      getCompetitiveSummary?: (
-        asins: string[]
-      ) => Promise<
+      getCompetitiveSummary?: (asins: string[]) => Promise<
         Array<{
           asin: string;
           wasPrice: number | null;

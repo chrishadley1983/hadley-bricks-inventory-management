@@ -7,23 +7,42 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import {
-  BrickLinkStoreScraper,
-  BrickLinkSessionExpiredError,
-} from './bricklink-store-scraper';
+import { BrickLinkStoreScraper, BrickLinkSessionExpiredError } from './bricklink-store-scraper';
 import { BrickLinkStoreExclusionService } from './bricklink-store-exclusion.service';
 
 // Shipping heuristics by store country (always in GBP)
 const UK_CODES = new Set(['UK', 'GB']);
 const EU_CODES = new Set([
-  'DE', 'FR', 'NL', 'BE', 'AT', 'IT', 'ES', 'PL', 'PT', 'IE', 'SE', 'DK',
-  'FI', 'CZ', 'HU', 'RO', 'BG', 'HR', 'SK', 'SI', 'LT', 'LV', 'EE', 'LU',
+  'DE',
+  'FR',
+  'NL',
+  'BE',
+  'AT',
+  'IT',
+  'ES',
+  'PL',
+  'PT',
+  'IE',
+  'SE',
+  'DK',
+  'FI',
+  'CZ',
+  'HU',
+  'RO',
+  'BG',
+  'HR',
+  'SK',
+  'SI',
+  'LT',
+  'LV',
+  'EE',
+  'LU',
 ]);
 
 const SHIPPING_HEURISTICS = {
-  uk: 3.50,
-  eu: 8.00,
-  row: 15.00,
+  uk: 3.5,
+  eu: 8.0,
+  row: 15.0,
 } as const;
 
 const PAGE_SIZE = 1000;
@@ -112,9 +131,8 @@ export class BrickLinkStoreDealService {
       // Only sum price + shipping when both are in the same currency (GBP).
       // For non-GBP listings, estimated_total is the price alone (shipping
       // would need currency conversion which we don't have).
-      const estimatedTotal = listing.currencyCode === 'GBP'
-        ? listing.unitPrice + estShipping
-        : listing.unitPrice;
+      const estimatedTotal =
+        listing.currencyCode === 'GBP' ? listing.unitPrice + estShipping : listing.unitPrice;
 
       rows.push({
         user_id: userId,
@@ -283,10 +301,7 @@ export class BrickLinkStoreDealService {
    * These are the sets worth scraping for store-level deals.
    * Paginates to handle tables exceeding Supabase's 1,000-row limit.
    */
-  async getPromisingSetNumbers(
-    userId: string,
-    minMarginPercent: number = 25
-  ): Promise<string[]> {
+  async getPromisingSetNumbers(userId: string, minMarginPercent: number = 25): Promise<string[]> {
     const setNumbers: string[] = [];
     let page = 0;
     let hasMore = true;

@@ -35,7 +35,9 @@ function ResultSummary({ result }: { result: Record<string, unknown> }) {
   if ('itemsSkipped' in result) lines.push({ label: 'Skipped', value: result.itemsSkipped });
   if ('itemsErrored' in result) lines.push({ label: 'Errors', value: result.itemsErrored });
 
-  const errors = Array.isArray(result.errors) ? result.errors as Array<{ item?: string; error: string }> : [];
+  const errors = Array.isArray(result.errors)
+    ? (result.errors as Array<{ item?: string; error: string }>)
+    : [];
 
   return (
     <div className="space-y-3">
