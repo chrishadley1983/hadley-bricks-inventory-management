@@ -43,8 +43,12 @@ export async function POST(request: NextRequest) {
 
     // EbayApiError has structured error info
     if (error && typeof error === 'object' && 'statusCode' in error) {
-      const ebayError = error as { statusCode: number; errors?: Array<{ message?: string; parameters?: Array<{ name: string; value: string }> }> };
-      statusCode = ebayError.statusCode >= 400 && ebayError.statusCode < 600 ? ebayError.statusCode : 500;
+      const ebayError = error as {
+        statusCode: number;
+        errors?: Array<{ message?: string; parameters?: Array<{ name: string; value: string }> }>;
+      };
+      statusCode =
+        ebayError.statusCode >= 400 && ebayError.statusCode < 600 ? ebayError.statusCode : 500;
       if (ebayError.errors?.length) {
         details = ebayError.errors
           .map((e) => {

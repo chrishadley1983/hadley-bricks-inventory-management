@@ -102,6 +102,11 @@ def build_email_body(
     otdr_90_pct: float,
     otdr_90_window: str,
     late_orders: list[dict],
+    e2e_expected_days: float = 0.0,
+    e2e_actual_days: float = 0.0,
+    e2e_delta_days: float = 0.0,
+    e2e_sample_size: int = 0,
+    e2e_period_str: str = "",
 ) -> str:
     logo_b64 = _load_logo_base64("small")
     logo_img = ""
@@ -264,6 +269,54 @@ def build_email_body(
             </tr>
         </table>
 
+        <!-- E2E Delivery Timeline -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+            <tr><td style="padding:0 0 6px 0;">
+                <span style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:600;color:{DARK_GRAY};">E2E delivery timeline</span>
+            </td></tr>
+            <tr><td style="padding:0 0 16px 0;">
+                <span style="font-family:'Poppins',sans-serif;font-size:12px;color:{WARM_GRAY};">Average days from order date — delivered orders only</span>
+            </td></tr>
+        </table>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
+            <tr>
+                <td width="33%" style="padding:0 8px 0 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:{WHITE};border:{CARD_BORDER};border-radius:{CARD_RADIUS};border-top:4px solid {INFO_BLUE};text-align:center;">
+                        <tr><td style="padding:20px 16px;text-align:center;">
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{WARM_GRAY};font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Expected</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:700;color:{DARK_GRAY};margin-top:8px;">{e2e_expected_days}</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{MEDIUM_GRAY};margin-top:6px;">days</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:6px;">{e2e_sample_size} orders</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:4px;">{e2e_period_str}</div>
+                        </td></tr>
+                    </table>
+                </td>
+                <td width="33%" style="padding:0 8px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:{WHITE};border:{CARD_BORDER};border-radius:{CARD_RADIUS};border-top:4px solid {NAVY_BLUE};text-align:center;">
+                        <tr><td style="padding:20px 16px;text-align:center;">
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{WARM_GRAY};font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Actual</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:700;color:{DARK_GRAY};margin-top:8px;">{e2e_actual_days}</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{MEDIUM_GRAY};margin-top:6px;">days</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:6px;">{e2e_sample_size} orders</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:4px;">{e2e_period_str}</div>
+                        </td></tr>
+                    </table>
+                </td>
+                <td width="34%" style="padding:0 0 0 8px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:{WHITE};border:{CARD_BORDER};border-radius:{CARD_RADIUS};border-top:4px solid {SUCCESS_GREEN if e2e_delta_days <= 0 else BRICK_ORANGE};text-align:center;">
+                        <tr><td style="padding:20px 16px;text-align:center;">
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{WARM_GRAY};font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Delta</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:700;color:{DARK_GRAY};margin-top:8px;">{"+" if e2e_delta_days > 0 else ""}{e2e_delta_days}</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:11px;color:{MEDIUM_GRAY};margin-top:6px;">days</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:6px;">{e2e_sample_size} orders</div>
+                            <div style="font-family:'Poppins',sans-serif;font-size:10px;color:{MEDIUM_GRAY};margin-top:4px;">{e2e_period_str}</div>
+                        </td></tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
         {late_section}
 
     </td></tr>
@@ -309,6 +362,11 @@ def build_full_report(
     otdr_90_window: str,
     late_orders: list[dict],
     all_orders: list[dict],
+    e2e_expected_days: float = 0.0,
+    e2e_actual_days: float = 0.0,
+    e2e_delta_days: float = 0.0,
+    e2e_sample_size: int = 0,
+    e2e_period_str: str = "",
 ) -> str:
     logo_b64 = _load_logo_base64("medium")
     logo_img = ""
@@ -457,6 +515,33 @@ def build_full_report(
                     <div class="card-value" style="font-size:18px;">{otdr_90_date}</div>
                     <div class="card-sub">Projected {otdr_90_pct}%</div>
                     <div class="card-sub" style="margin-top:4px;">{otdr_90_window}</div>
+                </div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">E2E delivery timeline</div>
+            <div class="section-subtitle">Average days from order date — delivered orders only</div>
+            <div class="otdr-cards">
+                <div class="otdr-card" style="border-top:4px solid {INFO_BLUE};">
+                    <div class="card-label">Expected</div>
+                    <div class="card-value">{e2e_expected_days}</div>
+                    <div class="card-sub">days</div>
+                    <div class="card-sub" style="margin-top:6px;">{e2e_sample_size} orders</div>
+                    <div class="card-sub" style="margin-top:4px;">{e2e_period_str}</div>
+                </div>
+                <div class="otdr-card" style="border-top:4px solid {NAVY_BLUE};">
+                    <div class="card-label">Actual</div>
+                    <div class="card-value">{e2e_actual_days}</div>
+                    <div class="card-sub">days</div>
+                    <div class="card-sub" style="margin-top:6px;">{e2e_sample_size} orders</div>
+                    <div class="card-sub" style="margin-top:4px;">{e2e_period_str}</div>
+                </div>
+                <div class="otdr-card" style="border-top:4px solid {SUCCESS_GREEN if e2e_delta_days <= 0 else BRICK_ORANGE};">
+                    <div class="card-label">Delta</div>
+                    <div class="card-value">{"+" if e2e_delta_days > 0 else ""}{e2e_delta_days}</div>
+                    <div class="card-sub">days</div>
+                    <div class="card-sub" style="margin-top:6px;">{e2e_sample_size} orders</div>
+                    <div class="card-sub" style="margin-top:4px;">{e2e_period_str}</div>
                 </div>
             </div>
         </div>

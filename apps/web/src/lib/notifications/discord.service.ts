@@ -21,20 +21,35 @@
  *    - DISCORD_WEBHOOK_PETER_CHAT
  */
 
-// Re-export types from Pushover for compatibility
-export type {
-  SyncFailureParams,
-  SyncSuccessParams,
-  VintedOpportunityParams,
-  VintedDailySummaryParams,
-} from './pushover.service';
+export interface SyncFailureParams {
+  feedId: string;
+  itemCount: number;
+  reason: string;
+  phase: 'price_verification' | 'price_rejected' | 'quantity_rejected' | 'quantity_verification';
+}
 
-import type {
-  SyncFailureParams,
-  SyncSuccessParams,
-  VintedOpportunityParams,
-  VintedDailySummaryParams,
-} from './pushover.service';
+export interface SyncSuccessParams {
+  feedId: string;
+  itemCount: number;
+  verificationTime: number;
+}
+
+export interface VintedOpportunityParams {
+  setNumber: string;
+  setName: string;
+  vintedPrice: number;
+  amazonPrice: number;
+  cogPercent: number;
+  profit: number;
+  vintedUrl: string;
+}
+
+export interface VintedDailySummaryParams {
+  broadSweeps: number;
+  watchlistScans: number;
+  opportunitiesFound: number;
+  nearMissesFound: number;
+}
 
 /** Discord embed colour constants */
 export const DiscordColors = {
@@ -324,12 +339,12 @@ export class DiscordService {
   }
 
   // =========================================================================
-  // Pushover-Compatible Methods (for migration)
+  // Convenience Methods
   // =========================================================================
 
   /**
    * Send Vinted opportunity alert
-   * Compatible with PushoverService.sendVintedOpportunity
+   * SendsendVintedOpportunity
    */
   async sendVintedOpportunity(params: VintedOpportunityParams): Promise<void> {
     await this.sendOpportunity(params);
@@ -337,7 +352,7 @@ export class DiscordService {
 
   /**
    * Send CAPTCHA warning - scanner has been auto-paused
-   * Compatible with PushoverService.sendVintedCaptchaWarning
+   * SendsendVintedCaptchaWarning
    */
   async sendVintedCaptchaWarning(): Promise<void> {
     await this.sendAlert({
@@ -353,7 +368,7 @@ export class DiscordService {
 
   /**
    * Send daily summary of Vinted scanner activity
-   * Compatible with PushoverService.sendVintedDailySummary
+   * SendsendVintedDailySummary
    */
   async sendVintedDailySummary(params: VintedDailySummaryParams): Promise<void> {
     const { broadSweeps, watchlistScans, opportunitiesFound, nearMissesFound } = params;
@@ -371,7 +386,7 @@ export class DiscordService {
 
   /**
    * Send consecutive failure alert
-   * Compatible with PushoverService.sendVintedConsecutiveFailures
+   * SendsendVintedConsecutiveFailures
    */
   async sendVintedConsecutiveFailures(failureCount: number): Promise<void> {
     await this.sendAlert({
@@ -387,7 +402,7 @@ export class DiscordService {
 
   /**
    * Send two-phase sync failure notification
-   * Compatible with PushoverService.sendSyncFailure
+   * SendsendSyncFailure
    */
   async sendSyncFailure(params: SyncFailureParams): Promise<void> {
     const { feedId, itemCount, reason, phase } = params;
@@ -410,7 +425,7 @@ export class DiscordService {
 
   /**
    * Send two-phase sync success notification
-   * Compatible with PushoverService.sendSyncSuccess
+   * SendsendSyncSuccess
    */
   async sendSyncSuccess(params: SyncSuccessParams): Promise<void> {
     const { feedId, itemCount, verificationTime } = params;

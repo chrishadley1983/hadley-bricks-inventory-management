@@ -28,16 +28,14 @@ const EditedListingSchema = z.object({
   description: z.string(),
   conditionId: z.number(),
   conditionDescription: z.string().nullable(),
-  itemSpecifics: z
-    .record(z.string(), z.string().nullable().optional())
-    .transform((val) => {
-      // Strip null/undefined values so downstream code only sees strings
-      const cleaned: Record<string, string | undefined> = {};
-      for (const [k, v] of Object.entries(val)) {
-        cleaned[k] = v ?? undefined;
-      }
-      return cleaned;
-    }),
+  itemSpecifics: z.record(z.string(), z.string().nullable().optional()).transform((val) => {
+    // Strip null/undefined values so downstream code only sees strings
+    const cleaned: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(val)) {
+      cleaned[k] = v ?? undefined;
+    }
+    return cleaned;
+  }),
   categoryId: z.string(),
   sku: z.string(),
   price: z.number(),

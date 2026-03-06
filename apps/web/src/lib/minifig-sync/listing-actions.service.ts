@@ -86,27 +86,28 @@ export class ListingActionsService {
       const listingUrl = `https://www.ebay.co.uk/itm/${listingId}`;
 
       // Create inventory_items record so eBay resolution, P&L, and reporting can find this minifig
-      const { error: invError } = await this.supabase
-        .from('inventory_items')
-        .insert({
-          set_number: item.bricklink_id || item.name || 'UNKNOWN',
-          item_name: item.name,
-          condition: 'Used',
-          status: 'LISTED',
-          source: 'Minifig Sync',
-          cost: item.bricqer_price ? Number(item.bricqer_price) : null,
-          listing_date: new Date().toISOString(),
-          listing_value: item.recommended_price ? Number(item.recommended_price) : null,
-          listing_platform: 'ebay',
-          sku: item.ebay_sku,
-          storage_location: item.storage_location,
-          ebay_listing_id: listingId,
-          ebay_listing_url: listingUrl,
-          user_id: this.userId,
-        });
+      const { error: invError } = await this.supabase.from('inventory_items').insert({
+        set_number: item.bricklink_id || item.name || 'UNKNOWN',
+        item_name: item.name,
+        condition: 'Used',
+        status: 'LISTED',
+        source: 'Minifig Sync',
+        cost: item.bricqer_price ? Number(item.bricqer_price) : null,
+        listing_date: new Date().toISOString(),
+        listing_value: item.recommended_price ? Number(item.recommended_price) : null,
+        listing_platform: 'ebay',
+        sku: item.ebay_sku,
+        storage_location: item.storage_location,
+        ebay_listing_id: listingId,
+        ebay_listing_url: listingUrl,
+        user_id: this.userId,
+      });
 
       if (invError) {
-        console.error('[ListingActionsService] Failed to create inventory_items record:', invError.message);
+        console.error(
+          '[ListingActionsService] Failed to create inventory_items record:',
+          invError.message
+        );
         // Non-fatal: the eBay listing is already live, so we log and continue
       }
 
@@ -482,7 +483,9 @@ export class ListingActionsService {
             price: { value: dbPrice, currency: 'GBP' },
           };
           needsUpdate = true;
-          console.log(`[ListingActionsService] Syncing price ${offerPrice} → ${dbPrice} on offer ${offerId}`);
+          console.log(
+            `[ListingActionsService] Syncing price ${offerPrice} → ${dbPrice} on offer ${offerId}`
+          );
         }
       }
 
@@ -492,9 +495,8 @@ export class ListingActionsService {
         try {
           const locationsResponse = await adapter.getInventoryLocations();
           const locations = locationsResponse.locations || [];
-          locationKey = locations.length > 0
-            ? locations[0].merchantLocationKey
-            : 'HADLEY_BRICKS_DEFAULT';
+          locationKey =
+            locations.length > 0 ? locations[0].merchantLocationKey : 'HADLEY_BRICKS_DEFAULT';
 
           if (locations.length === 0) {
             await adapter.createInventoryLocation(locationKey, {
@@ -512,7 +514,9 @@ export class ListingActionsService {
 
         updatableFields.merchantLocationKey = locationKey;
         needsUpdate = true;
-        console.log(`[ListingActionsService] Backfilling merchantLocationKey=${locationKey} on offer ${offerId}`);
+        console.log(
+          `[ListingActionsService] Backfilling merchantLocationKey=${locationKey} on offer ${offerId}`
+        );
       }
 
       // 2. Ensure return policy accepts returns (eBay rejects "No Returns" for many categories)
@@ -539,7 +543,10 @@ export class ListingActionsService {
             }
           }
         } catch (err) {
-          console.warn('[ListingActionsService] Return policy check failed:', err instanceof Error ? err.message : err);
+          console.warn(
+            '[ListingActionsService] Return policy check failed:',
+            err instanceof Error ? err.message : err
+          );
         }
       }
 
@@ -552,7 +559,10 @@ export class ListingActionsService {
         console.log(`[ListingActionsService] Updated offer ${offerId} for publishability`);
       }
     } catch (err) {
-      console.warn('[ListingActionsService] ensureOfferPublishable failed:', err instanceof Error ? err.message : err);
+      console.warn(
+        '[ListingActionsService] ensureOfferPublishable failed:',
+        err instanceof Error ? err.message : err
+      );
       // Don't throw — let publishOffer proceed and surface the real error if any
     }
   }

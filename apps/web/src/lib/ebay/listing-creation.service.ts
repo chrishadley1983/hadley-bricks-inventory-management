@@ -656,9 +656,7 @@ export class ListingCreationService {
    * 2. First tries Brickset API (most accurate) for LEGO items
    * 3. Falls back to Claude AI knowledge if Brickset fails or has insufficient data
    */
-  private async fetchResearchData(
-    setNumber: string
-  ): Promise<ListingResearchData | null> {
+  private async fetchResearchData(setNumber: string): Promise<ListingResearchData | null> {
     // Non-LEGO items: skip Brickset entirely (it only has LEGO data)
     if (setNumber === 'NA') {
       console.log(

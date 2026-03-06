@@ -306,9 +306,7 @@ export class ModelTrainingService {
    * Load a previously trained model from the database.
    * Returns null if no model exists.
    */
-  static async loadModel(
-    supabase: SupabaseClient
-  ): Promise<{
+  static async loadModel(supabase: SupabaseClient): Promise<{
     model: tf.Sequential;
     normContext: FeatureNormContext;
     modelVersion: string;

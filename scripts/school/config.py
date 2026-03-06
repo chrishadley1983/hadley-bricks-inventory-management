@@ -45,18 +45,30 @@ ARBOR_URL = "https://stocks-green-primary-school.uk.arbor.sc"
 ARBOR_EMAIL = os.environ.get("ARBOR_EMAIL", "chrishadley1983@gmail.com")
 ARBOR_PASSWORD = os.environ.get("ARBOR_PASSWORD", "Emmie2018!!!")
 
-# Pushover config for urgent alerts
-PUSHOVER_USER_KEY = os.environ.get("PUSHOVER_USER_KEY")
-PUSHOVER_API_TOKEN = os.environ.get("PUSHOVER_API_TOKEN")
+# WhatsApp via Evolution API (replaces Pushover)
+EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL", "http://localhost:8085")
+EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY", "peter-whatsapp-2026-hadley")
+EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "peter-whatsapp")
+WHATSAPP_CHRIS_NUMBER = "447855620978"
 
-# Load Pushover from .env.local too
-if not PUSHOVER_USER_KEY:
-    env_path = os.path.join(os.path.dirname(__file__), "..", "..", "apps", "web", ".env.local")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("PUSHOVER_USER_KEY="):
-                    PUSHOVER_USER_KEY = line.split("=", 1)[1].strip()
-                elif line.startswith("PUSHOVER_APP_TOKEN=") or line.startswith("PUSHOVER_API_TOKEN="):
-                    PUSHOVER_API_TOKEN = line.split("=", 1)[1].strip()
+
+def send_whatsapp(title: str, message: str, priority: int = 0):
+    """Send a WhatsApp message to Chris via Evolution API."""
+    import requests as _requests
+
+    text = f"*{title}*\n{message}"
+    number = WHATSAPP_CHRIS_NUMBER
+
+    try:
+        resp = _requests.post(
+            f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}",
+            json={"number": number, "text": text},
+            headers={"apikey": EVOLUTION_API_KEY},
+            timeout=15,
+        )
+        if resp.status_code in (200, 201):
+            print(f"[WhatsApp sent] {title}")
+        else:
+            print(f"[WhatsApp error] {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        print(f"WhatsApp error: {e}")

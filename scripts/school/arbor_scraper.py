@@ -1,6 +1,6 @@
 """
 Arbor parent portal scraper: logs in via Playwright, extracts account balances,
-attendance, notices, and upcoming events. Sends Pushover alerts for low balances.
+attendance, notices, and upcoming events. Sends WhatsApp alerts for low balances.
 
 Run daily as part of the school sync job.
 """
@@ -16,8 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import (
     SUPABASE_URL, SUPABASE_KEY,
     ARBOR_URL, ARBOR_EMAIL, ARBOR_PASSWORD,
-    PUSHOVER_USER_KEY, PUSHOVER_API_TOKEN,
-    CHILDREN,
+    CHILDREN, send_whatsapp,
 )
 
 # Alert if any account balance drops below this
@@ -28,24 +27,6 @@ MONITORED_ACCOUNTS = {
     ("Max", "Early Morning Club"),
     ("Emmie", "Meals"),
 }
-
-
-def send_pushover(title: str, message: str, priority: int = 0):
-    """Send a Pushover notification."""
-    if not PUSHOVER_USER_KEY or not PUSHOVER_API_TOKEN:
-        print(f"[Pushover not configured] {title}: {message}")
-        return
-    try:
-        requests.post("https://api.pushover.net/1/messages.json", data={
-            "token": PUSHOVER_API_TOKEN,
-            "user": PUSHOVER_USER_KEY,
-            "title": title,
-            "message": message,
-            "priority": priority,
-        })
-        print(f"[Pushover sent] {title}")
-    except Exception as e:
-        print(f"Pushover error: {e}")
 
 
 def parse_balance(text: str) -> float:
@@ -249,7 +230,7 @@ def main():
 
     if data["error"]:
         print(f"\nERROR: {data['error']}")
-        send_pushover("Arbor Scraper Failed", data["error"])
+        send_whatsapp("Arbor Scraper Failed", data["error"])
         sys.exit(1)
 
     # Print account balances
@@ -282,7 +263,7 @@ def main():
         for acc in low_accounts:
             lines.append(f"{acc['child']} {acc['account_type']}: {acc['balance']:.2f}")
         alert_msg = "\n".join(lines)
-        send_pushover(
+        send_whatsapp(
             f"School: Low Balance Alert",
             alert_msg,
             priority=0,
@@ -292,7 +273,7 @@ def main():
 
     # Alert for unread messages
     if data["messages_unread"]:
-        send_pushover("School: Unread Arbor Messages", "You have unread messages on Arbor")
+        send_whatsapp("School: Unread Arbor Messages", "You have unread messages on Arbor")
 
     # Check year group changes against config
     # Expected: Max = Year 2 (Form 2), Emmie = Year 4 (Form 4)
@@ -304,7 +285,7 @@ def main():
             status = "OK" if form == expected else "CHANGED"
             print(f"  [{status}] {child}: Form {form} (expected Year {expected})")
             if form != expected:
-                send_pushover(
+                send_whatsapp(
                     "School: Year Group Changed!",
                     f"{child} is now in Form {form} (was Year {expected}). "
                     f"Update CHILDREN config in scripts/school/config.py",

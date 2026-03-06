@@ -1,21 +1,12 @@
 'use client';
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Settings, ExternalLink } from 'lucide-react';
-import {
-  useShopifyConfig,
-  useUpdateShopifyConfig,
-} from '@/hooks/use-shopify-sync';
+import { useShopifyConfig, useUpdateShopifyConfig } from '@/hooks/use-shopify-sync';
 
 export function ShopifyConfigCard() {
   const { data: config, isLoading } = useShopifyConfig();
@@ -63,15 +54,11 @@ export function ShopifyConfigCard() {
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label>Sync Enabled</Label>
-            <p className="text-xs text-muted-foreground">
-              Allow products to be pushed to Shopify
-            </p>
+            <p className="text-xs text-muted-foreground">Allow products to be pushed to Shopify</p>
           </div>
           <Switch
             checked={config.sync_enabled}
-            onCheckedChange={(checked: boolean) =>
-              updateConfig.mutate({ sync_enabled: checked })
-            }
+            onCheckedChange={(checked: boolean) => updateConfig.mutate({ sync_enabled: checked })}
           />
         </div>
 
@@ -106,9 +93,7 @@ export function ShopifyConfigCard() {
                 }
               }}
             />
-            <span className="text-sm text-muted-foreground">
-              off marketplace price
-            </span>
+            <span className="text-sm text-muted-foreground">off marketplace price</span>
           </div>
         </div>
 

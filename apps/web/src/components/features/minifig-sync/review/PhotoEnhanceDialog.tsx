@@ -208,18 +208,15 @@ export function PhotoEnhanceDialog({
         {step === 'input' && (
           <div className="flex flex-col items-center gap-4 py-8">
             <p className="text-sm text-muted-foreground text-center">
-              Paste a screenshot or upload a photo. Uniform borders and
-              whitespace will be trimmed automatically.
+              Paste a screenshot or upload a photo. Uniform borders and whitespace will be trimmed
+              automatically.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={handlePasteButton}>
                 <ClipboardPaste className="h-4 w-4 mr-2" />
                 Paste from Clipboard
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" />
                 Upload File
               </Button>
@@ -232,7 +229,8 @@ export function PhotoEnhanceDialog({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              or press <kbd className="px-1.5 py-0.5 rounded bg-muted border text-xs">Ctrl+V</kbd> to paste
+              or press <kbd className="px-1.5 py-0.5 rounded bg-muted border text-xs">Ctrl+V</kbd>{' '}
+              to paste
             </p>
           </div>
         )}

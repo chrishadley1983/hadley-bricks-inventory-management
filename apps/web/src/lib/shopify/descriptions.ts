@@ -106,9 +106,7 @@ export function buildShopifyDescription(
 ): string {
   const parts: string[] = [];
 
-  const isUsed =
-    item.condition?.toLowerCase() === 'used' ||
-    item.condition?.toLowerCase() === 'u';
+  const isUsed = item.condition?.toLowerCase() === 'used' || item.condition?.toLowerCase() === 'u';
 
   // Condition badges
   if (isUsed) {
@@ -167,15 +165,11 @@ export function buildShopifyDescription(
       }
 
       if (bricksetData.pieces) {
-        parts.push(
-          `<li><strong>Pieces:</strong> ${bricksetData.pieces.toLocaleString()}</li>`
-        );
+        parts.push(`<li><strong>Pieces:</strong> ${bricksetData.pieces.toLocaleString()}</li>`);
       }
 
       if (bricksetData.minifigs) {
-        parts.push(
-          `<li><strong>Minifigures:</strong> ${bricksetData.minifigs}</li>`
-        );
+        parts.push(`<li><strong>Minifigures:</strong> ${bricksetData.minifigs}</li>`);
       }
 
       if (bricksetData.year_from) {
@@ -231,9 +225,7 @@ export function buildShopifyTitle(
   }
 
   // Add condition
-  const isUsed =
-    item.condition?.toLowerCase() === 'used' ||
-    item.condition?.toLowerCase() === 'u';
+  const isUsed = item.condition?.toLowerCase() === 'used' || item.condition?.toLowerCase() === 'u';
   if (isUsed) {
     const completeness = detectCompleteness(ebayDescription);
     switch (completeness) {
@@ -272,9 +264,7 @@ export function buildShopifyTags(
   }
 
   // Condition
-  const isUsed =
-    item.condition?.toLowerCase() === 'used' ||
-    item.condition?.toLowerCase() === 'u';
+  const isUsed = item.condition?.toLowerCase() === 'used' || item.condition?.toLowerCase() === 'u';
   tags.push(isUsed ? 'Used' : 'New');
   tags.push(isUsed ? 'Restored' : 'Sealed');
   if (isUsed) {
@@ -392,15 +382,11 @@ export async function getOrGenerateAIDescription(
   // 3. Generate via Claude Haiku
   try {
     const userPrompt = buildDescriptionPrompt(setNumber, context);
-    const html = await sendMessage(
-      SHOPIFY_DESCRIPTION_SYSTEM_PROMPT,
-      userPrompt,
-      {
-        model: 'claude-haiku-4-5-20251001',
-        maxTokens: 1024,
-        temperature: 0.4,
-      }
-    );
+    const html = await sendMessage(SHOPIFY_DESCRIPTION_SYSTEM_PROMPT, userPrompt, {
+      model: 'claude-haiku-4-5-20251001',
+      maxTokens: 1024,
+      temperature: 0.4,
+    });
 
     if (!html || html.trim().length < 20) return null;
 
@@ -437,9 +423,7 @@ function buildDescriptionPrompt(
   const lines: string[] = [];
   lines.push(`Set: ${context.item_name ?? setNumber}`);
   if (context.theme) {
-    const theme = context.subtheme
-      ? `${context.theme} > ${context.subtheme}`
-      : context.theme;
+    const theme = context.subtheme ? `${context.theme} > ${context.subtheme}` : context.theme;
     lines.push(`Theme: ${theme}`);
   }
   if (context.pieces) lines.push(`Pieces: ${context.pieces}`);
@@ -464,13 +448,10 @@ export function buildSeoDescription(
   bricksetData?: BricksetData | null
 ): string {
   const parts: string[] = [];
-  const setNum = item.set_number && item.set_number !== 'NA'
-    ? item.set_number.replace(/-1$/, '')
-    : null;
+  const setNum =
+    item.set_number && item.set_number !== 'NA' ? item.set_number.replace(/-1$/, '') : null;
 
-  const isUsed =
-    item.condition?.toLowerCase() === 'used' ||
-    item.condition?.toLowerCase() === 'u';
+  const isUsed = item.condition?.toLowerCase() === 'used' || item.condition?.toLowerCase() === 'u';
 
   // Opening: "LEGO {Theme} {Name} ({SetNum})"
   parts.push('LEGO');

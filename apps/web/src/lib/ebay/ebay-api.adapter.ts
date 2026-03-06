@@ -362,17 +362,14 @@ export class EbayApiAdapter {
    * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/updateOffer
    */
   async updateOffer(offerId: string, offer: Partial<EbayOfferRequest>): Promise<void> {
-    await this.request<void>(
-      `${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`,
-      {
-        method: 'PUT',
-        body: offer,
-        headers: {
-          'Content-Language': 'en-GB',
-          'Accept-Language': 'en-GB',
-        },
-      }
-    );
+    await this.request<void>(`${INVENTORY_API_PATH}/offer/${encodeURIComponent(offerId)}`, {
+      method: 'PUT',
+      body: offer,
+      headers: {
+        'Content-Language': 'en-GB',
+        'Accept-Language': 'en-GB',
+      },
+    });
   }
 
   /**

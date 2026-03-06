@@ -683,7 +683,10 @@ export class BricqerClient {
    * Reduce quantity of an inventory item by a given amount.
    * Uses PATCH to update remainingQuantity.
    */
-  async reduceInventoryQuantity(itemId: number, reduceBy: number = 1): Promise<'reduced' | 'zeroed'> {
+  async reduceInventoryQuantity(
+    itemId: number,
+    reduceBy: number = 1
+  ): Promise<'reduced' | 'zeroed'> {
     const item = await this.getInventoryItem(itemId);
     const currentQty = item.remainingQuantity ?? item.quantity ?? 0;
     const newQty = Math.max(0, currentQty - reduceBy);

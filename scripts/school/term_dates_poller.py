@@ -2,7 +2,7 @@
 Term dates poller: downloads term date PDFs, parses them, detects changes,
 syncs to Supabase and Google Calendar, and alerts on updates.
 
-Run weekly. Sends Pushover notification when INSET days change.
+Run weekly. Sends WhatsApp notification when INSET days change.
 """
 import hashlib
 import json
@@ -22,25 +22,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import (
     SUPABASE_URL, SUPABASE_KEY, ANTHROPIC_API_KEY,
     SCHOOL_WEBSITE, TERM_DATES_URL,
-    PUSHOVER_USER_KEY, PUSHOVER_API_TOKEN
+    send_whatsapp,
 )
-
-
-def send_pushover(title: str, message: str, priority: int = 0):
-    """Send a Pushover notification."""
-    if not PUSHOVER_USER_KEY or not PUSHOVER_API_TOKEN:
-        print(f"[Pushover not configured] {title}: {message}")
-        return
-    try:
-        requests.post("https://api.pushover.net/1/messages.json", data={
-            "token": PUSHOVER_API_TOKEN,
-            "user": PUSHOVER_USER_KEY,
-            "title": title,
-            "message": message,
-            "priority": priority,
-        })
-    except Exception as e:
-        print(f"Pushover error: {e}")
 
 
 def find_term_date_pdfs() -> list[dict]:
@@ -246,7 +229,7 @@ def main():
             if removed_insets:
                 change_msg.append(f"Removed: {', '.join(sorted(removed_insets))}")
             alert_msg = f"INSET days updated for {year}:\n" + "\n".join(change_msg)
-            send_pushover(f"School INSET Update ({year})", alert_msg, priority=0)
+            send_whatsapp(f"School INSET Update ({year})", alert_msg, priority=0)
             print(f"    ALERT: {alert_msg}")
 
         # Update tracking
@@ -263,7 +246,7 @@ def main():
     # Summary
     if changes_detected:
         print(f"\nChanges detected in: {', '.join(changes_detected)}")
-        send_pushover(
+        send_whatsapp(
             "School Term Dates Updated",
             f"Term date changes detected for: {', '.join(changes_detected)}. Check school_term_dates table.",
         )

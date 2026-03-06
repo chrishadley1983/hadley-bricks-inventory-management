@@ -1234,7 +1234,9 @@ export class AmazonSyncService {
     userEmail: string
   ): Promise<TwoPhaseStepResult> {
     // Reconstruct items from Phase 1 feed items (same pattern as price verification)
-    console.log('[AmazonSyncService] Starting quantity verification - checking all items on Amazon');
+    console.log(
+      '[AmazonSyncService] Starting quantity verification - checking all items on Amazon'
+    );
     const feedItems = await this.getFeedItems(feedId);
 
     if (feedItems.length === 0) {
@@ -1289,9 +1291,7 @@ export class AmazonSyncService {
         const livePrice =
           offer?.price?.amount !== undefined ? Number(offer.price.amount) : undefined;
         const priceMatch =
-          livePrice !== undefined &&
-          !isNaN(livePrice) &&
-          Math.abs(livePrice - item.price) < 0.01;
+          livePrice !== undefined && !isNaN(livePrice) && Math.abs(livePrice - item.price) < 0.01;
 
         // Check quantity
         const fulfillment = listing.fulfillmentAvailability?.find(
@@ -1352,10 +1352,7 @@ export class AmazonSyncService {
       } catch (error) {
         allVerified = false;
         failedSkus.push(item.amazonSku);
-        console.error(
-          `[AmazonSyncService] Error verifying ${item.amazonSku}:`,
-          error
-        );
+        console.error(`[AmazonSyncService] Error verifying ${item.amazonSku}:`, error);
       }
     }
 
@@ -1438,7 +1435,11 @@ export class AmazonSyncService {
     const quantityFeedId = priceFeed?.quantity_feed_id;
 
     if (!quantityFeedId) {
-      return this.failTwoPhaseSync(feedId, userEmail, 'Quantity feed ID not found during verification');
+      return this.failTwoPhaseSync(
+        feedId,
+        userEmail,
+        'Quantity feed ID not found during verification'
+      );
     }
 
     return this.completeTwoPhaseSync(feedId, userEmail, quantityFeedId);
