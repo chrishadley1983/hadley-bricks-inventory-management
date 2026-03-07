@@ -80,8 +80,8 @@ apps/web/test-results/
 # Keepa API response dumps
 keepa_*.json
 
-# Generated reports
-reports/
+# Generated reports (top-level outputs only)
+/reports/
 
 # ML artifacts
 scripts/ml/__pycache__/
