@@ -176,19 +176,16 @@ function getColumns(onReprice: (item: BuyBoxGapRow) => void): ColumnDef<BuyBoxGa
     },
     {
       id: 'marginNow',
+      accessorFn: (row) => row.profitAtYourPrice?.profitMarginPercent ?? -999,
       header: 'Margin Now',
       cell: ({ row }) => {
         const margin = row.original.profitAtYourPrice?.profitMarginPercent ?? null;
         return <span className={`tabular-nums font-medium ${profitColor(margin)}`}>{formatPct(margin)}</span>;
       },
-      sortingFn: (a, b) => {
-        const am = a.original.profitAtYourPrice?.profitMarginPercent ?? -999;
-        const bm = b.original.profitAtYourPrice?.profitMarginPercent ?? -999;
-        return am - bm;
-      },
     },
     {
       id: 'marginAtBB',
+      accessorFn: (row) => row.profitAtBuyBox?.profitMarginPercent ?? -999,
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -210,11 +207,6 @@ function getColumns(onReprice: (item: BuyBoxGapRow) => void): ColumnDef<BuyBoxGa
             )}
           </div>
         );
-      },
-      sortingFn: (a, b) => {
-        const am = a.original.profitAtBuyBox?.profitMarginPercent ?? -999;
-        const bm = b.original.profitAtBuyBox?.profitMarginPercent ?? -999;
-        return am - bm;
       },
     },
     {
