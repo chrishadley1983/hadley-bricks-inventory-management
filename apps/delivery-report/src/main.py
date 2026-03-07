@@ -73,26 +73,11 @@ def main() -> None:
         merged = match_orders(supabase_orders, cd_tracking, cancelled_ids, cache)
         log.info("Merged into %d orders", len(merged))
 
-        # ── Step 7: Royal Mail lookups ─────────────────────────────────
-        from src.data.cache import categorise_orders
-        from src.scrapers.royal_mail_tracking import lookup_tracking, map_results_to_orders
-
-        log.info("Step 7/10: Looking up Royal Mail tracking")
-        buckets = categorise_orders(merged, cache)
-
-        orders_to_lookup = buckets["needs_recheck"] + buckets["new_orders"]
-        tracking_numbers = [
-            o["tracking_number"] for o in orders_to_lookup if o.get("tracking_number")
-        ]
-
-        rm_results_raw = {}
-        if tracking_numbers:
-            log.info("Looking up %d tracking numbers on Royal Mail", len(tracking_numbers))
-            rm_results_raw = lookup_tracking(tracking_numbers)
-        else:
-            log.info("No new tracking numbers to look up")
-
-        rm_results = map_results_to_orders(rm_results_raw, orders_to_lookup)
+        # ── Step 7: Royal Mail lookups (skipped on Cloud Run) ─────────
+        # RM lookups run locally via scheduled task (rm_backfill.py) 1 hour
+        # before this pipeline.  Cloud Run trusts the cached RM data.
+        log.info("Step 7/10: Skipping RM lookups (handled by local backfill job)")
+        rm_results: dict[str, dict] = {}
 
         # ── Step 8: Build report ───────────────────────────────────────
         from src.data.cache import build_cache_rows
@@ -237,7 +222,7 @@ def main() -> None:
                 "in_transit": stats["in_transit"],
                 "otdr_now": otdr_now["pct"],
                 "cd_tracking_matches": len(cd_tracking),
-                "rm_lookups": len(tracking_numbers),
+                "rm_lookups": 0,  # RM lookups handled by local backfill job
                 "phantoms_removed": len(phantoms),
             },
         )

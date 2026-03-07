@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# System deps for WeasyPrint + Playwright Chromium
+# System deps for WeasyPrint + Playwright Chromium + Xvfb (virtual display)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # WeasyPrint deps
     libpango-1.0-0 \
@@ -40,4 +40,5 @@ COPY src/ src/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+# RM lookups handled by local backfill job — Cloud Run just builds the report
 CMD ["python", "-m", "src.main"]

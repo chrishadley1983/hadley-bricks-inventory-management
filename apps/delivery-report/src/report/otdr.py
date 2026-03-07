@@ -231,7 +231,7 @@ def build_all_orders_list(orders: list[dict]) -> list[dict]:
             "order_date": _format_date(order.get("order_date")),
             "item": order.get("item_name", "Unknown"),
             "order_no": order.get("platform_order_id", ""),
-            "tracking": order.get("tracking_number", ""),
+            "tracking": order.get("tracking_number") or "",
             "expected": _format_date(exp) if exp else "",
             "actual": _format_date(delivery) if delivery else "",
             "status": on_time_status,

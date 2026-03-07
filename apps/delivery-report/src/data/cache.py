@@ -53,8 +53,11 @@ def categorise_orders(
 
         if not tracking:
             result["no_tracking"].append(order)
-        elif cached and _is_delivered(cached.get("rm_status", "")):
+        elif cached and _is_delivered(cached.get("rm_status", "")) and cached.get("rm_delivery_date"):
             result["cached_delivered"].append(order)
+        elif cached and _is_delivered(cached.get("rm_status", "")) and not cached.get("rm_delivery_date"):
+            # Delivered via CD fallback but no actual date — recheck RM
+            result["needs_recheck"].append(order)
         elif cached and cached.get("needs_recheck"):
             result["needs_recheck"].append(order)
         elif cached:
@@ -138,7 +141,9 @@ def build_cache_rows(
         if not tracking:
             rm_status = "Not dispatched yet" if _is_recent(order) else "Not checked"
 
-        needs_recheck = not _is_delivered(rm_status)
+        # Orders with estimated dates (from CD fallback) still need RM recheck
+        has_real_rm_date = bool(rm.get("rm_delivery_date") or cached.get("rm_delivery_date"))
+        needs_recheck = not _is_delivered(rm_status) or (_is_delivered(rm_status) and not has_real_rm_date)
 
         rows.append(
             {
