@@ -1,32 +1,99 @@
 """
-Royal Mail public tracking scraper — Playwright automation for RM tracking SPA.
+Royal Mail tracking — Chrome CDP approach.
 
-Key behaviours:
-- Full page reload per tracking number (Angular SPA doesn't re-render on hash change)
-- 5s wait for Angular to bootstrap and fetch data
-- Cookie consent dismissal on first visit
-- Batch with 10s pauses every 20 lookups
-- Tracking data expires after ~7 days
+Launches Chrome as a child process with --remote-debugging-port and connects
+via CDP. This bypasses Akamai because Chrome is NOT launched by Playwright
+(no navigator.webdriver flag). Uses hash URL navigation — no form submission
+needed, so no hCaptcha.
+
+For local runs: Chrome is launched with a temp user-data-dir, does lookups,
+then is killed. User's normal Chrome is unaffected.
+
+For Cloud Run: Falls back to headless Chromium (may be blocked by Akamai,
+but the nightly job is supplemented by local backfill runs).
 """
 
+import json
 import logging
+import os
 import re
+import socket
+import subprocess
 import time
-
-from playwright.sync_api import Page, sync_playwright
 
 log = logging.getLogger(__name__)
 
+CDP_PORT = int(os.environ.get("CHROME_CDP_PORT", "9222"))
+CHROME_PATH = os.environ.get(
+    "CHROME_PATH",
+    os.path.join("C:\\", "Program Files", "Google", "Chrome", "Application", "chrome.exe"),
+)
 RM_TRACKING_URL = "https://www.royalmail.com/track-your-item#/tracking-results/{tracking}"
 BATCH_SIZE = 20
-BATCH_PAUSE_SECS = 10
-PAGE_WAIT_SECS = 5
-DATE_PATTERN = re.compile(r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})")
+BATCH_PAUSE_SECS = 5
+LOOKUP_PAUSE_SECS = 2
+SPA_WAIT_SECS = 5
+
+DATE_PATTERN = re.compile(r"delivered[\s\S]{0,80}?(\d{1,2}-\d{1,2}-\d{4})", re.IGNORECASE)
+KNOWN_HEADING_STATUSES = {"delivered", "in transit", "ready for delivery"}
+
+
+def _is_cdp_available(port: int = CDP_PORT) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=2):
+            return True
+    except (ConnectionRefusedError, OSError):
+        return False
+
+
+def _launch_chrome_cdp(port: int = CDP_PORT) -> subprocess.Popen | None:
+    """Launch Chrome as child process with remote debugging."""
+    import tempfile
+    user_data_dir = os.path.join(tempfile.gettempdir(), "rm-tracking-chrome")
+
+    try:
+        proc = subprocess.Popen(
+            [
+                CHROME_PATH,
+                f"--remote-debugging-port={port}",
+                f"--user-data-dir={user_data_dir}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "about:blank",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        log.warning("Chrome not found at %s", CHROME_PATH)
+        return None
+
+    for _ in range(15):
+        time.sleep(1)
+        if _is_cdp_available(port):
+            log.info("Chrome CDP ready on port %d (pid %d)", port, proc.pid)
+            return proc
+
+    log.error("Chrome did not start with CDP within timeout")
+    try:
+        proc.kill()
+    except Exception:
+        pass
+    return None
+
+
+def _parse_rm_date(date_str: str) -> str:
+    """Convert DD-MM-YYYY to YYYY-MM-DD."""
+    parts = date_str.split("-")
+    return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
 
 
 def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
     """
     Look up delivery status for a list of tracking numbers.
+
+    Uses Chrome CDP (child process) to bypass Akamai. Navigates via hash URLs
+    so no form submission / hCaptcha is needed.
 
     Returns:
         Dict of tracking_number -> {rm_status, rm_delivery_date}
@@ -36,170 +103,141 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
 
     log.info("Looking up %d tracking numbers on Royal Mail", len(tracking_numbers))
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            context = browser.new_context()
-            page = context.new_page()
-            results = {}
-            cookie_dismissed = False
+    from playwright.sync_api import sync_playwright
 
+    results = {}
+    chrome_proc = None
+
+    # Launch Chrome if not already running with CDP
+    if not _is_cdp_available():
+        chrome_proc = _launch_chrome_cdp()
+        if chrome_proc is None:
+            log.error("Cannot launch Chrome — RM lookups skipped")
+            return {t: {"rm_status": "Unknown", "rm_delivery_date": None} for t in tracking_numbers}
+
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{CDP_PORT}")
+            log.info("Connected to Chrome via CDP")
+        except Exception as e:
+            log.error("CDP connection failed: %s", e)
+            if chrome_proc:
+                chrome_proc.kill()
+            return {t: {"rm_status": "Unknown", "rm_delivery_date": None} for t in tracking_numbers}
+
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        try:
             for i, tracking in enumerate(tracking_numbers):
                 if i > 0 and i % BATCH_SIZE == 0:
-                    log.info("Pausing %ds between batches (processed %d/%d)", BATCH_PAUSE_SECS, i, len(tracking_numbers))
+                    log.info("Pausing %ds between batches (%d/%d)",
+                             BATCH_PAUSE_SECS, i, len(tracking_numbers))
                     time.sleep(BATCH_PAUSE_SECS)
 
-                url = RM_TRACKING_URL.format(tracking=tracking)
                 try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                    time.sleep(PAGE_WAIT_SECS)
+                    # Navigate to about:blank first (SPA stale render fix)
+                    page.goto("about:blank", wait_until="domcontentloaded", timeout=10000)
+                    time.sleep(0.5)
 
-                    # Dismiss cookie consent on first visit
-                    if not cookie_dismissed:
-                        _dismiss_cookies(page)
-                        cookie_dismissed = True
+                    # Navigate via hash URL — no form, no hCaptcha
+                    url = RM_TRACKING_URL.format(tracking=tracking)
+                    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(SPA_WAIT_SECS)
 
-                    result = _extract_status(page, tracking)
-                    results[tracking] = result
+                    # Get visible text (excluding scripts)
+                    visible_text = page.evaluate("""() => {
+                        const body = document.body.cloneNode(true);
+                        body.querySelectorAll('script, style, noscript').forEach(s => s.remove());
+                        return body.innerText;
+                    }""")
 
-                    if result["rm_status"] != "Unknown":
-                        log.debug("  %s: %s %s", tracking, result["rm_status"], result.get("rm_delivery_date", ""))
+                    # Check for Akamai block
+                    if len(visible_text) < 100 or "access denied" in visible_text.lower():
+                        log.warning("Blocked by Akamai for %s", tracking)
+                        results[tracking] = {"rm_status": "Unknown", "rm_delivery_date": None}
+                        continue
+
+                    # Parse status — headings first (most reliable)
+                    status = None
+                    for sel in ["h1", "h2", "h3"]:
+                        elements = page.locator(sel)
+                        count = elements.count()
+                        for j in range(min(count, 5)):
+                            heading = elements.nth(j).inner_text().strip().lower()
+                            if heading in KNOWN_HEADING_STATUSES:
+                                status = heading.title()
+                                break
+                        if status:
+                            break
+
+                    # Fallback: body text — non-delivered statuses FIRST
+                    if not status:
+                        lower = visible_text.lower()
+                        if "unable to confirm" in lower or "tracking information not available" in lower:
+                            status = "RM data expired"
+                        elif "in transit" in lower:
+                            status = "In transit"
+                        elif "ready for delivery" in lower:
+                            status = "Ready for delivery"
+                        elif "we have your item" in lower:
+                            status = "We have your item"
+                        elif "item dispatched" in lower:
+                            status = "Item dispatched"
+                        elif "delivered" in lower:
+                            status = "Delivered"
+
+                    # Extract delivery date
+                    delivery_date = None
+                    date_match = DATE_PATTERN.search(visible_text)
+                    if date_match:
+                        delivery_date = _parse_rm_date(date_match.group(1))
+
+                    results[tracking] = {
+                        "rm_status": status or "Unknown",
+                        "rm_delivery_date": delivery_date,
+                    }
+
+                    if delivery_date:
+                        log.debug("  %s: %s date=%s", tracking, status, delivery_date)
+                    elif status and status != "Unknown":
+                        log.debug("  %s: %s (no date)", tracking, status)
 
                 except Exception as e:
                     log.warning("Error looking up %s: %s", tracking, e)
                     results[tracking] = {"rm_status": "Lookup failed", "rm_delivery_date": None}
 
-            log.info("Completed RM lookups: %d total", len(results))
-            return results
+                # Pause between lookups
+                if i < len(tracking_numbers) - 1:
+                    time.sleep(LOOKUP_PAUSE_SECS)
+
+            log.info("Completed RM lookups: %d total, %d with dates",
+                     len(results),
+                     sum(1 for r in results.values() if r.get("rm_delivery_date")))
 
         finally:
+            try:
+                page.close()
+            except Exception:
+                pass
             browser.close()
 
-
-def _dismiss_cookies(page: Page) -> None:
-    """Dismiss the cookie consent banner if present."""
-    try:
-        accept_btns = [
-            'button:has-text("Accept")',
-            'button:has-text("Accept all")',
-            '#onetrust-accept-btn-handler',
-            '.cookie-accept',
-        ]
-        for selector in accept_btns:
-            btn = page.locator(selector)
-            if btn.count() > 0 and btn.first.is_visible():
-                btn.first.click()
-                log.debug("Dismissed cookie consent")
-                time.sleep(1)
-                return
-    except Exception:
-        pass
-
-
-def _extract_status(page: Page, tracking: str) -> dict:
-    """Extract tracking status from the RM tracking page."""
-    text = page.inner_text("body").lower()
-
-    # Check for Akamai challenge / blocked page
-    if len(text) < 100 or "access denied" in text or "enable javascript" in text:
-        log.debug("Short/blocked page text for %s, waiting extra 3s", tracking)
-        time.sleep(3)
-        text = page.inner_text("body").lower()
-        if len(text) < 100:
-            return {"rm_status": "Unknown", "rm_delivery_date": None}
-
-    # Check for data expiry
-    if "unable to confirm the status" in text or "tracking information not available" in text:
-        return {"rm_status": "RM data expired", "rm_delivery_date": None}
-
-    # Try the main status heading first (most reliable)
-    heading_status = _extract_status_heading(page)
-    if heading_status:
-        if heading_status == "delivered":
-            return {"rm_status": "Delivered", "rm_delivery_date": _extract_date(page)}
-        if heading_status == "in transit":
-            return {"rm_status": "In transit", "rm_delivery_date": None}
-        if heading_status == "ready for delivery":
-            return {"rm_status": "Ready for Delivery", "rm_delivery_date": None}
-
-    # Fallback: body text — check non-delivered statuses FIRST to avoid
-    # false positives from "delivered" appearing in page boilerplate
-    if "in transit" in text:
-        return {"rm_status": "In transit", "rm_delivery_date": None}
-    if "ready for delivery" in text:
-        return {"rm_status": "Ready for Delivery", "rm_delivery_date": None}
-    if "we have your item" in text:
-        return {"rm_status": "We have your item", "rm_delivery_date": None}
-    if "item dispatched" in text:
-        return {"rm_status": "Item dispatched", "rm_delivery_date": None}
-
-    # Check for delivered last (avoids false positives from boilerplate)
-    if "delivered" in text:
-        delivery_date = _extract_date(page)
-        return {"rm_status": "Delivered", "rm_delivery_date": delivery_date}
-
-    return {"rm_status": "Unknown", "rm_delivery_date": None}
-
-
-KNOWN_STATUSES = {"delivered", "in transit", "ready for delivery"}
-
-
-def _extract_status_heading(page: Page) -> str | None:
-    """Try to extract the main status heading from the RM tracking page.
-
-    The RM Angular SPA renders the status as a prominent heading (h1/h2).
-    Returns the normalised status string, or None if not found.
-    """
-    for selector in ["h1", "h2", "h3", "[class*='status']"]:
+    # Kill Chrome if we launched it
+    if chrome_proc:
         try:
-            elements = page.locator(selector)
-            for i in range(min(elements.count(), 5)):
-                text = elements.nth(i).inner_text().strip().lower()
-                if text in KNOWN_STATUSES:
-                    return text
+            chrome_proc.kill()
+            log.debug("Chrome process killed")
         except Exception:
-            continue
-    return None
+            pass
 
-
-def _extract_date(page: Page) -> str | None:
-    """Extract delivery date from the page in YYYY-MM-DD format."""
-    text = page.inner_text("body")
-
-    # Look for dates near "delivered" text
-    matches = DATE_PATTERN.findall(text)
-    for match in matches:
-        # Try DD-MM-YYYY or DD/MM/YYYY
-        for sep in ["-", "/"]:
-            if sep in match:
-                parts = match.split(sep)
-                if len(parts) == 3:
-                    try:
-                        day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
-                        if year < 100:
-                            year += 2000
-                        if 1 <= day <= 31 and 1 <= month <= 12:
-                            return f"{year:04d}-{month:02d}-{day:02d}"
-                    except ValueError:
-                        continue
-
-    return None
+    return results
 
 
 def map_results_to_orders(
     rm_results: dict[str, dict],
     orders: list[dict],
 ) -> dict[str, dict]:
-    """
-    Map RM tracking results back to order IDs.
-
-    Args:
-        rm_results: tracking_number -> {rm_status, rm_delivery_date}
-        orders: list of order dicts with tracking_number and platform_order_id
-
-    Returns:
-        Dict of platform_order_id -> {rm_status, rm_delivery_date}
-    """
+    """Map RM tracking results back to order IDs."""
     mapped = {}
     for order in orders:
         tracking = order.get("tracking_number")

@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# System deps for WeasyPrint + Playwright Chromium
+# System deps for WeasyPrint + Playwright Chromium + Xvfb (virtual display)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # WeasyPrint deps
     libpango-1.0-0 \
@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm1 \
     libasound2 \
     libpangoft2-1.0-0 \
+    # Xvfb — virtual display so Chrome runs "headed" in headless environment
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -40,4 +42,6 @@ COPY src/ src/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "src.main"]
+# Use xvfb-run to provide virtual display for Chrome headed mode
+# This bypasses Akamai headless browser detection on Royal Mail
+CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1920x1080x24", "python", "-m", "src.main"]

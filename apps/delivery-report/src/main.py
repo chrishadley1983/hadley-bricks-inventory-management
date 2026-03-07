@@ -80,10 +80,15 @@ def main() -> None:
         log.info("Step 7/10: Looking up Royal Mail tracking")
         buckets = categorise_orders(merged, cache)
 
-        orders_to_lookup = buckets["needs_recheck"] + buckets["new_orders"]
+        # Prioritise new orders over rechecks
+        MAX_RM_LOOKUPS = 20
+        orders_to_lookup = buckets["new_orders"] + buckets["needs_recheck"]
         tracking_numbers = [
             o["tracking_number"] for o in orders_to_lookup if o.get("tracking_number")
         ]
+        if len(tracking_numbers) > MAX_RM_LOOKUPS:
+            log.info("Capping RM lookups from %d to %d (rate limit)", len(tracking_numbers), MAX_RM_LOOKUPS)
+            tracking_numbers = tracking_numbers[:MAX_RM_LOOKUPS]
 
         rm_results_raw = {}
         if tracking_numbers:
