@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
               asin,
               local_price: newPrice,
               local_quantity: 1,
-              amazon_sku: listing.platform_sku,
+              amazon_sku: amazonSku,
               amazon_price: null,
               amazon_quantity: null,
               product_type: 'BUILDING_BRICK_SET',
