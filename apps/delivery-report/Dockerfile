@@ -23,8 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm1 \
     libasound2 \
     libpangoft2-1.0-0 \
-    # Xvfb — virtual display so Chrome runs "headed" in headless environment
-    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -42,6 +40,5 @@ COPY src/ src/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Use xvfb-run to provide virtual display for Chrome headed mode
-# This bypasses Akamai headless browser detection on Royal Mail
-CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1920x1080x24", "python", "-m", "src.main"]
+# RM lookups handled by local backfill job — Cloud Run just builds the report
+CMD ["python", "-m", "src.main"]
