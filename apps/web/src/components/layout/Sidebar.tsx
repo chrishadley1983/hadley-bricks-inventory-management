@@ -71,6 +71,7 @@ const navSections: NavSection[] = [
       { href: '/cost-modelling', label: 'Cost Modelling', icon: Calculator },
       { href: '/reports/daily-activity', label: 'Daily Activity', icon: CalendarDays },
       { href: '/reports/inventory-aging', label: 'Inventory Aging', icon: Clock },
+      { href: '/reports/buy-box-gap', label: 'Buy Box Gap', icon: Scale },
     ],
   },
   {
