@@ -28,13 +28,17 @@ CHROME_PATH = os.environ.get(
     "CHROME_PATH",
     os.path.join("C:\\", "Program Files", "Google", "Chrome", "Application", "chrome.exe"),
 )
+RM_BASE_URL = "https://www.royalmail.com/track-your-item"
 RM_TRACKING_URL = "https://www.royalmail.com/track-your-item#/tracking-results/{tracking}"
 BATCH_SIZE = 20
 BATCH_PAUSE_SECS = 5
 LOOKUP_PAUSE_SECS = 2
 SPA_WAIT_SECS = 5
 
-DATE_PATTERN = re.compile(r"delivered[\s\S]{0,80}?(\d{1,2}-\d{1,2}-\d{4})", re.IGNORECASE)
+DATE_PATTERN_NEAR_DELIVERED = re.compile(
+    r"delivered[\s\S]{0,200}?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", re.IGNORECASE
+)
+DATE_PATTERN_ANY = re.compile(r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})")
 KNOWN_HEADING_STATUSES = {"delivered", "in transit", "ready for delivery"}
 
 
@@ -82,10 +86,48 @@ def _launch_chrome_cdp(port: int = CDP_PORT) -> subprocess.Popen | None:
     return None
 
 
-def _parse_rm_date(date_str: str) -> str:
-    """Convert DD-MM-YYYY to YYYY-MM-DD."""
-    parts = date_str.split("-")
-    return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+def _parse_rm_date(date_str: str) -> str | None:
+    """Convert DD-MM-YYYY or DD/MM/YYYY to YYYY-MM-DD. Returns None on failure."""
+    for sep in ("-", "/"):
+        if sep in date_str:
+            parts = date_str.split(sep)
+            if len(parts) == 3:
+                try:
+                    day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                    if year < 100:
+                        year += 2000
+                    if 1 <= day <= 31 and 1 <= month <= 12:
+                        return f"{year:04d}-{month:02d}-{day:02d}"
+                except ValueError:
+                    continue
+    return None
+
+
+def _get_visible_text(page) -> str:
+    """Extract visible text from page, excluding scripts/styles."""
+    return page.evaluate("""() => {
+        const body = document.body.cloneNode(true);
+        body.querySelectorAll('script, style, noscript').forEach(s => s.remove());
+        return body.innerText;
+    }""")
+
+
+def _dismiss_cookies(page) -> None:
+    """Dismiss the RM cookie consent banner if present."""
+    try:
+        for selector in [
+            "#onetrust-accept-btn-handler",
+            'button:has-text("Accept all")',
+            'button:has-text("Accept")',
+        ]:
+            btn = page.locator(selector)
+            if btn.count() > 0 and btn.first.is_visible():
+                btn.first.click()
+                log.debug("Dismissed cookie consent via %s", selector)
+                time.sleep(1)
+                return
+    except Exception:
+        pass
 
 
 def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
@@ -136,9 +178,16 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                     time.sleep(BATCH_PAUSE_SECS)
 
                 try:
-                    # Navigate to about:blank first (SPA stale render fix)
-                    page.goto("about:blank", wait_until="domcontentloaded", timeout=10000)
+                    # Full SPA reset: about:blank → base URL → hash URL.
+                    # - about:blank clears Angular state (prevents stale renders)
+                    # - base URL bootstraps Angular fresh
+                    # - hash URL triggers results fetch
+                    page.goto("about:blank", wait_until="domcontentloaded", timeout=5000)
                     time.sleep(0.5)
+                    page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(2)
+                    if i == 0:
+                        _dismiss_cookies(page)
 
                     # Navigate via hash URL — no form, no hCaptcha
                     url = RM_TRACKING_URL.format(tracking=tracking)
@@ -146,11 +195,18 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                     time.sleep(SPA_WAIT_SECS)
 
                     # Get visible text (excluding scripts)
-                    visible_text = page.evaluate("""() => {
-                        const body = document.body.cloneNode(true);
-                        body.querySelectorAll('script, style, noscript').forEach(s => s.remove());
-                        return body.innerText;
-                    }""")
+                    visible_text = _get_visible_text(page)
+
+                    # Retry once if SPA didn't render results (shows empty form)
+                    if "track another item" not in visible_text.lower() and len(visible_text) > 500:
+                        log.debug("SPA didn't render for %s, retrying...", tracking)
+                        page.goto("about:blank", wait_until="domcontentloaded", timeout=5000)
+                        time.sleep(0.5)
+                        page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
+                        time.sleep(2)
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                        time.sleep(SPA_WAIT_SECS + 2)
+                        visible_text = _get_visible_text(page)
 
                     # Check for Akamai block
                     if len(visible_text) < 100 or "access denied" in visible_text.lower():
@@ -184,14 +240,23 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                             status = "We have your item"
                         elif "item dispatched" in lower:
                             status = "Item dispatched"
-                        elif "delivered" in lower:
+                        elif "your item was delivered" in lower or "item delivered" in lower:
+                            # Match specific RM result phrases, not the generic help link
+                            # ("My item is shown as delivered but it hasn't been")
                             status = "Delivered"
 
-                    # Extract delivery date
+                    # Extract delivery date — try near "delivered" first, then anywhere
                     delivery_date = None
-                    date_match = DATE_PATTERN.search(visible_text)
-                    if date_match:
-                        delivery_date = _parse_rm_date(date_match.group(1))
+                    if status and "delivered" in status.lower():
+                        date_match = DATE_PATTERN_NEAR_DELIVERED.search(visible_text)
+                        if date_match:
+                            delivery_date = _parse_rm_date(date_match.group(1))
+                        if not delivery_date:
+                            for m in DATE_PATTERN_ANY.finditer(visible_text):
+                                parsed = _parse_rm_date(m.group(1))
+                                if parsed:
+                                    delivery_date = parsed
+                                    break
 
                     results[tracking] = {
                         "rm_status": status or "Unknown",
@@ -200,6 +265,9 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
 
                     if delivery_date:
                         log.debug("  %s: %s date=%s", tracking, status, delivery_date)
+                    elif status and "delivered" in status.lower():
+                        log.warning("  %s: %s but NO DATE found in page text (%d chars)",
+                                    tracking, status, len(visible_text))
                     elif status and status != "Unknown":
                         log.debug("  %s: %s (no date)", tracking, status)
 
