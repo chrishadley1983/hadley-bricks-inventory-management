@@ -28,6 +28,7 @@ CHROME_PATH = os.environ.get(
     "CHROME_PATH",
     os.path.join("C:\\", "Program Files", "Google", "Chrome", "Application", "chrome.exe"),
 )
+RM_BASE_URL = "https://www.royalmail.com/track-your-item"
 RM_TRACKING_URL = "https://www.royalmail.com/track-your-item#/tracking-results/{tracking}"
 BATCH_SIZE = 20
 BATCH_PAUSE_SECS = 5
@@ -150,9 +151,12 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                     time.sleep(BATCH_PAUSE_SECS)
 
                 try:
-                    # Navigate to about:blank first (SPA stale render fix)
-                    page.goto("about:blank", wait_until="domcontentloaded", timeout=10000)
-                    time.sleep(0.5)
+                    # Navigate to RM base page first so Angular SPA bootstraps,
+                    # then navigate to hash URL. Going from about:blank directly
+                    # to the hash URL doesn't trigger Angular's router.
+                    if i == 0:
+                        page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
+                        time.sleep(3)
 
                     # Navigate via hash URL — no form, no hCaptcha
                     url = RM_TRACKING_URL.format(tracking=tracking)
@@ -198,7 +202,9 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                             status = "We have your item"
                         elif "item dispatched" in lower:
                             status = "Item dispatched"
-                        elif "delivered" in lower:
+                        elif "your item was delivered" in lower or "item delivered" in lower:
+                            # Match specific RM result phrases, not the generic help link
+                            # ("My item is shown as delivered but it hasn't been")
                             status = "Delivered"
 
                     # Extract delivery date — try near "delivered" first, then anywhere
