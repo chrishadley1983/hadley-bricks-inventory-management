@@ -34,7 +34,10 @@ BATCH_PAUSE_SECS = 5
 LOOKUP_PAUSE_SECS = 2
 SPA_WAIT_SECS = 5
 
-DATE_PATTERN = re.compile(r"delivered[\s\S]{0,80}?(\d{1,2}-\d{1,2}-\d{4})", re.IGNORECASE)
+DATE_PATTERN_NEAR_DELIVERED = re.compile(
+    r"delivered[\s\S]{0,200}?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", re.IGNORECASE
+)
+DATE_PATTERN_ANY = re.compile(r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})")
 KNOWN_HEADING_STATUSES = {"delivered", "in transit", "ready for delivery"}
 
 
@@ -82,10 +85,21 @@ def _launch_chrome_cdp(port: int = CDP_PORT) -> subprocess.Popen | None:
     return None
 
 
-def _parse_rm_date(date_str: str) -> str:
-    """Convert DD-MM-YYYY to YYYY-MM-DD."""
-    parts = date_str.split("-")
-    return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+def _parse_rm_date(date_str: str) -> str | None:
+    """Convert DD-MM-YYYY or DD/MM/YYYY to YYYY-MM-DD. Returns None on failure."""
+    for sep in ("-", "/"):
+        if sep in date_str:
+            parts = date_str.split(sep)
+            if len(parts) == 3:
+                try:
+                    day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                    if year < 100:
+                        year += 2000
+                    if 1 <= day <= 31 and 1 <= month <= 12:
+                        return f"{year:04d}-{month:02d}-{day:02d}"
+                except ValueError:
+                    continue
+    return None
 
 
 def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
@@ -187,11 +201,18 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                         elif "delivered" in lower:
                             status = "Delivered"
 
-                    # Extract delivery date
+                    # Extract delivery date — try near "delivered" first, then anywhere
                     delivery_date = None
-                    date_match = DATE_PATTERN.search(visible_text)
-                    if date_match:
-                        delivery_date = _parse_rm_date(date_match.group(1))
+                    if status and "delivered" in status.lower():
+                        date_match = DATE_PATTERN_NEAR_DELIVERED.search(visible_text)
+                        if date_match:
+                            delivery_date = _parse_rm_date(date_match.group(1))
+                        if not delivery_date:
+                            for m in DATE_PATTERN_ANY.finditer(visible_text):
+                                parsed = _parse_rm_date(m.group(1))
+                                if parsed:
+                                    delivery_date = parsed
+                                    break
 
                     results[tracking] = {
                         "rm_status": status or "Unknown",
@@ -200,6 +221,9 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
 
                     if delivery_date:
                         log.debug("  %s: %s date=%s", tracking, status, delivery_date)
+                    elif status and "delivered" in status.lower():
+                        log.warning("  %s: %s but NO DATE found in page text (%d chars)",
+                                    tracking, status, len(visible_text))
                     elif status and status != "Unknown":
                         log.debug("  %s: %s (no date)", tracking, status)
 
