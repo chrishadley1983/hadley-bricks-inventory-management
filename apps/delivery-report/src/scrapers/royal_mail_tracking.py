@@ -103,6 +103,33 @@ def _parse_rm_date(date_str: str) -> str | None:
     return None
 
 
+def _get_visible_text(page) -> str:
+    """Extract visible text from page, excluding scripts/styles."""
+    return page.evaluate("""() => {
+        const body = document.body.cloneNode(true);
+        body.querySelectorAll('script, style, noscript').forEach(s => s.remove());
+        return body.innerText;
+    }""")
+
+
+def _dismiss_cookies(page) -> None:
+    """Dismiss the RM cookie consent banner if present."""
+    try:
+        for selector in [
+            "#onetrust-accept-btn-handler",
+            'button:has-text("Accept all")',
+            'button:has-text("Accept")',
+        ]:
+            btn = page.locator(selector)
+            if btn.count() > 0 and btn.first.is_visible():
+                btn.first.click()
+                log.debug("Dismissed cookie consent via %s", selector)
+                time.sleep(1)
+                return
+    except Exception:
+        pass
+
+
 def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
     """
     Look up delivery status for a list of tracking numbers.
@@ -151,12 +178,16 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                     time.sleep(BATCH_PAUSE_SECS)
 
                 try:
-                    # Navigate to RM base page first so Angular SPA bootstraps,
-                    # then navigate to hash URL. Going from about:blank directly
-                    # to the hash URL doesn't trigger Angular's router.
+                    # Full SPA reset: about:blank → base URL → hash URL.
+                    # - about:blank clears Angular state (prevents stale renders)
+                    # - base URL bootstraps Angular fresh
+                    # - hash URL triggers results fetch
+                    page.goto("about:blank", wait_until="domcontentloaded", timeout=5000)
+                    time.sleep(0.5)
+                    page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(2)
                     if i == 0:
-                        page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
-                        time.sleep(3)
+                        _dismiss_cookies(page)
 
                     # Navigate via hash URL — no form, no hCaptcha
                     url = RM_TRACKING_URL.format(tracking=tracking)
@@ -164,11 +195,18 @@ def lookup_tracking(tracking_numbers: list[str]) -> dict[str, dict]:
                     time.sleep(SPA_WAIT_SECS)
 
                     # Get visible text (excluding scripts)
-                    visible_text = page.evaluate("""() => {
-                        const body = document.body.cloneNode(true);
-                        body.querySelectorAll('script, style, noscript').forEach(s => s.remove());
-                        return body.innerText;
-                    }""")
+                    visible_text = _get_visible_text(page)
+
+                    # Retry once if SPA didn't render results (shows empty form)
+                    if "track another item" not in visible_text.lower() and len(visible_text) > 500:
+                        log.debug("SPA didn't render for %s, retrying...", tracking)
+                        page.goto("about:blank", wait_until="domcontentloaded", timeout=5000)
+                        time.sleep(0.5)
+                        page.goto(RM_BASE_URL, wait_until="domcontentloaded", timeout=30000)
+                        time.sleep(2)
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                        time.sleep(SPA_WAIT_SECS + 2)
+                        visible_text = _get_visible_text(page)
 
                     # Check for Akamai block
                     if len(visible_text) < 100 or "access denied" in visible_text.lower():
