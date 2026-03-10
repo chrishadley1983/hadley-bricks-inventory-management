@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
+import { UK_MARKETPLACE_ID } from '@/lib/amazon/amazon-sync.types';
 
 const RepriceSchema = z.object({
   asin: z.string().min(1),
@@ -90,8 +91,11 @@ export async function POST(request: NextRequest) {
 
     const amazonSku = listing?.platform_sku ?? null;
 
-    // Step 4: Add items to amazon sync queue
+    // Step 4: Look up the real product type for this ASIN
     const service = new AmazonSyncService(supabase, user.id);
+    const productType = await service.getProductTypeForAsin(asin, UK_MARKETPLACE_ID);
+
+    // Step 5: Add items to amazon sync queue
     let queued = 0;
     const errors: string[] = [];
 
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest) {
               amazon_sku: amazonSku,
               amazon_price: null,
               amazon_quantity: null,
-              product_type: 'BUILDING_BRICK_SET',
+              product_type: productType,
               is_new_sku: false,
             });
 
