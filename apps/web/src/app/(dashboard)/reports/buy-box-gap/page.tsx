@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { Scale, RefreshCw } from 'lucide-react';
+import { Scale, RefreshCw, Trophy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TableSkeleton, StatCardSkeleton } from '@/components/ui/skeletons';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BuyBoxGapRow } from '@/app/api/reports/buy-box-gap/route';
 
 const Header = dynamic(
@@ -21,9 +23,18 @@ const BuyBoxGapTable = dynamic(
   { ssr: false, loading: () => <TableSkeleton columns={12} rows={10} /> }
 );
 
+const WinningBuyBoxTable = dynamic(
+  () =>
+    import('@/components/features/buy-box-gap').then((mod) => ({
+      default: mod.WinningBuyBoxTable,
+    })),
+  { ssr: false, loading: () => <TableSkeleton columns={10} rows={10} /> }
+);
+
 interface BuyBoxGapResponse {
   data: {
     items: BuyBoxGapRow[];
+    winningItems: BuyBoxGapRow[];
     summary: {
       totalInStock: number;
       losingBuyBox: number;
@@ -49,6 +60,7 @@ function formatGBP(n: number): string {
 }
 
 export default function BuyBoxGapPage() {
+  const [activeTab, setActiveTab] = useState('gap');
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['buy-box-gap'],
     queryFn: fetchBuyBoxGap,
@@ -57,6 +69,7 @@ export default function BuyBoxGapPage() {
 
   const summary = data?.data.summary;
   const items = data?.data.items ?? [];
+  const winningItems = data?.data.winningItems ?? [];
 
   return (
     <>
@@ -84,9 +97,10 @@ export default function BuyBoxGapPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-7">
           {isLoading ? (
             <>
+              <StatCardSkeleton />
               <StatCardSkeleton />
               <StatCardSkeleton />
               <StatCardSkeleton />
@@ -100,6 +114,19 @@ export default function BuyBoxGapPage() {
                 <CardContent className="p-4 text-center">
                   <p className="text-xs text-muted-foreground font-medium">Losing Buy Box</p>
                   <p className="text-2xl font-bold text-slate-800">{summary.losingBuyBox}</p>
+                  <p className="text-xs text-muted-foreground">of {summary.totalInStock} in-stock</p>
+                </CardContent>
+              </Card>
+              <Card
+                className="border-t-2 border-t-blue-500 cursor-pointer hover:bg-blue-50/50 transition-colors"
+                onClick={() => setActiveTab('winning')}
+              >
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center justify-center gap-1">
+                    <Trophy className="h-3 w-3 text-blue-500" />
+                    Winning Buy Box
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600">{summary.winningBuyBox}</p>
                   <p className="text-xs text-muted-foreground">of {summary.totalInStock} in-stock</p>
                 </CardContent>
               </Card>
@@ -142,27 +169,56 @@ export default function BuyBoxGapPage() {
           ) : null}
         </div>
 
-        {/* Data freshness notice */}
-        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
-          <strong>Data freshness:</strong> Buy box prices from last SP-API/Keepa sync. Your price and stock from daily SP-API sync. Run the CLI script for live buy box data.
-        </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="gap">
+              Buy Box Gap {!isLoading && `(${items.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="winning">
+              <Trophy className="h-3.5 w-3.5 mr-1" />
+              Winning Buy Box {!isLoading && `(${winningItems.length})`}
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Buy Box Gap — In-Stock Listings</CardTitle>
-            <CardDescription>
-              Click &quot;Reprice&quot; to update the price and push to the Amazon sync queue. Suggested price rounds down to the nearest .49/.99 below the buy box.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BuyBoxGapTable
-              items={items}
-              isLoading={isLoading}
-              onRepriceSuccess={() => refetch()}
-            />
-          </CardContent>
-        </Card>
+          <TabsContent value="gap" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Buy Box Gap — In-Stock Listings</CardTitle>
+                <CardDescription>
+                  Click &quot;Reprice&quot; to update the price and push to the Amazon sync queue. Suggested price rounds down to the nearest .49/.99 below the buy box.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BuyBoxGapTable
+                  items={items}
+                  isLoading={isLoading}
+                  onRepriceSuccess={() => refetch()}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="winning" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-blue-500" />
+                  Winning Buy Box — In-Stock Listings
+                </CardTitle>
+                <CardDescription>
+                  Items where you currently own the buy box. Sorted by profit margin.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <WinningBuyBoxTable
+                  items={winningItems}
+                  isLoading={isLoading}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );
