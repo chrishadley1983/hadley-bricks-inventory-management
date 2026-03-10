@@ -16,8 +16,15 @@ const functions = require('@google-cloud/functions-framework');
 
 // Configuration
 const APP_URL = process.env.APP_URL || 'https://hadley-bricks.vercel.app';
-const MAX_ITERATIONS = 120; // 120 * 30s = 1 hour max
+const DEFAULT_MAX_ITERATIONS = 120; // 120 * 30s = 1 hour max
 const ITERATION_DELAY_MS = 30000; // 30 seconds between calls
+
+// amazon-pricing uses budget-spread (self-contained invocations, no retry loop needed)
+const JOB_MAX_ITERATIONS = {
+  'amazon-pricing': 1,
+  'ebay-pricing': 120,
+  'bricklink-pricing': 120,
+};
 
 // Job type to endpoint mapping
 const JOB_ENDPOINTS = {
@@ -102,9 +109,10 @@ functions.http('pricingSyncDriver', async (req, res) => {
 
     let iteration = 0;
     let lastResponse = null;
+    const maxIterations = JOB_MAX_ITERATIONS[jobType] ?? DEFAULT_MAX_ITERATIONS;
 
     // Loop until complete or max iterations reached
-    while (iteration < MAX_ITERATIONS) {
+    while (iteration < maxIterations) {
       iteration++;
       const iterationStart = Date.now();
 
@@ -155,7 +163,7 @@ functions.http('pricingSyncDriver', async (req, res) => {
       const iterationDuration = Date.now() - iterationStart;
       const delayNeeded = Math.max(0, ITERATION_DELAY_MS - iterationDuration);
 
-      if (delayNeeded > 0 && iteration < MAX_ITERATIONS) {
+      if (delayNeeded > 0 && iteration < maxIterations) {
         console.log(`[PricingSyncDriver] Waiting ${delayNeeded}ms before next iteration...`);
         await sleep(delayNeeded);
       }
@@ -164,14 +172,15 @@ functions.http('pricingSyncDriver', async (req, res) => {
     // Max iterations reached without completion
     const totalDuration = Date.now() - startTime;
     console.warn(
-      `[PricingSyncDriver] Max iterations (${MAX_ITERATIONS}) reached for ${jobType}`
+      `[PricingSyncDriver] Max iterations (${maxIterations}) reached for ${jobType}`
     );
 
-    res.status(200).json({
+    // Return 500 so Cloud Scheduler registers a failure
+    res.status(500).json({
       success: false,
-      warning: 'Max iterations reached',
+      warning: 'Max iterations reached without completion',
       jobType,
-      iterations: MAX_ITERATIONS,
+      iterations: maxIterations,
       totalDurationMs: totalDuration,
       lastResponse: lastResponse?.body,
     });
