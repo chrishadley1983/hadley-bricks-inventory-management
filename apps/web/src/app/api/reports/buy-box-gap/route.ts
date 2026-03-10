@@ -193,9 +193,9 @@ export async function GET() {
       }
     }
 
-    // Step 5: Build gap items
+    // Step 5: Build gap items and winning items
     const items: BuyBoxGapRow[] = [];
-    let winningCount = 0;
+    const winningItems: BuyBoxGapRow[] = [];
 
     for (const tracked of allTracked) {
       const bb = buyBoxMap.get(tracked.asin);
@@ -203,11 +203,6 @@ export async function GET() {
 
       const yourPrice = tracked.price ? Number(tracked.price) : 0;
       if (yourPrice <= 0) continue;
-
-      if (bb.buyBoxIsYours) {
-        winningCount++;
-        continue;
-      }
 
       const gapAbsolute = yourPrice - bb.buyBoxPrice;
       const gapPercent = yourPrice > 0 ? (gapAbsolute / yourPrice) * 100 : 0;
@@ -217,7 +212,7 @@ export async function GET() {
         ? costs.reduce((a, b) => a + b, 0) / costs.length
         : null;
 
-      items.push({
+      const row: BuyBoxGapRow = {
         asin: tracked.asin,
         name: tracked.name ?? 'Unknown',
         setNumber: setMap.get(tracked.asin) ?? null,
@@ -233,13 +228,23 @@ export async function GET() {
         profitAtBuyBox: avgCost ? calculateProfit(bb.buyBoxPrice, avgCost) : null,
         profitAtYourPrice: avgCost ? calculateProfit(yourPrice, avgCost) : null,
         priceSource: 'cached',
-        buyBoxIsYours: false,
+        buyBoxIsYours: bb.buyBoxIsYours,
         snapshotDate: bb.snapshotDate,
-      });
+      };
+
+      if (bb.buyBoxIsYours) {
+        winningItems.push(row);
+      } else {
+        items.push(row);
+      }
     }
 
-    // Sort by gap (biggest first)
+    // Sort gap items by gap (biggest first), winning items by margin (best first)
     items.sort((a, b) => b.gapAbsolute - a.gapAbsolute);
+    winningItems.sort((a, b) =>
+      (b.profitAtYourPrice?.profitMarginPercent ?? -999) -
+      (a.profitAtYourPrice?.profitMarginPercent ?? -999)
+    );
 
     const matchBB = items.filter((i) => i.profitAtBuyBox && i.profitAtBuyBox.profitMarginPercent >= 15).length;
     const review = items.filter((i) => i.profitAtBuyBox && i.profitAtBuyBox.profitMarginPercent >= 5 && i.profitAtBuyBox.profitMarginPercent < 15).length;
@@ -250,10 +255,11 @@ export async function GET() {
     return NextResponse.json({
       data: {
         items,
+        winningItems,
         summary: {
           totalInStock: allTracked.length,
           losingBuyBox: items.length,
-          winningBuyBox: winningCount,
+          winningBuyBox: winningItems.length,
           matchBB,
           review,
           loss,
