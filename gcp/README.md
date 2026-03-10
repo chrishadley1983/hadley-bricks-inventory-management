@@ -250,18 +250,21 @@ gcloud scheduler jobs create http bricklink-pricing-sync \
   --oidc-service-account-email="hadley-scheduler-sa@$GCP_PROJECT.iam.gserviceaccount.com" \
   --description="Daily BrickLink pricing sync (resumable)"
 
-# Amazon Pricing Sync - daily at 4am UTC
-gcloud scheduler jobs create http amazon-pricing-sync \
+# Amazon Pricing Sync - every 30 minutes (budget-spread strategy)
+# Each invocation processes ~57 ASINs, prioritising in-stock items.
+# In-stock ASINs refresh same-day; others over a 3-4 day cycle.
+# To update existing job:
+gcloud scheduler jobs update http amazon-pricing-sync \
   --location=europe-west2 \
-  --schedule="0 4 * * *" \
+  --schedule="*/30 * * * *" \
   --uri="$FUNCTION_URL" \
   --http-method=POST \
   --headers="Content-Type=application/json" \
   --message-body='{"jobType":"amazon-pricing"}' \
   --time-zone="UTC" \
-  --attempt-deadline="3600s" \
+  --attempt-deadline="600s" \
   --oidc-service-account-email="hadley-scheduler-sa@$GCP_PROJECT.iam.gserviceaccount.com" \
-  --description="Daily Amazon pricing sync (resumable)"
+  --description="Amazon pricing sync - budget-spread (every 30 min)"
 ```
 
 ## Verification

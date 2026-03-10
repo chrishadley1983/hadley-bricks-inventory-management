@@ -921,6 +921,7 @@ export type Database = {
           total_items: number | null
           updated_at: string
           user_id: string
+          zero_progress_count: number | null
         }
         Insert: {
           created_at?: string
@@ -940,6 +941,7 @@ export type Database = {
           total_items?: number | null
           updated_at?: string
           user_id: string
+          zero_progress_count?: number | null
         }
         Update: {
           created_at?: string
@@ -959,6 +961,7 @@ export type Database = {
           total_items?: number | null
           updated_at?: string
           user_id?: string
+          zero_progress_count?: number | null
         }
         Relationships: [
           {
@@ -3752,42 +3755,204 @@ export type Database = {
           },
         ]
       }
+      energy_billing: {
+        Row: {
+          account_balance_pence: number | null
+          billing_month: string
+          created_at: string | null
+          dd_adequate: boolean | null
+          dd_amount_pence: number | null
+          id: string
+          last_bill_amount_pence: number | null
+          last_bill_date: string | null
+          raw_response: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_balance_pence?: number | null
+          billing_month: string
+          created_at?: string | null
+          dd_adequate?: boolean | null
+          dd_amount_pence?: number | null
+          id?: string
+          last_bill_amount_pence?: number | null
+          last_bill_date?: string | null
+          raw_response?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_balance_pence?: number | null
+          billing_month?: string
+          created_at?: string | null
+          dd_adequate?: boolean | null
+          dd_amount_pence?: number | null
+          id?: string
+          last_bill_amount_pence?: number | null
+          last_bill_date?: string | null
+          raw_response?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      energy_consumption: {
+        Row: {
+          consumption_kwh: number
+          consumption_raw: number | null
+          created_at: string | null
+          fuel_type: string
+          id: string
+          interval_end: string
+          interval_start: string
+        }
+        Insert: {
+          consumption_kwh: number
+          consumption_raw?: number | null
+          created_at?: string | null
+          fuel_type: string
+          id?: string
+          interval_end: string
+          interval_start: string
+        }
+        Update: {
+          consumption_kwh?: number
+          consumption_raw?: number | null
+          created_at?: string | null
+          fuel_type?: string
+          id?: string
+          interval_end?: string
+          interval_start?: string
+        }
+        Relationships: []
+      }
+      energy_daily_summary: {
+        Row: {
+          cost_pence: number
+          created_at: string | null
+          fuel_type: string
+          id: string
+          is_ev_charge_day: boolean | null
+          offpeak_kwh: number | null
+          peak_kwh: number | null
+          standing_charge_pence: number | null
+          summary_date: string
+          total_cost_pence: number
+          total_kwh: number
+          updated_at: string | null
+        }
+        Insert: {
+          cost_pence?: number
+          created_at?: string | null
+          fuel_type: string
+          id?: string
+          is_ev_charge_day?: boolean | null
+          offpeak_kwh?: number | null
+          peak_kwh?: number | null
+          standing_charge_pence?: number | null
+          summary_date: string
+          total_cost_pence?: number
+          total_kwh?: number
+          updated_at?: string | null
+        }
+        Update: {
+          cost_pence?: number
+          created_at?: string | null
+          fuel_type?: string
+          id?: string
+          is_ev_charge_day?: boolean | null
+          offpeak_kwh?: number | null
+          peak_kwh?: number | null
+          standing_charge_pence?: number | null
+          summary_date?: string
+          total_cost_pence?: number
+          total_kwh?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      energy_tariffs: {
+        Row: {
+          created_at: string | null
+          fuel_type: string
+          id: string
+          product_code: string | null
+          rate_type: string
+          tariff_code: string | null
+          valid_from: string
+          valid_to: string | null
+          value_inc_vat: number
+        }
+        Insert: {
+          created_at?: string | null
+          fuel_type: string
+          id?: string
+          product_code?: string | null
+          rate_type: string
+          tariff_code?: string | null
+          valid_from: string
+          valid_to?: string | null
+          value_inc_vat: number
+        }
+        Update: {
+          created_at?: string | null
+          fuel_type?: string
+          id?: string
+          product_code?: string | null
+          rate_type?: string
+          tariff_code?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value_inc_vat?: number
+        }
+        Relationships: []
+      }
       evening_clubs: {
         Row: {
+          booked_via: string | null
           child_name: string
           club_name: string
+          cost_per_session: number | null
           created_at: string | null
           id: string
           is_active: boolean | null
           notes: string | null
           pickup_location: string | null
           pickup_time: string | null
+          provider: string | null
+          term_pair: string | null
           time_category: string | null
           updated_at: string | null
           weekday: number
         }
         Insert: {
+          booked_via?: string | null
           child_name: string
           club_name: string
+          cost_per_session?: number | null
           created_at?: string | null
           id?: string
           is_active?: boolean | null
           notes?: string | null
           pickup_location?: string | null
           pickup_time?: string | null
+          provider?: string | null
+          term_pair?: string | null
           time_category?: string | null
           updated_at?: string | null
           weekday: number
         }
         Update: {
+          booked_via?: string | null
           child_name?: string
           club_name?: string
+          cost_per_session?: number | null
           created_at?: string | null
           id?: string
           is_active?: boolean | null
           notes?: string | null
           pickup_location?: string | null
           pickup_time?: string | null
+          provider?: string | null
+          term_pair?: string | null
           time_category?: string | null
           updated_at?: string | null
           weekday?: number
@@ -4014,6 +4179,48 @@ export type Database = {
           source?: string | null
           total_hours?: number | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      gemini_api_usage: {
+        Row: {
+          consumer: string
+          created_at: string
+          error_message: string | null
+          id: number
+          input_tokens: number | null
+          metadata: Json | null
+          model: string
+          output_tokens: number | null
+          response_time_ms: number | null
+          success: boolean
+          total_tokens: number | null
+        }
+        Insert: {
+          consumer: string
+          created_at?: string
+          error_message?: string | null
+          id?: never
+          input_tokens?: number | null
+          metadata?: Json | null
+          model: string
+          output_tokens?: number | null
+          response_time_ms?: number | null
+          success?: boolean
+          total_tokens?: number | null
+        }
+        Update: {
+          consumer?: string
+          created_at?: string
+          error_message?: string | null
+          id?: never
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string
+          output_tokens?: number | null
+          response_time_ms?: number | null
+          success?: boolean
+          total_tokens?: number | null
         }
         Relationships: []
       }
@@ -5586,6 +5793,7 @@ export type Database = {
           created_at: string | null
           embedding: string | null
           end_word: number | null
+          fts: unknown
           id: string
           parent_id: string
           start_word: number | null
@@ -5596,6 +5804,7 @@ export type Database = {
           created_at?: string | null
           embedding?: string | null
           end_word?: number | null
+          fts?: unknown
           id?: string
           parent_id: string
           start_word?: number | null
@@ -5606,6 +5815,7 @@ export type Database = {
           created_at?: string | null
           embedding?: string | null
           end_word?: number | null
+          fts?: unknown
           id?: string
           parent_id?: string
           start_word?: number | null
@@ -5676,9 +5886,11 @@ export type Database = {
           access_count: number | null
           base_priority: number | null
           capture_type: string
+          concepts: Json | null
           content_type: string
           created_at: string | null
           decay_score: number | null
+          facts: Json | null
           full_text: string | null
           id: string
           last_accessed_at: string | null
@@ -5690,6 +5902,7 @@ export type Database = {
           status: string | null
           summary: string | null
           title: string | null
+          title_fts: unknown
           topics: string[] | null
           updated_at: string | null
           user_note: string | null
@@ -5699,9 +5912,11 @@ export type Database = {
           access_count?: number | null
           base_priority?: number | null
           capture_type?: string
+          concepts?: Json | null
           content_type: string
           created_at?: string | null
           decay_score?: number | null
+          facts?: Json | null
           full_text?: string | null
           id?: string
           last_accessed_at?: string | null
@@ -5713,6 +5928,7 @@ export type Database = {
           status?: string | null
           summary?: string | null
           title?: string | null
+          title_fts?: unknown
           topics?: string[] | null
           updated_at?: string | null
           user_note?: string | null
@@ -5722,9 +5938,11 @@ export type Database = {
           access_count?: number | null
           base_priority?: number | null
           capture_type?: string
+          concepts?: Json | null
           content_type?: string
           created_at?: string | null
           decay_score?: number | null
+          facts?: Json | null
           full_text?: string | null
           id?: string
           last_accessed_at?: string | null
@@ -5736,6 +5954,7 @@ export type Database = {
           status?: string | null
           summary?: string | null
           title?: string | null
+          title_fts?: unknown
           topics?: string[] | null
           updated_at?: string | null
           user_note?: string | null
@@ -6236,6 +6455,45 @@ export type Database = {
         }
         Relationships: []
       }
+      meal_history: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          meal_name: string
+          notes: string | null
+          protein_type: string | null
+          rating: number | null
+          recipe_id: string | null
+          recipe_source: string | null
+          would_make_again: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          meal_name: string
+          notes?: string | null
+          protein_type?: string | null
+          rating?: number | null
+          recipe_id?: string | null
+          recipe_source?: string | null
+          would_make_again?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          meal_name?: string
+          notes?: string | null
+          protein_type?: string | null
+          rating?: number | null
+          recipe_id?: string | null
+          recipe_source?: string | null
+          would_make_again?: boolean | null
+        }
+        Relationships: []
+      }
       meal_plan_ingredients: {
         Row: {
           category: string
@@ -6280,35 +6538,44 @@ export type Database = {
       meal_plan_items: {
         Row: {
           adults_meal: string | null
+          cook_time_mins: number | null
           created_at: string | null
           date: string
           id: string
           kids_meal: string | null
           meal_slot: number
+          notes: string | null
           plan_id: string
           recipe_url: string | null
+          servings: number | null
           source_tag: string | null
         }
         Insert: {
           adults_meal?: string | null
+          cook_time_mins?: number | null
           created_at?: string | null
           date: string
           id?: string
           kids_meal?: string | null
           meal_slot: number
+          notes?: string | null
           plan_id: string
           recipe_url?: string | null
+          servings?: number | null
           source_tag?: string | null
         }
         Update: {
           adults_meal?: string | null
+          cook_time_mins?: number | null
           created_at?: string | null
           date?: string
           id?: string
           kids_meal?: string | null
           meal_slot?: number
+          notes?: string | null
           plan_id?: string
           recipe_url?: string | null
+          servings?: number | null
           source_tag?: string | null
         }
         Relationships: [
@@ -6320,6 +6587,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meal_plan_preferences: {
+        Row: {
+          batch_cook_per_week: number | null
+          budget_per_week_pence: number | null
+          cuisine_preferences: string[] | null
+          dietary: Json | null
+          disliked_ingredients: string[] | null
+          gousto_nights_per_week: number | null
+          id: string
+          profile_name: string
+          updated_at: string | null
+          variety_rules: Json | null
+        }
+        Insert: {
+          batch_cook_per_week?: number | null
+          budget_per_week_pence?: number | null
+          cuisine_preferences?: string[] | null
+          dietary?: Json | null
+          disliked_ingredients?: string[] | null
+          gousto_nights_per_week?: number | null
+          id?: string
+          profile_name?: string
+          updated_at?: string | null
+          variety_rules?: Json | null
+        }
+        Update: {
+          batch_cook_per_week?: number | null
+          budget_per_week_pence?: number | null
+          cuisine_preferences?: string[] | null
+          dietary?: Json | null
+          disliked_ingredients?: string[] | null
+          gousto_nights_per_week?: number | null
+          id?: string
+          profile_name?: string
+          updated_at?: string | null
+          variety_rules?: Json | null
+        }
+        Relationships: []
+      }
+      meal_plan_templates: {
+        Row: {
+          created_at: string | null
+          days: Json
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          days: Json
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          days?: Json
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       meal_plans: {
         Row: {
@@ -9302,6 +9635,219 @@ export type Database = {
           },
         ]
       }
+      school_events: {
+        Row: {
+          action_deadline: string | null
+          calendar_event_id: string | null
+          created_at: string | null
+          event_date: string
+          event_name: string
+          event_type: string
+          id: string
+          notes: string | null
+          relevant_children: string[] | null
+          requires_action: string | null
+          source: string | null
+          source_date: string | null
+          updated_at: string | null
+          year_groups: string[] | null
+        }
+        Insert: {
+          action_deadline?: string | null
+          calendar_event_id?: string | null
+          created_at?: string | null
+          event_date: string
+          event_name: string
+          event_type?: string
+          id?: string
+          notes?: string | null
+          relevant_children?: string[] | null
+          requires_action?: string | null
+          source?: string | null
+          source_date?: string | null
+          updated_at?: string | null
+          year_groups?: string[] | null
+        }
+        Update: {
+          action_deadline?: string | null
+          calendar_event_id?: string | null
+          created_at?: string | null
+          event_date?: string
+          event_name?: string
+          event_type?: string
+          id?: string
+          notes?: string | null
+          relevant_children?: string[] | null
+          requires_action?: string | null
+          source?: string | null
+          source_date?: string | null
+          updated_at?: string | null
+          year_groups?: string[] | null
+        }
+        Relationships: []
+      }
+      school_inset_days: {
+        Row: {
+          academic_year: string
+          calendar_event_id: string | null
+          confirmed: boolean | null
+          created_at: string | null
+          id: string
+          inset_date: string
+        }
+        Insert: {
+          academic_year: string
+          calendar_event_id?: string | null
+          confirmed?: boolean | null
+          created_at?: string | null
+          id?: string
+          inset_date: string
+        }
+        Update: {
+          academic_year?: string
+          calendar_event_id?: string | null
+          confirmed?: boolean | null
+          created_at?: string | null
+          id?: string
+          inset_date?: string
+        }
+        Relationships: []
+      }
+      school_newsletters: {
+        Row: {
+          created_at: string | null
+          events_extracted: number | null
+          id: string
+          last_checked_at: string | null
+          newsletter_date: string
+          pdf_url: string
+          processed: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          events_extracted?: number | null
+          id?: string
+          last_checked_at?: string | null
+          newsletter_date: string
+          pdf_url: string
+          processed?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          events_extracted?: number | null
+          id?: string
+          last_checked_at?: string | null
+          newsletter_date?: string
+          pdf_url?: string
+          processed?: boolean | null
+        }
+        Relationships: []
+      }
+      school_spellings: {
+        Row: {
+          academic_year: string
+          child_name: string
+          created_at: string | null
+          id: string
+          phoneme: string | null
+          source: string | null
+          test_date: string | null
+          updated_at: string | null
+          week_number: number
+          words: Json
+          year_group: string
+        }
+        Insert: {
+          academic_year: string
+          child_name: string
+          created_at?: string | null
+          id?: string
+          phoneme?: string | null
+          source?: string | null
+          test_date?: string | null
+          updated_at?: string | null
+          week_number: number
+          words?: Json
+          year_group: string
+        }
+        Update: {
+          academic_year?: string
+          child_name?: string
+          created_at?: string | null
+          id?: string
+          phoneme?: string | null
+          source?: string | null
+          test_date?: string | null
+          updated_at?: string | null
+          week_number?: number
+          words?: Json
+          year_group?: string
+        }
+        Relationships: []
+      }
+      school_term_date_pdfs: {
+        Row: {
+          academic_year: string
+          content_hash: string | null
+          created_at: string | null
+          id: string
+          last_changed_at: string | null
+          last_checked_at: string | null
+          pdf_url: string
+        }
+        Insert: {
+          academic_year: string
+          content_hash?: string | null
+          created_at?: string | null
+          id?: string
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          pdf_url: string
+        }
+        Update: {
+          academic_year?: string
+          content_hash?: string | null
+          created_at?: string | null
+          id?: string
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          pdf_url?: string
+        }
+        Relationships: []
+      }
+      school_term_dates: {
+        Row: {
+          academic_year: string
+          created_at: string | null
+          end_date: string
+          id: string
+          start_date: string
+          term_name: string
+          term_number: number
+          updated_at: string | null
+        }
+        Insert: {
+          academic_year: string
+          created_at?: string | null
+          end_date: string
+          id?: string
+          start_date: string
+          term_name: string
+          term_number: number
+          updated_at?: string | null
+        }
+        Update: {
+          academic_year?: string
+          created_at?: string | null
+          end_date?: string
+          id?: string
+          start_date?: string
+          term_name?: string
+          term_number?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       scraped_metrics: {
         Row: {
           billing_period_end: string | null
@@ -9793,6 +10339,105 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shopping_staples: {
+        Row: {
+          category: string
+          created_at: string | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          last_added_date: string | null
+          name: string
+          notes: string | null
+          quantity: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          last_added_date?: string | null
+          name: string
+          notes?: string | null
+          quantity?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          last_added_date?: string | null
+          name?: string
+          notes?: string | null
+          quantity?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      spelling_sentences: {
+        Row: {
+          created_at: string | null
+          sentence: string
+          word: string
+        }
+        Insert: {
+          created_at?: string | null
+          sentence: string
+          word: string
+        }
+        Update: {
+          created_at?: string | null
+          sentence?: string
+          word?: string
+        }
+        Relationships: []
+      }
+      spelling_test_results: {
+        Row: {
+          academic_year: string
+          answers: Json | null
+          child_name: string
+          created_at: string | null
+          id: string
+          score: number
+          time_seconds: number | null
+          total: number
+          week_number: number
+          wrong_words: Json | null
+          year_group: string | null
+        }
+        Insert: {
+          academic_year: string
+          answers?: Json | null
+          child_name: string
+          created_at?: string | null
+          id?: string
+          score: number
+          time_seconds?: number | null
+          total: number
+          week_number: number
+          wrong_words?: Json | null
+          year_group?: string | null
+        }
+        Update: {
+          academic_year?: string
+          answers?: Json | null
+          child_name?: string
+          created_at?: string | null
+          id?: string
+          score?: number
+          time_seconds?: number | null
+          total?: number
+          week_number?: number
+          wrong_words?: Json | null
+          year_group?: string | null
+        }
+        Relationships: []
       }
       stock_pickups: {
         Row: {
@@ -13077,6 +13722,13 @@ export type Database = {
           your_qty: number
         }[]
       }
+      get_connection_coverage: {
+        Args: never
+        Returns: {
+          metric: string
+          value: number
+        }[]
+      }
       get_daily_totals: {
         Args: { end_date: string; start_date: string }
         Returns: {
@@ -13089,15 +13741,24 @@ export type Database = {
           total_water_ml: number
         }[]
       }
+      get_decay_distribution: {
+        Args: never
+        Returns: {
+          bucket: string
+          item_count: number
+        }[]
+      }
       get_fading_but_relevant: {
         Args: { item_limit?: number }
         Returns: {
           access_count: number | null
           base_priority: number | null
           capture_type: string
+          concepts: Json | null
           content_type: string
           created_at: string | null
           decay_score: number | null
+          facts: Json | null
           full_text: string | null
           id: string
           last_accessed_at: string | null
@@ -13109,6 +13770,7 @@ export type Database = {
           status: string | null
           summary: string | null
           title: string | null
+          title_fts: unknown
           topics: string[] | null
           updated_at: string | null
           user_note: string | null
@@ -13120,6 +13782,15 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_keepa_priority_asins: {
+        Args: { p_budget: number; p_today: string; p_user_id: string }
+        Returns: {
+          asin: string
+          last_snapshot: string
+          priority: number
+          quantity: number
+        }[]
       }
       get_latest_listing_review: {
         Args: { p_listing_id: string; p_user_id: string }
@@ -13171,6 +13842,41 @@ export type Database = {
           total_offers_sent: number
         }[]
       }
+      get_orphaned_items: {
+        Args: { item_limit?: number }
+        Returns: {
+          access_count: number | null
+          base_priority: number | null
+          capture_type: string
+          concepts: Json | null
+          content_type: string
+          created_at: string | null
+          decay_score: number | null
+          facts: Json | null
+          full_text: string | null
+          id: string
+          last_accessed_at: string | null
+          promoted_at: string | null
+          site_name: string | null
+          source_message_id: string | null
+          source_system: string | null
+          source_url: string | null
+          status: string | null
+          summary: string | null
+          title: string | null
+          title_fts: unknown
+          topics: string[] | null
+          updated_at: string | null
+          user_note: string | null
+          word_count: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_player_id: { Args: never; Returns: string }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
       get_profit_per_sale: {
@@ -13201,13 +13907,21 @@ export type Database = {
           spent: number
         }[]
       }
-      get_topic_counts: {
-        Args: never
-        Returns: {
-          count: number
-          topic: string
-        }[]
-      }
+      get_topic_counts:
+        | {
+            Args: never
+            Returns: {
+              count: number
+              topic: string
+            }[]
+          }
+        | {
+            Args: { max_topics?: number }
+            Returns: {
+              count: number
+              topic: string
+            }[]
+          }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
       initialize_seeded_asins: {
         Args: never
@@ -13217,6 +13931,40 @@ export type Database = {
         }[]
       }
       is_admin: { Args: never; Returns: boolean }
+      keyword_search_knowledge: {
+        Args: {
+          capture_types?: string[]
+          exclude_parent?: string
+          match_count?: number
+          min_decay?: number
+          search_query: string
+        }
+        Returns: {
+          access_count: number
+          base_priority: number
+          capture_type: string
+          chunk_content: string
+          chunk_id: string
+          chunk_index: number
+          concepts: Json
+          content_type: string
+          created_at: string
+          decay_score: number
+          facts: Json
+          full_text: string
+          last_accessed_at: string
+          parent_id: string
+          promoted_at: string
+          rank: number
+          source_message_id: string
+          source_system: string
+          source_url: string
+          status: string
+          summary: string
+          title: string
+          topics: string[]
+        }[]
+      }
       search_inventory_excluding_linked: {
         Args: {
           p_offset?: number
@@ -13257,9 +14005,11 @@ export type Database = {
           chunk_content: string
           chunk_id: string
           chunk_index: number
+          concepts: Json
           content_type: string
           created_at: string
           decay_score: number
+          facts: Json
           full_text: string
           last_accessed_at: string
           parent_id: string
