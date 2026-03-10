@@ -47,147 +47,37 @@ export class KeepaArbitrageSyncService {
   }
 
   /**
-   * Fetch ASINs to sync, prioritised:
+   * Fetch ASINs to sync via a single SQL RPC, prioritised:
    *   Tier 1: In-stock ASINs (qty >= 1) not refreshed today
-   *   Tier 2: Stalest ASINs (oldest snapshot_date first)
+   *   Tier 2: Stalest ASINs (oldest snapshot_date first, excluding already refreshed today)
    *
-   * Returns at most `budget` ASINs.
+   * Returns at most `budget` ASINs in 1 DB call instead of 10+.
    */
   private async getPrioritisedAsins(
     userId: string,
     budget: number,
     today: string
-  ): Promise<{ asins: string[]; inStockCount: number; staleCount: number }> {
-    const PAGE_SIZE = 1000;
-
-    // Step 1: Fetch all active tracked ASINs with quantity
-    const allTracked: { asin: string; quantity: number }[] = [];
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('tracked_asins')
-        .select('asin, quantity')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) {
-        throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
-      }
-
-      allTracked.push(...(data ?? []).map((r) => ({ asin: r.asin, quantity: r.quantity ?? 0 })));
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
-
-    // Step 2: Fetch seeded ASINs
-    const seededAsins: string[] = [];
-    page = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('user_seeded_asin_preferences')
-        .select(
-          `
-          seeded_asins!inner(asin),
-          manual_asin_override
-        `
-        )
-        .eq('user_id', userId)
-        .eq('include_in_sync', true)
-        .eq('user_status', 'active')
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) {
-        console.error('[KeepaArbitrageSync] Error fetching seeded ASINs:', error);
-        break;
-      }
-
-      const pageAsins = (data ?? [])
-        .map((p) => {
-          const sa = p.seeded_asins as unknown as { asin: string | null };
-          return p.manual_asin_override ?? sa?.asin;
-        })
-        .filter((a): a is string => a !== null && a !== undefined);
-
-      seededAsins.push(...pageAsins);
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
-
-    // Step 3: Build sets
-    const inStockAsins = allTracked.filter((t) => t.quantity > 0).map((t) => t.asin);
-    const allAsins = [...new Set([...allTracked.map((t) => t.asin), ...seededAsins])];
-
-    console.log(
-      `[KeepaArbitrageSync] Total: ${allAsins.length} ASINs (${inStockAsins.length} in-stock, ${seededAsins.length} seeded)`
-    );
-
-    // Step 4: Get latest snapshot_date per ASIN
-    const snapshotMap = new Map<string, string | null>();
-
-    for (let i = 0; i < allAsins.length; i += PAGE_SIZE) {
-      const chunk = allAsins.slice(i, i + PAGE_SIZE);
-      const { data, error } = await this.supabase
-        .from('amazon_arbitrage_pricing')
-        .select('asin, snapshot_date')
-        .in('asin', chunk)
-        .order('snapshot_date', { ascending: false });
-
-      if (error) {
-        console.error('[KeepaArbitrageSync] Error fetching snapshot dates:', error);
-        continue;
-      }
-
-      for (const row of data ?? []) {
-        if (!snapshotMap.has(row.asin)) {
-          snapshotMap.set(row.asin, row.snapshot_date);
-        }
-      }
-    }
-
-    // Step 5: Tier 1 — in-stock ASINs not yet refreshed today
-    const tier1 = inStockAsins.filter((asin) => {
-      const lastSnapshot = snapshotMap.get(asin);
-      return !lastSnapshot || lastSnapshot < today;
+  ): Promise<{ asins: string[]; inStockCount: number }> {
+    const { data, error } = await this.supabase.rpc('get_keepa_priority_asins', {
+      p_user_id: userId,
+      p_today: today,
+      p_budget: budget,
     });
 
-    // Step 6: Tier 2 — all remaining ASINs sorted by staleness
-    const tier1Set = new Set(tier1);
-    const tier2 = allAsins
-      .filter((asin) => !tier1Set.has(asin))
-      .sort((a, b) => {
-        const dateA = snapshotMap.get(a) ?? '1970-01-01';
-        const dateB = snapshotMap.get(b) ?? '1970-01-01';
-        return dateA.localeCompare(dateB);
-      });
-
-    // Step 7: Fill budget — tier 1 first, then tier 2
-    const result: string[] = [];
-    let inStockCount = 0;
-
-    for (const asin of tier1) {
-      if (result.length >= budget) break;
-      result.push(asin);
-      inStockCount++;
+    if (error) {
+      throw new Error(`get_keepa_priority_asins RPC failed: ${error.message}`);
     }
 
-    const staleStart = result.length;
-    for (const asin of tier2) {
-      if (result.length >= budget) break;
-      result.push(asin);
-    }
-
-    const staleCount = result.length - staleStart;
+    const rows = (data ?? []) as { asin: string; quantity: number; last_snapshot: string | null; priority: number }[];
+    const asins = rows.map((r) => r.asin);
+    const inStockCount = rows.filter((r) => r.priority === 1).length;
+    const staleCount = rows.filter((r) => r.priority === 2).length;
 
     console.log(
-      `[KeepaArbitrageSync] Budget ${budget}: ${inStockCount} in-stock (${tier1.length} needed) + ${staleCount} stale`
+      `[KeepaArbitrageSync] Budget ${budget}: ${inStockCount} in-stock + ${staleCount} stale (1 RPC call)`
     );
 
-    return { asins: result, inStockCount, staleCount };
+    return { asins, inStockCount };
   }
 
   /**
