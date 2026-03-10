@@ -209,6 +209,18 @@ gcloud scheduler jobs create http vercel-usage-report \
   --time-zone="Europe/London" \
   --description="Daily Vercel usage monitoring report"
 
+# SP-API Buy Box Overlay - daily at 6am UTC (after Keepa overnight backfill)
+# Updates buy_box_is_yours, buy_box_price, your_price, offer_count from SP-API
+gcloud scheduler jobs create http spapi-buybox-overlay \
+  --location=europe-west2 \
+  --schedule="0 6 * * *" \
+  --uri="$APP_URL/api/cron/spapi-buybox-overlay" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --attempt-deadline="300s" \
+  --description="Daily SP-API buy box overlay for in-stock ASINs"
+
 # Cost Allocation - daily at 9:15pm UK time
 gcloud scheduler jobs create http cost-allocation \
   --location=europe-west2 \
