@@ -3105,7 +3105,7 @@ export class AmazonSyncService {
    * 4. Cache the result for future use
    * 5. Return product type or default fallback
    */
-  private async getProductTypeForAsin(asin: string, marketplaceId: string): Promise<string> {
+  async getProductTypeForAsin(asin: string, marketplaceId: string): Promise<string> {
     console.log(`[AmazonSyncService] Getting product type for ASIN: ${asin}`);
 
     // 1. Check cache first
