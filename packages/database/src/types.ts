@@ -921,6 +921,7 @@ export type Database = {
           total_items: number | null
           updated_at: string
           user_id: string
+          zero_progress_count: number | null
         }
         Insert: {
           created_at?: string
@@ -940,6 +941,7 @@ export type Database = {
           total_items?: number | null
           updated_at?: string
           user_id: string
+          zero_progress_count?: number | null
         }
         Update: {
           created_at?: string
@@ -959,6 +961,7 @@ export type Database = {
           total_items?: number | null
           updated_at?: string
           user_id?: string
+          zero_progress_count?: number | null
         }
         Relationships: [
           {

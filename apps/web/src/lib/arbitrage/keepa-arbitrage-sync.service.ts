@@ -1,21 +1,20 @@
 /**
  * Keepa Arbitrage Sync Service
  *
- * Replaces SP-API competitive pricing sync with Keepa product API.
  * Syncs buy_box_price, sales_rank, was_price_90d, offer_count, and
- * lowest_offer_price for active ASINs (tracked + seeded).
+ * lowest_offer_price for active ASINs using the Keepa product API.
  *
- * Weekly refresh strategy:
- * - Processes ~1,500 ASINs per day (configurable via KEEPA_DAILY_LIMIT)
- * - Orders by oldest snapshot_date first, so data is at most ~1 week old
- * - ~8,875 total ASINs ÷ 1,500/day = ~6 days for a full cycle
+ * Budget-spread strategy (EUR 49 plan, 20 tokens/min):
+ * - Called every 30 minutes by Cloud Scheduler (48 invocations/day)
+ * - Each invocation processes a fixed ASIN budget (~56 ASINs)
+ * - Priority: in-stock ASINs first (same-day freshness), then stalest items
+ * - Leaves ~40% token headroom for other Keepa-consuming processes
  *
- * Token rate is configurable via KEEPA_TOKENS_PER_MINUTE env var:
- * - EUR 49 plan:  20 tokens/min (default)
- * - EUR 129 plan: 60 tokens/min
- *
- * Batches of 10 ASINs per Keepa request. Resumable cursor pattern
- * compatible with the existing arbitrage_sync_status table.
+ * Token economics (EUR 49):
+ *   20 tokens/min × 30 min = 600 tokens per window
+ *   Budget per invocation: ~170 tokens (~57 ASINs × 3 tokens)
+ *   Daily capacity: ~2,700 ASINs (232 in-stock + ~2,450 stale)
+ *   Full cycle for ~8,600 non-in-stock ASINs: ~3.5 days
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -24,50 +23,52 @@ import { KeepaClient } from '../keepa/keepa-client';
 
 const KEEPA_BATCH_SIZE = 10; // Keepa max per request
 
-/** Default daily ASIN limit — refreshes all ASINs over ~1 week */
-const DEFAULT_DAILY_LIMIT = 1500;
+/** Default ASINs per invocation — conservative to avoid 429s */
+const DEFAULT_BUDGET_PER_INVOCATION = 57;
+
+/** Safety margin before Vercel timeout (ms) */
+const SAFETY_MARGIN_MS = 30_000;
 
 export class KeepaArbitrageSyncService {
   private keepa: KeepaClient;
 
   constructor(private supabase: SupabaseClient<Database>) {
-    const tokensPerMinute = parseInt(process.env.KEEPA_TOKENS_PER_MINUTE ?? '20', 10);
     this.keepa = new KeepaClient();
-    // Update the client's internal rate if customised
-    if (tokensPerMinute !== 20) {
-      // KeepaClient uses tokensPerMinute internally for wait calculations
-      // We pass it through the constructor or override — for now we log it
-      console.log(`[KeepaArbitrageSync] Configured token rate: ${tokensPerMinute} tokens/min`);
-    }
   }
 
   /**
-   * Get the daily ASIN limit from env or default.
+   * Get the per-invocation ASIN budget from env or default.
    */
-  private getDailyLimit(): number {
-    return parseInt(process.env.KEEPA_DAILY_LIMIT ?? String(DEFAULT_DAILY_LIMIT), 10);
+  private getBudget(): number {
+    return parseInt(
+      process.env.KEEPA_BUDGET_PER_INVOCATION ?? String(DEFAULT_BUDGET_PER_INVOCATION),
+      10
+    );
   }
 
   /**
-   * Fetch ASINs to refresh, ordered by oldest snapshot_date first.
-   * Returns up to `dailyLimit` ASINs that need pricing refresh.
+   * Fetch ASINs to sync, prioritised:
+   *   Tier 1: In-stock ASINs (qty >= 1) not refreshed today
+   *   Tier 2: Stalest ASINs (oldest snapshot_date first)
    *
-   * Strategy: Get all active ASINs, then LEFT JOIN to their latest
-   * amazon_arbitrage_pricing row to sort by staleness (oldest first).
-   * ASINs with no pricing at all come first (NULL snapshot_date).
+   * Returns at most `budget` ASINs.
    */
-  private async getStaleAsins(userId: string, dailyLimit: number): Promise<string[]> {
+  private async getPrioritisedAsins(
+    userId: string,
+    budget: number,
+    today: string
+  ): Promise<{ asins: string[]; inStockCount: number; staleCount: number }> {
     const PAGE_SIZE = 1000;
 
-    // Step 1: Fetch all active tracked ASINs
-    const trackedAsins: string[] = [];
+    // Step 1: Fetch all active tracked ASINs with quantity
+    const allTracked: { asin: string; quantity: number }[] = [];
     let page = 0;
     let hasMore = true;
 
     while (hasMore) {
       const { data, error } = await this.supabase
         .from('tracked_asins')
-        .select('asin')
+        .select('asin, quantity')
         .eq('user_id', userId)
         .eq('status', 'active')
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -76,12 +77,12 @@ export class KeepaArbitrageSyncService {
         throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
       }
 
-      trackedAsins.push(...(data ?? []).map((r) => r.asin));
+      allTracked.push(...(data ?? []).map((r) => ({ asin: r.asin, quantity: r.quantity ?? 0 })));
       hasMore = (data?.length ?? 0) === PAGE_SIZE;
       page++;
     }
 
-    // Step 2: Fetch seeded ASINs with include_in_sync
+    // Step 2: Fetch seeded ASINs
     const seededAsins: string[] = [];
     page = 0;
     hasMore = true;
@@ -117,16 +118,15 @@ export class KeepaArbitrageSyncService {
       page++;
     }
 
-    // Step 3: Deduplicate
-    const allAsins = [...new Set([...trackedAsins, ...seededAsins])];
+    // Step 3: Build sets
+    const inStockAsins = allTracked.filter((t) => t.quantity > 0).map((t) => t.asin);
+    const allAsins = [...new Set([...allTracked.map((t) => t.asin), ...seededAsins])];
+
     console.log(
-      `[KeepaArbitrageSync] Total unique ASINs: ${allAsins.length} (${trackedAsins.length} tracked + ${seededAsins.length} seeded)`
+      `[KeepaArbitrageSync] Total: ${allAsins.length} ASINs (${inStockAsins.length} in-stock, ${seededAsins.length} seeded)`
     );
 
-    if (allAsins.length === 0) return [];
-
-    // Step 4: Get latest snapshot_date per ASIN to sort by staleness
-    // Query in pages to respect Supabase row limit
+    // Step 4: Get latest snapshot_date per ASIN
     const snapshotMap = new Map<string, string | null>();
 
     for (let i = 0; i < allAsins.length; i += PAGE_SIZE) {
@@ -142,7 +142,6 @@ export class KeepaArbitrageSyncService {
         continue;
       }
 
-      // Keep only the most recent per ASIN
       for (const row of data ?? []) {
         if (!snapshotMap.has(row.asin)) {
           snapshotMap.set(row.asin, row.snapshot_date);
@@ -150,70 +149,118 @@ export class KeepaArbitrageSyncService {
       }
     }
 
-    // Step 5: Sort all ASINs by oldest snapshot first (NULLs = never synced = highest priority)
-    const sortedAsins = allAsins.sort((a, b) => {
-      const dateA = snapshotMap.get(a) ?? '1970-01-01';
-      const dateB = snapshotMap.get(b) ?? '1970-01-01';
-      return dateA.localeCompare(dateB);
+    // Step 5: Tier 1 — in-stock ASINs not yet refreshed today
+    const tier1 = inStockAsins.filter((asin) => {
+      const lastSnapshot = snapshotMap.get(asin);
+      return !lastSnapshot || lastSnapshot < today;
     });
 
-    // Step 6: Return only the daily limit
-    const result = sortedAsins.slice(0, dailyLimit);
+    // Step 6: Tier 2 — all remaining ASINs sorted by staleness
+    const tier1Set = new Set(tier1);
+    const tier2 = allAsins
+      .filter((asin) => !tier1Set.has(asin))
+      .sort((a, b) => {
+        const dateA = snapshotMap.get(a) ?? '1970-01-01';
+        const dateB = snapshotMap.get(b) ?? '1970-01-01';
+        return dateA.localeCompare(dateB);
+      });
 
-    const neverSynced = result.filter((a) => !snapshotMap.has(a)).length;
-    const oldestDate = snapshotMap.get(result[result.length - 1]) ?? 'never';
+    // Step 7: Fill budget — tier 1 first, then tier 2
+    const result: string[] = [];
+    let inStockCount = 0;
+
+    for (const asin of tier1) {
+      if (result.length >= budget) break;
+      result.push(asin);
+      inStockCount++;
+    }
+
+    const staleStart = result.length;
+    for (const asin of tier2) {
+      if (result.length >= budget) break;
+      result.push(asin);
+    }
+
+    const staleCount = result.length - staleStart;
+
     console.log(
-      `[KeepaArbitrageSync] Selected ${result.length} ASINs for today (${neverSynced} never synced, oldest: ${oldestDate})`
+      `[KeepaArbitrageSync] Budget ${budget}: ${inStockCount} in-stock (${tier1.length} needed) + ${staleCount} stale`
     );
 
-    return result;
+    return { asins: result, inStockCount, staleCount };
   }
 
   /**
-   * Sync pricing for a batch of the stalest ASINs using Keepa.
-   * Resumable: tracks cursor_position within today's daily ASIN list.
+   * Sync pricing for a budget of ASINs using Keepa.
+   * Self-contained: no cursor needed. Each invocation picks the highest-priority ASINs.
    *
    * @param userId - User ID
-   * @param options.offset - Cursor position within today's ASIN list
-   * @param options.limit - Max ASINs to process this invocation
-   * @returns processed, failed, updated counts + total for today
+   * @param options.maxDurationMs - Hard time limit (Vercel timeout), defaults to 300_000 (5 min)
+   * @param options.startTime - Start timestamp for timeout tracking
+   * @returns processed, failed, updated counts + metadata
    */
   async syncPricingBatch(
     userId: string,
     options: {
-      offset: number;
-      limit: number;
-    }
-  ): Promise<{ processed: number; failed: number; updated: number; totalForToday: number }> {
+      maxDurationMs?: number;
+      startTime?: number;
+    } = {}
+  ): Promise<{
+    processed: number;
+    failed: number;
+    updated: number;
+    inStockSynced: number;
+    staleSynced: number;
+    inStockRemaining: number;
+    rateLimited: boolean;
+  }> {
     if (!this.keepa.isConfigured()) {
       throw new Error('Keepa API key not configured. Set KEEPA_API_KEY environment variable.');
     }
 
-    const dailyLimit = this.getDailyLimit();
-    console.log(
-      `[KeepaArbitrageSync] Starting batch - offset: ${options.offset}, limit: ${options.limit}, daily limit: ${dailyLimit}`
-    );
-    const startTime = Date.now();
+    const budget = this.getBudget();
+    const maxDuration = options.maxDurationMs ?? 300_000;
+    const startTime = options.startTime ?? Date.now();
+    const today = new Date().toISOString().split('T')[0];
 
-    // Get today's ASIN list (oldest-first, capped at daily limit)
-    const todaysAsins = await this.getStaleAsins(userId, dailyLimit);
-    const batchAsins = todaysAsins.slice(options.offset, options.offset + options.limit);
+    console.log(`[KeepaArbitrageSync] Starting batch — budget: ${budget}`);
+
+    // Get prioritised ASIN list
+    const { asins: batchAsins, inStockCount } = await this.getPrioritisedAsins(
+      userId,
+      budget,
+      today
+    );
 
     if (batchAsins.length === 0) {
-      console.log('[KeepaArbitrageSync] No ASINs to process in this batch');
-      return { processed: 0, failed: 0, updated: 0, totalForToday: todaysAsins.length };
+      console.log('[KeepaArbitrageSync] No ASINs to process');
+      return {
+        processed: 0,
+        failed: 0,
+        updated: 0,
+        inStockSynced: 0,
+        staleSynced: 0,
+        inStockRemaining: 0,
+        rateLimited: false,
+      };
     }
-
-    console.log(
-      `[KeepaArbitrageSync] Processing ${batchAsins.length} ASINs (${options.offset} to ${options.offset + batchAsins.length} of ${todaysAsins.length} for today)`
-    );
 
     let updated = 0;
     let failed = 0;
-    const today = new Date().toISOString().split('T')[0];
+    let processedCount = 0;
+    let rateLimited = false;
 
     // Process in Keepa batches of 10
     for (let i = 0; i < batchAsins.length; i += KEEPA_BATCH_SIZE) {
+      // Safety timer — stop before Vercel kills us
+      const elapsed = Date.now() - startTime;
+      if (elapsed > maxDuration - SAFETY_MARGIN_MS) {
+        console.warn(
+          `[KeepaArbitrageSync] Safety timer: ${Math.round(elapsed / 1000)}s elapsed, stopping`
+        );
+        break;
+      }
+
       const batch = batchAsins.slice(i, i + KEEPA_BATCH_SIZE);
 
       try {
@@ -260,23 +307,44 @@ export class KeepaArbitrageSyncService {
           }
         }
 
-        // Count ASINs Keepa didn't return data for
-        const foundAsins = new Set(products.map((p) => p.asin));
-        const notFound = batch.filter((a) => !foundAsins.has(a));
+        const notFound = batch.filter((a) => !products.some((p) => p.asin === a));
         if (notFound.length > 0) {
           console.warn(`[KeepaArbitrageSync] ${notFound.length} ASINs not found by Keepa`);
         }
+
+        processedCount += batch.length;
       } catch (batchError) {
+        // Check if this is a rate limit error
+        const errMsg = batchError instanceof Error ? batchError.message : String(batchError);
+        if (errMsg.includes('429')) {
+          console.warn(`[KeepaArbitrageSync] Rate limited — stopping batch early`);
+          rateLimited = true;
+          break;
+        }
+
         console.error(`[KeepaArbitrageSync] Batch error:`, batchError);
         failed += batch.length;
+        processedCount += batch.length;
       }
     }
 
     const duration = Date.now() - startTime;
+    const inStockSynced = Math.min(processedCount, inStockCount);
+    const staleSynced = Math.max(0, processedCount - inStockCount);
+    const inStockRemaining = Math.max(0, inStockCount - inStockSynced);
+
     console.log(
-      `[KeepaArbitrageSync] Batch completed in ${duration}ms: ${updated} updated, ${failed} failed, tokens remaining: ${this.keepa.remainingTokens}`
+      `[KeepaArbitrageSync] Batch done in ${Math.round(duration / 1000)}s: ${processedCount} processed (${inStockSynced} in-stock, ${staleSynced} stale), ${updated} updated, ${failed} failed, tokens left: ${this.keepa.remainingTokens}${rateLimited ? ' [RATE LIMITED]' : ''}`
     );
 
-    return { processed: batchAsins.length, failed, updated, totalForToday: todaysAsins.length };
+    return {
+      processed: processedCount,
+      failed,
+      updated,
+      inStockSynced,
+      staleSynced,
+      inStockRemaining,
+      rateLimited,
+    };
   }
 }

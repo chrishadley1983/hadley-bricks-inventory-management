@@ -238,6 +238,23 @@ function getColumns(onReprice: (item: BuyBoxGapRow) => void): ColumnDef<BuyBoxGa
       ),
     },
     {
+      accessorKey: 'snapshotDate',
+      header: 'Data',
+      cell: ({ row }) => {
+        const date = row.original.snapshotDate;
+        if (!date) return <span className="text-xs text-muted-foreground">{'\u2014'}</span>;
+        const daysAgo = Math.floor(
+          (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const isStale = daysAgo > 3;
+        return (
+          <span className={`text-xs tabular-nums ${isStale ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+            {daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1d' : `${daysAgo}d`}
+          </span>
+        );
+      },
+    },
+    {
       id: 'action',
       header: 'Action',
       cell: ({ row }) => {

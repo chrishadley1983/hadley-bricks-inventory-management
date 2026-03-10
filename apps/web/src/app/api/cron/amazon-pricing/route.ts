@@ -1,21 +1,17 @@
 /**
  * POST /api/cron/amazon-pricing
  *
- * Cron endpoint for daily Amazon pricing sync via Keepa API.
- * Replaces the SP-API approach (~45+ hours) with Keepa (~2.5 hours for 1,500 ASINs/day).
+ * Cron endpoint for Amazon pricing sync via Keepa API.
  *
- * WEEKLY REFRESH: Processes ~1,500 ASINs per day (configurable via KEEPA_DAILY_LIMIT),
- * ordered by oldest snapshot_date first. All ~8,875 ASINs refresh over ~6 days.
+ * BUDGET-SPREAD STRATEGY:
+ * Called every 30 minutes by Cloud Scheduler. Each invocation processes
+ * a small budget of ASINs (~57), prioritising in-stock items for same-day
+ * freshness. Non-in-stock items refresh over a 3-4 day cycle.
  *
- * RESUMABLE: This endpoint tracks progress and can be called repeatedly.
- * It will resume from where it left off until all today's ASINs are processed.
- * Returns { complete: true } when finished.
+ * Each call is self-contained (no cursor/resume needed) — it picks the
+ * highest-priority ASINs, syncs them, and returns.
  *
- * Token rate is configurable via KEEPA_TOKENS_PER_MINUTE:
- * - EUR 49 plan:  20 tokens/min (default)
- * - EUR 129 plan: 60 tokens/min
- *
- * Recommended schedule: Daily at 4am (GCP Cloud Scheduler calls repeatedly until complete)
+ * Returns { complete: true } always so the GCP driver exits after one call.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -31,22 +27,11 @@ export const maxDuration = 300; // 5 minutes - Vercel Pro limit
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const JOB_TYPE = 'pricing_sync';
 
-/**
- * Calculate how many ASINs we can process per 5-minute invocation.
- * Keepa: 10 ASINs per request, ~1 token per ASIN, ~3s per request (rate limit wait).
- * At 20 tokens/min → ~100 ASINs/invocation. At 50 tokens/min → ~250 ASINs/invocation.
- */
-function getAsinsPerInvocation(): number {
-  const tokensPerMin = parseInt(process.env.KEEPA_TOKENS_PER_MINUTE ?? '20', 10);
-  // In 4.5 minutes (leaving 30s buffer), we can do tokensPerMin * 4.5 tokens
-  // Each 10-ASIN batch costs ~1 token per ASIN
-  // Conservative: assume we get tokensPerMin * 4 tokens in the window
-  return Math.floor(tokensPerMin * 4);
-}
+/** Alert if zero-progress invocations exceed this threshold */
+const ZERO_PROGRESS_ALERT_THRESHOLD = 3;
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  const today = new Date().toISOString().split('T')[0];
 
   let execution: ExecutionHandle = noopHandle;
   try {
@@ -63,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleClient();
 
-    // Get or create sync status for this job
+    // Get current sync status
     const { data: syncStatus } = await supabase
       .from('arbitrage_sync_status')
       .select('*')
@@ -71,71 +56,13 @@ export async function POST(request: NextRequest) {
       .eq('job_type', JOB_TYPE)
       .single();
 
-    // Check if this is a new day - reset cursor if so
-    const currentSyncDate = syncStatus?.sync_date;
-    const isNewDay = currentSyncDate !== today;
-    const cursorPosition = isNewDay ? 0 : (syncStatus?.cursor_position ?? 0);
-
-    console.log(
-      `[Cron AmazonPricing] Starting Keepa sync - date: ${today}, cursor: ${cursorPosition}, isNewDay: ${isNewDay}`
-    );
-
-    // If already completed today, short-circuit to avoid expensive re-query
-    if (!isNewDay && syncStatus?.status === 'completed') {
-      console.log(`[Cron AmazonPricing] Sync already complete for ${today}`);
-      return NextResponse.json({
-        success: true,
-        complete: true,
-        message: `Sync already complete for ${today}`,
-        processed: 0,
-        total: syncStatus.total_items ?? 0,
-      });
-    }
-
-    const asinsPerInvocation = getAsinsPerInvocation();
-
-    // Run the Keepa sync service with cursor
+    // Run the Keepa sync service
     const syncService = new KeepaArbitrageSyncService(supabase);
 
     const result = await syncService.syncPricingBatch(DEFAULT_USER_ID, {
-      offset: cursorPosition,
-      limit: asinsPerInvocation,
+      maxDurationMs: maxDuration * 1000,
+      startTime,
     });
-
-    const totalForToday = result.totalForToday;
-    const newCursorPosition = cursorPosition + result.processed;
-    const isComplete = newCursorPosition >= totalForToday;
-
-    // If cursor is 0 and this is the first invocation, send start notification
-    if (cursorPosition === 0 && result.processed > 0) {
-      await discordService.sendSyncStatus({
-        title: '🔄 Keepa Pricing Sync Started',
-        message: `Daily pricing sync started (Keepa)\n${totalForToday} ASINs to refresh today (oldest first)`,
-      });
-    }
-
-    // Update sync status
-    const { error: updateError } = await supabase.from('arbitrage_sync_status').upsert(
-      {
-        user_id: DEFAULT_USER_ID,
-        job_type: JOB_TYPE,
-        status: isComplete ? 'completed' : 'running',
-        sync_date: today,
-        cursor_position: newCursorPosition,
-        total_items: totalForToday,
-        items_processed: newCursorPosition,
-        items_failed: (isNewDay ? 0 : (syncStatus?.items_failed ?? 0)) + result.failed,
-        last_run_at: new Date().toISOString(),
-        last_success_at: isComplete ? new Date().toISOString() : syncStatus?.last_success_at,
-        last_run_duration_ms: Date.now() - startTime,
-        error_message: null,
-      },
-      { onConflict: 'user_id,job_type' }
-    );
-
-    if (updateError) {
-      console.error('[Cron AmazonPricing] Failed to update sync status:', updateError);
-    }
 
     const duration = Date.now() - startTime;
     const durationStr =
@@ -144,29 +71,71 @@ export async function POST(request: NextRequest) {
         : `${Math.round(duration / 1000)} sec`;
 
     console.log(
-      `[Cron AmazonPricing] Keepa batch complete: ${result.processed} processed, cursor now at ${newCursorPosition}/${totalForToday} (${durationStr})`
+      `[Cron AmazonPricing] Batch done: ${result.processed} processed (${result.inStockSynced} in-stock, ${result.staleSynced} stale), ${result.failed} failed (${durationStr})`
     );
 
-    // Send completion notification if done
-    if (isComplete) {
-      const totalFailed = (syncStatus?.items_failed ?? 0) + result.failed;
-      if (totalFailed > 0) {
-        await discordService.sendSyncStatus({
-          title: '⚠️ Keepa Pricing Sync Complete (with errors)',
-          message: `Updated: ${newCursorPosition} ASINs\nFailed: ${totalFailed} ASINs`,
-          success: false,
-        });
-      } else {
-        await discordService.sendSyncStatus({
-          title: '✅ Keepa Pricing Sync Complete',
-          message: `Updated: ${newCursorPosition} ASINs (daily batch)`,
-          success: true,
-        });
-      }
+    // Track zero-progress for stuck detection
+    const prevZeroCount = syncStatus?.zero_progress_count ?? 0;
+    const zeroProgressCount = result.processed === 0 ? prevZeroCount + 1 : 0;
+
+    // Update sync status
+    const today = new Date().toISOString().split('T')[0];
+    const { error: updateError } = await supabase.from('arbitrage_sync_status').upsert(
+      {
+        user_id: DEFAULT_USER_ID,
+        job_type: JOB_TYPE,
+        status: result.rateLimited ? 'rate_limited' : 'completed',
+        sync_date: today,
+        cursor_position: 0, // No cursor needed — budget-based
+        total_items: result.processed,
+        items_processed: result.processed,
+        items_failed: result.failed,
+        last_run_at: new Date().toISOString(),
+        last_success_at: result.processed > 0 ? new Date().toISOString() : syncStatus?.last_success_at,
+        last_run_duration_ms: duration,
+        error_message: result.rateLimited ? 'Rate limited by Keepa' : null,
+        zero_progress_count: zeroProgressCount,
+      },
+      { onConflict: 'user_id,job_type' }
+    );
+
+    if (updateError) {
+      console.error('[Cron AmazonPricing] Failed to update sync status:', updateError);
+    }
+
+    // Stuck detection: alert if consecutive zero-progress invocations
+    if (zeroProgressCount >= ZERO_PROGRESS_ALERT_THRESHOLD) {
+      await discordService.sendAlert({
+        title: '⚠️ Keepa Pricing Sync Stalled',
+        message: `${zeroProgressCount} consecutive invocations with 0 ASINs processed.\nLast success: ${syncStatus?.last_success_at ?? 'never'}\n${result.rateLimited ? 'Reason: Keepa rate limited' : 'Check KEEPA_API_KEY and token budget.'}`,
+        priority: 'high',
+      });
+    }
+
+    // Rate limit alert (first occurrence)
+    if (result.rateLimited && prevZeroCount === 0) {
+      await discordService.sendSyncStatus({
+        title: '⚡ Keepa Pricing Sync — Rate Limited',
+        message: `Processed ${result.processed} ASINs before hitting Keepa rate limit.\nWill resume next invocation.`,
+        success: false,
+      });
+    }
+
+    // Log in-stock remaining for visibility
+    if (result.inStockRemaining > 0 && result.processed > 0) {
+      console.log(
+        `[Cron AmazonPricing] ${result.inStockRemaining} in-stock ASINs still need refresh today`
+      );
     }
 
     await execution.complete(
-      { complete: isComplete, cursorPosition: newCursorPosition, total: totalForToday },
+      {
+        processed: result.processed,
+        inStockSynced: result.inStockSynced,
+        staleSynced: result.staleSynced,
+        inStockRemaining: result.inStockRemaining,
+        rateLimited: result.rateLimited,
+      },
       200,
       result.processed,
       result.failed
@@ -174,11 +143,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      complete: isComplete,
+      complete: true, // Always true — each invocation is self-contained
       processed: result.processed,
       failed: result.failed,
-      cursorPosition: newCursorPosition,
-      total: totalForToday,
+      inStockSynced: result.inStockSynced,
+      staleSynced: result.staleSynced,
+      inStockRemaining: result.inStockRemaining,
+      rateLimited: result.rateLimited,
       duration,
       durationStr,
     });
@@ -213,7 +184,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: errorMsg,
-        complete: false,
+        complete: true, // Still true so the driver doesn't retry into the same error
         duration,
       },
       { status: 500 }
