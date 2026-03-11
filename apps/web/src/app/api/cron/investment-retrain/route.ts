@@ -18,6 +18,9 @@ import { InvestmentScoringService } from '@/lib/investment';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes
+
 export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
