@@ -615,6 +615,14 @@ export const TWO_PHASE_DEFAULTS = {
   /** How often to check if price is live (30 seconds) */
   priceVerificationInterval: 30 * 1000,
 
+  /**
+   * Grace period after the first item verifies (10 minutes).
+   * Once at least one item's price is confirmed live, remaining items get this
+   * window to also verify. After it expires, verified items advance to the
+   * quantity phase and unverified items are reported as failures.
+   */
+  priceVerificationGracePeriod: 10 * 60 * 1000,
+
   /** Whether two-phase is the default mode */
   defaultSyncMode: 'single' as const,
 
