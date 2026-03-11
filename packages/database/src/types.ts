@@ -11494,6 +11494,7 @@ export type Database = {
           quantity: number | null
           sku: string | null
           source: string
+          spapi_refresh_needed: boolean | null
           status: string
           updated_at: string
           user_id: string
@@ -11512,6 +11513,7 @@ export type Database = {
           quantity?: number | null
           sku?: string | null
           source: string
+          spapi_refresh_needed?: boolean | null
           status?: string
           updated_at?: string
           user_id: string
@@ -11530,6 +11532,7 @@ export type Database = {
           quantity?: number | null
           sku?: string | null
           source?: string
+          spapi_refresh_needed?: boolean | null
           status?: string
           updated_at?: string
           user_id?: string

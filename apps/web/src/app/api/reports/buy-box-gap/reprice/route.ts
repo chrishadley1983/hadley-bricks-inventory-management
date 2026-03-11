@@ -95,7 +95,14 @@ export async function POST(request: NextRequest) {
     const service = new AmazonSyncService(supabase, user.id);
     const productType = await service.getProductTypeForAsin(asin, UK_MARKETPLACE_ID);
 
-    // Step 5: Add items to amazon sync queue
+    // Step 5: Update tracked_asins.price so the buy box gap report reflects the new price immediately
+    await supabase
+      .from('tracked_asins')
+      .update({ price: newPrice })
+      .eq('asin', asin)
+      .eq('user_id', user.id);
+
+    // Step 6: Add items to amazon sync queue
     let queued = 0;
     const errors: string[] = [];
 
