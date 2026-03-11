@@ -4,6 +4,8 @@ import { InventoryPullService } from '@/lib/minifig-sync/inventory-pull.service'
 import { OrderPollService } from '@/lib/minifig-sync/order-poll.service';
 import { RepricingService } from '@/lib/minifig-sync/repricing.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -17,6 +19,7 @@ export const maxDuration = 300;
  * 5. Repricing (Mondays only)
  */
 async function handler(request: NextRequest) {
+  let execution: ExecutionHandle = noopHandle;
   try {
     const authHeader = request.headers.get('Authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -24,6 +27,8 @@ async function handler(request: NextRequest) {
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start('minifig-daily-inventory', 'cron');
 
     const supabase = createServiceRoleClient();
     const results: Record<string, unknown> = {};
@@ -76,9 +81,17 @@ async function handler(request: NextRequest) {
       results.repricing = { skipped: true, reason: 'Only runs on Mondays' };
     }
 
+    const itemsProcessed =
+      (typeof results.inventoryPull === 'object' && results.inventoryPull !== null
+        ? (results.inventoryPull as Record<string, unknown>).itemsProcessed
+        : 0) as number;
+
+    await execution.complete(results, 200, itemsProcessed ?? 0, 0);
+
     return NextResponse.json({ data: results });
   } catch (error) {
     console.error('[/api/cron/minifigs/daily-inventory] Error:', error);
+    await execution.fail(error, 500);
     return NextResponse.json(
       {
         error: 'Daily inventory pull failed',
