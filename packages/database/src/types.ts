@@ -2650,6 +2650,27 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_progress: {
+        Row: {
+          job_name: string
+          last_cursor: string | null
+          run_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          job_name: string
+          last_cursor?: string | null
+          run_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          job_name?: string
+          last_cursor?: string | null
+          run_date?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       delivery_tracking_cache: {
         Row: {
           created_at: string

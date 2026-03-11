@@ -6,6 +6,7 @@
  * your_price, and offer_count — data that Keepa cannot provide (no seller identity).
  *
  * Processes CHUNK_SIZE ASINs per invocation (~40s) to stay within Vercel's 60s limit.
+ * Uses cron_progress table to track cursor across invocations.
  * The GCP pricing-sync-driver calls this in a loop until { complete: true }.
  *
  * Schedule: Daily at 6am UTC via GCP pricing-sync-driver
@@ -24,15 +25,10 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
+const JOB_NAME = 'spapi-buybox-overlay';
 
 /** Process 80 ASINs per call (4 batches of 20 × 10s delay = ~40s, under 60s limit) */
 const CHUNK_SIZE = 80;
-
-/**
- * Supabase table: spapi_overlay_progress
- * Tracks cursor across invocations for the same day.
- * We use a simple key-value approach via tracked_asins ordering.
- */
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -77,44 +73,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, complete: true, processed: 0 });
     }
 
-    // Determine which ASINs already have today's SP-API snapshot (buy_box_is_yours is not null/default)
-    // We find ASINs that DON'T yet have a snapshot with your_price set today (SP-API sets your_price)
-    const alreadyDone = new Set<string>();
-    for (let i = 0; i < inStockAsins.length; i += 500) {
-      const batch = inStockAsins.slice(i, i + 500);
-      const { data } = await supabase
-        .from('amazon_arbitrage_pricing')
-        .select('asin')
-        .in('asin', batch)
-        .eq('snapshot_date', today)
-        .not('your_price', 'is', null);
+    // Get cursor from cron_progress — last ASIN processed today
+    const { data: progress } = await supabase
+      .from('cron_progress')
+      .select('last_cursor, run_date')
+      .eq('job_name', JOB_NAME)
+      .single();
 
-      if (data) {
-        for (const row of data) {
-          alreadyDone.add(row.asin);
-        }
+    let cursorIndex = 0;
+    if (progress && progress.run_date === today && progress.last_cursor) {
+      // Find where we left off
+      const idx = inStockAsins.indexOf(progress.last_cursor);
+      if (idx >= 0) {
+        cursorIndex = idx + 1; // Start after the last processed ASIN
       }
+    } else if (progress && progress.run_date !== today) {
+      // New day — reset cursor
+      cursorIndex = 0;
     }
 
-    const remaining = inStockAsins.filter((a) => !alreadyDone.has(a));
-
-    console.log(
-      `[SP-API Overlay] ${inStockAsins.length} total, ${alreadyDone.size} already done today, ${remaining.length} remaining`
-    );
-
-    if (remaining.length === 0) {
-      // All done — send summary and mark complete
-      const { data: todaySnapshots } = await supabase
+    // Check if we're done
+    if (cursorIndex >= inStockAsins.length) {
+      // All done — send summary
+      const { count } = await supabase
         .from('amazon_arbitrage_pricing')
-        .select('buy_box_is_yours')
+        .select('*', { count: 'exact', head: true })
         .eq('snapshot_date', today)
-        .in('asin', inStockAsins);
-
-      const buyBoxYoursCount = todaySnapshots?.filter((r) => r.buy_box_is_yours).length ?? 0;
+        .eq('buy_box_is_yours', true)
+        .in('asin', inStockAsins.slice(0, 500)); // Check first batch for count
 
       await discordService.sendSyncStatus({
         title: 'SP-API Buy Box Overlay',
-        message: `${inStockAsins.length}/${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own the buy box\n0 failed`,
+        message: `${inStockAsins.length} ASINs updated\n~${count ?? 0}+ own the buy box`,
         success: true,
       });
 
@@ -123,19 +113,20 @@ export async function POST(request: NextRequest) {
         complete: true,
         processed: inStockAsins.length,
         remaining: 0,
-        buyBoxYoursCount,
       });
     }
 
     // Process a chunk
-    const chunk = remaining.slice(0, CHUNK_SIZE);
-    const isFirstChunk = alreadyDone.size === 0;
+    const chunk = inStockAsins.slice(cursorIndex, cursorIndex + CHUNK_SIZE);
+    const isFirstChunk = cursorIndex === 0;
 
     if (isFirstChunk) {
-      execution = await jobExecutionService.start('spapi-buybox-overlay', 'cron');
+      execution = await jobExecutionService.start(JOB_NAME, 'cron');
     }
 
-    console.log(`[SP-API Overlay] Processing chunk of ${chunk.length} ASINs`);
+    console.log(
+      `[SP-API Overlay] Processing ASINs ${cursorIndex + 1}-${cursorIndex + chunk.length} of ${inStockAsins.length}`
+    );
 
     // Get Amazon credentials
     const credentialsRepo = new CredentialsRepository(supabase);
@@ -196,27 +187,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Save cursor progress
+    const lastAsin = chunk[chunk.length - 1];
+    await supabase
+      .from('cron_progress')
+      .upsert(
+        { job_name: JOB_NAME, last_cursor: lastAsin, run_date: today, updated_at: new Date().toISOString() },
+        { onConflict: 'job_name' }
+      );
+
     const duration = Date.now() - startTime;
-    const newRemaining = remaining.length - chunk.length;
-    const isComplete = newRemaining <= 0;
+    const newCursorIndex = cursorIndex + chunk.length;
+    const isComplete = newCursorIndex >= inStockAsins.length;
     const buyBoxYoursCount = pricingData.filter((p) => p.buyBoxIsYours).length;
 
     console.log(
-      `[SP-API Overlay] Chunk done in ${Math.round(duration / 1000)}s: ${updated} updated, ${failed} failed, ${buyBoxYoursCount} own buy box, ${newRemaining} remaining`
+      `[SP-API Overlay] Chunk done in ${Math.round(duration / 1000)}s: ${updated} updated, ${failed} failed, ${buyBoxYoursCount} own buy box, ${inStockAsins.length - newCursorIndex} remaining`
     );
 
     if (isComplete) {
-      const totalProcessed = alreadyDone.size + chunk.length;
-
       await discordService.sendSyncStatus({
         title: 'SP-API Buy Box Overlay',
-        message: `${totalProcessed}/${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own buy box in this chunk\n${failed} failed`,
+        message: `${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own buy box (last chunk)\n${failed} failed`,
         success: failed === 0,
       });
 
       if (isFirstChunk) {
         await execution.complete(
-          { processed: totalProcessed, updated, buyBoxYoursCount },
+          { processed: inStockAsins.length, updated, buyBoxYoursCount },
           200,
           updated,
           failed
@@ -227,10 +225,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       complete: isComplete,
-      processed: alreadyDone.size + chunk.length,
+      processed: newCursorIndex,
+      total: inStockAsins.length,
       updated,
       failed,
-      remaining: newRemaining,
+      remaining: inStockAsins.length - newCursorIndex,
       buyBoxYoursCount,
       duration,
     });
