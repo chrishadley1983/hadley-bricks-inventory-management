@@ -119,7 +119,7 @@ functions.http('pricingSyncDriver', async (req, res) => {
       const iterationStart = Date.now();
 
       console.log(
-        `[PricingSyncDriver] Iteration ${iteration}/${MAX_ITERATIONS} for ${jobType}`
+        `[PricingSyncDriver] Iteration ${iteration}/${maxIterations} for ${jobType}`
       );
 
       try {
