@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File \"scripts/notify.ps1\" -Title \"Claude Code\" -Message \"Task completed\" -Sound success"
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\Chris Hadley\\claude-projects\\hadley-bricks-inventory-management\\scripts\\notify.ps1\" -Title \"Claude Code\" -Message \"Task completed\" -Sound success"
           }
         ]
       }
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File \"scripts/notify.ps1\" -Title \"Claude Code\" -Message \"Permission needed - check VS Code\" -Sound warning"
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\Chris Hadley\\claude-projects\\hadley-bricks-inventory-management\\scripts\\notify.ps1\" -Title \"Claude Code\" -Message \"Permission needed - check VS Code\" -Sound warning"
           }
         ]
       }

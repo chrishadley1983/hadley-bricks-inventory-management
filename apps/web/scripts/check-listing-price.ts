@@ -16,7 +16,7 @@ import { AmazonListingsClient } from '../src/lib/amazon/amazon-listings.client';
 import { CredentialsRepository } from '../src/lib/repositories/credentials.repository';
 import type { Database } from '@hadley-bricks/database';
 
-const SKU = 'HB-B0BYZHTMVW-SM72';
+const SKU = process.argv[2] || 'HB-B0792T5XJD-HAU7';
 const MARKETPLACE_ID = 'A1F83G8C2ARO7P';
 
 async function main() {

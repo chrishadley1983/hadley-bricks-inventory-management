@@ -1055,7 +1055,25 @@ export class AmazonSyncService {
       verifiedCount += skippedNewSkus.length;
     }
 
+    // Check which items are already verified from previous polls
+    const { data: feedItemRows } = await this.supabase
+      .from('amazon_sync_feed_items')
+      .select('amazon_sku, price_verified')
+      .eq('feed_id', feedId);
+
+    const alreadyVerifiedSkus = new Set(
+      (feedItemRows ?? [])
+        .filter((r) => r.price_verified === true)
+        .map((r) => r.amazon_sku)
+    );
+
     for (const item of itemsToVerify) {
+      // Skip items already verified in a previous poll
+      if (alreadyVerifiedSkus.has(item.amazonSku)) {
+        verifiedCount++;
+        continue;
+      }
+
       try {
         const listing = await listingsClient.getListing(item.amazonSku, 'A1F83G8C2ARO7P', [
           'offers',
@@ -1086,8 +1104,28 @@ export class AmazonSyncService {
             `[AmazonSyncService] Price not yet live for ${item.amazonSku}: ` +
               `expected ${item.price}, got ${livePrice} (raw: ${offer?.price?.amount}, type: ${typeof offer?.price?.amount})`
           );
+
+          // Persist failed verification to DB
+          await this.supabase
+            .from('amazon_sync_feed_items')
+            .update({
+              verified_price: livePrice ?? null,
+              price_verified: false,
+            })
+            .eq('feed_id', feedId)
+            .eq('amazon_sku', item.amazonSku);
         } else {
           verifiedCount++;
+
+          // Persist successful verification to DB
+          await this.supabase
+            .from('amazon_sync_feed_items')
+            .update({
+              verified_price: livePrice,
+              price_verified: true,
+            })
+            .eq('feed_id', feedId)
+            .eq('amazon_sku', item.amazonSku);
         }
       } catch (error) {
         allVerified = false;
@@ -1096,17 +1134,138 @@ export class AmazonSyncService {
       }
     }
 
-    if (!allVerified) {
-      // Still waiting - check if we've exceeded timeout
-      const feed = await this.getFeedWithTwoPhaseState(feedId);
-      const startedAt = feed?.two_phase_started_at
-        ? new Date(feed.two_phase_started_at).getTime()
-        : Date.now();
-      const elapsed = Date.now() - startedAt;
+    // Get feed timing info
+    const feed = await this.getFeedWithTwoPhaseState(feedId);
+    const startedAt = feed?.two_phase_started_at
+      ? new Date(feed.two_phase_started_at).getTime()
+      : Date.now();
+    const elapsed = Date.now() - startedAt;
 
+    if (!allVerified) {
+      // Check hard timeout first (2 hours)
       if (elapsed > TWO_PHASE_DEFAULTS.priceVerificationTimeout) {
-        // Timeout - fail with verification error
         return this.failTwoPhaseVerification(feedId, userEmail, failedSkus);
+      }
+
+      // Grace period logic: once at least one item verifies, start a 10-minute
+      // countdown. If unverified items remain after the grace period, advance
+      // with partial success and report the failures.
+      if (verifiedCount > 0) {
+        // Record when the first item was verified (price_verified_at doubles as grace period start)
+        const firstVerifiedAt = feed?.price_verified_at
+          ? new Date(feed.price_verified_at).getTime()
+          : null;
+
+        if (!firstVerifiedAt) {
+          // First time we've seen a verified item — start the grace period
+          await this.updateFeedRecord(feedId, {
+            price_verified_at: new Date().toISOString(),
+          } as Parameters<typeof this.updateFeedRecord>[1]);
+
+          console.log(
+            `[AmazonSyncService] Grace period started: ${verifiedCount}/${aggregatedItems.length} verified, ` +
+              `${failedSkus.length} pending (${TWO_PHASE_DEFAULTS.priceVerificationGracePeriod / 60000} min window)`
+          );
+        } else {
+          const graceElapsed = Date.now() - firstVerifiedAt;
+
+          if (graceElapsed > TWO_PHASE_DEFAULTS.priceVerificationGracePeriod) {
+            // Grace period expired — advance with partial success
+            console.log(
+              `[AmazonSyncService] Grace period expired: ${verifiedCount}/${aggregatedItems.length} verified. ` +
+                `Advancing verified items, reporting ${failedSkus.length} failures.`
+            );
+
+            // Get actual prices from feed items for the error report
+            const { data: failedFeedItems } = await this.supabase
+              .from('amazon_sync_feed_items')
+              .select('amazon_sku, asin, submitted_price, verified_price')
+              .eq('feed_id', feedId)
+              .in('amazon_sku', failedSkus);
+
+            // Mark failed items in DB
+            await this.supabase
+              .from('amazon_sync_feed_items')
+              .update({
+                status: 'verification_failed',
+                verification_error: `Price not verified within grace period (${Math.round(graceElapsed / 60000)} min)`,
+              })
+              .eq('feed_id', feedId)
+              .in('amazon_sku', failedSkus);
+
+            // Send Discord error report (fire-and-forget — don't block quantity submission)
+            const failedLines = (failedFeedItems ?? []).map((fi) =>
+              `• ${fi.asin} (${fi.amazon_sku}): expected £${Number(fi.submitted_price).toFixed(2)}, ` +
+              `got £${fi.verified_price !== null ? Number(fi.verified_price).toFixed(2) : 'N/A'}`
+            );
+
+            discordService.sendAlert({
+              title: '⚠️ Partial Price Verification',
+              message:
+                `${verifiedCount} of ${aggregatedItems.length} prices verified. ` +
+                `${failedSkus.length} failed:\n${failedLines.join('\n')}`,
+              priority: 'high',
+            }).catch((err) =>
+              console.error('[AmazonSyncService] Discord partial verification alert failed:', err)
+            );
+
+            // Send email notification (fire-and-forget)
+            emailService.sendTwoPhaseFailure({
+              userEmail,
+              feedId,
+              failedSkus,
+              submittedPrice: 0, // Not relevant for partial — details are per-item
+              verificationDuration: elapsed,
+              itemDetails: this.buildItemDetails(aggregatedItems),
+            }).catch((err) =>
+              console.error('[AmazonSyncService] Email partial verification notification failed:', err)
+            );
+
+            // Advance ONLY verified items to quantity phase
+            const verifiedItems = aggregatedItems.filter(
+              (item) => !failedSkus.includes(item.amazonSku)
+            );
+
+            if (verifiedItems.length === 0) {
+              // All items failed — fail the feed entirely
+              return this.failTwoPhaseVerification(feedId, userEmail, failedSkus);
+            }
+
+            // Submit quantity feed for verified items only
+            const quantityFeed = await this.submitQuantityOnlyFeed(
+              verifiedItems,
+              credentials,
+              feedId
+            );
+
+            // Update feed state atomically after quantity feed succeeds
+            const priceVerifiedAt = new Date().toISOString();
+            await this.updateFeedRecord(feedId, {
+              status: 'verified',
+              price_verified_at: priceVerifiedAt,
+              error_message: `Partial verification: ${verifiedCount}/${aggregatedItems.length} succeeded, ${failedSkus.length} failed`,
+              two_phase_step: 'quantity_submitted',
+              quantity_feed_id: quantityFeed.id,
+            } as Parameters<typeof this.updateFeedRecord>[1]);
+
+            return {
+              feedId,
+              status: 'quantity_submitted',
+              step: 'quantity_submission',
+              isComplete: false,
+              message: `Partial verification: ${verifiedCount}/${aggregatedItems.length} verified, ${failedSkus.length} failed. Quantity feed submitted for verified items.`,
+              priceFeed: await this.getFeed(feedId),
+              quantityFeed,
+              priceVerifiedAt,
+              nextPollDelay: 5000,
+              verificationProgress: {
+                total: aggregatedItems.length,
+                verified: verifiedCount,
+                pendingSkus: failedSkus,
+              },
+            };
+          }
+        }
       }
 
       return {
@@ -1114,7 +1273,7 @@ export class AmazonSyncService {
         status: 'price_verifying',
         step: 'price_verification',
         isComplete: false,
-        message: `Waiting for price to appear on Amazon (${Math.round(elapsed / 1000)}s elapsed)`,
+        message: `Waiting for price to appear on Amazon (${verifiedCount}/${aggregatedItems.length} verified, ${Math.round(elapsed / 1000)}s elapsed)`,
         priceFeed: await this.getFeed(feedId),
         nextPollDelay: 30000,
         verificationProgress: {
@@ -1463,7 +1622,12 @@ export class AmazonSyncService {
       );
       const feedItems = await this.getFeedItems(feedId);
 
-      aggregatedItems = feedItems.map((item) => ({
+      // Exclude items that failed price verification (partial success case)
+      const verifiedFeedItems = feedItems.filter(
+        (item) => item.status !== 'verification_failed'
+      );
+
+      aggregatedItems = verifiedFeedItems.map((item) => ({
         asin: item.asin,
         amazonSku: item.amazon_sku,
         price: Number(item.submitted_price),
@@ -1553,6 +1717,11 @@ export class AmazonSyncService {
       itemDetails,
     });
 
+    // Check if this was a partial verification (some items failed price check)
+    const partialMessage = priceFeed?.error_message?.startsWith('Partial verification')
+      ? `\n${priceFeed.error_message}`
+      : '';
+
     await discordService.sendSyncSuccess({
       feedId,
       itemCount: aggregatedItems.length,
@@ -1564,7 +1733,7 @@ export class AmazonSyncService {
       status: 'completed',
       step: 'complete',
       isComplete: true,
-      message: 'Two-phase sync completed successfully! Notifications sent.',
+      message: `Two-phase sync completed! ${aggregatedItems.length} item(s) synced.${partialMessage}`,
       priceFeed: await this.getFeed(feedId),
       quantityFeed: await this.getFeed(quantityFeedId),
     };
