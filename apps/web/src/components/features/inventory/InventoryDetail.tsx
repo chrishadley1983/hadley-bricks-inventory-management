@@ -16,6 +16,7 @@ import {
   Store,
   RotateCcw,
   Eye,
+  PackageCheck,
 } from 'lucide-react';
 import {
   useInventoryItem,
@@ -24,7 +25,9 @@ import {
   usePurchase,
   usePerf,
   usePerfQuery,
+  inventoryKeys,
 } from '@/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,11 +40,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CreateEbayListingModal } from './CreateEbayListingModal';
 import { EbayListingDetailsDialog } from './EbayListingDetailsDialog';
 import { AddToSyncButton } from '@/components/features/amazon-sync/AddToSyncButton';
 import { PriceConflictDialog } from '@/components/features/amazon-sync/PriceConflictDialog';
+import { useAddToSyncQueue } from '@/hooks/use-amazon-sync';
 import { useToast } from '@/hooks/use-toast';
 import type { PriceConflict } from '@/lib/amazon/amazon-sync.types';
 
@@ -66,7 +72,12 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
   const [showCreateListingModal, setShowCreateListingModal] = useState(false);
   const [showListingDetailsDialog, setShowListingDetailsDialog] = useState(false);
   const [priceConflict, setPriceConflict] = useState<PriceConflict | null>(null);
+  const [showRelistDialog, setShowRelistDialog] = useState(false);
+  const [relistStorageLocation, setRelistStorageLocation] = useState('');
+  const [isRelisting, setIsRelisting] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const addToSyncQueue = useAddToSyncQueue();
 
   // Performance logging
   usePerf('InventoryDetail', isLoading);
@@ -90,6 +101,67 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
       },
     });
     setShowResetEbayDialog(false);
+  };
+
+  const handleOpenRelistDialog = () => {
+    setRelistStorageLocation(item?.storage_location || '');
+    setShowRelistDialog(true);
+  };
+
+  const handleRelistAmazon = async () => {
+    if (!relistStorageLocation.trim()) return;
+
+    setIsRelisting(true);
+    try {
+      // Step 1: Reset item to BACKLOG via API
+      const response = await fetch(`/api/inventory/${id}/relist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storageLocation: relistStorageLocation.trim() }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to return item to stock');
+      }
+
+      // Step 2: Add to Amazon sync queue
+      try {
+        const result = await addToSyncQueue.mutateAsync({ inventoryItemId: id });
+        if (result.priceConflict) {
+          setPriceConflict(result.priceConflict);
+          toast({
+            title: 'Item returned to stock',
+            description: 'Price conflict detected — resolve it to complete queue addition.',
+          });
+        } else {
+          toast({
+            title: 'Item returned to stock and added to Amazon queue',
+            description: `Storage location updated to "${relistStorageLocation.trim()}"`,
+          });
+        }
+      } catch {
+        toast({
+          title: 'Item returned to stock',
+          description: 'Failed to add to Amazon queue — please add manually.',
+          variant: 'destructive',
+        });
+      }
+
+      // Refresh page data
+      setShowRelistDialog(false);
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.summary() });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to return item to stock',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRelisting(false);
+    }
   };
 
   if (isLoading) {
@@ -176,6 +248,13 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               <Button variant="outline" onClick={() => setShowResetEbayDialog(true)}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset eBay
+              </Button>
+            )}
+            {/* Return to Stock & Re-list button - only show for SOLD Amazon items */}
+            {item.status === 'SOLD' && item.amazon_asin && (
+              <Button variant="outline" onClick={handleOpenRelistDialog}>
+                <PackageCheck className="mr-2 h-4 w-4" />
+                Return to Stock & Re-list
               </Button>
             )}
             <Button variant="outline" asChild>
@@ -464,6 +543,51 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
         open={showListingDetailsDialog}
         onOpenChange={setShowListingDetailsDialog}
       />
+
+      {/* Amazon Re-list Confirmation Dialog */}
+      <Dialog open={showRelistDialog} onOpenChange={setShowRelistDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return to Stock & Re-list on Amazon</DialogTitle>
+            <DialogDescription>
+              This will return the item to BACKLOG status, clear sale data, and add it to the
+              Amazon sync queue for re-listing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <span className="text-muted-foreground">Item</span>
+              <span className="font-medium">{item?.item_name || `Set ${item?.set_number}`}</span>
+              <span className="text-muted-foreground">ASIN</span>
+              <span className="font-medium">{item?.amazon_asin}</span>
+              <span className="text-muted-foreground">Listing Price</span>
+              <span className="font-medium">
+                {item?.listing_value ? formatCurrency(item.listing_value) : '-'}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="relist-storage-location">Storage Location *</Label>
+              <Input
+                id="relist-storage-location"
+                value={relistStorageLocation}
+                onChange={(e) => setRelistStorageLocation(e.target.value)}
+                placeholder="e.g. Shelf A3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRelistDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRelistAmazon}
+              disabled={isRelisting || !relistStorageLocation.trim()}
+            >
+              {isRelisting ? 'Processing...' : 'Return to Stock & Re-list'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Amazon Price Conflict Dialog */}
       <PriceConflictDialog
