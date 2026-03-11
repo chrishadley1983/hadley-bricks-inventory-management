@@ -1,12 +1,14 @@
 /**
  * POST /api/cron/spapi-buybox-overlay
  *
- * Daily SP-API overlay for in-stock ASINs (~232).
+ * Resumable SP-API overlay for in-stock ASINs (~232).
  * Calls getCompetitivePricing to get accurate buy_box_is_yours, buy_box_price,
  * your_price, and offer_count — data that Keepa cannot provide (no seller identity).
  *
- * Timing: 232 ASINs = 12 batches of 20 x 10s delay = ~2 min (within 5-min Vercel limit)
- * Schedule: Daily at 6am UTC (after Keepa has had overnight to backfill)
+ * Processes CHUNK_SIZE ASINs per invocation (~40s) to stay within Vercel's 60s limit.
+ * The GCP pricing-sync-driver calls this in a loop until { complete: true }.
+ *
+ * Schedule: Daily at 6am UTC via GCP pricing-sync-driver
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,9 +21,18 @@ import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 import type { AmazonCredentials } from '@/lib/amazon';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 60;
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
+
+/** Process 80 ASINs per call (4 batches of 20 × 10s delay = ~40s, under 60s limit) */
+const CHUNK_SIZE = 80;
+
+/**
+ * Supabase table: spapi_overlay_progress
+ * Tracks cursor across invocations for the same day.
+ * We use a simple key-value approach via tracked_asins ordering.
+ */
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -36,11 +47,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    execution = await jobExecutionService.start('spapi-buybox-overlay', 'cron');
-
     const supabase = createServiceRoleClient();
+    const today = new Date().toISOString().split('T')[0];
 
-    // Get all in-stock ASINs (qty >= 1)
+    // Get all in-stock ASINs (sorted for deterministic cursor)
     const inStockAsins: string[] = [];
     const PAGE_SIZE = 1000;
     let page = 0;
@@ -53,6 +63,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', DEFAULT_USER_ID)
         .eq('status', 'active')
         .gt('quantity', 0)
+        .order('asin', { ascending: true })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
       if (error) throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
@@ -62,12 +73,69 @@ export async function POST(request: NextRequest) {
       page++;
     }
 
-    console.log(`[SP-API Overlay] Found ${inStockAsins.length} in-stock ASINs`);
-
     if (inStockAsins.length === 0) {
-      await execution.complete({ processed: 0 }, 200, 0, 0);
       return NextResponse.json({ success: true, complete: true, processed: 0 });
     }
+
+    // Determine which ASINs already have today's SP-API snapshot (buy_box_is_yours is not null/default)
+    // We find ASINs that DON'T yet have a snapshot with your_price set today (SP-API sets your_price)
+    const alreadyDone = new Set<string>();
+    for (let i = 0; i < inStockAsins.length; i += 500) {
+      const batch = inStockAsins.slice(i, i + 500);
+      const { data } = await supabase
+        .from('amazon_arbitrage_pricing')
+        .select('asin')
+        .in('asin', batch)
+        .eq('snapshot_date', today)
+        .not('your_price', 'is', null);
+
+      if (data) {
+        for (const row of data) {
+          alreadyDone.add(row.asin);
+        }
+      }
+    }
+
+    const remaining = inStockAsins.filter((a) => !alreadyDone.has(a));
+
+    console.log(
+      `[SP-API Overlay] ${inStockAsins.length} total, ${alreadyDone.size} already done today, ${remaining.length} remaining`
+    );
+
+    if (remaining.length === 0) {
+      // All done — send summary and mark complete
+      const { data: todaySnapshots } = await supabase
+        .from('amazon_arbitrage_pricing')
+        .select('buy_box_is_yours')
+        .eq('snapshot_date', today)
+        .in('asin', inStockAsins);
+
+      const buyBoxYoursCount = todaySnapshots?.filter((r) => r.buy_box_is_yours).length ?? 0;
+
+      await discordService.sendSyncStatus({
+        title: 'SP-API Buy Box Overlay',
+        message: `${inStockAsins.length}/${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own the buy box\n0 failed`,
+        success: true,
+      });
+
+      return NextResponse.json({
+        success: true,
+        complete: true,
+        processed: inStockAsins.length,
+        remaining: 0,
+        buyBoxYoursCount,
+      });
+    }
+
+    // Process a chunk
+    const chunk = remaining.slice(0, CHUNK_SIZE);
+    const isFirstChunk = alreadyDone.size === 0;
+
+    if (isFirstChunk) {
+      execution = await jobExecutionService.start('spapi-buybox-overlay', 'cron');
+    }
+
+    console.log(`[SP-API Overlay] Processing chunk of ${chunk.length} ASINs`);
 
     // Get Amazon credentials
     const credentialsRepo = new CredentialsRepository(supabase);
@@ -81,17 +149,12 @@ export async function POST(request: NextRequest) {
     }
 
     const pricingClient = createAmazonPricingClient(credentials);
+    const pricingData = await pricingClient.getCompetitivePricing(chunk);
 
-    // Call SP-API getCompetitivePricing (auto-batches at 20 ASINs, 10s delays)
-    console.log(`[SP-API Overlay] Calling getCompetitivePricing for ${inStockAsins.length} ASINs`);
-    const pricingData = await pricingClient.getCompetitivePricing(inStockAsins);
-
-    const today = new Date().toISOString().split('T')[0];
     let updated = 0;
     let failed = 0;
 
-    // Upsert SP-API data into amazon_arbitrage_pricing
-    // We only update the fields SP-API provides — Keepa fields are preserved
+    // Upsert SP-API data
     const UPSERT_BATCH = 100;
     for (let i = 0; i < pricingData.length; i += UPSERT_BATCH) {
       const batch = pricingData.slice(i, i + UPSERT_BATCH);
@@ -118,7 +181,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Also update tracked_asins.price with SP-API yourPrice where available
+    // Update tracked_asins.price with SP-API yourPrice
     const priceUpdates = pricingData.filter((p) => p.yourPrice !== null);
     for (let i = 0; i < priceUpdates.length; i += 20) {
       const batch = priceUpdates.slice(i, i + 20);
@@ -134,32 +197,40 @@ export async function POST(request: NextRequest) {
     }
 
     const duration = Date.now() - startTime;
+    const newRemaining = remaining.length - chunk.length;
+    const isComplete = newRemaining <= 0;
     const buyBoxYoursCount = pricingData.filter((p) => p.buyBoxIsYours).length;
 
     console.log(
-      `[SP-API Overlay] Done in ${Math.round(duration / 1000)}s: ${updated} updated, ${failed} failed, ${buyBoxYoursCount} own buy box`
+      `[SP-API Overlay] Chunk done in ${Math.round(duration / 1000)}s: ${updated} updated, ${failed} failed, ${buyBoxYoursCount} own buy box, ${newRemaining} remaining`
     );
 
-    // Send Discord summary
-    await discordService.sendSyncStatus({
-      title: 'SP-API Buy Box Overlay',
-      message: `${updated}/${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own the buy box\n${failed} failed\nDuration: ${Math.round(duration / 1000)}s`,
-      success: failed === 0,
-    });
+    if (isComplete) {
+      const totalProcessed = alreadyDone.size + chunk.length;
 
-    await execution.complete(
-      { processed: inStockAsins.length, updated, buyBoxYoursCount },
-      200,
-      updated,
-      failed
-    );
+      await discordService.sendSyncStatus({
+        title: 'SP-API Buy Box Overlay',
+        message: `${totalProcessed}/${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own buy box in this chunk\n${failed} failed`,
+        success: failed === 0,
+      });
+
+      if (isFirstChunk) {
+        await execution.complete(
+          { processed: totalProcessed, updated, buyBoxYoursCount },
+          200,
+          updated,
+          failed
+        );
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      complete: true,
-      processed: inStockAsins.length,
+      complete: isComplete,
+      processed: alreadyDone.size + chunk.length,
       updated,
       failed,
+      remaining: newRemaining,
       buyBoxYoursCount,
       duration,
     });
