@@ -162,6 +162,9 @@ export class KeepaPricingSyncService {
             }
 
             // Upsert into amazon_arbitrage_pricing
+            // Note: buy_box_is_yours and your_price are intentionally omitted —
+            // they are set by the SP-API overlay cron which has seller identity data.
+            // Including them here would overwrite SP-API truth with Keepa defaults.
             const { error: upsertError } = await this.supabase
               .from('amazon_arbitrage_pricing')
               .upsert(
@@ -170,9 +173,6 @@ export class KeepaPricingSyncService {
                   asin: product.asin,
                   snapshot_date: today,
                   buy_box_price: buyBoxPrice,
-                  your_price: amazonPrice ?? buyBoxPrice,
-                  your_qty: 0,
-                  buy_box_is_yours: false,
                   offer_count: latest.new_offer_count,
                   sales_rank: latest.sales_rank,
                 },

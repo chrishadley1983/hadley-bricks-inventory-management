@@ -1490,6 +1490,20 @@ export class AmazonSyncService {
       completed_at: new Date().toISOString(),
     } as Parameters<typeof this.updateFeedRecord>[1]);
 
+    // Flag ASINs for SP-API buy box refresh (so the lightweight cron picks them up)
+    const completedAsins = aggregatedItems.map((item) => item.asin).filter(Boolean);
+    if (completedAsins.length > 0) {
+      await this.supabase
+        .from('tracked_asins')
+        .update({ spapi_refresh_needed: true })
+        .eq('user_id', this.userId)
+        .in('asin', completedAsins);
+
+      console.log(
+        `[AmazonSyncService] Flagged ${completedAsins.length} ASINs for SP-API refresh: ${completedAsins.join(', ')}`
+      );
+    }
+
     // Send success notifications
     const priceFeed = await this.getFeedWithTwoPhaseState(feedId);
     const startedAt = priceFeed?.two_phase_started_at
