@@ -19,10 +19,10 @@ const APP_URL = process.env.APP_URL || 'https://hadley-bricks.vercel.app';
 const DEFAULT_MAX_ITERATIONS = 120; // 120 * 30s = 1 hour max
 const ITERATION_DELAY_MS = 30000; // 30 seconds between calls
 
-// amazon-pricing and spapi-buybox-overlay are self-contained (no retry loop needed)
+// amazon-pricing is self-contained (no retry loop needed)
 const JOB_MAX_ITERATIONS = {
   'amazon-pricing': 1,
-  'spapi-buybox-overlay': 1,
+  'spapi-buybox-overlay': 10,  // ~232 ASINs / 80 per chunk = 3 calls, 10 for safety
   'ebay-pricing': 120,
   'bricklink-pricing': 120,
 };
