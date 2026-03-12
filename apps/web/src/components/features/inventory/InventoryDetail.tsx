@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CreateEbayListingModal } from './CreateEbayListingModal';
 import { EbayListingDetailsDialog } from './EbayListingDetailsDialog';
@@ -214,6 +215,11 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
               <Badge variant={item.status ? STATUS_VARIANTS[item.status] || 'outline' : 'outline'}>
                 {item.status || '-'}
               </Badge>
+              {item.markdown_hold && (
+                <Badge variant="outline" className="border-orange-500 text-orange-700 bg-orange-50">
+                  Held
+                </Badge>
+              )}
             </div>
             <p className="text-muted-foreground">Set #{item.set_number}</p>
           </div>
@@ -384,6 +390,34 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
                   <dd className="mt-1 text-sm whitespace-pre-wrap">{item.notes}</dd>
                 </div>
               )}
+              {/* Markdown Hold Toggle */}
+              <div className="flex items-center justify-between pt-2 border-t">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Hold from Markdown</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Exempt this item from automatic markdowns
+                  </p>
+                </div>
+                <Switch
+                  checked={item.markdown_hold ?? false}
+                  onCheckedChange={(checked: boolean) => {
+                    updateMutation.mutate(
+                      { id: item.id, data: { markdown_hold: checked } },
+                      {
+                        onSuccess: () => {
+                          queryClient.invalidateQueries({ queryKey: inventoryKeys.detail(item.id) });
+                          toast({
+                            title: checked ? 'Markdown hold enabled' : 'Markdown hold removed',
+                            description: checked
+                              ? 'This item will be skipped in markdown evaluations'
+                              : 'This item will be included in markdown evaluations',
+                          });
+                        },
+                      }
+                    );
+                  }}
+                />
+              </div>
             </CardContent>
           </Card>
 

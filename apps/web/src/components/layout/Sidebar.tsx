@@ -32,6 +32,7 @@ import {
   ChevronDown,
   LineChart,
   Gavel,
+  TrendingDown,
 } from 'lucide-react';
 
 interface NavItem {
@@ -53,6 +54,7 @@ const mainNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
   { href: '/inventory', label: 'Inventory', icon: Package },
+  { href: '/inventory/markdown', label: 'Smart Markdown', icon: TrendingDown },
   { href: '/orders', label: 'Orders', icon: FileText },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
   { href: '/set-lookup', label: 'Set Lookup', icon: Search },
