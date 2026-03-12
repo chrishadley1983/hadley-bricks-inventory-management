@@ -116,6 +116,60 @@ export interface AuctionProfitBreakdown {
 }
 
 // ============================================
+// Evaluation Detail (per-auction debug data)
+// ============================================
+
+export type EvalFilterReason =
+  | 'passed'
+  | 'false_positive'
+  | 'not_new_sealed'
+  | 'below_min_bids'
+  | 'excluded_set'
+  | 'no_set_identified'
+  | 'no_amazon_price'
+  | 'sales_rank_too_high'
+  | 'below_min_margin'
+  | 'below_min_profit'
+  | 'already_alerted'
+  | 'joblot';
+
+export interface AuctionEvaluation {
+  itemId: string;
+  title: string;
+  currentBidGbp: number;
+  postageGbp: number;
+  totalCostGbp: number;
+  bidCount: number;
+  minutesRemaining: number;
+  itemUrl: string;
+  imageUrl: string | null;
+  condition: string | null;
+
+  // Identification
+  setNumber: string | null;
+  setConfidence: string | null;
+  isJoblot: boolean;
+  isFalsePositive: boolean;
+  isNewSealed: boolean;
+
+  // Amazon lookup
+  amazonPrice: number | null;
+  amazon90dAvg: number | null;
+  amazonAsin: string | null;
+  amazonSalesRank: number | null;
+  amazonSetName: string | null;
+
+  // Profit calculation (null if no Amazon data)
+  profitGbp: number | null;
+  marginPercent: number | null;
+  roiPercent: number | null;
+
+  // Outcome
+  filterReason: EvalFilterReason;
+  alertTier: 'great' | 'good' | null;
+}
+
+// ============================================
 // Scan Results
 // ============================================
 
@@ -126,9 +180,11 @@ export interface ScanResult {
   alertsSent: number;
   joblotsFound: number;
   apiCallsMade: number;
+  keepaCallsMade: number;
   durationMs: number;
   opportunities: AuctionOpportunity[];
   joblots: JoblotOpportunity[];
+  evaluations: AuctionEvaluation[];
   skippedReason?: string;
   error?: string;
 }
@@ -180,6 +236,8 @@ export interface EbayAuctionScanLog {
   joblotsFound: number;
   durationMs: number | null;
   apiCallsMade: number;
+  keepaCallsMade: number;
+  evaluationDetails: AuctionEvaluation[] | null;
   errorMessage: string | null;
   skippedReason: string | null;
   createdAt: string;

@@ -2881,8 +2881,10 @@ export type Database = {
           created_at: string
           duration_ms: number | null
           error_message: string | null
+          evaluation_details: Json | null
           id: string
           joblots_found: number
+          keepa_calls_made: number
           opportunities_found: number
           skipped_reason: string | null
           user_id: string
@@ -2895,8 +2897,10 @@ export type Database = {
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
+          evaluation_details?: Json | null
           id?: string
           joblots_found?: number
+          keepa_calls_made?: number
           opportunities_found?: number
           skipped_reason?: string | null
           user_id: string
@@ -2909,8 +2913,10 @@ export type Database = {
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
+          evaluation_details?: Json | null
           id?: string
           joblots_found?: number
+          keepa_calls_made?: number
           opportunities_found?: number
           skipped_reason?: string | null
           user_id?: string
@@ -5308,6 +5314,7 @@ export type Database = {
           listing_date: string | null
           listing_platform: string | null
           listing_value: number | null
+          markdown_hold: boolean
           notes: string | null
           purchase_date: string | null
           purchase_id: string | null
@@ -5347,6 +5354,7 @@ export type Database = {
           listing_date?: string | null
           listing_platform?: string | null
           listing_value?: number | null
+          markdown_hold?: boolean
           notes?: string | null
           purchase_date?: string | null
           purchase_id?: string | null
@@ -5386,6 +5394,7 @@ export type Database = {
           listing_date?: string | null
           listing_platform?: string | null
           listing_value?: number | null
+          markdown_hold?: boolean
           notes?: string | null
           purchase_date?: string | null
           purchase_id?: string | null
@@ -6625,6 +6634,177 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      markdown_config: {
+        Row: {
+          amazon_fee_rate: number
+          amazon_step1_days: number
+          amazon_step2_days: number
+          amazon_step2_undercut_pct: number
+          amazon_step3_days: number
+          amazon_step3_undercut_pct: number
+          amazon_step4_days: number
+          auction_default_duration_days: number
+          auction_enabled: boolean
+          auction_max_per_day: number
+          created_at: string
+          ebay_fee_rate: number
+          ebay_step1_days: number
+          ebay_step1_reduction_pct: number
+          ebay_step2_days: number
+          ebay_step2_reduction_pct: number
+          ebay_step3_days: number
+          ebay_step4_days: number
+          id: string
+          low_demand_sales_rank: number
+          mode: string
+          overpriced_threshold_pct: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amazon_fee_rate?: number
+          amazon_step1_days?: number
+          amazon_step2_days?: number
+          amazon_step2_undercut_pct?: number
+          amazon_step3_days?: number
+          amazon_step3_undercut_pct?: number
+          amazon_step4_days?: number
+          auction_default_duration_days?: number
+          auction_enabled?: boolean
+          auction_max_per_day?: number
+          created_at?: string
+          ebay_fee_rate?: number
+          ebay_step1_days?: number
+          ebay_step1_reduction_pct?: number
+          ebay_step2_days?: number
+          ebay_step2_reduction_pct?: number
+          ebay_step3_days?: number
+          ebay_step4_days?: number
+          id?: string
+          low_demand_sales_rank?: number
+          mode?: string
+          overpriced_threshold_pct?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amazon_fee_rate?: number
+          amazon_step1_days?: number
+          amazon_step2_days?: number
+          amazon_step2_undercut_pct?: number
+          amazon_step3_days?: number
+          amazon_step3_undercut_pct?: number
+          amazon_step4_days?: number
+          auction_default_duration_days?: number
+          auction_enabled?: boolean
+          auction_max_per_day?: number
+          created_at?: string
+          ebay_fee_rate?: number
+          ebay_step1_days?: number
+          ebay_step1_reduction_pct?: number
+          ebay_step2_days?: number
+          ebay_step2_reduction_pct?: number
+          ebay_step3_days?: number
+          ebay_step4_days?: number
+          id?: string
+          low_demand_sales_rank?: number
+          mode?: string
+          overpriced_threshold_pct?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      markdown_proposals: {
+        Row: {
+          aging_days: number
+          auction_duration_days: number | null
+          auction_end_date: string | null
+          created_at: string
+          current_price: number
+          diagnosis: string
+          diagnosis_reason: string
+          error_message: string | null
+          id: string
+          inventory_item_id: string
+          item_name: string | null
+          markdown_step: number | null
+          market_price: number | null
+          platform: string
+          price_floor: number
+          proposed_action: string
+          proposed_price: number | null
+          sales_rank: number | null
+          set_number: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          aging_days: number
+          auction_duration_days?: number | null
+          auction_end_date?: string | null
+          created_at?: string
+          current_price: number
+          diagnosis: string
+          diagnosis_reason: string
+          error_message?: string | null
+          id?: string
+          inventory_item_id: string
+          item_name?: string | null
+          markdown_step?: number | null
+          market_price?: number | null
+          platform: string
+          price_floor: number
+          proposed_action: string
+          proposed_price?: number | null
+          sales_rank?: number | null
+          set_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          aging_days?: number
+          auction_duration_days?: number | null
+          auction_end_date?: string | null
+          created_at?: string
+          current_price?: number
+          diagnosis?: string
+          diagnosis_reason?: string
+          error_message?: string | null
+          id?: string
+          inventory_item_id?: string
+          item_name?: string | null
+          markdown_step?: number | null
+          market_price?: number | null
+          platform?: string
+          price_floor?: number
+          proposed_action?: string
+          proposed_price?: number | null
+          sales_rank?: number | null
+          set_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "markdown_proposals_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "markdown_proposals_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
             referencedColumns: ["id"]
           },
         ]
