@@ -7,6 +7,7 @@ import { ReportingService } from '@/lib/services';
 const QueryParamsSchema = z.object({
   preset: z
     .enum([
+      'today',
       'this_month',
       'last_month',
       'this_quarter',
