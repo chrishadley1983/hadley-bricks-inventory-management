@@ -2719,6 +2719,204 @@ export type Database = {
         }
         Relationships: []
       }
+      ebay_auction_alerts: {
+        Row: {
+          alert_tier: string
+          amazon_90d_avg_gbp: number | null
+          amazon_asin: string | null
+          amazon_price_gbp: number | null
+          amazon_sales_rank: number | null
+          auction_end_time: string | null
+          bid_count: number
+          created_at: string
+          current_bid_gbp: number
+          discord_sent: boolean
+          discord_sent_at: string | null
+          ebay_image_url: string | null
+          ebay_item_id: string
+          ebay_title: string
+          ebay_url: string | null
+          id: string
+          is_joblot: boolean
+          joblot_sets: Json | null
+          margin_percent: number | null
+          postage_gbp: number
+          profit_gbp: number | null
+          roi_percent: number | null
+          set_name: string | null
+          set_number: string | null
+          total_cost_gbp: number
+          user_id: string
+        }
+        Insert: {
+          alert_tier?: string
+          amazon_90d_avg_gbp?: number | null
+          amazon_asin?: string | null
+          amazon_price_gbp?: number | null
+          amazon_sales_rank?: number | null
+          auction_end_time?: string | null
+          bid_count?: number
+          created_at?: string
+          current_bid_gbp: number
+          discord_sent?: boolean
+          discord_sent_at?: string | null
+          ebay_image_url?: string | null
+          ebay_item_id: string
+          ebay_title: string
+          ebay_url?: string | null
+          id?: string
+          is_joblot?: boolean
+          joblot_sets?: Json | null
+          margin_percent?: number | null
+          postage_gbp?: number
+          profit_gbp?: number | null
+          roi_percent?: number | null
+          set_name?: string | null
+          set_number?: string | null
+          total_cost_gbp: number
+          user_id: string
+        }
+        Update: {
+          alert_tier?: string
+          amazon_90d_avg_gbp?: number | null
+          amazon_asin?: string | null
+          amazon_price_gbp?: number | null
+          amazon_sales_rank?: number | null
+          auction_end_time?: string | null
+          bid_count?: number
+          created_at?: string
+          current_bid_gbp?: number
+          discord_sent?: boolean
+          discord_sent_at?: string | null
+          ebay_image_url?: string | null
+          ebay_item_id?: string
+          ebay_title?: string
+          ebay_url?: string | null
+          id?: string
+          is_joblot?: boolean
+          joblot_sets?: Json | null
+          margin_percent?: number | null
+          postage_gbp?: number
+          profit_gbp?: number | null
+          roi_percent?: number | null
+          set_name?: string | null
+          set_number?: string | null
+          total_cost_gbp?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ebay_auction_config: {
+        Row: {
+          created_at: string
+          default_postage_gbp: number
+          enabled: boolean
+          excluded_sets: Json
+          great_margin_percent: number
+          id: string
+          joblot_analysis_enabled: boolean
+          joblot_min_total_value_gbp: number
+          max_bid_price_gbp: number | null
+          max_sales_rank: number | null
+          min_bids: number
+          min_margin_percent: number
+          min_profit_gbp: number
+          quiet_hours_enabled: boolean
+          quiet_hours_end: number
+          quiet_hours_start: number
+          scan_window_minutes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_postage_gbp?: number
+          enabled?: boolean
+          excluded_sets?: Json
+          great_margin_percent?: number
+          id?: string
+          joblot_analysis_enabled?: boolean
+          joblot_min_total_value_gbp?: number
+          max_bid_price_gbp?: number | null
+          max_sales_rank?: number | null
+          min_bids?: number
+          min_margin_percent?: number
+          min_profit_gbp?: number
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          scan_window_minutes?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_postage_gbp?: number
+          enabled?: boolean
+          excluded_sets?: Json
+          great_margin_percent?: number
+          id?: string
+          joblot_analysis_enabled?: boolean
+          joblot_min_total_value_gbp?: number
+          max_bid_price_gbp?: number | null
+          max_sales_rank?: number | null
+          min_bids?: number
+          min_margin_percent?: number
+          min_profit_gbp?: number
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          scan_window_minutes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ebay_auction_scan_log: {
+        Row: {
+          alerts_sent: number
+          api_calls_made: number
+          auctions_found: number
+          auctions_with_sets: number
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          id: string
+          joblots_found: number
+          opportunities_found: number
+          skipped_reason: string | null
+          user_id: string
+        }
+        Insert: {
+          alerts_sent?: number
+          api_calls_made?: number
+          auctions_found?: number
+          auctions_with_sets?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          joblots_found?: number
+          opportunities_found?: number
+          skipped_reason?: string | null
+          user_id: string
+        }
+        Update: {
+          alerts_sent?: number
+          api_calls_made?: number
+          auctions_found?: number
+          auctions_with_sets?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          joblots_found?: number
+          opportunities_found?: number
+          skipped_reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ebay_business_policies: {
         Row: {
           cached_at: string | null
@@ -13606,6 +13804,7 @@ export type Database = {
           last_offer_date: string
         }[]
       }
+      cleanup_stale_job_executions: { Args: never; Returns: number }
       count_all_unlinked_order_items_since: {
         Args: { p_since_date: string; p_user_id: string }
         Returns: number
