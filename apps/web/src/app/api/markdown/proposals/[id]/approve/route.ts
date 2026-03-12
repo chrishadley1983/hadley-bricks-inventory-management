@@ -12,7 +12,7 @@ export async function POST(
     // Fetch proposal
     const { data: proposal, error: fetchError } = await supabase
       .from('markdown_proposals')
-      .select('*')
+      .select('id, inventory_item_id, proposed_action, proposed_price, status')
       .eq('id', id)
       .single();
 

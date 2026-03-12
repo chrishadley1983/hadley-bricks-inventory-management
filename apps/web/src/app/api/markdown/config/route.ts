@@ -30,7 +30,7 @@ export async function GET() {
     const supabase = createServiceRoleClient();
     const { data, error } = await supabase
       .from('markdown_config')
-      .select('*')
+      .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, created_at, updated_at')
       .eq('user_id', DEFAULT_USER_ID)
       .single();
 
