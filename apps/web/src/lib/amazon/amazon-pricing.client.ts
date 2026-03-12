@@ -691,7 +691,12 @@ export class AmazonPricingClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
+  private async request<T>(
+    path: string,
+    method: 'GET' | 'POST',
+    body?: unknown,
+    _retryCount = 0
+  ): Promise<T> {
     const accessToken = await this.getAccessToken();
 
     const url = `${this.endpoint}${path}`;
@@ -717,13 +722,16 @@ export class AmazonPricingClient {
 
     // Handle rate limiting — cap fallback at 20s to avoid exceeding Vercel's 60s timeout
     if (response.status === 429) {
+      if (_retryCount >= 2) {
+        throw new Error('Rate limited by Amazon SP-API after 2 retries — aborting');
+      }
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter
         ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
         : 20000;
-      console.warn(`[AmazonPricingClient] Rate limited, waiting ${waitTime / 1000}s...`);
+      console.warn(`[AmazonPricingClient] Rate limited (attempt ${_retryCount + 1}/2), waiting ${waitTime / 1000}s...`);
       await this.sleep(waitTime);
-      return this.request<T>(path, method, body);
+      return this.request<T>(path, method, body, _retryCount + 1);
     }
 
     // Handle auth errors
