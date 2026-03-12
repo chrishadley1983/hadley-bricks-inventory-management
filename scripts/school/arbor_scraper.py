@@ -66,13 +66,17 @@ def scrape_arbor() -> dict:
         page = context.new_page()
 
         try:
-            # Login
-            page.goto(ARBOR_URL, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(2000)
+            # Login — Arbor is an SPA, so wait for networkidle then for the login form
+            page.goto(ARBOR_URL, wait_until="networkidle", timeout=45000)
 
-            # Check we're on the login page
-            if "Email address" not in page.content():
-                result["error"] = f"Unexpected page: {page.url}"
+            # Wait for the login form to render (SPA may take a few seconds)
+            try:
+                page.wait_for_selector(
+                    'input[placeholder="Email address"]', timeout=15000
+                )
+            except Exception:
+                # Last resort: check if we ended up somewhere unexpected
+                result["error"] = f"Unexpected page (login form not found): {page.url}"
                 return result
 
             page.fill('input[placeholder="Email address"]', ARBOR_EMAIL)

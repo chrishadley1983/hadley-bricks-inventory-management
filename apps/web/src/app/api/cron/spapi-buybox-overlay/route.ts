@@ -27,8 +27,8 @@ export const maxDuration = 60;
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const JOB_NAME = 'spapi-buybox-overlay';
 
-/** Process 80 ASINs per call (4 batches of 20 × 10s delay = ~40s, under 60s limit) */
-const CHUNK_SIZE = 80;
+/** Process 60 ASINs per call (3 batches of 20 × 10s delay = ~20s delay + API time, safe under 60s limit) */
+const CHUNK_SIZE = 60;
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();

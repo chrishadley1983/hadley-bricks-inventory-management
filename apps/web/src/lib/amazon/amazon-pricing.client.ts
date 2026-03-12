@@ -715,10 +715,12 @@ export class AmazonPricingClient {
 
     const response = await fetch(url, options);
 
-    // Handle rate limiting
+    // Handle rate limiting — cap fallback at 20s to avoid exceeding Vercel's 60s timeout
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
+      const waitTime = retryAfter
+        ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
+        : 20000;
       console.warn(`[AmazonPricingClient] Rate limited, waiting ${waitTime / 1000}s...`);
       await this.sleep(waitTime);
       return this.request<T>(path, method, body);
