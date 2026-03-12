@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         // Fetch proposal
         const { data: proposal } = await supabase
           .from('markdown_proposals')
-          .select('*')
+          .select('id, inventory_item_id, proposed_action, proposed_price, status')
           .eq('id', id)
           .eq('status', 'PENDING')
           .single();
