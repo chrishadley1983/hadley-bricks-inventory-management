@@ -20,6 +20,7 @@ export interface DateRange {
  * Standard date range presets
  */
 export type DateRangePreset =
+  | 'today'
   | 'this_month'
   | 'last_month'
   | 'this_quarter'
@@ -427,6 +428,11 @@ export class ReportingService {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     switch (preset) {
+      case 'today': {
+        const end = new Date(today);
+        end.setHours(23, 59, 59, 999);
+        return { startDate: today, endDate: end };
+      }
       case 'this_month': {
         const start = new Date(today.getFullYear(), today.getMonth(), 1);
         const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
