@@ -44,6 +44,43 @@ export interface VintedOpportunityParams {
   vintedUrl: string;
 }
 
+export interface EbayAuctionAlertParams {
+  setNumber: string;
+  setName: string | null;
+  ebayTitle: string;
+  currentBid: number;
+  postage: number;
+  totalCost: number;
+  bidCount: number;
+  minutesRemaining: number;
+  amazonPrice: number;
+  amazon90dAvg: number | null;
+  amazonAsin: string;
+  salesRank: number | null;
+  profit: number;
+  marginPercent: number;
+  roiPercent: number;
+  alertTier: 'great' | 'good';
+  ebayUrl: string;
+  imageUrl: string | null;
+  ukRrp: number | null;
+}
+
+export interface EbayJoblotAlertParams {
+  ebayTitle: string;
+  currentBid: number;
+  postage: number;
+  totalCost: number;
+  bidCount: number;
+  minutesRemaining: number;
+  totalAmazonValue: number;
+  estimatedProfit: number;
+  marginPercent: number;
+  sets: Array<{ setNumber: string; setName: string | null; amazonPrice: number | null }>;
+  ebayUrl: string;
+  imageUrl: string | null;
+}
+
 export interface VintedDailySummaryParams {
   broadSweeps: number;
   watchlistScans: number;
@@ -440,6 +477,153 @@ export class DiscordService {
       success: true,
       url: `${this.appUrl}/amazon-sync?feed=${feedId}`,
     });
+  }
+
+  // =========================================================================
+  // eBay Auction Sniper Methods
+  // =========================================================================
+
+  /**
+   * Send an eBay auction opportunity alert.
+   * Colour-coded: green for great deals (≥25% margin), amber for good deals (≥15%).
+   */
+  async sendEbayAuctionAlert(params: EbayAuctionAlertParams): Promise<DiscordSendResult> {
+    const {
+      setNumber, setName, ebayTitle, currentBid, postage, totalCost,
+      bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
+      salesRank, profit, marginPercent, roiPercent, alertTier,
+      ebayUrl, imageUrl, ukRrp,
+    } = params;
+
+    const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
+    const tierEmoji = alertTier === 'great' ? '🟢' : '🟠';
+    const tierLabel = alertTier === 'great' ? 'GREAT DEAL' : 'GOOD DEAL';
+
+    const keepaUrl = `https://keepa.com/#!product/2-${amazonAsin}`;
+    const amazonUrl = `https://www.amazon.co.uk/dp/${amazonAsin}`;
+
+    const fields: DiscordEmbedField[] = [
+      {
+        name: '🏷️ eBay (COG)',
+        value: `Bid: £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
+        inline: true,
+      },
+      {
+        name: '🛒 Amazon',
+        value: `Buy Box: [£${amazonPrice.toFixed(2)}](${amazonUrl})\n[Keepa](${keepaUrl})`,
+        inline: true,
+      },
+      {
+        name: '📊 90d Avg',
+        value: amazon90dAvg ? `£${amazon90dAvg.toFixed(2)}` : '—',
+        inline: true,
+      },
+      {
+        name: '💰 Profit / Margin',
+        value: `**£${profit.toFixed(2)}** · ${marginPercent.toFixed(1)}% margin · ${roiPercent.toFixed(0)}% ROI`,
+        inline: false,
+      },
+      {
+        name: `${tierEmoji} ${tierLabel}`,
+        value: `${marginPercent.toFixed(1)}% profit margin`,
+        inline: true,
+      },
+      {
+        name: '⏰ Time Left',
+        value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
+        inline: true,
+      },
+    ];
+
+    if (ukRrp) {
+      fields.push({ name: '🏷️ UK RRP', value: `£${ukRrp.toFixed(2)}`, inline: true });
+    }
+
+    if (salesRank) {
+      fields.push({
+        name: '📈 Sales Rank',
+        value: `#${new Intl.NumberFormat('en-GB').format(salesRank)}`,
+        inline: true,
+      });
+    }
+
+    fields.push({
+      name: '🧱 Set',
+      value: `${setNumber}${setName ? `: ${setName}` : ''}`,
+      inline: false,
+    });
+
+    const embed: DiscordEmbed = {
+      title: `🔨 ${setNumber}: ${ebayTitle.substring(0, 80)}`,
+      url: ebayUrl,
+      color,
+      fields,
+    };
+
+    if (imageUrl) {
+      (embed as Record<string, unknown>).thumbnail = { url: imageUrl };
+    }
+
+    return this.send('opportunities', embed);
+  }
+
+  /**
+   * Send a joblot opportunity alert.
+   */
+  async sendEbayJoblotAlert(params: EbayJoblotAlertParams): Promise<DiscordSendResult> {
+    const {
+      ebayTitle, currentBid, postage, totalCost, bidCount, minutesRemaining,
+      totalAmazonValue, estimatedProfit, marginPercent, sets, ebayUrl, imageUrl,
+    } = params;
+
+    const color = marginPercent >= 25 ? 0x2ecc71 : 0xf1c40f;
+    const setsBreakdown = sets
+      .map((s) => {
+        const price = s.amazonPrice ? `£${s.amazonPrice.toFixed(2)}` : '?';
+        return `• ${s.setNumber}${s.setName ? ` ${s.setName}` : ''} → ${price}`;
+      })
+      .join('\n');
+
+    const fields: DiscordEmbedField[] = [
+      {
+        name: '🏷️ eBay (COG)',
+        value: `Bid: £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
+        inline: true,
+      },
+      {
+        name: '🛒 Total Amazon Value',
+        value: `**£${totalAmazonValue.toFixed(2)}**`,
+        inline: true,
+      },
+      {
+        name: '⏰ Time Left',
+        value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
+        inline: true,
+      },
+      {
+        name: '💰 Est. Profit / Margin',
+        value: `**£${estimatedProfit.toFixed(2)}** · ${marginPercent.toFixed(1)}% margin`,
+        inline: false,
+      },
+      {
+        name: `📦 Sets (${sets.length})`,
+        value: setsBreakdown.substring(0, 1024),
+        inline: false,
+      },
+    ];
+
+    const embed: DiscordEmbed = {
+      title: `📦 JOBLOT: ${ebayTitle.substring(0, 70)}`,
+      url: ebayUrl,
+      color,
+      fields,
+    };
+
+    if (imageUrl) {
+      (embed as Record<string, unknown>).thumbnail = { url: imageUrl };
+    }
+
+    return this.send('opportunities', embed);
   }
 }
 
