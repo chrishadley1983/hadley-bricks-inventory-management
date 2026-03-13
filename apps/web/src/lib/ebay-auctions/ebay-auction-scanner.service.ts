@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEbayBrowseClient, type EbayItemSummary } from '@/lib/ebay/ebay-browse.client';
+import { KeepaClient } from '@/lib/keepa/keepa-client';
 import { calculateAuctionProfit } from './auction-profit-calculator';
 import {
   extractSetNumbers,
@@ -359,7 +360,8 @@ export class EbayAuctionScannerService {
 
   /**
    * Batch look up Amazon pricing from seeded_asin_pricing table.
-   * This is token-efficient - no external API calls, just a local DB query.
+   * Falls back to Keepa API for set numbers not found locally,
+   * then saves discovered data so future scans hit the local DB.
    */
   private async lookupAmazonPricing(
     setNumbers: string[]
@@ -416,6 +418,137 @@ export class EbayAuctionScannerService {
         setName: row.set_name || null,
         ukRrp: row.uk_retail_price || null,
       });
+    }
+
+    // Keepa fallback for set numbers not found locally
+    const missingSetNumbers = setNumbers.filter((s) => !map.has(s));
+    if (missingSetNumbers.length > 0) {
+      const keepaResults = await this.keepaFallbackLookup(missingSetNumbers);
+      for (const [setNum, pricing] of keepaResults) {
+        map.set(setNum, pricing);
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * Keepa fallback: discover ASINs via EAN lookup, fetch pricing, and save to DB
+   * so future scans hit the local cache. Cost: ~1 token per EAN + ~3 tokens per ASIN.
+   */
+  private async keepaFallbackLookup(
+    setNumbers: string[]
+  ): Promise<Map<string, AmazonPricingData>> {
+    const map = new Map<string, AmazonPricingData>();
+    const keepa = new KeepaClient();
+
+    if (!keepa.isConfigured()) {
+      console.log('[AuctionScanner] Keepa not configured, skipping fallback lookup');
+      return map;
+    }
+
+    try {
+      // 1. Look up EANs from brickset_sets for these set numbers
+      const { data: bricksetRows } = await this.supabase
+        .from('brickset_sets')
+        .select('id, set_number, set_name, ean, uk_retail_price')
+        .in('set_number', setNumbers)
+        .not('ean', 'is', null);
+
+      if (!bricksetRows?.length) {
+        console.log(`[AuctionScanner] No brickset_sets entries for: ${setNumbers.join(', ')}`);
+        return map;
+      }
+
+      // 2. Discover ASINs via Keepa EAN search (1 token per matched product)
+      const eans = bricksetRows.map((r) => r.ean!).filter(Boolean);
+      const eanToSetMap = new Map<string, typeof bricksetRows[0]>();
+      for (const row of bricksetRows) {
+        if (row.ean) eanToSetMap.set(row.ean, row);
+      }
+
+      this.keepaCallsMade++;
+      const discoveredProducts = await keepa.searchByCode(eans);
+
+      if (discoveredProducts.length === 0) {
+        console.log(`[AuctionScanner] Keepa found no products for EANs: ${eans.join(', ')}`);
+        return map;
+      }
+
+      // Map discovered ASINs back to set numbers
+      const asinToSetInfo = new Map<string, typeof bricksetRows[0]>();
+      for (const product of discoveredProducts) {
+        // Match product back to our set via EAN
+        for (const ean of product.eanList || []) {
+          const setInfo = eanToSetMap.get(ean);
+          if (setInfo) {
+            asinToSetInfo.set(product.asin, setInfo);
+            break;
+          }
+        }
+      }
+
+      if (asinToSetInfo.size === 0) return map;
+
+      // 3. Fetch full pricing for discovered ASINs (3 tokens per ASIN)
+      const asinsToFetch = [...asinToSetInfo.keys()];
+      this.keepaCallsMade++;
+      const pricedProducts = await keepa.fetchProducts(asinsToFetch);
+
+      const today = new Date().toISOString().split('T')[0];
+
+      for (const product of pricedProducts) {
+        const setInfo = asinToSetInfo.get(product.asin);
+        if (!setInfo) continue;
+
+        const pricing = keepa.extractCurrentPricing(product);
+        const amazonPrice = pricing.buyBoxPrice || pricing.lowestNewPrice;
+        if (!amazonPrice) continue;
+
+        // 4. Save to seeded_asins (upsert) so the view picks it up
+        await this.supabase.from('seeded_asins').upsert(
+          {
+            brickset_set_id: setInfo.id,
+            asin: product.asin,
+            discovery_status: 'found',
+            match_method: 'keepa_ean',
+            match_confidence: 100,
+            amazon_title: product.title || null,
+            amazon_price: amazonPrice,
+          },
+          { onConflict: 'brickset_set_id' }
+        );
+
+        // 5. Save to amazon_arbitrage_pricing for freshness
+        await this.supabase.from('amazon_arbitrage_pricing').upsert(
+          {
+            user_id: DEFAULT_USER_ID,
+            asin: product.asin,
+            snapshot_date: today,
+            buy_box_price: pricing.buyBoxPrice,
+            sales_rank: pricing.salesRank,
+            was_price_90d: pricing.was90dAvg,
+            offer_count: pricing.offerCount,
+          },
+          { onConflict: 'asin,snapshot_date' }
+        );
+
+        // 6. Return pricing for this scan
+        map.set(setInfo.set_number, {
+          asin: product.asin,
+          amazonPrice,
+          was90dAvg: pricing.was90dAvg,
+          salesRank: pricing.salesRank,
+          setName: setInfo.set_name || product.title || null,
+          ukRrp: setInfo.uk_retail_price ? Number(setInfo.uk_retail_price) : null,
+        });
+
+        console.log(
+          `[AuctionScanner] Keepa discovered ${setInfo.set_number} → ${product.asin} (£${amazonPrice})`
+        );
+      }
+    } catch (err) {
+      console.error('[AuctionScanner] Keepa fallback error:', err);
     }
 
     return map;
