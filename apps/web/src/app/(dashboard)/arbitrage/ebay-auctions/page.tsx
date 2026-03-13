@@ -102,7 +102,7 @@ function useTriggerScan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/cron/ebay-auctions', { method: 'POST' });
+      const res = await fetch('/api/ebay-auctions/scan', { method: 'POST' });
       if (!res.ok) throw new Error('Scan failed');
       return res.json();
     },
