@@ -28,6 +28,7 @@ import type {
   JoblotOpportunity,
   JoblotSetEntry,
   ScanResult,
+  AuctionEvaluation,
 } from './types';
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
@@ -45,6 +46,7 @@ interface AuctionItemSummary extends EbayItemSummary {
 export class EbayAuctionScannerService {
   private supabase: SupabaseClient;
   private apiCallsMade = 0;
+  private keepaCallsMade = 0;
 
   constructor(supabase: SupabaseClient) {
     this.supabase = supabase;
@@ -57,6 +59,8 @@ export class EbayAuctionScannerService {
   async scan(config: EbayAuctionConfig): Promise<ScanResult> {
     const startTime = Date.now();
     this.apiCallsMade = 0;
+    this.keepaCallsMade = 0;
+    const evaluations: AuctionEvaluation[] = [];
 
     try {
       // 1. Check quiet hours
@@ -72,11 +76,11 @@ export class EbayAuctionScannerService {
       const auctionItems = await this.searchEndingSoonAuctions(config);
 
       if (auctionItems.length === 0) {
-        return this.createResult(startTime, { auctionsFound: 0 });
+        return this.createResult(startTime, { auctionsFound: 0, evaluations: [] });
       }
 
-      // 3. Filter and identify sets
-      const { singles, joblots } = this.categorizeAuctions(auctionItems, config);
+      // 3. Categorize auctions and build per-auction evaluation records
+      const { singles, joblots } = this.categorizeAuctions(auctionItems, config, evaluations);
 
       // 4. Look up Amazon pricing for identified sets (batch query)
       const allSetNumbers = [
@@ -86,8 +90,8 @@ export class EbayAuctionScannerService {
       const uniqueSetNumbers = [...new Set(allSetNumbers)];
       const amazonPricing = await this.lookupAmazonPricing(uniqueSetNumbers);
 
-      // 5. Calculate opportunities for single sets
-      const opportunities = this.evaluateSingleOpportunities(singles, amazonPricing, config);
+      // 5. Calculate opportunities for single sets (updates evaluations in-place)
+      const opportunities = this.evaluateSingleOpportunities(singles, amazonPricing, config, evaluations);
 
       // 6. Evaluate joblots
       const joblotOpps = config.joblotAnalysisEnabled
@@ -95,14 +99,25 @@ export class EbayAuctionScannerService {
         : [];
 
       // 7. Deduplicate against previously alerted auctions
-      const newOpportunities = await this.deduplicateAlerts(
-        opportunities,
-        config.userId || DEFAULT_USER_ID
-      );
-      const newJoblots = await this.deduplicateJoblotAlerts(
-        joblotOpps,
-        config.userId || DEFAULT_USER_ID
-      );
+      const alreadyAlertedIds = await this.getAlreadyAlertedIds(config.userId || DEFAULT_USER_ID, [
+        ...opportunities.map((o) => o.auction.itemId),
+        ...joblotOpps.map((j) => j.auction.itemId),
+      ]);
+
+      const newOpportunities = opportunities.filter((o) => {
+        if (alreadyAlertedIds.has(o.auction.itemId)) {
+          // Update the evaluation record for this item
+          const ev = evaluations.find((e) => e.itemId === o.auction.itemId);
+          if (ev) {
+            ev.filterReason = 'already_alerted';
+            ev.alertTier = null;
+          }
+          return false;
+        }
+        return true;
+      });
+
+      const newJoblots = joblotOpps.filter((j) => !alreadyAlertedIds.has(j.auction.itemId));
 
       return {
         auctionsFound: auctionItems.length,
@@ -111,9 +126,11 @@ export class EbayAuctionScannerService {
         alertsSent: 0, // Caller handles sending
         joblotsFound: newJoblots.length,
         apiCallsMade: this.apiCallsMade,
+        keepaCallsMade: this.keepaCallsMade,
         durationMs: Date.now() - startTime,
         opportunities: newOpportunities,
         joblots: newJoblots,
+        evaluations,
       };
     } catch (error) {
       return {
@@ -123,9 +140,11 @@ export class EbayAuctionScannerService {
         alertsSent: 0,
         joblotsFound: 0,
         apiCallsMade: this.apiCallsMade,
+        keepaCallsMade: this.keepaCallsMade,
         durationMs: Date.now() - startTime,
         opportunities: [],
         joblots: [],
+        evaluations,
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -224,7 +243,8 @@ export class EbayAuctionScannerService {
    */
   private categorizeAuctions(
     items: EbayAuctionItem[],
-    config: EbayAuctionConfig
+    config: EbayAuctionConfig,
+    evaluations: AuctionEvaluation[]
   ): {
     singles: Array<{ auction: EbayAuctionItem; setNumber: string; confidence: string }>;
     joblots: Array<{ auction: EbayAuctionItem; setNumbers: string[] }>;
@@ -234,37 +254,90 @@ export class EbayAuctionScannerService {
     const excludedSetsSet = new Set(config.excludedSets);
 
     for (const auction of items) {
-      // Skip false positives (minifigs, instructions, etc.)
-      if (isFalsePositive(auction.title)) continue;
+      const isFP = isFalsePositive(auction.title);
+      const isNS = isNewSealed(auction.title, auction.condition);
+      const isJL = isJoblot(auction.title);
+      const identifiedSets = extractSetNumbers(auction.title);
+      const bestMatch = identifiedSets.length > 0 ? identifiedSets[0] : null;
 
-      // Must be new/sealed (primary focus)
-      if (!isNewSealed(auction.title, auction.condition)) continue;
+      // Build base evaluation (Amazon data filled in later for singles that pass)
+      const ev: AuctionEvaluation = {
+        itemId: auction.itemId,
+        title: auction.title,
+        currentBidGbp: auction.currentBidGbp,
+        postageGbp: auction.postageGbp,
+        totalCostGbp: auction.totalCostGbp,
+        bidCount: auction.bidCount,
+        minutesRemaining: auction.minutesRemaining,
+        itemUrl: auction.itemUrl,
+        imageUrl: auction.imageUrl,
+        condition: auction.condition,
+        setNumber: bestMatch?.setNumber || null,
+        setConfidence: bestMatch?.confidence || null,
+        isJoblot: isJL,
+        isFalsePositive: isFP,
+        isNewSealed: isNS,
+        amazonPrice: null,
+        amazon90dAvg: null,
+        amazonAsin: null,
+        amazonSalesRank: null,
+        amazonSetName: null,
+        profitGbp: null,
+        marginPercent: null,
+        roiPercent: null,
+        filterReason: 'passed',
+        alertTier: null,
+      };
 
-      // Check minimum bids
-      if (auction.bidCount < config.minBids) continue;
+      // Apply filters in order, recording the first reason that stops it
+      if (isFP) {
+        ev.filterReason = 'false_positive';
+        evaluations.push(ev);
+        continue;
+      }
 
-      // Check if it's a joblot
-      if (isJoblot(auction.title)) {
+      if (!isNS) {
+        ev.filterReason = 'not_new_sealed';
+        evaluations.push(ev);
+        continue;
+      }
+
+      if (auction.bidCount < config.minBids) {
+        ev.filterReason = 'below_min_bids';
+        evaluations.push(ev);
+        continue;
+      }
+
+      if (isJL) {
+        ev.filterReason = 'joblot';
         const setNumbers = extractJoblotSets(auction.title);
         const filtered = setNumbers.filter((s) => !excludedSetsSet.has(s));
         if (filtered.length >= 2) {
           joblots.push({ auction, setNumbers: filtered });
         }
+        evaluations.push(ev);
         continue;
       }
 
-      // Try to identify single set
-      const identifiedSets = extractSetNumbers(auction.title);
-      if (identifiedSets.length > 0) {
-        const bestMatch = identifiedSets[0]; // Highest confidence first
-        if (!excludedSetsSet.has(bestMatch.setNumber)) {
-          singles.push({
-            auction,
-            setNumber: bestMatch.setNumber,
-            confidence: bestMatch.confidence,
-          });
-        }
+      if (!bestMatch) {
+        ev.filterReason = 'no_set_identified';
+        evaluations.push(ev);
+        continue;
       }
+
+      if (excludedSetsSet.has(bestMatch.setNumber)) {
+        ev.filterReason = 'excluded_set';
+        evaluations.push(ev);
+        continue;
+      }
+
+      // Passed categorization — will be evaluated further in evaluateSingleOpportunities
+      evaluations.push(ev);
+      singles.push({
+        auction,
+        setNumber: bestMatch.setNumber,
+        confidence: bestMatch.confidence,
+      });
     }
 
     return { singles, joblots };
@@ -340,13 +413,29 @@ export class EbayAuctionScannerService {
   private evaluateSingleOpportunities(
     singles: Array<{ auction: EbayAuctionItem; setNumber: string; confidence: string }>,
     amazonPricing: Map<string, AmazonPricingData>,
-    config: EbayAuctionConfig
+    config: EbayAuctionConfig,
+    evaluations: AuctionEvaluation[]
   ): AuctionOpportunity[] {
     const opportunities: AuctionOpportunity[] = [];
 
     for (const { auction, setNumber, confidence } of singles) {
+      // Find the existing evaluation record for this auction
+      const ev = evaluations.find((e) => e.itemId === auction.itemId);
+
       const amazon = amazonPricing.get(setNumber);
-      if (!amazon) continue;
+      if (!amazon) {
+        if (ev) ev.filterReason = 'no_amazon_price';
+        continue;
+      }
+
+      // Populate Amazon data on the evaluation
+      if (ev) {
+        ev.amazonPrice = amazon.amazonPrice;
+        ev.amazon90dAvg = amazon.was90dAvg;
+        ev.amazonAsin = amazon.asin;
+        ev.amazonSalesRank = amazon.salesRank;
+        ev.amazonSetName = amazon.setName;
+      }
 
       // Use default postage if eBay didn't provide it
       const postage = auction.postageGbp > 0 ? auction.postageGbp : config.defaultPostageGbp;
@@ -354,18 +443,38 @@ export class EbayAuctionScannerService {
 
       // Check sales rank filter
       if (config.maxSalesRank && amazon.salesRank && amazon.salesRank > config.maxSalesRank) {
+        if (ev) ev.filterReason = 'sales_rank_too_high';
         continue;
       }
 
       const profit = calculateAuctionProfit(auction.currentBidGbp, postage, amazon.amazonPrice);
       if (!profit) continue;
 
+      // Populate profit data on the evaluation
+      if (ev) {
+        ev.profitGbp = profit.totalProfit;
+        ev.marginPercent = profit.profitMarginPercent;
+        ev.roiPercent = profit.roiPercent;
+      }
+
       // Check thresholds
-      if (profit.profitMarginPercent < config.minMarginPercent) continue;
-      if (profit.totalProfit < config.minProfitGbp) continue;
+      if (profit.profitMarginPercent < config.minMarginPercent) {
+        if (ev) ev.filterReason = 'below_min_margin';
+        continue;
+      }
+      if (profit.totalProfit < config.minProfitGbp) {
+        if (ev) ev.filterReason = 'below_min_profit';
+        continue;
+      }
 
       const alertTier =
         profit.profitMarginPercent >= config.greatMarginPercent ? 'great' : 'good';
+
+      // Mark as passed with tier
+      if (ev) {
+        ev.filterReason = 'passed';
+        ev.alertTier = alertTier;
+      }
 
       opportunities.push({
         auction: { ...auction, postageGbp: postage, totalCostGbp: totalCost },
@@ -441,43 +550,21 @@ export class EbayAuctionScannerService {
   }
 
   /**
-   * Filter out opportunities that have already been alerted.
+   * Get set of item IDs that have already been alerted.
    */
-  private async deduplicateAlerts(
-    opportunities: AuctionOpportunity[],
-    userId: string
-  ): Promise<AuctionOpportunity[]> {
-    if (opportunities.length === 0) return [];
+  private async getAlreadyAlertedIds(
+    userId: string,
+    itemIds: string[]
+  ): Promise<Set<string>> {
+    if (itemIds.length === 0) return new Set();
 
-    const itemIds = opportunities.map((o) => o.auction.itemId);
     const { data: existing } = await this.supabase
       .from('ebay_auction_alerts')
       .select('ebay_item_id')
       .eq('user_id', userId)
       .in('ebay_item_id', itemIds);
 
-    const existingSet = new Set((existing || []).map((e) => e.ebay_item_id));
-    return opportunities.filter((o) => !existingSet.has(o.auction.itemId));
-  }
-
-  /**
-   * Filter out joblot opportunities that have already been alerted.
-   */
-  private async deduplicateJoblotAlerts(
-    joblots: JoblotOpportunity[],
-    userId: string
-  ): Promise<JoblotOpportunity[]> {
-    if (joblots.length === 0) return [];
-
-    const itemIds = joblots.map((j) => j.auction.itemId);
-    const { data: existing } = await this.supabase
-      .from('ebay_auction_alerts')
-      .select('ebay_item_id')
-      .eq('user_id', userId)
-      .in('ebay_item_id', itemIds);
-
-    const existingSet = new Set((existing || []).map((e) => e.ebay_item_id));
-    return joblots.filter((j) => !existingSet.has(j.auction.itemId));
+    return new Set((existing || []).map((e) => e.ebay_item_id));
   }
 
   /**
@@ -586,6 +673,8 @@ export class EbayAuctionScannerService {
       joblots_found: result.joblotsFound,
       duration_ms: result.durationMs,
       api_calls_made: result.apiCallsMade,
+      keepa_calls_made: result.keepaCallsMade || 0,
+      evaluation_details: result.evaluations?.length ? result.evaluations : null,
       error_message: result.error || null,
       skipped_reason: result.skippedReason || null,
     });
@@ -634,9 +723,11 @@ export class EbayAuctionScannerService {
       alertsSent: 0,
       joblotsFound: 0,
       apiCallsMade: 0,
+      keepaCallsMade: 0,
       durationMs: Date.now() - startTime,
       opportunities: [],
       joblots: [],
+      evaluations: [],
       skippedReason: reason,
     };
   }
@@ -652,9 +743,11 @@ export class EbayAuctionScannerService {
       alertsSent: 0,
       joblotsFound: 0,
       apiCallsMade: this.apiCallsMade,
+      keepaCallsMade: this.keepaCallsMade,
       durationMs: Date.now() - startTime,
       opportunities: [],
       joblots: [],
+      evaluations: [],
       ...partial,
     };
   }
