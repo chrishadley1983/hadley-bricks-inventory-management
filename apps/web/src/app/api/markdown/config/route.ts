@@ -28,7 +28,8 @@ const configUpdateSchema = z.object({
 export async function GET() {
   try {
     const supabase = createServiceRoleClient();
-    const { data, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+    const { data, error } = await (supabase as any)
       .from('markdown_config')
       .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, created_at, updated_at')
       .eq('user_id', DEFAULT_USER_ID)
@@ -68,7 +69,8 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
       .from('markdown_config')
       .update(update)
       .eq('user_id', DEFAULT_USER_ID)

@@ -9,7 +9,8 @@ export async function POST(
     const { id } = await params;
     const supabase = createServiceRoleClient();
 
-    const { data: proposal, error: fetchError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+    const { data: proposal, error: fetchError } = await (supabase as any)
       .from('markdown_proposals')
       .select('id, status')
       .eq('id', id)
@@ -26,7 +27,8 @@ export async function POST(
       );
     }
 
-    const { error: rejectError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: rejectError } = await (supabase as any)
       .from('markdown_proposals')
       .update({ status: 'REJECTED', updated_at: new Date().toISOString() })
       .eq('id', id);
