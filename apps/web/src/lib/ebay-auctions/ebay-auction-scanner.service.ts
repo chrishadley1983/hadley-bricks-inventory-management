@@ -13,6 +13,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEbayBrowseClient, type EbayItemSummary } from '@/lib/ebay/ebay-browse.client';
 import { KeepaClient } from '@/lib/keepa/keepa-client';
+import { BricksetApiClient } from '@/lib/brickset/brickset-api';
+import { BricksetCredentialsService } from '@/lib/services/brickset-credentials.service';
+import { apiSetToInternal, internalToDbInsert } from '@/lib/brickset/types';
 import { calculateAuctionProfit } from './auction-profit-calculator';
 import {
   extractSetNumbers,
@@ -452,18 +455,31 @@ export class EbayAuctionScannerService {
       const { data: bricksetRows } = await this.supabase
         .from('brickset_sets')
         .select('id, set_number, set_name, ean, uk_retail_price')
-        .in('set_number', setNumbers)
-        .not('ean', 'is', null);
+        .in('set_number', setNumbers);
 
-      if (!bricksetRows?.length) {
-        console.log(`[AuctionScanner] No brickset_sets entries for: ${setNumbers.join(', ')}`);
+      const foundSetNumbers = new Set((bricksetRows || []).map((r) => r.set_number));
+      const missingFromBrickset = setNumbers.filter((s) => !foundSetNumbers.has(s));
+
+      // 1b. Discover missing sets from Brickset API and save to DB
+      if (missingFromBrickset.length > 0) {
+        const newRows = await this.discoverFromBricksetApi(missingFromBrickset);
+        if (newRows.length > 0 && bricksetRows) {
+          bricksetRows.push(...newRows);
+        }
+      }
+
+      // Filter to only rows with EANs
+      const rowsWithEans = (bricksetRows || []).filter((r) => r.ean);
+
+      if (!rowsWithEans.length) {
+        console.log(`[AuctionScanner] No EANs found for: ${setNumbers.join(', ')}`);
         return map;
       }
 
       // 2. Discover ASINs via Keepa EAN search (1 token per matched product)
-      const eans = bricksetRows.map((r) => r.ean!).filter(Boolean);
-      const eanToSetMap = new Map<string, typeof bricksetRows[0]>();
-      for (const row of bricksetRows) {
+      const eans = rowsWithEans.map((r) => r.ean!).filter(Boolean);
+      const eanToSetMap = new Map<string, typeof rowsWithEans[0]>();
+      for (const row of rowsWithEans) {
         if (row.ean) eanToSetMap.set(row.ean, row);
       }
 
@@ -552,6 +568,68 @@ export class EbayAuctionScannerService {
     }
 
     return map;
+  }
+
+  /**
+   * Discover sets from Brickset API that aren't in our local brickset_sets table.
+   * Fetches full set data including EAN, saves to DB, returns rows for Keepa lookup.
+   */
+  private async discoverFromBricksetApi(
+    setNumbers: string[]
+  ): Promise<Array<{ id: string; set_number: string; set_name: string; ean: string | null; uk_retail_price: number | null }>> {
+    const results: Array<{ id: string; set_number: string; set_name: string; ean: string | null; uk_retail_price: number | null }> = [];
+
+    try {
+      const credService = new BricksetCredentialsService(this.supabase);
+      const apiKey = await credService.getApiKey(DEFAULT_USER_ID);
+      if (!apiKey) {
+        console.log('[AuctionScanner] No Brickset API key configured, skipping discovery');
+        return results;
+      }
+
+      const bricksetClient = new BricksetApiClient(apiKey);
+
+      for (const setNum of setNumbers) {
+        try {
+          // Brickset expects "NNNNN-1" format
+          const queryNum = setNum.includes('-') ? setNum : `${setNum}-1`;
+          const apiSet = await bricksetClient.getSetByNumber(queryNum);
+
+          if (!apiSet) {
+            console.log(`[AuctionScanner] Brickset: set ${setNum} not found`);
+            continue;
+          }
+
+          // Convert to internal format and save to DB
+          const internal = apiSetToInternal(apiSet);
+          const dbRow = internalToDbInsert(internal);
+
+          const { data: inserted, error } = await this.supabase
+            .from('brickset_sets')
+            .upsert(dbRow, { onConflict: 'set_number' })
+            .select('id, set_number, set_name, ean, uk_retail_price')
+            .single();
+
+          if (error) {
+            console.error(`[AuctionScanner] Failed to save brickset set ${setNum}:`, error.message);
+            continue;
+          }
+
+          if (inserted) {
+            results.push(inserted);
+            console.log(
+              `[AuctionScanner] Brickset discovered ${setNum}: ${internal.setName} (EAN: ${internal.ean || 'none'})`
+            );
+          }
+        } catch (setErr) {
+          console.error(`[AuctionScanner] Brickset API error for ${setNum}:`, setErr);
+        }
+      }
+    } catch (err) {
+      console.error('[AuctionScanner] Brickset discovery error:', err);
+    }
+
+    return results;
   }
 
   /**
