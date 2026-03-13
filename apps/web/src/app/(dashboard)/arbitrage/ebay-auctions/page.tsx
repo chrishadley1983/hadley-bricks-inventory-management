@@ -320,16 +320,41 @@ function AlertsTab() {
                   </TableCell>
                   <TableCell className="text-center">{String(alert.bid_count)}</TableCell>
                   <TableCell>
-                    {(alert.ebay_url as string) && (
-                      <a
-                        href={alert.ebay_url as string}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {(alert.ebay_url as string) && (
+                        <a
+                          href={alert.ebay_url as string}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                          title="eBay"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      )}
+                      {(alert.amazon_asin as string) && (
+                        <>
+                          <a
+                            href={`https://www.amazon.co.uk/dp/${alert.amazon_asin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-orange-500 hover:text-orange-700 text-xs font-bold"
+                            title="Amazon"
+                          >
+                            A
+                          </a>
+                          <a
+                            href={`https://keepa.com/#!product/2-${alert.amazon_asin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-teal-600 hover:text-teal-800 text-xs font-bold"
+                            title="Keepa"
+                          >
+                            K
+                          </a>
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -634,16 +659,41 @@ function DebugTab({ recentScans }: { recentScans: Record<string, unknown>[] }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {(ev.itemUrl as string) && (
-                        <a
-                          href={ev.itemUrl as string}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {(ev.itemUrl as string) && (
+                          <a
+                            href={ev.itemUrl as string}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800"
+                            title="eBay"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {(ev.amazonAsin as string) && (
+                          <>
+                            <a
+                              href={`https://www.amazon.co.uk/dp/${ev.amazonAsin}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-orange-500 hover:text-orange-700 text-xs font-bold"
+                              title="Amazon"
+                            >
+                              A
+                            </a>
+                            <a
+                              href={`https://keepa.com/#!product/2-${ev.amazonAsin}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-teal-600 hover:text-teal-800 text-xs font-bold"
+                              title="Keepa"
+                            >
+                              K
+                            </a>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
