@@ -492,7 +492,7 @@ export class EbayAuctionScannerService {
       }
 
       // Map discovered ASINs back to set numbers
-      const asinToSetInfo = new Map<string, typeof bricksetRows[0]>();
+      const asinToSetInfo = new Map<string, typeof rowsWithEans[0]>();
       for (const product of discoveredProducts) {
         // Match product back to our set via EAN
         for (const ean of product.eanList || []) {
