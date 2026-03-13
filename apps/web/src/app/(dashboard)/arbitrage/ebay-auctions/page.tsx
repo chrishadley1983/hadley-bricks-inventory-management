@@ -395,6 +395,7 @@ function ScanHistoryTab({ recentScans }: { recentScans: Record<string, unknown>[
               <TableHead>Joblots</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>API Calls</TableHead>
+              <TableHead>Keepa</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -422,6 +423,7 @@ function ScanHistoryTab({ recentScans }: { recentScans: Record<string, unknown>[
                   {scan.duration_ms ? `${Math.round((scan.duration_ms as number) / 1000)}s` : '—'}
                 </TableCell>
                 <TableCell>{scan.api_calls_made as number}</TableCell>
+                <TableCell>{(scan.keepa_calls_made as number) || 0}</TableCell>
                 <TableCell>
                   {scan.error_message ? (
                     <Badge variant="destructive">Error</Badge>
@@ -437,6 +439,220 @@ function ScanHistoryTab({ recentScans }: { recentScans: Record<string, unknown>[
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================
+// Debug Tab — per-auction evaluation details
+// ============================================
+
+const FILTER_REASON_LABELS: Record<string, { label: string; color: string }> = {
+  passed: { label: 'Passed', color: 'bg-green-600' },
+  false_positive: { label: 'False Positive', color: 'bg-red-500' },
+  not_new_sealed: { label: 'Not New/Sealed', color: 'bg-orange-500' },
+  below_min_bids: { label: 'Low Bids', color: 'bg-yellow-600' },
+  excluded_set: { label: 'Excluded Set', color: 'bg-gray-500' },
+  no_set_identified: { label: 'No Set ID', color: 'bg-gray-500' },
+  no_amazon_price: { label: 'No Amazon Price', color: 'bg-orange-500' },
+  sales_rank_too_high: { label: 'Rank Too High', color: 'bg-orange-500' },
+  below_min_margin: { label: 'Low Margin', color: 'bg-yellow-600' },
+  below_min_profit: { label: 'Low Profit', color: 'bg-yellow-600' },
+  already_alerted: { label: 'Already Alerted', color: 'bg-blue-500' },
+  joblot: { label: 'Joblot', color: 'bg-purple-500' },
+};
+
+function DebugTab({ recentScans }: { recentScans: Record<string, unknown>[] }) {
+  const [selectedScanIdx, setSelectedScanIdx] = useState(0);
+
+  // Find scans that have evaluation_details
+  const scansWithDetails = (recentScans || []).filter(
+    (s) => s.evaluation_details && (s.evaluation_details as unknown[]).length > 0
+  );
+
+  if (scansWithDetails.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-center text-muted-foreground">
+          No evaluation data yet. Debug data is recorded with each scan.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const selectedScan = scansWithDetails[selectedScanIdx];
+  const evaluations = (selectedScan?.evaluation_details || []) as Record<string, unknown>[];
+  const scanTime = new Date(selectedScan.created_at as string).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  // Summary counts by filter reason
+  const reasonCounts: Record<string, number> = {};
+  for (const ev of evaluations) {
+    const reason = ev.filterReason as string;
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Scan selector */}
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Label className="whitespace-nowrap">Scan:</Label>
+            <div className="flex gap-2 flex-wrap">
+              {scansWithDetails.map((scan, idx) => (
+                <Button
+                  key={scan.id as string}
+                  variant={idx === selectedScanIdx ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedScanIdx(idx)}
+                >
+                  {new Date(scan.created_at as string).toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                  {' '}({(scan.evaluation_details as unknown[]).length})
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filter reason summary */}
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium mr-2">
+              {scanTime} — {evaluations.length} auctions evaluated:
+            </span>
+            {Object.entries(reasonCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([reason, count]) => {
+                const info = FILTER_REASON_LABELS[reason] || { label: reason, color: 'bg-gray-500' };
+                return (
+                  <Badge key={reason} className={`${info.color} text-white`}>
+                    {info.label}: {count}
+                  </Badge>
+                );
+              })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detailed evaluation table */}
+      <Card>
+        <CardContent className="pt-4 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[250px]">Auction</TableHead>
+                <TableHead>Set</TableHead>
+                <TableHead>eBay Cost</TableHead>
+                <TableHead>Amazon</TableHead>
+                <TableHead>Profit</TableHead>
+                <TableHead>Margin</TableHead>
+                <TableHead>Bids</TableHead>
+                <TableHead>Mins</TableHead>
+                <TableHead>Result</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {evaluations.map((ev) => {
+                const reason = ev.filterReason as string;
+                const info = FILTER_REASON_LABELS[reason] || { label: reason, color: 'bg-gray-500' };
+                const margin = ev.marginPercent as number | null;
+                const profit = ev.profitGbp as number | null;
+                const tier = ev.alertTier as string | null;
+
+                return (
+                  <TableRow
+                    key={ev.itemId as string}
+                    className={reason === 'passed' ? 'bg-green-50 dark:bg-green-950/20' : ''}
+                  >
+                    <TableCell>
+                      <div className="text-xs truncate max-w-[250px]" title={ev.title as string}>
+                        {ev.title as string}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
+                        {ev.isFalsePositive ? <Badge variant="destructive" className="text-[10px] px-1 py-0">FP</Badge> : null}
+                        {ev.isJoblot ? <Badge variant="outline" className="text-[10px] px-1 py-0">Joblot</Badge> : null}
+                        {ev.isNewSealed ? <Badge variant="outline" className="text-[10px] px-1 py-0 border-green-400">New</Badge> : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {ev.setNumber ? (
+                        <div>
+                          <span className="font-mono font-medium">{ev.setNumber as string}</span>
+                          <div className="text-[10px] text-muted-foreground">
+                            {ev.amazonSetName ? String(ev.amazonSetName).substring(0, 25) : (ev.setConfidence as string)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      £{Number(ev.totalCostGbp).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {ev.amazonPrice ? (
+                        <div>
+                          £{Number(ev.amazonPrice).toFixed(2)}
+                          {ev.amazonSalesRank ? (
+                            <div className="text-[10px] text-muted-foreground">
+                              #{String(ev.amazonSalesRank)}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={`font-mono text-sm ${profit !== null && profit > 0 ? 'text-green-600' : profit !== null && profit < 0 ? 'text-red-600' : ''}`}>
+                      {profit !== null ? `£${profit.toFixed(2)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {margin !== null ? `${margin.toFixed(1)}%` : '—'}
+                    </TableCell>
+                    <TableCell className="text-center text-sm">{String(ev.bidCount)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{String(ev.minutesRemaining)}m</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Badge className={`${info.color} text-white text-[10px]`}>
+                          {info.label}
+                        </Badge>
+                        {tier && (
+                          <Badge variant={tier === 'great' ? 'default' : 'secondary'} className="text-[10px]">
+                            {tier}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {(ev.itemUrl as string) && (
+                        <a
+                          href={ev.itemUrl as string}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -820,6 +1036,7 @@ export default function EbayAuctionsPage() {
         <TabsList>
           <TabsTrigger value="alerts">Recent Alerts</TabsTrigger>
           <TabsTrigger value="history">Scan History</TabsTrigger>
+          <TabsTrigger value="debug">Debug</TabsTrigger>
         </TabsList>
 
         <TabsContent value="alerts">
@@ -828,6 +1045,10 @@ export default function EbayAuctionsPage() {
 
         <TabsContent value="history">
           <ScanHistoryTab recentScans={statusData?.recentScans || []} />
+        </TabsContent>
+
+        <TabsContent value="debug">
+          <DebugTab recentScans={statusData?.recentScans || []} />
         </TabsContent>
       </Tabs>
 

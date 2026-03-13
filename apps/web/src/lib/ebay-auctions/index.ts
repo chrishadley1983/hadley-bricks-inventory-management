@@ -16,6 +16,7 @@ export type {
   JoblotSetEntry,
   ScanResult,
   AuctionProfitBreakdown,
+  AuctionEvaluation,
   EbayAuctionAlert,
   EbayAuctionScanLog,
   AuctionStatusResponse,
