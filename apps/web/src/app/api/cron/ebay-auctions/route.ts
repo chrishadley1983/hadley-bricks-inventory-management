@@ -146,6 +146,9 @@ export async function POST(request: NextRequest) {
       0
     );
 
+    // Include debug flag to return evaluations for testing
+    const isDebug = request.nextUrl.searchParams.get('debug') === '1';
+
     return NextResponse.json({
       success: true,
       auctionsFound: result.auctionsFound,
@@ -154,7 +157,9 @@ export async function POST(request: NextRequest) {
       alertsSent,
       joblotsFound: result.joblotsFound,
       apiCallsMade: result.apiCallsMade,
+      keepaCallsMade: result.keepaCallsMade,
       durationMs: duration,
+      ...(isDebug && { evaluations: result.evaluations }),
     });
   } catch (error) {
     const duration = Date.now() - startTime;
