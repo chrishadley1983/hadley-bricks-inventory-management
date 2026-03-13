@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
     for (const { id, action } of parsed.data.actions) {
       try {
         // Fetch proposal
-        const { data: proposal } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+        const { data: proposal } = await (supabase as any)
           .from('markdown_proposals')
           .select('id, inventory_item_id, proposed_action, proposed_price, status')
           .eq('id', id)
@@ -54,7 +55,8 @@ export async function POST(request: NextRequest) {
               .eq('id', proposal.inventory_item_id);
 
             if (updateError) {
-              await supabase
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabase as any)
                 .from('markdown_proposals')
                 .update({ status: 'FAILED', error_message: updateError.message, updated_at: new Date().toISOString() })
                 .eq('id', id);
@@ -64,13 +66,15 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          await supabase
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
             .from('markdown_proposals')
             .update({ status: 'APPROVED', updated_at: new Date().toISOString() })
             .eq('id', id);
           results.approved++;
         } else {
-          await supabase
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
             .from('markdown_proposals')
             .update({ status: 'REJECTED', updated_at: new Date().toISOString() })
             .eq('id', id);

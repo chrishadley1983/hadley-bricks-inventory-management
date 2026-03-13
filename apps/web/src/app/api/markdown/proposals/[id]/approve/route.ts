@@ -10,7 +10,8 @@ export async function POST(
     const supabase = createServiceRoleClient();
 
     // Fetch proposal
-    const { data: proposal, error: fetchError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+    const { data: proposal, error: fetchError } = await (supabase as any)
       .from('markdown_proposals')
       .select('id, inventory_item_id, proposed_action, proposed_price, status')
       .eq('id', id)
@@ -40,7 +41,8 @@ export async function POST(
 
       if (updateError) {
         // Mark proposal as FAILED
-        await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
           .from('markdown_proposals')
           .update({ status: 'FAILED', error_message: updateError.message, updated_at: new Date().toISOString() })
           .eq('id', id);
@@ -50,7 +52,8 @@ export async function POST(
     }
 
     // Mark proposal as approved
-    const { error: approveError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: approveError } = await (supabase as any)
       .from('markdown_proposals')
       .update({ status: 'APPROVED', updated_at: new Date().toISOString() })
       .eq('id', id);
