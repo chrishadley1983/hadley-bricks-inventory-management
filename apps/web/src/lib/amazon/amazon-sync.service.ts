@@ -3093,33 +3093,65 @@ export class AmazonSyncService {
   /**
    * Update inventory items to LISTED status after successful Amazon sync
    *
-   * Sets:
-   * - status: 'LISTED'
-   * - listing_date: current timestamp
-   * - listing_platform: 'amazon'
+   * Only sets listing_date for items that don't already have one (truly new listings).
+   * Re-priced items keep their original listing_date so they don't inflate "listed this week" metrics.
    */
   private async updateInventoryItemsAsListed(inventoryItemIds: string[]): Promise<void> {
     console.log(
       `[AmazonSyncService] Updating ${inventoryItemIds.length} inventory items to LISTED status`
     );
 
-    const { error } = await this.supabase
+    // Find which items already have a listing_date (re-prices) vs new listings
+    const { data: existingItems } = await this.supabase
       .from('inventory_items')
-      .update({
-        status: 'LISTED',
-        listing_date: new Date().toISOString(),
-        listing_platform: 'amazon',
-      })
+      .select('id, listing_date')
       .in('id', inventoryItemIds)
       .eq('user_id', this.userId);
 
-    if (error) {
-      console.error('[AmazonSyncService] Failed to update inventory items:', error);
-      // Don't throw - this is a secondary operation, the feed sync was still successful
-    } else {
-      console.log(
-        `[AmazonSyncService] Successfully updated ${inventoryItemIds.length} inventory items to LISTED`
-      );
+    const alreadyListedIds = (existingItems ?? [])
+      .filter((item) => item.listing_date != null)
+      .map((item) => item.id);
+    const newListingIds = inventoryItemIds.filter((id) => !alreadyListedIds.includes(id));
+
+    // Update re-priced items: status + platform only, preserve listing_date
+    if (alreadyListedIds.length > 0) {
+      const { error } = await this.supabase
+        .from('inventory_items')
+        .update({
+          status: 'LISTED',
+          listing_platform: 'amazon',
+        })
+        .in('id', alreadyListedIds)
+        .eq('user_id', this.userId);
+
+      if (error) {
+        console.error('[AmazonSyncService] Failed to update re-priced items:', error);
+      } else {
+        console.log(
+          `[AmazonSyncService] Updated ${alreadyListedIds.length} re-priced items (listing_date preserved)`
+        );
+      }
+    }
+
+    // Update new listings: set listing_date to now
+    if (newListingIds.length > 0) {
+      const { error } = await this.supabase
+        .from('inventory_items')
+        .update({
+          status: 'LISTED',
+          listing_date: new Date().toISOString(),
+          listing_platform: 'amazon',
+        })
+        .in('id', newListingIds)
+        .eq('user_id', this.userId);
+
+      if (error) {
+        console.error('[AmazonSyncService] Failed to update new listing items:', error);
+      } else {
+        console.log(
+          `[AmazonSyncService] Updated ${newListingIds.length} new listings (listing_date set to now)`
+        );
+      }
     }
   }
 

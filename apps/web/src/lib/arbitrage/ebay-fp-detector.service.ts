@@ -2,9 +2,9 @@
  * eBay False-Positive Detector Service
  *
  * Detects and excludes false-positive eBay listings from arbitrage calculations.
- * Uses 31 weighted scoring signals. Listings scoring >= 50 are excluded.
+ * Uses 34 weighted scoring signals. Listings scoring >= 50 are excluded.
  * Patterns expanded to catch: bare instruction manuals, empty box, advent day/micro builds,
- * copy/replica/clone listings.
+ * copy/replica/clone listings, CMF individual figure sales, sold individually listings.
  *
  * Signals:
  * 1. Very Low COG (<5%) - 35 pts
@@ -39,6 +39,9 @@
  * 29. Complementary Product (fills another set) - 30 pts
  * 30. Min-to-Avg Price Ratio (<10%) - 25 pts
  * 31. Opened Set (not factory sealed) - 50 pts
+ * 32. Select Your / Sold Individually - 25 pts
+ * 33. Character Pack / Blind Bag Individual - 25 pts
+ * Note: SET_NUMBER_PATTERN expanded to \d{4,7} to catch 6-7 digit LEGO product numbers
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -51,16 +54,17 @@ import type {
   FpDetectorConfig,
 } from './ebay-fp-detector.types';
 import { DEFAULT_THRESHOLD, DEFAULT_USER_ID, SIGNAL_WEIGHTS } from './ebay-fp-detector.types';
+import type { ProcessedEbayListing } from './ebay-sync.service';
 
 // Regex patterns for detection
 const PART_NUMBER_PATTERN = /\b\d{4,6}(pb|pat|pr|c)\d{1,3}\b/i;
-const SET_NUMBER_PATTERN = /\b(\d{4,5})\b/g;
-const MINIFIG_KEYWORDS = /\b(minifig|minifigure|figure|fig|figurine|mini fig)\b/i;
-const INSTRUCTIONS_KEYWORDS = /\b(instruction|manual|booklet|directions)\b/i;
-const PARTS_KEYWORDS = /\b(part|piece|brick|plate|tile|slope|wedge|axle|technic)\b/i;
+const SET_NUMBER_PATTERN = /\b(\d{4,7})\b/g;
+const MINIFIG_KEYWORDS = /\b(minifigs?|minifigures?|figures?|figs?|figurines?|mini figs?)\b/i;
+const INSTRUCTIONS_KEYWORDS = /\b(instructions?|manuals?|booklets?|directions)\b/i;
+const PARTS_KEYWORDS = /\b(parts?|pieces?|bricks?|plates?|tiles?|slopes?|wedges?|axles?|technic)\b/i;
 const INCOMPLETE_KEYWORDS =
-  /\b(spares?|missing|incomplete|partial|damaged|opened|no box|empty\s+box|ex[\s-]?display|shop\s+display|unsealed|open\s+box|box\s+only)\b/i;
-const KEYRING_KEYWORDS = /\b(keyring|key ring|keychain|key chain|key light|torch)\b/i;
+  /\b(spares?|missing|incomplete|partial|damaged|opened|no box|empty\s+box|ex[\s-]?display|shop\s+display|unsealed|open\s+box|box\s+only|box\s+opened)\b/i;
+const KEYRING_KEYWORDS = /\b(keyrings?|key rings?|keychains?|key chains?|key lights?|torch)\b/i;
 const ITEM_ONLY_PATTERN =
   /\b(sticker|part|parts|piece|pieces|build|builds|minifig|minifigure|figure|manual|instruction|booklet|box|packaging|light kit|led)\s*(sheet|s)?\s+only\b/i;
 
@@ -84,10 +88,14 @@ const STICKER_POSTER_KEYWORDS =
 const POLYBAG_KEYWORDS = /\b(poly\s*bag|paper\s*bag|foil\s*(bag|pack)|promo\s*bag)\b/i;
 const ADVENT_DAY_KEYWORDS =
   /\b(choose\s+your\s+day|pick\s+your\s+day|day\s+\d{1,2}\b|micro\s+build|advent\s+micro)\b/i;
-const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,5}\b)/i;
+const SPLIT_FROM_KEYWORDS = /\b(from\s+set\b|split\s+from|from\s+\d{4,7}\b)/i;
 const NO_MINIFIGS_KEYWORDS = /\bno\s+(minifig(ure)?s?|mini\s*figs?|figs?|figures?)\b/i;
 const PROMOTIONAL_KEYWORDS = /\b(metal\s*box|shaped\s*box|promotional\s+tin)\b/i;
 const COMPLEMENTARY_KEYWORDS = /\b(fills?|fill\s+up|to\s+fill|to\s+complete)\b/i;
+const SELECT_CHOOSE_KEYWORDS =
+  /\b(select\s+your|choose\s+your|pick\s+your|pick\s+from|sold\s+individually|sold\s+separately|each\s+sold|price\s+per)\b/i;
+const FIGURE_PACK_KEYWORDS =
+  /\b(character\s+pack|blind\s+bag|mystery\s+bag|series\s+\d+\s*[-–]\s*\w+|#\d{1,2}\s+character|collectible\s+minifigure)\b/i;
 const OPENED_SET_KEYWORDS =
   /\b(complete\s+with\s+(box|instructions?|manual|booklet)|100\s*%\s*complete|complete\s+set\s+with|built\s+(once|and\s+displayed|then\s+dismantled)|pre[\s-]?owned|used\s+set|previously\s+built|assembled\s+once|box\s+opened|opened\s+box|open\s+box|retired\s+display)\b/i;
 
@@ -278,7 +286,7 @@ export class EbayFpDetectorService {
     }
 
     // 5. Minifigure keywords (skip if "buildable figure" — that's a real LEGO product line)
-    if (MINIFIG_KEYWORDS.test(title) && !/\bbuildable\s+figure/i.test(title)) {
+    if (MINIFIG_KEYWORDS.test(title) && !/\bbuildable\s+figures?/i.test(title)) {
       score += SIGNAL_WEIGHTS.MINIFIGURE_KEYWORDS;
       signals.push({
         signal: 'MINIFIGURE_KEYWORDS',
@@ -291,7 +299,7 @@ export class EbayFpDetectorService {
     if (INSTRUCTIONS_KEYWORDS.test(title)) {
       if (
         /\b(only|just|booklet|vgc|good\s+condition)\b/i.test(title) ||
-        /\b(?:for|from)\s+\d{4,5}\b/i.test(title) ||
+        /\b(?:for|from)\s+\d{4,7}\b/i.test(title) ||
         /\b(instruction\s+manual|instruction\s+book)\b/i.test(title)
       ) {
         score += SIGNAL_WEIGHTS.INSTRUCTIONS_ONLY;
@@ -572,6 +580,26 @@ export class EbayFpDetectorService {
       });
     }
 
+    // 32. "Select your" / "Sold individually" — individual item from multi-pack
+    if (SELECT_CHOOSE_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.SELECT_CHOOSE_INDIVIDUALLY;
+      signals.push({
+        signal: 'SELECT_CHOOSE_INDIVIDUALLY',
+        points: SIGNAL_WEIGHTS.SELECT_CHOOSE_INDIVIDUALLY,
+        description: 'Individual item sale (select your / sold individually)',
+      });
+    }
+
+    // 33. Character pack / blind bag individual figure sale
+    if (FIGURE_PACK_KEYWORDS.test(title)) {
+      score += SIGNAL_WEIGHTS.FIGURE_PACK_INDIVIDUAL;
+      signals.push({
+        signal: 'FIGURE_PACK_INDIVIDUAL',
+        points: SIGNAL_WEIGHTS.FIGURE_PACK_INDIVIDUAL,
+        description: 'Character pack / blind bag individual figure',
+      });
+    }
+
     // 31. Opened/used set indicators (auto-exclude: not factory sealed)
     if (OPENED_SET_KEYWORDS.test(title)) {
       score += SIGNAL_WEIGHTS.OPENED_SET;
@@ -594,6 +622,143 @@ export class EbayFpDetectorService {
 
     // Cap at 100
     return { score: Math.min(score, 100), signals };
+  }
+
+  /**
+   * Recalculate ebay_pricing aggregates (min/avg/max/total) after exclusions.
+   * Loads listings_json, filters out excluded item IDs, recalculates, and updates the row.
+   * This ensures the view's ebay_min_price reflects only legitimate listings.
+   */
+  async recalculateAggregatesAfterExclusions(
+    userId: string
+  ): Promise<{ setsUpdated: number; setsCleared: number; errors: number }> {
+    let setsUpdated = 0;
+    let setsCleared = 0;
+    let errors = 0;
+
+    try {
+      // 1. Load ALL excluded item IDs grouped by set_number
+      const excludedBySet = await this.loadExcludedListings(userId);
+      if (excludedBySet.size === 0) {
+        console.log('[EbayFpDetector] No exclusions found, skipping recalculation');
+        return { setsUpdated: 0, setsCleared: 0, errors: 0 };
+      }
+
+      // 2. For each set with exclusions, load and recalculate ebay_pricing
+      const setNumbers = [...excludedBySet.keys()];
+      console.log(`[EbayFpDetector] Recalculating aggregates for ${setNumbers.length} sets with exclusions`);
+
+      // Process in batches to avoid overwhelming the DB
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < setNumbers.length; i += BATCH_SIZE) {
+        const batch = setNumbers.slice(i, i + BATCH_SIZE);
+
+        // Fetch current ebay_pricing rows for this batch
+        const { data: pricingRows, error: fetchError } = await this.supabase
+          .from('ebay_pricing')
+          .select('id, set_number, listings_json, min_price, avg_price, max_price, total_listings')
+          .in('set_number', batch)
+          .eq('condition', 'NEW')
+          .eq('country_code', 'GB')
+          .order('snapshot_date', { ascending: false });
+
+        if (fetchError) {
+          console.error('[EbayFpDetector] Failed to fetch ebay_pricing:', fetchError.message);
+          errors++;
+          continue;
+        }
+
+        if (!pricingRows || pricingRows.length === 0) continue;
+
+        // Deduplicate: keep only the latest row per set_number
+        const latestBySet = new Map<string, typeof pricingRows[0]>();
+        for (const row of pricingRows) {
+          if (!latestBySet.has(row.set_number)) {
+            latestBySet.set(row.set_number, row);
+          }
+        }
+
+        for (const [setNumber, row] of latestBySet) {
+          try {
+            const excludedIds = excludedBySet.get(setNumber);
+            if (!excludedIds || excludedIds.size === 0) continue;
+
+            // Parse listings
+            let listings: ProcessedEbayListing[] = [];
+            if (typeof row.listings_json === 'string') {
+              listings = JSON.parse(row.listings_json);
+            } else if (Array.isArray(row.listings_json)) {
+              listings = row.listings_json as unknown as ProcessedEbayListing[];
+            }
+
+            if (listings.length === 0) continue;
+
+            // Filter out excluded listings
+            const activeListings = listings.filter((l) => !excludedIds.has(l.itemId));
+
+            // Recalculate aggregates
+            let newMin: number | null = null;
+            let newAvg: number | null = null;
+            let newMax: number | null = null;
+            const newTotal = activeListings.length;
+
+            if (activeListings.length > 0) {
+              const prices = activeListings.map((l) => l.totalPrice);
+              const sum = prices.reduce((a, b) => a + b, 0);
+              newMin = Math.min(...prices);
+              newAvg = Math.round((sum / prices.length) * 100) / 100;
+              newMax = Math.max(...prices);
+            }
+
+            // Skip update if nothing changed
+            if (
+              newMin === row.min_price &&
+              newAvg === row.avg_price &&
+              newMax === row.max_price &&
+              newTotal === row.total_listings
+            ) {
+              continue;
+            }
+
+            // Update the row
+            const { error: updateError } = await this.supabase
+              .from('ebay_pricing')
+              .update({
+                min_price: newMin,
+                avg_price: newAvg,
+                max_price: newMax,
+                total_listings: newTotal,
+                listings_json: activeListings as unknown as Record<string, unknown>[],
+              })
+              .eq('id', row.id);
+
+            if (updateError) {
+              console.error(`[EbayFpDetector] Failed to update ${setNumber}:`, updateError.message);
+              errors++;
+              continue;
+            }
+
+            if (newTotal === 0) {
+              setsCleared++;
+            } else {
+              setsUpdated++;
+            }
+          } catch (rowErr) {
+            console.error(`[EbayFpDetector] Error processing ${setNumber}:`, rowErr);
+            errors++;
+          }
+        }
+      }
+
+      console.log(
+        `[EbayFpDetector] Recalculation complete: ${setsUpdated} updated, ${setsCleared} cleared, ${errors} errors`
+      );
+    } catch (err) {
+      console.error('[EbayFpDetector] Recalculation failed:', err);
+      errors++;
+    }
+
+    return { setsUpdated, setsCleared, errors };
   }
 
   /**
@@ -762,6 +927,14 @@ export class EbayFpDetectorService {
         }
       }
 
+      // Recalculate ebay_pricing aggregates to remove excluded listings from min/avg/max
+      // This is critical: without this, the view shows raw min prices from FP listings
+      this.excludedBySet = null; // Clear cache so recalculation loads fresh data
+      const recalcResult = await this.recalculateAggregatesAfterExclusions(userId);
+      if (recalcResult.errors > 0) {
+        errors += recalcResult.errors;
+      }
+
       // Get top 3 reasons
       const topReasons = [...reasonCounts.entries()]
         .sort((a, b) => b[1] - a[1])
@@ -777,6 +950,7 @@ export class EbayFpDetectorService {
         errors,
         duration: Date.now() - startTime,
         topReasons,
+        aggregatesRecalculated: recalcResult.setsUpdated + recalcResult.setsCleared,
       };
     } catch (error) {
       console.error('[EbayFpDetector] Cleanup failed:', error);
