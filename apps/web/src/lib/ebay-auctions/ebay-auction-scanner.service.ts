@@ -385,9 +385,6 @@ export class EbayAuctionScannerService {
       if (!s.includes('-')) variantToOriginal.set(`${s}-1`, s);
     }
 
-    console.log(`[AuctionScanner] Looking up pricing for ${setNumbers.length} sets: ${setNumbers.join(', ')}`);
-    console.log(`[AuctionScanner] Variant query: ${variantSetNumbers.join(', ')}`);
-
     // Query seeded_asin_pricing for these set numbers
     const { data, error } = await this.supabase
       .from('seeded_asin_pricing')
@@ -399,8 +396,6 @@ export class EbayAuctionScannerService {
       console.error('[AuctionScanner] Failed to look up Amazon pricing:', error.message);
       return map;
     }
-
-    console.log(`[AuctionScanner] View query returned ${data?.length ?? 'null'} rows: ${(data || []).map((r) => `${r.set_number}=${r.amazon_price}`).join(', ')}`);
 
     // Also check amazon_arbitrage_pricing for buy box / sales rank data
     const asins = (data || []).filter((d) => d.asin).map((d) => d.asin!);
@@ -443,20 +438,17 @@ export class EbayAuctionScannerService {
       });
     }
 
-    console.log(`[AuctionScanner] Initial map has ${map.size} entries: ${[...map.keys()].join(', ')}`);
-
     // Keepa fallback for set numbers not found locally
     const missingSetNumbers = setNumbers.filter((s) => !map.has(s));
     if (missingSetNumbers.length > 0) {
-      console.log(`[AuctionScanner] Missing from local DB: ${missingSetNumbers.join(', ')} — trying Keepa fallback`);
+      console.log(`[AuctionScanner] Keepa fallback for ${missingSetNumbers.length} sets: ${missingSetNumbers.join(', ')}`);
       const keepaResults = await this.keepaFallbackLookup(missingSetNumbers);
-      console.log(`[AuctionScanner] Keepa fallback returned ${keepaResults.size} results: ${[...keepaResults.keys()].join(', ')}`);
       for (const [setNum, pricing] of keepaResults) {
         map.set(setNum, pricing);
       }
     }
 
-    console.log(`[AuctionScanner] Final pricing map: ${map.size} entries — ${[...map.entries()].map(([k, v]) => `${k}=£${v.amazonPrice}`).join(', ')}`);
+    console.log(`[AuctionScanner] Pricing: ${map.size}/${setNumbers.length} sets matched`);
     return map;
   }
 
@@ -504,7 +496,6 @@ export class EbayAuctionScannerService {
       // Filter to only rows with EANs
       const rowsWithEans = (bricksetRows || []).filter((r) => r.ean);
 
-      console.log(`[AuctionScanner] Keepa: bricksetRows=${bricksetRows?.length ?? 'null'}, withEans=${rowsWithEans.length}, discovered=${missingFromBrickset.length}`);
       if (!rowsWithEans.length) {
         console.log(`[AuctionScanner] No EANs found for: ${setNumbers.join(', ')}`);
         return map;
