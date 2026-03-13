@@ -63,6 +63,7 @@ export interface FpCleanupResult {
   errors: number;
   duration: number;
   topReasons: string[];
+  aggregatesRecalculated?: number;
 }
 
 /**
@@ -109,6 +110,8 @@ export const SIGNAL_WEIGHTS = {
   COMPLEMENTARY_PRODUCT: 30,
   KEYWORD_STUFFED: 25,
   OPENED_SET: 50,
+  SELECT_CHOOSE_INDIVIDUALLY: 25,
+  FIGURE_PACK_INDIVIDUAL: 25,
 } as const;
 
 /**

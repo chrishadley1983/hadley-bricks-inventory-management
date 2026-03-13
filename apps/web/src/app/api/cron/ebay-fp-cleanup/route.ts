@@ -101,6 +101,9 @@ export async function POST(request: NextRequest) {
       } else {
         message += '\nNo false positives detected';
       }
+      if (result.aggregatesRecalculated && result.aggregatesRecalculated > 0) {
+        message += `\nAggregates recalculated: ${result.aggregatesRecalculated} sets`;
+      }
       message += `\nDuration: ${durationStr}`;
 
       await discordService.sendSyncStatus({
@@ -133,6 +136,7 @@ export async function POST(request: NextRequest) {
       listingsScanned: result.listingsScanned,
       itemsFlagged: result.itemsFlagged,
       itemsExcluded: result.itemsExcluded,
+      aggregatesRecalculated: result.aggregatesRecalculated ?? 0,
       errors: result.errors,
       duration: durationMs,
       durationStr,
