@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceRoleClient();
 
     // Build query
-    let query = supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+    let query = (supabase as any)
       .from('markdown_proposals')
       .select('id, user_id, inventory_item_id, platform, diagnosis, diagnosis_reason, current_price, proposed_price, price_floor, market_price, proposed_action, markdown_step, aging_days, auction_end_date, auction_duration_days, status, error_message, set_number, item_name, sales_rank, created_at, updated_at', { count: 'exact' })
       .eq('user_id', DEFAULT_USER_ID)
@@ -38,7 +39,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Also get summary counts
-    const { data: summaryData } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: summaryData } = await (supabase as any)
       .from('markdown_proposals')
       .select('status, proposed_action')
       .eq('user_id', DEFAULT_USER_ID);

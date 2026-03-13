@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient();
 
     // 1. Load config
-    const { data: configRow, error: configError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+    const { data: configRow, error: configError } = await (supabase as any)
       .from('markdown_config')
       .select('mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled')
       .eq('user_id', DEFAULT_USER_ID)
@@ -77,13 +78,14 @@ export async function POST(request: NextRequest) {
     };
 
     // 2. Get existing pending proposals to avoid duplicates
-    const { data: existingProposals } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingProposals } = await (supabase as any)
       .from('markdown_proposals')
       .select('inventory_item_id')
       .eq('user_id', DEFAULT_USER_ID)
       .eq('status', 'PENDING');
 
-    const existingItemIds = new Set((existingProposals || []).map((p) => p.inventory_item_id));
+    const existingItemIds = new Set((existingProposals || []).map((p: { inventory_item_id: string }) => p.inventory_item_id));
 
     // 3. Fetch LISTED inventory items (paginated)
     const allItems: InventoryItemForMarkdown[] = [];
@@ -94,7 +96,8 @@ export async function POST(request: NextRequest) {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data: items, error: itemsError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: items, error: itemsError } = await (supabase as any)
         .from('inventory_items')
         .select(
           'id, user_id, set_number, item_name, condition, status, cost, listing_value, listing_platform, listing_date, purchase_date, created_at, markdown_hold, amazon_asin, ebay_listing_id'
@@ -200,7 +203,8 @@ export async function POST(request: NextRequest) {
 
     // 7. Insert proposals into database
     if (newProposals.length > 0) {
-      const { error: insertError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insertError } = await (supabase as any)
         .from('markdown_proposals')
         .insert(newProposals);
 
@@ -223,7 +227,8 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error(`[Markdown] Auto-apply failed for ${proposal.inventory_item_id}:`, err);
         // Mark as FAILED
-        await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
           .from('markdown_proposals')
           .update({ status: 'FAILED', error_message: String(err) })
           .eq('inventory_item_id', proposal.inventory_item_id)

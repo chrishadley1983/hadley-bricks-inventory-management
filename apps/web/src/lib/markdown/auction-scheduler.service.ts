@@ -20,7 +20,8 @@ async function getExistingAuctionSchedule(
   const twoWeeksOut = new Date(today);
   twoWeeksOut.setDate(twoWeeksOut.getDate() + 14);
 
-  const { data } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
+  const { data } = await (supabase as any)
     .from('markdown_proposals')
     .select('auction_end_date')
     .eq('user_id', userId)
@@ -97,7 +98,8 @@ export async function getAuctionCountForDate(
   userId: string,
   date: string
 ): Promise<number> {
-  const { count } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (supabase as any)
     .from('markdown_proposals')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
