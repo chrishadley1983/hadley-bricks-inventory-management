@@ -22,7 +22,7 @@ const ITERATION_DELAY_MS = 30000; // 30 seconds between calls
 // amazon-pricing is self-contained (no retry loop needed)
 const JOB_MAX_ITERATIONS = {
   'amazon-pricing': 1,
-  'spapi-buybox-overlay': 10,  // ~232 ASINs / 80 per chunk = 3 calls, 10 for safety
+  'spapi-buybox-overlay': 15,  // ~232 ASINs / 20 per chunk = 12 calls, 15 for safety
   'ebay-pricing': 120,
   'bricklink-pricing': 120,
 };
