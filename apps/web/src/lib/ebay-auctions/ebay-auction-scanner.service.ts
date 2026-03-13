@@ -372,11 +372,24 @@ export class EbayAuctionScannerService {
     const map = new Map<string, AmazonPricingData>();
     if (setNumbers.length === 0) return map;
 
+    // brickset_sets stores set numbers as "NNNNN-1" format, but eBay titles give us "NNNNN"
+    // Query with both variants to ensure we match
+    const variantSetNumbers = setNumbers.flatMap((s) =>
+      s.includes('-') ? [s] : [s, `${s}-1`]
+    );
+
+    // Map variant back to original: "42201-1" → "42201"
+    const variantToOriginal = new Map<string, string>();
+    for (const s of setNumbers) {
+      variantToOriginal.set(s, s);
+      if (!s.includes('-')) variantToOriginal.set(`${s}-1`, s);
+    }
+
     // Query seeded_asin_pricing for these set numbers
     const { data, error } = await this.supabase
       .from('seeded_asin_pricing')
       .select('set_number, set_name, amazon_price, was_price_90d, uk_retail_price, asin')
-      .in('set_number', setNumbers)
+      .in('set_number', variantSetNumbers)
       .not('amazon_price', 'is', null);
 
     if (error) {
@@ -412,8 +425,10 @@ export class EbayAuctionScannerService {
       if (!row.amazon_price) continue;
 
       const arbInfo = row.asin ? arbitragePricing[row.asin] : undefined;
+      // Map back to the original set number (e.g. "42201-1" → "42201")
+      const originalSetNum = variantToOriginal.get(row.set_number) || row.set_number;
 
-      map.set(row.set_number, {
+      map.set(originalSetNum, {
         asin: row.asin || '',
         amazonPrice: row.amazon_price,
         was90dAvg: row.was_price_90d || arbInfo?.was90d || null,
@@ -451,14 +466,22 @@ export class EbayAuctionScannerService {
     }
 
     try {
-      // 1. Look up EANs from brickset_sets for these set numbers
+      // 1. Look up EANs from brickset_sets (try both "NNNNN" and "NNNNN-1" formats)
+      const bricksetVariants = setNumbers.flatMap((s) =>
+        s.includes('-') ? [s] : [s, `${s}-1`]
+      );
       const { data: bricksetRows } = await this.supabase
         .from('brickset_sets')
         .select('id, set_number, set_name, ean, uk_retail_price')
-        .in('set_number', setNumbers);
+        .in('set_number', bricksetVariants);
 
-      const foundSetNumbers = new Set((bricksetRows || []).map((r) => r.set_number));
-      const missingFromBrickset = setNumbers.filter((s) => !foundSetNumbers.has(s));
+      // Track which original set numbers were found (strip -1 suffix for matching)
+      const foundOriginals = new Set(
+        (bricksetRows || []).map((r) => r.set_number.replace(/-1$/, ''))
+      );
+      const missingFromBrickset = setNumbers.filter(
+        (s) => !foundOriginals.has(s) && !foundOriginals.has(s.replace(/-1$/, ''))
+      );
 
       // 1b. Discover missing sets from Brickset API and save to DB
       if (missingFromBrickset.length > 0) {
@@ -549,8 +572,9 @@ export class EbayAuctionScannerService {
           { onConflict: 'asin,snapshot_date' }
         );
 
-        // 6. Return pricing for this scan
-        map.set(setInfo.set_number, {
+        // 6. Return pricing for this scan (use original set number without -1 suffix)
+        const origSetNum = setInfo.set_number.replace(/-1$/, '');
+        map.set(origSetNum, {
           asin: product.asin,
           amazonPrice,
           was90dAvg: pricing.was90dAvg,
