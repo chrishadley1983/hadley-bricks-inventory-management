@@ -82,13 +82,27 @@ export class EbayAuctionScannerService {
       // 3. Categorize auctions and build per-auction evaluation records
       const { singles, joblots } = this.categorizeAuctions(auctionItems, config, evaluations);
 
-      // 4. Look up Amazon pricing for identified sets (batch query)
-      const allSetNumbers = [
-        ...singles.map((s) => s.setNumber),
-        ...joblots.flatMap((j) => j.setNumbers),
-      ];
-      const uniqueSetNumbers = [...new Set(allSetNumbers)];
+      // 4. Look up Amazon pricing for ALL identified sets (including filtered ones for debug)
+      const allEvalSetNumbers = evaluations
+        .filter((e) => e.setNumber)
+        .map((e) => e.setNumber!);
+      const joblotSetNumbers = joblots.flatMap((j) => j.setNumbers);
+      const uniqueSetNumbers = [...new Set([...allEvalSetNumbers, ...joblotSetNumbers])];
       const amazonPricing = await this.lookupAmazonPricing(uniqueSetNumbers);
+
+      // 4b. Backfill Amazon data on ALL evaluations (even filtered ones) for debug visibility
+      for (const ev of evaluations) {
+        if (ev.setNumber && !ev.amazonPrice) {
+          const amazon = amazonPricing.get(ev.setNumber);
+          if (amazon) {
+            ev.amazonPrice = amazon.amazonPrice;
+            ev.amazon90dAvg = amazon.was90dAvg;
+            ev.amazonAsin = amazon.asin;
+            ev.amazonSalesRank = amazon.salesRank;
+            ev.amazonSetName = amazon.setName;
+          }
+        }
+      }
 
       // 5. Calculate opportunities for single sets (updates evaluations in-place)
       const opportunities = this.evaluateSingleOpportunities(singles, amazonPricing, config, evaluations);
