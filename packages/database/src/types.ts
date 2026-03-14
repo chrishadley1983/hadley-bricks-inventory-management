@@ -3641,6 +3641,68 @@ export type Database = {
         }
         Relationships: []
       }
+      ebay_promoted_listings_schedules: {
+        Row: {
+          campaign_id: string
+          campaign_name: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          campaign_name?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          campaign_name?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ebay_promoted_listings_stages: {
+        Row: {
+          bid_percentage: number
+          created_at: string
+          days_threshold: number
+          id: string
+          schedule_id: string
+        }
+        Insert: {
+          bid_percentage: number
+          created_at?: string
+          days_threshold: number
+          id?: string
+          schedule_id: string
+        }
+        Update: {
+          bid_percentage?: number
+          created_at?: string
+          days_threshold?: number
+          id?: string
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_promoted_listings_stages_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "ebay_promoted_listings_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_shipping_fulfilments: {
         Row: {
           created_at: string

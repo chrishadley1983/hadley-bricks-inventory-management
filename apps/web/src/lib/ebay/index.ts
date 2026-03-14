@@ -59,4 +59,10 @@ export type { EbayItemSummary, EbaySearchResponse, EbaySearchOptions } from './e
 export { EbayFindingClient, getEbayFindingClient } from './ebay-finding.client';
 export type { EbaySoldItem, SoldListingsResult } from './ebay-finding.client';
 
+export { EbayPromotedListingsService } from './ebay-promoted-listings.service';
+export type {
+  PromotedListingStatus,
+  BulkPromotionResult,
+} from './ebay-promoted-listings.service';
+
 export * from './types';

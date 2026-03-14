@@ -732,3 +732,93 @@ export interface EbayErrorResponse {
   errors: EbayApiError[];
   warnings?: EbayApiError[];
 }
+
+// ============================================================================
+// Marketing API Types (Promoted Listings Standard / CPS)
+// ============================================================================
+
+export type EbayCampaignStatus = 'RUNNING' | 'PAUSED' | 'ENDED' | 'PENDING';
+export type EbayAdStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type EbayFundingModel = 'COST_PER_SALE' | 'COST_PER_CLICK';
+export type EbayAdRateStrategy = 'FIXED' | 'DYNAMIC';
+
+export interface EbayFundingStrategy {
+  fundingModel: EbayFundingModel;
+  bidPercentage?: string;
+  adRateStrategy?: EbayAdRateStrategy;
+}
+
+export interface EbayCampaign {
+  campaignId: string;
+  campaignName: string;
+  campaignStatus: EbayCampaignStatus;
+  marketplaceId: string;
+  fundingStrategy: EbayFundingStrategy;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface EbayCampaignResponse {
+  campaigns: EbayCampaign[];
+  total: number;
+  limit: number;
+  offset: number;
+  href?: string;
+  next?: string;
+}
+
+export interface EbayAd {
+  adId: string;
+  campaignId: string;
+  listingId: string;
+  bidPercentage: string;
+  adStatus: EbayAdStatus;
+}
+
+export interface EbayAdResponse {
+  ads: EbayAd[];
+  total: number;
+  limit: number;
+  offset: number;
+  href?: string;
+  next?: string;
+}
+
+export interface EbayFindCampaignResponse {
+  campaigns: Array<{
+    campaignId: string;
+    campaignName: string;
+    campaignStatus: EbayCampaignStatus;
+    fundingStrategy: EbayFundingStrategy;
+  }>;
+}
+
+// Bulk operation request/response types
+
+export interface EbayBulkAdRequest {
+  listingId: string;
+  bidPercentage: string;
+}
+
+export interface EbayBulkCreateAdsRequest {
+  requests: EbayBulkAdRequest[];
+}
+
+export interface EbayBulkUpdateAdsBidRequest {
+  requests: EbayBulkAdRequest[];
+}
+
+export interface EbayBulkDeleteAdsRequest {
+  requests: Array<{ listingId: string }>;
+}
+
+export interface EbayBulkAdResponseItem {
+  adId?: string;
+  listingId: string;
+  statusCode: number;
+  errors?: EbayApiError[];
+}
+
+export interface EbayBulkAdResponse {
+  responses: EbayBulkAdResponseItem[];
+}
