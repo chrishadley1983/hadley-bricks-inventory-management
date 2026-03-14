@@ -46,6 +46,7 @@ interface ListingRow {
  * without making any changes. Needs a user_id to auth against eBay.
  */
 async function generateReport(supabase: ReturnType<typeof createServiceRoleClient>) {
+  try {
   // Find the first user with eBay credentials
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: creds } = await (supabase as any)
@@ -59,10 +60,13 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
   }
 
   const userId = creds.user_id;
+  console.log('[EbayPromotions Report] Found user:', userId);
   const service = new EbayPromotedListingsService(supabase, userId);
 
   // Get all campaigns and ads from eBay
+  console.log('[EbayPromotions Report] Fetching campaigns and ads from eBay API...');
   const campaignAds = await service.getAllPromotedAds();
+  console.log('[EbayPromotions Report] Got', campaignAds.length, 'campaigns');
 
   // Get all eBay-listed inventory
   const allListings: Array<{ ebay_listing_id: string; listing_date: string | null; listing_value: number | null; item_name: string | null; set_number: string | null }> = [];
@@ -162,6 +166,13 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
     bidDistribution,
     notPromotedByAge,
   });
+  } catch (error) {
+    console.error('[EbayPromotions Report] Error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Report generation failed', stack: error instanceof Error ? error.stack : undefined },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
