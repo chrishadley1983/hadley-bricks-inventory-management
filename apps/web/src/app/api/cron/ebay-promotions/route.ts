@@ -47,10 +47,10 @@ interface ListingRow {
  */
 async function generateReport(supabase: ReturnType<typeof createServiceRoleClient>) {
   // Find the first user with eBay credentials
-  const { data: creds } = await supabase
-    .from('platform_credentials')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: creds } = await (supabase as any)
+    .from('ebay_credentials')
     .select('user_id')
-    .eq('platform', 'ebay')
     .limit(1)
     .single();
 
