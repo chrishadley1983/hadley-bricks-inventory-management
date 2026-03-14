@@ -221,6 +221,18 @@ gcloud scheduler jobs create http spapi-buybox-overlay \
   --attempt-deadline="300s" \
   --description="Daily SP-API buy box overlay for in-stock ASINs"
 
+# eBay Promotions - daily at 5am UTC
+# Applies promotion schedules (add/update/remove bid percentages based on listing age)
+gcloud scheduler jobs create http ebay-promotions \
+  --location=europe-west2 \
+  --schedule="0 5 * * *" \
+  --uri="$APP_URL/api/cron/ebay-promotions" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="UTC" \
+  --attempt-deadline="300s" \
+  --description="Apply eBay promoted listings schedules based on listing age"
+
 # Cost Allocation - daily at 9:15pm UK time
 gcloud scheduler jobs create http cost-allocation \
   --location=europe-west2 \
@@ -304,6 +316,9 @@ gcloud scheduler jobs run investment-retrain --location=europe-west2
 
 # Notification jobs
 gcloud scheduler jobs run vinted-collections --location=europe-west2
+
+# eBay Promotions
+gcloud scheduler jobs run ebay-promotions --location=europe-west2
 
 # Monitoring jobs
 gcloud scheduler jobs run vercel-usage-report --location=europe-west2

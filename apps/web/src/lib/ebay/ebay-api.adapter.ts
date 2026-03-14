@@ -34,6 +34,14 @@ import type {
   // Taxonomy API types
   EbayCategorySuggestionsResponse,
   EbayItemAspectsResponse,
+  // Marketing API types (Promoted Listings)
+  EbayCampaignResponse,
+  EbayAdResponse,
+  EbayFindCampaignResponse,
+  EbayBulkCreateAdsRequest,
+  EbayBulkUpdateAdsBidRequest,
+  EbayBulkDeleteAdsRequest,
+  EbayBulkAdResponse,
 } from './types';
 import type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
 import { ebaySignatureService } from './ebay-signature.service';
@@ -51,6 +59,7 @@ const FINANCES_API_PATH = '/sell/finances/v1';
 const ACCOUNT_API_PATH = '/sell/account/v1';
 const INVENTORY_API_PATH = '/sell/inventory/v1';
 const TAXONOMY_API_PATH = '/commerce/taxonomy/v1';
+const MARKETING_API_PATH = '/sell/marketing/v1';
 
 // UK category tree ID for LEGO items
 const UK_CATEGORY_TREE_ID = '3';
@@ -505,6 +514,105 @@ export class EbayApiAdapter {
     return this.request<EbayItemAspectsResponse>(
       `${TAXONOMY_API_PATH}/category_tree/${UK_CATEGORY_TREE_ID}/get_item_aspects_for_category`,
       { params: { category_id: categoryId } }
+    );
+  }
+
+  // ============================================================================
+  // Marketing API Methods (Promoted Listings Standard / CPS)
+  // ============================================================================
+
+  /**
+   * Get all CPS campaigns
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/campaign/methods/getCampaigns
+   */
+  async getCampaigns(params?: {
+    limit?: number;
+    offset?: number;
+    campaignStatus?: string;
+  }): Promise<EbayCampaignResponse> {
+    return this.request<EbayCampaignResponse>(`${MARKETING_API_PATH}/ad_campaign`, {
+      params: {
+        limit: params?.limit || 100,
+        offset: params?.offset || 0,
+        campaign_status: params?.campaignStatus,
+      },
+    });
+  }
+
+  /**
+   * Get ads in a campaign with optional listing ID filter
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/ad/methods/getAds
+   */
+  async getAds(
+    campaignId: string,
+    params?: { listingIds?: string[]; adStatus?: string; limit?: number; offset?: number }
+  ): Promise<EbayAdResponse> {
+    return this.request<EbayAdResponse>(
+      `${MARKETING_API_PATH}/ad_campaign/${encodeURIComponent(campaignId)}/ad`,
+      {
+        params: {
+          listing_ids: params?.listingIds?.join(','),
+          ad_status: params?.adStatus,
+          limit: params?.limit || 500,
+          offset: params?.offset || 0,
+        },
+      }
+    );
+  }
+
+  /**
+   * Find which campaign a listing belongs to
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/campaign/methods/findCampaignByAdReference
+   */
+  async findCampaignByListing(listingId: string): Promise<EbayFindCampaignResponse> {
+    return this.request<EbayFindCampaignResponse>(
+      `${MARKETING_API_PATH}/ad_campaign/find_campaign_by_ad_reference`,
+      { params: { listing_id: listingId } }
+    );
+  }
+
+  /**
+   * Bulk add listings to a campaign with bid percentages
+   * Max 500 listings per call
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/ad/methods/bulkCreateAdsByListingId
+   */
+  async bulkCreateAds(
+    campaignId: string,
+    request: EbayBulkCreateAdsRequest
+  ): Promise<EbayBulkAdResponse> {
+    return this.request<EbayBulkAdResponse>(
+      `${MARKETING_API_PATH}/ad_campaign/${encodeURIComponent(campaignId)}/bulk_create_ads_by_listing_id`,
+      { method: 'POST', body: request }
+    );
+  }
+
+  /**
+   * Bulk update bid percentages by listing ID
+   * Max 500 listings per call
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/ad/methods/bulkUpdateAdsBidByListingId
+   */
+  async bulkUpdateAdsBid(
+    campaignId: string,
+    request: EbayBulkUpdateAdsBidRequest
+  ): Promise<EbayBulkAdResponse> {
+    return this.request<EbayBulkAdResponse>(
+      `${MARKETING_API_PATH}/ad_campaign/${encodeURIComponent(campaignId)}/bulk_update_ads_bid_by_listing_id`,
+      { method: 'POST', body: request }
+    );
+  }
+
+  /**
+   * Bulk remove listings from a campaign
+   * Max 500 listings per call
+   * @see https://developer.ebay.com/api-docs/sell/marketing/resources/ad/methods/bulkDeleteAdsByListingId
+   */
+  async bulkDeleteAds(
+    campaignId: string,
+    request: EbayBulkDeleteAdsRequest
+  ): Promise<EbayBulkAdResponse> {
+    return this.request<EbayBulkAdResponse>(
+      `${MARKETING_API_PATH}/ad_campaign/${encodeURIComponent(campaignId)}/bulk_delete_ads_by_listing_id`,
+      { method: 'POST', body: request }
     );
   }
 
