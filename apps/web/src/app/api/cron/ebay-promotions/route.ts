@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayPromotedListingsService } from '@/lib/ebay/ebay-promoted-listings.service';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
@@ -61,7 +63,21 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
 
   const userId = creds.user_id;
   console.log('[EbayPromotions Report] Found user:', userId);
-  const service = new EbayPromotedListingsService(supabase, userId);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const authService = new EbayAuthService(undefined, supabase as any);
+  const service = new EbayPromotedListingsService(supabase, userId, authService);
+
+  // Get actual eBay active listing count via Trading API
+  console.log('[EbayPromotions Report] Getting active listing count from eBay Trading API...');
+  const accessToken = await authService.getAccessToken(userId);
+  let ebayActiveCount = 0;
+  if (accessToken) {
+    const tradingClient = new EbayTradingClient({ accessToken, siteId: 3 });
+    const page1 = await tradingClient.getActiveListings({ ActiveList: true, pageNumber: 1, entriesPerPage: 1 });
+    ebayActiveCount = page1.totalEntries;
+  }
+  console.log('[EbayPromotions Report] eBay reports', ebayActiveCount, 'active listings');
 
   // Get all campaigns and ads from eBay
   console.log('[EbayPromotions Report] Fetching campaigns and ads from eBay API...');
@@ -89,8 +105,10 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
   // Build set of promoted listing IDs with their bid %
   const promotedMap = new Map<string, { bidPercentage: string; campaignName: string; adStatus: string }>();
   const bidDistribution: Record<string, number> = {};
+  let totalPromotedAds = 0;
 
   for (const { campaign, ads } of campaignAds) {
+    totalPromotedAds += ads.length;
     for (const ad of ads) {
       promotedMap.set(ad.listingId, {
         bidPercentage: ad.bidPercentage,
@@ -154,10 +172,15 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
       totalAds: ads.length,
     })),
     coverage: {
-      totalEbayListings: allListings.length,
-      promoted: promoted.length,
-      notPromoted: notPromoted.length,
-      coveragePercent: allListings.length > 0
+      ebayActiveListings: ebayActiveCount,
+      trackedInDb: allListings.length,
+      totalPromotedAds,
+      promotedTracked: promoted.length,
+      notPromotedTracked: notPromoted.length,
+      coveragePercentEbay: ebayActiveCount > 0
+        ? Math.round((totalPromotedAds / ebayActiveCount) * 100)
+        : 0,
+      coveragePercentDb: allListings.length > 0
         ? Math.round((promoted.length / allListings.length) * 100)
         : 0,
       promotedValue: Math.round(promotedValue * 100) / 100,
