@@ -51,7 +51,8 @@ export class EbayPromotedListingsService {
   constructor(supabase: SupabaseClient<Database>, userId: string, authService?: EbayAuthService) {
     this.supabase = supabase;
     this.userId = userId;
-    this.authService = authService ?? new EbayAuthService();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.authService = authService ?? new EbayAuthService(undefined, supabase as any);
   }
 
   /**
