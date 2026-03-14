@@ -8,7 +8,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   EbayCampaign,
   EbayAd,
-  EbayBulkAdResponseItem,
 } from '@/lib/ebay/types';
 import type { BulkPromotionResult } from '@/lib/ebay/ebay-promoted-listings.service';
 

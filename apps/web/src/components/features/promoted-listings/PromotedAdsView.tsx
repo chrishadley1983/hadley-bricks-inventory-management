@@ -37,7 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, RefreshCw, TrendingUp, Trash2, Plus } from 'lucide-react';
 
 interface FlatAd extends EbayAd {
