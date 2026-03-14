@@ -33,6 +33,7 @@ import {
   LineChart,
   Gavel,
   TrendingDown,
+  Megaphone,
 } from 'lucide-react';
 
 interface NavItem {
@@ -95,6 +96,7 @@ const navSections: NavSection[] = [
       { href: '/platform-stock', label: 'Amazon Stock', icon: Layers },
       { href: '/amazon-sync', label: 'Amazon Sync', icon: CloudUpload },
       { href: '/ebay-stock', label: 'eBay Stock', icon: Layers },
+      { href: '/promoted-listings', label: 'Promoted Listings', icon: Megaphone },
       { href: '/minifigs', label: 'Minifig Sync', icon: CloudUpload },
     ],
   },
