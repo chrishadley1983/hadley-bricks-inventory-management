@@ -79,9 +79,19 @@ const LISTING_MANAGEMENT_SCOPES = [
 const ANALYTICS_SCOPES = ['https://api.ebay.com/oauth/api_scope/sell.analytics.readonly'];
 
 /**
+ * Scope required for promoted listings (Marketing API)
+ */
+const MARKETING_SCOPES = ['https://api.ebay.com/oauth/api_scope/sell.marketing'];
+
+/**
  * All required scopes for full functionality
  */
-const REQUIRED_SCOPES = [...BASE_SCOPES, ...LISTING_MANAGEMENT_SCOPES, ...ANALYTICS_SCOPES];
+const REQUIRED_SCOPES = [
+  ...BASE_SCOPES,
+  ...LISTING_MANAGEMENT_SCOPES,
+  ...ANALYTICS_SCOPES,
+  ...MARKETING_SCOPES,
+];
 
 // ============================================================================
 // EbayAuthService Class
