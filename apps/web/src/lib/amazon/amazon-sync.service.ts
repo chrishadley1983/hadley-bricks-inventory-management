@@ -2992,7 +2992,7 @@ export class AmazonSyncService {
    * If there are no issues, all items were accepted successfully.
    * Successfully synced items will have their inventory_items updated with:
    * - status: 'LISTED'
-   * - listing_date: current timestamp
+   * - listing_date: now (new SKUs) or created_at (existing SKU reprices) or preserved (already set)
    */
   private async processFeedResult(
     feedId: string,
@@ -3014,8 +3014,9 @@ export class AmazonSyncService {
       }
     }
 
-    // Collect inventory item IDs that were successfully synced
-    const successfulInventoryItemIds: string[] = [];
+    // Collect inventory item IDs that were successfully synced, split by new vs reprice
+    const genuineNewListingIds: string[] = [];
+    const repriceItemIds: string[] = [];
     let hasItemsNeedingVerification = false;
 
     // Update each feed item based on the result
@@ -3071,16 +3072,21 @@ export class AmazonSyncService {
 
       await this.supabase.from('amazon_sync_feed_items').update(updates).eq('id', feedItem.id);
 
-      // Collect successful/accepted inventory item IDs for status update
+      // Collect successful/accepted inventory item IDs, split by new listing vs reprice
       // Note: For 'accepted' items, we set LISTED now but price might not be visible yet
       if (status === 'success' || status === 'warning' || status === 'accepted') {
-        successfulInventoryItemIds.push(...feedItem.inventory_item_ids);
+        if (feedItem.is_new_sku) {
+          genuineNewListingIds.push(...feedItem.inventory_item_ids);
+        } else {
+          repriceItemIds.push(...feedItem.inventory_item_ids);
+        }
       }
     }
 
     // Update inventory items to LISTED status
-    if (successfulInventoryItemIds.length > 0) {
-      await this.updateInventoryItemsAsListed(successfulInventoryItemIds);
+    const allSuccessfulIds = [...genuineNewListingIds, ...repriceItemIds];
+    if (allSuccessfulIds.length > 0) {
+      await this.updateInventoryItemsAsListed(allSuccessfulIds, new Set(repriceItemIds));
     }
 
     // Note: We don't update platform_listings here because that table is designed
@@ -3093,10 +3099,18 @@ export class AmazonSyncService {
   /**
    * Update inventory items to LISTED status after successful Amazon sync
    *
-   * Only sets listing_date for items that don't already have one (truly new listings).
-   * Re-priced items keep their original listing_date so they don't inflate "listed this week" metrics.
+   * Three categories:
+   * 1. Items with existing listing_date → preserve date (re-prices, already tracked)
+   * 2. Items without listing_date from a NEW SKU feed → set listing_date to now (genuine new listing)
+   * 3. Items without listing_date from an EXISTING SKU feed → set listing_date to created_at
+   *    (price-only reprice on an item already on Amazon but never tracked — avoids inflating today's count)
+   *
+   * @param repriceItemIds - Set of inventory item IDs from is_new_sku=false feed items (existing SKU reprices)
    */
-  private async updateInventoryItemsAsListed(inventoryItemIds: string[]): Promise<void> {
+  private async updateInventoryItemsAsListed(
+    inventoryItemIds: string[],
+    repriceItemIds: Set<string>
+  ): Promise<void> {
     console.log(
       `[AmazonSyncService] Updating ${inventoryItemIds.length} inventory items to LISTED status`
     );
@@ -3104,16 +3118,27 @@ export class AmazonSyncService {
     // Find which items already have a listing_date (re-prices) vs new listings
     const { data: existingItems } = await this.supabase
       .from('inventory_items')
-      .select('id, listing_date')
+      .select('id, listing_date, created_at')
       .in('id', inventoryItemIds)
       .eq('user_id', this.userId);
 
     const alreadyListedIds = (existingItems ?? [])
       .filter((item) => item.listing_date != null)
       .map((item) => item.id);
-    const newListingIds = inventoryItemIds.filter((id) => !alreadyListedIds.includes(id));
 
-    // Update re-priced items: status + platform only, preserve listing_date
+    const noListingDateItems = (existingItems ?? []).filter(
+      (item) => item.listing_date == null
+    );
+
+    // Split items without listing_date into genuine new listings vs price-only reprices
+    const genuineNewIds = noListingDateItems
+      .filter((item) => !repriceItemIds.has(item.id))
+      .map((item) => item.id);
+    const priceOnlyRepriceItems = noListingDateItems.filter((item) =>
+      repriceItemIds.has(item.id)
+    );
+
+    // 1. Update items that already have listing_date: status + platform only
     if (alreadyListedIds.length > 0) {
       const { error } = await this.supabase
         .from('inventory_items')
@@ -3133,8 +3158,8 @@ export class AmazonSyncService {
       }
     }
 
-    // Update new listings: set listing_date to now
-    if (newListingIds.length > 0) {
+    // 2. Update genuine new listings: set listing_date to now
+    if (genuineNewIds.length > 0) {
       const { error } = await this.supabase
         .from('inventory_items')
         .update({
@@ -3142,16 +3167,43 @@ export class AmazonSyncService {
           listing_date: new Date().toISOString(),
           listing_platform: 'amazon',
         })
-        .in('id', newListingIds)
+        .in('id', genuineNewIds)
         .eq('user_id', this.userId);
 
       if (error) {
         console.error('[AmazonSyncService] Failed to update new listing items:', error);
       } else {
         console.log(
-          `[AmazonSyncService] Updated ${newListingIds.length} new listings (listing_date set to now)`
+          `[AmazonSyncService] Updated ${genuineNewIds.length} new listings (listing_date set to now)`
         );
       }
+    }
+
+    // 3. Update price-only reprices with no listing_date: set listing_date to created_at
+    //    These are items already on Amazon but never tracked — backdate to avoid inflating today's count
+    if (priceOnlyRepriceItems.length > 0) {
+      const results = await Promise.all(
+        priceOnlyRepriceItems.map((item) =>
+          this.supabase
+            .from('inventory_items')
+            .update({
+              status: 'LISTED',
+              listing_date: item.created_at,
+              listing_platform: 'amazon',
+            })
+            .eq('id', item.id)
+            .eq('user_id', this.userId)
+        )
+      );
+      const errors = results.filter((r) => r.error);
+      if (errors.length > 0) {
+        console.error(
+          `[AmazonSyncService] Failed to update ${errors.length} price-only reprice items`
+        );
+      }
+      console.log(
+        `[AmazonSyncService] Updated ${priceOnlyRepriceItems.length - errors.length} price-only reprices (listing_date set to created_at)`
+      );
     }
   }
 
