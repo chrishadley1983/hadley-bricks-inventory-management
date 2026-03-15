@@ -46,32 +46,9 @@ export class ArbitrageService {
       pageSize = 50,
     } = options;
 
-    // Fetch user's excluded eBay listings for recalculating stats (paginated - may exceed 1000)
-    const excludedBySet = new Map<string, Set<string>>();
-    const allExcludedIds = new Set<string>();
-    {
-      const pgSize = 1000;
-      let offset = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data: pg } = await this.supabase
-          .from('excluded_ebay_listings')
-          .select('ebay_item_id, set_number')
-          .eq('user_id', userId)
-          .range(offset, offset + pgSize - 1);
-
-        for (const row of pg ?? []) {
-          if (!excludedBySet.has(row.set_number)) {
-            excludedBySet.set(row.set_number, new Set());
-          }
-          excludedBySet.get(row.set_number)!.add(row.ebay_item_id);
-          allExcludedIds.add(row.ebay_item_id);
-        }
-
-        hasMore = (pg?.length ?? 0) === pgSize;
-        offset += pgSize;
-      }
-    }
+    // Fetch user's excluded eBay listings for recalculating stats
+    // Uses RPC to fetch all IDs in a single round trip (avoids 12+ paginated requests for 11k+ rows)
+    const { excludedBySet, allExcludedIds } = await this.fetchExcludedEbayListings(userId);
 
     // When sorting/filtering by eBay fields, excluded listings change the
     // min price and COG% after the DB query. Server-side sort on raw DB
@@ -690,6 +667,41 @@ export class ArbitrageService {
   // ============================================
   // Helper Methods
   // ============================================
+
+  /**
+   * Fetch all excluded eBay listing IDs in a single round trip
+   */
+  private async fetchExcludedEbayListings(
+    userId: string
+  ): Promise<{
+    excludedBySet: Map<string, Set<string>>;
+    allExcludedIds: Set<string>;
+  }> {
+    const excludedBySet = new Map<string, Set<string>>();
+    const allExcludedIds = new Set<string>();
+
+    const { data, error } = await this.supabase.rpc('get_excluded_ebay_listing_ids', {
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.error('[ArbitrageService.fetchExcludedEbayListings] RPC error:', error);
+      // Fall back to empty — eBay stats won't be recalculated but page still loads
+      return { excludedBySet, allExcludedIds };
+    }
+
+    for (const row of data ?? []) {
+      const setNumber = row.set_number as string;
+      const itemId = row.ebay_item_id as string;
+      if (!excludedBySet.has(setNumber)) {
+        excludedBySet.set(setNumber, new Set());
+      }
+      excludedBySet.get(setNumber)!.add(itemId);
+      allExcludedIds.add(itemId);
+    }
+
+    return { excludedBySet, allExcludedIds };
+  }
 
   /**
    * Map sort field to database column

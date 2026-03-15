@@ -5855,6 +5855,111 @@ export type Database = {
           },
         ]
       }
+      japan_day_plans: {
+        Row: {
+          city: string
+          day_date: string
+          notes: string | null
+          plan_data: Json
+          stay_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          city: string
+          day_date: string
+          notes?: string | null
+          plan_data?: Json
+          stay_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          city?: string
+          day_date?: string
+          notes?: string | null
+          plan_data?: Json
+          stay_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      japan_favourites: {
+        Row: {
+          added_at: string | null
+          area: string | null
+          guide: string
+          guide_title: string | null
+          id: number
+          lat: number | null
+          lng: number | null
+          name: string
+        }
+        Insert: {
+          added_at?: string | null
+          area?: string | null
+          guide: string
+          guide_title?: string | null
+          id?: number
+          lat?: number | null
+          lng?: number | null
+          name: string
+        }
+        Update: {
+          added_at?: string | null
+          area?: string | null
+          guide?: string
+          guide_title?: string | null
+          id?: number
+          lat?: number | null
+          lng?: number | null
+          name?: string
+        }
+        Relationships: []
+      }
+      japan_notes: {
+        Row: {
+          guide: string
+          id: number
+          name: string
+          note: string
+          updated_at: string | null
+        }
+        Insert: {
+          guide: string
+          id?: number
+          name: string
+          note: string
+          updated_at?: string | null
+        }
+        Update: {
+          guide?: string
+          id?: number
+          name?: string
+          note?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      japan_ruled_out: {
+        Row: {
+          guide: string
+          id: number
+          name: string
+          ruled_at: string | null
+        }
+        Insert: {
+          guide: string
+          id?: number
+          name: string
+          ruled_at?: string | null
+        }
+        Update: {
+          guide?: string
+          id?: number
+          name?: string
+          ruled_at?: string | null
+        }
+        Relationships: []
+      }
       job_execution_history: {
         Row: {
           completed_at: string | null
@@ -14211,6 +14316,13 @@ export type Database = {
         Returns: {
           bucket: string
           item_count: number
+        }[]
+      }
+      get_excluded_ebay_listing_ids: {
+        Args: { p_user_id: string }
+        Returns: {
+          ebay_item_id: string
+          set_number: string
         }[]
       }
       get_fading_but_relevant: {
