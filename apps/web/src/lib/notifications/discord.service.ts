@@ -64,6 +64,7 @@ export interface EbayAuctionAlertParams {
   ebayUrl: string;
   imageUrl: string | null;
   ukRrp: number | null;
+  maxBid: number | null;
 }
 
 export interface EbayJoblotAlertParams {
@@ -485,14 +486,14 @@ export class DiscordService {
 
   /**
    * Send an eBay auction opportunity alert.
-   * Colour-coded: green for great deals (≥25% margin), amber for good deals (≥15%).
+   * Colour-coded: green for great deals (≥30% margin), amber for good deals (≥25%).
    */
   async sendEbayAuctionAlert(params: EbayAuctionAlertParams): Promise<DiscordSendResult> {
     const {
       setNumber, setName, ebayTitle, currentBid, postage, totalCost,
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
-      ebayUrl, imageUrl, ukRrp,
+      ebayUrl, imageUrl, ukRrp, maxBid,
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
@@ -526,6 +527,11 @@ export class DiscordService {
       {
         name: `${tierEmoji} ${tierLabel}`,
         value: `${marginPercent.toFixed(1)}% profit margin`,
+        inline: true,
+      },
+      {
+        name: '🎯 Max Bid (25%)',
+        value: maxBid != null ? `£${maxBid.toFixed(2)}` : '—',
         inline: true,
       },
       {
@@ -576,7 +582,7 @@ export class DiscordService {
       totalAmazonValue, estimatedProfit, marginPercent, sets, ebayUrl, imageUrl,
     } = params;
 
-    const color = marginPercent >= 25 ? 0x2ecc71 : 0xf1c40f;
+    const color = marginPercent >= 30 ? 0x2ecc71 : 0xf1c40f;
     const setsBreakdown = sets
       .map((s) => {
         const price = s.amazonPrice ? `£${s.amazonPrice.toFixed(2)}` : '?';

@@ -906,7 +906,7 @@ export class EbayAuctionScannerService {
         amazon_price_gbp: joblot.totalAmazonValue,
         profit_gbp: joblot.estimatedProfit,
         margin_percent: joblot.marginPercent,
-        alert_tier: joblot.marginPercent >= 25 ? 'great' : 'good',
+        alert_tier: joblot.marginPercent >= 30 ? 'great' : 'good',
         is_joblot: true,
         joblot_sets: joblot.sets as unknown as Record<string, unknown>,
         auction_end_time: joblot.auction.auctionEndTime,

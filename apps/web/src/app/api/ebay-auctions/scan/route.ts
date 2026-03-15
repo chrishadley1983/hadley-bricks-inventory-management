@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayAuctionScannerService } from '@/lib/ebay-auctions';
+import { calculateMaxBidForMargin } from '@/lib/ebay-auctions/auction-profit-calculator';
 import { discordService } from '@/lib/notifications/discord.service';
 
 export const runtime = 'nodejs';
@@ -39,6 +40,12 @@ export async function POST() {
 
     for (const opp of result.opportunities) {
       try {
+        const maxBid = calculateMaxBidForMargin(
+          opp.auction.postageGbp,
+          opp.amazonData.amazonPrice,
+          config.minMarginPercent
+        );
+
         const discordResult = await discordService.sendEbayAuctionAlert({
           setNumber: opp.setIdentification.setNumber,
           setName: opp.amazonData.setName,
@@ -59,6 +66,7 @@ export async function POST() {
           ebayUrl: opp.auction.itemUrl,
           imageUrl: opp.auction.imageUrl,
           ukRrp: opp.amazonData.ukRrp,
+          maxBid,
         });
 
         await scanner.saveAlert(DEFAULT_USER_ID, opp, discordResult.success);
