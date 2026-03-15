@@ -10,6 +10,9 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { ArbitrageService } from '@/lib/arbitrage';
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 // ============================================================================
 // SCHEMAS
 // ============================================================================
