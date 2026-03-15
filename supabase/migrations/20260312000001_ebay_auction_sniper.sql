@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS ebay_auction_config (
   enabled BOOLEAN NOT NULL DEFAULT true,
 
   -- Margin thresholds (profit margin % on Amazon FBM sale)
-  min_margin_percent NUMERIC(5,2) NOT NULL DEFAULT 15.0,
-  great_margin_percent NUMERIC(5,2) NOT NULL DEFAULT 25.0,
+  min_margin_percent NUMERIC(5,2) NOT NULL DEFAULT 25.0,
+  great_margin_percent NUMERIC(5,2) NOT NULL DEFAULT 30.0,
 
   -- Minimum profit in £ to alert (avoid tiny margin items)
   min_profit_gbp NUMERIC(8,2) NOT NULL DEFAULT 3.0,
