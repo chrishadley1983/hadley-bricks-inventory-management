@@ -427,9 +427,9 @@ export function ArbitrageFilters({
       {showAdvanced && (
         <div className="rounded-b-lg border border-t-0 bg-muted/30 p-4">
           <div className="flex flex-wrap items-end gap-4">
-            {/* Min Gross Margin (DB simple margin, not profit margin shown in table) */}
+            {/* Min Margin % (profit margin after Amazon fees + shipping) */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-foreground">Min Gross Margin %</label>
+              <label className="text-xs font-medium text-muted-foreground">Min Margin %</label>
               <DebouncedNumberInput
                 value={filters.minMargin}
                 onChange={(v) => updateFilter('minMargin', v)}

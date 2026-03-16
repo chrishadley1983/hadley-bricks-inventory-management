@@ -73,9 +73,9 @@ export class ArbitrageService {
       .select('*', { count: 'exact' })
       .eq('user_id', userId);
 
-    // Apply min margin filter (always, independent of show filter)
+    // Apply min margin filter on profit_margin_percent (accounts for Amazon fees + shipping)
     if (minMargin > 0) {
-      query = query.gte('margin_percent', minMargin);
+      query = query.gte('profit_margin_percent', minMargin);
     }
 
     // Apply show filter
@@ -148,7 +148,7 @@ export class ArbitrageService {
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .gte('margin_percent', minMargin);
+      .gte('profit_margin_percent', minMargin);
 
     const seededCount = items.filter((item) => item.itemType === 'seeded').length;
     const inventoryCount = items.filter((item) => item.itemType === 'inventory').length;
@@ -189,15 +189,14 @@ export class ArbitrageService {
     // eBay filtering and sorting happens after recalculation.
     let baseQuery = this.supabase.from('arbitrage_current_view').select('*').eq('user_id', userId);
 
-    // Apply min margin filter (always, independent of show filter)
+    // Apply min margin filter on profit_margin_percent (accounts for Amazon fees + shipping)
     if (minMargin > 0) {
-      baseQuery = baseQuery.gte('margin_percent', minMargin);
+      baseQuery = baseQuery.gte('profit_margin_percent', minMargin);
     }
 
     // Apply non-eBay show filters
     switch (show) {
       case 'ebay_opportunities':
-        // Only require eBay data exists — COG filter applied after recalc
         baseQuery = baseQuery.not('ebay_min_price', 'is', null);
         break;
       case 'with_ebay_data':
@@ -287,7 +286,7 @@ export class ArbitrageService {
       .from('arbitrage_current_view')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .gte('margin_percent', minMargin);
+      .gte('profit_margin_percent', minMargin);
 
     return {
       items: pagedItems,
@@ -746,8 +745,8 @@ export class ArbitrageService {
     if (blPriceMax != null) query = query.lte('bl_min_price', blPriceMax);
 
     // Margin range (uses DB margin_percent as proxy — profit margin is computed app-side)
-    if (marginMin != null) query = query.gte('margin_percent', marginMin);
-    if (marginMax != null) query = query.lte('margin_percent', marginMax);
+    if (marginMin != null) query = query.gte('profit_margin_percent', marginMin);
+    if (marginMax != null) query = query.lte('profit_margin_percent', marginMax);
 
     // Sales rank range
     if (salesRankMin != null) query = query.gte('sales_rank', salesRankMin);
@@ -781,7 +780,7 @@ export class ArbitrageService {
    */
   private getSortColumn(sortField: string): string {
     const mapping: Record<string, string> = {
-      margin: 'margin_percent',
+      margin: 'profit_margin_percent',
       cog: 'cog_percent',
       bl_price: 'bl_min_price',
       your_price: 'your_price',
@@ -793,7 +792,7 @@ export class ArbitrageService {
       ebay_margin: 'ebay_cog_percent',
       ebay_price: 'ebay_min_price',
     };
-    return mapping[sortField] ?? 'margin_percent';
+    return mapping[sortField] ?? 'profit_margin_percent';
   }
 
   /**
@@ -896,16 +895,16 @@ export class ArbitrageService {
    * Transform database row to ArbitrageItem
    */
   private transformToArbitrageItem(row: Record<string, unknown>): ArbitrageItem {
-    // Calculate true Amazon FBM profit margin (accounts for fees + shipping)
+    // Read profit margin from DB view (computed in SQL with same fee formula)
     const effectiveAmazonPrice = row.effective_amazon_price as number | null;
     const effectiveBlPrice = row.effective_bl_price as number | null;
-    let profitMarginPercent: number | null = null;
-    let profitAbsolute: number | null = null;
+    const profitMarginPercent = row.profit_margin_percent as number | null;
 
+    // Calculate profit absolute from the profit margin if both prices available
+    let profitAbsolute: number | null = null;
     if (effectiveAmazonPrice && effectiveAmazonPrice > 0 && effectiveBlPrice && effectiveBlPrice > 0) {
       const profitBreakdown = calculateAmazonFBMProfit(effectiveAmazonPrice, effectiveBlPrice);
       if (profitBreakdown) {
-        profitMarginPercent = Math.round(profitBreakdown.profitMarginPercent * 10) / 10;
         profitAbsolute = Math.round(profitBreakdown.totalProfit * 100) / 100;
       }
     }
