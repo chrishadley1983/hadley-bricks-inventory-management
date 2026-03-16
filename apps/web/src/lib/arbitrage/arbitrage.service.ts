@@ -18,6 +18,7 @@ import type {
   SyncJobType,
   EbayListing,
 } from './types';
+import { calculateAmazonFBMProfit } from './calculations';
 
 /**
  * Service for arbitrage tracking operations
@@ -103,10 +104,17 @@ export class ArbitrageService {
 
     // Apply search filter
     if (search) {
-      query = query.or(
-        `name.ilike.%${search}%,asin.ilike.%${search}%,bricklink_set_number.ilike.%${search}%`
-      );
+      // Sanitise search to prevent PostgREST filter injection (strip commas/dots that alter .or() syntax)
+      const safeSearch = search.replace(/[,.*()]/g, '');
+      if (safeSearch) {
+        query = query.or(
+          `name.ilike.%${safeSearch}%,asin.ilike.%${safeSearch}%,bricklink_set_number.ilike.%${safeSearch}%`
+        );
+      }
     }
+
+    // Apply advanced column filters
+    query = this.applyAdvancedFilters(query, options);
 
     // Apply sorting
     const sortColumn = this.getSortColumn(sortField);
@@ -704,6 +712,61 @@ export class ArbitrageService {
   }
 
   /**
+   * Apply advanced column filters to a Supabase query
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private applyAdvancedFilters(query: any, options: ArbitrageFilterOptions): any {
+    const {
+      amazonPriceMin, amazonPriceMax,
+      blPriceMin, blPriceMax,
+      marginMin, marginMax,
+      salesRankMin, salesRankMax,
+      blLotsMin, blLotsMax,
+      qtyMin, qtyMax,
+      source,
+      maxDataAgeDays,
+    } = options;
+
+    // Amazon price range (effective = buy_box or was_price_90d)
+    if (amazonPriceMin != null) query = query.gte('effective_amazon_price', amazonPriceMin);
+    if (amazonPriceMax != null) query = query.lte('effective_amazon_price', amazonPriceMax);
+
+    // BrickLink price range
+    if (blPriceMin != null) query = query.gte('bl_min_price', blPriceMin);
+    if (blPriceMax != null) query = query.lte('bl_min_price', blPriceMax);
+
+    // Margin range (uses DB margin_percent as proxy — profit margin is computed app-side)
+    if (marginMin != null) query = query.gte('margin_percent', marginMin);
+    if (marginMax != null) query = query.lte('margin_percent', marginMax);
+
+    // Sales rank range
+    if (salesRankMin != null) query = query.gte('sales_rank', salesRankMin);
+    if (salesRankMax != null) query = query.lte('sales_rank', salesRankMax);
+
+    // BL lots range
+    if (blLotsMin != null) query = query.gte('bl_total_lots', blLotsMin);
+    if (blLotsMax != null) query = query.lte('bl_total_lots', blLotsMax);
+
+    // Quantity range
+    if (qtyMin != null) query = query.gte('your_qty', qtyMin);
+    if (qtyMax != null) query = query.lte('your_qty', qtyMax);
+
+    // Source filter (inventory/seeded)
+    if (source && source !== 'all') {
+      query = query.eq('item_type', source);
+    }
+
+    // Data freshness filter (max age in days for amazon_snapshot_date)
+    if (maxDataAgeDays != null) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - maxDataAgeDays);
+      query = query.gte('amazon_snapshot_date', cutoff.toISOString().split('T')[0]);
+    }
+
+    return query;
+  }
+
+  /**
    * Map sort field to database column
    */
   private getSortColumn(sortField: string): string {
@@ -720,7 +783,7 @@ export class ArbitrageService {
       ebay_margin: 'ebay_cog_percent',
       ebay_price: 'ebay_min_price',
     };
-    return mapping[sortField] ?? 'cog_percent';
+    return mapping[sortField] ?? 'margin_percent';
   }
 
   /**
@@ -823,6 +886,20 @@ export class ArbitrageService {
    * Transform database row to ArbitrageItem
    */
   private transformToArbitrageItem(row: Record<string, unknown>): ArbitrageItem {
+    // Calculate true Amazon FBM profit margin (accounts for fees + shipping)
+    const effectiveAmazonPrice = row.effective_amazon_price as number | null;
+    const effectiveBlPrice = row.effective_bl_price as number | null;
+    let profitMarginPercent: number | null = null;
+    let profitAbsolute: number | null = null;
+
+    if (effectiveAmazonPrice && effectiveAmazonPrice > 0 && effectiveBlPrice && effectiveBlPrice > 0) {
+      const profitBreakdown = calculateAmazonFBMProfit(effectiveAmazonPrice, effectiveBlPrice);
+      if (profitBreakdown) {
+        profitMarginPercent = Math.round(profitBreakdown.profitMarginPercent * 10) / 10;
+        profitAbsolute = Math.round(profitBreakdown.totalProfit * 100) / 100;
+      }
+    }
+
     return {
       asin: row.asin as string,
       userId: row.user_id as string,
@@ -851,7 +928,7 @@ export class ArbitrageService {
       offersJson: row.offers_json as ArbitrageItem['offersJson'],
       totalOfferCount: row.total_offer_count as number | null,
       competitivePrice: row.competitive_price as number | null,
-      effectiveAmazonPrice: row.effective_amazon_price as number | null,
+      effectiveAmazonPrice,
       blMinPrice: row.bl_min_price as number | null,
       blAvgPrice: row.bl_avg_price as number | null,
       blMaxPrice: row.bl_max_price as number | null,
@@ -861,10 +938,16 @@ export class ArbitrageService {
       blSnapshotDate: row.bl_snapshot_date as string | null,
       // BrickLink price override
       minBlPriceOverride: row.min_bl_price_override as number | null,
-      effectiveBlPrice: row.effective_bl_price as number | null,
+      effectiveBlPrice,
       cogPercent: row.cog_percent as number | null,
       marginPercent: row.margin_percent as number | null,
       marginAbsolute: row.margin_absolute as number | null,
+      // Amazon FBM profit margin
+      profitMarginPercent,
+      profitAbsolute,
+      // Data freshness timestamps
+      amazonFetchedAt: row.amazon_snapshot_date as string | null,
+      blFetchedAt: row.bl_snapshot_date as string | null,
       amazonUrl: row.amazon_url as string | null,
       // eBay fields
       ebayMinPrice: row.ebay_min_price as number | null,

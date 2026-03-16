@@ -86,17 +86,16 @@ function ArbitragePageContent() {
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
   const [excludedStoresModalOpen, setExcludedStoresModalOpen] = useState(false);
 
-  // BrickLink filters (COG-based)
+  // BrickLink filters (margin-based)
   const [blFilters, setBlFilters] = useState<ArbitrageFilterOptions>({
-    show: 'opportunities',
-    sortField: 'cog',
-    sortDirection: 'asc',
-    maxCog: 50,
+    show: 'all',
+    sortField: 'margin',
+    sortDirection: 'desc',
     pageSize: 50,
     page: 1,
   });
 
-  // eBay filters (COG-based)
+  // eBay filters
   const [ebayFilters, setEbayFilters] = useState<ArbitrageFilterOptions>({
     show: 'ebay_opportunities',
     sortField: 'ebay_margin',
@@ -118,8 +117,8 @@ function ArbitragePageContent() {
   const { data: selectedItem } = useArbitrageItem(selectedAsin);
   const { data: syncStatus, isLoading: syncLoading } = useSyncStatus();
   const { data: summary, isLoading: summaryLoading } = useArbitrageSummary(
-    undefined,
-    currentFilters.maxCog ?? 50
+    currentFilters.minMargin ?? 30,
+    currentFilters.maxCog ?? 100
   );
 
   // Mutations
@@ -136,38 +135,11 @@ function ArbitragePageContent() {
   );
 
   const handleBlFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setBlFilters((prev) => {
-      // If only the page changed, keep it. Otherwise reset to page 1.
-      const pageChanged = newFilters.page !== prev.page;
-      const onlyPageChanged =
-        pageChanged &&
-        newFilters.show === prev.show &&
-        newFilters.sortField === prev.sortField &&
-        newFilters.sortDirection === prev.sortDirection &&
-        newFilters.maxCog === prev.maxCog &&
-        newFilters.search === prev.search;
-      return {
-        ...newFilters,
-        page: onlyPageChanged ? newFilters.page : pageChanged ? newFilters.page : 1,
-      };
-    });
+    setBlFilters(newFilters);
   }, []);
 
   const handleEbayFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setEbayFilters((prev) => {
-      const pageChanged = newFilters.page !== prev.page;
-      const onlyPageChanged =
-        pageChanged &&
-        newFilters.show === prev.show &&
-        newFilters.sortField === prev.sortField &&
-        newFilters.sortDirection === prev.sortDirection &&
-        newFilters.maxCog === prev.maxCog &&
-        newFilters.search === prev.search;
-      return {
-        ...newFilters,
-        page: onlyPageChanged ? newFilters.page : pageChanged ? newFilters.page : 1,
-      };
-    });
+    setEbayFilters(newFilters);
   }, []);
 
   const handleRowClick = useCallback((item: ArbitrageItem) => {
@@ -277,7 +249,7 @@ function ArbitragePageContent() {
                   <SummaryCard
                     label="Opportunities"
                     value={blOpportunityCount}
-                    description={`≤${blFilters.maxCog ?? 50}% COG`}
+                    description={`≥${blFilters.minMargin ?? 30}% margin`}
                     variant="success"
                   />
                   <SummaryCard
@@ -337,7 +309,7 @@ function ArbitragePageContent() {
               onOpenExcluded={() => setExcludedModalOpen(true)}
               showFilterOptions={SHOW_FILTER_OPTIONS_WITH_SEEDED}
               sortOptions={SORT_OPTIONS}
-              defaultSortField="cog"
+              defaultSortField="margin"
               hasMore={arbitrageData?.hasMore ?? false}
               seededCount={arbitrageData?.seededCount}
               inventoryCount={arbitrageData?.inventoryCount}
@@ -345,8 +317,7 @@ function ArbitragePageContent() {
             <ArbitrageTable
               items={items}
               isLoading={dataLoading}
-              minMargin={100 - (blFilters.maxCog ?? 50)}
-              maxCog={blFilters.maxCog ?? 50}
+              minMargin={blFilters.minMargin ?? 0}
               onRowClick={handleRowClick}
               sortField={blFilters.sortField}
               sortDirection={blFilters.sortDirection}
@@ -375,7 +346,7 @@ function ArbitragePageContent() {
                   <SummaryCard
                     label="eBay Opportunities"
                     value={ebayOpportunityCount}
-                    description={`≤${ebayFilters.maxCog ?? 50}% COG`}
+                    description={`≤${ebayFilters.maxCog ?? 50}% COG (eBay)`}
                     variant="success"
                   />
                   <SummaryCard
@@ -431,7 +402,6 @@ function ArbitragePageContent() {
               items={items}
               isLoading={dataLoading}
               minMargin={100 - (ebayFilters.maxCog ?? 50)}
-              maxCog={ebayFilters.maxCog ?? 50}
               onRowClick={handleRowClick}
               sortField={ebayFilters.sortField}
               sortDirection={ebayFilters.sortDirection}

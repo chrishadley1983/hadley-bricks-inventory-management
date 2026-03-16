@@ -91,6 +91,21 @@ async function fetchArbitrageData(
   if (filters?.search) params.set('search', filters.search);
   if (filters?.page) params.set('page', String(filters.page));
   if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+  // Advanced column filters
+  if (filters?.amazonPriceMin !== undefined) params.set('amazonPriceMin', String(filters.amazonPriceMin));
+  if (filters?.amazonPriceMax !== undefined) params.set('amazonPriceMax', String(filters.amazonPriceMax));
+  if (filters?.blPriceMin !== undefined) params.set('blPriceMin', String(filters.blPriceMin));
+  if (filters?.blPriceMax !== undefined) params.set('blPriceMax', String(filters.blPriceMax));
+  if (filters?.marginMin !== undefined) params.set('marginMin', String(filters.marginMin));
+  if (filters?.marginMax !== undefined) params.set('marginMax', String(filters.marginMax));
+  if (filters?.salesRankMin !== undefined) params.set('salesRankMin', String(filters.salesRankMin));
+  if (filters?.salesRankMax !== undefined) params.set('salesRankMax', String(filters.salesRankMax));
+  if (filters?.blLotsMin !== undefined) params.set('blLotsMin', String(filters.blLotsMin));
+  if (filters?.blLotsMax !== undefined) params.set('blLotsMax', String(filters.blLotsMax));
+  if (filters?.qtyMin !== undefined) params.set('qtyMin', String(filters.qtyMin));
+  if (filters?.qtyMax !== undefined) params.set('qtyMax', String(filters.qtyMax));
+  if (filters?.source && filters.source !== 'all') params.set('source', filters.source);
+  if (filters?.maxDataAgeDays !== undefined) params.set('maxDataAgeDays', String(filters.maxDataAgeDays));
 
   const response = await fetch(`/api/arbitrage?${params.toString()}`);
 
