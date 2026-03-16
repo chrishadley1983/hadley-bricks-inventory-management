@@ -27,9 +27,9 @@ export const maxDuration = 60;
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const JOB_NAME = 'spapi-buybox-overlay';
 
-/** Process 20 ASINs per call (single batch, no inter-batch delay, safe under 60s limit).
- *  GCP driver loops with 30s gaps: ~232 ASINs / 20 = 12 iterations × 30s ≈ 6 min total. */
-const CHUNK_SIZE = 20;
+/** Process 5 ASINs per call (single batch, no inter-batch delay, safe under 60s limit).
+ *  GCP driver loops with 30s gaps: ~232 ASINs / 5 = 47 iterations × 30s ≈ 24 min total. */
+const CHUNK_SIZE = 5;
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
