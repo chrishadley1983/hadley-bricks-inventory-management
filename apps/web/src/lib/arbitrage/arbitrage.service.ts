@@ -73,10 +73,15 @@ export class ArbitrageService {
       .select('*', { count: 'exact' })
       .eq('user_id', userId);
 
+    // Apply min margin filter (always, independent of show filter)
+    if (minMargin > 0) {
+      query = query.gte('margin_percent', minMargin);
+    }
+
     // Apply show filter
     switch (show) {
       case 'opportunities':
-        query = query.gte('margin_percent', minMargin);
+        // minMargin already applied above
         break;
       case 'with_ebay_data':
         query = query.not('ebay_min_price', 'is', null);
@@ -184,6 +189,11 @@ export class ArbitrageService {
     // eBay filtering and sorting happens after recalculation.
     let baseQuery = this.supabase.from('arbitrage_current_view').select('*').eq('user_id', userId);
 
+    // Apply min margin filter (always, independent of show filter)
+    if (minMargin > 0) {
+      baseQuery = baseQuery.gte('margin_percent', minMargin);
+    }
+
     // Apply non-eBay show filters
     switch (show) {
       case 'ebay_opportunities':
@@ -197,7 +207,7 @@ export class ArbitrageService {
         baseQuery = baseQuery.is('ebay_min_price', null);
         break;
       case 'opportunities':
-        baseQuery = baseQuery.gte('margin_percent', minMargin);
+        // minMargin already applied above
         break;
       case 'in_stock':
         baseQuery = baseQuery.gt('your_qty', 0);
