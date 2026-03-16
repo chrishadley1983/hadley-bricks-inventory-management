@@ -230,6 +230,14 @@ export interface ArbitrageItem {
   marginPercent: number | null;
   marginAbsolute: number | null;
 
+  // Amazon FBM profit margin (accounts for fees + shipping)
+  profitMarginPercent: number | null;
+  profitAbsolute: number | null;
+
+  // Data freshness timestamps
+  amazonFetchedAt: string | null;
+  blFetchedAt: string | null;
+
   // Calculated margins (eBay)
   ebayMarginPercent: number | null;
   ebayMarginAbsolute: number | null;
@@ -322,6 +330,21 @@ export interface ArbitrageFilterOptions {
   search?: string;
   page?: number;
   pageSize?: number;
+  // Advanced column filters
+  amazonPriceMin?: number;
+  amazonPriceMax?: number;
+  blPriceMin?: number;
+  blPriceMax?: number;
+  marginMin?: number;
+  marginMax?: number;
+  salesRankMin?: number;
+  salesRankMax?: number;
+  blLotsMin?: number;
+  blLotsMax?: number;
+  qtyMin?: number;
+  qtyMax?: number;
+  source?: 'all' | 'inventory' | 'seeded';
+  maxDataAgeDays?: number;
 }
 
 // ============================================
@@ -465,8 +488,7 @@ export const EBAY_SHOW_FILTER_OPTIONS: { value: ArbitrageShowFilter; label: stri
 ];
 
 export const SORT_OPTIONS: { value: ArbitrageSortField; label: string }[] = [
-  { value: 'cog', label: 'COG %' },
-  { value: 'margin', label: 'Margin (BL)' },
+  { value: 'margin', label: 'Margin %' },
   { value: 'bl_price', label: 'BL Price' },
   { value: 'your_price', label: 'Your Price' },
   { value: 'buy_box', label: 'Buy Box' },

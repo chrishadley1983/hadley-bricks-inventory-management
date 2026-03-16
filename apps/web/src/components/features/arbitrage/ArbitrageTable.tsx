@@ -16,8 +16,34 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ArbitrageItem, ArbitrageSortField, SortDirection } from '@/lib/arbitrage/types';
-import { formatCurrencyGBP, formatSalesRank, isOpportunity } from '@/lib/arbitrage/calculations';
+import { formatCurrencyGBP, formatSalesRank } from '@/lib/arbitrage/calculations';
 import { AmazonOffersModal } from './AmazonOffersModal';
+
+/**
+ * Format a date string as relative time with freshness colour
+ */
+function formatFreshness(dateStr: string | null): { label: string; className: string } {
+  if (!dateStr) return { label: 'No data', className: 'text-muted-foreground' };
+
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = diffHours / 24;
+
+  let label: string;
+  if (diffHours < 1) label = '<1h ago';
+  else if (diffHours < 24) label = `${Math.floor(diffHours)}h ago`;
+  else if (diffDays < 30) label = `${Math.floor(diffDays)}d ago`;
+  else label = `${Math.floor(diffDays / 30)}mo ago`;
+
+  let className: string;
+  if (diffDays <= 1) className = 'text-green-600';
+  else if (diffDays <= 7) className = 'text-amber-600';
+  else className = 'text-red-500';
+
+  return { label, className };
+}
 
 type ArbitrageTableMode = 'bricklink' | 'ebay';
 
@@ -25,7 +51,6 @@ interface ArbitrageTableProps {
   items: ArbitrageItem[];
   isLoading: boolean;
   minMargin: number;
-  maxCog?: number;
   onRowClick: (item: ArbitrageItem) => void;
   sortField?: ArbitrageSortField;
   sortDirection?: SortDirection;
@@ -80,7 +105,6 @@ export function ArbitrageTable({
   items,
   isLoading,
   minMargin,
-  maxCog = 100,
   onRowClick,
   sortField,
   sortDirection,
@@ -161,8 +185,8 @@ export function ArbitrageTable({
                 className="w-[10%]"
               />
               <SortableHeader
-                field={mode === 'ebay' ? 'ebay_margin' : 'cog'}
-                label="COG %"
+                field={mode === 'ebay' ? 'ebay_margin' : 'margin'}
+                label="Margin %"
                 currentField={sortField}
                 direction={sortDirection}
                 onSort={onSort}
@@ -178,7 +202,6 @@ export function ArbitrageTable({
                 key={item.asin}
                 item={item}
                 minMargin={minMargin}
-                maxCog={maxCog}
                 mode={mode}
                 onClick={() => onRowClick(item)}
                 onOffersClick={() => setOffersModalItem(item)}
@@ -201,7 +224,6 @@ export function ArbitrageTable({
 interface ArbitrageTableRowProps {
   item: ArbitrageItem;
   minMargin: number;
-  maxCog: number;
   mode: ArbitrageTableMode;
   onClick: () => void;
   onOffersClick: () => void;
@@ -210,17 +232,15 @@ interface ArbitrageTableRowProps {
 function ArbitrageTableRow({
   item,
   minMargin,
-  maxCog,
   mode,
   onClick,
   onOffersClick,
 }: ArbitrageTableRowProps) {
-  // Use the appropriate COG % based on mode
-  const cogValue = mode === 'ebay' ? item.ebayCogPercent : item.cogPercent;
+  // Use profit margin for BrickLink, eBay COG for eBay mode
+  const marginValue = mode === 'ebay' ? (item.ebayCogPercent != null ? 100 - item.ebayCogPercent : null) : item.profitMarginPercent;
 
-  // Use COG % for opportunity detection (lower is better)
-  const cogIsGood = cogValue != null && cogValue <= maxCog;
-  const isOpp = cogIsGood || isOpportunity(item.marginPercent, minMargin);
+  // Opportunity detection: margin >= minMargin
+  const isOpp = marginValue != null && marginValue >= minMargin;
 
   // Determine effective price (buy box or lowest offer fallback)
   const hasBuyBox = item.buyBoxPrice !== null;
@@ -325,16 +345,22 @@ function ArbitrageTableRow({
         >
           {formatCurrencyGBP(effectivePrice)}
         </div>
-        <div
-          className={cn('text-xs', item.buyBoxIsYours ? 'text-green-600' : 'text-muted-foreground')}
-        >
-          {item.buyBoxIsYours
-            ? 'You (Buy Box)'
-            : hasBuyBox
-              ? 'Buy Box'
-              : effectivePrice
-                ? 'Lowest Offer'
-                : '—'}
+        <div className="flex items-center gap-1">
+          <span
+            className={cn('text-xs', item.buyBoxIsYours ? 'text-green-600' : 'text-muted-foreground')}
+          >
+            {item.buyBoxIsYours
+              ? 'You (Buy Box)'
+              : hasBuyBox
+                ? 'Buy Box'
+                : effectivePrice
+                  ? 'Lowest Offer'
+                  : '—'}
+          </span>
+          {(() => {
+            const f = formatFreshness(item.amazonFetchedAt);
+            return <span className={cn('text-[10px]', f.className)}>{f.label}</span>;
+          })()}
         </div>
       </TableCell>
 
@@ -391,30 +417,38 @@ function ArbitrageTableRow({
             <div className="font-mono font-semibold text-blue-600">
               {formatCurrencyGBP(item.blMinPrice)}
             </div>
-            <div className="text-xs text-muted-foreground">
-              Avg: {formatCurrencyGBP(item.blAvgPrice)}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">
+                Avg: {formatCurrencyGBP(item.blAvgPrice)}
+              </span>
+              {(() => {
+                const f = formatFreshness(item.blFetchedAt);
+                return <span className={cn('text-[10px]', f.className)}>{f.label}</span>;
+              })()}
             </div>
           </>
         )}
       </TableCell>
 
-      {/* COG % */}
+      {/* Margin % */}
       <TableCell>
         <div
           className={cn(
             'font-mono font-bold',
-            cogValue != null && cogValue <= maxCog
+            marginValue != null && marginValue >= 20
               ? 'text-green-600'
-              : cogValue != null && cogValue > 70
-                ? 'text-red-600'
-                : 'text-muted-foreground'
+              : marginValue != null && marginValue >= 10
+                ? 'text-amber-600'
+                : marginValue != null && marginValue < 10
+                  ? 'text-red-600'
+                  : 'text-muted-foreground'
           )}
         >
-          {cogValue != null ? `${cogValue.toFixed(1)}%` : '—'}
+          {marginValue != null ? `${marginValue.toFixed(1)}%` : '—'}
         </div>
-        {mode === 'bricklink' && item.minBlPriceOverride != null && (
-          <div className="text-xs text-amber-600" title="Override active">
-            Override
+        {mode === 'bricklink' && item.profitAbsolute != null && (
+          <div className="text-xs text-muted-foreground">
+            {formatCurrencyGBP(item.profitAbsolute)}
           </div>
         )}
       </TableCell>

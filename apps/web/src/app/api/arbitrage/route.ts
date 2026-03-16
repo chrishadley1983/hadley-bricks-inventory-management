@@ -18,8 +18,8 @@ export const maxDuration = 30;
 // ============================================================================
 
 const FilterParamsSchema = z.object({
-  minMargin: z.coerce.number().min(0).max(100).optional().default(30),
-  maxCog: z.coerce.number().min(0).max(100).optional().default(50),
+  minMargin: z.coerce.number().min(0).max(100).optional().default(0),
+  maxCog: z.coerce.number().min(0).max(100).optional().default(100),
   show: z
     .enum([
       'all',
@@ -55,6 +55,21 @@ const FilterParamsSchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   pageSize: z.coerce.number().int().min(10).max(500).optional().default(100),
+  // Advanced column filters
+  amazonPriceMin: z.coerce.number().min(0).optional(),
+  amazonPriceMax: z.coerce.number().min(0).optional(),
+  blPriceMin: z.coerce.number().min(0).optional(),
+  blPriceMax: z.coerce.number().min(0).optional(),
+  marginMin: z.coerce.number().optional(),
+  marginMax: z.coerce.number().optional(),
+  salesRankMin: z.coerce.number().int().min(0).optional(),
+  salesRankMax: z.coerce.number().int().min(0).optional(),
+  blLotsMin: z.coerce.number().int().min(0).optional(),
+  blLotsMax: z.coerce.number().int().min(0).optional(),
+  qtyMin: z.coerce.number().int().min(0).optional(),
+  qtyMax: z.coerce.number().int().min(0).optional(),
+  source: z.enum(['all', 'inventory', 'seeded']).optional(),
+  maxDataAgeDays: z.coerce.number().int().min(1).optional(),
 });
 
 // ============================================================================
@@ -77,23 +92,16 @@ export async function GET(request: NextRequest) {
     // Parse query parameters - filter out null values so defaults apply
     const { searchParams } = new URL(request.url);
     const params: Record<string, string> = {};
-    const minMargin = searchParams.get('minMargin');
-    const maxCog = searchParams.get('maxCog');
-    const show = searchParams.get('show');
-    const sortField = searchParams.get('sortField');
-    const sortDirection = searchParams.get('sortDirection');
-    const search = searchParams.get('search');
-    const page = searchParams.get('page');
-    const pageSize = searchParams.get('pageSize');
-
-    if (minMargin) params.minMargin = minMargin;
-    if (maxCog) params.maxCog = maxCog;
-    if (show) params.show = show;
-    if (sortField) params.sortField = sortField;
-    if (sortDirection) params.sortDirection = sortDirection;
-    if (search) params.search = search;
-    if (page) params.page = page;
-    if (pageSize) params.pageSize = pageSize;
+    const paramNames = [
+      'minMargin', 'maxCog', 'show', 'sortField', 'sortDirection', 'search',
+      'page', 'pageSize', 'amazonPriceMin', 'amazonPriceMax', 'blPriceMin',
+      'blPriceMax', 'marginMin', 'marginMax', 'salesRankMin', 'salesRankMax',
+      'blLotsMin', 'blLotsMax', 'qtyMin', 'qtyMax', 'source', 'maxDataAgeDays',
+    ];
+    for (const name of paramNames) {
+      const value = searchParams.get(name);
+      if (value) params[name] = value;
+    }
 
     const parsed = FilterParamsSchema.safeParse(params);
     if (!parsed.success) {
