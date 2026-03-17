@@ -243,6 +243,18 @@ gcloud scheduler jobs create http cost-allocation \
   --time-zone="Europe/London" \
   --attempt-deadline="300s" \
   --description="Daily proportional cost allocation across purchase items"
+
+# eBay Listing Refresh - weekly on Sunday at 7pm UK time
+# Ends stale listings (90+ days) and recreates with engagement-based pricing
+gcloud scheduler jobs create http ebay-listing-refresh \
+  --location=europe-west2 \
+  --schedule="0 19 * * 0" \
+  --uri="$APP_URL/api/cron/ebay-listing-refresh" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="300s" \
+  --description="Weekly refresh of stale eBay listings with smart pricing"
 ```
 
 #### Resumable Jobs (via Cloud Function Driver)
@@ -319,6 +331,9 @@ gcloud scheduler jobs run vinted-collections --location=europe-west2
 
 # eBay Promotions
 gcloud scheduler jobs run ebay-promotions --location=europe-west2
+
+# eBay Listing Refresh
+gcloud scheduler jobs run ebay-listing-refresh --location=europe-west2
 
 # Monitoring jobs
 gcloud scheduler jobs run vercel-usage-report --location=europe-west2

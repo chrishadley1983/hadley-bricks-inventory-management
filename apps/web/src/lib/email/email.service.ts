@@ -638,6 +638,147 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
 
     await this.send({ to: userEmail, subject, html });
   }
+  /**
+   * Send listing refresh report email
+   */
+  async sendListingRefreshReport(params: ListingRefreshReportParams): Promise<void> {
+    const { userEmail, items, failedItems } = params;
+
+    const refreshed = items.filter((i) => !i.failed);
+    const reductions = refreshed.filter((i) => i.newPrice < i.oldPrice);
+    const totalValueChange = refreshed.reduce((sum, i) => sum + (i.newPrice - i.oldPrice), 0);
+
+    const itemRows = items
+      .map((item) => {
+        const isReduced = !item.failed && item.newPrice < item.oldPrice;
+        const isFailed = item.failed;
+        const bgColor = isFailed ? '#FEE2E2' : isReduced ? '#FFF7ED' : '#F0FDF4';
+        const reductionPct =
+          !isFailed && item.oldPrice > 0
+            ? (((item.oldPrice - item.newPrice) / item.oldPrice) * 100).toFixed(1)
+            : '-';
+        const newListingLink = item.newListingUrl
+          ? `<a href="${item.newListingUrl}" style="color:#2563eb;">View</a>`
+          : '-';
+
+        return `<tr style="background:${bgColor};">
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${item.setNumber || '-'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${(item.itemName || '').slice(0, 50)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${item.oldPrice.toFixed(2)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${isFailed ? 'FAILED' : '£' + item.newPrice.toFixed(2)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${reductionPct}%</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${item.tier || '-'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${item.views ?? '-'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${item.watchers}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${item.ageDays}d</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${newListingLink}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    const failedSection =
+      failedItems.length > 0
+        ? `
+      <h3 style="color:#DC2626;margin-top:24px;">Failed Items (${failedItems.length})</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#FEE2E2;">
+            <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
+            <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Phase</th>
+            <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${failedItems
+            .map(
+              (f) => `<tr>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.title}</td>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.phase}</td>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.errorMessage}</td>
+          </tr>`
+            )
+            .join('\n')}
+        </tbody>
+      </table>`
+        : '';
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;">
+        <h2 style="color:#333;margin-bottom:4px;">EBAY LISTING REFRESH REPORT</h2>
+        <p style="color:#666;margin-top:0;">Sunday automated refresh — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+
+        <div style="display:flex;gap:16px;margin:16px 0;">
+          <div style="background:#F0FDF4;padding:12px 16px;border-radius:8px;flex:1;">
+            <div style="font-size:24px;font-weight:700;color:#16A34A;">${refreshed.length}</div>
+            <div style="font-size:12px;color:#666;">Refreshed</div>
+          </div>
+          <div style="background:#FFF7ED;padding:12px 16px;border-radius:8px;flex:1;">
+            <div style="font-size:24px;font-weight:700;color:#EA580C;">${reductions.length}</div>
+            <div style="font-size:12px;color:#666;">Price Reductions</div>
+          </div>
+          <div style="background:#EFF6FF;padding:12px 16px;border-radius:8px;flex:1;">
+            <div style="font-size:24px;font-weight:700;color:#2563EB;">£${Math.abs(totalValueChange).toFixed(2)}</div>
+            <div style="font-size:12px;color:#666;">Total ${totalValueChange <= 0 ? 'Reduction' : 'Change'}</div>
+          </div>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+          <thead>
+            <tr style="background:#F3F4F6;">
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Set #</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Old Price</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">New Price</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Reduction</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Tier</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Views</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Watchers</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Age</th>
+              <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        ${failedSection}
+
+        <p style="color:#999;font-size:11px;margin-top:24px;">
+          Pricing: HOT (0%) → WARM (5%) → COOL (10%) → COLD (15%) + 5% for Used. Rounded up to nearest .99. Floor = breakeven after eBay fees.
+        </p>
+      </div>
+    `;
+
+    const subject = `eBay Refresh: ${refreshed.length} listings refreshed${reductions.length > 0 ? `, ${reductions.length} price reductions (£${Math.abs(totalValueChange).toFixed(2)})` : ''}`;
+
+    await this.send({ to: userEmail, subject, html });
+  }
+}
+
+export interface ListingRefreshReportItem {
+  setNumber: string | null;
+  itemName: string | null;
+  oldPrice: number;
+  newPrice: number;
+  tier: string;
+  views: number | null;
+  watchers: number;
+  ageDays: number;
+  newListingUrl: string | null;
+  failed: boolean;
+}
+
+export interface ListingRefreshFailedItem {
+  title: string;
+  phase: string;
+  errorMessage: string;
+}
+
+export interface ListingRefreshReportParams {
+  userEmail: string;
+  items: ListingRefreshReportItem[];
+  failedItems: ListingRefreshFailedItem[];
 }
 
 export const emailService = new EmailService();
