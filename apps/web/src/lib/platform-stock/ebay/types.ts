@@ -423,6 +423,11 @@ export interface AddFixedPriceItemRequest {
   // Item specifics
   itemSpecifics?: Array<{ name: string; value: string }>;
 
+  // Product identifiers (EAN, UPC, ISBN)
+  ean?: string;
+  upc?: string;
+  isbn?: string;
+
   // Location
   location?: string;
   country?: string;

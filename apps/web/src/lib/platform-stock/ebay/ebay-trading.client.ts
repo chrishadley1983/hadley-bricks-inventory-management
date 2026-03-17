@@ -847,6 +847,15 @@ export class EbayTradingClient {
       itemNode.DispatchTimeMax = String(item.dispatchTimeMax);
     }
 
+    // Product identifiers (EAN, UPC, ISBN)
+    if (item.ean || item.upc || item.isbn) {
+      const pld: Record<string, unknown> = {};
+      if (item.ean) pld.EAN = item.ean;
+      if (item.upc) pld.UPC = item.upc;
+      if (item.isbn) pld.ISBN = item.isbn;
+      itemNode.ProductListingDetails = pld;
+    }
+
     // Item specifics
     if (item.itemSpecifics && item.itemSpecifics.length > 0) {
       itemNode.ItemSpecifics = {

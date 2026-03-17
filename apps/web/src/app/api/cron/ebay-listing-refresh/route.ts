@@ -7,8 +7,9 @@
  *
  * Query params:
  *   ?report=true  — dry-run: returns eligible listings with calculated prices, no changes
+ *   ?limit=N      — max listings to process per run (default: 20)
  *
- * Recommended schedule: Sunday 7 PM UK time (Europe/London)
+ * Recommended schedule: Daily at 7 PM UK time (Europe/London)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const isReport = searchParams.get('report') === 'true';
+    const batchLimit = parseInt(searchParams.get('limit') || '20', 10);
 
     const supabase = createServiceRoleClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,10 +194,12 @@ export async function POST(request: NextRequest) {
     const enrichedWithViews = await service.enrichListingsWithViews(eligible);
     const enrichedFull = await service.enrichWithPendingOffers(enrichedWithViews);
 
-    // 3. Filter out items with pending offers
-    const filtered = enrichedFull.filter((l) => l.pendingOfferCount === 0);
-    const skippedCount = enrichedFull.length - filtered.length;
-    console.log(`[ListingRefresh] ${filtered.length} to refresh, ${skippedCount} skipped (pending offers)`);
+    // 3. Filter out items with pending offers, apply batch limit
+    const withoutOffers = enrichedFull.filter((l) => l.pendingOfferCount === 0);
+    const skippedCount = enrichedFull.length - withoutOffers.length;
+    const filtered = withoutOffers.slice(0, batchLimit);
+    const deferredCount = withoutOffers.length - filtered.length;
+    console.log(`[ListingRefresh] ${filtered.length} to refresh (limit ${batchLimit}), ${skippedCount} skipped (pending offers), ${deferredCount} deferred to next run`);
 
     if (filtered.length === 0) {
       await execution.complete({ message: 'All eligible listings have pending offers', refreshed: 0, skipped: skippedCount });
