@@ -619,6 +619,7 @@ export class EbayTradingClient {
       quantityAvailable,
       galleryUrl: item.PictureDetails?.GalleryURL || null,
       viewItemUrl: listingDetails.ViewItemURL || null,
+      hasVariations: !!item.Variations,
     };
 
     return {
