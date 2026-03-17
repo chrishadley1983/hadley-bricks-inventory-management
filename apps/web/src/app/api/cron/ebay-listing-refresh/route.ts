@@ -226,25 +226,44 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    // Build a lookup map for O(1) matching
+    const enrichedMap = new Map<string, EnrichedListing>();
+    for (const el of enrichedListings) {
+      enrichedMap.set(el.itemId, el);
+    }
+    console.log(`[ListingRefresh] Built enrichedMap with ${enrichedMap.size} entries, sample key: "${enrichedListings[0]?.itemId}"`);
+
     // 6. Create refresh job (immediate mode, no review)
     console.log('[ListingRefresh] Creating refresh job');
     const job = await service.createRefreshJob(filtered, false);
 
     // 7. Set modified_price on each item
-    const { data: jobItems } = await supabase
+    const { data: jobItems, error: jobItemsErr } = await supabase
       .from('ebay_listing_refresh_items')
       .select('id, original_item_id')
       .eq('refresh_id', job.id);
 
-    if (jobItems) {
+    let pricesSet = 0;
+    if (jobItemsErr) {
+      console.error('[ListingRefresh] jobItems query error:', jobItemsErr.message);
+    } else if (jobItems && jobItems.length > 0) {
+      console.log(`[ListingRefresh] Got ${jobItems.length} job items, sample original_item_id: "${jobItems[0].original_item_id}", map has it: ${enrichedMap.has(jobItems[0].original_item_id)}`);
       for (const jobItem of jobItems) {
-        const enriched = enrichedListings.find((l) => l.itemId === jobItem.original_item_id);
-        if (enriched && enriched.pricing.newPrice !== enriched.pricing.oldPrice) {
+        const enriched = enrichedMap.get(jobItem.original_item_id);
+        if (!enriched) {
+          console.warn(`[ListingRefresh] No match for "${jobItem.original_item_id}"`);
+          continue;
+        }
+        if (enriched.pricing.newPrice !== enriched.pricing.oldPrice) {
           await service.updateItemBeforeRefresh(jobItem.id, {
             price: enriched.pricing.newPrice,
           });
+          pricesSet++;
         }
       }
+      console.log(`[ListingRefresh] Set modified_price on ${pricesSet} of ${jobItems.length} items`);
+    } else {
+      console.error('[ListingRefresh] jobItems query returned empty');
     }
 
     // 8. Execute refresh (Fetch → End → Create)
@@ -257,14 +276,15 @@ export async function POST(request: NextRequest) {
     const reportItems: ListingRefreshReportItem[] = [];
     const failedItems: ListingRefreshFailedItem[] = [];
 
+    let invUpdated = 0;
     if (updatedJob?.items) {
       for (const item of updatedJob.items) {
-        const enriched = enrichedListings.find((l) => l.itemId === item.originalItemId);
+        const enriched = enrichedMap.get(item.originalItemId);
         const inv = costMap.get(item.originalItemId);
 
         if (item.status === 'created' && item.newItemId && enriched?.inventoryItemId) {
           // Update inventory_items with new listing info
-          await supabase
+          const { error: invErr } = await supabase
             .from('inventory_items')
             .update({
               ebay_listing_id: item.newItemId,
@@ -273,6 +293,16 @@ export async function POST(request: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', enriched.inventoryItemId);
+
+          if (invErr) {
+            console.error(`[ListingRefresh] Failed to update inventory for ${item.originalItemId}:`, invErr.message);
+          } else {
+            invUpdated++;
+          }
+        } else if (item.status === 'created' && !enriched) {
+          console.warn(`[ListingRefresh] No enriched match for created item ${item.originalItemId}`);
+        } else if (item.status === 'created' && !enriched?.inventoryItemId) {
+          console.warn(`[ListingRefresh] No inventory record for created item ${item.originalItemId}`);
         }
 
         reportItems.push({
@@ -307,13 +337,15 @@ export async function POST(request: NextRequest) {
       failedItems,
     });
 
+    console.log(`[ListingRefresh] Inventory updated: ${invUpdated}, prices set: ${pricesSet}`);
+
     const summary = {
       refreshed: result.createdCount,
       failed: result.failedCount,
       skipped: skippedCount,
-      priceReductions: enrichedListings.filter(
-        (l) => l.pricing.newPrice < l.pricing.oldPrice
-      ).length,
+      priceReductions: pricesSet,
+      inventoryUpdated: invUpdated,
+      deferred: deferredCount,
     };
 
     console.log('[ListingRefresh] Complete:', summary);
