@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // CI runs lint separately — skip during build to avoid duplicate failures
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Exclude large packages from webpack bundling (resolve at runtime)
   serverExternalPackages: ['@tensorflow/tfjs'],
   // External image domains
