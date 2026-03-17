@@ -37,10 +37,11 @@ export async function POST(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dry') === 'true';
+    const jobId = searchParams.get('job') || REFRESH_JOB_ID;
 
     const supabase = createServiceRoleClient();
 
-    // Get all 64+1 created items with engagement data and inventory cost
+    // Get created items with engagement data and inventory cost
     const { data: items, error } = await supabase
       .from('ebay_listing_refresh_items')
       .select(`
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
         original_views,
         original_listing_start_date
       `)
-      .eq('refresh_id', REFRESH_JOB_ID)
+      .eq('refresh_id', jobId)
       .eq('status', 'created')
       .not('new_item_id', 'is', null);
 
