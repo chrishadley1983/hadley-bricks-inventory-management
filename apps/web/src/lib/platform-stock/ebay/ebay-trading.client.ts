@@ -456,6 +456,7 @@ export class EbayTradingClient {
             'X-EBAY-API-IAF-TOKEN': this.accessToken,
           },
           body: requestXml,
+          signal: AbortSignal.timeout(30000),
         });
 
         if (!response.ok) {
@@ -1020,6 +1021,7 @@ export class EbayTradingClient {
             'X-EBAY-API-IAF-TOKEN': this.accessToken,
           },
           body: requestXml,
+          signal: AbortSignal.timeout(30000),
         });
 
         if (!response.ok) {

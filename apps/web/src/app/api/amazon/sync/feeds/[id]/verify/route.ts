@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(
       {
         error: 'Failed to verify feed prices',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        details: 'Internal server error',
       },
       { status: 500 }
     );

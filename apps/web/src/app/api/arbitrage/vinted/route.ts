@@ -334,7 +334,7 @@ export async function GET(request: NextRequest) {
     console.error('Vinted arbitrage error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

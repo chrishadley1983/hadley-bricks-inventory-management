@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
           message: `Exported ${result.invoicesCreated} invoices and ${result.purchasesCreated} purchases to QuickFile`,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message = 'Internal server error';
 
         // Handle specific error types
         if (message.includes('timed out')) {
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('[POST /api/reports/mtd-export] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

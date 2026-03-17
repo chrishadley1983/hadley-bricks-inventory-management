@@ -44,7 +44,7 @@ export async function POST(
   } catch (error) {
     console.error('[POST /api/arbitrage/vinted/automation/regenerate-schedule] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to regenerate schedule' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/repricing] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -78,7 +78,7 @@ export async function POST() {
   } catch (error) {
     console.error('[POST /api/repricing] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

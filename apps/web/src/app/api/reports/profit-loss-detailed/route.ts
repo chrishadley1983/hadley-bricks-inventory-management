@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: report });
   } catch (error) {
     console.error('[GET /api/reports/profit-loss-detailed] Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = 'Internal server error';
     return NextResponse.json(
       { error: 'Failed to generate profit/loss report', details: message },
       { status: 500 }

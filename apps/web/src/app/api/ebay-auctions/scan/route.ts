@@ -123,7 +123,7 @@ export async function POST() {
       durationMs: result.durationMs,
     });
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorMsg = 'Internal server error';
     console.error('[ManualScan] Error:', error);
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }

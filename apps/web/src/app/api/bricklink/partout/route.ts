@@ -89,7 +89,7 @@ export async function GET(
   } catch (error) {
     console.error('[GET /api/bricklink/partout] Error:', error);
 
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = 'Internal server error';
 
     // Check for specific BrickLink API errors
     if (errorMessage.includes('404') || errorMessage.includes('not found')) {

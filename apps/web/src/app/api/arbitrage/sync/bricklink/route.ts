@@ -77,7 +77,7 @@ export async function POST() {
           encoder.encode(
             `data: ${JSON.stringify({
               type: 'error',
-              message: error instanceof Error ? error.message : 'Sync failed',
+              message: 'Internal server error',
             })}\n\n`
           )
         );

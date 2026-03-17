@@ -57,7 +57,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
       );
     } catch (error) {
       console.error('[GET /api/minifigs/sync/research/stream] Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+      const errorMessage = 'Internal server error';
       await writer.write(encoder.encode(formatSSE({ type: 'error', error: errorMessage })));
     } finally {
       await writer.close();

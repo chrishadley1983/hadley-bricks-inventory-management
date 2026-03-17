@@ -40,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to check signing keys',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -91,7 +91,7 @@ export async function POST() {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to regenerate signing keys',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -122,7 +122,7 @@ export async function DELETE() {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to delete signing keys',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

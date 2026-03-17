@@ -113,7 +113,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = 'Internal server error';
 
     if (errorMessage.includes('Cannot delete default')) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });

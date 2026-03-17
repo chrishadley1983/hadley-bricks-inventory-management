@@ -348,7 +348,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to fetch transactions',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

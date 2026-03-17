@@ -49,7 +49,7 @@ export async function POST() {
     console.error('[POST /api/ebay-stock/import] Error:', error);
 
     // Check for specific error types
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = 'Internal server error';
 
     if (errorMessage.includes('not connected')) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/ebay-stock/import] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

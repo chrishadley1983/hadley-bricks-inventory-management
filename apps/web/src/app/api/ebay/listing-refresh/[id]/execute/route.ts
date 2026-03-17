@@ -50,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           const result = await service.executeRefresh(id, onProgress);
           sendEvent('complete', result);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
+          const message = 'Internal server error';
           sendEvent('error', message);
         }
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (error) {
     console.error('[POST /api/ebay/listing-refresh/[id]/execute] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

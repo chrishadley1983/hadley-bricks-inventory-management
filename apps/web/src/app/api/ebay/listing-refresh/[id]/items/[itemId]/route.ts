@@ -67,7 +67,7 @@ export async function PATCH(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[PATCH /api/ebay/listing-refresh/[id]/items/[itemId]] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

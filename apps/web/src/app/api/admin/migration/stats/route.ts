@@ -59,7 +59,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[GET /api/admin/migration/stats] Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: 'Failed to get stats', details: message }, { status: 500 });
   }
 }

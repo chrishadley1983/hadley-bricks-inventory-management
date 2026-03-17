@@ -33,7 +33,7 @@ export async function GET() {
     return NextResponse.json({ data: report }, { status: 200 });
   } catch (error) {
     console.error('[GET /api/ebay/category-review/audit] Error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to run category audit';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

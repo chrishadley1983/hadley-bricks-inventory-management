@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
             sendEvent('error', result);
           }
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
+          const message = 'Internal server error';
           sendEvent('error', message);
         }
 
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/ebay/listing/confirm] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

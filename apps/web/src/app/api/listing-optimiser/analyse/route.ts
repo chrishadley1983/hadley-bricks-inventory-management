@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         console.error(`[POST /api/listing-optimiser/analyse] Error for ${itemId}:`, error);
         errors.push({
           itemId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: 'Internal server error',
         });
       }
     }
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/listing-optimiser/analyse] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -43,7 +43,7 @@ export async function GET(_request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/negotiation/config] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -121,7 +121,7 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('[PUT /api/negotiation/config] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

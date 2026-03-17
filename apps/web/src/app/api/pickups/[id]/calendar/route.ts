@@ -102,7 +102,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     console.error('[POST /api/pickups/[id]/calendar] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to sync to calendar' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -162,7 +162,7 @@ export async function DELETE(
   } catch (error) {
     console.error('[DELETE /api/pickups/[id]/calendar] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to remove from calendar' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

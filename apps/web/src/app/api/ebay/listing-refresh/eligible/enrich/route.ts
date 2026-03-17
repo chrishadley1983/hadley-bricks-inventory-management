@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
           console.error('[POST /api/ebay/listing-refresh/eligible/enrich] Error:', error);
           sendEvent({
             type: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: 'Internal server error',
           });
         } finally {
           controller.close();
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/ebay/listing-refresh/eligible/enrich] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

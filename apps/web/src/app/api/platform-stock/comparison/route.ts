@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/platform-stock/comparison] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

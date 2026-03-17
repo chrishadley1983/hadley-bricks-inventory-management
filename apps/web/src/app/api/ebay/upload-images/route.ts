@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
         results.push({
           id: image.id,
           success: false,
-          error: error instanceof Error ? error.message : 'Upload failed',
+          error: 'Internal server error',
         });
       }
     }
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/ebay/upload-images] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

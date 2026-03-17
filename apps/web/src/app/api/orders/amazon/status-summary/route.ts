@@ -68,7 +68,7 @@ export async function GET() {
   } catch (error) {
     console.error('[GET /api/orders/amazon/status-summary] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
