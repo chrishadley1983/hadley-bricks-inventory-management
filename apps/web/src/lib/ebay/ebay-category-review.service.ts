@@ -312,11 +312,11 @@ export class EbayCategoryReviewService {
   /**
    * Generic paginated select that respects Supabase 1,000 row limit.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async paginatedSelect(
     table: string,
     columns: string,
     filters: Record<string, string>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRows: any[] = [];
