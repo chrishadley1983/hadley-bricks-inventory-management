@@ -3,6 +3,7 @@
 import { Eye, Heart, ShoppingCart, Package, Calendar, Tag, TrendingUp } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
 import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
 
 interface EngagementPopoverProps {
@@ -51,16 +52,6 @@ function getEngagementBadgeVariant(level: 'high' | 'medium' | 'low') {
     case 'low':
       return 'outline'; // muted
   }
-}
-
-/**
- * Format currency for display
- */
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: currency || 'GBP',
-  }).format(amount);
 }
 
 /**

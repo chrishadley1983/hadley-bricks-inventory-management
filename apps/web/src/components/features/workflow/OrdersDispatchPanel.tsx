@@ -17,7 +17,7 @@ import {
   ExternalLink,
   ClipboardList,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { PickingListDialog } from './PickingListDialog';
 import type { PickingListPlatform } from '@/hooks/use-picking-list';
 
@@ -73,13 +73,6 @@ function formatTimeRemaining(dispatchBy: string, isOverdue: boolean): string {
     return `${diffHours}h ${diffMins}m`;
   }
   return `${diffMins}m`;
-}
-
-function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: currency || 'GBP',
-  }).format(amount);
 }
 
 const platformLabels: Record<string, string> = {

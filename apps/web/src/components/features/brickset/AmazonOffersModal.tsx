@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatCurrency } from '@/lib/utils';
 import type { AmazonOfferData } from './SetDetailsCard';
 
 interface AmazonOffersModalProps {
@@ -14,14 +15,6 @@ interface AmazonOffersModalProps {
   offers: AmazonOfferData[];
   isOpen: boolean;
   onClose: () => void;
-}
-
-function formatCurrency(value: number | null, currency: string = 'GBP'): string {
-  if (value === null) return '—';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(value);
 }
 
 function getConditionBadge(condition: string, subCondition: string) {

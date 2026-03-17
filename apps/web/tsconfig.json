@@ -30,12 +30,6 @@
       ],
       "@hadley-bricks/database/*": [
         "../../packages/database/src/*"
-      ],
-      "@hadley-bricks/shared": [
-        "../../packages/shared/src"
-      ],
-      "@hadley-bricks/shared/*": [
-        "../../packages/shared/src/*"
       ]
     },
     "target": "ES2017"

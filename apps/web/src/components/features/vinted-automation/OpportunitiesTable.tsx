@@ -34,7 +34,7 @@ import {
 } from '@/hooks/use-vinted-automation';
 import { ExternalLink, ShoppingCart, X, AlertCircle, TrendingUp } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 function getCogBadge(cogPercent: number | null) {
   if (cogPercent === null) return <Badge variant="outline">No data</Badge>;
@@ -49,11 +49,6 @@ function getCogBadge(cogPercent: number | null) {
     return <Badge className="bg-yellow-500">{cogPercent.toFixed(0)}% Marginal</Badge>;
   }
   return <Badge className="bg-red-500">{cogPercent.toFixed(0)}%</Badge>;
-}
-
-function formatCurrency(value: number | null): string {
-  if (value === null) return '-';
-  return `£${value.toFixed(2)}`;
 }
 
 function getStatusBadge(status: Opportunity['status']) {

@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatCurrency } from '@/lib/utils';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -360,10 +361,6 @@ function getAmazonReasonLabel(reason: string): string {
     picklist_mismatch: 'Pick list mismatch',
   };
   return labels[reason] || reason;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
 }
 
 function formatDate(dateString: string): string {

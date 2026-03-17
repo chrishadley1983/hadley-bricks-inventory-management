@@ -5,8 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { withServiceAuth, getSystemUserId } from '@/lib/middleware/service-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+
+const purchaseIdSchema = z.string().uuid('Purchase ID must be a valid UUID');
 
 /**
  * POST /api/service/purchases/[id]/photos
@@ -19,10 +22,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return withServiceAuth(request, ['write'], async (_keyInfo) => {
     try {
       const { id: purchaseId } = await params;
-
-      if (!purchaseId) {
-        return NextResponse.json({ error: 'Purchase ID is required' }, { status: 400 });
+      const idResult = purchaseIdSchema.safeParse(purchaseId);
+      if (!idResult.success) {
+        return NextResponse.json(
+          { error: 'Invalid request', details: idResult.error.flatten().formErrors },
+          { status: 400 }
+        );
       }
+      const validPurchaseId = idResult.data;
 
       const supabase = createServiceRoleClient();
       const userId = await getSystemUserId();
@@ -31,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const { data: purchase, error: purchaseError } = await supabase
         .from('purchases')
         .select('id')
-        .eq('id', purchaseId)
+        .eq('id', validPurchaseId)
         .single();
 
       if (purchaseError || !purchase) {
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           const buffer = Buffer.from(await file.arrayBuffer());
           const timestamp = Date.now();
           const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const filename = `${purchaseId}/${timestamp}-${safeName}`;
+          const filename = `${validPurchaseId}/${timestamp}-${safeName}`;
 
           const { data, error } = await supabase.storage
             .from('purchase-photos')
@@ -77,7 +84,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           // Link photo to purchase in database
           await supabase.from('purchase_images').insert({
             user_id: userId,
-            purchase_id: purchaseId,
+            purchase_id: validPurchaseId,
             storage_path: data.path,
             public_url: urlData.publicUrl,
             filename: file.name,

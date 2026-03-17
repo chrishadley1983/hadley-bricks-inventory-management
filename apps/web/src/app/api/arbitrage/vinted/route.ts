@@ -5,10 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { AmazonPricingClient } from '@/lib/amazon/amazon-pricing.client';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import type { AmazonCredentials } from '@/lib/amazon/types';
+
+const vintedPostSchema = z.object({
+  html: z.string().min(1, 'HTML content is required'),
+  cogThreshold: z.number().positive().optional().default(40),
+});
 
 const VINTED_SHIPPING_COST = 2.3;
 const DEFAULT_COG_THRESHOLD = 40;
@@ -353,11 +359,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { html, cogThreshold = DEFAULT_COG_THRESHOLD } = body;
-
-  if (!html) {
-    return NextResponse.json({ error: 'Missing html in request body' }, { status: 400 });
+  const parsed = vintedPostSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+      { status: 400 }
+    );
   }
+  const { html, cogThreshold } = parsed.data;
 
   // Parse listings from provided HTML
   const listings = parseVintedListings(html);

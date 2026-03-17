@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Check, X, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/utils';
 
 interface BundleItem {
   set_number: string;
@@ -36,10 +37,6 @@ interface BundleItem {
 }
 
 const DEFAULT_BUNDLE_ITEM: BundleItem = { set_number: '', condition: 'New' };
-
-function formatCurrency(value: number): string {
-  return `£${value.toFixed(2)}`;
-}
 
 export function ReviewQueueTable() {
   const [page, setPage] = useState(1);

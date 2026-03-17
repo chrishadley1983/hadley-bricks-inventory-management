@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Check, X, ExternalLink, ShoppingCart, Loader2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 import type { RemovalWithSyncItem } from '@/lib/api/minifig-sync';
 
 interface RemovalCardProps {
@@ -25,13 +26,6 @@ interface RemovalCardProps {
   onDismiss: (id: string) => void;
   isApproving?: boolean;
   isDismissing?: boolean;
-}
-
-function formatCurrency(value: number | string | null | undefined): string {
-  if (value == null) return '-';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '-';
-  return `£${num.toFixed(2)}`;
 }
 
 function formatDate(dateStr: string | null | undefined): string {

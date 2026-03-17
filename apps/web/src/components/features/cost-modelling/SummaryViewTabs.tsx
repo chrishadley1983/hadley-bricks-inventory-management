@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { CostModelScenarioFormData, CalculatedResults } from '@/types/cost-modelling';
-import { formatCurrency } from '@/lib/services/cost-calculations';
+import { formatCurrency } from '@/lib/utils';
 
 interface SummaryViewTabsProps {
   calculations: CalculatedResults;

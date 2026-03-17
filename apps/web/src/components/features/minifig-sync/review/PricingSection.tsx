@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Check, Pencil } from 'lucide-react';
-import { formatCurrency } from './utils';
+import { formatCurrency } from '@/lib/utils';
 import type { MinifigSyncItem } from '@/lib/minifig-sync/types';
 
 interface PricingSectionProps {

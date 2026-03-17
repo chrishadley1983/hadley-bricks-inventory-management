@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Search, X, Loader2, Plus, Calendar, Coins } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,16 +34,6 @@ function formatDate(dateString: string): string {
   } catch {
     return dateString;
   }
-}
-
-/**
- * Format currency for display
- */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
 }
 
 /**

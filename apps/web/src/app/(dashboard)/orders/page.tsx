@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { formatCurrency } from '@/lib/utils';
 import type { PlatformOrder, OrderStatus } from '@hadley-bricks/database';
 import { HeaderSkeleton } from '@/components/ui/skeletons';
 
@@ -430,14 +431,6 @@ function getStatusColor(status: string | null): string {
     return 'bg-red-100 text-red-800';
   }
   return 'bg-gray-100 text-gray-800';
-}
-
-function formatCurrency(amount: number | null, currency?: string | null): string {
-  if (amount === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: currency || 'GBP',
-  }).format(amount);
 }
 
 type TimeframeOption = 'all' | '7' | '30' | '90';

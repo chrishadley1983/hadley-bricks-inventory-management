@@ -110,9 +110,5 @@ export function getQualityCheck(item: MinifigSyncItem): QualityCheckResult {
   return { passed: reasons.length === 0, reasons };
 }
 
-export function formatCurrency(value: number | string | null | undefined): string {
-  if (value == null) return '-';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '-';
-  return `£${num.toFixed(2)}`;
-}
+// Re-export from canonical location
+export { formatCurrency } from '@/lib/utils';

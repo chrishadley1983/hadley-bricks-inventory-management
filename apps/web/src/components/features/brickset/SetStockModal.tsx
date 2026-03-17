@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import type {
   InventoryStockItem,
   InventoryStockSummary,
@@ -21,14 +21,6 @@ interface SetStockModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'current' | 'sold';
-}
-
-function formatCurrency(value: number | null): string {
-  if (value === null) return '—';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(value);
 }
 
 function formatDate(date: string | null): string {

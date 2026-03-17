@@ -33,19 +33,13 @@ import { Badge } from '@/components/ui/badge';
 import { StatCard, BarChart, PieChart } from '@/components/charts';
 import { useInventoryAgingReport, useExportReport } from '@/hooks/use-reports';
 import { usePerfPage } from '@/hooks/use-perf';
+import { formatCurrency } from '@/lib/utils';
 import type { InventoryAgingReport } from '@/lib/services';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
   { ssr: false }
 );
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-}
 
 const BRACKET_COLORS: Record<string, string> = {
   '0-30 days': '#10b981',

@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { ArrowUpDown, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
 import type { MinifigSyncItem } from '@/lib/minifig-sync/types';
 
 const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
@@ -21,11 +22,6 @@ const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'des
 
 function formatStatus(status: string): string {
   return status.replace(/_/g, ' ');
-}
-
-function formatCurrency(value: number | null): string {
-  if (value == null) return '-';
-  return `\u00A3${value.toFixed(2)}`;
 }
 
 export const MINIFIG_COLUMN_DISPLAY_NAMES: Record<string, string> = {

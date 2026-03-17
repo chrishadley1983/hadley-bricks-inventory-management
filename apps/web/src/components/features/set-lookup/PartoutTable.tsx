@@ -7,6 +7,7 @@ import { ArrowUpDown, Database, ExternalLink } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
 import type { PartValue } from '@/types/partout';
 
 /**
@@ -22,19 +23,6 @@ export type PartoutCondition = 'new' | 'used';
 interface PartoutTableProps {
   parts: PartValue[];
   condition: PartoutCondition;
-}
-
-/**
- * Format a number as GBP currency
- */
-function formatCurrency(value: number | null): string {
-  if (value === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
 }
 
 /**

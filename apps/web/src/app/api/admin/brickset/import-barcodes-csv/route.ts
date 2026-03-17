@@ -8,9 +8,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+
+const importBarcodesSchema = z.object({
+  dryRun: z.boolean().optional().default(false),
+  limit: z.number().int().positive().max(50000).optional().default(10000),
+});
 
 interface CsvRow {
   setNumber: string;
@@ -51,10 +57,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse body for options
+    // Parse and validate body options
     const body = await request.json().catch(() => ({}));
-    const dryRun = body.dryRun === true;
-    const limit = Math.min(body.limit || 10000, 50000);
+    const parsed = importBarcodesSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { dryRun, limit } = parsed.data;
 
     // Read the CSV file
     const csvPath = path.join(process.cwd(), '..', '..', 'docs', 'Brickset-allSets.csv');

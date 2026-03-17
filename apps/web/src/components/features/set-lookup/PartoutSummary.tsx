@@ -2,6 +2,7 @@
 
 import { TrendingUp, TrendingDown, Package, Database, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/utils';
 import type { PartoutData } from '@/types/partout';
 
 /**
@@ -16,18 +17,6 @@ function getMissingPriceStats(data: PartoutData) {
 
 interface PartoutSummaryProps {
   data: PartoutData;
-}
-
-/**
- * Format a number as GBP currency
- */
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
 }
 
 /**

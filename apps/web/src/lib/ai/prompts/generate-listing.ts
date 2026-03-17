@@ -5,7 +5,7 @@
  * based on inventory item data, research data, and user preferences.
  */
 
-import type { DescriptionStyle } from '@/lib/ebay/listing-creation.types';
+import type { DescriptionStyle } from '@/types/ebay-listing';
 
 /**
  * System prompt for generating eBay listings

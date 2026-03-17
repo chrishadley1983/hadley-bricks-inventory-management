@@ -23,11 +23,8 @@ import { Input } from '@/components/ui/input';
 import { useMinifigDashboard } from '@/hooks/use-minifig-sync';
 import { useMinifigSyncStream } from '@/hooks/use-minifig-sync-stream';
 import { SyncProgressDialog } from './SyncProgressDialog';
+import { formatCurrency } from '@/lib/utils';
 import type { SyncOperation } from '@/types/minifig-sync-stream';
-
-function formatCurrency(value: number): string {
-  return `£${value.toFixed(2)}`;
-}
 
 interface StatCardProps {
   title: string;

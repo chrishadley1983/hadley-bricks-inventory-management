@@ -37,6 +37,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { formatCurrency } from '@/lib/utils';
 import type { PlatformOrder, OrderItem, OrderStatus } from '@hadley-bricks/database';
 
 const Header = dynamic(
@@ -136,14 +137,6 @@ function getStatusColor(status: string | null): string {
     return 'bg-red-100 text-red-800';
   }
   return 'bg-gray-100 text-gray-800';
-}
-
-function formatCurrency(amount: number | null, currency?: string | null): string {
-  if (amount === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: currency || 'GBP',
-  }).format(amount);
 }
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {

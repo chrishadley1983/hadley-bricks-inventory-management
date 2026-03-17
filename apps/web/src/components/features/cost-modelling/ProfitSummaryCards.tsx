@@ -16,9 +16,8 @@ import {
   Coins,
   PoundSterling,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/services/cost-calculations';
 import type { CalculatedResults, ComparisonDelta } from '@/types/cost-modelling';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ProfitSummaryCardsProps {
   calculations: CalculatedResults;

@@ -23,7 +23,8 @@ import type {
   PackageCostFormData,
   PackageType,
 } from '@/types/cost-modelling';
-import { formatCurrency, calculatePackageTotal } from '@/lib/services/cost-calculations';
+import { calculatePackageTotal } from '@/lib/services/cost-calculations';
+import { formatCurrency } from '@/lib/utils';
 import { DEFAULT_PACKAGE_COSTS } from '@/types/cost-modelling';
 
 interface PackageCostMatrixProps {

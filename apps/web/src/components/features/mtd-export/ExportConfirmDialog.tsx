@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 import { useMtdExportPreview } from '@/hooks/use-mtd-export';
 
 interface ExportConfirmDialogProps {
@@ -21,13 +22,6 @@ interface ExportConfirmDialogProps {
   endMonth: string;
   onConfirm: () => Promise<void>;
   isExporting?: boolean;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
 }
 
 function formatDate(dateString: string): string {

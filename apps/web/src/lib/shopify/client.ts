@@ -56,6 +56,7 @@ export class ShopifyClient {
     const res = await fetch(`https://${this.shopDomain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: AbortSignal.timeout(30000),
       body: new URLSearchParams({
         grant_type: 'client_credentials',
         client_id: this.clientId,
@@ -92,6 +93,7 @@ export class ShopifyClient {
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30000),
     });
 
     // Update bucket from rate limit header
@@ -248,6 +250,7 @@ export class ShopifyClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (response.status === 429) {

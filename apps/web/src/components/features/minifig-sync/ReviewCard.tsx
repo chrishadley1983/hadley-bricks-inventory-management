@@ -31,6 +31,7 @@ import {
   Pencil,
   Loader2,
 } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 import type { MinifigSyncItem } from '@/lib/minifig-sync/types';
 
 interface SourcedImage {
@@ -77,13 +78,6 @@ function getQualityCheck(item: MinifigSyncItem): QualityIssue {
   }
 
   return { passed: reasons.length === 0, reasons };
-}
-
-function formatCurrency(value: number | string | null | undefined): string {
-  if (value == null) return '-';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '-';
-  return `£${num.toFixed(2)}`;
 }
 
 function sanitizeHtml(html: string): string {

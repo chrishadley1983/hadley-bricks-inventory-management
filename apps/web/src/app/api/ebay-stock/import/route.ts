@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { EbayStockService } from '@/lib/platform-stock/ebay';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 
 /**
  * POST /api/ebay-stock/import
@@ -27,7 +28,7 @@ export async function POST() {
     }
 
     // 2. Check if there's already an import in progress
-    const service = new EbayStockService(supabase, user.id);
+    const service = new EbayStockService(supabase, user.id, new EbayAuthService());
     const latestImport = await service.getLatestImport();
 
     if (latestImport?.status === 'processing') {
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10', 10);
 
     // 3. Get import history
-    const service = new EbayStockService(supabase, user.id);
+    const service = new EbayStockService(supabase, user.id, new EbayAuthService());
     const imports = await service.getImportHistory(limit);
 
     // 4. Return response

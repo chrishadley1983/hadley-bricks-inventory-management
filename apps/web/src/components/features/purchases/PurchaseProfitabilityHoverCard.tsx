@@ -6,21 +6,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, BarChart3, Clock, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { fetchPurchaseProfitability } from '@/lib/api';
 import type { PurchaseProfitability } from '@/lib/services/purchase-profitability.service';
 
 interface PurchaseProfitabilityHoverCardProps {
   purchaseId: string;
   children: React.ReactNode;
-}
-
-function formatCurrency(amount: number | null): string {
-  if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
 }
 
 function formatPercent(value: number | null): string {

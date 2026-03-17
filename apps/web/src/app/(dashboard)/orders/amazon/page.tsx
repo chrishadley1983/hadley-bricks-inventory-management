@@ -54,6 +54,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AmazonAsinMatcherDialog } from '@/components/features/orders/AmazonAsinMatcherDialog';
+import { formatCurrency } from '@/lib/utils';
 import { LinkedInventoryPopover } from '@/components/features/orders/LinkedInventoryPopover';
 
 const Header = dynamic(
@@ -170,13 +171,6 @@ function getStatusColor(status: string): string {
     default:
       return 'bg-gray-100 text-gray-800';
   }
-}
-
-function formatCurrency(amount: number | null, currency = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount || 0);
 }
 
 export default function AmazonOrdersPage() {

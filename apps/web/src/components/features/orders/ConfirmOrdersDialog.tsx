@@ -44,6 +44,8 @@ import {
   MapPin,
   ClipboardList,
 } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { inventoryKeys } from '@/hooks/use-inventory';
 
 interface InventoryCandidate {
   id: string;
@@ -203,13 +205,6 @@ async function confirmEbayBulkOrders(
   return response.json();
 }
 
-function formatCurrency(amount: number, currency = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
-}
-
 function getEbayStatusColor(status: string): string {
   switch (status) {
     case 'Completed':
@@ -259,7 +254,7 @@ function EbayConfirmContent({ onOpenChange }: { onOpenChange: (open: boolean) =>
     onSuccess: (result, variables) => {
       // Always invalidate queries to refresh the list
       queryClient.invalidateQueries({ queryKey: ['ebay', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
 
       // Only close dialog and clear selection if all orders confirmed successfully
       if (result.success && result.data && result.data.confirmed > 0) {
@@ -714,7 +709,7 @@ function AmazonConfirmContent({ onOpenChange }: { onOpenChange: (open: boolean) 
     onSuccess: (result) => {
       if (result.success) {
         queryClient.invalidateQueries({ queryKey: ['orders'] });
-        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        queryClient.invalidateQueries({ queryKey: inventoryKeys.lists() });
         queryClient.invalidateQueries({ queryKey: ['platforms'] });
         setSelectedOrderIds(new Set());
         onOpenChange(false);

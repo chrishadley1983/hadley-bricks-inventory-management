@@ -928,6 +928,7 @@ export class EbayApiAdapter {
           method: options.method || 'GET',
           headers: requestHeaders,
           body: options.body ? JSON.stringify(options.body) : undefined,
+          signal: AbortSignal.timeout(30000),
         });
 
         console.log(`[EbayApiAdapter] Response status: ${response.status} ${response.statusText}`);
