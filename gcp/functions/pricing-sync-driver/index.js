@@ -15,7 +15,7 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const functions = require('@google-cloud/functions-framework');
 
 // Configuration
-const APP_URL = process.env.APP_URL || 'https://hadley-bricks.vercel.app';
+const APP_URL = process.env.APP_URL || 'https://hadley-bricks-inventory-management.vercel.app';
 const DEFAULT_MAX_ITERATIONS = 120; // 120 * 30s = 1 hour max
 const ITERATION_DELAY_MS = 30000; // 30 seconds between calls
 

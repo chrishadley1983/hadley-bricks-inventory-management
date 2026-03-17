@@ -505,7 +505,7 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
       })
       .join('\n');
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hadley-bricks.vercel.app';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hadley-bricks-inventory-management.vercel.app';
     const usageUrl = 'https://vercel.com/account/usage';
 
     const html = `

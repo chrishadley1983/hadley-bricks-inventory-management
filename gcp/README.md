@@ -76,7 +76,7 @@ gcloud functions deploy pricing-sync-driver \
   --allow-unauthenticated=false \
   --timeout=3600 \
   --memory=256MB \
-  --set-env-vars="APP_URL=https://hadley-bricks.vercel.app,GCP_PROJECT=$GCP_PROJECT"
+  --set-env-vars="APP_URL=https://hadley-bricks-inventory-management.vercel.app,GCP_PROJECT=$GCP_PROJECT"
 
 # Get the function URL for scheduler jobs
 gcloud functions describe pricing-sync-driver --gen2 --region=europe-west2 --format='value(serviceConfig.uri)'
@@ -99,7 +99,7 @@ gcloud secrets add-iam-policy-binding hadley-bricks-cron-secret \
 Set the Vercel app URL and cron secret:
 
 ```bash
-export APP_URL="https://hadley-bricks.vercel.app"
+export APP_URL="https://hadley-bricks-inventory-management.vercel.app"
 export CRON_SECRET="YOUR_CRON_SECRET_VALUE"
 export FUNCTION_URL=$(gcloud functions describe pricing-sync-driver --gen2 --region=europe-west2 --format='value(serviceConfig.uri)')
 ```

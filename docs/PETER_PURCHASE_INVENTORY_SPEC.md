@@ -566,7 +566,7 @@ Add a new purchase with inventory items to Hadley Bricks.
 
 ## Required Environment
 - HB_SERVICE_API_KEY: Service API key for Hadley Bricks
-- HB_API_BASE_URL: Base URL (default: https://hadley-bricks.vercel.app)
+- HB_API_BASE_URL: Base URL (default: https://hadley-bricks-inventory-management.vercel.app)
 
 ## Workflow
 
@@ -680,7 +680,7 @@ Add to Peter's shell environment (in `.bashrc` or startup script):
 
 ```bash
 export HB_SERVICE_API_KEY="hb_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-export HB_API_BASE_URL="https://hadley-bricks.vercel.app"
+export HB_API_BASE_URL="https://hadley-bricks-inventory-management.vercel.app"
 ```
 
 ---
