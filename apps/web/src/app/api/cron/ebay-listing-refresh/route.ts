@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.service';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import {
   getEngagementTier,
   calculateRefreshPrice,
@@ -165,7 +166,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const service = new EbayListingRefreshService(supabase as any, USER_ID);
+    const authService = new EbayAuthService(undefined, supabase as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const service = new EbayListingRefreshService(supabase as any, USER_ID, authService);
 
     // Report mode
     if (isReport) {

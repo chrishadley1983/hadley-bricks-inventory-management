@@ -9,7 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAnalyticsClient } from './ebay-analytics.client';
-import { ebayAuthService } from './ebay-auth.service';
+import { ebayAuthService, EbayAuthService } from './ebay-auth.service';
 import type { ParsedEbayListing, AddFixedPriceItemRequest } from '@/lib/platform-stock/ebay/types';
 import { rowToRefreshJob, rowToRefreshJobItem, calculateListingAge } from './listing-refresh.types';
 import type {
@@ -61,10 +61,12 @@ export class EbayListingRefreshService {
   private userId: string;
   private tradingClient: EbayTradingClient | null = null;
   private analyticsClient: EbayAnalyticsClient | null = null;
+  private authService: EbayAuthService;
 
-  constructor(supabase: SupabaseClient<Database>, userId: string) {
+  constructor(supabase: SupabaseClient<Database>, userId: string, authService?: EbayAuthService) {
     this.supabase = supabase;
     this.userId = userId;
+    this.authService = authService ?? ebayAuthService;
   }
 
   // ============================================================================
@@ -75,7 +77,7 @@ export class EbayListingRefreshService {
    * Get or create a Trading API client with valid access token
    */
   private async getTradingClient(): Promise<EbayTradingClient> {
-    const accessToken = await ebayAuthService.getAccessToken(this.userId);
+    const accessToken = await this.authService.getAccessToken(this.userId);
     if (!accessToken) {
       throw new Error('Not connected to eBay or token expired');
     }
@@ -96,7 +98,7 @@ export class EbayListingRefreshService {
    * Get or create an Analytics API client with valid access token
    */
   private async getAnalyticsClient(): Promise<EbayAnalyticsClient> {
-    const accessToken = await ebayAuthService.getAccessToken(this.userId);
+    const accessToken = await this.authService.getAccessToken(this.userId);
     if (!accessToken) {
       throw new Error('Not connected to eBay or token expired');
     }
