@@ -9,6 +9,10 @@ import { CredentialsRepository } from '@/lib/repositories';
 import type { BrickLinkCredentials } from '@/lib/bricklink/types';
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 404 });
+  }
+
   try {
     const supabase = await createClient();
     const {

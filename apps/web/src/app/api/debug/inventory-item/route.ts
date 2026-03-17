@@ -10,6 +10,10 @@ import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 404 });
+  }
+
   const result: Record<string, unknown> = {};
 
   try {

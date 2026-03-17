@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayAuctionScannerService } from '@/lib/ebay-auctions';
 import { calculateMaxBidForMargin } from '@/lib/ebay-auctions/auction-profit-calculator';
 import { discordService } from '@/lib/notifications/discord.service';
@@ -15,14 +15,19 @@ import { discordService } from '@/lib/notifications/discord.service';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
-
 export async function POST() {
   try {
-    const supabase = createServiceRoleClient();
-    const scanner = new EbayAuctionScannerService(supabase);
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const config = await scanner.loadConfig(DEFAULT_USER_ID);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const serviceSupabase = createServiceRoleClient();
+    const scanner = new EbayAuctionScannerService(serviceSupabase);
+
+    const config = await scanner.loadConfig(user.id);
     if (!config) {
       return NextResponse.json({ error: 'No config found' }, { status: 404 });
     }
@@ -31,7 +36,7 @@ export async function POST() {
 
     // If skipped, just log and return
     if (result.skippedReason) {
-      await scanner.saveScanLog(DEFAULT_USER_ID, result);
+      await scanner.saveScanLog(user.id, result);
       return NextResponse.json({ success: true, skipped: result.skippedReason });
     }
 
@@ -69,11 +74,11 @@ export async function POST() {
           maxBid,
         });
 
-        await scanner.saveAlert(DEFAULT_USER_ID, opp, discordResult.success);
+        await scanner.saveAlert(user.id, opp, discordResult.success);
         if (discordResult.success) alertsSent++;
       } catch (err) {
         console.error('[ManualScan] Failed to send alert:', err);
-        await scanner.saveAlert(DEFAULT_USER_ID, opp, false);
+        await scanner.saveAlert(user.id, opp, false);
       }
     }
 
@@ -95,16 +100,16 @@ export async function POST() {
           imageUrl: joblot.auction.imageUrl,
         });
 
-        await scanner.saveJoblotAlert(DEFAULT_USER_ID, joblot, discordResult.success);
+        await scanner.saveJoblotAlert(user.id, joblot, discordResult.success);
         if (discordResult.success) alertsSent++;
       } catch (err) {
         console.error('[ManualScan] Failed to send joblot alert:', err);
-        await scanner.saveJoblotAlert(DEFAULT_USER_ID, joblot, false);
+        await scanner.saveJoblotAlert(user.id, joblot, false);
       }
     }
 
     result.alertsSent = alertsSent;
-    await scanner.saveScanLog(DEFAULT_USER_ID, result);
+    await scanner.saveScanLog(user.id, result);
 
     return NextResponse.json({
       success: true,

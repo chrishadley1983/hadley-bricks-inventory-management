@@ -6,18 +6,23 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayAuctionScannerService } from '@/lib/ebay-auctions';
-
-const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
 export async function GET() {
   try {
-    const supabase = createServiceRoleClient();
-    const scanner = new EbayAuctionScannerService(supabase);
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const serviceSupabase = createServiceRoleClient();
+    const scanner = new EbayAuctionScannerService(serviceSupabase);
 
     // Load config
-    const config = await scanner.loadConfig(DEFAULT_USER_ID);
+    const config = await scanner.loadConfig(user.id);
     if (!config) {
       return NextResponse.json({ error: 'No config found' }, { status: 404 });
     }
@@ -26,7 +31,7 @@ export async function GET() {
     const { data: lastScan } = await supabase
       .from('ebay_auction_scan_log')
       .select('*')
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -38,7 +43,7 @@ export async function GET() {
     const { data: todayScans } = await supabase
       .from('ebay_auction_scan_log')
       .select('opportunities_found, alerts_sent, joblots_found')
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .gte('created_at', todayStart.toISOString());
 
     const todayStats = {
@@ -52,7 +57,7 @@ export async function GET() {
     const { data: recentScans } = await supabase
       .from('ebay_auction_scan_log')
       .select('*')
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(20);
 
