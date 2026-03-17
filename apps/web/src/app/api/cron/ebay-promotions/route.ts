@@ -297,8 +297,6 @@ export async function POST(request: NextRequest) {
 
       // Filter to listings with eBay listing IDs and determine target bid
       const toAdd: Array<{ listingId: string; bidPercentage: string }> = [];
-      const toUpdate: Array<{ listingId: string; bidPercentage: string }> = [];
-      const toRemove: string[] = [];
 
       // Get current promotion status
       const service = new EbayPromotedListingsService(supabase, schedule.user_id);
@@ -307,13 +305,13 @@ export async function POST(request: NextRequest) {
         .filter((id): id is string => !!id);
 
       // Batch status checks (500 at a time)
-      const statusMap = new Map<string, { isPromoted: boolean; bidPercentage?: string }>();
+      const statusMap = new Map<string, { isPromoted: boolean; bidPercentage?: string; campaignId?: string }>();
       for (let i = 0; i < ebayListingIds.length; i += 500) {
         const batch = ebayListingIds.slice(i, i + 500);
         try {
           const statuses = await service.getPromotionStatus(batch);
           for (const s of statuses) {
-            statusMap.set(s.listingId, { isPromoted: s.isPromoted, bidPercentage: s.bidPercentage });
+            statusMap.set(s.listingId, { isPromoted: s.isPromoted, bidPercentage: s.bidPercentage, campaignId: s.campaignId });
           }
         } catch (error) {
           console.error(`[Cron EbayPromotions] Error checking status:`, error);
@@ -322,6 +320,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Determine actions for each listing
+      // Updates/removes grouped by actual campaign (listings may be in a different campaign)
+      const updatesByCampaign = new Map<string, Array<{ listingId: string; bidPercentage: string }>>();
+      const removesByCampaign = new Map<string, string[]>();
+
       for (const listing of allListings) {
         if (!listing.ebay_listing_id) continue;
 
@@ -345,24 +347,32 @@ export async function POST(request: NextRequest) {
         }
 
         const current = statusMap.get(listing.ebay_listing_id);
+        const actualCampaignId = current?.campaignId || schedule.campaign_id;
 
         if (targetBid === null) {
           // Listing is too new for any stage — should not be promoted
           if (current?.isPromoted) {
-            toRemove.push(listing.ebay_listing_id);
+            const removes = removesByCampaign.get(actualCampaignId) || [];
+            removes.push(listing.ebay_listing_id);
+            removesByCampaign.set(actualCampaignId, removes);
           }
         } else if (!current?.isPromoted) {
-          // Not currently promoted — add it
+          // Not currently promoted — add to schedule's campaign
           toAdd.push({ listingId: listing.ebay_listing_id, bidPercentage: targetBid });
         } else if (current.bidPercentage !== targetBid) {
-          // Already promoted but bid needs updating
-          toUpdate.push({ listingId: listing.ebay_listing_id, bidPercentage: targetBid });
+          // Already promoted but bid needs updating — update in actual campaign
+          const updates = updatesByCampaign.get(actualCampaignId) || [];
+          updates.push({ listingId: listing.ebay_listing_id, bidPercentage: targetBid });
+          updatesByCampaign.set(actualCampaignId, updates);
         }
         // else: already at correct bid — no action needed
       }
 
+      const totalUpdatesCount = Array.from(updatesByCampaign.values()).reduce((sum, arr) => sum + arr.length, 0);
+      const totalRemovesCount = Array.from(removesByCampaign.values()).reduce((sum, arr) => sum + arr.length, 0);
+
       console.log(
-        `[Cron EbayPromotions] Campaign ${schedule.campaign_id}: ${toAdd.length} to add, ${toUpdate.length} to update, ${toRemove.length} to remove`
+        `[Cron EbayPromotions] Campaign ${schedule.campaign_id}: ${toAdd.length} to add, ${totalUpdatesCount} to update, ${totalRemovesCount} to remove`
       );
 
       // Apply changes
@@ -377,12 +387,12 @@ export async function POST(request: NextRequest) {
               listingId: f.listingId,
               action: 'add',
               statusCode: f.statusCode,
-              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+              error: f.errors?.map((e) => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
             });
           }
         }
-        if (toUpdate.length > 0) {
-          const result = await service.updateBidPercentages(schedule.campaign_id, toUpdate);
+        for (const [campaignId, updates] of updatesByCampaign) {
+          const result = await service.updateBidPercentages(campaignId, updates);
           totalUpdated += result.successful.length;
           totalErrors += result.failed.length;
           for (const f of result.failed) {
@@ -390,12 +400,12 @@ export async function POST(request: NextRequest) {
               listingId: f.listingId,
               action: 'update',
               statusCode: f.statusCode,
-              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+              error: f.errors?.map((e) => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
             });
           }
         }
-        if (toRemove.length > 0) {
-          const result = await service.removeListings(schedule.campaign_id, toRemove);
+        for (const [campaignId, removes] of removesByCampaign) {
+          const result = await service.removeListings(campaignId, removes);
           totalRemoved += result.successful.length;
           totalErrors += result.failed.length;
           for (const f of result.failed) {
@@ -403,7 +413,7 @@ export async function POST(request: NextRequest) {
               listingId: f.listingId,
               action: 'remove',
               statusCode: f.statusCode,
-              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+              error: f.errors?.map((e) => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
             });
           }
         }
