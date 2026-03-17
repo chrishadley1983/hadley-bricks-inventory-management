@@ -61,7 +61,7 @@ export async function POST() {
           encoder.encode(
             `data: ${JSON.stringify({
               type: 'error',
-              message: error instanceof Error ? error.message : 'Keepa pricing sync failed',
+              message: 'Internal server error',
             })}\n\n`
           )
         );

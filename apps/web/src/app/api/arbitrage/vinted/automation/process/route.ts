@@ -535,7 +535,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<any>> {
     } catch (error) {
       console.error('[process] Error:', error);
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Unknown error' },
+        { error: 'Internal server error' },
         { status: 500 }
       );
     }

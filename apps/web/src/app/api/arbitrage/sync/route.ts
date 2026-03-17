@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] inventory_asins error:', error);
         results.inventoryAsins = {
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: 'Internal server error',
         };
       }
     }
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         results.asinMapping = await mappingService.mapAllUnmapped(user.id);
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] asin_mapping error:', error);
-        results.asinMapping = { error: error instanceof Error ? error.message : 'Unknown error' };
+        results.asinMapping = { error: 'Internal server error' };
       }
     }
 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         results.amazonPricing = await amazonSyncService.syncPricing(user.id);
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] amazon_pricing error:', error);
-        results.amazonPricing = { error: error instanceof Error ? error.message : 'Unknown error' };
+        results.amazonPricing = { error: 'Internal server error' };
       }
     }
 
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] bricklink_pricing error:', error);
         results.bricklinkPricing = {
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: 'Internal server error',
         };
       }
     }
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         results.ebayPricing = await ebaySyncService.syncPricing(user.id);
       } catch (error) {
         console.error('[POST /api/arbitrage/sync] ebay_pricing error:', error);
-        results.ebayPricing = { error: error instanceof Error ? error.message : 'Unknown error' };
+        results.ebayPricing = { error: 'Internal server error' };
       }
     }
 

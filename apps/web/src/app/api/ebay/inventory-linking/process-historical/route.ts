@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           const errorResult = {
             type: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: 'Internal server error',
           };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorResult)}\n\n`));
         }
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/ebay/inventory-linking/process-historical] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -268,7 +268,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/admin/brickset/import-barcodes-csv] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

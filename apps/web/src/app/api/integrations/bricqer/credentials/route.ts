@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/integrations/bricqer/credentials] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = 'Internal server error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

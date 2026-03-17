@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     console.error('[POST /api/minifigs/sync/publish] Error:', error);
 
     // Surface eBay-specific errors so the user sees what actually failed
-    let details = error instanceof Error ? error.message : String(error);
+    let details = 'Internal server error';
     let statusCode = 500;
 
     // EbayApiError has structured error info

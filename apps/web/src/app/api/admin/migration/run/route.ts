@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/admin/migration/run] Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: 'Migration failed', details: message }, { status: 500 });
   }
 }

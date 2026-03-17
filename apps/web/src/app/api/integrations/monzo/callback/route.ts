@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     const returnUrl = new URL('/settings/integrations', request.url);
     returnUrl.searchParams.set(
       'monzo_error',
-      error instanceof Error ? error.message : 'An unexpected error occurred'
+      'Internal server error'
     );
     return NextResponse.redirect(returnUrl.toString());
   }

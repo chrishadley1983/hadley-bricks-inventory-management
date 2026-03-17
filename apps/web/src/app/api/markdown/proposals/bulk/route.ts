@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 const bulkSchema = z.object({
@@ -13,6 +13,12 @@ const bulkSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const parsed = bulkSchema.safeParse(body);
 
@@ -89,7 +95,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, ...results });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[POST /api/integrations/amazon/sync] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = 'Internal server error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
@@ -165,7 +165,7 @@ export async function GET() {
     return NextResponse.json(status);
   } catch (error) {
     console.error('[GET /api/integrations/amazon/sync] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = 'Internal server error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

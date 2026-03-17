@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to verify listing',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        details: 'Internal server error',
       },
       { status: 500 }
     );

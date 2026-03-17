@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ data: job });
   } catch (error) {
     console.error('[GET /api/ebay/listing-refresh/[id]] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -73,7 +73,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[DELETE /api/ebay/listing-refresh/[id]] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
 
     // Return 404 if job not found
     if (message.includes('not found')) {

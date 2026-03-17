@@ -249,7 +249,7 @@ export async function POST(_request: NextRequest) {
   } catch (error) {
     console.error('[watchlist/refresh] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

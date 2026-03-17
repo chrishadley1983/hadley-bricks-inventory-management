@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: true, skippedCount: parsed.data.itemIds.length });
   } catch (error) {
     console.error('[POST /api/ebay/listing-refresh/[id]/items/skip] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

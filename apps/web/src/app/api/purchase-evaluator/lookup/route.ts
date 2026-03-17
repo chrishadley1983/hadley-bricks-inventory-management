@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
           console.error('[POST /api/purchase-evaluator/lookup] Error:', error);
           sendProgress({
             type: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: 'Internal server error',
           });
         } finally {
           controller.close();

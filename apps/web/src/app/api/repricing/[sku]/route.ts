@@ -63,7 +63,7 @@ export async function PATCH(
   } catch (error) {
     console.error('[PATCH /api/repricing/[sku]] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

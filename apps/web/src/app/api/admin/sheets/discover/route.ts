@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/admin/sheets/discover] Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = 'Internal server error';
     return NextResponse.json(
       { error: 'Failed to discover sheet structure', details: message },
       { status: 500 }

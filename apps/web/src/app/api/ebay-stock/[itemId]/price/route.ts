@@ -131,7 +131,7 @@ export async function PUT(
   } catch (error) {
     console.error('[PUT /api/ebay-stock/[itemId]/price] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

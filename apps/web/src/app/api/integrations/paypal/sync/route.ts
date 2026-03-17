@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Sync failed',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -102,7 +102,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to fetch sync status',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

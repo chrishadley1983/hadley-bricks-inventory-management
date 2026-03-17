@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: job }, { status: 201 });
   } catch (error) {
     console.error('[POST /api/ebay/listing-refresh] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/ebay/listing-refresh] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -66,7 +66,7 @@ export async function GET() {
   } catch (error) {
     console.error('[GET /schedules] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /schedules] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error('[DELETE /schedules] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

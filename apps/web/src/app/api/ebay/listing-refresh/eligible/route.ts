@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/ebay/listing-refresh/eligible] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     const errorUrl = new URL('/settings/integrations', baseUrl);
     errorUrl.searchParams.set(
       'google_calendar_error',
-      error instanceof Error ? error.message : 'An unexpected error occurred'
+      'Internal server error'
     );
     return NextResponse.redirect(errorUrl);
   }
