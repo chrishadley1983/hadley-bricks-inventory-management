@@ -69,6 +69,7 @@ export async function GET() {
       isInQuietHours: scanner.isInQuietHours(config),
     });
   } catch (error) {
+    console.error('Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

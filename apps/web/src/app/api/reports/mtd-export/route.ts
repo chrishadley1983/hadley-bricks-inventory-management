@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
           purchasesCreated: result.purchasesCreated,
           message: `Exported ${result.invoicesCreated} invoices and ${result.purchasesCreated} purchases to QuickFile`,
         });
-      } catch (error) {
+      } catch (_error) {
         const message = 'Internal server error';
 
         // Handle specific error types

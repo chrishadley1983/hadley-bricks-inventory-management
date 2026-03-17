@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         try {
           const result = await service.executeRefresh(id, onProgress);
           sendEvent('complete', result);
-        } catch (error) {
+        } catch (_error) {
           const message = 'Internal server error';
           sendEvent('error', message);
         }

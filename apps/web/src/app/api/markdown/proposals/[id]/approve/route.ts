@@ -70,6 +70,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, action: proposal.proposed_action });
   } catch (error) {
+    console.error('Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

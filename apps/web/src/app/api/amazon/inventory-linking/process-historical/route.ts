@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
           // Send final result
           const finalResult = { type: 'complete', data: result };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalResult)}\n\n`));
-        } catch (error) {
+        } catch (_error) {
           const errorResult = {
             type: 'error',
             error: 'Internal server error',
