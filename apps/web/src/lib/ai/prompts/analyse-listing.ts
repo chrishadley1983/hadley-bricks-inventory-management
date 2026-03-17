@@ -5,7 +5,7 @@
  * against the ebay-listing-specification.md best practices.
  */
 
-import type { FullItemDetails } from '@/lib/platform-stock/ebay/types';
+import type { FullItemDetails } from '@/types/ebay-listing';
 
 /**
  * System prompt for analysing existing eBay listings

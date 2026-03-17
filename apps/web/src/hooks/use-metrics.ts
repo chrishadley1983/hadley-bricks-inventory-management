@@ -81,15 +81,9 @@ export function useListingCounts() {
   });
 }
 
-// Utility functions
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+// Re-export from canonical location
+import { formatCurrency } from '@/lib/utils';
+export { formatCurrency };
 
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-GB').format(value);

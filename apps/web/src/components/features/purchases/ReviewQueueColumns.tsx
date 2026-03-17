@@ -2,6 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
 import type { ReviewQueueItem } from '@/lib/api/review-queue';
 
 export const REVIEW_COLUMN_DISPLAY_NAMES: Record<string, string> = {
@@ -24,11 +25,6 @@ function formatDate(dateStr: string | null): string {
   } catch {
     return dateStr;
   }
-}
-
-function formatCurrency(amount: number | null): string {
-  if (amount == null) return '-';
-  return `\u00a3${Number(amount).toFixed(2)}`;
 }
 
 export function getReviewQueueColumns(): ColumnDef<ReviewQueueItem>[] {

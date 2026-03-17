@@ -7,6 +7,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PlatformOrder, OrderItem } from '@hadley-bricks/database';
 
+export const orderKeys = {
+  all: ['orders'] as const,
+  lists: () => [...orderKeys.all, 'list'] as const,
+  list: (filters?: Record<string, unknown>) => [...orderKeys.lists(), filters] as const,
+  details: () => [...orderKeys.all, 'detail'] as const,
+  detail: (id: string) => [...orderKeys.details(), id] as const,
+  stats: (platform?: string) => [...orderKeys.all, 'stats', platform] as const,
+};
+
 interface OrdersResponse {
   data: PlatformOrder[];
   pagination: {
@@ -126,7 +135,7 @@ async function triggerBrickLinkSync(
  */
 export function useOrders(filters: OrderFilters = {}) {
   return useQuery({
-    queryKey: ['orders', filters],
+    queryKey: orderKeys.list(filters as Record<string, unknown>),
     queryFn: () => fetchOrders(filters),
     staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
   });
@@ -137,7 +146,7 @@ export function useOrders(filters: OrderFilters = {}) {
  */
 export function useOrder(id: string | undefined) {
   return useQuery({
-    queryKey: ['order', id],
+    queryKey: orderKeys.detail(id!),
     queryFn: () => fetchOrder(id!),
     enabled: !!id,
     staleTime: 10 * 60 * 1000, // 10 minutes - order details don't change often
@@ -149,7 +158,7 @@ export function useOrder(id: string | undefined) {
  */
 export function useOrderStats(platform?: string) {
   return useQuery({
-    queryKey: ['orders', 'stats', platform],
+    queryKey: orderKeys.stats(platform),
     queryFn: () => fetchOrderStats(platform),
     staleTime: 5 * 60 * 1000, // 5 minutes - stats are computed aggregates
   });
@@ -176,7 +185,7 @@ export function useBrickLinkSync() {
     mutationFn: triggerBrickLinkSync,
     onSuccess: () => {
       // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: orderKeys.all });
       queryClient.invalidateQueries({ queryKey: ['bricklink', 'sync-status'] });
     },
   });

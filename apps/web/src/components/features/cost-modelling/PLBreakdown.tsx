@@ -7,9 +7,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { formatCurrency } from '@/lib/services/cost-calculations';
 import type { CalculatedResults } from '@/types/cost-modelling';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
 

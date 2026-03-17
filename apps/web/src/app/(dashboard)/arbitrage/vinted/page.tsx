@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 const DEFAULT_VINTED_URL =
   'https://www.vinted.co.uk/catalog?search_text=lego&status_ids[]=6&order=newest_first';
@@ -75,11 +75,6 @@ function getCogBadge(cogPercent: number | null) {
     return <Badge className="bg-orange-500">{cogPercent.toFixed(0)}% Poor</Badge>;
   }
   return <Badge className="bg-red-500">{cogPercent.toFixed(0)}% Not viable</Badge>;
-}
-
-function formatCurrency(value: number | null): string {
-  if (value === null) return '-';
-  return `£${value.toFixed(2)}`;
 }
 
 export default function VintedArbitragePage() {

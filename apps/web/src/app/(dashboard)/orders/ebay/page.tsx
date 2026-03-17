@@ -57,6 +57,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatCurrency } from '@/lib/utils';
 import { EbaySkuMatcherDialog } from '@/components/features/orders/EbaySkuMatcherDialog';
 
 const Header = dynamic(
@@ -185,13 +186,6 @@ function getStatusColor(status: string): string {
     default:
       return 'bg-gray-100 text-gray-800';
   }
-}
-
-function formatCurrency(amount: number, currency = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
 }
 
 export default function EbayOrdersPage() {

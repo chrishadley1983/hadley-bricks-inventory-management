@@ -479,7 +479,7 @@ export class KeepaClient {
    */
   private async fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
 
       if (response.status === 429) {
         if (attempt === maxRetries) {

@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { DateRangePicker, StatCard } from '@/components/charts';
 import { useDailyActivityReport, useUpdateStoreStatus, useExportReport } from '@/hooks/use-reports';
 import { usePerfPage } from '@/hooks/use-perf';
+import { formatCurrency } from '@/lib/utils';
 import type {
   DateRangePreset,
   StoreStatus,
@@ -52,13 +53,6 @@ type ColumnVisibility = {
   bricklink: boolean;
   total: boolean;
 };
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-}
 
 function formatPlatformName(platform: ActivityPlatform | 'total'): string {
   const names: Record<ActivityPlatform | 'total', string> = {

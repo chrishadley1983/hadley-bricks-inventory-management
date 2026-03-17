@@ -37,7 +37,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useProfitLossReport, useExportReport } from '@/hooks/use-reports';
 import { usePerfPage } from '@/hooks/use-perf';
 import type { ProfitLossCategory } from '@/lib/services/profit-loss-report.service';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { BarChart } from '@/components/charts/bar-chart';
 import { ComboChart } from '@/components/charts/combo-chart';
 import { useToast } from '@/hooks/use-toast';
@@ -115,13 +115,6 @@ const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
   { ssr: false }
 );
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-}
 
 function formatMonth(monthStr: string): string {
   const [year, month] = monthStr.split('-');

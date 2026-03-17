@@ -5,7 +5,7 @@
  * that helps users improve their eBay listings based on quality review feedback.
  */
 
-import type { QualityReviewResult } from '@/lib/ebay/listing-creation.types';
+import type { QualityReviewResult } from '@/types/ebay-listing';
 
 /**
  * Context for the listing improvement chat

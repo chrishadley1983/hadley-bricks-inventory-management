@@ -42,6 +42,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useState } from 'react';
+import { formatCurrency } from '@/lib/utils';
 import { EbaySkuMatcherDialog } from '@/components/features/orders/EbaySkuMatcherDialog';
 
 const Header = dynamic(
@@ -178,13 +179,6 @@ function getMatchStatusBadge(status: 'matched' | 'unmatched' | 'manual' | 'no_sk
     case 'no_sku':
       return <Badge className="bg-gray-100 text-gray-600">No SKU</Badge>;
   }
-}
-
-function formatCurrency(amount: number, currency = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
 }
 
 export default function EbayOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {

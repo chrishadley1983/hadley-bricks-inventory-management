@@ -16,19 +16,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { StatCard, PieChart } from '@/components/charts';
 import { useInventoryValuationReport, useExportReport } from '@/hooks/use-reports';
+import { formatCurrency } from '@/lib/utils';
 import { usePerfPage } from '@/hooks/use-perf';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
   { ssr: false }
 );
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-}
 
 export default function InventoryValuationReportPage() {
   usePerfPage('InventoryValuationReportPage');

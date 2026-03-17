@@ -8,11 +8,14 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a number as currency (GBP)
  */
-export function formatCurrency(amount: number, currency: string = 'GBP'): string {
+export function formatCurrency(amount: number | string | null | undefined, currency?: string | null): string {
+  if (amount == null) return '—';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '—';
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
-    currency,
-  }).format(amount);
+    currency: currency || 'GBP',
+  }).format(num);
 }
 
 /**

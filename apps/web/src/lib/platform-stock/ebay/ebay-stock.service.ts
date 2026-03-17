@@ -9,7 +9,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { PlatformStockService } from '../platform-stock.service';
 import { EbayTradingClient, EbayTradingApiError } from './ebay-trading.client';
-import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import type {
   StockPlatform,
   ListingImport,
@@ -17,6 +16,15 @@ import type {
   ComparisonSummary,
   DiscrepancyType,
 } from '../types';
+
+/**
+ * Interface for eBay authentication providers.
+ * Decouples EbayStockService from the concrete EbayAuthService to avoid
+ * a circular dependency between lib/platform-stock/ebay and lib/ebay.
+ */
+export interface EbayAuthProvider {
+  getAccessToken(userId: string): Promise<string | null>;
+}
 import type {
   ParsedEbayListing,
   EbayStockComparison,
@@ -35,11 +43,11 @@ type PlatformListingInsert = Database['public']['Tables']['platform_listings']['
 
 export class EbayStockService extends PlatformStockService {
   readonly platform: StockPlatform = 'ebay';
-  private ebayAuth: EbayAuthService;
+  private ebayAuth: EbayAuthProvider;
 
-  constructor(supabase: SupabaseClient<Database>, userId: string) {
+  constructor(supabase: SupabaseClient<Database>, userId: string, ebayAuth: EbayAuthProvider) {
     super(supabase, userId);
-    this.ebayAuth = new EbayAuthService();
+    this.ebayAuth = ebayAuth;
   }
 
   // ============================================================================

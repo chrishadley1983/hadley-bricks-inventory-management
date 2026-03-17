@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import type { CostModelScenarioFormData, CalculatedResults } from '@/types/cost-modelling';
-import { formatCurrency, formatPercentage } from '@/lib/services/cost-calculations';
+import { formatPercentage } from '@/lib/services/cost-calculations';
+import { formatCurrency } from '@/lib/utils';
 
 interface ExportButtonsProps {
   formData: CostModelScenarioFormData | null;

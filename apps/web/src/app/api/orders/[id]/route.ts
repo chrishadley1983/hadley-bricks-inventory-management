@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { OrderRepository } from '@/lib/repositories';
+
+const orderIdSchema = z.string().uuid('Order ID must be a valid UUID');
 
 /**
  * GET /api/orders/[id]
@@ -49,6 +52,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const idResult = orderIdSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: idResult.error.flatten().formErrors },
+        { status: 400 }
+      );
+    }
 
     const supabase = await createClient();
     const {
@@ -63,7 +73,7 @@ export async function DELETE(
     const orderRepo = new OrderRepository(supabase);
 
     // Verify ownership first
-    const order = await orderRepo.findById(id);
+    const order = await orderRepo.findById(idResult.data);
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
@@ -72,7 +82,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await orderRepo.delete(id);
+    await orderRepo.delete(idResult.data);
 
     return NextResponse.json({ success: true });
   } catch (error) {

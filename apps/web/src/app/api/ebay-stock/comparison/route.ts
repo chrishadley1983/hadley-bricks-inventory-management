@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { EbayStockService } from '@/lib/platform-stock/ebay';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import type { ComparisonFilters, DiscrepancyType } from '@/lib/platform-stock/types';
 
 export async function GET(request: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     };
 
     // 4. Get comparison
-    const service = new EbayStockService(supabase, user.id);
+    const service = new EbayStockService(supabase, user.id, new EbayAuthService());
     const result = await service.getStockComparison(filters);
 
     // 5. Return response

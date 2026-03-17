@@ -5,18 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, AlertTriangle, Clock, BarChart3, Upload } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface PurchaseProfitabilityProps {
   purchaseId: string;
-}
-
-function formatCurrency(amount: number | null): string {
-  if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
 }
 
 function formatPercent(value: number | null): string {

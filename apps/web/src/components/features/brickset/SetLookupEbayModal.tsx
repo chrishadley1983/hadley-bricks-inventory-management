@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { buildEbaySearchUrl, buildEbayItemUrl } from '@/lib/arbitrage/ebay-url';
 import type { EbayListingItem, EbayListingsResponse } from '@/app/api/brickset/ebay-listings/route';
 
@@ -16,14 +16,6 @@ interface SetLookupEbayModalProps {
   condition?: 'new' | 'used';
   isOpen: boolean;
   onClose: () => void;
-}
-
-function formatCurrency(value: number | null): string {
-  if (value === null) return '—';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(value);
 }
 
 export function SetLookupEbayModal({

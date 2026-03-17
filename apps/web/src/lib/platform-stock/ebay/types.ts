@@ -7,6 +7,12 @@
 import type { Json } from '@hadley-bricks/database';
 import type { PlatformListing, StockComparison, ListingStatus, DiscrepancyType } from '../types';
 
+// Re-export shared types from canonical location to maintain backward compatibility
+export type { FullItemDetails, ShippingServiceOption } from '@/types/ebay-listing';
+
+// Import for local use within this file
+import type { ShippingServiceOption } from '@/types/ebay-listing';
+
 // ============================================================================
 // TRADING API RESPONSE TYPES
 // ============================================================================
@@ -375,80 +381,6 @@ export interface EndItemResult {
   endTime?: string;
   errorCode?: string;
   errorMessage?: string;
-}
-
-/**
- * Full item details from GetItem response
- * Used to capture complete listing data before ending
- */
-export interface FullItemDetails {
-  itemId: string;
-  title: string;
-  description: string;
-  sku: string | null;
-  quantity: number;
-  startPrice: number;
-  currency: string;
-  conditionId: number | null;
-  conditionDescription: string | null;
-  categoryId: string;
-  categoryName: string | null;
-  storeCategoryId: string | null;
-  storeCategoryName: string | null;
-  listingType: string;
-  listingDuration: string | null;
-  pictureUrls: string[];
-  galleryUrl: string | null;
-  viewItemUrl: string | null;
-
-  // Best offer settings
-  bestOfferEnabled: boolean;
-  bestOfferAutoAcceptPrice: number | null;
-  minimumBestOfferPrice: number | null;
-
-  // Shipping and return policies (IDs for business policies)
-  shippingProfileId: string | null;
-  returnProfileId: string | null;
-  paymentProfileId: string | null;
-
-  // Shipping details (fallback if no business policies)
-  shippingServiceOptions: ShippingServiceOption[];
-  dispatchTimeMax: number | null;
-
-  // Return policy details (fallback if no business policies)
-  returnsAccepted: boolean;
-  returnsWithin: string | null;
-  refundOption: string | null;
-  shippingCostPaidBy: string | null;
-
-  // Item specifics
-  itemSpecifics: Array<{ name: string; value: string }>;
-
-  // Location
-  location: string | null;
-  country: string | null;
-  postalCode: string | null;
-
-  // Dates
-  listingStartDate: string;
-  listingEndDate: string | null;
-
-  // Engagement
-  watchers: number;
-  hitCount: number | null;
-  quantitySold: number;
-  quantityAvailable: number;
-}
-
-/**
- * Shipping service option for listing creation
- */
-export interface ShippingServiceOption {
-  shippingService: string;
-  shippingServiceCost: number;
-  shippingServiceAdditionalCost?: number;
-  shippingServicePriority: number;
-  freeShipping?: boolean;
 }
 
 /**

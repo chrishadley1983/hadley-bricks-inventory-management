@@ -31,15 +31,9 @@ vi.mock('../ebay-trading.client', () => {
   };
 });
 
-// Mock EbayAuthService
+// Mock EbayAuthProvider
 const mockGetAccessToken = vi.fn();
-vi.mock('@/lib/ebay/ebay-auth.service', () => {
-  return {
-    EbayAuthService: class MockEbayAuthService {
-      getAccessToken = mockGetAccessToken;
-    },
-  };
-});
+const mockEbayAuth = { getAccessToken: mockGetAccessToken };
 
 // Suppress console logs during tests
 vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -136,7 +130,7 @@ describe('EbayStockService', () => {
   describe('constructor', () => {
     it('should create instance with platform set to ebay', async () => {
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       expect(service).toBeDefined();
       expect(service.platform).toBe('ebay');
@@ -152,7 +146,7 @@ describe('EbayStockService', () => {
       mockGetAccessToken.mockResolvedValueOnce(null);
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       await expect(service.triggerImport()).rejects.toThrow(
         'eBay not connected. Please connect your eBay account first.'
@@ -187,7 +181,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       await expect(service.triggerImport()).rejects.toThrow('API rate limit exceeded');
     });
@@ -216,7 +210,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.validateSkus();
 
@@ -246,7 +240,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.validateSkus();
 
@@ -274,7 +268,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.validateSkus();
 
@@ -296,7 +290,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.validateSkus();
 
@@ -327,7 +321,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.validateSkus();
 
@@ -356,7 +350,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getSkuIssues();
 
@@ -488,7 +482,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -515,7 +509,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -532,7 +526,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -560,7 +554,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -588,7 +582,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -624,7 +618,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -659,7 +653,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({
         discrepancyType: 'platform_only',
@@ -695,7 +689,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({
         search: 'falcon',
@@ -735,7 +729,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -796,7 +790,7 @@ describe('EbayStockService', () => {
       );
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       await expect(service.getStockComparison({})).rejects.toThrow(
         'Failed to fetch inventory: Database connection failed'
@@ -824,7 +818,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 
@@ -861,7 +855,7 @@ describe('EbayStockService', () => {
       });
 
       const { EbayStockService } = await import('../ebay-stock.service');
-      const service = new EbayStockService(mockSupabase, userId);
+      const service = new EbayStockService(mockSupabase, userId, mockEbayAuth);
 
       const result = await service.getStockComparison({});
 

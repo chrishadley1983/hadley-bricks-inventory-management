@@ -16,8 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ComparisonDelta } from '@/types/cost-modelling';
-import { formatCurrency } from '@/lib/services/cost-calculations';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ComparisonSummaryProps {
   deltas: ComparisonDelta[];

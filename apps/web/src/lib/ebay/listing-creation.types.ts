@@ -5,19 +5,11 @@
  * request/response types, progress tracking, and AI-generated content.
  */
 
-// ============================================
-// Enums
-// ============================================
+// Re-export shared types from canonical location to maintain backward compatibility
+export type { DescriptionStyle, QualityReviewResult, QualityScoreBreakdown, QualityScoreItem } from '@/types/ebay-listing';
 
-/**
- * Description style options for AI-generated content
- */
-export type DescriptionStyle =
-  | 'Minimalist'
-  | 'Standard'
-  | 'Professional'
-  | 'Friendly'
-  | 'Enthusiastic';
+// Import for local use within this file
+import type { DescriptionStyle, QualityReviewResult } from '@/types/ebay-listing';
 
 /**
  * Listing type options
@@ -255,58 +247,6 @@ export interface AIGeneratedListing {
   confidence: number;
   /** Recommendations for improvement */
   recommendations: string[];
-}
-
-// ============================================
-// Quality Review Types
-// ============================================
-
-/**
- * Individual score breakdown item
- */
-export interface QualityScoreItem {
-  /** Score for this category */
-  score: number;
-  /** Feedback for this category */
-  feedback: string;
-}
-
-/**
- * Category scores for quality review
- */
-export interface QualityScoreBreakdown {
-  /** Title quality (0-25) */
-  title: QualityScoreItem;
-  /** Item specifics completeness (0-20) */
-  itemSpecifics: QualityScoreItem;
-  /** Description quality (0-25) */
-  description: QualityScoreItem;
-  /** Condition accuracy (0-15) */
-  conditionAccuracy: QualityScoreItem;
-  /** SEO optimization (0-15) */
-  seoOptimization: QualityScoreItem;
-}
-
-/**
- * Quality review result from Gemini 3 Pro
- */
-export interface QualityReviewResult {
-  /** Overall quality score (0-100) */
-  score: number;
-  /** Letter grade */
-  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
-  /** Breakdown by category */
-  breakdown: QualityScoreBreakdown;
-  /** Critical issues that should be fixed */
-  issues: string[];
-  /** Non-critical improvement suggestions */
-  suggestions: string[];
-  /** Things done well */
-  highlights: string[];
-  /** When the review was completed */
-  reviewedAt: string;
-  /** AI model used for review */
-  reviewerModel: string;
 }
 
 // ============================================

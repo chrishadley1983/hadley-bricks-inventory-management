@@ -7,6 +7,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package, MapPin, Calendar, TrendingUp, ExternalLink } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { inventoryKeys } from '@/hooks/use-inventory';
 
 interface LinkedInventoryItem {
   id: string;
@@ -36,13 +38,6 @@ async function fetchInventoryItem(id: string): Promise<LinkedInventoryItem | nul
   return result.data;
 }
 
-function formatCurrency(amount: number | null): string {
-  if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-';
@@ -69,7 +64,7 @@ export function LinkedInventoryPopover({ inventoryItemId, children }: LinkedInve
   const [isOpen, setIsOpen] = useState(false);
 
   const { data: item, isLoading } = useQuery({
-    queryKey: ['inventory', 'item', inventoryItemId],
+    queryKey: inventoryKeys.detail(inventoryItemId),
     queryFn: () => fetchInventoryItem(inventoryItemId),
     enabled: isOpen,
     staleTime: 30000,

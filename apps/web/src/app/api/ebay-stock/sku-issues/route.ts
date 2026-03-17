@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { EbayStockService } from '@/lib/platform-stock/ebay';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 
 export async function GET() {
   try {
@@ -23,7 +24,7 @@ export async function GET() {
     }
 
     // 2. Get SKU issues
-    const service = new EbayStockService(supabase, user.id);
+    const service = new EbayStockService(supabase, user.id, new EbayAuthService());
     const result = await service.getSkuIssues();
 
     // 3. Return response

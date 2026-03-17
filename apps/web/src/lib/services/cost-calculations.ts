@@ -330,18 +330,9 @@ export function calculateComparisonDeltas(
   });
 }
 
-/**
- * Format currency value for display
- * U2: All monetary values with £ symbol and 2 decimal places
- */
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+// Re-export from canonical location
+import { formatCurrency } from '@/lib/utils';
+export { formatCurrency };
 
 /**
  * Format percentage for display
