@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
-
-const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = Number(searchParams.get('page') || '1');
     const pageSize = Math.min(Number(searchParams.get('pageSize') || '50'), 100);
@@ -13,14 +18,12 @@ export async function GET(request: NextRequest) {
     const diagnosis = searchParams.get('diagnosis'); // OVERPRICED, LOW_DEMAND
     const action = searchParams.get('action'); // MARKDOWN, AUCTION
 
-    const supabase = createServiceRoleClient();
-
     // Build query
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
     let query = (supabase as any)
       .from('markdown_proposals')
       .select('id, user_id, inventory_item_id, platform, diagnosis, diagnosis_reason, current_price, proposed_price, price_floor, market_price, proposed_action, markdown_step, aging_days, auction_end_date, auction_duration_days, status, error_message, set_number, item_name, sales_rank, created_at, updated_at', { count: 'exact' })
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (status) query = query.eq('status', status);
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
     const { data: summaryData } = await (supabase as any)
       .from('markdown_proposals')
       .select('status, proposed_action')
-      .eq('user_id', DEFAULT_USER_ID);
+      .eq('user_id', user.id);
 
     const summary = {
       pending: 0,

@@ -126,6 +126,10 @@ async function getItem(accessToken: string, itemId: string): Promise<unknown> {
 }
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 404 });
+  }
+
   try {
     console.log('[eBay Browse Test] Starting test...');
 
