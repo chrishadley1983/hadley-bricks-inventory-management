@@ -9,7 +9,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import { ebayAuthService } from './ebay-auth.service';
+import { EbayTradingClient } from '../platform-stock/ebay/ebay-trading.client';
 import type { EbayOfferResponse } from './types';
+import type { ParsedEbayListing } from '../platform-stock/ebay/types';
+import {
+  STORE_CATEGORY_BY_ID,
+  getCorrectStoreCategory as getCorrectStoreCategoryShared,
+  looksLikeCompleteSet as looksLikeCompleteSetShared,
+} from './ebay-store-category-rules';
 
 // ============================================================================
 // Types
@@ -65,6 +72,45 @@ interface PlatformListingUpdate {
   categoryId: string | null;
   storeCategoryNames: string[] | null;
 }
+
+// ============================================================================
+// Full Audit Types
+// ============================================================================
+
+export interface FullAuditResult {
+  totalListings: number;
+  itemCategoryIssues: ItemCategoryIssue[];
+  storeCategoryIssues: StoreCategoryIssueItem[];
+  summary: {
+    itemCategoryIssueCount: number;
+    storeCategoryIssueCount: number;
+    storeCategoryDistribution: Record<string, { name: string; count: number }>;
+    itemCategoryDistribution: Record<string, { name: string; count: number }>;
+  };
+}
+
+export interface ItemCategoryIssue {
+  itemId: string;
+  title: string;
+  currentCategoryId: string;
+  currentCategoryName: string | null;
+  suggestedCategoryId: string;
+  suggestedCategoryName: string;
+  reason: string;
+}
+
+export interface StoreCategoryIssueItem {
+  itemId: string;
+  title: string;
+  currentStoreCategoryId: string;
+  currentStoreCategoryName: string;
+  suggestedStoreCategoryId: string;
+  suggestedStoreCategoryName: string;
+  reason: string;
+}
+
+// Re-export for internal use
+const STORE_CATEGORIES = STORE_CATEGORY_BY_ID;
 
 // ============================================================================
 // Service
@@ -303,6 +349,91 @@ export class EbayCategoryReviewService {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       return { success: false, error: msg };
     }
+  }
+
+  /**
+   * Run a full audit of all active eBay listings, checking both item categories
+   * and store categories against expected rules. Fetches live data from eBay.
+   */
+  async runFullAudit(): Promise<FullAuditResult> {
+    const accessToken = await ebayAuthService.getAccessToken(this.userId);
+    if (!accessToken) {
+      throw new Error('EBAY_AUTH_REQUIRED: eBay credentials not configured or token expired');
+    }
+
+    const client = new EbayTradingClient({ accessToken, siteId: 3 });
+    const listings = await client.getAllActiveListings();
+
+    const itemCategoryIssues: ItemCategoryIssue[] = [];
+    const storeCategoryIssues: StoreCategoryIssueItem[] = [];
+    const itemCatDist: Record<string, { name: string; count: number }> = {};
+    const storeCatDist: Record<string, { name: string; count: number }> = {};
+
+    for (const listing of listings) {
+      // Track item category distribution (use String() since XML parser may return numbers)
+      const catId = String(listing.ebayData?.categoryId || 'unknown');
+      const catName = listing.ebayData?.categoryName || 'Unknown';
+      if (!itemCatDist[catId]) itemCatDist[catId] = { name: catName, count: 0 };
+      itemCatDist[catId].count++;
+
+      // Track store category distribution
+      const storeCatId = String(listing.ebayData?.storeCategoryId || '1');
+      const storeCatName = STORE_CATEGORIES[storeCatId] || `Unknown (${storeCatId})`;
+      if (!storeCatDist[storeCatId]) storeCatDist[storeCatId] = { name: storeCatName, count: 0 };
+      storeCatDist[storeCatId].count++;
+
+      // Check item category: complete sets should not be in 183448
+      if (catId === '183448' && this.looksLikeCompleteSet(listing)) {
+        itemCategoryIssues.push({
+          itemId: listing.platformItemId,
+          title: listing.title,
+          currentCategoryId: catId,
+          currentCategoryName: catName,
+          suggestedCategoryId: '19006',
+          suggestedCategoryName: 'LEGO Complete Sets & Packs',
+          reason: 'Complete set listed in Bricks & Parts category',
+        });
+      }
+
+      // Check store category
+      const correctStore = this.getCorrectStoreCategory(listing);
+      if (correctStore.id !== String(storeCatId)) {
+        storeCategoryIssues.push({
+          itemId: listing.platformItemId,
+          title: listing.title,
+          currentStoreCategoryId: storeCatId,
+          currentStoreCategoryName: storeCatName,
+          suggestedStoreCategoryId: correctStore.id,
+          suggestedStoreCategoryName: STORE_CATEGORIES[correctStore.id] || correctStore.id,
+          reason: correctStore.reason,
+        });
+      }
+    }
+
+    return {
+      totalListings: listings.length,
+      itemCategoryIssues,
+      storeCategoryIssues,
+      summary: {
+        itemCategoryIssueCount: itemCategoryIssues.length,
+        storeCategoryIssueCount: storeCategoryIssues.length,
+        storeCategoryDistribution: storeCatDist,
+        itemCategoryDistribution: itemCatDist,
+      },
+    };
+  }
+
+  private looksLikeCompleteSet(listing: ParsedEbayListing): boolean {
+    return looksLikeCompleteSetShared(listing.title);
+  }
+
+  private getCorrectStoreCategory(listing: ParsedEbayListing): { id: string; reason: string } {
+    return getCorrectStoreCategoryShared({
+      title: listing.title,
+      categoryId: listing.ebayData?.categoryId,
+      categoryName: listing.ebayData?.categoryName,
+      condition: listing.ebayData?.condition,
+    });
   }
 
   // ============================================================================

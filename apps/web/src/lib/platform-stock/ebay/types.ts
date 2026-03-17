@@ -658,6 +658,9 @@ export interface ReviseItemRequest {
   conditionDescription?: string;
   itemSpecifics?: Array<{ name: string; value: string }>;
   pictureUrls?: string[];
+  // Category fields
+  categoryId?: string; // eBay item category (PrimaryCategory)
+  storeCategoryId?: string; // eBay store category (Storefront)
   // Best Offer fields
   bestOfferEnabled?: boolean;
   bestOfferAutoAcceptPrice?: number;
