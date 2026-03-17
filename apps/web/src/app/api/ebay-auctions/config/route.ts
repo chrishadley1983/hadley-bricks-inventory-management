@@ -5,10 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
-
-const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
 const configUpdateSchema = z.object({
   enabled: z.boolean().optional(),
@@ -30,11 +28,17 @@ const configUpdateSchema = z.object({
 
 export async function GET() {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { data, error } = await supabase
       .from('ebay_auction_config')
       .select('*')
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .single();
 
     if (error) {
@@ -52,6 +56,13 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Validate input
@@ -62,8 +73,6 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = createServiceRoleClient();
 
     // Map camelCase to snake_case for DB
     const fieldMap: Record<string, string> = {
@@ -95,7 +104,7 @@ export async function PUT(request: NextRequest) {
     const { data, error } = await supabase
       .from('ebay_auction_config')
       .update(update)
-      .eq('user_id', DEFAULT_USER_ID)
+      .eq('user_id', user.id)
       .select()
       .single();
 
