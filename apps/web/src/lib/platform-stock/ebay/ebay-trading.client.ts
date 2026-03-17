@@ -902,6 +902,14 @@ export class EbayTradingClient {
       itemNode.ConditionDescription = request.conditionDescription;
     }
 
+    if (request.categoryId !== undefined) {
+      itemNode.PrimaryCategory = { CategoryID: request.categoryId };
+    }
+
+    if (request.storeCategoryId !== undefined) {
+      itemNode.Storefront = { StoreCategoryID: request.storeCategoryId };
+    }
+
     if (request.pictureUrls !== undefined && request.pictureUrls.length > 0) {
       itemNode.PictureDetails = {
         PictureURL: request.pictureUrls,
