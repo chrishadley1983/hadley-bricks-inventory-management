@@ -112,6 +112,9 @@ export async function POST(request: NextRequest) {
           itemSpecifics: ((cd.itemSpecifics as unknown[]) || []).length > 0
             ? (cd.itemSpecifics as Array<{ name: string; value: string }>)
             : undefined,
+          ean: (cd.itemSpecifics as Array<{ name: string; value: string }> || []).find((s) => s.name === 'EAN')?.value || undefined,
+          upc: (cd.itemSpecifics as Array<{ name: string; value: string }> || []).find((s) => s.name === 'UPC')?.value || undefined,
+          isbn: (cd.itemSpecifics as Array<{ name: string; value: string }> || []).find((s) => s.name === 'ISBN')?.value || undefined,
           location: (cd.location as string) || undefined,
           country: (cd.country as string) || undefined,
           postalCode: (cd.postalCode as string) || undefined,

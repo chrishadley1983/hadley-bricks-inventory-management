@@ -244,11 +244,11 @@ gcloud scheduler jobs create http cost-allocation \
   --attempt-deadline="300s" \
   --description="Daily proportional cost allocation across purchase items"
 
-# eBay Listing Refresh - weekly on Sunday at 7pm UK time
+# eBay Listing Refresh - daily at 7pm UK time (20 listings per run)
 # Ends stale listings (90+ days) and recreates with engagement-based pricing
 gcloud scheduler jobs create http ebay-listing-refresh \
   --location=europe-west2 \
-  --schedule="0 19 * * 0" \
+  --schedule="0 19 * * *" \
   --uri="$APP_URL/api/cron/ebay-listing-refresh" \
   --http-method=POST \
   --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \

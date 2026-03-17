@@ -776,6 +776,11 @@ export class EbayListingRefreshService {
           // Item specifics
           itemSpecifics: cachedData.itemSpecifics.length > 0 ? cachedData.itemSpecifics : undefined,
 
+          // Product identifiers (extract from item specifics if present)
+          ean: cachedData.itemSpecifics.find((s: { name: string }) => s.name === 'EAN')?.value || undefined,
+          upc: cachedData.itemSpecifics.find((s: { name: string }) => s.name === 'UPC')?.value || undefined,
+          isbn: cachedData.itemSpecifics.find((s: { name: string }) => s.name === 'ISBN')?.value || undefined,
+
           // Location
           location: cachedData.location || undefined,
           country: cachedData.country || undefined,
