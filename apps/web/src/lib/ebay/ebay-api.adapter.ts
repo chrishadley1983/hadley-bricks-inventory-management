@@ -29,6 +29,7 @@ import type {
   EbayCreateOfferResponse,
   EbayPublishOfferResponse,
   EbayOfferResponse,
+  EbayOffersResponse,
   EbayInventoryLocation,
   EbayInventoryLocationInput,
   // Taxonomy API types
@@ -418,6 +419,56 @@ export class EbayApiAdapter {
       // If no offers exist, eBay may return 404
       return [];
     }
+  }
+
+  /**
+   * Get offers with pagination (no SKU filter)
+   * @see https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/getOffers
+   */
+  async getOffers(params?: {
+    limit?: number;
+    offset?: number;
+    format?: 'FIXED_PRICE' | 'AUCTION';
+  }): Promise<EbayOffersResponse> {
+    const queryParams: Record<string, string | number | undefined> = {
+      limit: params?.limit || 200,
+      offset: params?.offset || 0,
+      marketplace_id: this.marketplaceId,
+    };
+
+    if (params?.format) {
+      queryParams.format = params.format;
+    }
+
+    return this.request<EbayOffersResponse>(`${INVENTORY_API_PATH}/offer`, {
+      params: queryParams,
+      headers: {
+        'Content-Language': 'en-GB',
+        'Accept-Language': 'en-GB',
+      },
+    });
+  }
+
+  /**
+   * Fetch all offers using pagination, across all formats
+   */
+  async getAllOffers(params?: { limit?: number; format?: 'FIXED_PRICE' | 'AUCTION' }): Promise<EbayOfferResponse[]> {
+    const allOffers: EbayOfferResponse[] = [];
+    let offset = 0;
+    const limit = params?.limit || 200;
+
+    while (true) {
+      const response = await this.getOffers({ limit, offset, format: params?.format });
+      allOffers.push(...(response.offers ?? []));
+
+      if (offset + limit >= response.total) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    return allOffers;
   }
 
   /**

@@ -576,6 +576,7 @@ export interface EbayOfferResponse {
   bestOffer?: EbayBestOffer;
   categoryId?: string;
   secondaryCategoryId?: string;
+  storeCategoryNames?: string[];
   listing?: {
     listingId: string;
     listingStatus: string;
@@ -584,6 +585,20 @@ export interface EbayOfferResponse {
   merchantLocationKey?: string;
   status?: string;
   statusReason?: string;
+}
+
+/**
+ * Paginated response from getOffers endpoint
+ */
+export interface EbayOffersResponse {
+  href?: string;
+  total: number;
+  size: number;
+  offset: number;
+  limit: number;
+  offers: EbayOfferResponse[];
+  next?: string;
+  prev?: string;
 }
 
 /**
