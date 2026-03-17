@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
           } else {
             sendEvent('error', result);
           }
-        } catch (error) {
+        } catch (_error) {
           const message = 'Internal server error';
           sendEvent('error', message);
         }
