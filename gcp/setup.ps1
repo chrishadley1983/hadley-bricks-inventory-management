@@ -157,6 +157,9 @@ Create-SchedulerJob -Name "investment-retrain" -Schedule "0 6 1 * *" -Uri "$APP_
 Create-SchedulerJob -Name "minifig-daily-inventory" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/minifigs/daily-inventory" -Description "Daily minifig inventory pull, Bricqer order poll, research refresh, repricing"
 Create-SchedulerJob -Name "minifig-poll-ebay-orders" -Schedule "*/15 * * * *" -Uri "$APP_URL/api/cron/minifigs/poll-ebay-orders" -Description "Poll eBay for minifig sales (cross-platform delisting)"
 
+# Weekly audit jobs
+Create-SchedulerJob -Name "ebay-category-audit" -Schedule "0 7 * * 1" -Uri "$APP_URL/api/cron/ebay-category-audit" -Description "Weekly eBay category audit report (Mondays 7am UTC)"
+
 # Summary
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
