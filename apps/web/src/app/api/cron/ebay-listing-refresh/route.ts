@@ -58,14 +58,15 @@ async function getInventoryCosts(
   ebayListingIds: string[]
 ): Promise<Map<string, { id: string; cost: number; condition: string | null; set_number: string | null; item_name: string | null }>> {
   const map = new Map<string, { id: string; cost: number; condition: string | null; set_number: string | null; item_name: string | null }>();
-  const pageSize = 1000;
+  const pageSize = 500; // Keep well under Supabase 1000-row response limit
 
   for (let offset = 0; offset < ebayListingIds.length; offset += pageSize) {
     const batch = ebayListingIds.slice(offset, offset + pageSize);
     const { data } = await supabase
       .from('inventory_items')
       .select('id, ebay_listing_id, cost, condition, set_number, item_name')
-      .in('ebay_listing_id', batch);
+      .in('ebay_listing_id', batch)
+      .limit(1000);
 
     if (data) {
       for (const row of data) {
@@ -265,8 +266,6 @@ export async function POST(request: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', enriched.inventoryItemId);
-
-          await delay(RATE_LIMIT_DELAY_MS);
         }
 
         reportItems.push({

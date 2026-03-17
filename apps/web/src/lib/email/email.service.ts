@@ -62,6 +62,31 @@ export interface CostAllocationReportParams {
   summary: CostAllocationSummary;
 }
 
+export interface ListingRefreshReportItem {
+  setNumber: string | null;
+  itemName: string | null;
+  oldPrice: number;
+  newPrice: number;
+  tier: string;
+  views: number | null;
+  watchers: number;
+  ageDays: number;
+  newListingUrl: string | null;
+  failed: boolean;
+}
+
+export interface ListingRefreshFailedItem {
+  title: string;
+  phase: string;
+  errorMessage: string;
+}
+
+export interface ListingRefreshReportParams {
+  userEmail: string;
+  items: ListingRefreshReportItem[];
+  failedItems: ListingRefreshFailedItem[];
+}
+
 export interface TwoPhaseSuccessParams {
   userEmail: string;
   feedId: string;
@@ -74,6 +99,10 @@ export interface TwoPhaseSuccessParams {
     itemName: string;
     price: number;
   }>;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export class EmailService {
@@ -662,8 +691,8 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
           : '-';
 
         return `<tr style="background:${bgColor};">
-          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${item.setNumber || '-'}</td>
-          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${(item.itemName || '').slice(0, 50)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(item.setNumber || '-')}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml((item.itemName || '').slice(0, 50))}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${item.oldPrice.toFixed(2)}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${isFailed ? 'FAILED' : '£' + item.newPrice.toFixed(2)}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${reductionPct}%</td>
@@ -692,9 +721,9 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
           ${failedItems
             .map(
               (f) => `<tr>
-            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.title}</td>
-            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.phase}</td>
-            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${f.errorMessage}</td>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(f.title)}</td>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(f.phase)}</td>
+            <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(f.errorMessage)}</td>
           </tr>`
             )
             .join('\n')}
@@ -754,31 +783,6 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
 
     await this.send({ to: userEmail, subject, html });
   }
-}
-
-export interface ListingRefreshReportItem {
-  setNumber: string | null;
-  itemName: string | null;
-  oldPrice: number;
-  newPrice: number;
-  tier: string;
-  views: number | null;
-  watchers: number;
-  ageDays: number;
-  newListingUrl: string | null;
-  failed: boolean;
-}
-
-export interface ListingRefreshFailedItem {
-  title: string;
-  phase: string;
-  errorMessage: string;
-}
-
-export interface ListingRefreshReportParams {
-  userEmail: string;
-  items: ListingRefreshReportItem[];
-  failedItems: ListingRefreshFailedItem[];
 }
 
 export const emailService = new EmailService();
