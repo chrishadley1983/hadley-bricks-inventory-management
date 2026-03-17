@@ -6,7 +6,7 @@
 #   .\scripts\run-keepa-discovery.ps1 -Phase ean
 #   .\scripts\run-keepa-discovery.ps1 -Phase finder
 #   .\scripts\run-keepa-discovery.ps1 -Phase ean -DryRun
-#   .\scripts\run-keepa-discovery.ps1 -Phase ean -BaseUrl https://hadley-bricks.vercel.app
+#   .\scripts\run-keepa-discovery.ps1 -Phase ean -BaseUrl https://hadley-bricks-inventory-management.vercel.app
 
 param(
     [Parameter(Mandatory=$true)]

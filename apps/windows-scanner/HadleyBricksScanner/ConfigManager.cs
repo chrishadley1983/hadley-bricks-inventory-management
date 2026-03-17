@@ -23,7 +23,7 @@ public class ConfigManager
     private readonly string _scheduleCachePath;
     private readonly string _apiKeyPath;
 
-    public string BaseUrl { get; private set; } = "https://hadley-bricks.vercel.app";
+    public string BaseUrl { get; private set; } = "https://hadley-bricks-inventory-management.vercel.app";
     public string MachineId { get; }
     public string MachineName { get; }
 

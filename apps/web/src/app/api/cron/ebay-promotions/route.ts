@@ -258,6 +258,7 @@ export async function POST(request: NextRequest) {
     let totalUpdated = 0;
     let totalRemoved = 0;
     let totalErrors = 0;
+    const allFailedDetails: Array<{ listingId: string; action: string; statusCode: number; error: string }> = [];
 
     // 3. Process each schedule
     for (const schedule of schedules as ScheduleRow[]) {
@@ -365,25 +366,55 @@ export async function POST(request: NextRequest) {
       );
 
       // Apply changes
+      const failedDetails: Array<{ listingId: string; action: string; statusCode: number; error: string }> = [];
       try {
         if (toAdd.length > 0) {
           const result = await service.addListings(schedule.campaign_id, toAdd);
           totalAdded += result.successful.length;
           totalErrors += result.failed.length;
+          for (const f of result.failed) {
+            failedDetails.push({
+              listingId: f.listingId,
+              action: 'add',
+              statusCode: f.statusCode,
+              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+            });
+          }
         }
         if (toUpdate.length > 0) {
           const result = await service.updateBidPercentages(schedule.campaign_id, toUpdate);
           totalUpdated += result.successful.length;
           totalErrors += result.failed.length;
+          for (const f of result.failed) {
+            failedDetails.push({
+              listingId: f.listingId,
+              action: 'update',
+              statusCode: f.statusCode,
+              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+            });
+          }
         }
         if (toRemove.length > 0) {
           const result = await service.removeListings(schedule.campaign_id, toRemove);
           totalRemoved += result.successful.length;
           totalErrors += result.failed.length;
+          for (const f of result.failed) {
+            failedDetails.push({
+              listingId: f.listingId,
+              action: 'remove',
+              statusCode: f.statusCode,
+              error: f.errors?.map(e => `${e.errorId}: ${e.message}`).join('; ') || 'unknown',
+            });
+          }
         }
       } catch (error) {
         console.error(`[Cron EbayPromotions] Error applying changes:`, error);
         totalErrors++;
+      }
+
+      if (failedDetails.length > 0) {
+        allFailedDetails.push(...failedDetails);
+        console.error(`[Cron EbayPromotions] Failed listings for campaign ${schedule.campaign_id}:`, JSON.stringify(failedDetails));
       }
     }
 
@@ -391,7 +422,11 @@ export async function POST(request: NextRequest) {
     console.log(`[Cron EbayPromotions] Complete:`, summary);
 
     await execution.complete(summary);
-    return NextResponse.json({ success: true, ...summary });
+    return NextResponse.json({
+      success: true,
+      ...summary,
+      ...(allFailedDetails.length > 0 ? { failedDetails: allFailedDetails } : {}),
+    });
   } catch (error) {
     console.error('[Cron EbayPromotions] Fatal error:', error);
     await execution.fail(error instanceof Error ? error.message : 'Unknown error');
