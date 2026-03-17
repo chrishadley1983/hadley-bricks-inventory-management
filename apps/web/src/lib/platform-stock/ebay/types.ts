@@ -87,6 +87,8 @@ export interface TradingApiItem {
   PictureDetails?: {
     GalleryURL?: string;
   };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Variations?: any;
 }
 
 /**
@@ -169,6 +171,9 @@ export interface EbayListingData {
   // Image & URL
   galleryUrl: string | null;
   viewItemUrl: string | null;
+
+  // Variation listings
+  hasVariations: boolean;
 }
 
 // ============================================================================

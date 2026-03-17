@@ -138,6 +138,9 @@ export class EbayListingRefreshService {
         // Must be older than minimum age
         if (age < minAge) return false;
 
+        // Exclude variation/multi-listings — end+create doesn't preserve variations
+        if (listing.ebayData.hasVariations) return false;
+
         // Apply optional filters
         if (filters?.maxPrice !== undefined && listing.price > filters.maxPrice) return false;
         if (filters?.minPrice !== undefined && listing.price < filters.minPrice) return false;
