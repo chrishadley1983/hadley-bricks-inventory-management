@@ -1,9 +1,13 @@
 /**
  * POST /api/cron/ebay-listing-refresh/reprice
  *
- * One-off: applies engagement-based pricing to the 64 listings that were
- * recreated at original prices due to the initial timeout.
+ * One-off: applies engagement-based pricing to listings that were
+ * recreated at original prices due to the ItemID type mismatch bug.
  * Uses ReviseFixedPriceItem to update price only (no end/create).
+ *
+ * Query params:
+ *   ?job=<id>      — comma-separated refresh job IDs (defaults to known unpriced jobs)
+ *   ?dry=true      — dry-run mode, returns calculated prices without applying
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,8 +24,13 @@ export const maxDuration = 300;
 
 const USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const EBAY_FEE_RATE = 0.1323;
-const REFRESH_JOB_ID = '2a021d2c-9641-466d-a607-09feae372134';
 const RATE_LIMIT_DELAY_MS = 150;
+
+// Jobs created before the ItemID type fix — need retroactive repricing
+const DEFAULT_JOB_IDS = [
+  '01d60f42-9ba3-4f03-904c-c598420fc737',  // 2026-03-17 19:00 (20 items)
+  '69991a48-8edf-4b28-a7fb-7a3d5c096e4b',  // 2026-03-18 19:00 (20 items)
+];
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,11 +46,13 @@ export async function POST(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dry') === 'true';
-    const jobId = searchParams.get('job') || REFRESH_JOB_ID;
+    const jobIds = searchParams.get('job')
+      ? searchParams.get('job')!.split(',').map((s) => s.trim())
+      : DEFAULT_JOB_IDS;
 
     const supabase = createServiceRoleClient();
 
-    // Get created items with engagement data and inventory cost
+    // Get created items with engagement data across all specified jobs
     const { data: items, error } = await supabase
       .from('ebay_listing_refresh_items')
       .select(`
@@ -52,7 +63,7 @@ export async function POST(request: NextRequest) {
         original_views,
         original_listing_start_date
       `)
-      .eq('refresh_id', jobId)
+      .in('refresh_id', jobIds)
       .eq('status', 'created')
       .not('new_item_id', 'is', null);
 
@@ -60,15 +71,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
     }
 
-    // Get inventory costs for items that have inventory records
+    // Get inventory data (cost + current listing_value) for already-reduced check
     const newItemIds = items.map((i) => i.new_item_id).filter(Boolean) as string[];
-    const costMap = new Map<string, { cost: number; condition: string | null; id: string }>();
+    const costMap = new Map<string, { cost: number; condition: string | null; id: string; listingValue: number | null }>();
 
     for (let offset = 0; offset < newItemIds.length; offset += 500) {
       const batch = newItemIds.slice(offset, offset + 500);
       const { data: invRows } = await supabase
         .from('inventory_items')
-        .select('id, ebay_listing_id, cost, condition')
+        .select('id, ebay_listing_id, cost, condition, listing_value')
         .in('ebay_listing_id', batch);
 
       if (invRows) {
@@ -78,6 +89,7 @@ export async function POST(request: NextRequest) {
               cost: Number(row.cost) || 0,
               condition: row.condition,
               id: row.id,
+              listingValue: row.listing_value != null ? Number(row.listing_value) : null,
             });
           }
         }
@@ -97,11 +109,21 @@ export async function POST(request: NextRequest) {
       watchers: number;
       inventoryId: string | null;
     }> = [];
+    let alreadyReduced = 0;
 
     for (const item of items) {
       if (!item.new_item_id) continue;
 
       const oldPrice = Number(item.original_price) || 0;
+      const inv = costMap.get(item.new_item_id);
+
+      // Guard: skip items where listing_value is already below original_price
+      // This means the reprice script (or manual edit) already reduced the price
+      if (inv?.listingValue != null && inv.listingValue < oldPrice) {
+        alreadyReduced++;
+        continue;
+      }
+
       const views = item.original_views || 0;
       const watchers = item.original_watchers || 0;
       const startDate = item.original_listing_start_date
@@ -109,7 +131,6 @@ export async function POST(request: NextRequest) {
         : now;
       const ageDays = Math.max(1, Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-      const inv = costMap.get(item.new_item_id);
       const cost = inv?.cost || 0;
       const condition = inv?.condition || null;
 
@@ -134,9 +155,11 @@ export async function POST(request: NextRequest) {
     if (dryRun) {
       return NextResponse.json({
         dryRun: true,
+        jobIds,
         totalItems: items.length,
         toReprice: repriceItems.length,
-        unchanged: items.length - repriceItems.length,
+        alreadyReduced,
+        unchanged: items.length - repriceItems.length - alreadyReduced,
         items: repriceItems.map((i) => ({
           title: i.title.slice(0, 60),
           oldPrice: i.oldPrice,
@@ -203,10 +226,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      jobIds,
       totalItems: items.length,
       revised,
       failed,
-      unchanged: items.length - repriceItems.length,
+      alreadyReduced,
+      unchanged: items.length - repriceItems.length - alreadyReduced,
       results,
     });
   } catch (error) {
