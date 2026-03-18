@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       {
         overallStatus: report.overallStatus,
         fromApi: report.fromApi,
+        ...(report.apiError ? { apiError: report.apiError } : {}),
         metricsCount: report.metrics.length,
         redCount: report.metrics.filter((m) => m.status === 'RED').length,
         amberCount: report.metrics.filter((m) => m.status === 'AMBER').length,
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
       success: true,
       overallStatus: report.overallStatus,
       fromApi: report.fromApi,
+      ...(report.apiError ? { apiError: report.apiError } : {}),
       period: report.period.formatted,
       duration: durationMs,
     });
