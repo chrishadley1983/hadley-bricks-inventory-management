@@ -182,7 +182,71 @@ def main():
     else:
         log.info("No successful lookups to update")
 
+    # ── Post-backfill integrity check ────────────────────────────────────
+    # Flag any delivered items still missing a delivery date
+    all_rows = _supabase_get("delivery_tracking_cache?select=*")
+    gaps = [
+        row for row in all_rows
+        if row.get("rm_status")
+        and "delivered" in row["rm_status"].lower()
+        and not row.get("rm_delivery_date")
+    ]
+
+    if gaps:
+        log.warning(
+            "%d delivered orders still missing delivery date — sending Discord alert",
+            len(gaps),
+        )
+        _send_discord_alert(gaps)
+    else:
+        log.info("Integrity check passed — all delivered orders have dates")
+
     log.info("=== RM Backfill Complete ===")
+
+
+def _send_discord_alert(gaps: list[dict]) -> None:
+    """Send a Discord alert for delivered orders missing delivery dates."""
+    # Read webhook from env or web app config
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_ALERTS")
+    if not webhook_url:
+        env_local = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "web", ".env.local"
+        )
+        if os.path.exists(env_local):
+            with open(env_local) as f:
+                for line in f:
+                    if line.startswith("DISCORD_WEBHOOK_ALERTS="):
+                        webhook_url = line.split("=", 1)[1].strip().strip('"')
+
+    if not webhook_url:
+        log.warning("DISCORD_WEBHOOK_ALERTS not found — cannot send alert")
+        return
+
+    lines = [f"- `{g['platform_order_id']}` — {g.get('rm_status', '?')} (tracked: {g.get('tracking_number', 'none')})" for g in gaps[:10]]
+    if len(gaps) > 10:
+        lines.append(f"- ...and {len(gaps) - 10} more")
+
+    payload = {
+        "embeds": [{
+            "title": "RM Backfill — Delivered Without Date",
+            "description": f"**{len(gaps)}** orders show as delivered but have no delivery date after backfill.\n\n" + "\n".join(lines),
+            "color": 0xed4245,
+            "footer": {"text": "rm_backfill.py integrity check"},
+        }]
+    }
+
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        webhook_url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            resp.read()
+        log.info("Discord alert sent for %d gaps", len(gaps))
+    except Exception as e:
+        log.error("Failed to send Discord alert: %s", e)
 
 
 if __name__ == "__main__":
