@@ -133,12 +133,12 @@ export async function POST(request: NextRequest) {
       `[Cron EmailPurchases] Scan complete: ${candidates.length} ready, ${needsReview.length} need review, ${scanResult.data?.already_processed_count ?? 0} already processed`
     );
 
-    if (candidates.length === 0) {
-      console.log('[Cron EmailPurchases] No new candidates to import');
+    if (candidates.length === 0 && needsReview.length === 0) {
+      console.log('[Cron EmailPurchases] No new candidates or review items');
       await execution.complete(
         {
           message: 'No new candidates',
-          needsReview: needsReview.length,
+          needsReview: 0,
           alreadyProcessed: scanResult.data?.already_processed_count ?? 0,
         },
         200,
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
         message: 'No new candidates to import',
         scanned: scanResult.data?.total_found ?? 0,
         alreadyProcessed: scanResult.data?.already_processed_count ?? 0,
-        needsReview: needsReview.length,
+        needsReview: 0,
         duration: Date.now() - startTime,
       });
     }
