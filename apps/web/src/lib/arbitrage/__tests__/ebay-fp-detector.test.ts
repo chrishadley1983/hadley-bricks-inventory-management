@@ -64,8 +64,8 @@ describe('EbayFpDetectorService', () => {
   // ============================================
 
   describe('signal weights', () => {
-    it('should have 22 signals defined', () => {
-      expect(Object.keys(SIGNAL_WEIGHTS)).toHaveLength(22);
+    it('should have 34 signals defined', () => {
+      expect(Object.keys(SIGNAL_WEIGHTS)).toHaveLength(34);
     });
 
     it('should have a default threshold of 50', () => {
