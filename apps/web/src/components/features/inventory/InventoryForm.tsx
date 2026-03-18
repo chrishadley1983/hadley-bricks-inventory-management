@@ -733,15 +733,15 @@ export function InventoryForm({
                             variant="outline"
                             size="icon"
                             asChild
-                            title="View on SellerAmp SAS"
-                            className="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                            title="View on Keepa"
+                            className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                           >
                             <a
-                              href={`https://sas.selleramp.com/sas/lookup?SasLookup%5Bsearch_term%5D=${field.value}`}
+                              href={`https://keepa.com/#!product/2-${field.value}`}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              <span className="text-xs font-bold">SAS</span>
+                              <span className="text-xs font-bold">K</span>
                             </a>
                           </Button>
                         </>
