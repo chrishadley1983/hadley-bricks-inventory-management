@@ -45,20 +45,22 @@ export async function GET() {
     const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
     const [ebayResult, amazonResult, bricklinkResult, brickowlResult] = await Promise.all([
-      // eBay: query listing VALUE (sum) instead of count
+      // eBay: query listing VALUE (sum) instead of count — exclude refreshed listings
       supabase
         .from('inventory_items')
         .select('listing_value')
         .eq('user_id', user.id)
         .eq('listing_platform', 'ebay')
+        .eq('is_refresh', false)
         .gte('listing_date', weekStartStr)
         .lte('listing_date', weekEndStr),
-      // Amazon: query listing VALUE (sum) instead of count
+      // Amazon: query listing VALUE (sum) instead of count — exclude refreshed listings
       supabase
         .from('inventory_items')
         .select('listing_value')
         .eq('user_id', user.id)
         .eq('listing_platform', 'amazon')
+        .eq('is_refresh', false)
         .gte('listing_date', weekStartStr)
         .lte('listing_date', weekEndStr),
       supabase
@@ -87,19 +89,21 @@ export async function GET() {
     // Get daily listing counts by platform (items listed today)
     const [ebayDailyResult, amazonDailyResult, bricklinkDailyResult, brickowlDailyResult] =
       await Promise.all([
-        // eBay: query listing VALUE (sum) instead of count
+        // eBay: query listing VALUE (sum) instead of count — exclude refreshed listings
         supabase
           .from('inventory_items')
           .select('listing_value')
           .eq('user_id', user.id)
           .eq('listing_platform', 'ebay')
+          .eq('is_refresh', false)
           .eq('listing_date', todayStr),
-        // Amazon: query listing VALUE (sum) instead of count
+        // Amazon: query listing VALUE (sum) instead of count — exclude refreshed listings
         supabase
           .from('inventory_items')
           .select('listing_value')
           .eq('user_id', user.id)
           .eq('listing_platform', 'amazon')
+          .eq('is_refresh', false)
           .eq('listing_date', todayStr),
         supabase
           .from('inventory_items')
@@ -184,11 +188,12 @@ export async function GET() {
       (bricklinkWeekItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
       (bricklinkWeekUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
 
-    // Get daily listed value (items listed today + BrickLink uploads today)
+    // Get daily listed value (items listed today + BrickLink uploads today) — exclude refreshes
     const { data: todayListedItems } = await supabase
       .from('inventory_items')
       .select('listing_value')
       .eq('user_id', user.id)
+      .eq('is_refresh', false)
       .eq('listing_date', todayStr);
 
     const { data: todayBricklinkUploads } = await supabase
@@ -213,11 +218,12 @@ export async function GET() {
       (todayBricklinkItems?.reduce((sum, item) => sum + (item.listing_value || 0), 0) ?? 0) +
       (todayBricklinkUploads?.reduce((sum, u) => sum + (u.selling_price || 0), 0) ?? 0);
 
-    // Get week listed totals (inventory items + BrickLink uploads)
+    // Get week listed totals (inventory items + BrickLink uploads) — exclude refreshes
     const { data: weekListedItems } = await supabase
       .from('inventory_items')
       .select('listing_value')
       .eq('user_id', user.id)
+      .eq('is_refresh', false)
       .gte('listing_date', format(weekStart, 'yyyy-MM-dd'))
       .lte('listing_date', format(weekEnd, 'yyyy-MM-dd'));
 
@@ -237,11 +243,12 @@ export async function GET() {
       const date = subDays(today, i);
       const dateStr = format(date, 'yyyy-MM-dd');
 
-      // Listed value for the day (inventory items + BrickLink uploads)
+      // Listed value for the day (inventory items + BrickLink uploads) — exclude refreshes
       const { data: dayListedItems } = await supabase
         .from('inventory_items')
         .select('listing_value')
         .eq('user_id', user.id)
+        .eq('is_refresh', false)
         .eq('listing_date', dateStr);
 
       const { data: dayBricklinkUploads } = await supabase

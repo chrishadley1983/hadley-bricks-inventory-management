@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
                 ebay_listing_id: result.itemId,
                 listing_date: new Date().toISOString().split('T')[0],
                 listing_value: item.modified_price || item.original_price,
+                is_refresh: true,
                 updated_at: new Date().toISOString(),
               })
               .eq('id', inv.id);

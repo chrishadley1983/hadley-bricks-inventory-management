@@ -3121,6 +3121,69 @@ export type Database = {
           },
         ]
       }
+      ebay_listing_categories: {
+        Row: {
+          category_id: string | null
+          category_name: string | null
+          created_at: string
+          ebay_item_id: string | null
+          id: string
+          inventory_item_id: string | null
+          last_synced_at: string
+          offer_id: string | null
+          sku: string | null
+          store_category_names: string[] | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          category_name?: string | null
+          created_at?: string
+          ebay_item_id?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          last_synced_at?: string
+          offer_id?: string | null
+          sku?: string | null
+          store_category_names?: string[] | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          category_name?: string | null
+          created_at?: string
+          ebay_item_id?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          last_synced_at?: string
+          offer_id?: string | null
+          sku?: string | null
+          store_category_names?: string[] | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ebay_listing_categories_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebay_listing_categories_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ebay_listing_refresh_items: {
         Row: {
           cached_listing_data: Json | null
@@ -5371,6 +5434,7 @@ export type Database = {
           ebay_listing_id: string | null
           ebay_listing_url: string | null
           id: string
+          is_refresh: boolean
           item_name: string | null
           linked_lot: string | null
           listing_date: string | null
@@ -5411,6 +5475,7 @@ export type Database = {
           ebay_listing_id?: string | null
           ebay_listing_url?: string | null
           id?: string
+          is_refresh?: boolean
           item_name?: string | null
           linked_lot?: string | null
           listing_date?: string | null
@@ -5451,6 +5516,7 @@ export type Database = {
           ebay_listing_id?: string | null
           ebay_listing_url?: string | null
           id?: string
+          is_refresh?: boolean
           item_name?: string | null
           linked_lot?: string | null
           listing_date?: string | null
@@ -5854,111 +5920,6 @@ export type Database = {
             referencedColumns: ["set_number"]
           },
         ]
-      }
-      japan_day_plans: {
-        Row: {
-          city: string
-          day_date: string
-          notes: string | null
-          plan_data: Json
-          stay_name: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          city: string
-          day_date: string
-          notes?: string | null
-          plan_data?: Json
-          stay_name?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          city?: string
-          day_date?: string
-          notes?: string | null
-          plan_data?: Json
-          stay_name?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      japan_favourites: {
-        Row: {
-          added_at: string | null
-          area: string | null
-          guide: string
-          guide_title: string | null
-          id: number
-          lat: number | null
-          lng: number | null
-          name: string
-        }
-        Insert: {
-          added_at?: string | null
-          area?: string | null
-          guide: string
-          guide_title?: string | null
-          id?: number
-          lat?: number | null
-          lng?: number | null
-          name: string
-        }
-        Update: {
-          added_at?: string | null
-          area?: string | null
-          guide?: string
-          guide_title?: string | null
-          id?: number
-          lat?: number | null
-          lng?: number | null
-          name?: string
-        }
-        Relationships: []
-      }
-      japan_notes: {
-        Row: {
-          guide: string
-          id: number
-          name: string
-          note: string
-          updated_at: string | null
-        }
-        Insert: {
-          guide: string
-          id?: number
-          name: string
-          note: string
-          updated_at?: string | null
-        }
-        Update: {
-          guide?: string
-          id?: number
-          name?: string
-          note?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      japan_ruled_out: {
-        Row: {
-          guide: string
-          id: number
-          name: string
-          ruled_at: string | null
-        }
-        Insert: {
-          guide: string
-          id?: number
-          name: string
-          ruled_at?: string | null
-        }
-        Update: {
-          guide?: string
-          id?: number
-          name?: string
-          ruled_at?: string | null
-        }
-        Relationships: []
       }
       job_execution_history: {
         Row: {
@@ -13142,6 +13103,7 @@ export type Database = {
           offer_count: number | null
           offers_json: Json | null
           price_is_lowest_offer: boolean | null
+          profit_margin_percent: number | null
           sales_rank: number | null
           sales_rank_category: string | null
           seeded_asin_id: string | null
