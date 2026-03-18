@@ -80,6 +80,7 @@ export class EbayTradingClient {
       attributeNamePrefix: '@_',
       textNodeName: '#text',
       parseAttributeValue: false,
+      parseTagValue: false,
       trimValues: true,
     });
 

@@ -37,19 +37,11 @@ const JOB_TYPE = 'ebay-listing-refresh';
 const USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const USER_EMAIL = 'chris@hadleybricks.co.uk';
 const EBAY_FEE_RATE = 0.1323;
-const RATE_LIMIT_DELAY_MS = 150;
 
 interface EnrichedListing extends EligibleListing {
   pricing: RefreshPriceResult;
   inventoryItemId: string | null;
   cost: number;
-}
-
-/**
- * Sleep helper for rate limiting
- */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

@@ -283,7 +283,7 @@ export class EbayListingRefreshService {
     const endsWithin12Hours = endDate ? endDate <= twelveHoursFromNow : false;
 
     return {
-      itemId: listing.platformItemId,
+      itemId: String(listing.platformItemId),
       title: listing.title,
       price: listing.price,
       currency: listing.currency,
