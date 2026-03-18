@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { INVENTORY_HEALTH_TARGETS } from '@/lib/constants/inventory-health-targets';
 
 /**
  * Date range for reports
@@ -150,6 +151,63 @@ export interface InventoryAgingReport {
   averageDaysInStock: number;
   itemsOver180Days: number;
   valueOver180Days: number;
+}
+
+/**
+ * Inventory Health Dashboard data structure
+ */
+export interface InventoryHealthReport {
+  kpis: {
+    listedCount: number;
+    listedTarget: number;
+    inventoryCog: number;
+    inventoryValue: number;
+    valueCogRatio: number;
+  };
+
+  velocity: {
+    soldThisWeek: number;
+    sellThroughPct: number;
+    weeklyGrossRevenue: number;
+    medianDaysToSell: number;
+    annualPace: number;
+    annualTarget: number;
+  };
+
+  sourcing: {
+    itemsBoughtThisWeek: number;
+    itemsListedThisWeek: number;
+    avgCogBought: number;
+    avgListValueListed: number;
+    cogPct: number;
+    cogPctTarget: number;
+    netStockChange: number;
+  };
+
+  stockHealth: Array<{
+    bracket: string;
+    itemCount: number;
+    cogAmount: number;
+    pctOfListed: number;
+    status: 'green' | 'amber' | 'red';
+  }>;
+
+  pipeline: {
+    genuineBacklog: number;
+    investmentHolds: number;
+    notYetReceived: number;
+    weeksToTarget: number | null;
+  };
+
+  trends: Array<{
+    weekStart: string;
+    listed: number;
+    sold: number;
+    sellThroughPct: number;
+    cogPct: number;
+    grossRevenue: number;
+    netChange: number;
+  }>;
 }
 
 /**
@@ -1851,5 +1909,433 @@ export class ReportingService {
       platform: row.platform as ActivityPlatform,
       status: row.status as StoreStatus,
     }));
+  }
+
+  // ─── Inventory Health Dashboard ───────────────────────────────────────
+
+  private static readonly HEALTH_TARGETS = INVENTORY_HEALTH_TARGETS;
+
+  /**
+   * Helper: get Monday of the current ISO week
+   */
+  private getMonday(d: Date): Date {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.getFullYear(), date.getMonth(), diff);
+  }
+
+  /**
+   * Helper: paginated fetch from inventory_items_with_age view (may exceed 1,000 rows)
+   */
+  private async fetchAllListedAmazonItems(
+    userId: string
+  ): Promise<
+    Array<{
+      id: string | null;
+      cost: number | null;
+      listing_value: number | null;
+      days_in_stock: number | null;
+    }>
+  > {
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    const allRows: Array<{
+      id: string | null;
+      cost: number | null;
+      listing_value: number | null;
+      days_in_stock: number | null;
+    }> = [];
+
+    while (true) {
+      const { data, error } = await this.supabase
+        .from('inventory_items_with_age')
+        .select('id, cost, listing_value, days_in_stock')
+        .eq('user_id', userId)
+        .eq('status', 'LISTED')
+        .ilike('listing_platform', 'amazon')
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) throw new Error(`Failed to fetch listed items: ${error.message}`);
+
+      allRows.push(...(data || []));
+      if (!data || data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+
+    return allRows;
+  }
+
+  /**
+   * Get Inventory Health Report
+   * Single method returning all dashboard data for the inventory health page
+   */
+  async getInventoryHealthReport(userId: string): Promise<InventoryHealthReport> {
+    const now = new Date();
+    const monday = this.getMonday(now);
+    const mondayStr = this.formatDate(monday);
+
+    // 4 weeks ago for annual pace calculation
+    const fourWeeksAgo = new Date(monday);
+    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+    const fourWeeksAgoStr = this.formatDate(fourWeeksAgo);
+
+    // 8 weeks ago for trend derivation
+    const eightWeeksAgo = new Date(monday);
+    eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+    const eightWeeksAgoStr = this.formatDate(eightWeeksAgo);
+
+    // ── Run all queries in parallel ──
+    interface SoldRow {
+      id: string;
+      cost: number | null;
+      sold_price: number | null;
+      sold_date: string | null;
+      listing_date: string | null;
+      listing_value: number | null;
+    }
+    interface BoughtRow {
+      id: string;
+      cost: number | null;
+    }
+    interface ListedThisWeekRow {
+      id: string;
+      listing_value: number | null;
+    }
+    interface BacklogRow {
+      id: string;
+      cost: number | null;
+      status: string;
+    }
+    interface SnapshotRow {
+      week_start: string;
+      listed_count: number;
+      items_sold: number;
+      sell_through_pct: number;
+      avg_cog_bought: number;
+      avg_list_value_listed: number;
+      gross_revenue: number;
+      items_bought: number;
+    }
+
+    const [
+      listedItems,
+      soldThisWeekItems,
+      recentSalesData,
+      soldLast4Weeks,
+      boughtThisWeek,
+      listedThisWeek,
+      backlogItems,
+      snapshotsResult,
+      soldLast8Weeks,
+    ] = await Promise.all([
+      // Q1: All Amazon LISTED items (paginated for >1000)
+      this.fetchAllListedAmazonItems(userId),
+
+      // Q2: Sold this week (Amazon)
+      this.supabase
+        .from('inventory_items')
+        .select('id, cost, sold_price, sold_date, listing_date, listing_value')
+        .eq('user_id', userId)
+        .eq('status', 'SOLD')
+        .ilike('sold_platform', 'amazon')
+        .gte('sold_date', mondayStr)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Sold this week query failed: ${error.message}`);
+          return (data || []) as SoldRow[];
+        }),
+
+      // Q3: Last 50 Amazon sales for median days-to-sell
+      this.supabase
+        .from('inventory_items')
+        .select('listing_date, sold_date')
+        .eq('user_id', userId)
+        .eq('status', 'SOLD')
+        .ilike('sold_platform', 'amazon')
+        .not('sold_date', 'is', null)
+        .not('listing_date', 'is', null)
+        .order('sold_date', { ascending: false })
+        .limit(50)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Recent sales query failed: ${error.message}`);
+          return (data || []) as Array<{ listing_date: string; sold_date: string }>;
+        }),
+
+      // Q4: Sold in last 4 weeks (Amazon) for annual pace
+      this.supabase
+        .from('inventory_items')
+        .select('id, sold_price, sold_date')
+        .eq('user_id', userId)
+        .eq('status', 'SOLD')
+        .ilike('sold_platform', 'amazon')
+        .gte('sold_date', fourWeeksAgoStr)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Last 4 weeks sold query failed: ${error.message}`);
+          return (data || []) as Array<{ id: string; sold_price: number | null; sold_date: string }>;
+        }),
+
+      // Q5: Bought this week
+      this.supabase
+        .from('inventory_items')
+        .select('id, cost')
+        .eq('user_id', userId)
+        .gte('purchase_date', mondayStr)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Bought this week query failed: ${error.message}`);
+          return (data || []) as BoughtRow[];
+        }),
+
+      // Q6: Listed on Amazon this week
+      this.supabase
+        .from('inventory_items')
+        .select('id, listing_value')
+        .eq('user_id', userId)
+        .ilike('listing_platform', 'amazon')
+        .gte('listing_date', mondayStr)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Listed this week query failed: ${error.message}`);
+          return (data || []) as ListedThisWeekRow[];
+        }),
+
+      // Q7: BACKLOG + NOT YET RECEIVED
+      this.supabase
+        .from('inventory_items')
+        .select('id, cost, status')
+        .eq('user_id', userId)
+        .in('status', ['BACKLOG', 'NOT YET RECEIVED', 'Not Yet Received'])
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Backlog query failed: ${error.message}`);
+          return (data || []) as BacklogRow[];
+        }),
+
+      // Q8: Weekly snapshots (last 8)
+      this.supabase
+        .from('inventory_weekly_snapshots')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('platform', 'amazon')
+        .order('week_start', { ascending: false })
+        .limit(8)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Snapshots query failed: ${error.message}`);
+          return (data || []) as SnapshotRow[];
+        }),
+
+      // Q9: Sold in last 8 weeks (Amazon) for trend derivation
+      this.supabase
+        .from('inventory_items')
+        .select('id, cost, sold_price, sold_date, listing_value')
+        .eq('user_id', userId)
+        .eq('status', 'SOLD')
+        .ilike('sold_platform', 'amazon')
+        .gte('sold_date', eightWeeksAgoStr)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`Last 8 weeks sold query failed: ${error.message}`);
+          return (data || []) as SoldRow[];
+        }),
+    ]);
+
+    // ── Section 1: KPI Cards ──
+    const listedCount = listedItems.length;
+    const inventoryCog = listedItems.reduce((sum, i) => sum + (i.cost || 0), 0);
+    const inventoryValue = listedItems.reduce((sum, i) => sum + (i.listing_value || 0), 0);
+    const valueCogRatio = inventoryCog > 0 ? inventoryValue / inventoryCog : 0;
+
+    // ── Section 2: Velocity ──
+    const soldThisWeekCount = soldThisWeekItems.length;
+    const sellThroughPct =
+      listedCount > 0 ? (soldThisWeekCount / listedCount) * 100 : 0;
+    const weeklyGrossRevenue = soldThisWeekItems.reduce(
+      (sum, i) => sum + (i.sold_price || 0),
+      0
+    );
+
+    // Median days to sell
+    const daysToSellArr = recentSalesData
+      .map((s) => {
+        const listDate = new Date(s.listing_date);
+        const soldDate = new Date(s.sold_date);
+        return Math.floor((soldDate.getTime() - listDate.getTime()) / 86400000);
+      })
+      .filter((d) => d >= 0)
+      .sort((a, b) => a - b);
+    const medianDaysToSell =
+      daysToSellArr.length > 0
+        ? daysToSellArr[Math.floor(daysToSellArr.length / 2)]
+        : 0;
+
+    // Annual pace: last 4 weeks revenue × 13
+    const last4WeeksGross = soldLast4Weeks.reduce(
+      (sum, i) => sum + (i.sold_price || 0),
+      0
+    );
+    const annualPace = last4WeeksGross * 13;
+
+    // ── Section 3: Sourcing Quality ──
+    const itemsBoughtThisWeek = boughtThisWeek.length;
+    const itemsListedThisWeek = listedThisWeek.length;
+    const totalCogBought = boughtThisWeek.reduce((sum, i) => sum + (i.cost || 0), 0);
+    const avgCogBought =
+      itemsBoughtThisWeek > 0 ? totalCogBought / itemsBoughtThisWeek : 0;
+    const totalListValueListed = listedThisWeek.reduce(
+      (sum, i) => sum + (i.listing_value || 0),
+      0
+    );
+    const avgListValueListed =
+      itemsListedThisWeek > 0 ? totalListValueListed / itemsListedThisWeek : 0;
+    const cogPct = inventoryValue > 0 ? (inventoryCog / inventoryValue) * 100 : 0;
+    const netStockChange = itemsListedThisWeek - soldThisWeekCount;
+
+    // ── Section 4: Stock Health ──
+    const ageBrackets = [
+      { label: '0-30 days', min: 0, max: 30, status: 'green' as const },
+      { label: '31-90 days', min: 31, max: 90, status: 'green' as const },
+      { label: '91-180 days', min: 91, max: 180, status: 'amber' as const },
+      { label: '180-365 days', min: 181, max: 365, status: 'red' as const },
+      { label: '365+ days', min: 366, max: Infinity, status: 'red' as const },
+    ];
+
+    const stockHealth = ageBrackets.map((bracket) => {
+      const items = listedItems.filter((i) => {
+        const days = i.days_in_stock || 0;
+        return days >= bracket.min && days <= bracket.max;
+      });
+      const cogAmount = items.reduce((sum, i) => sum + (i.cost || 0), 0);
+      return {
+        bracket: bracket.label,
+        itemCount: items.length,
+        cogAmount,
+        pctOfListed: listedCount > 0 ? (items.length / listedCount) * 100 : 0,
+        status: bracket.status,
+      };
+    });
+
+    // ── Section 5: Pipeline ──
+    const backlogOnly = backlogItems.filter((i) => i.status === 'BACKLOG');
+    const notYetReceived = backlogItems.filter(
+      (i) => i.status === 'NOT YET RECEIVED' || i.status === 'Not Yet Received'
+    );
+    const investmentHolds = backlogOnly.filter(
+      (i) =>
+        (i.cost || 0) > ReportingService.HEALTH_TARGETS.INVESTMENT_HOLD_COG_THRESHOLD
+    );
+    const genuineBacklog = backlogOnly.length - investmentHolds.length;
+
+    // Weeks to target: average net growth over recent snapshots, fallback to current week
+    let avgWeeklyNetGrowth = netStockChange;
+    if (snapshotsResult.length >= 2) {
+      const recentSnapshots = snapshotsResult
+        .sort((a, b) => b.week_start.localeCompare(a.week_start))
+        .slice(0, 4);
+      const totalNetChange = recentSnapshots.reduce(
+        (sum, s) => sum + (s.items_bought - s.items_sold),
+        0
+      );
+      avgWeeklyNetGrowth = totalNetChange / recentSnapshots.length;
+    }
+    const gap = ReportingService.HEALTH_TARGETS.LISTED - listedCount;
+    const weeksToTarget =
+      gap <= 0 ? 0 : avgWeeklyNetGrowth > 0 ? Math.ceil(gap / avgWeeklyNetGrowth) : null;
+
+    // ── Section 6: Trends ──
+    let trends: InventoryHealthReport['trends'] = [];
+
+    if (snapshotsResult.length >= 4) {
+      // Use stored snapshots
+      trends = snapshotsResult
+        .sort(
+          (a, b) =>
+            new Date(a.week_start).getTime() - new Date(b.week_start).getTime()
+        )
+        .map((s) => ({
+          weekStart: s.week_start,
+          listed: s.listed_count,
+          sold: s.items_sold,
+          sellThroughPct: s.sell_through_pct,
+          cogPct:
+            s.avg_list_value_listed > 0
+              ? (s.avg_cog_bought / s.avg_list_value_listed) * 100
+              : 0,
+          grossRevenue: s.gross_revenue,
+          netChange: s.items_bought - s.items_sold,
+        }));
+    } else {
+      // Derive from live data — group soldLast8Weeks by week
+      const weekMap = new Map<
+        string,
+        { sold: number; grossRevenue: number; totalCog: number; totalListValue: number }
+      >();
+
+      for (let w = 0; w < 8; w++) {
+        const weekStart = new Date(monday);
+        weekStart.setDate(weekStart.getDate() - w * 7);
+        const key = this.formatDate(weekStart);
+        weekMap.set(key, { sold: 0, grossRevenue: 0, totalCog: 0, totalListValue: 0 });
+      }
+
+      for (const item of soldLast8Weeks) {
+        if (!item.sold_date) continue;
+        const soldDate = new Date(item.sold_date);
+        const itemMonday = this.getMonday(soldDate);
+        const key = this.formatDate(itemMonday);
+        const entry = weekMap.get(key);
+        if (entry) {
+          entry.sold++;
+          entry.grossRevenue += item.sold_price || 0;
+          entry.totalCog += item.cost || 0;
+          entry.totalListValue += item.listing_value || 0;
+        }
+      }
+
+      trends = Array.from(weekMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([weekStart, data]) => ({
+          weekStart,
+          listed: listedCount, // Approximation — we don't know historical listed count
+          sold: data.sold,
+          sellThroughPct: listedCount > 0 ? (data.sold / listedCount) * 100 : 0,
+          cogPct:
+            data.totalListValue > 0
+              ? (data.totalCog / data.totalListValue) * 100
+              : 0,
+          grossRevenue: data.grossRevenue,
+          netChange: 0, // Can't derive without snapshot
+        }));
+    }
+
+    return {
+      kpis: {
+        listedCount,
+        listedTarget: ReportingService.HEALTH_TARGETS.LISTED,
+        inventoryCog: Math.round(inventoryCog * 100) / 100,
+        inventoryValue: Math.round(inventoryValue * 100) / 100,
+        valueCogRatio: Math.round(valueCogRatio * 100) / 100,
+      },
+      velocity: {
+        soldThisWeek: soldThisWeekCount,
+        sellThroughPct: Math.round(sellThroughPct * 100) / 100,
+        weeklyGrossRevenue: Math.round(weeklyGrossRevenue * 100) / 100,
+        medianDaysToSell,
+        annualPace: Math.round(annualPace),
+        annualTarget: ReportingService.HEALTH_TARGETS.ANNUAL_GROSS,
+      },
+      sourcing: {
+        itemsBoughtThisWeek,
+        itemsListedThisWeek,
+        avgCogBought: Math.round(avgCogBought * 100) / 100,
+        avgListValueListed: Math.round(avgListValueListed * 100) / 100,
+        cogPct: Math.round(cogPct * 100) / 100,
+        cogPctTarget: ReportingService.HEALTH_TARGETS.COG_PCT,
+        netStockChange,
+      },
+      stockHealth,
+      pipeline: {
+        genuineBacklog,
+        investmentHolds: investmentHolds.length,
+        notYetReceived: notYetReceived.length,
+        weeksToTarget,
+      },
+      trends,
+    };
   }
 }

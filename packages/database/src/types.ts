@@ -5597,6 +5597,65 @@ export type Database = {
           },
         ]
       }
+      inventory_weekly_snapshots: {
+        Row: {
+          avg_cog_bought: number
+          avg_list_value_listed: number
+          created_at: string
+          gross_revenue: number
+          id: string
+          items_bought: number
+          items_sold: number
+          listed_count: number
+          platform: string
+          sell_through_pct: number
+          total_cog: number
+          total_list_value: number
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          avg_cog_bought?: number
+          avg_list_value_listed?: number
+          created_at?: string
+          gross_revenue?: number
+          id?: string
+          items_bought?: number
+          items_sold?: number
+          listed_count?: number
+          platform?: string
+          sell_through_pct?: number
+          total_cog?: number
+          total_list_value?: number
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          avg_cog_bought?: number
+          avg_list_value_listed?: number
+          created_at?: string
+          gross_revenue?: number
+          id?: string
+          items_bought?: number
+          items_sold?: number
+          listed_count?: number
+          platform?: string
+          sell_through_pct?: number
+          total_cog?: number
+          total_list_value?: number
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_weekly_snapshots_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investment_historical: {
         Row: {
           actual_1yr_appreciation: number | null
