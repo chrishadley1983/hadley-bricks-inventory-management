@@ -120,8 +120,8 @@ export function EbayDetailModal({ item, isOpen, onClose, onExclude }: EbayDetail
 
   const amazonUrl = item.amazonUrl ?? `https://www.amazon.co.uk/dp/${item.asin}`;
 
-  // SellerAmp SAS web app - direct ASIN lookup
-  const sellerAmpUrl = `https://sas.selleramp.com/sas/lookup?SasLookup%5Bsearch_term%5D=${item.asin}`;
+  // Keepa product page - Amazon UK (domain 2)
+  const keepaUrl = `https://keepa.com/#!product/2-${item.asin}`;
 
   // Check if buy price has been modified from default
   const isModified = buyPrice !== defaultBuyPrice;
@@ -675,10 +675,10 @@ export function EbayDetailModal({ item, isOpen, onClose, onExclude }: EbayDetail
               asChild
               variant="outline"
               size="sm"
-              className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+              className="bg-green-50 hover:bg-green-100 border-green-200"
             >
-              <a href={sellerAmpUrl} target="_blank" rel="noopener noreferrer">
-                SellerAmp
+              <a href={keepaUrl} target="_blank" rel="noopener noreferrer">
+                Keepa
                 <ExternalLink className="ml-2 h-4 w-4" />
               </a>
             </Button>
