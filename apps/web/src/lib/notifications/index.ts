@@ -11,6 +11,4 @@ export type {
   SendDailySummaryParams,
   SyncFailureParams,
   SyncSuccessParams,
-  VintedOpportunityParams,
-  VintedDailySummaryParams,
 } from './discord.service';

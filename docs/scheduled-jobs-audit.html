@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hadley Bricks — Scheduled Jobs Audit</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent); }
+  h2 {
+    font-size: 1.4rem;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+    color: var(--accent);
+  }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: var(--text); }
+  .subtitle { color: var(--text-muted); margin-bottom: 2rem; }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .card .num { font-size: 2.5rem; font-weight: 700; color: var(--accent); }
+  .card .label { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.88rem;
+  }
+  th {
+    background: var(--surface);
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--surface2);
+    vertical-align: top;
+  }
+  tr:hover td { background: rgba(56, 189, 248, 0.05); }
+  code {
+    background: var(--surface2);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    color: var(--cyan);
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-green { background: rgba(74,222,128,0.15); color: var(--green); }
+  .badge-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .badge-orange { background: rgba(251,146,60,0.15); color: var(--orange); }
+  .badge-red { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .badge-cyan { background: rgba(34,211,238,0.15); color: var(--cyan); }
+  .badge-pink { background: rgba(244,114,182,0.15); color: var(--pink); }
+
+  /* Collapsible sections */
+  details { margin-bottom: 1rem; }
+  summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  summary::before { content: '\25B6'; font-size: 0.7em; transition: transform 0.2s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  details[open] summary { border-radius: 8px 8px 0 0; border-bottom-color: transparent; }
+  .detail-body {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 1rem;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding: 1rem 0;
+  }
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+    align-items: start;
+  }
+  .timeline-hour {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-align: right;
+    padding-top: 0.25rem;
+  }
+  .timeline-jobs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .timeline-chip {
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .chip-gcp { background: rgba(56,189,248,0.12); color: var(--accent); border-color: rgba(56,189,248,0.3); }
+  .chip-peter { background: rgba(167,139,250,0.12); color: var(--purple); border-color: rgba(167,139,250,0.3); }
+  .chip-function { background: rgba(74,222,128,0.12); color: var(--green); border-color: rgba(74,222,128,0.3); }
+  .chip-cloudrun { background: rgba(251,146,60,0.12); color: var(--orange); border-color: rgba(251,146,60,0.3); }
+  .chip-collision { background: rgba(248,113,113,0.2); color: var(--red); border-color: rgba(248,113,113,0.4); font-weight: 600; }
+  .chip-weekly { opacity: 0.65; font-style: italic; }
+
+  .issue-card {
+    background: var(--surface);
+    border-left: 4px solid var(--red);
+    border-radius: 0 8px 8px 0;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .issue-card.warn { border-left-color: var(--yellow); }
+  .issue-card.info { border-left-color: var(--accent); }
+  .issue-card h4 { margin-bottom: 0.4rem; }
+  .issue-card p { color: var(--text-muted); font-size: 0.9rem; }
+
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--surface2);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+  .checklist li::before {
+    content: '\2610';
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+  }
+  .check-freq { color: var(--text-muted); font-size: 0.8rem; }
+
+  .notif-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  .notif-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .notif-card h4 {
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .notif-card ul {
+    list-style: none;
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .notif-card li { padding: 0.2rem 0; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.35rem; }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  /* Search/Filter */
+  .filter-bar {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .filter-bar input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: var(--text);
+    font-size: 0.9rem;
+    flex: 1;
+    min-width: 200px;
+  }
+  .filter-bar input::placeholder { color: var(--text-muted); }
+  .filter-bar input:focus { outline: none; border-color: var(--accent); }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    table { font-size: 0.8rem; }
+    td, th { padding: 0.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Hadley Bricks — Scheduled Jobs Audit</h1>
+<p class="subtitle">Generated 2026-03-18 (updated) &middot; GCP + Supabase + Peter Bot &middot; 27 Cloud Scheduler jobs, 31 cron routes</p>
+
+<!-- Executive Summary -->
+<h2>Executive Summary</h2>
+<div class="cards">
+  <div class="card"><div class="num">27</div><div class="label">GCP Cloud Scheduler</div></div>
+  <div class="card"><div class="num">1</div><div class="label">Cloud Run Job</div></div>
+  <div class="card"><div class="num">1</div><div class="label">Cloud Function</div></div>
+  <div class="card"><div class="num">1</div><div class="label">pg_cron Job</div></div>
+  <div class="card"><div class="num">~8</div><div class="label">Peter Bot HB Jobs</div></div>
+  <div class="card"><div class="num">31</div><div class="label">Cron Route Endpoints</div></div>
+  <div class="card"><div class="num" style="color:var(--red)">4</div><div class="label">Broken / Disabled</div></div>
+  <div class="card"><div class="num" style="color:var(--yellow)">3</div><div class="label">Schedule Collisions</div></div>
+</div>
+
+<!-- 24h Timeline -->
+<h2>24-Hour Timeline (UTC)</h2>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(56,189,248,0.4)"></div> GCP Scheduler</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(167,139,250,0.4)"></div> Peter Bot</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(74,222,128,0.4)"></div> Cloud Function</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(251,146,60,0.4)"></div> Cloud Run</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(248,113,113,0.4)"></div> Collision</div>
+</div>
+
+<div class="timeline">
+  <div class="timeline-row">
+    <div class="timeline-hour">00:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp" style="opacity:0.3;text-decoration:line-through">vinted-cleanup (DELETED)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">01:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-peter">incremental-seed</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">02:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-function">ebay-pricing-sync (resumable)</span>
+      <span class="timeline-chip chip-gcp">email-purchases (02:17)</span>
+      <span class="timeline-chip chip-function">bricklink-pricing-sync (02:30, resumable)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">03:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp chip-weekly">refresh-watchlist (Sun)</span>
+      <span class="timeline-chip chip-gcp">full-sync [1/6] (03:45)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">04:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp chip-weekly">rebrickable-sync (Sun)</span>
+      <span class="timeline-chip chip-gcp">ebay-fp-cleanup</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">05:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-promotions</span>
+      <span class="timeline-chip chip-gcp">investment-sync</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour" style="color:var(--red)">06:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-collision">retirement-sync</span>
+      <span class="timeline-chip chip-collision">spapi-buybox-overlay</span>
+      <span class="timeline-chip chip-collision">minifig-daily-inventory</span>
+      <span class="timeline-chip chip-gcp chip-weekly" style="opacity:0.5">investment-retrain (1st)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">07:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">vercel-usage-report</span>
+      <span class="timeline-chip chip-cloudrun">delivery-report-daily</span>
+      <span class="timeline-chip chip-gcp chip-weekly">ebay-category-audit (Mon)</span>
+      <span class="timeline-chip chip-peter">school-integration</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">07:45</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">full-sync [2/6]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">08:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-negotiation [1/4]</span>
+      <span class="timeline-chip chip-gcp">vinted-collections</span>
+      <span class="timeline-chip chip-peter">email-summary (08:02)</span>
+      <span class="timeline-chip chip-peter">schedule-today (08:04)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">09:30</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-peter">amazon-purchases</span>
+      <span class="timeline-chip chip-peter">hb-full-sync-print (09:35)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">10:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-peter">octopus-energy</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">11:45</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">full-sync [3/6]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">12:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-negotiation [2/4]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">15:45</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">full-sync [4/6]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">16:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-negotiation [3/4]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">19:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-listing-refresh</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">19:45</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">full-sync [5/6]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">20:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">ebay-negotiation [4/4]</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">21:00</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-peter">daily-instagram-prep (21:05)</span>
+      <span class="timeline-chip chip-gcp">cost-allocation (21:15)</span>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-hour">23:45</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">full-sync [6/6]</span>
+    </div>
+  </div>
+  <div class="timeline-row" style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--surface2);">
+    <div class="timeline-hour" style="color:var(--text-muted)">CONT.</div>
+    <div class="timeline-jobs">
+      <span class="timeline-chip chip-gcp">*/5 amazon-two-phase-sync</span>
+      <span class="timeline-chip chip-gcp">*/15 ebay-auction-sniper</span>
+      <span class="timeline-chip chip-gcp">*/15 minifig-poll-ebay-orders</span>
+      <span class="timeline-chip chip-function">*/30 amazon-pricing-sync</span>
+      <span class="timeline-chip chip-gcp">*/30 spapi-buybox-refresh</span>
+      <span class="timeline-chip chip-gcp">*/30 minifig-poll-bricqer-orders</span>
+    </div>
+  </div>
+</div>
+
+<!-- GCP Cloud Scheduler -->
+<h2>GCP Cloud Scheduler (28 Jobs)</h2>
+
+<div class="filter-bar">
+  <input type="text" id="jobSearch" placeholder="Filter jobs..." oninput="filterJobs()">
+</div>
+
+<details open>
+  <summary>High-Frequency (Every 5-30 min) <span class="badge badge-red">3 jobs</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>amazon-two-phase-sync</code></td><td><code>*/5 * * * *</code></td><td>/api/cron/amazon-sync</td><td>UTC</td><td>default</td><td>Two-phase feed processor (price &rarr; quantity), 6 intermediate states</td></tr>
+        <tr><td><code>amazon-pricing-sync</code></td><td><code>*/30 * * * *</code></td><td>Cloud Function</td><td>UTC</td><td>600s</td><td>Keepa API budget-spread, ~57 ASINs/call, in-stock prioritised</td></tr>
+        <tr><td><code>spapi-buybox-refresh</code></td><td><code>*/30 * * * *</code></td><td>/api/cron/spapi-buybox-refresh</td><td>UTC</td><td>default</td><td>Lightweight refresh for ASINs flagged <code>spapi_refresh_needed</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details open>
+  <summary>Medium-Frequency (Every 15 min) <span class="badge badge-orange">2 jobs</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>ebay-auction-sniper</code></td><td><code>*/15 * * * *</code></td><td>/api/cron/ebay-auctions</td><td>UTC</td><td>default</td><td>Find LEGO auctions ending soon, Discord alerts</td></tr>
+        <tr><td><code>minifig-poll-ebay-orders</code></td><td><code>*/15 * * * *</code></td><td>/api/cron/minifigs/poll-ebay-orders</td><td>UTC</td><td>default</td><td>Detect eBay minifig sales for cross-platform delisting</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details open>
+  <summary>Multi-Daily <span class="badge badge-yellow">3 jobs</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>full-sync</code></td><td><code>45 3,7,11,15,19,23 * * *</code></td><td>/api/cron/full-sync</td><td>UTC</td><td>default</td><td>eBay, Amazon, BrickLink, Brick Owl, Shopify batch, Discord report (6x)</td></tr>
+        <tr><td><code>ebay-negotiation-sync</code></td><td><code>0 8,12,16,20 * * *</code></td><td>/api/cron/negotiation</td><td>UTC</td><td>default</td><td>Automated eBay offers: sync statuses + send new (4x)</td></tr>
+        <tr><td><code>minifig-poll-bricqer-orders</code></td><td><code>*/30 * * * *</code></td><td>/api/cron/minifigs/poll-bricqer-orders</td><td>UTC</td><td>default</td><td>Detect Bricqer minifig sales for removal queue</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Daily &mdash; Overnight (00:00-06:00 UTC) <span class="badge badge-cyan">10 jobs</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr style="opacity:0.4;text-decoration:line-through"><td><code>vinted-cleanup</code></td><td><code>0 0 * * *</code></td><td>/api/cron/vinted-cleanup</td><td>UTC</td><td>default</td><td>DELETED &mdash; Server-side scanner replaced by Chrome extension</td></tr>
+        <tr><td><code>ebay-pricing-sync</code></td><td><code>0 2 * * *</code></td><td>Cloud Function</td><td>UTC</td><td>3600s</td><td>Cursor-based eBay pricing, up to 1,000 items/day (resumable)</td></tr>
+        <tr><td><code>email-purchases</code></td><td><code>17 2 * * *</code></td><td>/api/cron/email-purchases</td><td>UTC</td><td>default</td><td>Gmail scan for Vinted/eBay purchase confirmations, batch import</td></tr>
+        <tr><td><code>bricklink-pricing-sync</code></td><td><code>30 2 * * *</code></td><td>Cloud Function</td><td>UTC</td><td>3600s</td><td>Cursor-based BrickLink pricing, up to 1,000 items/day (resumable)</td></tr>
+        <tr><td><code>ebay-fp-cleanup</code></td><td><code>0 4 * * *</code></td><td>/api/cron/ebay-fp-cleanup</td><td>UTC</td><td>default</td><td>False-positive detection, 22 weighted signals (threshold 50)</td></tr>
+        <tr><td><code>ebay-promotions</code></td><td><code>0 5 * * *</code></td><td>/api/cron/ebay-promotions</td><td>UTC</td><td>300s</td><td>Apply promotion schedules: bid % based on listing age</td></tr>
+        <tr><td><code>investment-sync</code></td><td><code>0 5 * * *</code></td><td>/api/cron/investment-sync</td><td>UTC</td><td>default</td><td>ASIN linkage, auto-classification, price movement alerts</td></tr>
+        <tr style="background:rgba(248,113,113,0.06)"><td><code>retirement-sync</code></td><td><code>0 6 * * *</code></td><td>/api/cron/retirement-sync</td><td>UTC</td><td>300s</td><td>Brickset + Brick Tap sync <span class="badge badge-red">collision</span></td></tr>
+        <tr style="background:rgba(248,113,113,0.06)"><td><code>spapi-buybox-overlay</code></td><td><code>0 6 * * *</code></td><td>/api/cron/spapi-buybox-overlay</td><td>UTC</td><td>300s</td><td>~232 in-stock ASINs <span class="badge badge-red">collision</span></td></tr>
+        <tr style="background:rgba(248,113,113,0.06)"><td><code>minifig-daily-inventory</code></td><td><code>0 6 * * *</code></td><td>/api/cron/minifigs/daily-inventory</td><td>UTC</td><td>default</td><td>Crash recovery + inventory + repricing (Mon) <span class="badge badge-red">collision</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Daily &mdash; Daytime (07:00+ UTC) <span class="badge badge-cyan">4 jobs</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>vercel-usage-report</code></td><td><code>0 7 * * *</code></td><td>/api/cron/vercel-usage</td><td>Europe/London</td><td>default</td><td>Vercel metrics, RAG status, email + Discord summary</td></tr>
+        <tr><td><code>vinted-collections</code></td><td><code>0 8 * * *</code></td><td>/api/cron/vinted-collections</td><td>Europe/London</td><td>default</td><td>Gmail parsing for collection-ready + Royal Mail pickup</td></tr>
+        <tr><td><code>ebay-listing-refresh</code></td><td><code>0 19 * * *</code></td><td>/api/cron/ebay-listing-refresh</td><td>Europe/London</td><td>300s</td><td>End stale listings (90+ days), recreate with engagement pricing</td></tr>
+        <tr><td><code>cost-allocation</code></td><td><code>15 21 * * *</code></td><td>/api/cron/cost-allocation</td><td>Europe/London</td><td>300s</td><td>Distribute purchase costs proportionally across items</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Weekly <span class="badge badge-green">3 jobs</span> &amp; Monthly <span class="badge badge-purple">1 job</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>refresh-watchlist</code></td><td><code>0 3 * * 0</code></td><td>/api/cron/refresh-watchlist</td><td>UTC</td><td>default</td><td>Populate arbitrage watchlist with newly sold items (Sun 3am)</td></tr>
+        <tr><td><code>rebrickable-sync</code></td><td><code>0 4 * * 0</code></td><td>/api/cron/rebrickable-sync</td><td>UTC</td><td>default</td><td>Sync LEGO set data from Rebrickable (Sun 4am)</td></tr>
+        <tr><td><code>ebay-category-audit</code></td><td><code>0 7 * * 1</code></td><td>/api/cron/ebay-category-audit</td><td>UTC</td><td>default</td><td>eBay category audit report (Mon 7am)</td></tr>
+        <tr><td><code>investment-retrain</code></td><td><code>0 6 1 * *</code></td><td>/api/cron/investment-retrain</td><td>UTC</td><td>300s</td><td>TensorFlow.js ML model retrain on historical appreciation data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Non-HB <span class="badge badge-pink">1 job</span></summary>
+  <div class="detail-body">
+    <table class="filterable">
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Description</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>verify-punditry-daily</code></td><td>daily</td><td>Football Prediction Game verification</td><td>Cleanup candidate &mdash; move to separate GCP project</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<!-- Cloud Run & Cloud Functions -->
+<h2>Cloud Run &amp; Cloud Functions</h2>
+
+<details open>
+  <summary>Cloud Run: delivery-report-daily</summary>
+  <div class="detail-body">
+    <table>
+      <tr><td style="width:140px;font-weight:600">Schedule</td><td>7am UK time daily</td></tr>
+      <tr><td style="font-weight:600">Pipeline</td><td>10-step: orders &rarr; tracking &rarr; report &rarr; email</td></tr>
+      <tr><td style="font-weight:600">Output</td><td>HTML email to chris@hadleybricks.co.uk</td></tr>
+    </table>
+  </div>
+</details>
+
+<details open>
+  <summary>Cloud Function: pricing-sync-driver</summary>
+  <div class="detail-body">
+    <table>
+      <tr><td style="width:140px;font-weight:600">Runtime</td><td>Gen2, Node.js 20, europe-west2</td></tr>
+      <tr><td style="font-weight:600">Entry Point</td><td><code>pricingSyncDriver</code></td></tr>
+      <tr><td style="font-weight:600">Trigger</td><td>HTTP (authenticated via OIDC)</td></tr>
+      <tr><td style="font-weight:600">Timeout</td><td>3600s (1 hour)</td></tr>
+      <tr><td style="font-weight:600">Memory</td><td>256MB</td></tr>
+      <tr><td style="font-weight:600">Handles</td><td>amazon-pricing, ebay-pricing, bricklink-pricing (resumable loop until <code>{complete: true}</code>)</td></tr>
+      <tr><td style="font-weight:600">Source</td><td><code>gcp/functions/pricing-sync-driver/</code></td></tr>
+    </table>
+  </div>
+</details>
+
+<!-- Database Jobs -->
+<h2>Database Jobs (pg_cron)</h2>
+
+<details open>
+  <summary>cleanup-stale-job-executions</summary>
+  <div class="detail-body">
+    <table>
+      <tr><td style="width:140px;font-weight:600">Schedule</td><td><code>*/5 * * * *</code> (every 5 minutes)</td></tr>
+      <tr><td style="font-weight:600">Function</td><td><code>cleanup_stale_job_executions()</code></td></tr>
+      <tr><td style="font-weight:600">Purpose</td><td>Auto-mark jobs stuck in "running" for &gt;10 min as "timeout"</td></tr>
+      <tr><td style="font-weight:600">History</td><td>Fixed 195 zombie entries on 2026-03-11</td></tr>
+      <tr><td style="font-weight:600">Migration</td><td><code>20260311000001_job_execution_zombie_cleanup.sql</code></td></tr>
+    </table>
+  </div>
+</details>
+
+<!-- Peter Bot -->
+<h2>Peter Bot (HB-Related Jobs)</h2>
+<p style="color:var(--text-muted); margin-bottom:1rem;">APScheduler on WSL, timezone Europe/London. These are the HB-relevant subset of ~65 total Peter jobs.</p>
+
+<table>
+  <thead><tr><th>Job</th><th>Schedule</th><th>Description</th><th>Channel</th></tr></thead>
+  <tbody>
+    <tr><td><code>hb-full-sync-print</code></td><td>09:35 daily</td><td>Triggers full-sync + pick list PDFs</td><td>#peterbot</td></tr>
+    <tr><td><code>daily-instagram-prep</code></td><td>21:05 daily</td><td>Instagram content preparation</td><td>#peterbot</td></tr>
+    <tr><td><code>amazon-purchases</code></td><td>09:30 daily</td><td>Personal Amazon order sync (CDP)</td><td>#peterbot</td></tr>
+    <tr><td><code>email-summary</code></td><td>08:02 daily</td><td>Gmail summary (may surface HB emails)</td><td>#peterbot</td></tr>
+    <tr><td><code>schedule-today</code></td><td>08:04 daily</td><td>Today's schedule</td><td>#peterbot</td></tr>
+    <tr><td><code>incremental-seed</code></td><td>01:00 daily</td><td>Second Brain import (includes HB email)</td><td>#alerts</td></tr>
+    <tr style="color:var(--text-muted)"><td colspan="4"><em>4 previously active HB jobs removed from SCHEDULE.md: Arbitrage FP Cleanup, HB Cron Health Check, HB Morning Sync, HB Afternoon Sync</em></td></tr>
+  </tbody>
+</table>
+
+<!-- Notification Map -->
+<h2>Notification Map</h2>
+<div class="notif-grid">
+  <div class="notif-card">
+    <h4 style="color:var(--purple)">Discord</h4>
+    <ul>
+      <li><strong>#alerts</strong> &mdash; Job failures, CAPTCHA, cron errors</li>
+      <li><strong>#opportunities</strong> &mdash; Vinted/eBay arbitrage (colour-coded by COG%)</li>
+      <li><strong>#sync-status</strong> &mdash; Sync started/complete, pricing, offers</li>
+      <li><strong>#daily-summary</strong> &mdash; End-of-day reports</li>
+      <li><strong>#peter-chat</strong> &mdash; Peter bot actionable notifications</li>
+    </ul>
+  </div>
+  <div class="notif-card">
+    <h4 style="color:var(--yellow)">Email</h4>
+    <ul>
+      <li><strong>Delivery Report</strong> &mdash; Daily 7am (Cloud Run)</li>
+      <li><strong>eBay Listing Refresh</strong> &mdash; Daily 7pm</li>
+      <li><strong>Vercel Usage</strong> &mdash; Daily 7am</li>
+      <li><strong>Amazon Feed Failures</strong> &mdash; On failure</li>
+    </ul>
+  </div>
+  <div class="notif-card">
+    <h4 style="color:var(--green)">WhatsApp</h4>
+    <ul>
+      <li>HB alerts routed via Peter Bot</li>
+      <li>Evolution API (Docker :8085)</li>
+      <li>Group messages for briefings</li>
+      <li>Chris-only for sports/financial</li>
+    </ul>
+  </div>
+  <div class="notif-card">
+    <h4 style="color:var(--text-muted)">Pushover</h4>
+    <ul>
+      <li>Configured but minimal use</li>
+      <li>School term date PDF alerts</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Broken / Disabled -->
+<h2>Broken / Disabled</h2>
+
+<div class="issue-card">
+  <h4><code>markdown</code> cron route &mdash; NOT SCHEDULED</h4>
+  <p>Route exists at <code>apps/web/src/app/api/cron/markdown/route.ts</code> but NO GCP Cloud Scheduler job fires it. Smart auto-markdown (evaluate LISTED items, generate proposals, auto-apply OVERPRICED markdowns) never runs.</p>
+  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Create GCP scheduler job, suggested: daily 8pm UK</p>
+</div>
+
+<div class="issue-card">
+  <h4><code>minifigs/research-refresh</code> &mdash; DISABLED IN CODE</h4>
+  <p>Terapeak research requires local Playwright, not available on Vercel. Returns 0 items. Minifig market research data goes stale.</p>
+  <p style="color:var(--yellow); margin-top:0.5rem"><strong>Fix:</strong> No path on Vercel. Would need Cloud Run container with Playwright or local scheduled task.</p>
+</div>
+
+<div class="issue-card">
+  <h4>Royal Mail Backfill &mdash; TASK NOT REGISTERED</h4>
+  <p>Script <code>rm_backfill.py</code> exists but Windows Task Scheduler task <code>HadleyBricks-RM-Backfill</code> is NOT registered. <code>register_task_scheduler.ps1</code> does NOT exist.</p>
+  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Create PowerShell script to register Windows scheduled task, daily 6am</p>
+</div>
+
+<div class="issue-card warn">
+  <h4>GCP README &mdash; STALE</h4>
+  <p>Documents only original 17 jobs. Missing 11+ jobs added post-migration: full-sync, email-purchases, ebay-auctions, ebay-fp-cleanup, minifig-daily-inventory, minifig-poll-ebay-orders, minifig-poll-bricqer-orders, minifigs-reprice, spapi-buybox-refresh, ebay-category-audit, verify-punditry-daily.</p>
+  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Update README or use this audit as canonical source of truth</p>
+</div>
+
+<!-- Optimisation Opportunities -->
+<h2>Optimisation Opportunities</h2>
+
+<div class="issue-card">
+  <h4>6am UTC Collision &mdash; 3 jobs at <code>0 6 * * *</code></h4>
+  <p><code>retirement-sync</code> (300s, external APIs), <code>spapi-buybox-overlay</code> (300s, ~232 ASINs), <code>minifig-daily-inventory</code> (inventory + repricing) all fire simultaneously. Risk: Vercel concurrent limits, API rate limits.</p>
+  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Stagger: retirement 06:00, spapi-overlay 06:10, minifig-daily 06:20</p>
+</div>
+
+<div class="issue-card warn">
+  <h4>5am UTC Collision &mdash; 2 jobs at <code>0 5 * * *</code></h4>
+  <p><code>ebay-promotions</code> and <code>investment-sync</code> both fire at the same time. Lower risk but unnecessary.</p>
+  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Move investment-sync to 05:15 UTC</p>
+</div>
+
+<div class="issue-card info">
+  <h4>Non-HB Job in HB Project</h4>
+  <p><code>verify-punditry-daily</code> is a Football Prediction Game job running in HB's GCP project. Should be moved to a separate project or documented as intentional.</p>
+</div>
+
+<div class="issue-card info">
+  <h4>Consolidation Candidates</h4>
+  <p><code>minifig-poll-ebay-orders</code> (*/15) and <code>minifig-poll-bricqer-orders</code> (*/30) could be rolled into <code>minifig-daily-inventory</code> if real-time detection isn't critical. Currently 96+48 = 144 invocations/day for these two jobs alone.</p>
+</div>
+
+<!-- Automation Gaps -->
+<h2>Automation Gaps</h2>
+
+<div class="issue-card info">
+  <h4>Missing Scheduler Jobs</h4>
+  <p><strong>markdown</strong> &mdash; Route exists, no scheduler (auto-markdown pricing never runs)<br>
+  <strong>minifigs/reprice</strong> &mdash; Route exists, unclear if independently scheduled<br>
+  <strong>ebay-listing-refresh/resume</strong> &mdash; Sub-route for interrupted refreshes, may need its own entry<br>
+  <strong>Stock reconciliation</strong> &mdash; No automated check that counts match live listings</p>
+</div>
+
+<div class="issue-card info">
+  <h4>Manual Processes That Could Be Automated</h4>
+  <p>
+    <strong>Bricqer inventory audit</strong> &mdash; Manual spot-check Bricqer vs Supabase<br>
+    <strong>eBay returns</strong> &mdash; Currently processed manually<br>
+    <strong>BrickLink purchases</strong> &mdash; email-purchases handles Vinted/eBay only<br>
+    <strong>Shopify products</strong> &mdash; New product creation is manual<br>
+    <strong>RM backfill</strong> &mdash; Script ready, task scheduler registration missing
+  </p>
+</div>
+
+<!-- Manual Tasks Checklist -->
+<h2>Manual Tasks Checklist</h2>
+<p style="color:var(--text-muted); margin-bottom:1rem;">Human tasks that wrap around the automation:</p>
+
+<ul class="checklist">
+  <li><span>Check #alerts Discord for overnight failures <span class="check-freq">(daily morning)</span></span></li>
+  <li><span>Review pick list PDF from hb-full-sync-print <span class="check-freq">(daily 09:35)</span></span></li>
+  <li><span>Check delivery report email for stuck parcels <span class="check-freq">(daily 07:00)</span></span></li>
+  <li><span>Process Vinted collection notifications <span class="check-freq">(ongoing)</span></span></li>
+  <li><span>Accept/reject eBay negotiation offers flagged for review <span class="check-freq">(ongoing)</span></span></li>
+  <li><span>Review eBay listing refresh report <span class="check-freq">(daily 19:00)</span></span></li>
+  <li><span>Review eBay category audit report <span class="check-freq">(weekly Monday)</span></span></li>
+  <li><span>Check Vercel usage trends <span class="check-freq">(weekly)</span></span></li>
+  <li><span>Review investment retrain results <span class="check-freq">(monthly 1st)</span></span></li>
+  <li><span>Manually enter BrickLink/other purchases <span class="check-freq">(ad-hoc)</span></span></li>
+  <li><span>Process eBay returns and refunds <span class="check-freq">(ad-hoc)</span></span></li>
+  <li><span>Update Shopify product listings <span class="check-freq">(ad-hoc)</span></span></li>
+</ul>
+
+<!-- Cost -->
+<h2>Cost Estimate</h2>
+<table>
+  <thead><tr><th>Component</th><th>Monthly Cost</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>GCP Cloud Scheduler</td><td>~$2.50</td><td>3 free, 25 at ~$0.10/month each</td></tr>
+    <tr><td>GCP Cloud Function</td><td>$0.00</td><td>Within free tier</td></tr>
+    <tr><td>GCP Cloud Run</td><td>~$0.10</td><td>1 daily job, minimal compute</td></tr>
+    <tr><td>GCP Secret Manager</td><td>$0.00</td><td>Within free tier</td></tr>
+    <tr><td>Supabase pg_cron</td><td>$0.00</td><td>Included in Supabase plan</td></tr>
+    <tr style="font-weight:700"><td>Total GCP</td><td>~$2.60/month</td><td></td></tr>
+  </tbody>
+</table>
+
+<p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">
+  <strong>GCP Project:</strong> gen-lang-client-0823893317 &middot;
+  <strong>Region:</strong> europe-west2 &middot;
+  <strong>Service Account:</strong> hadley-scheduler-sa
+</p>
+
+<p style="color:var(--text-muted); font-size:0.8rem; margin-top:3rem; text-align:center;">
+  Generated 2026-03-18 &middot; Source: GCP Cloud Scheduler, gcp/setup.ps1, gcp/README.md, Peter Bot SCHEDULE.md, codebase route analysis
+</p>
+
+<script>
+function filterJobs() {
+  const q = document.getElementById('jobSearch').value.toLowerCase();
+  document.querySelectorAll('table.filterable tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
