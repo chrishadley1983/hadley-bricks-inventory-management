@@ -44,6 +44,7 @@ export interface VercelUsageReport {
   overallStatus: RagStatus;
   fetchedAt: string;
   fromApi: boolean;
+  apiError?: string;
 }
 
 /** Keys matching Hobby plan metric names (dashboard + v2 API) */
@@ -218,6 +219,7 @@ export class VercelUsageService {
 
     // Try v2 API first, then fall back to scraped-only
     let report: VercelUsageReport | null = null;
+    let apiError: string | undefined;
 
     if (this.token) {
       try {
@@ -240,17 +242,18 @@ export class VercelUsageService {
         } else {
           const reqBody = !requestsRes.ok ? await requestsRes.text().catch(() => '') : '';
           const buildBody = !buildsRes.ok ? await buildsRes.text().catch(() => '') : '';
-          console.warn(
-            `[VercelUsageService] v2 API error - requests: ${requestsRes.status} ${reqBody}, builds: ${buildsRes.status} ${buildBody}`
-          );
+          apiError = `requests: ${requestsRes.status} ${reqBody.slice(0, 200)}, builds: ${buildsRes.status} ${buildBody.slice(0, 200)}`;
+          console.warn(`[VercelUsageService] v2 API error - ${apiError}`);
         }
       } catch (error) {
+        apiError = error instanceof Error ? error.message : String(error);
         console.warn(
           '[VercelUsageService] v2 API fetch failed, falling back to scraped data:',
           error
         );
       }
     } else {
+      apiError = 'VERCEL_API_TOKEN not set';
       console.log('[VercelUsageService] No VERCEL_API_TOKEN — using scraped data only');
     }
 
@@ -258,6 +261,7 @@ export class VercelUsageService {
     if (!report) {
       report = this.buildReportFromManualData({});
       report.fromApi = false;
+      report.apiError = apiError;
     }
 
     // Always merge scraped dashboard metrics (overrides v2 API values where available)
