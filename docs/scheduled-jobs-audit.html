@@ -276,8 +276,8 @@
   <div class="card"><div class="num">1</div><div class="label">pg_cron Job</div></div>
   <div class="card"><div class="num">~8</div><div class="label">Peter Bot HB Jobs</div></div>
   <div class="card"><div class="num">31</div><div class="label">Cron Route Endpoints</div></div>
-  <div class="card"><div class="num" style="color:var(--red)">4</div><div class="label">Broken / Disabled</div></div>
-  <div class="card"><div class="num" style="color:var(--yellow)">3</div><div class="label">Schedule Collisions</div></div>
+  <div class="card"><div class="num" style="color:var(--red)">3</div><div class="label">Broken / Disabled</div></div>
+  <div class="card"><div class="num" style="color:var(--yellow)">1</div><div class="label">Schedule Collision</div></div>
 </div>
 
 <!-- 24h Timeline -->
@@ -329,23 +329,24 @@
     <div class="timeline-hour">05:00</div>
     <div class="timeline-jobs">
       <span class="timeline-chip chip-gcp">ebay-promotions</span>
-      <span class="timeline-chip chip-gcp">investment-sync</span>
+      <span class="timeline-chip chip-gcp chip-weekly" style="opacity:0.5">investment-retrain (1st)</span>
+      <span class="timeline-chip chip-cloudrun" style="opacity:0.7">verify-punditry (05:30, non-HB)</span>
     </div>
   </div>
   <div class="timeline-row">
     <div class="timeline-hour" style="color:var(--red)">06:00</div>
     <div class="timeline-jobs">
       <span class="timeline-chip chip-collision">retirement-sync</span>
-      <span class="timeline-chip chip-collision">spapi-buybox-overlay</span>
+      <span class="timeline-chip chip-collision">spapi-buybox-overlay (Cloud Function)</span>
       <span class="timeline-chip chip-collision">minifig-daily-inventory</span>
-      <span class="timeline-chip chip-gcp chip-weekly" style="opacity:0.5">investment-retrain (1st)</span>
     </div>
   </div>
   <div class="timeline-row">
     <div class="timeline-hour">07:00</div>
     <div class="timeline-jobs">
-      <span class="timeline-chip chip-gcp">vercel-usage-report</span>
       <span class="timeline-chip chip-cloudrun">delivery-report-daily</span>
+      <span class="timeline-chip chip-gcp">vercel-usage-report</span>
+      <span class="timeline-chip chip-gcp">investment-sync</span>
       <span class="timeline-chip chip-gcp chip-weekly">ebay-category-audit (Mon)</span>
       <span class="timeline-chip chip-peter">school-integration</span>
     </div>
@@ -438,7 +439,7 @@
     <div class="timeline-jobs">
       <span class="timeline-chip chip-gcp">*/5 amazon-two-phase-sync</span>
       <span class="timeline-chip chip-gcp">*/15 ebay-auction-sniper</span>
-      <span class="timeline-chip chip-gcp">*/15 minifig-poll-ebay-orders</span>
+      <span class="timeline-chip chip-gcp">*/30 minifig-poll-ebay-orders</span>
       <span class="timeline-chip chip-function">*/30 amazon-pricing-sync</span>
       <span class="timeline-chip chip-gcp">*/30 spapi-buybox-refresh</span>
       <span class="timeline-chip chip-gcp">*/30 minifig-poll-bricqer-orders</span>
@@ -447,34 +448,35 @@
 </div>
 
 <!-- GCP Cloud Scheduler -->
-<h2>GCP Cloud Scheduler (28 Jobs)</h2>
+<h2>GCP Cloud Scheduler (27 Jobs) &mdash; from live <code>gcloud</code></h2>
 
 <div class="filter-bar">
   <input type="text" id="jobSearch" placeholder="Filter jobs..." oninput="filterJobs()">
 </div>
 
 <details open>
-  <summary>High-Frequency (Every 5-30 min) <span class="badge badge-red">3 jobs</span></summary>
+  <summary>High-Frequency (Every 5-30 min) <span class="badge badge-red">5 jobs</span></summary>
   <div class="detail-body">
     <table class="filterable">
-      <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
+      <thead><tr><th>Job Name</th><th>Schedule</th><th>Target</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>amazon-two-phase-sync</code></td><td><code>*/5 * * * *</code></td><td>/api/cron/amazon-sync</td><td>UTC</td><td>default</td><td>Two-phase feed processor (price &rarr; quantity), 6 intermediate states</td></tr>
-        <tr><td><code>amazon-pricing-sync</code></td><td><code>*/30 * * * *</code></td><td>Cloud Function</td><td>UTC</td><td>600s</td><td>Keepa API budget-spread, ~57 ASINs/call, in-stock prioritised</td></tr>
-        <tr><td><code>spapi-buybox-refresh</code></td><td><code>*/30 * * * *</code></td><td>/api/cron/spapi-buybox-refresh</td><td>UTC</td><td>default</td><td>Lightweight refresh for ASINs flagged <code>spapi_refresh_needed</code></td></tr>
+        <tr><td><code>amazon-two-phase-sync</code></td><td><code>*/5 * * * *</code></td><td>Vercel</td><td>Two-phase feed processor (price &rarr; quantity), 6 intermediate states</td></tr>
+        <tr><td><code>amazon-pricing-sync</code></td><td><code>*/30 * * * *</code></td><td>Cloud Function</td><td>Keepa API budget-spread, ~57 ASINs/call, in-stock prioritised</td></tr>
+        <tr><td><code>spapi-buybox-refresh</code></td><td><code>*/30 * * * *</code></td><td>Vercel</td><td>Lightweight refresh for ASINs flagged <code>spapi_refresh_needed</code></td></tr>
+        <tr><td><code>minifig-poll-ebay-orders</code></td><td><code>*/30 * * * *</code></td><td>Vercel</td><td>Detect eBay minifig sales for cross-platform delisting</td></tr>
+        <tr><td><code>minifig-poll-bricqer-orders</code></td><td><code>*/30 * * * *</code></td><td>Vercel</td><td>Detect Bricqer minifig sales for removal queue</td></tr>
       </tbody>
     </table>
   </div>
 </details>
 
 <details open>
-  <summary>Medium-Frequency (Every 15 min) <span class="badge badge-orange">2 jobs</span></summary>
+  <summary>Medium-Frequency (Every 15 min) <span class="badge badge-orange">1 job</span></summary>
   <div class="detail-body">
     <table class="filterable">
       <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td><code>ebay-auction-sniper</code></td><td><code>*/15 * * * *</code></td><td>/api/cron/ebay-auctions</td><td>UTC</td><td>default</td><td>Find LEGO auctions ending soon, Discord alerts</td></tr>
-        <tr><td><code>minifig-poll-ebay-orders</code></td><td><code>*/15 * * * *</code></td><td>/api/cron/minifigs/poll-ebay-orders</td><td>UTC</td><td>default</td><td>Detect eBay minifig sales for cross-platform delisting</td></tr>
       </tbody>
     </table>
   </div>
@@ -504,11 +506,11 @@
         <tr><td><code>ebay-pricing-sync</code></td><td><code>0 2 * * *</code></td><td>Cloud Function</td><td>UTC</td><td>3600s</td><td>Cursor-based eBay pricing, up to 1,000 items/day (resumable)</td></tr>
         <tr><td><code>email-purchases</code></td><td><code>17 2 * * *</code></td><td>/api/cron/email-purchases</td><td>UTC</td><td>default</td><td>Gmail scan for Vinted/eBay purchase confirmations, batch import</td></tr>
         <tr><td><code>bricklink-pricing-sync</code></td><td><code>30 2 * * *</code></td><td>Cloud Function</td><td>UTC</td><td>3600s</td><td>Cursor-based BrickLink pricing, up to 1,000 items/day (resumable)</td></tr>
-        <tr><td><code>ebay-fp-cleanup</code></td><td><code>0 4 * * *</code></td><td>/api/cron/ebay-fp-cleanup</td><td>UTC</td><td>default</td><td>False-positive detection, 22 weighted signals (threshold 50)</td></tr>
+        <tr><td><code>ebay-fp-cleanup</code></td><td><code>0 4 * * *</code></td><td>/api/cron/ebay-fp-cleanup</td><td>UTC</td><td>default</td><td>False-positive detection, 34 weighted signals (threshold 50)</td></tr>
         <tr><td><code>ebay-promotions</code></td><td><code>0 5 * * *</code></td><td>/api/cron/ebay-promotions</td><td>UTC</td><td>300s</td><td>Apply promotion schedules: bid % based on listing age</td></tr>
-        <tr><td><code>investment-sync</code></td><td><code>0 5 * * *</code></td><td>/api/cron/investment-sync</td><td>UTC</td><td>default</td><td>ASIN linkage, auto-classification, price movement alerts</td></tr>
+        <tr><td><code>investment-retrain</code></td><td><code>0 5 1 * *</code></td><td>/api/cron/investment-retrain</td><td>UTC</td><td>300s</td><td>Monthly ML model retrain (1st of month only)</td></tr>
         <tr style="background:rgba(248,113,113,0.06)"><td><code>retirement-sync</code></td><td><code>0 6 * * *</code></td><td>/api/cron/retirement-sync</td><td>UTC</td><td>300s</td><td>Brickset + Brick Tap sync <span class="badge badge-red">collision</span></td></tr>
-        <tr style="background:rgba(248,113,113,0.06)"><td><code>spapi-buybox-overlay</code></td><td><code>0 6 * * *</code></td><td>/api/cron/spapi-buybox-overlay</td><td>UTC</td><td>300s</td><td>~232 in-stock ASINs <span class="badge badge-red">collision</span></td></tr>
+        <tr style="background:rgba(248,113,113,0.06)"><td><code>spapi-buybox-overlay</code></td><td><code>0 6 * * *</code></td><td>Cloud Function</td><td>UTC</td><td>300s</td><td>~232 in-stock ASINs (via pricing-sync-driver) <span class="badge badge-red">collision</span></td></tr>
         <tr style="background:rgba(248,113,113,0.06)"><td><code>minifig-daily-inventory</code></td><td><code>0 6 * * *</code></td><td>/api/cron/minifigs/daily-inventory</td><td>UTC</td><td>default</td><td>Crash recovery + inventory + repricing (Mon) <span class="badge badge-red">collision</span></td></tr>
       </tbody>
     </table>
@@ -516,13 +518,14 @@
 </details>
 
 <details>
-  <summary>Daily &mdash; Daytime (07:00+ UTC) <span class="badge badge-cyan">4 jobs</span></summary>
+  <summary>Daily &mdash; Daytime (07:00+ UTC) <span class="badge badge-cyan">5 jobs</span></summary>
   <div class="detail-body">
     <table class="filterable">
       <thead><tr><th>Job Name</th><th>Schedule</th><th>Endpoint</th><th>TZ</th><th>Timeout</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>vercel-usage-report</code></td><td><code>0 7 * * *</code></td><td>/api/cron/vercel-usage</td><td>Europe/London</td><td>default</td><td>Vercel metrics, RAG status, email + Discord summary</td></tr>
-        <tr><td><code>vinted-collections</code></td><td><code>0 8 * * *</code></td><td>/api/cron/vinted-collections</td><td>Europe/London</td><td>default</td><td>Gmail parsing for collection-ready + Royal Mail pickup</td></tr>
+        <tr><td><code>vercel-usage-report</code></td><td><code>0 7 * * *</code></td><td>/api/cron/vercel-usage</td><td>UTC</td><td>default</td><td>Vercel metrics, RAG status, email + Discord summary</td></tr>
+        <tr><td><code>investment-sync</code></td><td><code>0 7 * * *</code></td><td>/api/cron/investment-sync</td><td>UTC</td><td>default</td><td>ASIN linkage, auto-classification, price movement alerts</td></tr>
+        <tr><td><code>vinted-collections</code></td><td><code>0 8 * * *</code></td><td>/api/cron/vinted-collections</td><td>UTC</td><td>default</td><td>Gmail parsing for collection-ready + Royal Mail pickup</td></tr>
         <tr><td><code>ebay-listing-refresh</code></td><td><code>0 19 * * *</code></td><td>/api/cron/ebay-listing-refresh</td><td>Europe/London</td><td>300s</td><td>End stale listings (90+ days), recreate with engagement pricing</td></tr>
         <tr><td><code>cost-allocation</code></td><td><code>15 21 * * *</code></td><td>/api/cron/cost-allocation</td><td>Europe/London</td><td>300s</td><td>Distribute purchase costs proportionally across items</td></tr>
       </tbody>
@@ -539,7 +542,7 @@
         <tr><td><code>refresh-watchlist</code></td><td><code>0 3 * * 0</code></td><td>/api/cron/refresh-watchlist</td><td>UTC</td><td>default</td><td>Populate arbitrage watchlist with newly sold items (Sun 3am)</td></tr>
         <tr><td><code>rebrickable-sync</code></td><td><code>0 4 * * 0</code></td><td>/api/cron/rebrickable-sync</td><td>UTC</td><td>default</td><td>Sync LEGO set data from Rebrickable (Sun 4am)</td></tr>
         <tr><td><code>ebay-category-audit</code></td><td><code>0 7 * * 1</code></td><td>/api/cron/ebay-category-audit</td><td>UTC</td><td>default</td><td>eBay category audit report (Mon 7am)</td></tr>
-        <tr><td><code>investment-retrain</code></td><td><code>0 6 1 * *</code></td><td>/api/cron/investment-retrain</td><td>UTC</td><td>300s</td><td>TensorFlow.js ML model retrain on historical appreciation data</td></tr>
+        <tr style="color:var(--text-muted)"><td colspan="6"><em>investment-retrain moved to overnight section (0 5 1 * *)</em></td></tr>
       </tbody>
     </table>
   </div>
@@ -551,7 +554,7 @@
     <table class="filterable">
       <thead><tr><th>Job Name</th><th>Schedule</th><th>Description</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td><code>verify-punditry-daily</code></td><td>daily</td><td>Football Prediction Game verification</td><td>Cleanup candidate &mdash; move to separate GCP project</td></tr>
+        <tr><td><code>verify-punditry-daily</code></td><td><code>30 5 * * *</code></td><td>Football Prediction Game verification (Cloud Run)</td><td>Non-HB &mdash; consider moving to separate project</td></tr>
       </tbody>
     </table>
   </div>
@@ -580,7 +583,7 @@
       <tr><td style="font-weight:600">Trigger</td><td>HTTP (authenticated via OIDC)</td></tr>
       <tr><td style="font-weight:600">Timeout</td><td>3600s (1 hour)</td></tr>
       <tr><td style="font-weight:600">Memory</td><td>256MB</td></tr>
-      <tr><td style="font-weight:600">Handles</td><td>amazon-pricing, ebay-pricing, bricklink-pricing (resumable loop until <code>{complete: true}</code>)</td></tr>
+      <tr><td style="font-weight:600">Handles</td><td>amazon-pricing, ebay-pricing, bricklink-pricing, spapi-buybox-overlay (resumable loop until <code>{complete: true}</code>)</td></tr>
       <tr><td style="font-weight:600">Source</td><td><code>gcp/functions/pricing-sync-driver/</code></td></tr>
     </table>
   </div>
@@ -695,12 +698,6 @@
   <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Stagger: retirement 06:00, spapi-overlay 06:10, minifig-daily 06:20</p>
 </div>
 
-<div class="issue-card warn">
-  <h4>5am UTC Collision &mdash; 2 jobs at <code>0 5 * * *</code></h4>
-  <p><code>ebay-promotions</code> and <code>investment-sync</code> both fire at the same time. Lower risk but unnecessary.</p>
-  <p style="color:var(--green); margin-top:0.5rem"><strong>Fix:</strong> Move investment-sync to 05:15 UTC</p>
-</div>
-
 <div class="issue-card info">
   <h4>Non-HB Job in HB Project</h4>
   <p><code>verify-punditry-daily</code> is a Football Prediction Game job running in HB's GCP project. Should be moved to a separate project or documented as intentional.</p>
@@ -708,7 +705,7 @@
 
 <div class="issue-card info">
   <h4>Consolidation Candidates</h4>
-  <p><code>minifig-poll-ebay-orders</code> (*/15) and <code>minifig-poll-bricqer-orders</code> (*/30) could be rolled into <code>minifig-daily-inventory</code> if real-time detection isn't critical. Currently 96+48 = 144 invocations/day for these two jobs alone.</p>
+  <p><code>minifig-poll-ebay-orders</code> (*/30) and <code>minifig-poll-bricqer-orders</code> (*/30) could be rolled into <code>minifig-daily-inventory</code> if real-time detection isn't critical. Currently 48+48 = 96 invocations/day for these two jobs alone.</p>
 </div>
 
 <!-- Automation Gaps -->
@@ -773,7 +770,7 @@
 </p>
 
 <p style="color:var(--text-muted); font-size:0.8rem; margin-top:3rem; text-align:center;">
-  Generated 2026-03-18 &middot; Source: GCP Cloud Scheduler, gcp/setup.ps1, gcp/README.md, Peter Bot SCHEDULE.md, codebase route analysis
+  Verified 2026-03-18 against live <code>gcloud scheduler jobs list</code> &middot; Do NOT rely on gcp/setup.ps1 or gcp/README.md (both stale)
 </p>
 
 <script>
