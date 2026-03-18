@@ -34,15 +34,6 @@ export interface SyncSuccessParams {
   verificationTime: number;
 }
 
-export interface VintedOpportunityParams {
-  setNumber: string;
-  setName: string;
-  vintedPrice: number;
-  amazonPrice: number;
-  cogPercent: number;
-  profit: number;
-  vintedUrl: string;
-}
 
 export interface EbayAuctionAlertParams {
   setNumber: string;
@@ -82,12 +73,6 @@ export interface EbayJoblotAlertParams {
   imageUrl: string | null;
 }
 
-export interface VintedDailySummaryParams {
-  broadSweeps: number;
-  watchlistScans: number;
-  opportunitiesFound: number;
-  nearMissesFound: number;
-}
 
 /** Discord embed colour constants */
 export const DiscordColors = {
@@ -379,64 +364,6 @@ export class DiscordService {
   // =========================================================================
   // Convenience Methods
   // =========================================================================
-
-  /**
-   * Send Vinted opportunity alert
-   * SendsendVintedOpportunity
-   */
-  async sendVintedOpportunity(params: VintedOpportunityParams): Promise<void> {
-    await this.sendOpportunity(params);
-  }
-
-  /**
-   * Send CAPTCHA warning - scanner has been auto-paused
-   * SendsendVintedCaptchaWarning
-   */
-  async sendVintedCaptchaWarning(): Promise<void> {
-    await this.sendAlert({
-      title: '⚠️ CAPTCHA Detected - Scanner Paused',
-      message:
-        'Vinted CAPTCHA detected. Scanner has been automatically paused. ' +
-        'Please resolve the CAPTCHA manually and resume scanning.',
-      priority: 'high',
-      url: `${this.appUrl}/arbitrage/vinted/automation`,
-      urlTitle: 'View Scanner Status',
-    });
-  }
-
-  /**
-   * Send daily summary of Vinted scanner activity
-   * SendsendVintedDailySummary
-   */
-  async sendVintedDailySummary(params: VintedDailySummaryParams): Promise<void> {
-    const { broadSweeps, watchlistScans, opportunitiesFound, nearMissesFound } = params;
-
-    await this.sendDailySummary({
-      title: '📊 Vinted Scanner Daily Summary',
-      fields: [
-        { name: 'Broad Sweeps', value: broadSweeps.toString(), inline: true },
-        { name: 'Watchlist Scans', value: watchlistScans.toString(), inline: true },
-        { name: 'Opportunities', value: opportunitiesFound.toString(), inline: true },
-        { name: 'Near Misses', value: nearMissesFound.toString(), inline: true },
-      ],
-    });
-  }
-
-  /**
-   * Send consecutive failure alert
-   * SendsendVintedConsecutiveFailures
-   */
-  async sendVintedConsecutiveFailures(failureCount: number): Promise<void> {
-    await this.sendAlert({
-      title: '🔴 Vinted Scanner Issues',
-      message:
-        `${failureCount} consecutive scan failures detected.\n` +
-        'Please check scanner status and Vinted accessibility.',
-      priority: 'high',
-      url: `${this.appUrl}/arbitrage/vinted/automation`,
-      urlTitle: 'View Scanner Status',
-    });
-  }
 
   /**
    * Send two-phase sync failure notification
