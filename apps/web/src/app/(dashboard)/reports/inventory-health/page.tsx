@@ -131,7 +131,7 @@ export default function InventoryHealthPage() {
               />
               <StatCard
                 title="Value/COG Ratio"
-                value={`${report.kpis.valueCogRatio.toFixed(1)}x`}
+                value={`${report.kpis.valueCogRatio.toFixed(1)}x (${report.kpis.portfolioCogPct.toFixed(0)}%)`}
                 description={
                   report.kpis.valueCogRatio >= TARGETS.VALUE_COG_RATIO
                     ? `Above ${TARGETS.VALUE_COG_RATIO}x target`
@@ -208,28 +208,24 @@ export default function InventoryHealthPage() {
                     <ShoppingCart className="h-5 w-5" />
                     Sourcing Quality
                   </CardTitle>
-                  <CardDescription>This week&apos;s buying and listing metrics</CardDescription>
+                  <CardDescription>Items listed on Amazon this week (purchased within 28 days)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-3 grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Bought This Week</p>
-                      <p className="text-2xl font-bold">{report.sourcing.itemsBoughtThisWeek}</p>
-                    </div>
-                    <div>
+                    <div className="col-span-2">
                       <p className="text-sm text-muted-foreground">Listed This Week</p>
                       <p className="text-2xl font-bold">{report.sourcing.itemsListedThisWeek}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Avg COG (Bought)</p>
+                      <p className="text-sm text-muted-foreground">Avg COG</p>
                       <p className="text-2xl font-bold">
-                        {formatCurrency(report.sourcing.avgCogBought)}
+                        {formatCurrency(report.sourcing.avgCog)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Avg List Value</p>
                       <p className="text-2xl font-bold">
-                        {formatCurrency(report.sourcing.avgListValueListed)}
+                        {formatCurrency(report.sourcing.avgListValue)}
                       </p>
                     </div>
                     <div>
@@ -365,7 +361,7 @@ export default function InventoryHealthPage() {
                         <TableHead>Week</TableHead>
                         <TableHead className="text-right">Listed</TableHead>
                         <TableHead className="text-right">Sold</TableHead>
-                        <TableHead className="text-right">ST%</TableHead>
+                        <TableHead className="text-right">Sell-Through %</TableHead>
                         <TableHead className="text-right">COG%</TableHead>
                         <TableHead className="text-right">Gross</TableHead>
                         <TableHead className="text-right">Net +/-</TableHead>

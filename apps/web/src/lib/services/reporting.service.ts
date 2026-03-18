@@ -163,6 +163,7 @@ export interface InventoryHealthReport {
     inventoryCog: number;
     inventoryValue: number;
     valueCogRatio: number;
+    portfolioCogPct: number;
   };
 
   velocity: {
@@ -175,10 +176,9 @@ export interface InventoryHealthReport {
   };
 
   sourcing: {
-    itemsBoughtThisWeek: number;
     itemsListedThisWeek: number;
-    avgCogBought: number;
-    avgListValueListed: number;
+    avgCog: number;
+    avgListValue: number;
     cogPct: number;
     cogPctTarget: number;
     netStockChange: number;
@@ -1980,6 +1980,11 @@ export class ReportingService {
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
     const fourWeeksAgoStr = this.formatDate(fourWeeksAgo);
 
+    // 28 days ago for sourcing recency filter
+    const twentyEightDaysAgo = new Date(now);
+    twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
+    const twentyEightDaysAgoStr = this.formatDate(twentyEightDaysAgo);
+
     // 8 weeks ago for trend derivation
     const eightWeeksAgo = new Date(monday);
     eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
@@ -1994,12 +1999,9 @@ export class ReportingService {
       listing_date: string | null;
       listing_value: number | null;
     }
-    interface BoughtRow {
-      id: string;
-      cost: number | null;
-    }
     interface ListedThisWeekRow {
       id: string;
+      cost: number | null;
       listing_value: number | null;
     }
     interface BacklogRow {
@@ -2023,7 +2025,6 @@ export class ReportingService {
       soldThisWeekItems,
       recentSalesData,
       soldLast4Weeks,
-      boughtThisWeek,
       listedThisWeek,
       backlogItems,
       snapshotsResult,
@@ -2074,24 +2075,14 @@ export class ReportingService {
           return (data || []) as Array<{ id: string; sold_price: number | null; sold_date: string }>;
         }),
 
-      // Q5: Bought this week
+      // Q5: Listed on Amazon this week + purchased within last 28 days (unified sourcing query)
       this.supabase
         .from('inventory_items')
-        .select('id, cost')
-        .eq('user_id', userId)
-        .gte('purchase_date', mondayStr)
-        .then(({ data, error }) => {
-          if (error) throw new Error(`Bought this week query failed: ${error.message}`);
-          return (data || []) as BoughtRow[];
-        }),
-
-      // Q6: Listed on Amazon this week
-      this.supabase
-        .from('inventory_items')
-        .select('id, listing_value')
+        .select('id, cost, listing_value')
         .eq('user_id', userId)
         .ilike('listing_platform', 'amazon')
         .gte('listing_date', mondayStr)
+        .gte('purchase_date', twentyEightDaysAgoStr)
         .then(({ data, error }) => {
           if (error) throw new Error(`Listed this week query failed: ${error.message}`);
           return (data || []) as ListedThisWeekRow[];
@@ -2171,19 +2162,20 @@ export class ReportingService {
     );
     const annualPace = last4WeeksGross * 13;
 
-    // ── Section 3: Sourcing Quality ──
-    const itemsBoughtThisWeek = boughtThisWeek.length;
+    // ── Section 1b: Portfolio COG% ──
+    const portfolioCogPct = inventoryValue > 0 ? (inventoryCog / inventoryValue) * 100 : 0;
+
+    // ── Section 3: Sourcing Quality (unified: listed on Amazon this week, purchased within 28 days) ──
     const itemsListedThisWeek = listedThisWeek.length;
-    const totalCogBought = boughtThisWeek.reduce((sum, i) => sum + (i.cost || 0), 0);
-    const avgCogBought =
-      itemsBoughtThisWeek > 0 ? totalCogBought / itemsBoughtThisWeek : 0;
+    const totalCogListed = listedThisWeek.reduce((sum, i) => sum + (i.cost || 0), 0);
     const totalListValueListed = listedThisWeek.reduce(
       (sum, i) => sum + (i.listing_value || 0),
       0
     );
-    const avgListValueListed =
+    const avgCog = itemsListedThisWeek > 0 ? totalCogListed / itemsListedThisWeek : 0;
+    const avgListValue =
       itemsListedThisWeek > 0 ? totalListValueListed / itemsListedThisWeek : 0;
-    const cogPct = inventoryValue > 0 ? (inventoryCog / inventoryValue) * 100 : 0;
+    const sourcingCogPct = totalListValueListed > 0 ? (totalCogListed / totalListValueListed) * 100 : 0;
     const netStockChange = itemsListedThisWeek - soldThisWeekCount;
 
     // ── Section 4: Stock Health ──
@@ -2310,6 +2302,7 @@ export class ReportingService {
         inventoryCog: Math.round(inventoryCog * 100) / 100,
         inventoryValue: Math.round(inventoryValue * 100) / 100,
         valueCogRatio: Math.round(valueCogRatio * 100) / 100,
+        portfolioCogPct: Math.round(portfolioCogPct * 100) / 100,
       },
       velocity: {
         soldThisWeek: soldThisWeekCount,
@@ -2320,11 +2313,10 @@ export class ReportingService {
         annualTarget: ReportingService.HEALTH_TARGETS.ANNUAL_GROSS,
       },
       sourcing: {
-        itemsBoughtThisWeek,
         itemsListedThisWeek,
-        avgCogBought: Math.round(avgCogBought * 100) / 100,
-        avgListValueListed: Math.round(avgListValueListed * 100) / 100,
-        cogPct: Math.round(cogPct * 100) / 100,
+        avgCog: Math.round(avgCog * 100) / 100,
+        avgListValue: Math.round(avgListValue * 100) / 100,
+        cogPct: Math.round(sourcingCogPct * 100) / 100,
         cogPctTarget: ReportingService.HEALTH_TARGETS.COG_PCT,
         netStockChange,
       },
