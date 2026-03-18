@@ -226,10 +226,10 @@ export function VintedInventoryReviewCard({ item, onChange }: VintedInventoryRev
     return calculateAmazonFBMProfit(item.listingValue, item.purchaseCost);
   }, [item.listingValue, item.purchaseCost]);
 
-  // SellerAmp URL - use ASIN if available, otherwise set number
-  const sellerAmpSearchTerm = item.amazonAsin || item.setNumber;
-  const sellerAmpUrl = sellerAmpSearchTerm
-    ? `https://sas.selleramp.com/sas/lookup?SasLookup%5Bsearch_term%5D=${encodeURIComponent(sellerAmpSearchTerm)}`
+  // Keepa URL - use ASIN if available, otherwise set number
+  const keepaSearchTerm = item.amazonAsin || item.setNumber;
+  const keepaUrl = keepaSearchTerm
+    ? `https://keepa.com/#!product/2-${encodeURIComponent(keepaSearchTerm)}`
     : null;
 
   return (
@@ -404,21 +404,21 @@ export function VintedInventoryReviewCard({ item, onChange }: VintedInventoryRev
                     placeholder="e.g., 29.99"
                     className="flex-1"
                   />
-                  {sellerAmpUrl && (
+                  {keepaUrl && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <a
-                            href={sellerAmpUrl}
+                            href={keepaUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-orange-600 hover:text-orange-800"
+                            className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-green-600 hover:text-green-800"
                           >
-                            <span className="text-[10px] font-bold">SAS</span>
+                            <span className="text-[10px] font-bold">K</span>
                           </a>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Open in SellerAmp</p>
+                          <p>Open in Keepa</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
