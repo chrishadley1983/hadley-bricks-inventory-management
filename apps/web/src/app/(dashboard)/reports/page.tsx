@@ -11,6 +11,7 @@ import {
   Settings,
   ArrowRight,
   CalendarDays,
+  Activity,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,14 @@ const reportCategories = [
         icon: Package,
         color: 'text-blue-600',
         comingSoon: true,
+      },
+      {
+        name: 'Inventory Health',
+        description: 'KPIs, velocity, sourcing quality, and weekly trends for Amazon',
+        href: '/reports/inventory-health',
+        icon: Activity,
+        color: 'text-emerald-600',
+        comingSoon: false,
       },
       {
         name: 'Inventory Aging',

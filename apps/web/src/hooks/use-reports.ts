@@ -5,6 +5,7 @@ import type {
   DateRangePreset,
   InventoryValuationReport,
   InventoryAgingReport,
+  InventoryHealthReport,
   PlatformPerformanceReport,
   PurchaseAnalysisReport,
   ReportSettings,
@@ -81,6 +82,17 @@ export function useInventoryAgingReport() {
   return useQuery<InventoryAgingReport>({
     queryKey: ['reports', 'inventory-aging'],
     queryFn: () => fetchReport<InventoryAgingReport>('inventory-aging'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook for fetching inventory health dashboard
+ */
+export function useInventoryHealthReport() {
+  return useQuery<InventoryHealthReport>({
+    queryKey: ['reports', 'inventory-health'],
+    queryFn: () => fetchReport<InventoryHealthReport>('inventory-health'),
     staleTime: 5 * 60 * 1000,
   });
 }
