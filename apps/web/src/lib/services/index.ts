@@ -54,6 +54,7 @@ export type {
   MonthlyActivityRow,
   DailyActivityReport,
   UpdateStoreStatusInput,
+  InventoryHealthReport,
 } from './reporting.service';
 export type {
   CreateMileageInput,
