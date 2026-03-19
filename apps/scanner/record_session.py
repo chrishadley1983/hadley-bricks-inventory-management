@@ -37,7 +37,7 @@ async def main():
     log.info(f"Camera: {config.phone_ip}:{config.phone_port}")
     log.info(f"Target FPS: {config.camera_fps}")
 
-    camera = CameraClient(config)
+    camera = await CameraClient.create(config)
     log.info("Connecting to camera...")
     ok = await camera.health_check()
     if not ok:

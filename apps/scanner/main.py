@@ -456,7 +456,7 @@ async def main(config: ScannerConfig) -> None:
             return
 
     # Initialize modules
-    camera = CameraClient(config)
+    camera = await CameraClient.create(config)
     detector = PieceDetector(config)
     tracker = CentroidTracker()
     selector = BestFrameSelector()
@@ -835,7 +835,7 @@ async def main_set_check(config: ScannerConfig) -> None:
             return
 
     # Initialize modules (I1: reuse existing pipeline)
-    camera = CameraClient(config)
+    camera = await CameraClient.create(config)
     detector = PieceDetector(config)
     tracker = CentroidTracker()
     selector = BestFrameSelector()

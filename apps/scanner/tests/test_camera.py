@@ -9,7 +9,7 @@ import aiohttp
 import numpy as np
 import pytest
 
-from camera import CameraClient
+from camera import CameraClient, discover_phone_ip
 from config import ScannerConfig
 
 
@@ -58,6 +58,82 @@ def _exception_response(exc):
     ctx.__aenter__ = AsyncMock(side_effect=exc)
     ctx.__aexit__ = AsyncMock(return_value=False)
     return ctx
+
+
+class TestDiscoverPhoneIp:
+    """Auto-discovery of IP Webcam on the local network."""
+
+    @pytest.mark.asyncio
+    async def test_returns_known_ip_immediately(self):
+        """Fast-path: returns the known IP when it responds on the first probe."""
+        async def mock_probe(session, ip, port):
+            return ip == "192.168.0.59"
+
+        with patch("camera._probe_ip", side_effect=mock_probe):
+            # Patch ClientSession so no real network I/O occurs
+            with patch("camera.aiohttp.ClientSession") as MockSession:
+                MockSession.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+                MockSession.return_value.__aexit__ = AsyncMock(return_value=False)
+                # Use the real discover_phone_ip but with _probe_ip mocked
+                result = await discover_phone_ip(port=8080)
+
+        assert result == "192.168.0.59"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_subnet_scan(self):
+        """Subnet scan returns the first responding IP when known IP is offline."""
+        target_ip = "192.168.1.42"
+
+        async def mock_probe(session, ip, port):
+            return ip == target_ip
+
+        with patch("camera._probe_ip", side_effect=mock_probe):
+            with patch("camera.aiohttp.ClientSession") as MockSession:
+                MockSession.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+                MockSession.return_value.__aexit__ = AsyncMock(return_value=False)
+                result = await discover_phone_ip(port=8080)
+
+        assert result == target_ip
+
+    @pytest.mark.asyncio
+    async def test_raises_when_no_camera_found(self):
+        """RuntimeError is raised with a descriptive message when nothing responds."""
+        async def mock_probe(session, ip, port):
+            return False
+
+        with patch("camera._probe_ip", side_effect=mock_probe):
+            with patch("camera.aiohttp.ClientSession") as MockSession:
+                MockSession.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+                MockSession.return_value.__aexit__ = AsyncMock(return_value=False)
+                with pytest.raises(RuntimeError, match="Auto-discovery failed"):
+                    await discover_phone_ip(port=8080)
+
+    @pytest.mark.asyncio
+    async def test_create_resolves_auto_ip(self, config: ScannerConfig):
+        """CameraClient.create() resolves 'auto' to a real IP before constructing."""
+        auto_config = ScannerConfig(
+            phone_ip="auto",
+            phone_port=8080,
+            camera_fps=config.camera_fps,
+            supabase_url=config.supabase_url,
+            supabase_key=config.supabase_key,
+        )
+
+        with patch("camera.discover_phone_ip", new_callable=AsyncMock, return_value="192.168.0.59"):
+            client = await CameraClient.create(auto_config)
+
+        assert client.shot_url == "http://192.168.0.59:8080/shot.jpg"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_create_skips_discovery_when_ip_explicit(self, config: ScannerConfig):
+        """CameraClient.create() does not call discover_phone_ip when IP is explicit."""
+        with patch("camera.discover_phone_ip", new_callable=AsyncMock) as mock_discover:
+            client = await CameraClient.create(config)
+
+        mock_discover.assert_not_called()
+        assert "192.168.1.100" in client.shot_url
+        await client.close()
 
 
 class TestHealthCheck:
