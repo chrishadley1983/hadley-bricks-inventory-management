@@ -746,7 +746,11 @@ export class EbayListingRefreshService {
           description: cachedData.description,
           sku: cachedData.sku || undefined,
           startPrice: item.modifiedPrice || cachedData.startPrice,
-          quantity: item.modifiedQuantity || cachedData.quantity,
+          quantity:
+            item.modifiedQuantity ||
+            (cachedData.quantitySold > 0
+              ? cachedData.quantity - cachedData.quantitySold
+              : cachedData.quantity),
           currency: cachedData.currency,
           conditionId: cachedData.conditionId || undefined,
           conditionDescription: cachedData.conditionDescription || undefined,

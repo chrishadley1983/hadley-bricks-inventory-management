@@ -87,7 +87,11 @@ export async function POST(request: NextRequest) {
           description: cd.description as string,
           sku: (cd.sku as string) || undefined,
           startPrice: item.modified_price || (cd.startPrice as number),
-          quantity: item.modified_quantity || (cd.quantity as number),
+          quantity:
+            item.modified_quantity ||
+            ((cd.quantitySold as number) > 0
+              ? (cd.quantity as number) - (cd.quantitySold as number)
+              : (cd.quantity as number)),
           currency: (cd.currency as string) || 'GBP',
           conditionId: (cd.conditionId as number) || undefined,
           conditionDescription: (cd.conditionDescription as string) || undefined,
