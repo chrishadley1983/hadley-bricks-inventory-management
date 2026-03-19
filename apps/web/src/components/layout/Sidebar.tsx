@@ -29,6 +29,7 @@ import {
   Calculator,
   PenLine,
   ClipboardList,
+  Camera,
   ChevronDown,
   LineChart,
   Gavel,
@@ -61,6 +62,7 @@ const mainNavItems: NavItem[] = [
   { href: '/set-lookup', label: 'Set Lookup', icon: Search },
   { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
   { href: '/listing-assistant', label: 'Listing Assistant', icon: PenLine },
+  { href: '/scanner', label: 'Scanner', icon: Camera },
   { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
 ];
 

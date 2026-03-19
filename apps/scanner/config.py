@@ -49,6 +49,7 @@ class ScannerConfig:
 
     # Set check mode
     check_set: str | None = None
+    resume: bool = False
     rebrickable_api_key: str = ""
 
     # Runtime (set after init)
@@ -73,6 +74,8 @@ class ScannerConfig:
             errors.append("CAMERA_FPS must be between 1 and 30")
         if self.confidence_threshold < 0 or self.confidence_threshold > 1:
             errors.append("CONFIDENCE_THRESHOLD must be between 0 and 1")
+        if self.resume and not self.check_set:
+            errors.append("--resume requires --check-set <set_number>")
         return errors
 
 
@@ -111,6 +114,11 @@ def parse_cli_args(args: list[str] | None = None) -> ScannerConfig:
         metavar="SET_NUM",
         help="Set check mode: verify completeness of a LEGO set (e.g., 75192-1)",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the most recent incomplete set-check session (requires --check-set)",
+    )
 
     parsed = parser.parse_args(args)
     config = load_config()
@@ -124,5 +132,7 @@ def parse_cli_args(args: list[str] | None = None) -> ScannerConfig:
         config.camera_fps = parsed.fps
     if parsed.check_set is not None:
         config.check_set = parsed.check_set
+    if parsed.resume:
+        config.resume = True
 
     return config
