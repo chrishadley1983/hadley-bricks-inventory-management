@@ -123,45 +123,64 @@ export class EbayListingRefreshService {
    * Get listings eligible for refresh (older than specified days)
    */
   async getEligibleListings(filters?: EligibleListingFilters): Promise<EligibleListing[]> {
+    const result = await this.getEligibleListingsWithSkipped(filters);
+    return result.eligible;
+  }
+
+  /**
+   * Get eligible listings plus any multi-qty items that were skipped.
+   * The cron route uses this to send Discord alerts for skipped items.
+   */
+  async getEligibleListingsWithSkipped(filters?: EligibleListingFilters): Promise<{
+    eligible: EligibleListing[];
+    skippedMultiQty: EligibleListing[];
+  }> {
     const minAge = filters?.minAge ?? DEFAULT_MIN_AGE_DAYS;
 
     // Fetch all active listings from eBay
     const client = await this.getTradingClient();
     const listings = await client.getAllActiveListings();
 
-    // Filter by age and other criteria
-    const eligibleListings = listings
-      .filter((listing) => {
-        const startDate = new Date(listing.ebayData.listingStartDate);
-        const age = calculateListingAge(startDate);
+    const eligible: EligibleListing[] = [];
+    const skippedMultiQty: EligibleListing[] = [];
 
-        // Must be older than minimum age
-        if (age < minAge) return false;
+    for (const listing of listings) {
+      const startDate = new Date(listing.ebayData.listingStartDate);
+      const age = calculateListingAge(startDate);
 
-        // Exclude variation/multi-listings — end+create doesn't preserve variations
-        if (listing.ebayData.hasVariations) return false;
+      // Must be older than minimum age
+      if (age < minAge) continue;
 
-        // Apply optional filters
-        if (filters?.maxPrice !== undefined && listing.price > filters.maxPrice) return false;
-        if (filters?.minPrice !== undefined && listing.price < filters.minPrice) return false;
-        if (filters?.condition && listing.ebayData.condition !== filters.condition) return false;
-        if (filters?.hasWatchers && listing.ebayData.watchers === 0) return false;
-        if (filters?.minWatchers !== undefined && listing.ebayData.watchers < filters.minWatchers) {
-          return false;
-        }
-        if (
-          filters?.search &&
-          !listing.title.toLowerCase().includes(filters.search.toLowerCase())
-        ) {
-          return false;
-        }
+      // Exclude variation/multi-listings — end+create doesn't preserve variations
+      if (listing.ebayData.hasVariations) continue;
 
-        return true;
-      })
-      .map((listing) => this.parseToEligibleListing(listing))
-      .sort((a, b) => b.listingAge - a.listingAge); // Oldest first
+      // Multi-quantity listings: track separately for alerting
+      if (listing.quantity > 1) {
+        skippedMultiQty.push(this.parseToEligibleListing(listing));
+        continue;
+      }
 
-    return eligibleListings;
+      // Apply optional filters
+      if (filters?.maxPrice !== undefined && listing.price > filters.maxPrice) continue;
+      if (filters?.minPrice !== undefined && listing.price < filters.minPrice) continue;
+      if (filters?.condition && listing.ebayData.condition !== filters.condition) continue;
+      if (filters?.hasWatchers && listing.ebayData.watchers === 0) continue;
+      if (filters?.minWatchers !== undefined && listing.ebayData.watchers < filters.minWatchers) {
+        continue;
+      }
+      if (
+        filters?.search &&
+        !listing.title.toLowerCase().includes(filters.search.toLowerCase())
+      ) {
+        continue;
+      }
+
+      eligible.push(this.parseToEligibleListing(listing));
+    }
+
+    eligible.sort((a, b) => b.listingAge - a.listingAge); // Oldest first
+
+    return { eligible, skippedMultiQty };
   }
 
   /**
@@ -746,7 +765,11 @@ export class EbayListingRefreshService {
           description: cachedData.description,
           sku: cachedData.sku || undefined,
           startPrice: item.modifiedPrice || cachedData.startPrice,
-          quantity: item.modifiedQuantity || cachedData.quantity,
+          quantity:
+            item.modifiedQuantity ||
+            (cachedData.quantitySold > 0
+              ? cachedData.quantity - cachedData.quantitySold
+              : cachedData.quantity),
           currency: cachedData.currency,
           conditionId: cachedData.conditionId || undefined,
           conditionDescription: cachedData.conditionDescription || undefined,
