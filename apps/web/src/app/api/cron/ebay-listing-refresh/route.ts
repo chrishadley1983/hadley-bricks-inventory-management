@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
           (l) => `• **${l.title}** (SKU: ${l.sku || 'none'}) — qty: ${l.quantity}, sold: ${l.quantitySold}, age: ${l.listingAge}d`
         ).join('\n');
         await discord.send('alerts', {
-          title: `⚠️ Listing Refresh: ${skippedMultiQty.length} multi-qty item(s) skipped`,
+          title: `Listing Refresh: ${skippedMultiQty.length} multi-qty item(s) skipped`,
           description: `The following listings have quantity > 1 and were excluded from automatic refresh. Please review and relist manually with correct quantities.\n\n${itemLines}`,
           color: 0xffa500, // Orange
         });

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
         // Skip multi-quantity items — cross-platform stock may differ
         const effectiveQty = item.modified_quantity ||
-          ((cd.quantitySold as number) > 0
+          Math.max(1, (cd.quantitySold as number) > 0
             ? (cd.quantity as number) - (cd.quantitySold as number)
             : (cd.quantity as number));
         if (!item.modified_quantity && effectiveQty > 1) {

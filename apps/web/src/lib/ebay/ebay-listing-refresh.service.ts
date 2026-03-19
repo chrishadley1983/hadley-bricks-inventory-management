@@ -767,7 +767,7 @@ export class EbayListingRefreshService {
           startPrice: item.modifiedPrice || cachedData.startPrice,
           quantity:
             item.modifiedQuantity ||
-            (cachedData.quantitySold > 0
+            Math.max(1, cachedData.quantitySold > 0
               ? cachedData.quantity - cachedData.quantitySold
               : cachedData.quantity),
           currency: cachedData.currency,
