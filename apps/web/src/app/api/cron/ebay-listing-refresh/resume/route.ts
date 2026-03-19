@@ -82,12 +82,28 @@ export async function POST(request: NextRequest) {
 
       try {
         const cd = cachedData as Record<string, unknown>;
+
+        // Skip multi-quantity items — cross-platform stock may differ
+        const effectiveQty = item.modified_quantity ||
+          Math.max(1, (cd.quantitySold as number) > 0
+            ? (cd.quantity as number) - (cd.quantitySold as number)
+            : (cd.quantity as number));
+        if (!item.modified_quantity && effectiveQty > 1) {
+          console.log(`[ListingRefresh Resume] Skipping multi-qty item ${item.original_item_id} (qty: ${effectiveQty}) — needs manual review`);
+          await supabase
+            .from('ebay_listing_refresh_items')
+            .update({ status: 'skipped' })
+            .eq('id', item.id);
+          results.push({ itemId: item.original_item_id, title: item.original_title || '', error: 'Skipped: quantity > 1 needs manual review' });
+          continue;
+        }
+
         const addRequest: AddFixedPriceItemRequest = {
           title: (item.modified_title || cd.title) as string,
           description: cd.description as string,
           sku: (cd.sku as string) || undefined,
           startPrice: item.modified_price || (cd.startPrice as number),
-          quantity: item.modified_quantity || (cd.quantity as number),
+          quantity: effectiveQty,
           currency: (cd.currency as string) || 'GBP',
           conditionId: (cd.conditionId as number) || undefined,
           conditionDescription: (cd.conditionDescription as string) || undefined,

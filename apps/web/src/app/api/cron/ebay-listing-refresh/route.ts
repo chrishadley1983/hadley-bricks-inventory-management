@@ -29,6 +29,7 @@ import {
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
+import { DiscordService } from '@/lib/notifications/discord.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -173,12 +174,29 @@ export async function POST(request: NextRequest) {
 
     // 1. Get eligible listings (90+ days old) from eBay
     console.log('[ListingRefresh] Fetching eligible listings from eBay');
-    const eligible = await service.getEligibleListings();
-    console.log(`[ListingRefresh] Found ${eligible.length} eligible listings`);
+    const { eligible, skippedMultiQty } = await service.getEligibleListingsWithSkipped();
+    console.log(`[ListingRefresh] Found ${eligible.length} eligible listings, ${skippedMultiQty.length} skipped (qty > 1)`);
+
+    // Send Discord alert for multi-qty items that need manual review
+    if (skippedMultiQty.length > 0) {
+      try {
+        const discord = new DiscordService();
+        const itemLines = skippedMultiQty.map(
+          (l) => `• **${l.title}** (SKU: ${l.sku || 'none'}) — qty: ${l.quantity}, sold: ${l.quantitySold}, age: ${l.listingAge}d`
+        ).join('\n');
+        await discord.send('alerts', {
+          title: `Listing Refresh: ${skippedMultiQty.length} multi-qty item(s) skipped`,
+          description: `The following listings have quantity > 1 and were excluded from automatic refresh. Please review and relist manually with correct quantities.\n\n${itemLines}`,
+          color: 0xffa500, // Orange
+        });
+      } catch (discordErr) {
+        console.error('[ListingRefresh] Discord alert failed (non-blocking):', discordErr);
+      }
+    }
 
     if (eligible.length === 0) {
-      await execution.complete({ message: 'No eligible listings', refreshed: 0 });
-      return NextResponse.json({ success: true, message: 'No eligible listings', refreshed: 0 });
+      await execution.complete({ message: 'No eligible listings', refreshed: 0, skippedMultiQty: skippedMultiQty.length });
+      return NextResponse.json({ success: true, message: 'No eligible listings', refreshed: 0, skippedMultiQty: skippedMultiQty.length });
     }
 
     // 2. Enrich with views and pending offers
@@ -336,6 +354,7 @@ export async function POST(request: NextRequest) {
       refreshed: result.createdCount,
       failed: result.failedCount,
       skipped: skippedCount,
+      skippedMultiQty: skippedMultiQty.length,
       priceReductions: pricesSet,
       inventoryUpdated: invUpdated,
       deferred: deferredCount,
