@@ -32,6 +32,7 @@ from identifier import (
 from models import IdentificationResult, SessionSummary
 from rebrickable import RebrickableClient, RebrickableError, SetNotFoundError
 from session import SessionManager
+from set_check_persistence import SetCheckPersistence
 from set_check import (
     MatchResult,
     SetChecklist,
@@ -569,6 +570,7 @@ async def set_check_result_loop(
     checklist: SetChecklist,
     recent_matches: list[tuple[str, str, MatchResult]],
     stop_event: asyncio.Event,
+    persistence: SetCheckPersistence | None = None,
 ) -> None:
     """Process identification results against the set checklist.
 
@@ -616,6 +618,23 @@ async def set_check_result_loop(
         # F4: Match against checklist
         match_result = checklist.mark_found(part_id, color_id)
         recent_matches.append((part_name, color_name, match_result))
+
+        # Persist progress to Supabase (survives crashes)
+        if persistence and match_result in (MatchResult.FOUND, MatchResult.COMPLETE):
+            key = (part_id, color_id)
+            entry = checklist._entries.get(key) or checklist._spare_entries.get(key)
+            if entry:
+                try:
+                    await persistence.persist_progress(
+                        part_num=entry.part_num,
+                        color_id=entry.color_id,
+                        color_name=entry.color_name,
+                        expected_qty=entry.expected_qty,
+                        found_qty=entry.found_qty,
+                        is_spare=entry.is_spare,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to persist progress for {part_id}: {e}")
 
         found, expected = checklist.get_progress()
         if match_result == MatchResult.FOUND:
@@ -834,6 +853,49 @@ async def main_set_check(config: ScannerConfig) -> None:
             console.print(f"[red]Cannot determine user: {e}[/red]")
             return
 
+    # Create session manager for Supabase persistence
+    session_mgr = SessionManager(config)
+    camera_config = {
+        "phone_ip": config.phone_ip,
+        "phone_port": config.phone_port,
+        "fps": config.camera_fps,
+    }
+    await session_mgr.start(config.confidence_threshold, camera_config)
+
+    # Set-check persistence
+    sc_persistence = SetCheckPersistence(session_mgr.supabase, session_mgr.session_id)
+
+    # Handle --resume: try to load existing progress
+    if config.resume:
+        existing_id = await sc_persistence.find_incomplete_session(set_num)
+        if existing_id:
+            console.print(f"[cyan]Resuming set-check session {existing_id}[/cyan]")
+            sc_persistence.set_check_session_id = existing_id
+            rows = await sc_persistence.load_progress(existing_id)
+            for row in rows:
+                key = (row["part_num"], row["color_id"])
+                entry = checklist._entries.get(key) or checklist._spare_entries.get(key)
+                if entry:
+                    entry.found_qty = row["found_qty"]
+            found, expected = checklist.get_progress()
+            console.print(f"[green]Restored progress:[/green] {found}/{expected} parts")
+        else:
+            console.print(
+                f"[yellow]No incomplete session found for set {set_num}. Starting fresh.[/yellow]"
+            )
+
+    # Create new set-check session if not resuming
+    if not sc_persistence.set_check_session_id:
+        await sc_persistence.create_set_check_session(
+            set_num=set_num,
+            set_name=set_info["name"],
+            set_year=set_info.get("year"),
+            total_expected=expected,
+            total_unique=checklist.total_unique_parts,
+            spare_count=sum(p["quantity"] for p in spare),
+            parts_json=parts,
+        )
+
     # Initialize modules (I1: reuse existing pipeline)
     camera = await CameraClient.create(config)
     detector = PieceDetector(config)
@@ -889,7 +951,7 @@ async def main_set_check(config: ScannerConfig) -> None:
             identification_loop(identifier, best_frame_queue, result_queue, config, stop_event)
         ),
         asyncio.create_task(
-            set_check_result_loop(result_queue, checklist, recent_matches, stop_event)
+            set_check_result_loop(result_queue, checklist, recent_matches, stop_event, sc_persistence)
         ),
         asyncio.create_task(
             set_check_keyboard_handler(checklist, config, status_ref, stop_event, live_ref)
@@ -952,6 +1014,7 @@ async def main_set_check(config: ScannerConfig) -> None:
             pass
 
     # Cleanup
+    await session_mgr.end()
     await camera.close()
     await identifier.close()
 
