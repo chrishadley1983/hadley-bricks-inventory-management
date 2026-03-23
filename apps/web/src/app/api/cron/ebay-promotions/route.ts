@@ -41,6 +41,7 @@ interface StageRow {
 interface ListingRow {
   ebay_listing_id: string;
   listing_date: string | null;
+  is_refresh: boolean | null;
 }
 
 /**
@@ -277,7 +278,7 @@ export async function POST(request: NextRequest) {
       while (true) {
         const { data: batch, error: listErr } = await supabase
           .from('inventory_items')
-          .select('ebay_listing_id, listing_date')
+          .select('ebay_listing_id, listing_date, is_refresh')
           .eq('user_id', schedule.user_id)
           .not('ebay_listing_id', 'is', null)
           .eq('status', 'LISTED')
@@ -337,11 +338,18 @@ export async function POST(request: NextRequest) {
 
         const ageDays = Math.floor((now.getTime() - listingDate.getTime()) / (1000 * 60 * 60 * 24));
 
+        // Refreshed listings skip the initial no-promotion window:
+        // They get the lowest bid stage immediately (4.1%), then ramp normally.
+        // E.g. stages [7d→4.1%, 45d→5.0%] become [0d→4.1%, 45d→5.0%] for refreshes.
+        const effectiveStages = listing.is_refresh
+          ? scheduleStages.map((s, idx) => idx === 0 ? { ...s, days_threshold: 0 } : s)
+          : scheduleStages;
+
         // Find the applicable stage (highest days_threshold <= ageDays)
         let targetBid: string | null = null;
-        for (let i = scheduleStages.length - 1; i >= 0; i--) {
-          if (ageDays >= scheduleStages[i].days_threshold) {
-            targetBid = scheduleStages[i].bid_percentage.toFixed(1);
+        for (let i = effectiveStages.length - 1; i >= 0; i--) {
+          if (ageDays >= effectiveStages[i].days_threshold) {
+            targetBid = effectiveStages[i].bid_percentage.toFixed(1);
             break;
           }
         }
