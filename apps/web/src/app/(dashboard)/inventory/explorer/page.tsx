@@ -273,7 +273,7 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
     condition: '',
     color: '',
     page: 1,
-    sort: 'bricqer_price',
+    sort: 'totalValue',
     dir: 'desc',
   });
 
@@ -398,12 +398,17 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
                 >
                   Price{sortIndicator('bricqer_price')}
                 </th>
-                <th className="px-3 py-2 text-right font-medium">Value</th>
+                <th
+                  className="cursor-pointer px-3 py-2 text-right font-medium hover:text-foreground"
+                  onClick={() => toggleSort('totalValue')}
+                >
+                  Value{sortIndicator('totalValue')}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {data.items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30">
+              {data.items.map((item, idx) => (
+                <tr key={`${item.itemNumber}-${item.colorId}-${item.condition}-${idx}`} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-3">
                       {item.imageUrl ? (
@@ -441,7 +446,7 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
                   <td className="px-3 py-2 text-right font-mono">{num(item.quantity)}</td>
                   <td className="px-3 py-2 text-right font-mono">{gbp(item.price)}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold">
-                    {gbp(item.price * item.quantity)}
+                    {gbp(item.value)}
                   </td>
                 </tr>
               ))}

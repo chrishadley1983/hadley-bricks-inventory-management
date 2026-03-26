@@ -37,8 +37,6 @@ export interface ExplorerOverview {
 }
 
 export interface ExplorerItem {
-  id: string;
-  bricqerItemId: number;
   itemNumber: string;
   itemName: string;
   itemType: string;
@@ -48,8 +46,8 @@ export interface ExplorerItem {
   condition: string;
   quantity: number;
   price: number;
+  value: number;
   imageUrl: string | null;
-  storageLocation: string | null;
 }
 
 export interface ExplorerItemsResponse {
