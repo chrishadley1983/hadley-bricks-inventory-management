@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // ============================================
 // Types
@@ -139,22 +139,20 @@ async function fetchItems(filters: ItemsFilters): Promise<ExplorerItemsResponse>
   return json.data;
 }
 
+export interface SyncProgress {
+  page: number;
+  totalPages: number;
+  itemsFetched: number;
+  totalItems: number;
+  status: 'running' | 'completed' | 'failed';
+}
+
 export interface EnrichProgress {
   processed: number;
   total: number;
   fetched: number;
   errors: number;
   status: 'running' | 'completed' | 'failed';
-}
-
-async function triggerSync(): Promise<{ itemsSynced: number; complete: boolean }> {
-  const res = await fetch('/api/inventory/explorer/sync', { method: 'POST' });
-  if (!res.ok) {
-    const json = await res.json();
-    throw new Error(json.error || 'Sync failed');
-  }
-  const json = await res.json();
-  return json.data;
 }
 
 // ============================================
@@ -260,26 +258,71 @@ export function useExplorerEnrich() {
 export function useExplorerSync() {
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [result, setResult] = useState<{ itemsSynced: number; complete: boolean } | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: triggerSync,
-    onMutate: () => setIsSyncing(true),
-    onSettled: () => {
+  const sync = useCallback(async () => {
+    if (isSyncing) return;
+
+    setIsSyncing(true);
+    setProgress({ page: 0, totalPages: 0, itemsFetched: 0, totalItems: 0, status: 'running' });
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/inventory/explorer/sync', { method: 'POST' });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to start sync');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let eventType = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ') && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (eventType === 'progress') {
+                setProgress(data as SyncProgress);
+              } else if (eventType === 'complete') {
+                setResult(data);
+                setProgress((prev) => prev ? { ...prev, status: 'completed' } : null);
+              } else if (eventType === 'error') {
+                throw new Error(data.error || 'Sync failed');
+              }
+            } catch (parseError) {
+              if (parseError instanceof Error && parseError.message !== 'Sync failed') {
+                console.error('Failed to parse SSE data:', parseError);
+              } else {
+                throw parseError;
+              }
+            }
+            eventType = '';
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Sync failed'));
+      setProgress((prev) => prev ? { ...prev, status: 'failed' } : null);
+    } finally {
       setIsSyncing(false);
       queryClient.invalidateQueries({ queryKey: explorerKeys.all });
-    },
-  });
-
-  const sync = useCallback(() => {
-    if (!isSyncing) {
-      mutation.mutate();
     }
-  }, [isSyncing, mutation]);
+  }, [isSyncing, queryClient]);
 
-  return {
-    sync,
-    isSyncing,
-    error: mutation.error,
-    data: mutation.data,
-  };
+  return { sync, isSyncing, progress, error, result };
 }
