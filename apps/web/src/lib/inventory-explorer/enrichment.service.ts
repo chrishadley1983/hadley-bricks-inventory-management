@@ -271,11 +271,12 @@ export class EnrichmentService {
     });
 
     // Calculate STR: times_sold / (times_sold + stock_available)
+    // Store 0 (not null) when BL returned data but no market activity — null means "never fetched"
     const stockAvailable = stockData.total_quantity || 0;
     const timesSold = soldData.total_quantity || 0;
     const str = stockAvailable + timesSold > 0
       ? (timesSold / (timesSold + stockAvailable)) * 100
-      : null;
+      : 0;
 
     const avgPrice = soldData.avg_price ? parseFloat(soldData.avg_price) : null;
 
