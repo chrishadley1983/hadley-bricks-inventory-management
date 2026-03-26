@@ -256,16 +256,16 @@ gcloud scheduler jobs create http ebay-listing-refresh \
   --attempt-deadline="300s" \
   --description="Weekly refresh of stale eBay listings with smart pricing"
 
-# Inventory BrickLink Enrichment - daily, enriches up to 1000 items with BL price/STR data
+# Inventory BrickLink Enrichment - 5x daily, 200 items/run = 1K/day (fits 5-min Vercel timeout)
 gcloud scheduler jobs create http inventory-bricklink-enrich \
   --location=europe-west2 \
-  --schedule="0 3 * * *" \
+  --schedule="0 3,6,9,12,15 * * *" \
   --uri="$APP_URL/api/cron/inventory/enrich" \
   --http-method=POST \
   --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
   --time-zone="UTC" \
   --attempt-deadline="300s" \
-  --description="Daily BrickLink enrichment for inventory explorer (1K items/day, 90-day cache)"
+  --description="BrickLink enrichment for inventory explorer (200 items/run, 5x/day = 1K/day, 90-day cache)"
 ```
 
 #### Resumable Jobs (via Cloud Function Driver)
