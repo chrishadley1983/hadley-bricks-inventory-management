@@ -37,65 +37,99 @@ export async function GET() {
       });
     }
 
-    // Count distinct (item_number, color_id) combos in snapshot that have color_id
-    // Then check how many have fresh BL cache entries
-    const freshAfter = new Date(Date.now() - FRESH_THRESHOLD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    // Fetch all snapshot rows to compute consolidated lots
+    // Consolidation key: (item_number, color_id, condition, comment)
+    interface LotInfo {
+      itemNumber: string;
+      colorId: number | null;
+      condition: string;
+      totalQty: number;
+    }
 
-    // Get all distinct part_number+colour_id from snapshot (paginated)
-    const snapshotKeys = new Set<string>();
+    const lotMap = new Map<string, LotInfo>();
     let offset = 0;
     const pageSize = 1000;
+
     while (true) {
       const { data } = await supabase
         .from('bricqer_inventory_snapshot')
-        .select('item_number, color_id')
+        .select('item_number, color_id, condition, comment, quantity')
         .eq('user_id', user.id)
-        .not('color_id', 'is', null)
         .range(offset, offset + pageSize - 1);
 
       if (!data || data.length === 0) break;
+
       for (const row of data) {
-        snapshotKeys.add(`${row.item_number}|${row.color_id}`);
+        const key = `${row.item_number}|${row.color_id ?? ''}|${row.condition}|${row.comment ?? ''}`;
+        const existing = lotMap.get(key);
+        if (existing) {
+          existing.totalQty += row.quantity;
+        } else {
+          lotMap.set(key, {
+            itemNumber: row.item_number,
+            colorId: row.color_id,
+            condition: row.condition,
+            totalQty: row.quantity,
+          });
+        }
       }
+
       if (data.length < pageSize) break;
       offset += pageSize;
     }
 
-    const totalWithColor = snapshotKeys.size;
+    const consolidatedLots = lotMap.size;
+    const totalItems = Array.from(lotMap.values()).reduce((sum, l) => sum + l.totalQty, 0);
 
-    // Get fresh cache entries
-    const freshKeys = new Set<string>();
-    const partNumbers = [...new Set([...snapshotKeys].map((k) => k.split('|')[0]))];
+    // Count enriched vs stale consolidated lots
+    // A lot is "enriched" if (item_number, color_id) has fresh BL cache for its condition
+    const freshAfter = new Date(Date.now() - FRESH_THRESHOLD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    for (let i = 0; i < partNumbers.length; i += 500) {
-      const batch = partNumbers.slice(i, i + 500);
+    // Get fresh cache entries (keyed by part_number|colour_id)
+    // We also need to know which conditions have data
+    const freshCache = new Map<string, { hasNew: boolean; hasUsed: boolean }>();
+    const allPartNumbers = [...new Set(Array.from(lotMap.values()).filter((l) => l.colorId !== null).map((l) => l.itemNumber))];
+
+    for (let i = 0; i < allPartNumbers.length; i += 500) {
+      const batch = allPartNumbers.slice(i, i + 500);
       const { data: cached } = await supabase
         .from('bricklink_part_price_cache')
-        .select('part_number, colour_id')
+        .select('part_number, colour_id, sell_through_rate_new, sell_through_rate_used')
         .in('part_number', batch)
         .gte('fetched_at', freshAfter);
 
       if (cached) {
         for (const row of cached) {
-          freshKeys.add(`${row.part_number}|${row.colour_id}`);
+          const cacheKey = `${row.part_number}|${row.colour_id}`;
+          const existing = freshCache.get(cacheKey) || { hasNew: false, hasUsed: false };
+          if (row.sell_through_rate_new !== null) existing.hasNew = true;
+          if (row.sell_through_rate_used !== null) existing.hasUsed = true;
+          freshCache.set(cacheKey, existing);
         }
       }
     }
 
-    // Count matches
     let enrichedLots = 0;
-    for (const key of snapshotKeys) {
-      if (freshKeys.has(key)) enrichedLots++;
+    for (const lot of lotMap.values()) {
+      if (lot.colorId === null) continue;
+      const cacheKey = `${lot.itemNumber}|${lot.colorId}`;
+      const entry = freshCache.get(cacheKey);
+      if (!entry) continue;
+
+      const isEnriched = lot.condition === 'New' ? entry.hasNew : entry.hasUsed;
+      if (isEnriched) enrichedLots++;
     }
 
-    const staleLots = totalWithColor - enrichedLots;
+    // Lots with color_id that could be enriched
+    const enrichableLots = Array.from(lotMap.values()).filter((l) => l.colorId !== null).length;
+    const staleLots = enrichableLots - enrichedLots;
 
     return NextResponse.json({
       data: {
         syncStatus: meta.sync_status,
         lastFullSync: meta.last_full_sync,
-        totalItems: meta.total_items,
-        totalLots: meta.total_lots,
+        totalItems,
+        totalLots: consolidatedLots,
         syncCursor: meta.sync_cursor,
         syncError: meta.sync_error,
         enrichedLots,
