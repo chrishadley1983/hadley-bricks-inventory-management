@@ -82,7 +82,15 @@ function SyncBanner() {
         ) : lastSync ? (
           <>
             <Clock className="h-4 w-4" />
-            <span>Last synced {lastSync} &middot; {num(status?.totalItems || 0)} items &middot; {num(status?.totalLots || 0)} lots</span>
+            <span>
+              Last synced {lastSync} &middot; {num(status?.totalItems || 0)} items &middot; {num(status?.totalLots || 0)} lots
+              {status?.staleLots !== undefined && status.staleLots > 0 && (
+                <> &middot; <span className="text-amber-600">{num(status.staleLots)} need BL enrichment</span></>
+              )}
+              {status?.staleLots === 0 && status?.enrichedLots !== undefined && status.enrichedLots > 0 && (
+                <> &middot; <span className="text-green-600">all enriched</span></>
+              )}
+            </span>
           </>
         ) : (
           <>

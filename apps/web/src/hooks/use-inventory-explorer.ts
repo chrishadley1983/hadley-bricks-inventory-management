@@ -75,6 +75,8 @@ export interface SyncStatus {
   totalLots: number;
   syncCursor: number;
   syncError: string | null;
+  enrichedLots: number;
+  staleLots: number;
 }
 
 export type ItemType = 'Part' | 'Set' | 'Minifig';
