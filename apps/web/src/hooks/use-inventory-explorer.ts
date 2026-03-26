@@ -84,6 +84,7 @@ export interface ItemsFilters {
   search: string;
   condition: string;
   color: string;
+  enriched: string;
   page: number;
   sort: string;
   dir: 'asc' | 'desc';
@@ -128,6 +129,7 @@ async function fetchItems(filters: ItemsFilters): Promise<ExplorerItemsResponse>
   if (filters.search) params.set('search', filters.search);
   if (filters.condition) params.set('condition', filters.condition);
   if (filters.color) params.set('color', filters.color);
+  if (filters.enriched) params.set('enriched', filters.enriched);
 
   const res = await fetch(`/api/inventory/explorer/items?${params}`);
   if (!res.ok) throw new Error('Failed to fetch items');
@@ -135,14 +137,12 @@ async function fetchItems(filters: ItemsFilters): Promise<ExplorerItemsResponse>
   return json.data;
 }
 
-async function triggerEnrich(): Promise<{ newlyFetched: number; errors: number }> {
-  const res = await fetch('/api/inventory/explorer/enrich', { method: 'POST' });
-  if (!res.ok) {
-    const json = await res.json();
-    throw new Error(json.error || 'Enrichment failed');
-  }
-  const json = await res.json();
-  return json.data;
+export interface EnrichProgress {
+  processed: number;
+  total: number;
+  fetched: number;
+  errors: number;
+  status: 'running' | 'completed' | 'failed';
 }
 
 async function triggerSync(): Promise<{ itemsSynced: number; complete: boolean }> {
@@ -186,28 +186,73 @@ export function useExplorerItems(filters: ItemsFilters) {
 export function useExplorerEnrich() {
   const queryClient = useQueryClient();
   const [isEnriching, setIsEnriching] = useState(false);
+  const [progress, setProgress] = useState<EnrichProgress | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [result, setResult] = useState<{ newlyFetched: number; errors: number } | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: triggerEnrich,
-    onMutate: () => setIsEnriching(true),
-    onSettled: () => {
+  const enrich = useCallback(async () => {
+    if (isEnriching) return;
+
+    setIsEnriching(true);
+    setProgress({ processed: 0, total: 0, fetched: 0, errors: 0, status: 'running' });
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/inventory/explorer/enrich', { method: 'POST' });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to start enrichment');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let eventType = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ') && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (eventType === 'progress') {
+                setProgress(data as EnrichProgress);
+              } else if (eventType === 'complete') {
+                setResult(data);
+                setProgress((prev) => prev ? { ...prev, status: 'completed' } : null);
+              } else if (eventType === 'error') {
+                throw new Error(data.error || 'Enrichment failed');
+              }
+            } catch (parseError) {
+              if (parseError instanceof Error && parseError.message !== 'Enrichment failed') {
+                console.error('Failed to parse SSE data:', parseError);
+              } else {
+                throw parseError;
+              }
+            }
+            eventType = '';
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Enrichment failed'));
+      setProgress((prev) => prev ? { ...prev, status: 'failed' } : null);
+    } finally {
       setIsEnriching(false);
       queryClient.invalidateQueries({ queryKey: explorerKeys.all });
-    },
-  });
-
-  const enrich = useCallback(() => {
-    if (!isEnriching) {
-      mutation.mutate();
     }
-  }, [isEnriching, mutation]);
+  }, [isEnriching, queryClient]);
 
-  return {
-    enrich,
-    isEnriching,
-    error: mutation.error,
-    data: mutation.data,
-  };
+  return { enrich, isEnriching, progress, error, result };
 }
 
 export function useExplorerSync() {

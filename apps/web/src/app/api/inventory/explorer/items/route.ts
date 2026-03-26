@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const condition = searchParams.get('condition');
     const color = searchParams.get('color');
+    const enriched = searchParams.get('enriched'); // 'yes', 'no', or null
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const sortField = searchParams.get('sort') || 'totalValue';
     const sortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
@@ -134,7 +135,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Aggregate stats (after search filter)
+    // Fetch BL cache for enriched filter and data columns
+    const allPartNumbers = lots.map((l) => l.itemNumber);
+    const blCache = await fetchBLCache(supabase, allPartNumbers);
+
+    // Apply enriched filter
+    if (enriched === 'yes') {
+      lots = lots.filter((lot) => {
+        const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
+        const entry = blCache.get(blKey);
+        return entry && getSTR(lot.condition, entry) !== null;
+      });
+    } else if (enriched === 'no') {
+      lots = lots.filter((lot) => {
+        const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
+        const entry = blCache.get(blKey);
+        return !entry || getSTR(lot.condition, entry) === null;
+      });
+    }
+
+    // Aggregate stats (after all filters)
     let totalItems = 0;
     let totalValue = 0;
     for (const lot of lots) {
@@ -175,11 +195,7 @@ export async function GET(request: NextRequest) {
     const from = (page - 1) * PAGE_SIZE;
     const pageItems = lots.slice(from, from + PAGE_SIZE);
 
-    // Fetch BrickLink cache for page items
-    const pagePartNumbers = pageItems.map((l) => l.itemNumber);
-    const blCache = await fetchBLCache(supabase, pagePartNumbers);
-
-    // Map to response format with BL data
+    // Map to response format with BL data (blCache already fetched above)
     const items = pageItems.map((lot) => {
       const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
       const blEntry = blCache.get(blKey);
