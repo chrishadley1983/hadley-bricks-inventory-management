@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchBLCache, getSTR, getSold, getForSale, getBLAvg } from '@/lib/inventory-explorer/bricklink-lookup';
 
 const VALID_TYPES = ['Part', 'Set', 'Minifig'];
 const PAGE_SIZE = 50;
@@ -174,20 +175,32 @@ export async function GET(request: NextRequest) {
     const from = (page - 1) * PAGE_SIZE;
     const pageItems = lots.slice(from, from + PAGE_SIZE);
 
-    // Map to response format
-    const items = pageItems.map((lot) => ({
-      itemNumber: lot.itemNumber,
-      itemName: lot.itemName,
-      itemType: lot.itemType,
-      colorId: lot.colorId,
-      colorName: lot.colorName,
-      colorRgb: lot.colorRgb,
-      condition: lot.condition,
-      quantity: lot.quantity,
-      price: Math.round(lot.avgPrice * 100) / 100,
-      value: Math.round(lot.totalValue * 100) / 100,
-      imageUrl: lot.imageUrl,
-    }));
+    // Fetch BrickLink cache for page items
+    const pagePartNumbers = pageItems.map((l) => l.itemNumber);
+    const blCache = await fetchBLCache(supabase, pagePartNumbers);
+
+    // Map to response format with BL data
+    const items = pageItems.map((lot) => {
+      const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
+      const blEntry = blCache.get(blKey);
+      return {
+        itemNumber: lot.itemNumber,
+        itemName: lot.itemName,
+        itemType: lot.itemType,
+        colorId: lot.colorId,
+        colorName: lot.colorName,
+        colorRgb: lot.colorRgb,
+        condition: lot.condition,
+        quantity: lot.quantity,
+        price: Math.round(lot.avgPrice * 100) / 100,
+        value: Math.round(lot.totalValue * 100) / 100,
+        imageUrl: lot.imageUrl,
+        blAvg: getBLAvg(lot.condition, blEntry),
+        str: getSTR(lot.condition, blEntry),
+        sold: getSold(lot.condition, blEntry),
+        forSale: getForSale(lot.condition, blEntry),
+      };
+    });
 
     // Get distinct colors for the filter dropdown (Parts only)
     let colors: string[] = [];

@@ -10,6 +10,7 @@ import {
   useExplorerSyncStatus,
   useExplorerItems,
   useExplorerSync,
+  useExplorerEnrich,
   type ItemType as ExplorerItemType,
   type ItemsFilters,
 } from '@/hooks/use-inventory-explorer';
@@ -45,6 +46,7 @@ function num(value: number): string {
 function SyncBanner() {
   const { data: status, isLoading } = useExplorerSyncStatus();
   const { sync, isSyncing } = useExplorerSync();
+  const { enrich, isEnriching } = useExplorerEnrich();
 
   if (isLoading) return <Skeleton className="h-10 w-full" />;
 
@@ -77,15 +79,26 @@ function SyncBanner() {
           </>
         )}
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={sync}
-        disabled={isSyncing || status?.syncStatus === 'running'}
-      >
-        <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-        Sync Now
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={sync}
+          disabled={isSyncing || status?.syncStatus === 'running'}
+        >
+          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          Sync
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={enrich}
+          disabled={isEnriching || !status?.lastFullSync}
+        >
+          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+          Enrich BL
+        </Button>
+      </div>
     </div>
   );
 }
@@ -131,7 +144,7 @@ function OverviewTab() {
   return (
     <div className="space-y-8">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div className="rounded-lg border bg-card p-5">
           <p className="text-sm text-muted-foreground">Total Items</p>
           <p className="text-3xl font-bold">{num(data.totalItems)}</p>
@@ -141,6 +154,13 @@ function OverviewTab() {
           <p className="text-sm text-muted-foreground">Estimated Value</p>
           <p className="text-3xl font-bold">{gbp(data.estimatedValue)}</p>
           <p className="text-sm text-muted-foreground">Based on Bricqer prices</p>
+        </div>
+        <div className="rounded-lg border bg-card p-5">
+          <p className="text-sm text-muted-foreground">Average STR</p>
+          <p className="text-3xl font-bold">
+            {data.averageSTR !== null ? `${data.averageSTR}%` : '—'}
+          </p>
+          <p className="text-sm text-muted-foreground">Based on BrickLink sales</p>
         </div>
         <div className="rounded-lg border bg-card p-5">
           <p className="text-sm text-muted-foreground">Item Types</p>
@@ -210,6 +230,7 @@ function OverviewTab() {
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
                 <th className="px-3 py-2 text-right font-medium">Price</th>
                 <th className="px-3 py-2 text-right font-medium">Value</th>
+                <th className="px-3 py-2 text-right font-medium">STR</th>
               </tr>
             </thead>
             <tbody>
@@ -253,6 +274,9 @@ function OverviewTab() {
                   <td className="px-3 py-2 text-right font-mono">{num(item.quantity)}</td>
                   <td className="px-3 py-2 text-right font-mono">{gbp(item.avgPrice)}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold">{gbp(item.value)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-green-600">
+                    {item.str !== null ? `${Math.round(item.str)}%` : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -404,6 +428,10 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
                 >
                   Value{sortIndicator('totalValue')}
                 </th>
+                <th className="px-3 py-2 text-right font-medium">BL Avg</th>
+                <th className="px-3 py-2 text-right font-medium">Sold</th>
+                <th className="px-3 py-2 text-right font-medium">For Sale</th>
+                <th className="px-3 py-2 text-right font-medium">STR</th>
               </tr>
             </thead>
             <tbody>
@@ -447,6 +475,18 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
                   <td className="px-3 py-2 text-right font-mono">{gbp(item.price)}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold">
                     {gbp(item.value)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    {item.blAvg !== null ? gbp(item.blAvg) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    {item.sold !== null ? num(item.sold) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    {item.forSale !== null ? num(item.forSale) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-green-600">
+                    {item.str !== null ? `${Math.round(item.str)}%` : '—'}
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchBLCache, getSTR } from '@/lib/inventory-explorer/bricklink-lookup';
 
 interface RawRow {
   item_type: string;
@@ -24,13 +25,13 @@ interface ConsolidatedLot {
   itemNumber: string;
   itemName: string;
   itemType: string;
+  colorId: number | null;
   colorName: string | null;
   colorRgb: string | null;
   imageUrl: string | null;
   condition: string;
   quantity: number;
   totalValue: number;
-  /** Weighted average price across consolidated rows */
   avgPrice: number;
 }
 
@@ -80,6 +81,7 @@ export async function GET() {
           itemNumber: row.item_number,
           itemName: row.item_name,
           itemType: row.item_type || 'Part',
+          colorId: row.color_id,
           colorName: row.color_name,
           colorRgb: row.color_rgb,
           imageUrl: row.image_url,
@@ -134,19 +136,42 @@ export async function GET() {
       }))
       .sort((a, b) => b.items - a.items);
 
-    // Top 10 most valuable consolidated lots
+    // Fetch BrickLink cache for all part numbers
+    const allPartNumbers = lots.map((l) => l.itemNumber);
+    const blCache = await fetchBLCache(supabase, allPartNumbers);
+
+    // Calculate average STR (weighted by value, only for lots with BL data)
+    let strWeightedSum = 0;
+    let strValueSum = 0;
+    for (const lot of lots) {
+      const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
+      const blEntry = blCache.get(blKey);
+      const str = getSTR(lot.condition, blEntry);
+      if (str !== null) {
+        strWeightedSum += str * lot.totalValue;
+        strValueSum += lot.totalValue;
+      }
+    }
+    const averageSTR = strValueSum > 0 ? Math.round((strWeightedSum / strValueSum) * 10) / 10 : null;
+
+    // Top 10 most valuable consolidated lots (with STR)
     const top10 = lots
-      .map((lot) => ({
-        itemNumber: lot.itemNumber,
-        itemName: lot.itemName,
-        colorName: lot.colorName,
-        colorRgb: lot.colorRgb,
-        imageUrl: lot.imageUrl,
-        condition: lot.condition,
-        quantity: lot.quantity,
-        avgPrice: Math.round(lot.avgPrice * 100) / 100,
-        value: Math.round(lot.totalValue * 100) / 100,
-      }))
+      .map((lot) => {
+        const blKey = `${lot.itemNumber}|${lot.colorId ?? ''}`;
+        const blEntry = blCache.get(blKey);
+        return {
+          itemNumber: lot.itemNumber,
+          itemName: lot.itemName,
+          colorName: lot.colorName,
+          colorRgb: lot.colorRgb,
+          imageUrl: lot.imageUrl,
+          condition: lot.condition,
+          quantity: lot.quantity,
+          avgPrice: Math.round(lot.avgPrice * 100) / 100,
+          value: Math.round(lot.totalValue * 100) / 100,
+          str: getSTR(lot.condition, blEntry),
+        };
+      })
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
@@ -155,6 +180,7 @@ export async function GET() {
         totalItems,
         totalLots,
         estimatedValue: Math.round(totalValue * 100) / 100,
+        averageSTR,
         conditionBreakdown,
         typeBreakdown,
         top10,
