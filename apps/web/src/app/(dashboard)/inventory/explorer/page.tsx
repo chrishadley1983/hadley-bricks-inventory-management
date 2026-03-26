@@ -51,9 +51,15 @@ function num(value: number): string {
 // ============================================
 function SyncBanner() {
   const { data: status, isLoading } = useExplorerSyncStatus();
-  const { sync, isSyncing } = useExplorerSync();
+  const { sync, isSyncing, progress: syncProgress, result: syncResult } = useExplorerSync();
   const { enrich, isEnriching, progress: enrichProgress, result: enrichResult } = useExplorerEnrich();
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [showEnrichDialog, setShowEnrichDialog] = useState(false);
+
+  const handleSync = () => {
+    setShowSyncDialog(true);
+    sync();
+  };
 
   const handleEnrich = () => {
     setShowEnrichDialog(true);
@@ -103,7 +109,7 @@ function SyncBanner() {
         <Button
           size="sm"
           variant="outline"
-          onClick={sync}
+          onClick={handleSync}
           disabled={isSyncing || status?.syncStatus === 'running'}
         >
           <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -119,6 +125,62 @@ function SyncBanner() {
           Enrich BL
         </Button>
       </div>
+
+      {/* Sync Progress Dialog */}
+      <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bricqer Inventory Sync</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {syncProgress && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span>
+                    {syncProgress.status === 'completed'
+                      ? 'Complete!'
+                      : syncProgress.status === 'failed'
+                        ? 'Failed'
+                        : `Page ${syncProgress.page} of ${syncProgress.totalPages}...`}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {num(syncProgress.itemsFetched)} / {num(syncProgress.totalItems)} items
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      syncProgress.status === 'completed'
+                        ? 'bg-green-500'
+                        : syncProgress.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-primary'
+                    }`}
+                    style={{
+                      width: `${syncProgress.totalPages > 0 ? Math.round((syncProgress.page / syncProgress.totalPages) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                {syncProgress.status === 'completed' && syncResult && (
+                  <p className="text-sm text-muted-foreground">
+                    Synced {num(syncResult.itemsSynced)} items from Bricqer.
+                  </p>
+                )}
+              </>
+            )}
+            {syncProgress?.status === 'completed' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowSyncDialog(false)}
+              >
+                Close
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Enrichment Progress Dialog */}
       <Dialog open={showEnrichDialog} onOpenChange={setShowEnrichDialog}>
