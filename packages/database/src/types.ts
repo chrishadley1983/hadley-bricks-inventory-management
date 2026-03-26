@@ -2107,6 +2107,115 @@ export type Database = {
         }
         Relationships: []
       }
+      bricqer_inventory_snapshot: {
+        Row: {
+          batch_id: number | null
+          bricqer_item_id: number
+          bricqer_price: number
+          color_id: number | null
+          color_name: string | null
+          color_rgb: string | null
+          condition: string
+          id: string
+          image_url: string | null
+          item_name: string
+          item_number: string
+          item_type: string
+          quantity: number
+          storage_location: string | null
+          synced_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_id?: number | null
+          bricqer_item_id: number
+          bricqer_price?: number
+          color_id?: number | null
+          color_name?: string | null
+          color_rgb?: string | null
+          condition?: string
+          id?: string
+          image_url?: string | null
+          item_name: string
+          item_number: string
+          item_type: string
+          quantity?: number
+          storage_location?: string | null
+          synced_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: number | null
+          bricqer_item_id?: number
+          bricqer_price?: number
+          color_id?: number | null
+          color_name?: string | null
+          color_rgb?: string | null
+          condition?: string
+          id?: string
+          image_url?: string | null
+          item_name?: string
+          item_number?: string
+          item_type?: string
+          quantity?: number
+          storage_location?: string | null
+          synced_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricqer_inventory_snapshot_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bricqer_snapshot_meta: {
+        Row: {
+          created_at: string
+          last_full_sync: string | null
+          sync_cursor: number
+          sync_error: string | null
+          sync_status: string
+          total_items: number
+          total_lots: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_full_sync?: string | null
+          sync_cursor?: number
+          sync_error?: string | null
+          sync_status?: string
+          total_items?: number
+          total_lots?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_full_sync?: string | null
+          sync_cursor?: number
+          sync_error?: string | null
+          sync_status?: string
+          total_items?: number
+          total_lots?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bricqer_snapshot_meta_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bricqer_stats_cache: {
         Row: {
           created_at: string
@@ -9837,28 +9946,46 @@ export type Database = {
       }
       reminders: {
         Row: {
+          acknowledged_at: string | null
           channel_id: number
           created_at: string | null
+          delivery: string | null
           fired_at: string | null
           id: string
+          interval_minutes: number | null
+          last_nagged_at: string | null
+          nag_until: string | null
+          reminder_type: string | null
           run_at: string
           task: string
           user_id: number
         }
         Insert: {
+          acknowledged_at?: string | null
           channel_id: number
           created_at?: string | null
+          delivery?: string | null
           fired_at?: string | null
           id: string
+          interval_minutes?: number | null
+          last_nagged_at?: string | null
+          nag_until?: string | null
+          reminder_type?: string | null
           run_at: string
           task: string
           user_id: number
         }
         Update: {
+          acknowledged_at?: string | null
           channel_id?: number
           created_at?: string | null
+          delivery?: string | null
           fired_at?: string | null
           id?: string
+          interval_minutes?: number | null
+          last_nagged_at?: string | null
+          nag_until?: string | null
+          reminder_type?: string | null
           run_at?: string
           task?: string
           user_id?: number
@@ -10120,11 +10247,14 @@ export type Database = {
           bounding_box_json: Json | null
           brickognize_item_id: string | null
           brickognize_listing_id: string | null
+          color_id: number | null
+          color_name: string | null
           confidence: number | null
           created_at: string
           frame_sharpness: number | null
           id: string
           image_path: string | null
+          inventory_item_id: string | null
           item_category: string | null
           item_name: string | null
           reviewed_at: string | null
@@ -10137,11 +10267,14 @@ export type Database = {
           bounding_box_json?: Json | null
           brickognize_item_id?: string | null
           brickognize_listing_id?: string | null
+          color_id?: number | null
+          color_name?: string | null
           confidence?: number | null
           created_at?: string
           frame_sharpness?: number | null
           id?: string
           image_path?: string | null
+          inventory_item_id?: string | null
           item_category?: string | null
           item_name?: string | null
           reviewed_at?: string | null
@@ -10154,11 +10287,14 @@ export type Database = {
           bounding_box_json?: Json | null
           brickognize_item_id?: string | null
           brickognize_listing_id?: string | null
+          color_id?: number | null
+          color_name?: string | null
           confidence?: number | null
           created_at?: string
           frame_sharpness?: number | null
           id?: string
           image_path?: string | null
+          inventory_item_id?: string | null
           item_category?: string | null
           item_name?: string | null
           reviewed_at?: string | null
@@ -10168,6 +10304,20 @@ export type Database = {
           top_results_json?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "scanner_pieces_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scanner_pieces_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items_with_age"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scanner_pieces_session_id_fkey"
             columns: ["session_id"]
@@ -10217,6 +10367,97 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scanner_set_check_progress: {
+        Row: {
+          color_id: number
+          color_name: string
+          expected_qty: number
+          found_qty: number
+          id: string
+          is_spare: boolean
+          part_num: string
+          set_check_session_id: string
+          updated_at: string
+        }
+        Insert: {
+          color_id: number
+          color_name: string
+          expected_qty: number
+          found_qty?: number
+          id?: string
+          is_spare?: boolean
+          part_num: string
+          set_check_session_id: string
+          updated_at?: string
+        }
+        Update: {
+          color_id?: number
+          color_name?: string
+          expected_qty?: number
+          found_qty?: number
+          id?: string
+          is_spare?: boolean
+          part_num?: string
+          set_check_session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scanner_set_check_progress_set_check_session_id_fkey"
+            columns: ["set_check_session_id"]
+            isOneToOne: false
+            referencedRelation: "scanner_set_check_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scanner_set_check_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          parts_json: Json
+          session_id: string | null
+          set_name: string
+          set_num: string
+          set_year: number | null
+          spare_count: number
+          total_expected: number
+          total_unique: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          parts_json: Json
+          session_id?: string | null
+          set_name: string
+          set_num: string
+          set_year?: number | null
+          spare_count?: number
+          total_expected: number
+          total_unique: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          parts_json?: Json
+          session_id?: string | null
+          set_name?: string
+          set_num?: string
+          set_year?: number | null
+          spare_count?: number
+          total_expected?: number
+          total_unique?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scanner_set_check_sessions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "scanner_sessions"
             referencedColumns: ["id"]
           },
         ]
