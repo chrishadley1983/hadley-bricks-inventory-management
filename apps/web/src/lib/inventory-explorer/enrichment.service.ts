@@ -54,8 +54,8 @@ const BATCH_SIZE = 10;
 /** Max items to enrich per manual invocation */
 const MAX_ITEMS_PER_RUN = 200;
 
-/** Max items for daily cron refresh (1000 items = 2000 API calls, well within 5000/day) */
-export const MAX_ITEMS_DAILY_REFRESH = 1000;
+/** Max items for daily cron refresh per invocation (fits within 5-min Vercel timeout) */
+export const MAX_ITEMS_DAILY_REFRESH = 200;
 
 export class EnrichmentService {
   constructor(
