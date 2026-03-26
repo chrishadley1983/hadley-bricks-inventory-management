@@ -18,6 +18,12 @@ import { RefreshCw, Package, Layers, Users, Clock, AlertCircle } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 
 const Header = dynamic(
@@ -46,7 +52,13 @@ function num(value: number): string {
 function SyncBanner() {
   const { data: status, isLoading } = useExplorerSyncStatus();
   const { sync, isSyncing } = useExplorerSync();
-  const { enrich, isEnriching } = useExplorerEnrich();
+  const { enrich, isEnriching, progress: enrichProgress, result: enrichResult } = useExplorerEnrich();
+  const [showEnrichDialog, setShowEnrichDialog] = useState(false);
+
+  const handleEnrich = () => {
+    setShowEnrichDialog(true);
+    enrich();
+  };
 
   if (isLoading) return <Skeleton className="h-10 w-full" />;
 
@@ -92,13 +104,70 @@ function SyncBanner() {
         <Button
           size="sm"
           variant="outline"
-          onClick={enrich}
+          onClick={handleEnrich}
           disabled={isEnriching || !status?.lastFullSync}
         >
           <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
           Enrich BL
         </Button>
       </div>
+
+      {/* Enrichment Progress Dialog */}
+      <Dialog open={showEnrichDialog} onOpenChange={setShowEnrichDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>BrickLink Enrichment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {enrichProgress && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span>
+                    {enrichProgress.status === 'completed'
+                      ? 'Complete!'
+                      : enrichProgress.status === 'failed'
+                        ? 'Failed'
+                        : `Processing ${enrichProgress.processed} of ${enrichProgress.total}...`}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {enrichProgress.fetched} fetched &middot; {enrichProgress.errors} errors
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      enrichProgress.status === 'completed'
+                        ? 'bg-green-500'
+                        : enrichProgress.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-primary'
+                    }`}
+                    style={{
+                      width: `${enrichProgress.total > 0 ? Math.round((enrichProgress.processed / enrichProgress.total) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                {enrichProgress.status === 'completed' && enrichResult && (
+                  <p className="text-sm text-muted-foreground">
+                    Enriched {enrichResult.newlyFetched} items with BrickLink data.
+                    {enrichResult.errors > 0 && ` ${enrichResult.errors} errors.`}
+                  </p>
+                )}
+              </>
+            )}
+            {enrichProgress?.status === 'completed' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowEnrichDialog(false)}
+              >
+                Close
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -296,6 +365,7 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
     search: '',
     condition: '',
     color: '',
+    enriched: '',
     page: 1,
     sort: 'totalValue',
     dir: 'desc',
@@ -355,6 +425,15 @@ function ItemsTab({ type }: { type: ExplorerItemType }) {
           <option value="">All conditions</option>
           <option value="New">New</option>
           <option value="Used">Used</option>
+        </select>
+        <select
+          className="h-9 rounded-md border bg-background px-3 text-sm"
+          value={filters.enriched}
+          onChange={(e) => updateFilter({ enriched: e.target.value })}
+        >
+          <option value="">All STR</option>
+          <option value="yes">Has STR</option>
+          <option value="no">No STR</option>
         </select>
         {type === 'Part' && data?.colors && data.colors.length > 0 && (
           <select

@@ -51,8 +51,11 @@ const BATCH_DELAY = 2000;
 /** Batch size for BrickLink API calls */
 const BATCH_SIZE = 10;
 
-/** Max items to enrich per invocation (stay within rate limits) */
+/** Max items to enrich per manual invocation */
 const MAX_ITEMS_PER_RUN = 200;
+
+/** Max items for daily cron refresh (1000 items = 2000 API calls, well within 5000/day) */
+const MAX_ITEMS_DAILY_REFRESH = 1000;
 
 export class EnrichmentService {
   constructor(
@@ -210,7 +213,7 @@ export class EnrichmentService {
     const partNumbers = [...new Set(candidates.map((c) => c.itemNumber))];
 
     // Fetch existing cache entries
-    const freshThresholdMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const freshThresholdMs = 90 * 24 * 60 * 60 * 1000; // 90 days
     const freshAfter = new Date(Date.now() - freshThresholdMs).toISOString();
 
     const cachedSet = new Set<string>();
