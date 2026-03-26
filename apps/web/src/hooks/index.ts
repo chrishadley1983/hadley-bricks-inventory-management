@@ -87,6 +87,7 @@ export {
   useExplorerSyncStatus,
   useExplorerItems,
   useExplorerSync,
+  useExplorerEnrich,
   explorerKeys,
   type ExplorerOverview,
   type ExplorerItem,

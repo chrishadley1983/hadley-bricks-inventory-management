@@ -11,6 +11,7 @@ export interface ExplorerOverview {
   totalItems: number;
   totalLots: number;
   estimatedValue: number;
+  averageSTR: number | null;
   conditionBreakdown: Array<{
     condition: string;
     items: number;
@@ -33,6 +34,7 @@ export interface ExplorerOverview {
     quantity: number;
     avgPrice: number;
     value: number;
+    str: number | null;
   }>;
 }
 
@@ -48,6 +50,10 @@ export interface ExplorerItem {
   price: number;
   value: number;
   imageUrl: string | null;
+  blAvg: number | null;
+  str: number | null;
+  sold: number | null;
+  forSale: number | null;
 }
 
 export interface ExplorerItemsResponse {
@@ -129,6 +135,16 @@ async function fetchItems(filters: ItemsFilters): Promise<ExplorerItemsResponse>
   return json.data;
 }
 
+async function triggerEnrich(): Promise<{ newlyFetched: number; errors: number }> {
+  const res = await fetch('/api/inventory/explorer/enrich', { method: 'POST' });
+  if (!res.ok) {
+    const json = await res.json();
+    throw new Error(json.error || 'Enrichment failed');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
 async function triggerSync(): Promise<{ itemsSynced: number; complete: boolean }> {
   const res = await fetch('/api/inventory/explorer/sync', { method: 'POST' });
   if (!res.ok) {
@@ -165,6 +181,33 @@ export function useExplorerItems(filters: ItemsFilters) {
     queryFn: () => fetchItems(filters),
     staleTime: 5 * 60 * 1000,
   });
+}
+
+export function useExplorerEnrich() {
+  const queryClient = useQueryClient();
+  const [isEnriching, setIsEnriching] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: triggerEnrich,
+    onMutate: () => setIsEnriching(true),
+    onSettled: () => {
+      setIsEnriching(false);
+      queryClient.invalidateQueries({ queryKey: explorerKeys.all });
+    },
+  });
+
+  const enrich = useCallback(() => {
+    if (!isEnriching) {
+      mutation.mutate();
+    }
+  }, [isEnriching, mutation]);
+
+  return {
+    enrich,
+    isEnriching,
+    error: mutation.error,
+    data: mutation.data,
+  };
 }
 
 export function useExplorerSync() {
