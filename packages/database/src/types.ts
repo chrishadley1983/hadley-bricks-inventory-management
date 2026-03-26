@@ -2115,6 +2115,7 @@ export type Database = {
           color_id: number | null
           color_name: string | null
           color_rgb: string | null
+          comment: string | null
           condition: string
           id: string
           image_url: string | null
@@ -2133,6 +2134,7 @@ export type Database = {
           color_id?: number | null
           color_name?: string | null
           color_rgb?: string | null
+          comment?: string | null
           condition?: string
           id?: string
           image_url?: string | null
@@ -2151,6 +2153,7 @@ export type Database = {
           color_id?: number | null
           color_name?: string | null
           color_rgb?: string | null
+          comment?: string | null
           condition?: string
           id?: string
           image_url?: string | null

@@ -2,8 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 const VALID_TYPES = ['Part', 'Set', 'Minifig'];
-const VALID_SORT_FIELDS = ['item_name', 'quantity', 'bricqer_price', 'item_number'];
 const PAGE_SIZE = 50;
+
+interface RawRow {
+  item_number: string;
+  item_name: string;
+  item_type: string;
+  color_id: number | null;
+  color_name: string | null;
+  color_rgb: string | null;
+  condition: string;
+  quantity: number;
+  bricqer_price: number;
+  image_url: string | null;
+  comment: string | null;
+}
+
+interface ConsolidatedLot {
+  itemNumber: string;
+  itemName: string;
+  itemType: string;
+  colorId: number | null;
+  colorName: string | null;
+  colorRgb: string | null;
+  condition: string;
+  quantity: number;
+  totalValue: number;
+  avgPrice: number;
+  imageUrl: string | null;
+}
+
+/** Consolidation key: same (item_number, color_id, condition, comment) = same lot */
+function lotKey(row: RawRow): string {
+  return `${row.item_number}|${row.color_id ?? ''}|${row.condition}|${row.comment ?? ''}`;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,124 +55,160 @@ export async function GET(request: NextRequest) {
     const condition = searchParams.get('condition');
     const color = searchParams.get('color');
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const sortField = searchParams.get('sort') || 'bricqer_price';
-    const sortDir = searchParams.get('dir') === 'asc' ? true : false;
+    const sortField = searchParams.get('sort') || 'totalValue';
+    const sortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
     if (!VALID_TYPES.includes(type)) {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
-    // Build query
-    let query = supabase
-      .from('bricqer_inventory_snapshot')
-      .select('*', { count: 'exact' })
-      .eq('user_id', user.id)
-      .eq('item_type', type);
-
-    if (condition && (condition === 'New' || condition === 'Used')) {
-      query = query.eq('condition', condition);
-    }
-
-    if (color) {
-      query = query.eq('color_name', color);
-    }
-
-    if (search) {
-      query = query.or(`item_name.ilike.%${search}%,item_number.ilike.%${search}%`);
-    }
-
-    // Sort
-    const safeSortField = VALID_SORT_FIELDS.includes(sortField) ? sortField : 'bricqer_price';
-    query = query.order(safeSortField, { ascending: sortDir });
-
-    // Paginate
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    query = query.range(from, to);
-
-    const { data, error, count } = await query;
-
-    if (error) throw error;
-
-    // Also get aggregate stats for the type (paginated to handle >1000 rows)
-    let totalItems = 0;
-    let totalValue = 0;
-    let statsOffset = 0;
-    const statsPageSize = 1000;
+    // Fetch ALL rows for this type (paginated for >1000 limit)
+    const allRows: RawRow[] = [];
+    let offset = 0;
+    const fetchSize = 1000;
 
     while (true) {
-      let statsQuery = supabase
+      let query = supabase
         .from('bricqer_inventory_snapshot')
-        .select('quantity, bricqer_price')
+        .select('item_number, item_name, item_type, color_id, color_name, color_rgb, condition, quantity, bricqer_price, image_url, comment')
         .eq('user_id', user.id)
         .eq('item_type', type);
 
       if (condition && (condition === 'New' || condition === 'Used')) {
-        statsQuery = statsQuery.eq('condition', condition);
+        query = query.eq('condition', condition);
       }
       if (color) {
-        statsQuery = statsQuery.eq('color_name', color);
-      }
-      if (search) {
-        statsQuery = statsQuery.or(`item_name.ilike.%${search}%,item_number.ilike.%${search}%`);
+        query = query.eq('color_name', color);
       }
 
-      const { data: statsData } = await statsQuery.range(statsOffset, statsOffset + statsPageSize - 1);
-
-      if (!statsData || statsData.length === 0) break;
-
-      for (const row of statsData) {
-        totalItems += row.quantity;
-        totalValue += row.bricqer_price * row.quantity;
-      }
-
-      if (statsData.length < statsPageSize) break;
-      statsOffset += statsPageSize;
+      const { data, error } = await query.range(offset, offset + fetchSize - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < fetchSize) break;
+      offset += fetchSize;
     }
 
-    // Get distinct colors for the filter dropdown (only for Parts)
+    // Consolidate lots
+    const lotMap = new Map<string, ConsolidatedLot>();
+
+    for (const row of allRows) {
+      const key = lotKey(row);
+      const existing = lotMap.get(key);
+
+      if (existing) {
+        existing.quantity += row.quantity;
+        existing.totalValue += row.bricqer_price * row.quantity;
+      } else {
+        lotMap.set(key, {
+          itemNumber: row.item_number,
+          itemName: row.item_name,
+          itemType: row.item_type,
+          colorId: row.color_id,
+          colorName: row.color_name,
+          colorRgb: row.color_rgb,
+          condition: row.condition,
+          quantity: row.quantity,
+          totalValue: row.bricqer_price * row.quantity,
+          avgPrice: 0,
+          imageUrl: row.image_url,
+        });
+      }
+    }
+
+    let lots = Array.from(lotMap.values());
+
+    // Calculate weighted avg price
+    for (const lot of lots) {
+      lot.avgPrice = lot.quantity > 0 ? lot.totalValue / lot.quantity : 0;
+    }
+
+    // Apply search filter on consolidated lots
+    if (search) {
+      const q = search.toLowerCase();
+      lots = lots.filter(
+        (lot) =>
+          lot.itemName.toLowerCase().includes(q) ||
+          lot.itemNumber.toLowerCase().includes(q)
+      );
+    }
+
+    // Aggregate stats (after search filter)
+    let totalItems = 0;
+    let totalValue = 0;
+    for (const lot of lots) {
+      totalItems += lot.quantity;
+      totalValue += lot.totalValue;
+    }
+    const totalLots = lots.length;
+
+    // Sort
+    const sortFn = (a: ConsolidatedLot, b: ConsolidatedLot): number => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'item_name':
+          cmp = a.itemName.localeCompare(b.itemName);
+          break;
+        case 'quantity':
+          cmp = a.quantity - b.quantity;
+          break;
+        case 'bricqer_price':
+        case 'avgPrice':
+          cmp = a.avgPrice - b.avgPrice;
+          break;
+        case 'item_number':
+          cmp = a.itemNumber.localeCompare(b.itemNumber);
+          break;
+        case 'totalValue':
+        default:
+          cmp = a.totalValue - b.totalValue;
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    };
+
+    lots.sort(sortFn);
+
+    // Paginate
+    const totalPages = Math.ceil(lots.length / PAGE_SIZE);
+    const from = (page - 1) * PAGE_SIZE;
+    const pageItems = lots.slice(from, from + PAGE_SIZE);
+
+    // Map to response format
+    const items = pageItems.map((lot) => ({
+      itemNumber: lot.itemNumber,
+      itemName: lot.itemName,
+      itemType: lot.itemType,
+      colorId: lot.colorId,
+      colorName: lot.colorName,
+      colorRgb: lot.colorRgb,
+      condition: lot.condition,
+      quantity: lot.quantity,
+      price: Math.round(lot.avgPrice * 100) / 100,
+      value: Math.round(lot.totalValue * 100) / 100,
+      imageUrl: lot.imageUrl,
+    }));
+
+    // Get distinct colors for the filter dropdown (Parts only)
     let colors: string[] = [];
     if (type === 'Part') {
-      const { data: colorData } = await supabase
-        .from('bricqer_inventory_snapshot')
-        .select('color_name')
-        .eq('user_id', user.id)
-        .eq('item_type', 'Part')
-        .not('color_name', 'is', null)
-        .order('color_name')
-        .limit(500);
-
-      if (colorData) {
-        colors = [...new Set(colorData.map((c) => c.color_name).filter(Boolean) as string[])];
+      const colorSet = new Set<string>();
+      for (const row of allRows) {
+        if (row.color_name) colorSet.add(row.color_name);
       }
+      colors = Array.from(colorSet).sort();
     }
-
-    const items = (data || []).map((item) => ({
-      id: item.id,
-      bricqerItemId: item.bricqer_item_id,
-      itemNumber: item.item_number,
-      itemName: item.item_name,
-      itemType: item.item_type,
-      colorId: item.color_id,
-      colorName: item.color_name,
-      colorRgb: item.color_rgb,
-      condition: item.condition,
-      quantity: item.quantity,
-      price: item.bricqer_price,
-      imageUrl: item.image_url,
-      storageLocation: item.storage_location,
-    }));
 
     return NextResponse.json({
       data: {
         items,
-        totalCount: count || 0,
-        totalLots: count || 0,
+        totalCount: totalLots,
+        totalLots,
         totalItems,
         totalValue: Math.round(totalValue * 100) / 100,
         page,
         pageSize: PAGE_SIZE,
-        totalPages: Math.ceil((count || 0) / PAGE_SIZE),
+        totalPages,
         colors,
       },
     });

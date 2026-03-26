@@ -53,6 +53,7 @@ function toSnapshotRow(item: BricqerInventoryItem, userId: string) {
     image_url: def.picture || def.legoPicture || null,
     storage_location: item.storageLabel || null,
     batch_id: item.batchId || null,
+    comment: def.comment || null,
     synced_at: new Date().toISOString(),
   };
 }
