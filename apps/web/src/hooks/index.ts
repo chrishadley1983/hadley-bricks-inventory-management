@@ -83,6 +83,19 @@ export {
 } from './use-vinted-import';
 export { usePerf, usePerfPage, usePerfQuery } from './use-perf';
 export {
+  useExplorerOverview,
+  useExplorerSyncStatus,
+  useExplorerItems,
+  useExplorerSync,
+  explorerKeys,
+  type ExplorerOverview,
+  type ExplorerItem,
+  type ExplorerItemsResponse,
+  type SyncStatus as ExplorerSyncStatus,
+  type ItemType as ExplorerItemType,
+  type ItemsFilters as ExplorerItemsFilters,
+} from './use-inventory-explorer';
+export {
   useReviewQueue,
   useReviewQueueCount,
   useApproveReviewItem,
