@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { EnrichmentService } from '@/lib/inventory-explorer/enrichment.service';
+import { EnrichmentService, MAX_ITEMS_DAILY_REFRESH } from '@/lib/inventory-explorer/enrichment.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient();
     const service = new EnrichmentService(supabase, DEFAULT_USER_ID);
 
-    console.log('[Cron InventoryEnrich] Starting daily enrichment (max 1000 items)');
+    console.log(`[Cron InventoryEnrich] Starting daily enrichment (max ${MAX_ITEMS_DAILY_REFRESH} items)`);
 
     const result = await service.enrich({
-      maxItems: 1000,
+      maxItems: MAX_ITEMS_DAILY_REFRESH,
       onProgress: (p) => {
         if (p.processed % 100 === 0 || p.status !== 'running') {
           console.log(`[Cron InventoryEnrich] ${p.processed}/${p.total} — fetched: ${p.fetched}, errors: ${p.errors}`);

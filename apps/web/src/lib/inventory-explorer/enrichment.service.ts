@@ -55,7 +55,7 @@ const BATCH_SIZE = 10;
 const MAX_ITEMS_PER_RUN = 200;
 
 /** Max items for daily cron refresh (1000 items = 2000 API calls, well within 5000/day) */
-const MAX_ITEMS_DAILY_REFRESH = 1000;
+export const MAX_ITEMS_DAILY_REFRESH = 1000;
 
 export class EnrichmentService {
   constructor(
