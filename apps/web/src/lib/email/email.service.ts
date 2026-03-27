@@ -165,6 +165,10 @@ export class EmailService {
       .map((item) => `• ${item.setNumber} - ${item.itemName} (SKU: ${item.sku})`)
       .join('\n');
 
+    const priceLine = submittedPrice > 0
+      ? `<li><strong>Submitted Price:</strong> £${submittedPrice.toFixed(2)}</li>`
+      : '';
+
     const html = `
       <h2>⚠️ Amazon Two-Phase Sync Failed</h2>
 
@@ -179,7 +183,7 @@ export class EmailService {
       <h3>Details:</h3>
       <ul>
         <li><strong>Feed ID:</strong> ${feedId}</li>
-        <li><strong>Submitted Price:</strong> £${submittedPrice.toFixed(2)}</li>
+        ${priceLine}
         <li><strong>Failed SKUs:</strong> ${failedSkus.join(', ')}</li>
       </ul>
 
@@ -205,8 +209,7 @@ Affected Items:
 ${itemList}
 
 Details:
-- Feed ID: ${feedId}
-- Submitted Price: £${submittedPrice.toFixed(2)}
+- Feed ID: ${feedId}${submittedPrice > 0 ? `\n- Submitted Price: £${submittedPrice.toFixed(2)}` : ''}
 - Failed SKUs: ${failedSkus.join(', ')}
 
 Required Action:
