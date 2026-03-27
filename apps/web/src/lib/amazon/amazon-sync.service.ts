@@ -1015,20 +1015,7 @@ export class AmazonSyncService {
       return this.failTwoPhaseSync(feedId, userEmail, 'No items found for verification');
     }
 
-    // Reconstruct aggregated items from feed items
-    const aggregatedItems = feedItems.map((item) => ({
-      asin: item.asin,
-      amazonSku: item.amazon_sku,
-      price: Number(item.submitted_price),
-      queueQuantity: item.submitted_quantity,
-      existingAmazonQuantity: 0,
-      totalQuantity: item.submitted_quantity,
-      inventoryItemIds: item.inventory_item_ids,
-      queueItemIds: [],
-      itemNames: [],
-      productType: DEFAULT_PRODUCT_TYPE,
-      isNewSku: item.is_new_sku ?? false,
-    }));
+    const aggregatedItems = this.reconstructItemsFromFeedItems(feedItems);
 
     // Check if prices are live
     const credentials = await this.getAmazonCredentials();
@@ -1210,11 +1197,13 @@ export class AmazonSyncService {
             );
 
             // Send email notification (fire-and-forget)
+            // Get per-item prices from the failed feed items for the notification
+            const failedItemPrices = (failedFeedItems ?? []).map((fi) => Number(fi.submitted_price));
             emailService.sendTwoPhaseFailure({
               userEmail,
               feedId,
               failedSkus,
-              submittedPrice: 0, // Not relevant for partial — details are per-item
+              submittedPrice: failedItemPrices.length === 1 ? failedItemPrices[0] : 0,
               verificationDuration: elapsed,
               itemDetails: this.buildItemDetails(aggregatedItems),
             }).catch((err) =>
@@ -1402,20 +1391,18 @@ export class AmazonSyncService {
       return this.failTwoPhaseSync(feedId, userEmail, 'No items found for quantity verification');
     }
 
-    // Reconstruct aggregated items from feed items
-    const aggregatedItems = feedItems.map((item) => ({
-      asin: item.asin,
-      amazonSku: item.amazon_sku,
-      price: Number(item.submitted_price),
-      queueQuantity: item.submitted_quantity,
-      existingAmazonQuantity: 0,
-      totalQuantity: item.submitted_quantity,
-      inventoryItemIds: item.inventory_item_ids,
-      queueItemIds: [] as string[],
-      itemNames: [] as string[],
-      productType: DEFAULT_PRODUCT_TYPE,
-      isNewSku: item.is_new_sku ?? false,
-    }));
+    // Skip items that already failed price verification — they weren't
+    // included in the quantity feed and will never verify here.
+    const verifiableItems = feedItems.filter((item) => item.status !== 'verification_failed');
+    const aggregatedItems = this.reconstructItemsFromFeedItems(verifiableItems);
+
+    if (aggregatedItems.length === 0) {
+      return this.failTwoPhaseSync(
+        feedId,
+        userEmail,
+        'No items remaining for quantity verification (all failed price verification)'
+      );
+    }
 
     // Get credentials for Listings API
     const credentials = await this.getAmazonCredentials();
@@ -1809,8 +1796,9 @@ export class AmazonSyncService {
       completed_at: new Date().toISOString(),
     } as Parameters<typeof this.updateFeedRecord>[1]);
 
-    // Send failure notifications
-    const aggregatedItems = await this.getAggregatedQueueItems();
+    // Reconstruct from feed items — the queue may already be cleared by this point
+    const feedItems = await this.getFeedItems(feedId);
+    const aggregatedItems = this.reconstructItemsFromFeedItems(feedItems);
     const itemDetails = this.buildItemDetails(aggregatedItems);
 
     await emailService.sendTwoPhaseFailure({
@@ -2177,6 +2165,29 @@ export class AmazonSyncService {
         ],
       },
     ];
+  }
+
+  /**
+   * Reconstruct AggregatedQueueItem[] from persisted feed items.
+   * Used in price verification, quantity verification, and failure notifications
+   * where the live queue may have already been cleared.
+   */
+  private reconstructItemsFromFeedItems(
+    feedItems: AmazonSyncFeedItemRow[]
+  ): AggregatedQueueItem[] {
+    return feedItems.map((item) => ({
+      asin: item.asin,
+      amazonSku: item.amazon_sku,
+      price: Number(item.submitted_price),
+      queueQuantity: item.submitted_quantity,
+      existingAmazonQuantity: 0,
+      totalQuantity: item.submitted_quantity,
+      inventoryItemIds: item.inventory_item_ids,
+      queueItemIds: [],
+      itemNames: [],
+      productType: DEFAULT_PRODUCT_TYPE,
+      isNewSku: item.is_new_sku ?? false,
+    }));
   }
 
   /**
