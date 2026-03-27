@@ -259,7 +259,7 @@ gcloud scheduler jobs create http ebay-listing-refresh \
 # Inventory BrickLink Enrichment - 5x daily, 200 items/run = 1K/day (fits 5-min Vercel timeout)
 gcloud scheduler jobs create http inventory-bricklink-enrich \
   --location=europe-west2 \
-  --schedule="0 3,6,9,12,15 * * *" \
+  --schedule="10 3,6,9,12,15 * * *" \
   --uri="$APP_URL/api/cron/inventory/enrich" \
   --http-method=POST \
   --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
