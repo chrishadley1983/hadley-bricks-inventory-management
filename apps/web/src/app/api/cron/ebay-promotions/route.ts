@@ -69,14 +69,18 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
   const authService = new EbayAuthService(undefined, supabase as any);
   const service = new EbayPromotedListingsService(supabase, userId, authService);
 
-  // Get actual eBay active listing count via Trading API
-  console.log('[EbayPromotions Report] Getting active listing count from eBay Trading API...');
+  // Get all eBay active listings via Trading API (we need the IDs for gap analysis)
+  console.log('[EbayPromotions Report] Fetching all active listings from eBay Trading API...');
   const accessToken = await authService.getAccessToken(userId);
   let ebayActiveCount = 0;
+  const ebayActiveIds = new Set<string>();
   if (accessToken) {
     const tradingClient = new EbayTradingClient({ accessToken, siteId: 3 });
-    const page1 = await tradingClient.getActiveListings({ ActiveList: true, pageNumber: 1, entriesPerPage: 1 });
-    ebayActiveCount = page1.totalEntries;
+    const allEbayListings = await tradingClient.getAllActiveListings();
+    ebayActiveCount = allEbayListings.length;
+    for (const listing of allEbayListings) {
+      ebayActiveIds.add(listing.platformItemId);
+    }
   }
   console.log('[EbayPromotions Report] eBay reports', ebayActiveCount, 'active listings');
 
@@ -164,6 +168,49 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
   const promotedValue = promoted.reduce((sum, i) => sum + Number(i.listing_value || 0), 0);
   const notPromotedValue = notPromoted.reduce((sum, i) => sum + Number(i.listing_value || 0), 0);
 
+  // Gap analysis: listings on eBay but not in DB
+  const dbListingIds = new Set(allListings.map((l) => l.ebay_listing_id));
+  const onEbayNotInDb = Array.from(ebayActiveIds).filter((id) => !dbListingIds.has(id));
+  const inDbNotOnEbay = allListings.filter((l) => !ebayActiveIds.has(l.ebay_listing_id));
+
+  // Listing date analysis: how many DB listings have null listing_date
+  const noListingDate = allListings.filter((l) => !l.listing_date);
+
+  // Get enabled schedules + stages for context
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: schedules } = await (supabase as any)
+    .from('ebay_promoted_listings_schedules')
+    .select('id, campaign_id, campaign_name, enabled')
+    .eq('enabled', true);
+
+  let stageConfig: Array<{ days_threshold: number; bid_percentage: number }> = [];
+  if (schedules && schedules.length > 0) {
+    const { data: stages } = await (supabase as any)
+      .from('ebay_promoted_listings_stages')
+      .select('days_threshold, bid_percentage')
+      .eq('schedule_id', schedules[0].id)
+      .order('days_threshold', { ascending: true });
+    stageConfig = stages || [];
+  }
+
+  // Simulate which listings would be skipped and why
+  const firstStageThreshold = stageConfig.length > 0 ? stageConfig[0].days_threshold : null;
+  let wouldSkipNoDate = 0;
+  let wouldSkipTooNew = 0;
+  let wouldPromote = 0;
+  for (const item of notPromoted) {
+    if (!item.listing_date) {
+      wouldSkipNoDate++;
+    } else if (firstStageThreshold !== null) {
+      const ageDays = Math.floor((now.getTime() - new Date(item.listing_date).getTime()) / (1000 * 60 * 60 * 24));
+      if (ageDays < firstStageThreshold) {
+        wouldSkipTooNew++;
+      } else {
+        wouldPromote++;
+      }
+    }
+  }
+
   return NextResponse.json({
     report: true,
     campaigns: campaignAds.map(({ campaign, ads }) => ({
@@ -189,6 +236,31 @@ async function generateReport(supabase: ReturnType<typeof createServiceRoleClien
     },
     bidDistribution,
     notPromotedByAge,
+    scheduleConfig: {
+      stages: stageConfig,
+      firstStageThreshold,
+    },
+    skipAnalysis: {
+      notPromotedTotal: notPromoted.length,
+      wouldSkipNoListingDate: wouldSkipNoDate,
+      wouldSkipTooNew,
+      wouldPromote,
+      noListingDateItems: noListingDate.map((l) => ({
+        ebay_listing_id: l.ebay_listing_id,
+        set_number: l.set_number,
+        item_name: l.item_name,
+      })),
+    },
+    gapAnalysis: {
+      onEbayNotInDb: onEbayNotInDb.length,
+      onEbayNotInDbIds: onEbayNotInDb.slice(0, 50), // first 50 for debugging
+      inDbNotOnEbay: inDbNotOnEbay.length,
+      inDbNotOnEbayIds: inDbNotOnEbay.slice(0, 20).map((l) => ({
+        ebay_listing_id: l.ebay_listing_id,
+        set_number: l.set_number,
+        item_name: l.item_name,
+      })),
+    },
   });
   } catch (error) {
     console.error('[EbayPromotions Report] Error:', error);
@@ -259,6 +331,9 @@ export async function POST(request: NextRequest) {
     let totalUpdated = 0;
     let totalRemoved = 0;
     let totalErrors = 0;
+    let skippedNoListingDate = 0;
+    let skippedTooNew = 0;
+    let skippedAlreadyPromoted = 0;
     const allFailedDetails: Array<{ listingId: string; action: string; statusCode: number; error: string }> = [];
 
     // 3. Process each schedule
@@ -334,7 +409,10 @@ export async function POST(request: NextRequest) {
           listingDate = new Date(listing.listing_date);
         }
 
-        if (!listingDate || isNaN(listingDate.getTime())) continue;
+        if (!listingDate || isNaN(listingDate.getTime())) {
+          skippedNoListingDate++;
+          continue;
+        }
 
         const ageDays = Math.floor((now.getTime() - listingDate.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -359,6 +437,7 @@ export async function POST(request: NextRequest) {
 
         if (targetBid === null) {
           // Listing is too new for any stage — should not be promoted
+          skippedTooNew++;
           if (current?.isPromoted) {
             const removes = removesByCampaign.get(actualCampaignId) || [];
             removes.push(listing.ebay_listing_id);
@@ -372,15 +451,19 @@ export async function POST(request: NextRequest) {
           const updates = updatesByCampaign.get(actualCampaignId) || [];
           updates.push({ listingId: listing.ebay_listing_id, bidPercentage: targetBid });
           updatesByCampaign.set(actualCampaignId, updates);
+        } else {
+          // Already at correct bid — no action needed
+          skippedAlreadyPromoted++;
         }
-        // else: already at correct bid — no action needed
       }
 
       const totalUpdatesCount = Array.from(updatesByCampaign.values()).reduce((sum, arr) => sum + arr.length, 0);
       const totalRemovesCount = Array.from(removesByCampaign.values()).reduce((sum, arr) => sum + arr.length, 0);
 
       console.log(
-        `[Cron EbayPromotions] Campaign ${schedule.campaign_id}: ${toAdd.length} to add, ${totalUpdatesCount} to update, ${totalRemovesCount} to remove`
+        `[Cron EbayPromotions] Campaign ${schedule.campaign_id}: ${allListings.length} total listings, ` +
+        `${toAdd.length} to add, ${totalUpdatesCount} to update, ${totalRemovesCount} to remove, ` +
+        `skipped: ${skippedNoListingDate} no listing_date, ${skippedTooNew} too new, ${skippedAlreadyPromoted} already correct`
       );
 
       // Apply changes
@@ -436,7 +519,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const summary = { added: totalAdded, updated: totalUpdated, removed: totalRemoved, errors: totalErrors };
+    const summary = { added: totalAdded, updated: totalUpdated, removed: totalRemoved, errors: totalErrors, skippedNoListingDate, skippedTooNew, skippedAlreadyPromoted };
     console.log(`[Cron EbayPromotions] Complete:`, summary);
 
     await execution.complete(summary);
