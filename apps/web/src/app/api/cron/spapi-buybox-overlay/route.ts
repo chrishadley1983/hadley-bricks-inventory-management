@@ -44,6 +44,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // One execution row per invocation (matches bricklink-pricing). Each chunk
+    // opens + closes its own row so the cleanup cron never marks a real run
+    // as a stale "timeout".
+    execution = await jobExecutionService.start(JOB_NAME, 'cron');
+
     const supabase = createServiceRoleClient();
     const today = new Date().toISOString().split('T')[0];
 
@@ -71,6 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (inStockAsins.length === 0) {
+      await execution.complete({ reason: 'no in-stock ASINs' }, 200, 0, 0);
       return NextResponse.json({ success: true, complete: true, processed: 0 });
     }
 
@@ -109,6 +115,12 @@ export async function POST(request: NextRequest) {
         success: true,
       });
 
+      await execution.complete(
+        { reason: 'already complete for today', total: inStockAsins.length },
+        200,
+        0,
+        0
+      );
       return NextResponse.json({
         success: true,
         complete: true,
@@ -117,13 +129,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Process a chunk
+    // Process a chunk (execution row already started at top of handler)
     const chunk = inStockAsins.slice(cursorIndex, cursorIndex + CHUNK_SIZE);
-    const isFirstChunk = cursorIndex === 0;
-
-    if (isFirstChunk) {
-      execution = await jobExecutionService.start(JOB_NAME, 'cron');
-    }
 
     console.log(
       `[SP-API Overlay] Processing ASINs ${cursorIndex + 1}-${cursorIndex + chunk.length} of ${inStockAsins.length}`
@@ -212,16 +219,20 @@ export async function POST(request: NextRequest) {
         message: `${inStockAsins.length} ASINs updated\n${buyBoxYoursCount} own buy box (last chunk)\n${failed} failed`,
         success: failed === 0,
       });
-
-      if (isFirstChunk) {
-        await execution.complete(
-          { processed: inStockAsins.length, updated, buyBoxYoursCount },
-          200,
-          updated,
-          failed
-        );
-      }
     }
+
+    await execution.complete(
+      {
+        complete: isComplete,
+        cursorPosition: newCursorIndex,
+        total: inStockAsins.length,
+        updated,
+        buyBoxYoursCount,
+      },
+      200,
+      updated,
+      failed
+    );
 
     return NextResponse.json({
       success: true,
