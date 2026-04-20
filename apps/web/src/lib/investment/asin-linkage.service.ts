@@ -83,24 +83,33 @@ export class AsinLinkageService {
         });
       }
 
-      // Batch upsert to brickset_sets
+      // UPDATE existing brickset_sets rows (not upsert — INSERT path fails
+      // because NOT NULL columns like set_number/set_name aren't known here).
+      // Each row is a single UPDATE; concurrency kept low to avoid saturating
+      // PostgREST. This replaces the previous .upsert({onConflict:'id'}) call
+      // which was silently logging 7000+ errors/day with newly_linked=0.
       if (updates.length > 0) {
-        for (let i = 0; i < updates.length; i += 500) {
-          const chunk = updates.slice(i, i + 500);
-          const { error: upsertError } = await this.supabase.from('brickset_sets').upsert(
-            chunk.map((u) => ({
-              id: u.id,
-              amazon_asin: u.amazon_asin,
-              has_amazon_listing: u.has_amazon_listing,
-            })),
-            { onConflict: 'id' }
+        const concurrency = 20;
+        for (let i = 0; i < updates.length; i += concurrency) {
+          const batch = updates.slice(i, i + concurrency);
+          const results = await Promise.all(
+            batch.map((u) =>
+              this.supabase
+                .from('brickset_sets')
+                .update({
+                  amazon_asin: u.amazon_asin,
+                  has_amazon_listing: u.has_amazon_listing,
+                })
+                .eq('id', u.id)
+            )
           );
-
-          if (upsertError) {
-            console.error('[AsinLinkage] Upsert error:', upsertError.message);
-            errors += chunk.length;
-          } else {
-            newlyLinked += chunk.length;
+          for (const { error: updateError } of results) {
+            if (updateError) {
+              console.error('[AsinLinkage] Update error:', updateError.message);
+              errors++;
+            } else {
+              newlyLinked++;
+            }
           }
         }
       }
