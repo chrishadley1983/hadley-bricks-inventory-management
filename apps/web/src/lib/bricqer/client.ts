@@ -20,6 +20,7 @@ import type {
   BricqerColor,
   BricqerBatch,
   BricqerPurchase,
+  BricqerPurchaseDetail,
 } from './types';
 
 /** Request timeout in milliseconds */
@@ -770,6 +771,15 @@ export class BricqerClient {
     }
 
     return response.results || [];
+  }
+
+  /**
+   * Get a single purchase with full detail (journal.posts, batches, sellingPrice).
+   * The list endpoint omits these fields; the detail endpoint is required to
+   * derive purchase cost from the double-entry accounting posts.
+   */
+  async getPurchaseDetail(purchaseId: number): Promise<BricqerPurchaseDetail> {
+    return this.request<BricqerPurchaseDetail>(`/inventory/purchase/${purchaseId}/`);
   }
 
   /**

@@ -396,12 +396,12 @@ export interface BricqerBatch {
   created: string;
 }
 
-/** Bricqer purchase */
+/** Bricqer purchase (list-endpoint shape) */
 export interface BricqerPurchase {
   id: number;
   journal: {
     id: number;
-    reference?: string;
+    reference?: string | null;
     contact?: {
       id: number;
       contactType: string;
@@ -410,13 +410,35 @@ export interface BricqerPurchase {
       email?: string | null;
       phone?: string | null;
       remarks?: string | null;
-      country?: number;
+      country?: number | { id: number; name?: string; countryCode?: string };
     };
   };
   condition: 'N' | 'U';
   totalQuantity: number;
   remainingQuantity: number;
   locked: boolean;
+}
+
+/** Bricqer journal post — accounting ledger entry */
+export interface BricqerJournalPost {
+  date: string;
+  journal: number;
+  ledger: number;
+  description?: string | null;
+  amount: string; // Decimal as string, negative for expense postings (e.g. "-85.00")
+}
+
+/** Bricqer purchase detail (from /inventory/purchase/{id}/) — includes posts + batches */
+export interface BricqerPurchaseDetail extends BricqerPurchase {
+  journal: BricqerPurchase['journal'] & {
+    posts?: BricqerJournalPost[];
+    documentSet?: unknown[];
+  };
+  batches?: BricqerBatch[];
+  sellingPrice?: string;
+  remainingPrice?: string;
+  lots?: number;
+  isMargin?: boolean;
 }
 
 /** Bricqer item link to external platforms */
