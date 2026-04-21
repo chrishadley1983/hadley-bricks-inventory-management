@@ -8,7 +8,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { BricqerClient } from './client';
 import { CredentialsRepository } from '@/lib/repositories';
-import type { BricqerBatch, BricqerPurchase, BricqerCredentials } from './types';
+import type {
+  BricqerBatch,
+  BricqerPurchaseDetail,
+  BricqerCredentials,
+} from './types';
 import type {
   BatchSyncResult,
   BatchSyncMode,
@@ -16,7 +20,7 @@ import type {
   BatchConnectionStatus,
   Json,
 } from './bricqer-batch-sync.types';
-import { parseCurrencyValue } from './bricqer-batch-sync.types';
+import { calculatePurchaseCost, parseCurrencyValue } from './bricqer-batch-sync.types';
 
 // ============================================================================
 // Constants
@@ -36,6 +40,8 @@ interface UploadRow {
   total_quantity: number;
   selling_price: number;
   cost: number;
+  source: string | null;
+  notes: string | null;
   lots: number;
   condition: string;
   reference: string | null;
@@ -45,6 +51,8 @@ interface UploadRow {
   raw_response: Json;
   synced_from_bricqer: boolean;
 }
+
+const PURCHASE_DETAIL_CONCURRENCY = 5;
 
 // ============================================================================
 // BricqerBatchSyncService Class
@@ -215,21 +223,10 @@ export class BricqerBatchSyncService {
       const client = new BricqerClient(credentials);
       console.log('[BricqerBatchSyncService] Bricqer client ready');
 
-      // Fetch batches and purchases from Bricqer
-      console.log('[BricqerBatchSyncService] Fetching batches and purchases from Bricqer API...');
-      const [batches, purchases] = await Promise.all([client.getBatches(), client.getPurchases()]);
-      console.log(
-        '[BricqerBatchSyncService] Fetched batches:',
-        batches.length,
-        'purchases:',
-        purchases.length
-      );
-
-      // Create purchase lookup map for cost data
-      const purchaseMap = new Map<number, BricqerPurchase>();
-      for (const purchase of purchases) {
-        purchaseMap.set(purchase.id, purchase);
-      }
+      // Fetch batches from Bricqer
+      console.log('[BricqerBatchSyncService] Fetching batches from Bricqer API...');
+      const batches = await client.getBatches();
+      console.log('[BricqerBatchSyncService] Fetched batches:', batches.length);
 
       // Filter batches
       let batchesToProcess = batches;
@@ -240,6 +237,20 @@ export class BricqerBatchSyncService {
           batchesToProcess.length
         );
       }
+
+      // Fetch purchase detail for every unique purchase referenced by the
+      // batches we're about to sync. The /inventory/purchase/ list endpoint
+      // does not expose purchase price, supplier name, or reference, but the
+      // detail endpoint does — it's our only source of cost/source/notes data.
+      const uniquePurchaseIds = [
+        ...new Set(batchesToProcess.map((b) => b.purchase).filter((id) => id != null)),
+      ];
+      console.log(
+        '[BricqerBatchSyncService] Fetching purchase detail for',
+        uniquePurchaseIds.length,
+        'unique purchases'
+      );
+      const purchaseMap = await this.fetchPurchaseDetails(client, uniquePurchaseIds);
 
       // Transform and upsert batches
       console.log('[BricqerBatchSyncService] Upserting batches to database...');
@@ -326,22 +337,70 @@ export class BricqerBatchSyncService {
   // ============================================================================
 
   /**
-   * Transform a Bricqer batch to a database row
+   * Fetch purchase detail for every unique purchase ID with bounded
+   * concurrency. Missing/failed fetches are logged and skipped — the batch
+   * will still sync, just without cost/source/notes.
+   */
+  private async fetchPurchaseDetails(
+    client: BricqerClient,
+    purchaseIds: number[]
+  ): Promise<Map<number, BricqerPurchaseDetail>> {
+    const map = new Map<number, BricqerPurchaseDetail>();
+    for (let i = 0; i < purchaseIds.length; i += PURCHASE_DETAIL_CONCURRENCY) {
+      const slice = purchaseIds.slice(i, i + PURCHASE_DETAIL_CONCURRENCY);
+      const results = await Promise.allSettled(slice.map((id) => client.getPurchaseDetail(id)));
+      results.forEach((result, idx) => {
+        const id = slice[idx];
+        if (result.status === 'fulfilled') {
+          map.set(id, result.value);
+        } else {
+          console.warn(
+            `[BricqerBatchSyncService] Failed to fetch purchase ${id}:`,
+            result.reason instanceof Error ? result.reason.message : result.reason
+          );
+        }
+      });
+    }
+    return map;
+  }
+
+  /**
+   * Transform a Bricqer batch to a database row.
+   *
+   * Cost is pro-rated: a purchase can have multiple batches, so we allocate
+   * the purchase's total cost across its batches in proportion to each
+   * batch's listing value (totalPrice). If the purchase total value is
+   * unknown, we allocate the full cost to each batch as a safe fallback
+   * (better to over-count than silently lose the data).
    */
   private transformBatchToRow(
     userId: string,
     batch: BricqerBatch,
-    purchaseMap: Map<number, BricqerPurchase>
+    purchaseMap: Map<number, BricqerPurchaseDetail>
   ): UploadRow {
-    // Get cost from linked purchase if available
-    // Note: Bricqer doesn't expose purchase price directly on batch,
-    // so we estimate from the purchase data when available
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _linkedPurchase = purchaseMap.get(batch.purchase);
+    const purchase = purchaseMap.get(batch.purchase);
 
-    // For now, cost is set to 0 as Bricqer purchase API doesn't include price info
-    // This can be populated later from manual entry or additional API calls
-    const cost = 0;
+    let cost = 0;
+    let source: string | null = null;
+    let notes: string | null = null;
+
+    if (purchase) {
+      const totalPurchaseCost = calculatePurchaseCost(purchase.journal.posts);
+      const purchaseSellingPrice = parseCurrencyValue(purchase.sellingPrice);
+      const batchSellingPrice = parseCurrencyValue(batch.totalPrice);
+
+      if (totalPurchaseCost > 0) {
+        if (purchaseSellingPrice > 0 && batchSellingPrice > 0) {
+          cost = totalPurchaseCost * (batchSellingPrice / purchaseSellingPrice);
+          cost = Math.round(cost * 100) / 100; // round to pence
+        } else {
+          cost = totalPurchaseCost;
+        }
+      }
+
+      source = purchase.journal.contact?.name ?? null;
+      notes = purchase.journal.reference ?? null;
+    }
 
     // Use activationDate if available, otherwise fall back to created date
     const uploadDate = batch.activationDate || batch.created;
@@ -354,6 +413,8 @@ export class BricqerBatchSyncService {
       total_quantity: batch.totalQuantity,
       selling_price: parseCurrencyValue(batch.totalPrice),
       cost,
+      source,
+      notes,
       lots: batch.lots,
       condition: batch.condition,
       reference: batch.reference ?? null,
@@ -371,7 +432,7 @@ export class BricqerBatchSyncService {
   private async upsertBatches(
     userId: string,
     batches: BricqerBatch[],
-    purchaseMap: Map<number, BricqerPurchase>
+    purchaseMap: Map<number, BricqerPurchaseDetail>
   ): Promise<{ created: number; updated: number; skipped: number }> {
     const supabase = await createClient();
 
