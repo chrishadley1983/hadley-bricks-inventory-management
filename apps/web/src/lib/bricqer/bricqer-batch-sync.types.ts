@@ -187,3 +187,23 @@ export function calculateMarginPercent(sellingPrice: number, cost: number | null
   if (cost === null || cost === 0 || sellingPrice === 0) return 0;
   return ((sellingPrice - cost) / cost) * 100;
 }
+
+/**
+ * Sum the purchase cost from a Bricqer purchase detail's journal posts.
+ *
+ * Bricqer records each purchase as a double-entry journal: the inbound stock
+ * ledger posts 0.00 (for margin-scheme purchases) and the supplier/cash ledger
+ * posts the negative purchase price (e.g. -85.00). Summing the absolute value
+ * of all negative amounts gives the total cash paid.
+ */
+export function calculatePurchaseCost(
+  posts: Array<{ amount: string }> | undefined | null
+): number {
+  if (!posts || posts.length === 0) return 0;
+  let total = 0;
+  for (const post of posts) {
+    const value = parseCurrencyValue(post.amount);
+    if (value < 0) total += Math.abs(value);
+  }
+  return total;
+}

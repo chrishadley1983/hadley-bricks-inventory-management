@@ -11,14 +11,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EnrichmentService, MAX_ITEMS_DAILY_REFRESH } from '@/lib/inventory-explorer/enrichment.service';
 import { discordService } from '@/lib/notifications';
+import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
+import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
+const JOB_NAME = 'inventory-bricklink-enrich';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
+  let execution: ExecutionHandle = noopHandle;
 
   try {
     // Verify cron secret
@@ -28,6 +32,8 @@ export async function POST(request: NextRequest) {
     if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    execution = await jobExecutionService.start(JOB_NAME, 'cron');
 
     const supabase = createServiceRoleClient();
     const service = new EnrichmentService(supabase, DEFAULT_USER_ID);
@@ -72,6 +78,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Cron InventoryEnrich] Done: ${result.newlyFetched} enriched, ${result.errors} errors, ${duration}s`);
 
+    await execution.complete(
+      { newlyFetched: result.newlyFetched, errors: result.errors, durationSec: duration },
+      200,
+      result.newlyFetched,
+      result.errors
+    );
+
     return NextResponse.json({
       data: result,
       message: `Enriched ${result.newlyFetched} items, ${result.errors} errors`,
@@ -81,6 +94,8 @@ export async function POST(request: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     console.error('[Cron InventoryEnrich] Error:', errorMsg);
+
+    await execution.fail(error, 500);
 
     await discordService.sendAlert({
       title: '🔴 Inventory BL Enrichment Failed',

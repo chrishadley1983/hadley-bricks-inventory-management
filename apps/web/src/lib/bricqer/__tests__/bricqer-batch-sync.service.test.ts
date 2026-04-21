@@ -8,12 +8,14 @@ vi.mock('@/lib/supabase/server', () => ({
 
 // Create mock functions for BricqerClient
 const mockGetBatchesDefault = vi.fn().mockResolvedValue([]);
-const mockGetPurchasesDefault = vi.fn().mockResolvedValue([]);
+const mockGetPurchaseDetailDefault = vi
+  .fn()
+  .mockRejectedValue(new Error('purchase detail not mocked'));
 
 vi.mock('../client', () => ({
   BricqerClient: class MockBricqerClient {
     getBatches = mockGetBatchesDefault;
-    getPurchases = mockGetPurchasesDefault;
+    getPurchaseDetail = mockGetPurchaseDetailDefault;
   },
 }));
 
@@ -262,7 +264,6 @@ describe('BricqerBatchSyncService', () => {
 
       // Use the default mock which returns empty arrays
       mockGetBatchesDefault.mockResolvedValueOnce([]);
-      mockGetPurchasesDefault.mockResolvedValueOnce([]);
 
       const mockFrom = vi.fn();
 
@@ -355,7 +356,6 @@ describe('BricqerBatchSyncService', () => {
           condition: 'new',
         },
       ]);
-      mockGetPurchasesDefault.mockResolvedValueOnce([]);
 
       const mockFrom = vi.fn();
 

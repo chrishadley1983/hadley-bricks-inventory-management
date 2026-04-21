@@ -163,6 +163,38 @@ def _parse_time_value(text: str) -> float:
     return total if (h or m or s) else _parse_value(text)
 
 
+def _scan_and_merge(body_text: str, seen: dict) -> None:
+    """Scan body_text once, populate any newly-resolved metrics into `seen`.
+
+    DOM layout (~Apr 2026):
+       {Label} / (blank) / \\t / (blank) / {current_value} / / / {soft} / {hard}
+    Labels may appear multiple times (nav, grid, tooltips); only the
+    occurrence followed within ~8 lines by a digit-starting string is real.
+    """
+    lines = body_text.split("\n")
+    for label, (db_key, unit) in METRIC_MAP.items():
+        if db_key in seen:
+            continue
+        occurrences = [i for i, ln in enumerate(lines) if ln.strip() == label]
+        for i in occurrences:
+            raw = None
+            for j in range(i + 1, min(i + 9, len(lines))):
+                cand = lines[j].strip()
+                if not cand or cand == "/":
+                    continue
+                if re.match(r"^\d", cand):
+                    raw = cand
+                break
+            if raw is None:
+                continue
+            try:
+                value = _convert_to_base_unit(raw, unit)
+            except Exception:
+                continue
+            seen[db_key] = (value, raw, label)
+            break
+
+
 def scrape_vercel_usage() -> dict[str, float]:
     """Scrape the Vercel usage dashboard via Chrome CDP."""
     from playwright.sync_api import sync_playwright
@@ -191,27 +223,35 @@ def scrape_vercel_usage() -> dict[str, float]:
 
         try:
             log.info("Navigating to %s", VERCEL_USAGE_URL)
-            page.goto(VERCEL_USAGE_URL, wait_until="domcontentloaded", timeout=30000)
-            time.sleep(5)  # Let JS render the metrics
+            # Values are populated via async backend queries that return in
+            # staggered chunks — any single snapshot captures only a subset.
+            # Navigate once, then poll the DOM every 3s for up to 45s, merging
+            # all metrics we see. Stop once we've seen all 15 METRIC_MAP entries
+            # OR 45s elapses.
+            page.goto(VERCEL_USAGE_URL, wait_until="networkidle", timeout=45000)
 
-            # Get all visible text
-            body_text = page.inner_text("body")
+            # Poll the DOM in a loop, merging metric snapshots across attempts.
+            # Each scan adds any newly-resolved metrics to `seen`; once a metric
+            # is captured we keep the first numeric value (values don't change
+            # mid-pageload).
+            import time as _time
+            deadline = _time.time() + 45
+            seen: dict[str, tuple[float, str, str]] = {}  # db_key -> (value, raw, label)
+            poll = 0
+            while _time.time() < deadline and len(seen) < len(METRIC_MAP):
+                poll += 1
+                body_text = page.inner_text("body")
+                before = len(seen)
+                _scan_and_merge(body_text, seen)
+                added = len(seen) - before
+                log.info("  poll #%d: +%d → %d/%d metrics", poll, added, len(seen), len(METRIC_MAP))
+                if len(seen) >= len(METRIC_MAP):
+                    break
+                _time.sleep(3)
 
-            # Vercel dashboard format (from innerText):
-            # "Label\n\n\t\nvalue\n\t\n$cost"
-            # Values: "2 hours", "63.75K", "115.46 GB Hrs", "1 GB / 1 TB", "358 MB"
-            for label, (db_key, unit) in METRIC_MAP.items():
-                pattern = rf'{re.escape(label)}\s*\n+\s*\t\s*\n\s*([\d,.]+\s*(?:K|M|B|seconds?|hours?|minutes?|GB[\s-]*Hrs?|GB|MB|KB)?(?:\s*/\s*[\d,.]+\s*(?:K|M|B|TB|GB|MB))?)\s*\n'
-                match = re.search(pattern, body_text, re.IGNORECASE)
-                if match:
-                    raw = match.group(1).strip()
-                    # Take only the "used" part if format is "used / limit"
-                    if '/' in raw:
-                        raw = raw.split('/')[0].strip()
-
-                    value = _convert_to_base_unit(raw, unit)
-                    results[db_key] = value
-                    log.info("  %s = %s (raw: '%s')", label, value, raw)
+            for db_key, (value, raw, label) in seen.items():
+                results[db_key] = value
+                log.info("  %s = %s (raw: '%s')", label, value, raw)
 
             log.info("Scraped %d metrics from Vercel dashboard", len(results))
 
