@@ -503,28 +503,36 @@ export class BricqerClient {
   }
 
   /**
-   * Get items for an order (if separate endpoint exists)
+   * Get items for an order. Bricqer's API exposes order items only via the
+   * order detail endpoint's `batchSet[].itemSet[]` — there is no `/orders/order/{id}/items/`
+   * sub-resource (returns 404) and `BricqerOrder.items` is also unpopulated in practice.
+   * We flatten batchSet here and project to BricqerOrderItem shape so callers
+   * (notably the minifig sale poller) can match by `bricklink_id`.
    * @param orderId The Bricqer order ID
    */
   async getOrderItems(orderId: string | number): Promise<BricqerOrderItem[]> {
-    try {
-      const response = await this.request<BricqerOrderItem[] | { items: BricqerOrderItem[] }>(
-        `/orders/order/${orderId}/items/`
-      );
-
-      if (Array.isArray(response)) {
-        return response;
+    const detail = await this.getOrder(orderId);
+    const batchSet = detail.batchSet ?? [];
+    const items: BricqerOrderItem[] = [];
+    for (const batch of batchSet) {
+      for (const it of batch.itemSet ?? []) {
+        items.push({
+          id: it.id,
+          name: it.description,
+          quantity: it.quantity,
+          price: it.price,
+          total: it.price * it.quantity,
+          condition: it.condition,
+          color: it.color?.name,
+          color_id: it.color?.id,
+          bricklink_id: it.legoId,
+          lego_id: it.legoId,
+          item_type: it.legoType,
+          image_url: it.picture || it.legoPicture,
+        });
       }
-
-      return response.items || [];
-    } catch (error) {
-      // If items endpoint doesn't exist, fetch from order detail
-      if (error instanceof BricqerApiError && error.statusCode === 404) {
-        const order = await this.getOrder(orderId);
-        return order.items || [];
-      }
-      throw error;
     }
+    return items;
   }
 
   /**
