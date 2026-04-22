@@ -271,9 +271,13 @@ export class OrderPollService {
 
       const client = new BricqerClient(credentials);
 
-      // Fetch recent orders
-      const orders = await client.getOrders({
-        created_after: lastCursor || undefined,
+      // Fetch recent orders. Use getAllOrders to paginate past the default 100-row cap
+      // (a busy day on BrickLink + BrickOwl can easily exceed that). On cold start
+      // (null cursor), anchor at 7 days ago to avoid replaying months of history.
+      const createdAfter =
+        lastCursor || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const orders = await client.getAllOrders({
+        created_after: createdAfter,
         status: 'READY',
       });
 
