@@ -133,8 +133,10 @@ export async function POST(request: NextRequest) {
             .eq('id', removal.minifig_sync_id as string)
             .eq('user_id', userId);
 
-          // Archive matching Shopify product (non-blocking)
-          // Use status=SOLD to target the item that was actually sold, not a sibling
+          // Archive matching Shopify product (non-blocking).
+          // Do not filter by inventory_items.status — that only flips to SOLD when the
+          // eBay order reaches FULFILLED (i.e. after shipping), which can lag days behind
+          // the sale. The Shopify archive must happen immediately to prevent double-sale.
           const bricklinkId = syncItem.bricklink_id as string | null;
           if (bricklinkId) {
             const { data: invItem } = await supabase
@@ -142,10 +144,9 @@ export async function POST(request: NextRequest) {
               .select('id')
               .eq('user_id', userId)
               .eq('set_number', bricklinkId)
-              .eq('status', 'SOLD')
               .order('updated_at', { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
 
             if (invItem) {
               archiveShopifyOnSold(supabase, userId, invItem.id);
