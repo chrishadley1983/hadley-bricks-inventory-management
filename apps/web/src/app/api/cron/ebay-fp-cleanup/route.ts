@@ -56,10 +56,14 @@ export async function POST(request: NextRequest) {
       { onConflict: 'user_id,job_type' }
     );
 
-    // Run the cleanup
+    // Run the cleanup with a time budget that leaves headroom before Vercel's
+    // 300s hard kill — service checkpoints at 85% of budget so the HTTP
+    // response + Discord notification still land in time.
+    const TIME_BUDGET_MS = 250_000; // ~4m10s
     const result = await fpDetector.runCleanup({
       threshold: DEFAULT_THRESHOLD,
       userId: DEFAULT_USER_ID,
+      timeBudgetMs: TIME_BUDGET_MS,
     });
 
     const durationMs = Date.now() - startTime;
@@ -68,14 +72,23 @@ export async function POST(request: NextRequest) {
         ? `${Math.round(durationMs / 60000)} min`
         : `${Math.round(durationMs / 1000)} sec`;
 
-    // Update sync status
+    // Update sync status. Note: a successful-but-partial run (checkpoint saved)
+    // marks status=running so the next cron invocation knows there's work to
+    // resume. Only a fully complete recalc marks status=completed.
+    const syncStatus = !result.success
+      ? 'failed'
+      : result.complete
+        ? 'completed'
+        : 'running';
+
     await supabase.from('arbitrage_sync_status').upsert(
       {
         user_id: DEFAULT_USER_ID,
         job_type: JOB_TYPE,
-        status: result.success ? 'completed' : 'failed',
+        status: syncStatus,
         last_run_at: new Date().toISOString(),
-        last_success_at: result.success ? new Date().toISOString() : undefined,
+        last_success_at:
+          result.success && result.complete ? new Date().toISOString() : undefined,
         last_run_duration_ms: durationMs,
         items_processed: result.itemsScanned,
         items_failed: result.errors,
@@ -91,14 +104,17 @@ export async function POST(request: NextRequest) {
     // Send Discord notifications
     if (result.success) {
       // Build message with details
-      let message = `Scanned: ${result.itemsScanned} items (${result.listingsScanned} listings)`;
+      let message = `Phase: ${result.phase}`;
+      if (result.itemsScanned > 0) {
+        message += `\nScanned: ${result.itemsScanned} items (${result.listingsScanned} listings)`;
+      }
       if (result.itemsFlagged > 0) {
         message += `\nFlagged: ${result.itemsFlagged}`;
         message += `\nExcluded: ${result.itemsExcluded}`;
         if (result.topReasons.length > 0) {
           message += `\nTop reasons: ${result.topReasons.join(', ')}`;
         }
-      } else {
+      } else if (result.itemsScanned > 0) {
         message += '\nNo false positives detected';
       }
       if (result.aggregatesRecalculated && result.aggregatesRecalculated > 0) {
@@ -106,8 +122,12 @@ export async function POST(request: NextRequest) {
       }
       message += `\nDuration: ${durationStr}`;
 
+      const title = result.complete
+        ? '✅ eBay FP Cleanup Complete'
+        : `⏸️ eBay FP Cleanup Checkpointed (resume after set ${result.resumeAfterSet ?? '?'})`;
+
       await discordService.sendSyncStatus({
-        title: '✅ eBay FP Cleanup Complete',
+        title,
         message,
         success: true,
       });
@@ -132,6 +152,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: result.success,
+      complete: result.complete,
+      phase: result.phase,
+      resumeAfterSet: result.resumeAfterSet ?? null,
       itemsScanned: result.itemsScanned,
       listingsScanned: result.listingsScanned,
       itemsFlagged: result.itemsFlagged,

@@ -630,27 +630,73 @@ export class EbayFpDetectorService {
    * This ensures the view's ebay_min_price reflects only legitimate listings.
    */
   async recalculateAggregatesAfterExclusions(
-    userId: string
-  ): Promise<{ setsUpdated: number; setsCleared: number; errors: number }> {
+    userId: string,
+    options: { resumeAfterSet?: string | null; budgetMs?: number } = {}
+  ): Promise<{
+    setsUpdated: number;
+    setsCleared: number;
+    errors: number;
+    complete: boolean;
+    lastProcessedSet: string | null;
+  }> {
     let setsUpdated = 0;
     let setsCleared = 0;
     let errors = 0;
+    let lastProcessedSet: string | null = null;
+    const recalcStart = Date.now();
+    const budgetMs = options.budgetMs ?? 250_000;
+    // Stop and checkpoint at 85% of budget — leaves a comfortable margin
+    // for the checkpoint write + HTTP response before Vercel's hard kill.
+    const stopAtMs = Math.floor(budgetMs * 0.85);
 
     try {
       // 1. Load ALL excluded item IDs grouped by set_number
       const excludedBySet = await this.loadExcludedListings(userId);
       if (excludedBySet.size === 0) {
         console.log('[EbayFpDetector] No exclusions found, skipping recalculation');
-        return { setsUpdated: 0, setsCleared: 0, errors: 0 };
+        return {
+          setsUpdated: 0,
+          setsCleared: 0,
+          errors: 0,
+          complete: true,
+          lastProcessedSet: null,
+        };
       }
 
-      // 2. For each set with exclusions, load and recalculate ebay_pricing
-      const setNumbers = [...excludedBySet.keys()];
-      console.log(`[EbayFpDetector] Recalculating aggregates for ${setNumbers.length} sets with exclusions`);
+      // 2. Sort set_numbers deterministically so resume-after works.
+      //    Filter out anything at or before the resume cursor from a prior run.
+      let setNumbers = [...excludedBySet.keys()].sort();
+      if (options.resumeAfterSet) {
+        const cursor = options.resumeAfterSet;
+        setNumbers = setNumbers.filter((s) => s > cursor);
+        console.log(
+          `[EbayFpDetector] Resuming recalc after set ${cursor}: ${setNumbers.length} sets remaining`
+        );
+      } else {
+        console.log(
+          `[EbayFpDetector] Recalculating aggregates for ${setNumbers.length} sets with exclusions`
+        );
+      }
 
-      // Process in batches to avoid overwhelming the DB
-      const BATCH_SIZE = 50;
+      // Process in smaller batches so we can checkpoint between them without
+      // losing too much work. Each batch is one DB round-trip + updates.
+      const BATCH_SIZE = 15;
       for (let i = 0; i < setNumbers.length; i += BATCH_SIZE) {
+        // Budget guard: before starting a batch, check we still have headroom.
+        const elapsed = Date.now() - recalcStart;
+        if (elapsed > stopAtMs) {
+          console.log(
+            `[EbayFpDetector] Recalc budget exhausted (${elapsed}ms > ${stopAtMs}ms) — checkpointing at set ${lastProcessedSet ?? '(none)'}`
+          );
+          return {
+            setsUpdated,
+            setsCleared,
+            errors,
+            complete: false,
+            lastProcessedSet,
+          };
+        }
+
         const batch = setNumbers.slice(i, i + BATCH_SIZE);
 
         // Fetch current ebay_pricing rows for this batch
@@ -748,17 +794,33 @@ export class EbayFpDetectorService {
             errors++;
           }
         }
+
+        // Advance cursor to the last set_number in this batch (sorted, so batch[-1]
+        // is safe to resume after on the next run).
+        lastProcessedSet = batch[batch.length - 1];
       }
 
       console.log(
         `[EbayFpDetector] Recalculation complete: ${setsUpdated} updated, ${setsCleared} cleared, ${errors} errors`
       );
+      return {
+        setsUpdated,
+        setsCleared,
+        errors,
+        complete: true,
+        lastProcessedSet,
+      };
     } catch (err) {
       console.error('[EbayFpDetector] Recalculation failed:', err);
       errors++;
+      return {
+        setsUpdated,
+        setsCleared,
+        errors,
+        complete: false,
+        lastProcessedSet,
+      };
     }
-
-    return { setsUpdated, setsCleared, errors };
   }
 
   /**
@@ -804,6 +866,44 @@ export class EbayFpDetectorService {
     const startTime = Date.now();
     const threshold = config?.threshold ?? DEFAULT_THRESHOLD;
     const userId = config?.userId ?? DEFAULT_USER_ID;
+    const timeBudgetMs = config?.timeBudgetMs ?? 250_000;
+
+    // Check for a checkpoint from a prior partial run. If recalc was interrupted,
+    // skip scan/score entirely and jump straight to resuming the recalc phase.
+    const checkpoint = await this.loadCheckpoint(userId);
+    if (checkpoint?.phase === 'recalc') {
+      console.log(
+        `[EbayFpDetector] Resuming from checkpoint: phase=recalc, resume_after_set=${checkpoint.resume_after_set ?? '(start)'}`
+      );
+      const recalcResult = await this.recalculateAggregatesAfterExclusions(userId, {
+        resumeAfterSet: checkpoint.resume_after_set,
+        budgetMs: timeBudgetMs - (Date.now() - startTime),
+      });
+
+      if (recalcResult.complete) {
+        await this.clearCheckpoint(userId);
+      } else {
+        await this.saveCheckpoint(userId, {
+          phase: 'recalc',
+          resume_after_set: recalcResult.lastProcessedSet,
+        });
+      }
+
+      return {
+        success: recalcResult.errors === 0,
+        itemsScanned: 0,
+        listingsScanned: 0,
+        itemsFlagged: 0,
+        itemsExcluded: 0,
+        errors: recalcResult.errors,
+        duration: Date.now() - startTime,
+        topReasons: [],
+        aggregatesRecalculated: recalcResult.setsUpdated + recalcResult.setsCleared,
+        complete: recalcResult.complete,
+        phase: 'resumed-recalc',
+        resumeAfterSet: recalcResult.complete ? null : recalcResult.lastProcessedSet,
+      };
+    }
 
     let itemsScanned = 0;
     let listingsScanned = 0;
@@ -826,6 +926,7 @@ export class EbayFpDetectorService {
 
       if (items.length === 0) {
         console.log('[EbayFpDetector] No items to process');
+        await this.clearCheckpoint(userId);
         return {
           success: true,
           itemsScanned: 0,
@@ -835,6 +936,8 @@ export class EbayFpDetectorService {
           errors: 0,
           duration: Date.now() - startTime,
           topReasons: [],
+          complete: true,
+          phase: 'done',
         };
       }
 
@@ -927,12 +1030,25 @@ export class EbayFpDetectorService {
         }
       }
 
-      // Recalculate ebay_pricing aggregates to remove excluded listings from min/avg/max
-      // This is critical: without this, the view shows raw min prices from FP listings
-      this.excludedBySet = null; // Clear cache so recalculation loads fresh data
-      const recalcResult = await this.recalculateAggregatesAfterExclusions(userId);
+      // Recalculate ebay_pricing aggregates to remove excluded listings from min/avg/max.
+      // This is critical: without it, the view shows raw min prices from FP listings.
+      // Recalc gets the remaining time budget after scan/score/insert.
+      this.excludedBySet = null; // Clear cache so recalc loads fresh data
+      const recalcBudget = Math.max(30_000, timeBudgetMs - (Date.now() - startTime));
+      const recalcResult = await this.recalculateAggregatesAfterExclusions(userId, {
+        budgetMs: recalcBudget,
+      });
       if (recalcResult.errors > 0) {
         errors += recalcResult.errors;
+      }
+
+      if (recalcResult.complete) {
+        await this.clearCheckpoint(userId);
+      } else {
+        await this.saveCheckpoint(userId, {
+          phase: 'recalc',
+          resume_after_set: recalcResult.lastProcessedSet,
+        });
       }
 
       // Get top 3 reasons
@@ -951,6 +1067,9 @@ export class EbayFpDetectorService {
         duration: Date.now() - startTime,
         topReasons,
         aggregatesRecalculated: recalcResult.setsUpdated + recalcResult.setsCleared,
+        complete: recalcResult.complete,
+        phase: recalcResult.complete ? 'done' : 'recalc',
+        resumeAfterSet: recalcResult.complete ? null : recalcResult.lastProcessedSet,
       };
     } catch (error) {
       console.error('[EbayFpDetector] Cleanup failed:', error);
@@ -963,7 +1082,55 @@ export class EbayFpDetectorService {
         errors: errors + 1,
         duration: Date.now() - startTime,
         topReasons: [],
+        complete: false,
+        phase: 'scan',
       };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Checkpoint helpers — stored in arbitrage_sync_status.checkpoint_data (JSONB).
+  // ---------------------------------------------------------------------------
+
+  private async loadCheckpoint(
+    userId: string
+  ): Promise<{ phase: string; resume_after_set: string | null } | null> {
+    const { data, error } = await this.supabase
+      .from('arbitrage_sync_status')
+      .select('checkpoint_data')
+      .eq('user_id', userId)
+      .eq('job_type', 'ebay_fp_cleanup')
+      .maybeSingle();
+    if (error || !data?.checkpoint_data) return null;
+    return data.checkpoint_data as { phase: string; resume_after_set: string | null };
+  }
+
+  private async saveCheckpoint(
+    userId: string,
+    checkpoint: { phase: string; resume_after_set: string | null }
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from('arbitrage_sync_status')
+      .update({ checkpoint_data: checkpoint })
+      .eq('user_id', userId)
+      .eq('job_type', 'ebay_fp_cleanup');
+    if (error) {
+      console.error('[EbayFpDetector] Failed to save checkpoint:', error.message);
+    } else {
+      console.log(
+        `[EbayFpDetector] Checkpoint saved: phase=${checkpoint.phase}, resume_after_set=${checkpoint.resume_after_set ?? '(none)'}`
+      );
+    }
+  }
+
+  private async clearCheckpoint(userId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('arbitrage_sync_status')
+      .update({ checkpoint_data: null })
+      .eq('user_id', userId)
+      .eq('job_type', 'ebay_fp_cleanup');
+    if (error) {
+      console.error('[EbayFpDetector] Failed to clear checkpoint:', error.message);
     }
   }
 }
