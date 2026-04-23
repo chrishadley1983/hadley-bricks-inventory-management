@@ -64,6 +64,13 @@ export interface FpCleanupResult {
   duration: number;
   topReasons: string[];
   aggregatesRecalculated?: number;
+  /** True when the full cleanup finished in this invocation.
+   *  False means a checkpoint was saved and the next cron run will resume. */
+  complete: boolean;
+  /** Which phase the invocation ran in. */
+  phase: 'scan' | 'recalc' | 'done' | 'resumed-recalc';
+  /** When complete=false, the cursor the next run resumes from. */
+  resumeAfterSet?: string | null;
 }
 
 /**
@@ -72,6 +79,8 @@ export interface FpCleanupResult {
 export interface FpDetectorConfig {
   threshold: number;
   userId: string;
+  /** Time budget in ms for the service (route passes remaining Vercel budget). */
+  timeBudgetMs?: number;
 }
 
 /**
