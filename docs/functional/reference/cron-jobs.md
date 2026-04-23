@@ -84,6 +84,7 @@ All cron routes require `Authorization: Bearer {CRON_SECRET}` header. Vercel Clo
 | Endpoint | Method | Schedule | Purpose |
 |----------|--------|----------|---------|
 | `/api/cron/vercel-usage` | POST | Daily 7am UK | Fetch Vercel metrics, calculate RAG status, email report, Discord summary |
+| `/api/cron/bricqer-sync-status` | POST | Daily 7:35am UK | Fetch Bricqer external-inventory sync (BrickLink + BrickOwl), Discord embed to #sync-status, email report |
 
 ## Resumable Patterns
 

@@ -10,6 +10,7 @@
 import { Resend } from 'resend';
 import type { VercelUsageReport } from '@/lib/services/vercel-usage.service';
 import type { CostAllocationSummary } from '@/lib/services/cost-allocation.service';
+import type { BricqerInventoryProblem } from '@/lib/bricqer/types';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -580,6 +581,64 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
         </p>
       </div>
     `;
+
+    await this.send({ to: userEmail, subject, html });
+  }
+
+  /**
+   * Daily Bricqer external-inventory sync status email.
+   * One row per marketplace — status (In sync / N problems) + last-checked time.
+   */
+  async sendBricqerSyncStatus(params: {
+    userEmail: string;
+    rows: BricqerInventoryProblem[];
+  }): Promise<void> {
+    const { userEmail, rows } = params;
+    const totalProblems = rows.reduce((s, r) => s + r.problems, 0);
+
+    const subject = totalProblems === 0
+      ? 'Bricqer sync — all in sync'
+      : `Bricqer sync — ${totalProblems} problem${totalProblems === 1 ? '' : 's'}`;
+
+    const fmtChecked = (iso: string) =>
+      new Date(iso).toLocaleString('en-GB', {
+        timeZone: 'Europe/London',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+    const rowsHtml = rows
+      .map((r) => {
+        const statusHtml =
+          r.problems === 0
+            ? '<span style="color:#2e7d32;font-weight:600">In sync</span>'
+            : `<span style="color:#c62828;font-weight:600">${r.problems} problem${r.problems === 1 ? '' : 's'}</span>`;
+        return `<tr>
+          <td style="padding:8px 16px;border-bottom:1px solid #eee">${escapeHtml(r.provider)}</td>
+          <td style="padding:8px 16px;border-bottom:1px solid #eee">${statusHtml}</td>
+          <td style="padding:8px 16px;border-bottom:1px solid #eee;color:#555">Checked ${fmtChecked(r.lastChecked)}</td>
+        </tr>`;
+      })
+      .join('');
+
+    const html = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
+      <h2 style="margin:0 0 8px">Bricqer external inventory</h2>
+      <p style="color:#666;font-size:13px;margin:0 0 16px">
+        Sync status from <code>/api/v1/inventory/problems/</code>.
+      </p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #eee;font-size:14px">
+        <thead>
+          <tr style="background:#fafafa">
+            <th style="text-align:left;padding:8px 16px;border-bottom:1px solid #eee">Marketplace</th>
+            <th style="text-align:left;padding:8px 16px;border-bottom:1px solid #eee">Status</th>
+            <th style="text-align:left;padding:8px 16px;border-bottom:1px solid #eee">Last checked</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
 
     await this.send({ to: userEmail, subject, html });
   }
