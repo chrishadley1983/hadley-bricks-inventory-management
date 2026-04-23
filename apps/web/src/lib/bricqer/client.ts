@@ -21,6 +21,7 @@ import type {
   BricqerBatch,
   BricqerPurchase,
   BricqerPurchaseDetail,
+  BricqerInventoryProblem,
 } from './types';
 
 /** Request timeout in milliseconds */
@@ -820,5 +821,15 @@ export class BricqerClient {
       totalQuantity: totalItems, // Would need full fetch to calculate actual quantity
       storageLocations: storageResponse.length,
     };
+  }
+
+  /**
+   * Get external-inventory sync status per marketplace.
+   *
+   * Undocumented endpoint — backs the "Check external inventory" UI dialog.
+   * Returns one row per connected provider (BrickLink, BrickOwl, eBay).
+   */
+  async getInventoryProblems(): Promise<BricqerInventoryProblem[]> {
+    return this.request<BricqerInventoryProblem[]>('/inventory/problems/');
   }
 }

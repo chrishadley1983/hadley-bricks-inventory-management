@@ -376,6 +376,18 @@ export interface BricqerColor {
   isManaged: boolean;
 }
 
+/**
+ * One row per connected external marketplace from `GET /inventory/problems/`.
+ * Backs the "Check external inventory" UI dialog. `provider` is the display
+ * name Bricqer uses ('BrickLink', 'BrickOwl', 'eBay'); `lastChecked` is an ISO
+ * timestamp of Bricqer's last automated check.
+ */
+export interface BricqerInventoryProblem {
+  provider: string;
+  problems: number;
+  lastChecked: string;
+}
+
 /** Bricqer purchase batch */
 export interface BricqerBatch {
   id: number;

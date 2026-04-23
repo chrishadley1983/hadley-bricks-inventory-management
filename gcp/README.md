@@ -209,6 +209,19 @@ gcloud scheduler jobs create http vercel-usage-report \
   --time-zone="Europe/London" \
   --description="Daily Vercel usage monitoring report"
 
+# Bricqer sync-status - daily at 7:35am UK time
+# Reports BrickLink + BrickOwl external-inventory sync status to #sync-status
+# Discord + email via Resend.
+gcloud scheduler jobs create http bricqer-sync-status \
+  --location=europe-west2 \
+  --schedule="35 7 * * *" \
+  --uri="$APP_URL/api/cron/bricqer-sync-status" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="60s" \
+  --description="Daily Bricqer external-inventory sync status (BrickLink + BrickOwl)"
+
 # SP-API Buy Box Overlay - daily at 6am UTC (after Keepa overnight backfill)
 # Updates buy_box_is_yours, buy_box_price, your_price, offer_count from SP-API
 gcloud scheduler jobs create http spapi-buybox-overlay \
