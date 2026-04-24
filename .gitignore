@@ -98,3 +98,4 @@ __pycache__/
 # Temp scratch files
 _tmp_*.txt
 _launch_*.ps1
+tmp/
