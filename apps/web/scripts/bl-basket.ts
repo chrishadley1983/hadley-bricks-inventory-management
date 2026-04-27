@@ -805,11 +805,11 @@ async function uploadWantedList(cdp: CDPClient, listName: string, xmlContent: st
   return id;
 }
 
-async function buildCart(cdp: CDPClient, wantedMoreID: number, storeId: number): Promise<void> {
-  console.log('  selecting target store on buy page...');
+async function buildCart(cdp: CDPClient, wantedMoreID: number, storeId: number, storeName: string): Promise<void> {
+  console.log(`  selecting target store on buy page (storeId=${storeId}, name="${storeName}")...`);
   await cdp.navigate(`https://www.bricklink.com/v2/wanted/buy.page?wantedMoreID=${wantedMoreID}&storeID=${storeId}`, 6000);
 
-  // Poll for the Select button to appear (some stores take a moment to load the row).
+  // Poll for at least one Select button to appear (some stores take a moment to load the row).
   let haveSelect = false;
   for (let i = 0; i < 30; i++) {
     await sleep(500);
@@ -821,7 +821,56 @@ async function buildCart(cdp: CDPClient, wantedMoreID: number, storeId: number):
     console.error(`  no Select button — diagnostics: ${dump}`);
     process.exit(5);
   }
-  await cdp.evaluate(`(function(){ var b = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim()==='Select'; }); if (b) b.click(); })()`);
+
+  // F2: Match the row to our target store before clicking Select. The buy.page's storeID URL
+  // filter is unreliable — when multiple stores stock all the parts on our wanted list, BL
+  // can render extra rows and the previous "first Select" click could land on the wrong seller
+  // (PR #347 inadvertently sent a wanted list to "Ferri's Inn ..." instead of the target).
+  // Strategy: walk Select buttons up the DOM to a row container, look for storeID in any link's
+  // href OR a textual match against the storeName. Click only the row that matches.
+  const storeNameJs = JSON.stringify(storeName);
+  const selectResult = await cdp.evaluate<string>(`(function(){
+    var btns = Array.from(document.querySelectorAll('button')).filter(function(b){ return b.textContent.trim()==='Select'; });
+    function findRow(btn) {
+      var n = btn;
+      for (var i = 0; i < 8 && n; i++) {
+        if (n.tagName === 'TR' || (n.className && /row|item|store/i.test(n.className))) return n;
+        n = n.parentElement;
+      }
+      return btn.closest('tr') || btn.parentElement;
+    }
+    var matchedById = null, matchedByName = null;
+    for (var i = 0; i < btns.length; i++) {
+      var row = findRow(btns[i]);
+      if (!row) continue;
+      // 1) try to find a store-page link with our numeric storeID in href (?sID=N or storeID=N)
+      var links = row.querySelectorAll('a[href]');
+      var hasId = false;
+      for (var j = 0; j < links.length; j++) {
+        var h = links[j].href || '';
+        if (h.indexOf('sID=${storeId}') >= 0 || h.indexOf('storeID=${storeId}') >= 0 || h.indexOf('p=${storeId}') >= 0) { hasId = true; break; }
+      }
+      if (hasId) { matchedById = btns[i]; break; }
+      // 2) text match against the store display name
+      var rowText = (row.textContent || '').trim();
+      if (rowText.indexOf(${storeNameJs}) >= 0) matchedByName = matchedByName || btns[i];
+    }
+    var chosen = matchedById || matchedByName;
+    if (!chosen) {
+      // Capture what rows we DO see so the failure dump is informative.
+      var seen = btns.slice(0, 8).map(function(b){ var r = findRow(b); return r ? (r.textContent||'').trim().replace(/\\s+/g,' ').slice(0, 200) : '(no row)'; });
+      return JSON.stringify({ matched: false, candidates: btns.length, seen: seen });
+    }
+    chosen.click();
+    return JSON.stringify({ matched: true, by: matchedById ? 'storeID' : 'storeName', candidates: btns.length });
+  })()`);
+  const sel = JSON.parse(selectResult) as { matched: boolean; by?: string; candidates: number; seen?: string[] };
+  if (!sel.matched) {
+    const dump = await dumpPageStateOnFailure(cdp, 'phase7-select-match', `none of ${sel.candidates} Select-row(s) matched storeID=${storeId} or name "${storeName}". Seen rows: ${(sel.seen ?? []).join(' | ')}`);
+    console.error(`  could not match Select row to target store — diagnostics: ${dump}`);
+    process.exit(5);
+  }
+  console.log(`  Select clicked on row matched by ${sel.by} (${sel.candidates} candidate row(s) on page)`);
   await sleep(4000);
 
   await cdp.evaluate(`(function(){ var b = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim()==='Confirm Selection'; }); if (b) b.click(); })()`);
@@ -957,17 +1006,137 @@ function reprojectWithActualShipping(passed: EnrichedItem[], actualShipping: num
   };
 }
 
-async function validateCart(cdp: CDPClient, expectedOutlay: number, estimatedShipping: number, passed: EnrichedItem[]): Promise<CartBreakdown & { reprojected: ReturnType<typeof reprojectWithActualShipping> }> {
+/**
+ * Try to read cart numbers from BL's globalcart.page row matching our store.
+ * Used as a fallback when the per-store cart page renders empty (some sellers
+ * — e.g. those without a UK domestic shipping rate — have their carts visible
+ * only in globalcart.page, classified under "International" even for UK→UK).
+ *
+ * Globalcart's row format (post-2026 BL): each store row contains lots, items,
+ * subtotal (GBP X), S&H (GBP Y or "TBD"), and an order total. We match the row
+ * by storeName containment.
+ */
+async function parseGlobalCartRow(cdp: CDPClient, storeId: number, storeName: string): Promise<{ subtotal: number; shippingPackaging: number; grandTotal: number; matchedBy: string } | null> {
+  await cdp.navigate('https://www.bricklink.com/v2/globalcart.page', 6000);
+  const storeNameJs = JSON.stringify(storeName);
+  const raw = await cdp.evaluate<string>(`(function(){
+    // The wanted-list name itself contains the storeName (e.g. "Brickandmix basket 2026-04-27"),
+    // so a plain-text match could catch the wrong row. Prefer matching by storeID via any
+    // link's href containing sID/storeID/p=N, then fall back to a storeName match that
+    // explicitly excludes elements with class names suggesting they're the wanted-list label.
+    var rows = Array.from(document.querySelectorAll('tr, .cart-row, [class*="store"], [class*="row"]'))
+      .filter(function(el){
+        var t = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+        return t.length > 0 && t.length < 600 && /GBP\\s*~?[0-9]/.test(t);
+      });
+    function rowText(el) { return (el.textContent || '').replace(/\\s+/g, ' ').trim(); }
+    function rowHasStoreId(el) {
+      var links = el.querySelectorAll('a[href]');
+      for (var i = 0; i < links.length; i++) {
+        var h = links[i].href || '';
+        if (h.indexOf('sID=${storeId}') >= 0 || h.indexOf('storeID=${storeId}') >= 0 || h.indexOf('p=${storeId}') >= 0) return true;
+      }
+      return false;
+    }
+    function rowHasStoreNameOutsideWantedList(el) {
+      // Look for an element whose text is exactly the store name (or contains it as a whole word
+      // outside any element marked as wanted-list). Cheap heuristic: store-name links/spans
+      // are usually in elements with class containing 'store' but not 'wanted'.
+      var candidates = el.querySelectorAll('a, span, strong, b, h1, h2, h3, h4, td');
+      for (var i = 0; i < candidates.length; i++) {
+        var el2 = candidates[i];
+        var c = (el2.className || '').toString().toLowerCase();
+        if (c.indexOf('wanted') >= 0) continue;
+        var txt = (el2.textContent || '').trim();
+        if (txt === ${storeNameJs}) return true;
+      }
+      return false;
+    }
+    var matchedById = null, matchedByName = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rowHasStoreId(rows[i])) { matchedById = rows[i]; break; }
+      if (rowHasStoreNameOutsideWantedList(rows[i])) matchedByName = matchedByName || rows[i];
+    }
+    var chosen = matchedById || matchedByName;
+    if (!chosen) {
+      // Capture top 5 candidate rows for diagnostic.
+      return JSON.stringify({ found: false, candidates: rows.slice(0,5).map(rowText).map(function(s){ return s.slice(0,200); }) });
+    }
+    var t = rowText(chosen);
+    var fees = [];
+    var re = /GBP\\s*~?\\s*([0-9]+(?:\\.[0-9]+)?)/g;
+    var m;
+    while ((m = re.exec(t)) !== null) fees.push(parseFloat(m[1]));
+    return JSON.stringify({ found: true, matchedBy: matchedById ? 'storeID' : 'storeName', rowText: t.slice(0, 400), fees: fees });
+  })()`);
+  const parsed = JSON.parse(raw) as { found: boolean; matchedBy?: string; rowText?: string; fees?: number[]; candidates?: string[] };
+  if (!parsed.found) {
+    if (parsed.candidates && parsed.candidates.length > 0) {
+      console.log(`  globalcart: no row matched storeID=${storeId} or exact storeName "${storeName}". Candidates seen: ${parsed.candidates.join(' | ')}`);
+    }
+    return null;
+  }
+  if (!parsed.found || !parsed.fees || parsed.fees.length === 0) return null;
+  // BL's row layout: [subtotal, S&H or "TBD" → 0, order total]. Sometimes only 2 figures appear
+  // when S&H is "TBD" (no GBP figure for it). Order total is always last.
+  const fees = parsed.fees;
+  const subtotal = fees[0];
+  let shippingPackaging = 0;
+  let grandTotal = subtotal;
+  if (fees.length >= 3) {
+    shippingPackaging = fees[1];
+    grandTotal = fees[2];
+  } else if (fees.length === 2) {
+    // S&H was "TBD" — second figure is order total ("subtotal + S&H" with TBD shown as ~).
+    grandTotal = fees[1];
+    shippingPackaging = grandTotal - subtotal;
+    if (shippingPackaging < 0) shippingPackaging = 0;
+  }
+  return { subtotal, shippingPackaging, grandTotal, matchedBy: parsed.matchedBy ?? 'unknown' };
+}
+
+async function validateCart(cdp: CDPClient, expectedOutlay: number, estimatedShipping: number, passed: EnrichedItem[], storeId: number, storeName: string): Promise<CartBreakdown & { reprojected: ReturnType<typeof reprojectWithActualShipping>; source: 'per-store' | 'globalcart' }> {
   console.log('\n[8/10] Validating cart against BL Order Summary...');
   await cdp.navigate(`https://store.bricklink.com/${STORE_SLUG}#/cart`, 6000);
 
-  const breakdown = await parseCartBreakdown(cdp, expectedOutlay, estimatedShipping);
+  let breakdown = await parseCartBreakdown(cdp, expectedOutlay, estimatedShipping);
+  let source: 'per-store' | 'globalcart' = 'per-store';
+
+  // F1: per-store cart page is empty for sellers without UK-domestic shipping config —
+  // BL classifies their carts as international and only shows them in globalcart.page.
+  // If subtotal is zero, fall back to globalcart row matching the storeName.
+  if (breakdown.subtotal === 0 && breakdown.grandTotal === 0) {
+    console.log('  per-store cart shows £0 — falling back to globalcart.page...');
+    const gc = await parseGlobalCartRow(cdp, storeId, storeName);
+    if (gc && gc.grandTotal > 0) {
+      const projectedTotal = expectedOutlay + estimatedShipping;
+      const totalDiffPct = projectedTotal > 0 ? (gc.grandTotal - projectedTotal) / projectedTotal : 0;
+      breakdown = {
+        subtotal: gc.subtotal,
+        shippingPackaging: gc.shippingPackaging,
+        insurance: 0, paymentProcessingFee: 0, additionalCharges: 0, credit: 0,
+        grandTotal: gc.grandTotal,
+        projectedOutlay: expectedOutlay,
+        estimatedShipping,
+        projectedTotal,
+        totalDiffPct: Number(totalDiffPct.toFixed(4)),
+        passed: Math.abs(totalDiffPct) <= CART_VALIDATION_TOLERANCE,
+        actualCartSubtotal: gc.subtotal,
+      };
+      source = 'globalcart';
+      console.log(`  (globalcart fallback succeeded — matched by ${gc.matchedBy})`);
+    } else {
+      console.log(`  globalcart fallback did NOT find a row matching "${storeName}" — cart may genuinely be empty.`);
+    }
+  }
+
   const reprojected = reprojectWithActualShipping(passed, breakdown.shippingPackaging || estimatedShipping);
 
   // Original projection (with estimated shipping) for delta line.
   const originalProj = reprojectWithActualShipping(passed, estimatedShipping);
 
   const fmt = (n: number) => '£' + n.toFixed(2);
+  console.log(`  Source:                 ${source === 'globalcart' ? 'BL global cart (fallback)' : 'per-store cart'}`);
   console.log(`  Subtotal:               ${fmt(breakdown.subtotal)}`);
   console.log(`  Shipping & Packaging:   ${fmt(breakdown.shippingPackaging)}  (estimate was ${fmt(estimatedShipping)}${breakdown.shippingPackaging !== estimatedShipping ? `, ${breakdown.shippingPackaging > estimatedShipping ? '+' : ''}${(breakdown.shippingPackaging - estimatedShipping).toFixed(2)}` : ''})`);
   if (breakdown.insurance > 0) console.log(`  Insurance:              ${fmt(breakdown.insurance)}  ⚠ not modelled`);
@@ -982,14 +1151,14 @@ async function validateCart(cdp: CDPClient, expectedOutlay: number, estimatedShi
   console.log(`  Re-projected at actual: net ${fmt(reprojected.net)}  margin ${reprojected.margin.toFixed(1)}%  ROI ${reprojected.roi.toFixed(1)}%`);
   console.log(`                          (was ${fmt(originalProj.net)} / ${originalProj.margin.toFixed(1)}% / ${originalProj.roi.toFixed(1)}% with £${estimatedShipping.toFixed(2)} estimate)`);
 
-  return { ...breakdown, reprojected };
+  return { ...breakdown, reprojected, source };
 }
 
 // ---------------------------------------------------------------------------
 // Phase 10: Persist
 // ---------------------------------------------------------------------------
 
-type CartValidation = (CartBreakdown & { reprojected: ReturnType<typeof reprojectWithActualShipping> }) | null;
+type CartValidation = (CartBreakdown & { reprojected: ReturnType<typeof reprojectWithActualShipping>; source: 'per-store' | 'globalcart' }) | null;
 
 async function persist(meta: { storeId: number; storeName: string; country: string }, inputs: RunInputs, passed: EnrichedItem[], reportText: string, cartValidation: CartValidation, blOrderId: string | null): Promise<{ arbitrageId: string | null; purchasesId: string | null }> {
   console.log('\n[10/10] Persisting to arbitrage_purchases...');
@@ -1149,12 +1318,12 @@ async function main() {
 
   // Phase 7b: cart build (skipped on resume-from-cart).
   if (!RESUME_FROM_CART) {
-    await buildCart(cdp, wantedMoreID, meta.storeId);
+    await buildCart(cdp, wantedMoreID, meta.storeId, meta.storeName);
   }
 
   // Phase 8: validate cart against BL Order Summary (Grand Total).
   const expectedOutlay = passed.reduce((s, o) => s + o.unitPriceGBP * o.invQty, 0);
-  const cartValidation = await validateCart(cdp, expectedOutlay, shipping, passed);
+  const cartValidation = await validateCart(cdp, expectedOutlay, shipping, passed, meta.storeId, meta.storeName);
   if (!cartValidation.passed) {
     if (AUTO_YES) {
       console.log(`  ⚠ over tolerance but --yes set — continuing.`);
