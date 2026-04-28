@@ -27,7 +27,10 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => { 
 const DRY_RUN = argv['dry-run'] === 'true';
 const STORE_OVERRIDE = argv['store-slug']; // optional: force a specific store (skip queue picking)
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
-const SMTP_TO = argv['email-to'] ?? process.env.PROACTIVE_EMAIL_TO ?? 'chrishadley1983@gmail.com';
+// Resend test-mode accounts can only send to verified domain addresses; default to the
+// business mailbox tied to the verified hadleybricks.co.uk domain. Override via
+// PROACTIVE_EMAIL_TO env var or --email-to= flag.
+const SMTP_TO = argv['email-to'] ?? process.env.PROACTIVE_EMAIL_TO ?? 'chris@hadleybricks.co.uk';
 
 interface ScreenResult {
   cacheCovered: number;
