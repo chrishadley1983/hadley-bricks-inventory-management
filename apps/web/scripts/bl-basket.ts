@@ -26,6 +26,9 @@
  *   --api-delay-ms=<n>      Delay between BL API price-guide calls. Default 250.
  *   --min-bargain-bombs=<n>   Skip API enrichment if cache-screened bargain-bomb count is <N. Default 0 (off).
  *   --max-stale-ratio=<x>     Skip API if median (ask÷UK 6MA) ≥ X. Default 1.0 (skip stores priced at-or-above market).
+ *   --checkpoint-tuples=<n>   Mid-API-loop check every N tuples. Default 25 (= 50 API calls). 0 disables.
+ *   --checkpoint-max-ratio=<x>  Abort API loop if mid-loop median ratio ≥ X. Default 1.0.
+ *   --checkpoint-min-data=<n>   Mid-loop check needs ≥ N ratio data points to judge. Default 15.
  *   --inventory-ttl-days=<n>  Reuse tmp/stores/<slug>/inventory.json if <N days old. Default 7.
  *   --force-rescrape        Force a fresh scrape even when cached inventory is fresh.
  *   --skip-cart             Stop after report (no cart build).
@@ -77,6 +80,14 @@ const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
 const MIN_BARGAIN_BOMBS = parseInt(argv['min-bargain-bombs'] ?? '0', 10);
 const MAX_STALE_RATIO = parseFloat(argv['max-stale-ratio'] ?? '1.0');
+// Mid-loop checkpoint: after every N freshly-fetched tuples, recompute median ask÷UK 6MA
+// across cache + just-fetched entries. If median exceeds CHECKPOINT_MAX_RATIO, the loop pauses
+// (interactive) or auto-aborts (--yes). Catches stores that the pre-loop screener misclassified
+// as insufficient_data (low cache coverage), then turn out to be priced-above-market once we
+// start fetching. Default checkpoint every 25 tuples = 50 API calls.
+const CHECKPOINT_TUPLES = parseInt(argv['checkpoint-tuples'] ?? '25', 10);
+const CHECKPOINT_MAX_RATIO = parseFloat(argv['checkpoint-max-ratio'] ?? '1.0');
+const CHECKPOINT_MIN_DATA = parseInt(argv['checkpoint-min-data'] ?? '15', 10); // need >=15 ratio points to judge
 const INVENTORY_TTL_DAYS = parseFloat(argv['inventory-ttl-days'] ?? '7');
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const SKIP_CART = argv['skip-cart'] === 'true';
@@ -586,10 +597,11 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
   }
   console.log(`  need to fetch: ${needed.size} tuples from BL API`);
   let calls = 0;
+  let tuplesFetched = 0;
   // Now also tracks null-result rows (price=null, sold=0, stock=actual) so they cache
   // and don't re-cost the API on subsequent runs (was C1 in the hardening plan).
   const forUpsert: Array<{ partNumber: string; partType: string; colourId: number; condition: ItemCondition; price: number | null; stockQty: number; soldQty: number }> = [];
-  for (const [key, t] of needed) {
+  fetchLoop: for (const [key, t] of needed) {
     if (calls + 2 > API_BUDGET) { console.warn(`  API budget reached (${calls}/${API_BUDGET})`); break; }
     try {
       await sleep(API_DELAY_MS);
@@ -598,6 +610,7 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
       await sleep(API_DELAY_MS);
       const stock: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: t.condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK' });
       calls++;
+      tuplesFetched++;
       const avg = parseFloat(sold.avg_price);
       const soldQty = sold.total_quantity ?? 0;
       const stockQty = stock.total_quantity ?? 0;
@@ -611,6 +624,29 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
         forUpsert.push({ partNumber: t.itemNo, partType, colourId: t.colourId, condition: t.condition, price: null, stockQty, soldQty: 0 });
       }
       if (calls % 20 === 0) console.log(`  fetched ${calls} calls (${Math.ceil(calls / 2)}/${needed.size} tuples)`);
+
+      // Mid-loop checkpoint: every CHECKPOINT_TUPLES freshly-fetched tuples, recompute
+      // median ratio across all data so far. If priced above market, stop spending API.
+      if (CHECKPOINT_TUPLES > 0 && tuplesFetched > 0 && tuplesFetched % CHECKPOINT_TUPLES === 0) {
+        const cp = staleScreen(items, out);
+        if (cp.cacheCovered >= CHECKPOINT_MIN_DATA && cp.medianRatio !== null) {
+          const above = cp.medianRatio >= CHECKPOINT_MAX_RATIO;
+          console.log(`  checkpoint after ${tuplesFetched} fresh tuples: median=${cp.medianRatio.toFixed(2)} P25/P75=${cp.p25?.toFixed(2)}/${cp.p75?.toFixed(2)} bombs=${cp.bargainBombs}${above ? '  ⚠ ABOVE MARKET' : '  ✓ ok'}`);
+          if (above) {
+            if (AUTO_YES) {
+              console.warn(`  store priced above market (median ${cp.medianRatio.toFixed(2)} ≥ ${CHECKPOINT_MAX_RATIO}) — auto-aborting API loop (${calls} calls used, ${needed.size - tuplesFetched} tuples skipped)`);
+              break fetchLoop;
+            } else {
+              const resp = (await rl.question(`\n⚠ checkpoint: median ratio ${cp.medianRatio.toFixed(2)} ≥ ${CHECKPOINT_MAX_RATIO}. Continue API spend? (y/N): `)).trim().toLowerCase();
+              if (resp !== 'y' && resp !== 'yes') {
+                console.log(`  user aborted — stopping API loop (${calls} calls used)`);
+                break fetchLoop;
+              }
+              console.log(`  user override — continuing.`);
+            }
+          }
+        }
+      }
     } catch (err) {
       if (err instanceof BrickLinkApiError && err.code === 429) { console.error('  rate limit, stopping'); break; }
       out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: 0, source: 'none' });
