@@ -27,22 +27,45 @@ const MIN_DELAY_SEC = parseInt(argv['min-delay-sec'] ?? '120', 10);
 const MAX_DELAY_SEC = parseInt(argv['max-delay-sec'] ?? '300', 10);
 const DRY_RUN = argv['dry-run'] === 'true';
 const FULL_ENRICH = argv['full-enrich'] === 'true';
+// Session-level API budget. After each iteration we parse the bl-basket subprocess stdout for
+// "fetched N calls" and accumulate. Stops the loop when cumulative reaches the cap, so a daily
+// cron can use most of the 5K/day BL allowance without exhausting it. 0 = no session cap.
+const SESSION_API_BUDGET = parseInt(argv['session-api-budget'] ?? '0', 10);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Parse stdout from a bl-basket subprocess and return the highest "fetched N calls" we saw. */
+function extractCallsUsed(stdout: string): number {
+  let max = 0;
+  for (const line of stdout.split('\n')) {
+    const m = line.match(/fetched\s+(\d+)\s+calls/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  }
+  return max;
+}
+
 async function main() {
   console.log(`==== BL Proactive Batch ====`);
-  console.log(`Count:        ${COUNT}`);
+  console.log(`Count:           ${COUNT}`);
   console.log(`Inter-run delay: ${MIN_DELAY_SEC}-${MAX_DELAY_SEC}s random`);
-  console.log(`Dry-run:      ${DRY_RUN}\n`);
+  console.log(`Dry-run:         ${DRY_RUN}`);
+  console.log(`Full-enrich:     ${FULL_ENRICH}`);
+  console.log(`Session budget:  ${SESSION_API_BUDGET || '(no cap)'}\n`);
 
   const startedAt = Date.now();
-  let done = 0, errors = 0, queueEmpty = false;
+  let done = 0, errors = 0, queueEmpty = false, sessionCalls = 0;
 
   for (let i = 0; i < COUNT; i++) {
     if (queueEmpty) break;
+    if (SESSION_API_BUDGET > 0 && sessionCalls >= SESSION_API_BUDGET) {
+      console.log(`[session] budget cap reached (${sessionCalls}/${SESSION_API_BUDGET}) — stopping`);
+      break;
+    }
     const iterStart = Date.now();
-    console.log(`\n[${i + 1}/${COUNT}] starting at ${new Date().toISOString()} ...`);
+    console.log(`\n[${i + 1}/${COUNT}] starting at ${new Date().toISOString()} ${SESSION_API_BUDGET ? `(session calls: ${sessionCalls}/${SESSION_API_BUDGET})` : ''}...`);
 
     const args = ['tsx', 'scripts/bl-proactive-daily.ts'];
     if (DRY_RUN) args.push('--dry-run');
@@ -65,8 +88,12 @@ async function main() {
 
     // Pick a few signal lines from stdout so the meta log is useful.
     const stdout = proc.stdout ?? '';
-    const summaryLines = stdout.split('\n').filter((l) => /Picked from queue|Verdict|Email sent|queue empty|skipped/i.test(l)).map((l) => '   ' + l.trim());
+    const summaryLines = stdout.split('\n').filter((l) => /Picked from queue|Verdict|Email sent|queue empty|skipped|fetched.*tuples\)|API budget reached|checkpoint after/i.test(l)).map((l) => '   ' + l.trim());
     console.log(summaryLines.join('\n') || '   (no summary lines found in stdout)');
+
+    // Account for API calls used in this iteration.
+    const callsUsed = extractCallsUsed(stdout);
+    sessionCalls += callsUsed;
 
     if (/queue empty/i.test(stdout)) {
       console.log(`[${i + 1}/${COUNT}] queue exhausted — stopping early`);
@@ -77,7 +104,7 @@ async function main() {
 
     done++;
     const iterMs = Date.now() - iterStart;
-    console.log(`[${i + 1}/${COUNT}] done in ${(iterMs / 1000).toFixed(0)}s`);
+    console.log(`[${i + 1}/${COUNT}] done in ${(iterMs / 1000).toFixed(0)}s, +${callsUsed} API calls (session total: ${sessionCalls})`);
 
     // Inter-run delay — randomised within configured range, only if not the last iteration.
     if (i < COUNT - 1) {
@@ -93,6 +120,7 @@ async function main() {
   console.log(`Errors:               ${errors}`);
   console.log(`Total elapsed:        ${elapsedMin} min`);
   console.log(`Queue empty:          ${queueEmpty}`);
+  console.log(`Session API calls:    ${sessionCalls}${SESSION_API_BUDGET ? ` / ${SESSION_API_BUDGET}` : ''}`);
 
   // Final queue snapshot
   const queuePath = path.resolve(__dirname, '../../../tmp/bl-store-queue.json');
