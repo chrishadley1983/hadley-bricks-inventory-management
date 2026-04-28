@@ -125,26 +125,37 @@ export function markScreened(queue: Queue, slug: string, verdict: ScreenVerdict,
 /**
  * Composite "staleness prior" for a never-screened store.
  *
- * Higher score = pick sooner. Designed so a stale-but-established UK store with old activity
- * outranks a brand-new tiny one, but the picker still gets to brand-new stores eventually.
+ * Higher score = pick sooner. Designed so dormant-but-established UK stores
+ * outrank tiny brand-new ones, but the picker still serves the long tail.
  *
  * Components (sum):
- *   +1 to +5  per year since lastActivityAt (capped at 5 — no lastActivityAt = +0)
- *   +1.0      if lotsCount >= 1000
- *   +0.5      if lotsCount >= 500
- *   +0.5      if feedbackCount >= 100
- *   +0.5      if hasUkDomesticShipping !== false
- *   −2.0      if hasUkDomesticShipping === false (BL classifies as international)
- *   ±0.0      no metadata at all → score 0, ranked equally with others
+ *   Activity tier (most signal — dormant stores have guaranteed-stale prices):
+ *     +5.0  if lastActivityAt > 365 days ago    (DORMANT — biggest win)
+ *     +3.0  if lastActivityAt 90-365 days ago   (semi-dormant)
+ *     +0.0  if lastActivityAt < 90 days ago     (active — could be either, screen will tell)
+ *
+ *   Inventory depth (more lots = more chances of pricing drift in the tail):
+ *     +1.0  if lotsCount >= 1000
+ *     +0.5  if lotsCount 500-999
+ *
+ *   Established seller (low risk, has track record):
+ *     +0.5  if feedbackCount >= 100
+ *
+ *   UK shipping config (avoid international-only stores — friction at checkout):
+ *     +0.5  if hasUkDomesticShipping === true
+ *     -2.0  if hasUkDomesticShipping === false
+ *
+ *   No metadata at all → score 0 (still picked, just last in tier).
  */
 export function stalenessScore(entry: QueueEntry, now: Date = new Date()): number {
   const m = entry.blMetadata;
   if (!m) return 0;
   let score = 0;
   if (m.lastActivityAt) {
-    const ageMs = now.getTime() - new Date(m.lastActivityAt).getTime();
-    const years = Math.max(0, ageMs / (365 * 86400_000));
-    score += Math.min(5, years);
+    const ageDays = (now.getTime() - new Date(m.lastActivityAt).getTime()) / 86400_000;
+    if (ageDays > 365) score += 5.0;
+    else if (ageDays > 90) score += 3.0;
+    // active stores (< 90d): no boost; not penalised either
   }
   if (m.lotsCount && m.lotsCount >= 1000) score += 1.0;
   else if (m.lotsCount && m.lotsCount >= 500) score += 0.5;
