@@ -24,6 +24,8 @@
  *   --max-pages=<n>         Max AJAX pages per item-type. Default 50, hard-capped at 200.
  *   --page-delay-ms=<n>     Delay between AJAX pages. Default 3000 (floor).
  *   --api-delay-ms=<n>      Delay between BL API price-guide calls. Default 250.
+ *   --min-bargain-bombs=<n>   Skip API enrichment if cache-screened bargain-bomb count is <N. Default 0 (off).
+ *   --max-stale-ratio=<x>     Skip API if median (ask÷UK 6MA) ≥ X. Default 1.0 (skip stores priced at-or-above market).
  *   --inventory-ttl-days=<n>  Reuse tmp/stores/<slug>/inventory.json if <N days old. Default 7.
  *   --force-rescrape        Force a fresh scrape even when cached inventory is fresh.
  *   --skip-cart             Stop after report (no cart build).
@@ -73,6 +75,8 @@ const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
+const MIN_BARGAIN_BOMBS = parseInt(argv['min-bargain-bombs'] ?? '0', 10);
+const MAX_STALE_RATIO = parseFloat(argv['max-stale-ratio'] ?? '1.0');
 const INVENTORY_TTL_DAYS = parseFloat(argv['inventory-ttl-days'] ?? '7');
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const SKIP_CART = argv['skip-cart'] === 'true';
@@ -217,6 +221,71 @@ function hasDamageNote(desc: string | null | undefined): { flag: boolean; keywor
     if (!negated) return { flag: true, keyword: words[i] };
   }
   return { flag: false };
+}
+
+/**
+ * Stale-pricing screen result. Identifies whether a store's pricing is stale-static (good for arbitrage)
+ * or dynamic/at-market (waste of API budget). See PR #351 — context: looking for stores where
+ * individual high-STR parts have drifted out of line, indicating the seller hasn't repriced recently.
+ */
+interface StaleScreenResult {
+  cacheCovered: number;
+  medianRatio: number | null;
+  p25: number | null;
+  p75: number | null;
+  bargainBombs: number;
+  verdict: 'promising' | 'low_priority' | 'priced_above_market' | 'insufficient_data';
+}
+
+/**
+ * Compute stale-pricing signal from items + cache, no API calls.
+ *
+ * Verdicts:
+ *   - insufficient_data: <30 items in cache → can't reliably judge, proceed to enrichment
+ *   - priced_above_market: median ask/6MA >= MAX_STALE_RATIO (default 1.0) → SKIP, store is dynamic/aggressive
+ *   - promising: enough bargain bombs (high-STR + high-margin + undamaged) → enrich the rest
+ *   - low_priority: median below threshold but no bombs → enrich anyway, just deprioritise in queue
+ */
+function staleScreen(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: number | null; ukSoldQty: number; ukStockQty: number; source: string }>): StaleScreenResult {
+  const ratios: number[] = [];
+  let bargainBombs = 0;
+  for (const it of items) {
+    if (it.unitPriceGBP < MIN_ASK) continue;
+    if (hasDamageNote(it.description).flag) continue;
+    const cond: ItemCondition = it.invNew === 'New' ? 'N' : 'U';
+    const key = `${it.itemType}:${it.itemNo}:${it.colourId}:${cond}`;
+    const entry = priceMap.get(key);
+    if (!entry?.ukSoldAvg) continue;
+
+    const ratio = it.unitPriceGBP / entry.ukSoldAvg;
+    ratios.push(ratio);
+
+    const sellThru = entry.ukStockQty > 0 ? entry.ukSoldQty / entry.ukStockQty : 0;
+    const multiplier = bricqerMultiplier(cond, sellThru);
+    const listPrice = entry.ukSoldAvg * multiplier;
+    if (listPrice <= 0) continue;
+    if (sellThru >= 0.50) {
+      const netPerUnit = listPrice * (1 - VAR_FEE_PCT) - it.unitPriceGBP; // ignoring postage allocation here — screener heuristic
+      const margin = netPerUnit / listPrice;
+      if (margin >= 0.35) bargainBombs++;
+    }
+  }
+
+  const cacheCovered = ratios.length;
+  if (cacheCovered === 0) return { cacheCovered, medianRatio: null, p25: null, p75: null, bargainBombs, verdict: 'insufficient_data' };
+
+  ratios.sort((a, b) => a - b);
+  const medianRatio = ratios[Math.floor(ratios.length / 2)];
+  const p25 = ratios[Math.floor(ratios.length * 0.25)];
+  const p75 = ratios[Math.floor(ratios.length * 0.75)];
+
+  let verdict: StaleScreenResult['verdict'];
+  if (cacheCovered < 30) verdict = 'insufficient_data';
+  else if (medianRatio >= MAX_STALE_RATIO) verdict = 'priced_above_market';
+  else if (bargainBombs >= 5) verdict = 'promising';
+  else verdict = 'low_priority';
+
+  return { cacheCovered, medianRatio, p25, p75, bargainBombs, verdict };
 }
 
 function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
@@ -463,7 +532,36 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
     }
   }
 
-  // Missing → fetch from BL API (UK sold + UK stock).
+  // Phase 2.5: Stale-pricing screen (cache-only — no API calls).
+  // For items where we already have UK 6-month avg in cache, compare seller's ask to UK avg.
+  // Stale-priced stores cluster well below market; dynamic / aggressive pricers cluster at-or-above.
+  // We're hunting for stores priced below 6MA where individual high-STR parts have drifted out of
+  // line — those are the arbitrage opportunities the workflow targets. See PR #351.
+  const screen = staleScreen(items, out);
+  console.log(`\n[2.5/10] Stale-pricing screen (cache-only):`);
+  console.log(`  Items with cached UK 6MA: ${screen.cacheCovered}`);
+  if (screen.cacheCovered >= 30) {
+    console.log(`  Median ask ÷ UK 6MA:     ${screen.medianRatio?.toFixed(2) ?? 'n/a'}    (P25/P75: ${screen.p25?.toFixed(2) ?? '-'} / ${screen.p75?.toFixed(2) ?? '-'})`);
+    console.log(`  Bargain bombs found:     ${screen.bargainBombs}    (high-STR · margin≥35% · undamaged)`);
+    console.log(`  Verdict:                 ${screen.verdict.toUpperCase()}`);
+  } else {
+    console.log(`  Insufficient cache coverage for a reliable verdict — proceeding to enrichment.`);
+  }
+  // Save screen result so the proactive runner can read it without re-running.
+  const screenFile = path.join(OUT_DIR, `screen-${new Date().toISOString().slice(0, 10)}.json`);
+  writeJson(screenFile, { ...screen, scrapedAt: new Date().toISOString(), inventoryCount: items.length });
+
+  // Decide whether to skip API enrichment based on screen + thresholds.
+  let skipApi = false;
+  if (screen.verdict === 'priced_above_market' && screen.cacheCovered >= 30) {
+    console.log(`  Store priced at-or-above market — skipping API enrichment to preserve budget.`);
+    skipApi = true;
+  } else if (MIN_BARGAIN_BOMBS > 0 && screen.cacheCovered >= 30 && screen.bargainBombs < MIN_BARGAIN_BOMBS) {
+    console.log(`  Bargain bombs ${screen.bargainBombs} < threshold ${MIN_BARGAIN_BOMBS} — skipping API enrichment.`);
+    skipApi = true;
+  }
+
+  // Missing → fetch from BL API (UK sold + UK stock), unless screen says skip.
   // Apply --min-ask BEFORE enrichment so we don't burn API budget on items the score phase
   // would reject anyway. (Pre-this-change: min-ask was checked in scoreAll, after we'd
   // already paid the API cost for every penny lot. Big saving on large stores with long tails.)
@@ -480,7 +578,11 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
   }
 
   if (droppedByMinAsk > 0 || droppedByDamage > 0) {
-    console.log(`  pre-enrichment filter: ${droppedByMinAsk} below min-ask £${MIN_ASK.toFixed(2)}, ${droppedByDamage} flagged as damaged`);
+    console.log(`\n  pre-enrichment filter: ${droppedByMinAsk} below min-ask £${MIN_ASK.toFixed(2)}, ${droppedByDamage} flagged as damaged`);
+  }
+  if (skipApi) {
+    console.log(`  Skipping API loop — proceeding to score with cache-only data.`);
+    return out;
   }
   console.log(`  need to fetch: ${needed.size} tuples from BL API`);
   let calls = 0;
