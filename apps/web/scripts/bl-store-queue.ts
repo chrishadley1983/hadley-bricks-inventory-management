@@ -42,6 +42,17 @@ export interface QueueEntry {
   skipUntil?: string | null;
   /** Number of times screened. */
   screenCount: number;
+  /** BL profile metadata captured during seed/enrich for staleness prior in pickNext. */
+  blMetadata?: {
+    lotsCount?: number;
+    feedbackCount?: number;
+    /** ISO timestamp of seller's last visible activity (last login, last listing change). null = unknown. */
+    lastActivityAt?: string | null;
+    /** True if seller has UK domestic shipping configured. */
+    hasUkDomesticShipping?: boolean | null;
+    /** ISO timestamp when this metadata was captured. */
+    capturedAt?: string;
+  };
 }
 
 export interface Queue {
@@ -112,26 +123,65 @@ export function markScreened(queue: Queue, slug: string, verdict: ScreenVerdict,
 }
 
 /**
- * Pick the next store to screen. Priority:
- *   1. Never-screened stores (oldest addedAt first)
- *   2. Stores past their skipUntil, oldest lastScreenedAt first
- *   3. Stores never-screened from buy-page > seller-list > manual (fresh discovery wins)
+ * Composite "staleness prior" for a never-screened store.
+ *
+ * Higher score = pick sooner. Designed so a stale-but-established UK store with old activity
+ * outranks a brand-new tiny one, but the picker still gets to brand-new stores eventually.
+ *
+ * Components (sum):
+ *   +1 to +5  per year since lastActivityAt (capped at 5 — no lastActivityAt = +0)
+ *   +1.0      if lotsCount >= 1000
+ *   +0.5      if lotsCount >= 500
+ *   +0.5      if feedbackCount >= 100
+ *   +0.5      if hasUkDomesticShipping !== false
+ *   −2.0      if hasUkDomesticShipping === false (BL classifies as international)
+ *   ±0.0      no metadata at all → score 0, ranked equally with others
+ */
+export function stalenessScore(entry: QueueEntry, now: Date = new Date()): number {
+  const m = entry.blMetadata;
+  if (!m) return 0;
+  let score = 0;
+  if (m.lastActivityAt) {
+    const ageMs = now.getTime() - new Date(m.lastActivityAt).getTime();
+    const years = Math.max(0, ageMs / (365 * 86400_000));
+    score += Math.min(5, years);
+  }
+  if (m.lotsCount && m.lotsCount >= 1000) score += 1.0;
+  else if (m.lotsCount && m.lotsCount >= 500) score += 0.5;
+  if (m.feedbackCount && m.feedbackCount >= 100) score += 0.5;
+  if (m.hasUkDomesticShipping === false) score -= 2.0;
+  else if (m.hasUkDomesticShipping === true) score += 0.5;
+  return score;
+}
+
+/**
+ * Pick the next store to screen.
+ *
+ * Tier 1 (never-screened): rank by stalenessScore(entry) descending; tiebreak by oldest addedAt.
+ * Tier 2 (past skipUntil):  oldest lastScreenedAt first.
  * Returns null if nothing eligible.
  */
 export function pickNext(queue: Queue, opts: { now?: Date } = {}): QueueEntry | null {
-  const now = (opts.now ?? new Date()).toISOString();
+  const now = opts.now ?? new Date();
+  const nowIso = now.toISOString();
   const eligible = queue.stores.filter((s) => {
     if (s.lastScreenedAt === null) return true;
-    return !s.skipUntil || s.skipUntil <= now;
+    return !s.skipUntil || s.skipUntil <= nowIso;
   });
   if (eligible.length === 0) return null;
-  // Never-screened first.
+
+  // Tier 1: never-screened. Sort by staleness score desc, then by addedAt asc.
   const fresh = eligible.filter((s) => s.lastScreenedAt === null);
   if (fresh.length > 0) {
-    fresh.sort((a, b) => a.addedAt.localeCompare(b.addedAt));
+    fresh.sort((a, b) => {
+      const sa = stalenessScore(a, now), sb = stalenessScore(b, now);
+      if (sa !== sb) return sb - sa;
+      return a.addedAt.localeCompare(b.addedAt);
+    });
     return fresh[0];
   }
-  // Otherwise oldest screened first.
+
+  // Tier 2: oldest screened first.
   const screened = eligible.slice().sort((a, b) => (a.lastScreenedAt ?? '').localeCompare(b.lastScreenedAt ?? ''));
   return screened[0];
 }
