@@ -972,16 +972,54 @@ async function buildCart(cdp: CDPClient, wantedMoreID: number, storeId: number, 
       var seen = btns.slice(0, 8).map(function(b){ var r = findRow(b); return r ? (r.textContent||'').trim().replace(/\\s+/g,' ').slice(0, 200) : '(no row)'; });
       return JSON.stringify({ matched: false, candidates: btns.length, seen: seen });
     }
+    // Harvest the slugs of all candidate rows on the page — these are stores that stock
+    // parts on our wanted list, so they're prime candidates for the discovery queue.
+    var harvested = [];
+    for (var k = 0; k < btns.length; k++) {
+      var row2 = findRow(btns[k]);
+      if (!row2) continue;
+      var rowLinks = row2.querySelectorAll('a[href]');
+      for (var l = 0; l < rowLinks.length; l++) {
+        var href = rowLinks[l].href || '';
+        // Match BL store-page URLs: store.bricklink.com/<slug> (with optional ?...)
+        var m = href.match(/store\\.bricklink\\.com\\/([A-Za-z0-9_-]+)(?:[\\/?#]|$)/);
+        if (m && m[1] && m[1].length > 2 && m[1].toLowerCase() !== 'storefront.asp') {
+          harvested.push(m[1]);
+          break;
+        }
+      }
+    }
     chosen.click();
-    return JSON.stringify({ matched: true, by: matchedById ? 'storeID' : 'storeName', candidates: btns.length });
+    return JSON.stringify({ matched: true, by: matchedById ? 'storeID' : 'storeName', candidates: btns.length, harvestedSlugs: [...new Set(harvested)] });
   })()`);
-  const sel = JSON.parse(selectResult) as { matched: boolean; by?: string; candidates: number; seen?: string[] };
+  const sel = JSON.parse(selectResult) as { matched: boolean; by?: string; candidates: number; seen?: string[]; harvestedSlugs?: string[] };
   if (!sel.matched) {
     const dump = await dumpPageStateOnFailure(cdp, 'phase7-select-match', `none of ${sel.candidates} Select-row(s) matched storeID=${storeId} or name "${storeName}". Seen rows: ${(sel.seen ?? []).join(' | ')}`);
     console.error(`  could not match Select row to target store — diagnostics: ${dump}`);
     process.exit(5);
   }
   console.log(`  Select clicked on row matched by ${sel.by} (${sel.candidates} candidate row(s) on page)`);
+  // Persist harvested slugs to the discovery queue so the proactive runner has fresh candidates.
+  if (sel.harvestedSlugs && sel.harvestedSlugs.length > 0) {
+    try {
+      // Lazy require: bl-store-queue is a tsx-compiled module, fine to import at runtime.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const queueMod = require('./bl-store-queue') as typeof import('./bl-store-queue');
+      const q = queueMod.loadQueue();
+      let added = 0;
+      for (const harvestedSlug of sel.harvestedSlugs) {
+        // Skip the target store (we're already screening it).
+        if (harvestedSlug.toLowerCase() === STORE_SLUG.toLowerCase()) continue;
+        if (queueMod.addCandidate(q, harvestedSlug, 'buy-page')) added++;
+      }
+      if (added > 0) {
+        queueMod.saveQueue(q);
+        console.log(`  Discovery queue: harvested ${added} new candidate store(s) from buy-page`);
+      }
+    } catch (e) {
+      console.warn(`  warn: queue harvest failed (${(e as Error).message}) — non-fatal`);
+    }
+  }
   await sleep(4000);
 
   await cdp.evaluate(`(function(){ var b = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim()==='Confirm Selection'; }); if (b) b.click(); })()`);
