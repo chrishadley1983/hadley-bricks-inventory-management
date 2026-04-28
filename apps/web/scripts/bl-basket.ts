@@ -463,9 +463,15 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
     }
   }
 
-  // Missing → fetch from BL API (UK sold + UK stock)
+  // Missing → fetch from BL API (UK sold + UK stock).
+  // Apply --min-ask BEFORE enrichment so we don't burn API budget on items the score phase
+  // would reject anyway. (Pre-this-change: min-ask was checked in scoreAll, after we'd
+  // already paid the API cost for every penny lot. Big saving on large stores with long tails.)
   const needed = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; condition: ItemCondition; itemName: string }>();
+  let droppedByMinAsk = 0, droppedByDamage = 0;
   for (const it of items) {
+    if (it.unitPriceGBP < MIN_ASK) { droppedByMinAsk++; continue; }
+    if (hasDamageNote(it.description).flag) { droppedByDamage++; continue; }
     const cond: ItemCondition = it.invNew === 'New' ? 'N' : 'U';
     const key = `${it.itemType}:${it.itemNo}:${it.colourId}:${cond}`;
     if (out.has(key)) continue;
@@ -473,6 +479,9 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
     if (!needed.has(key)) needed.set(key, { itemType: it.itemType, itemNo: it.itemNo, colourId: it.colourId, condition: cond, itemName: it.itemName });
   }
 
+  if (droppedByMinAsk > 0 || droppedByDamage > 0) {
+    console.log(`  pre-enrichment filter: ${droppedByMinAsk} below min-ask £${MIN_ASK.toFixed(2)}, ${droppedByDamage} flagged as damaged`);
+  }
   console.log(`  need to fetch: ${needed.size} tuples from BL API`);
   let calls = 0;
   // Now also tracks null-result rows (price=null, sold=0, stock=actual) so they cache
