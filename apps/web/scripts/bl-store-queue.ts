@@ -110,40 +110,56 @@ export function markScreened(queue: Queue, slug: string, verdict: ScreenVerdict,
   if (opts.storeName && !entry.storeName) entry.storeName = opts.storeName;
   if (opts.storeId && !entry.storeId) entry.storeId = opts.storeId;
   if (opts.country && !entry.country) entry.country = opts.country;
-  // Set skipUntil based on verdict so the picker doesn't immediately re-pick the same store.
+  // Set skipUntil based on verdict so the picker doesn't immediately re-pick.
+  // Insufficient_data window is now adaptive to cache coverage: stores with very low overlap
+  // (rare inventory we don't see often) are unlikely to flip soon, so defer them longer.
   const now = Date.now();
   const days = (n: number) => new Date(now + n * 86400_000).toISOString();
   switch (verdict) {
     case 'priced_above_market': entry.skipUntil = days(60); break;
     case 'low_priority':        entry.skipUntil = days(30); break;
-    case 'promising':           entry.skipUntil = days(7);  break;  // re-screen weekly to refresh STR/avg
-    case 'insufficient_data':   entry.skipUntil = days(14); break;
+    case 'promising':           entry.skipUntil = days(7);  break;
+    case 'insufficient_data': {
+      const cc = summary?.cacheCovered ?? 0;
+      if (cc < 10)      entry.skipUntil = days(90);   // rare-inventory store, won't flip soon
+      else if (cc < 20) entry.skipUntil = days(45);   // borderline — give cache time to grow
+      else              entry.skipUntil = days(14);   // close to threshold — re-check sooner
+      break;
+    }
     case 'errored':             entry.skipUntil = days(3);  break;
   }
 }
 
 /**
- * Composite "staleness prior" for a never-screened store.
+ * Composite "pick prior" for queue ordering.
  *
- * Higher score = pick sooner. Designed so dormant-but-established UK stores
- * outrank tiny brand-new ones, but the picker still serves the long tail.
+ * Higher score = pick sooner. Tuned 2026-04-28 after a 41-store empirical run:
+ * dormant stores returned 0/26 promising (mostly insufficient_data due to thin
+ * cache overlap, or dormant-PREMIUM with prices above market). The two known
+ * promising stores were ACTIVE, not dormant. So dormancy got dropped as a
+ * positive signal, and a cache-density prior was added to favour stores whose
+ * previous screen had real overlap (= they stock the popular parts our cache
+ * knows about).
  *
  * Components (sum):
- *   Activity tier (most signal — dormant stores have guaranteed-stale prices):
- *     +5.0  if lastActivityAt > 365 days ago    (DORMANT — biggest win)
- *     +3.0  if lastActivityAt 90-365 days ago   (semi-dormant)
- *     +0.0  if lastActivityAt < 90 days ago     (active — could be either, screen will tell)
- *
  *   Inventory depth (more lots = more chances of pricing drift in the tail):
- *     +1.0  if lotsCount >= 1000
- *     +0.5  if lotsCount 500-999
+ *     +1.0  lotsCount >= 1000
+ *     +0.5  lotsCount 500-999
  *
  *   Established seller (low risk, has track record):
- *     +0.5  if feedbackCount >= 100
+ *     +0.5  feedbackCount >= 100
  *
  *   UK shipping config (avoid international-only stores — friction at checkout):
- *     +0.5  if hasUkDomesticShipping === true
- *     -2.0  if hasUkDomesticShipping === false
+ *     +0.5  hasUkDomesticShipping === true
+ *     -2.0  hasUkDomesticShipping === false
+ *
+ *   Cache-density prior (re-screen tier — only applies post-first-screen):
+ *     +2.0  previous cacheCovered >= 100   (high overlap → reliable verdict)
+ *     +1.0  previous cacheCovered 30-99    (decent overlap)
+ *     -1.0  previous cacheCovered < 10     (rare-inventory store — defer)
+ *
+ *   Light activity penalty (drop dormancy boost; mildly prefer active stores):
+ *     -0.5  lastActivityAt > 365 days ago
  *
  *   No metadata at all → score 0 (still picked, just last in tier).
  */
@@ -151,25 +167,35 @@ export function stalenessScore(entry: QueueEntry, now: Date = new Date()): numbe
   const m = entry.blMetadata;
   if (!m) return 0;
   let score = 0;
-  if (m.lastActivityAt) {
-    const ageDays = (now.getTime() - new Date(m.lastActivityAt).getTime()) / 86400_000;
-    if (ageDays > 365) score += 5.0;
-    else if (ageDays > 90) score += 3.0;
-    // active stores (< 90d): no boost; not penalised either
-  }
   if (m.lotsCount && m.lotsCount >= 1000) score += 1.0;
   else if (m.lotsCount && m.lotsCount >= 500) score += 0.5;
   if (m.feedbackCount && m.feedbackCount >= 100) score += 0.5;
   if (m.hasUkDomesticShipping === false) score -= 2.0;
   else if (m.hasUkDomesticShipping === true) score += 0.5;
+
+  // Cache-density prior — only meaningful after a previous screen.
+  const cc = entry.lastScreenSummary?.cacheCovered;
+  if (cc !== undefined && cc !== null) {
+    if (cc >= 100) score += 2.0;
+    else if (cc >= 30) score += 1.0;
+    else if (cc < 10) score -= 1.0;
+  }
+
+  // Mild dormancy penalty (active stores were the empirically promising ones).
+  if (m.lastActivityAt) {
+    const ageDays = (now.getTime() - new Date(m.lastActivityAt).getTime()) / 86400_000;
+    if (ageDays > 365) score -= 0.5;
+  }
+
   return score;
 }
 
 /**
  * Pick the next store to screen.
  *
- * Tier 1 (never-screened): rank by stalenessScore(entry) descending; tiebreak by oldest addedAt.
- * Tier 2 (past skipUntil):  oldest lastScreenedAt first.
+ * Tier 1 (never-screened): rank by stalenessScore desc; tiebreak by oldest addedAt.
+ * Tier 2 (past skipUntil):  rank by stalenessScore desc (cache-density prior matters here);
+ *                           tiebreak by oldest lastScreenedAt first.
  * Returns null if nothing eligible.
  */
 export function pickNext(queue: Queue, opts: { now?: Date } = {}): QueueEntry | null {
@@ -181,7 +207,7 @@ export function pickNext(queue: Queue, opts: { now?: Date } = {}): QueueEntry | 
   });
   if (eligible.length === 0) return null;
 
-  // Tier 1: never-screened. Sort by staleness score desc, then by addedAt asc.
+  // Tier 1: never-screened.
   const fresh = eligible.filter((s) => s.lastScreenedAt === null);
   if (fresh.length > 0) {
     fresh.sort((a, b) => {
@@ -192,8 +218,13 @@ export function pickNext(queue: Queue, opts: { now?: Date } = {}): QueueEntry | 
     return fresh[0];
   }
 
-  // Tier 2: oldest screened first.
-  const screened = eligible.slice().sort((a, b) => (a.lastScreenedAt ?? '').localeCompare(b.lastScreenedAt ?? ''));
+  // Tier 2: past-skipUntil. Use stalenessScore (which now includes cache-density prior)
+  // as primary sort so high-overlap stores cycle faster.
+  const screened = eligible.slice().sort((a, b) => {
+    const sa = stalenessScore(a, now), sb = stalenessScore(b, now);
+    if (sa !== sb) return sb - sa;
+    return (a.lastScreenedAt ?? '').localeCompare(b.lastScreenedAt ?? '');
+  });
   return screened[0];
 }
 
