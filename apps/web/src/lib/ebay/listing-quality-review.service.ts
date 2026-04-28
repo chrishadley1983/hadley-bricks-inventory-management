@@ -241,59 +241,129 @@ export class ListingQualityReviewService {
   }
 
   /**
-   * Review listing with a timeout (default 60 seconds)
-   * Used for pre-publish review to prevent blocking the flow
+   * Review listing with timeout + optional retries.
    *
-   * Note: Gemini 3 Pro with HIGH thinking level typically takes 30-45 seconds,
-   * so 60 seconds provides adequate buffer.
+   * Gemini 3 Pro with HIGH thinking level typically takes 30-45s but can run longer
+   * under API load. Default 120s per attempt + one retry gives ~4 minutes worst-case
+   * before falling back, which is the right tradeoff vs. a fake B-grade fallback.
+   *
+   * Progress messages emitted via onProgress make retry/timeout state visible to the UI:
+   *   - "Reviewing listing quality (attempt 1/2)…"
+   *   - "Attempt 1 timed out after 120s — retrying"
+   *   - "Quality review unavailable — using fallback score" (only on final timeout)
    *
    * @param listing - The AI-generated listing to review
    * @param inventoryCondition - Original condition from inventory
-   * @param timeoutMs - Timeout in milliseconds (default: 60000)
+   * @param timeoutMs - Per-attempt timeout in milliseconds (default: 120000)
    * @param onProgress - Optional callback for progress updates
-   * @returns Quality review result or timeout result
+   * @param maxAttempts - Total attempts including initial try (default: 1, no retry)
+   * @returns Quality review result or fallback result
    */
   async reviewListingWithTimeout(
     listing: AIGeneratedListing,
     inventoryCondition: string,
-    timeoutMs: number = 60000,
-    onProgress?: ReviewProgressCallback
+    timeoutMs: number = 120000,
+    onProgress?: ReviewProgressCallback,
+    maxAttempts: number = 1
   ): Promise<QualityReviewResult> {
-    const timeoutPromise = new Promise<QualityReviewResult>((resolve) => {
-      setTimeout(() => {
-        resolve({
-          score: 75, // Default passing score when timed out
-          grade: 'B',
-          breakdown: {
-            title: { score: 19, feedback: 'Review timed out - using default score' },
-            itemSpecifics: { score: 15, feedback: 'Review timed out - using default score' },
-            description: { score: 19, feedback: 'Review timed out - using default score' },
-            conditionAccuracy: { score: 11, feedback: 'Review timed out - using default score' },
-            seoOptimization: { score: 11, feedback: 'Review timed out - using default score' },
-          },
-          issues: [],
-          suggestions: [
-            'Quality review timed out after 60 seconds. Listing published with default quality check.',
-          ],
-          highlights: ['Listing met basic validation requirements.'],
-          reviewedAt: new Date().toISOString(),
-          reviewerModel: `${GEMINI_MODEL} (timeout)`,
-        });
-      }, timeoutMs);
-    });
+    const buildFallback = (attemptsUsed: number): QualityReviewResult => {
+      const totalSeconds = Math.round((timeoutMs * attemptsUsed) / 1000);
+      const attemptsLabel =
+        attemptsUsed === 1 ? '1 attempt' : `${attemptsUsed} attempts`;
+      return {
+        score: 75,
+        grade: 'B',
+        breakdown: {
+          title: { score: 19, feedback: 'Review timed out — fallback score' },
+          itemSpecifics: { score: 15, feedback: 'Review timed out — fallback score' },
+          description: { score: 19, feedback: 'Review timed out — fallback score' },
+          conditionAccuracy: { score: 11, feedback: 'Review timed out — fallback score' },
+          seoOptimization: { score: 11, feedback: 'Review timed out — fallback score' },
+        },
+        issues: [],
+        suggestions: [
+          `Quality review timed out across ${attemptsLabel} (~${totalSeconds}s total). The score above is a placeholder, not a real evaluation. Cancel and re-open to try again, or publish as-is.`,
+        ],
+        highlights: ['Quality review unavailable — fallback score shown.'],
+        reviewedAt: new Date().toISOString(),
+        reviewerModel: `${GEMINI_MODEL} (timeout after ${attemptsUsed} attempt${attemptsUsed === 1 ? '' : 's'})`,
+      };
+    };
 
-    try {
-      return await Promise.race([
-        this.reviewListing(listing, inventoryCondition, onProgress),
-        timeoutPromise,
-      ]);
-    } catch (error) {
-      console.error(
-        '[ListingQualityReviewService] Review failed, returning timeout result:',
-        error
+    const timeoutSentinel = Symbol('timeout');
+    const timeoutSeconds = Math.round(timeoutMs / 1000);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const attemptLabel =
+        maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : '';
+      onProgress?.(`Reviewing listing quality${attemptLabel}`);
+
+      const reviewPromise = this.reviewListing(
+        listing,
+        inventoryCondition,
+        onProgress
       );
-      return timeoutPromise;
+      const timeoutPromise = new Promise<typeof timeoutSentinel>((resolve) => {
+        setTimeout(() => resolve(timeoutSentinel), timeoutMs);
+      });
+
+      try {
+        const result = await Promise.race([reviewPromise, timeoutPromise]);
+
+        if (result === timeoutSentinel) {
+          // Detach the dangling review promise so we don't leak unhandled rejections.
+          reviewPromise.catch((err) =>
+            console.warn(
+              `[ListingQualityReviewService] Discarded review promise after timeout: ${err instanceof Error ? err.message : String(err)}`
+            )
+          );
+
+          if (attempt < maxAttempts) {
+            onProgress?.(
+              `Attempt ${attempt} timed out after ${timeoutSeconds}s — retrying`
+            );
+            console.warn(
+              `[ListingQualityReviewService] Attempt ${attempt}/${maxAttempts} timed out after ${timeoutSeconds}s, retrying`
+            );
+            continue;
+          }
+
+          onProgress?.(
+            `Quality review unavailable after ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'} — using fallback score`
+          );
+          console.warn(
+            `[ListingQualityReviewService] All ${maxAttempts} attempts timed out — returning fallback`
+          );
+          return buildFallback(maxAttempts);
+        }
+
+        return result;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        if (attempt < maxAttempts) {
+          onProgress?.(
+            `Attempt ${attempt} failed (${errorMessage.slice(0, 80)}) — retrying`
+          );
+          console.warn(
+            `[ListingQualityReviewService] Attempt ${attempt}/${maxAttempts} threw: ${errorMessage} — retrying`
+          );
+          continue;
+        }
+
+        onProgress?.(
+          `Quality review failed after ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'} — using fallback score`
+        );
+        console.error(
+          `[ListingQualityReviewService] All ${maxAttempts} attempts failed, last error: ${errorMessage}`
+        );
+        return buildFallback(maxAttempts);
+      }
     }
+
+    // Unreachable but keeps the type checker happy.
+    return buildFallback(maxAttempts);
   }
 
   /**
@@ -507,7 +577,7 @@ Only include fields that need changes. Omit fields that are already optimal.`;
     const {
       targetScore = 90,
       maxIterations = 3,
-      timeoutPerReviewMs = 60000, // 60s - Gemini 3 Pro with HIGH thinking takes ~40s
+      timeoutPerReviewMs = 120000, // 120s - Gemini 3 Pro HIGH thinking takes ~40s but spikes past 60s under load
       onProgress,
     } = options;
 

@@ -225,16 +225,22 @@ export class ListingCreationService {
 
       // Step 6: Pre-publish quality review with single improvement pass
       // Flow: Review → Apply suggestions → Re-review → Display final score
+      // Per-attempt timeout 120s (Gemini 3 Pro HIGH thinking averages ~40s but spikes
+      // past 60s under load) with one retry — see fix/quality-review-timeout-and-retry.
+      const REVIEW_TIMEOUT_MS = 120_000;
+      const REVIEW_MAX_ATTEMPTS = 2;
       const reviewResult = await this.executeStep('review', onProgress, async () => {
-        // Initial review
+        // Initial review — pipe progress to UI so timeout/retry are visible
         console.log('[ListingCreationService] Starting initial quality review...');
         const initialReview = await this.qualityService.reviewListingWithTimeout(
           generatedListing!,
           item.condition ?? 'Used',
-          60000, // 60 second timeout - Gemini 3 Pro with HIGH thinking takes ~40s
+          REVIEW_TIMEOUT_MS,
           (step) => {
             console.log(`[ListingCreationService] Quality review: ${step}`);
-          }
+            this.sendProgress(onProgress, `Initial review — ${step}`);
+          },
+          REVIEW_MAX_ATTEMPTS
         );
 
         console.log(
@@ -255,6 +261,7 @@ export class ListingCreationService {
 
         if (hasImprovements) {
           console.log('[ListingCreationService] Applying suggestions to improve listing...');
+          this.sendProgress(onProgress, 'Applying improvements to listing');
           const improvedListing = await this.qualityService.applySuggestions(
             generatedListing!,
             initialReview
@@ -268,10 +275,12 @@ export class ListingCreationService {
           const finalReview = await this.qualityService.reviewListingWithTimeout(
             improvedListing,
             item.condition ?? 'Used',
-            60000, // 60 second timeout - Gemini 3 Pro with HIGH thinking takes ~40s
+            REVIEW_TIMEOUT_MS,
             (step) => {
               console.log(`[ListingCreationService] Final quality review: ${step}`);
-            }
+              this.sendProgress(onProgress, `Final review — ${step}`);
+            },
+            REVIEW_MAX_ATTEMPTS
           );
 
           console.log(
