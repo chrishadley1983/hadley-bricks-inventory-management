@@ -31,6 +31,10 @@ const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
 // business mailbox tied to the verified hadleybricks.co.uk domain. Override via
 // PROACTIVE_EMAIL_TO env var or --email-to= flag.
 const SMTP_TO = argv['email-to'] ?? process.env.PROACTIVE_EMAIL_TO ?? 'chris@hadleybricks.co.uk';
+// Full-enrich mode: spend BL API budget to find actual arbitrage. Mid-loop checkpoint (PR #356)
+// auto-aborts if the store turns out priced-above-market, so cost on a dud is bounded ~50 calls.
+// Default off — daily cron is cache-only. Set --full-enrich for on-demand deep scans.
+const FULL_ENRICH = argv['full-enrich'] === 'true';
 
 interface ScreenResult {
   cacheCovered: number;
@@ -96,13 +100,20 @@ async function main() {
     console.log(`[proactive] Picked from queue: ${slug} (last screened ${next.lastScreenedAt ?? 'never'}, addedFrom ${next.addedFrom})`);
   }
 
-  // Run bl-basket as subprocess: scrape + screen, no API, no cart.
+  // Run bl-basket as subprocess: scrape + screen.
   // Pass relative path to avoid windows-shell-quoting issues with spaces in absolute paths.
-  console.log(`[proactive] Running bl-basket --store-slug=${slug} --skip-cart --api-budget=0 --yes ...`);
-  const proc = spawnSync('npx', ['tsx', 'scripts/bl-basket.ts', `--store-slug=${slug}`, '--shipping=3.00', '--skip-cart', '--api-budget=0', '--yes'], {
+  // Full-enrich mode adds the proven arbitrage gates and drops --api-budget=0 so the API loop
+  // runs (with mid-loop checkpoint protection from PR #356 to bound cost on duds).
+  const baseArgs = ['tsx', 'scripts/bl-basket.ts', `--store-slug=${slug}`, '--shipping=3.00', '--skip-cart', '--yes'];
+  const enrichArgs = FULL_ENRICH
+    ? ['--min-ask=0.10', '--min-margin=0.35', '--min-str=0.25']
+    : ['--api-budget=0'];
+  const args = [...baseArgs, ...enrichArgs];
+  console.log(`[proactive] Running ${args.slice(1).join(' ')}  (mode=${FULL_ENRICH ? 'FULL-ENRICH' : 'cache-only'})`);
+  const proc = spawnSync('npx', args, {
     cwd: path.resolve(__dirname, '..'),
     encoding: 'utf8',
-    timeout: 30 * 60 * 1000, // 30 min hard cap (scraping a huge store can take ~15min)
+    timeout: 45 * 60 * 1000, // 45 min hard cap (full enrichment of a huge store can take ~30min)
     shell: true,
     env: process.env,
   });
