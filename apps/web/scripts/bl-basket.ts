@@ -21,7 +21,7 @@
  *   --min-str=<ratio>       Skip items where UK sell-through is below this. Default 0.
  *   --min-margin=<pct>      Skip items where net/list margin is below this. Default 0.20.
  *   --cache-ttl-days=<n>    Price cache freshness. Default 90.
- *   --max-pages=<n>         Max AJAX pages per item-type. Default 50.
+ *   --max-pages=<n>         Max AJAX pages per item-type. Default 50, hard-capped at 200.
  *   --page-delay-ms=<n>     Delay between AJAX pages. Default 3000 (floor).
  *   --api-delay-ms=<n>      Delay between BL API price-guide calls. Default 250.
  *   --inventory-ttl-days=<n>  Reuse tmp/stores/<slug>/inventory.json if <N days old. Default 7.
@@ -69,7 +69,7 @@ const MIN_ASK = parseFloat(argv['min-ask'] ?? '0.10');
 const MIN_STR = parseFloat(argv['min-str'] ?? '0');
 const MIN_MARGIN = parseFloat(argv['min-margin'] ?? '0.20');
 const CACHE_TTL_DAYS = parseInt(argv['cache-ttl-days'] ?? '90', 10);
-const MAX_PAGES = Math.min(50, parseInt(argv['max-pages'] ?? '50', 10));
+const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
