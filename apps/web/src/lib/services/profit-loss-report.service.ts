@@ -276,17 +276,11 @@ async function queryBrickLinkGrossSales(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // BrickLink stores statuses in UPPERCASE
-  // PURGED = orders older than 6 months that have been archived by BrickLink
-  const completedStatuses = [
-    'COMPLETED',
-    'RECEIVED',
-    'SHIPPED',
-    'PACKED',
-    'READY',
-    'PAID',
-    'PURGED',
-  ];
+  // BrickLink stores statuses in UPPERCASE. Count every order as gross sales
+  // unless it's explicitly cancelled — switching from an inclusion list means
+  // new/transient statuses (PENDING, PROCESSING, READY, PURGED, etc.) are
+  // captured automatically rather than silently dropped.
+  const excludedStatuses = ['CANCELLED'];
 
   // Paginate to handle Supabase's 1000 row limit
   const pageSize = 1000;
@@ -299,7 +293,7 @@ async function queryBrickLinkGrossSales(
       .from('bricklink_transactions')
       .select('order_date, base_grand_total')
       .eq('user_id', userId)
-      .in('order_status', completedStatuses)
+      .not('order_status', 'in', `(${excludedStatuses.join(',')})`)
       .gte('order_date', startDate)
       .lte('order_date', endDate)
       .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -339,8 +333,10 @@ async function queryBrickOwlGrossSales(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Brick Owl stores statuses in Title Case
-  const completedStatuses = ['Shipped', 'Received', 'Completed'];
+  // Brick Owl stores statuses in Title Case. Count every order as gross sales
+  // unless it's explicitly cancelled — "Payment Received" and any other
+  // pre-shipment statuses now count toward gross sales.
+  const excludedStatuses = ['Cancelled'];
 
   // Paginate to handle Supabase's 1000 row limit
   const pageSize = 1000;
@@ -353,7 +349,7 @@ async function queryBrickOwlGrossSales(
       .from('brickowl_transactions')
       .select('order_date, base_grand_total')
       .eq('user_id', userId)
-      .in('order_status', completedStatuses)
+      .not('order_status', 'in', `(${excludedStatuses.join(',')})`)
       .gte('order_date', startDate)
       .lte('order_date', endDate)
       .range(page * pageSize, (page + 1) * pageSize - 1);
