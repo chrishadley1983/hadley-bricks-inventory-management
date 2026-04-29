@@ -222,6 +222,30 @@ gcloud scheduler jobs create http bricqer-sync-status \
   --attempt-deadline="60s" \
   --description="Daily Bricqer external-inventory sync status (BrickLink + BrickOwl)"
 
+# BrickLink transaction sync - daily at 7:00am UK time
+# Incremental sync into bricklink_transactions (powers Profit & Loss report).
+gcloud scheduler jobs create http bricklink-transaction-sync \
+  --location=europe-west2 \
+  --schedule="0 7 * * *" \
+  --uri="$APP_URL/api/cron/bricklink-transaction-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="300s" \
+  --description="Daily BrickLink order sync into bricklink_transactions (P&L source)"
+
+# Brick Owl transaction sync - daily at 7:05am UK time
+# Incremental sync into brickowl_transactions (powers Profit & Loss report).
+gcloud scheduler jobs create http brickowl-transaction-sync \
+  --location=europe-west2 \
+  --schedule="5 7 * * *" \
+  --uri="$APP_URL/api/cron/brickowl-transaction-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="300s" \
+  --description="Daily Brick Owl order sync into brickowl_transactions (P&L source)"
+
 # SP-API Buy Box Overlay - daily at 6am UTC (after Keepa overnight backfill)
 # Updates buy_box_is_yours, buy_box_price, your_price, offer_count from SP-API
 gcloud scheduler jobs create http spapi-buybox-overlay \
@@ -352,6 +376,10 @@ gcloud scheduler jobs run investment-retrain --location=europe-west2
 
 # Notification jobs
 gcloud scheduler jobs run vinted-collections --location=europe-west2
+
+# BL/BO transaction syncs (P&L data source)
+gcloud scheduler jobs run bricklink-transaction-sync --location=europe-west2
+gcloud scheduler jobs run brickowl-transaction-sync --location=europe-west2
 
 # eBay Promotions
 gcloud scheduler jobs run ebay-promotions --location=europe-west2
