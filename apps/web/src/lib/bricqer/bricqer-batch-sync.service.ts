@@ -5,6 +5,8 @@
  * Batches represent inventory uploaded to BrickLink/BrickOwl stores.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { BricqerClient } from './client';
 import { CredentialsRepository } from '@/lib/repositories';
@@ -59,6 +61,16 @@ const PURCHASE_DETAIL_CONCURRENCY = 5;
 // ============================================================================
 
 export class BricqerBatchSyncService {
+  private supabaseOverride?: SupabaseClient<Database>;
+
+  constructor(supabase?: SupabaseClient<Database>) {
+    this.supabaseOverride = supabase;
+  }
+
+  private async getClient(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
   // ============================================================================
   // Connection Status
   // ============================================================================
@@ -67,7 +79,7 @@ export class BricqerBatchSyncService {
    * Get connection status and sync information
    */
   async getConnectionStatus(userId: string): Promise<BatchConnectionStatus> {
-    const supabase = await createClient();
+    const supabase = await this.getClient();
     const credentialsRepo = new CredentialsRepository(supabase);
 
     // Check if credentials exist
@@ -149,7 +161,7 @@ export class BricqerBatchSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getClient();
     const syncMode: BatchSyncMode = options?.fullSync ? 'FULL' : 'INCREMENTAL';
     const activatedOnly = options?.activatedOnly ?? true;
     console.log('[BricqerBatchSyncService] Sync mode:', syncMode, 'activatedOnly:', activatedOnly);
@@ -434,7 +446,7 @@ export class BricqerBatchSyncService {
     batches: BricqerBatch[],
     purchaseMap: Map<number, BricqerPurchaseDetail>
   ): Promise<{ created: number; updated: number; skipped: number }> {
-    const supabase = await createClient();
+    const supabase = await this.getClient();
 
     // Transform all batches to rows
     const rows = batches.map((batch) => this.transformBatchToRow(userId, batch, purchaseMap));
@@ -486,6 +498,8 @@ export class BricqerBatchSyncService {
 // Export singleton-like factory
 // ============================================================================
 
-export function createBricqerBatchSyncService(): BricqerBatchSyncService {
-  return new BricqerBatchSyncService();
+export function createBricqerBatchSyncService(
+  supabase?: SupabaseClient<Database>
+): BricqerBatchSyncService {
+  return new BricqerBatchSyncService(supabase);
 }
