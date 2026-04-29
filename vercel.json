@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/scanner-image-cleanup",
       "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/bricqer-batch-sync",
+      "schedule": "30 6 * * *"
     }
   ]
 }
