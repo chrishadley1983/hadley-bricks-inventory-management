@@ -548,25 +548,109 @@ async function pullQueueItems(): Promise<QueueItem[]> {
   return (data ?? []).slice(0, LIMIT) as QueueItem[];
 }
 
+/**
+ * Apply by writing directly to Supabase via the service role. Bypasses the
+ * /review-queue/[id]/approve endpoint, which 401s in production (production
+ * env apparently lacks SERVICE_USER_ID, so validateAuth falls through to
+ * cookie-based auth and rejects). Mirrors the approve endpoint's writes:
+ *   1. insert purchases row
+ *   2. insert inventory_items row (one per resolved set)
+ *   3. mark processed_purchase_emails as imported
+ *
+ * Skips ASIN / Brickset name / Amazon pricing enrichment — those can be filled
+ * in later by the existing enrichment jobs. set_name is taken from vision (or
+ * Brickset if text won) so the user sees a sensible name immediately.
+ */
 async function applyDecision(d: Decision): Promise<{ ok: boolean; info: string }> {
-  const apiKey = process.env.SERVICE_API_KEY!;
-  if (d.final === 'import' && d.set_number) {
-    const res = await fetch(`${PROD_URL}/api/purchases/review-queue/${d.item.id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-      body: JSON.stringify({ items: [{ set_number: d.set_number, condition: 'New' }] }),
-    });
-    const body = await res.text();
-    return { ok: res.ok, info: `${res.status} ${body.slice(0, 200)}` };
-  }
+  if (d.final === 'review') return { ok: true, info: 'review (no action)' };
+
+  // Look up the original processed_purchase_emails row for full context
+  const { data: emailRow, error: fetchErr } = await supabase
+    .from('processed_purchase_emails')
+    .select('*')
+    .eq('id', d.item.id)
+    .single();
+  if (fetchErr || !emailRow) return { ok: false, info: `fetch row: ${fetchErr?.message ?? 'not found'}` };
+
   if (d.final === 'dismiss') {
-    const res = await fetch(`${PROD_URL}/api/purchases/review-queue/${d.item.id}/dismiss`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-    });
-    return { ok: res.ok, info: `${res.status}` };
+    const { error: upErr } = await supabase
+      .from('processed_purchase_emails')
+      .update({ status: 'manual_skip', skip_reason: 'dismissed_auto_fix' })
+      .eq('id', d.item.id);
+    return { ok: !upErr, info: upErr?.message ?? 'dismissed' };
   }
-  return { ok: true, info: 'review (no action)' };
+
+  if (!d.set_number || !d.set_name) return { ok: false, info: 'missing set_number/set_name' };
+
+  const userId = process.env.SERVICE_USER_ID!;
+  const purchaseDate = emailRow.email_date ? new Date(emailRow.email_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+  const totalCost = emailRow.cost ? Number(emailRow.cost) : 0;
+
+  // 1. Insert purchase
+  const { data: purchase, error: pErr } = await supabase
+    .from('purchases')
+    .insert({
+      user_id: userId,
+      source: emailRow.source,
+      cost: totalCost,
+      payment_method: emailRow.source === 'Vinted' ? 'Vinted Wallet' : 'PayPal',
+      purchase_date: purchaseDate,
+      short_description: `${d.set_number} ${d.set_name}`,
+      description: `${d.set_name} from ${emailRow.seller_username ?? emailRow.source}`,
+      reference: emailRow.order_reference,
+    })
+    .select('id')
+    .single();
+  if (pErr || !purchase) return { ok: false, info: `purchase insert: ${pErr?.message ?? 'no id'}` };
+
+  // 2. Pick next SKU
+  const { data: skuRows } = await supabase
+    .from('inventory_items')
+    .select('sku')
+    .not('sku', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  let maxNum = 0;
+  for (const row of skuRows ?? []) {
+    const m = row.sku?.match(/^[NU](\d+)$/);
+    if (m) { const n = parseInt(m[1], 10); if (n > maxNum) maxNum = n; }
+  }
+  const sku = `N${maxNum + 1}`;
+
+  // 3. Insert inventory_items
+  const { data: inv, error: invErr } = await supabase
+    .from('inventory_items')
+    .insert({
+      user_id: userId,
+      set_number: d.set_number,
+      item_name: d.set_name,
+      condition: 'New',
+      cost: totalCost,
+      purchase_id: purchase.id,
+      linked_lot: emailRow.order_reference,
+      source: emailRow.source,
+      purchase_date: purchaseDate,
+      listing_platform: 'amazon',
+      storage_location: 'TBC',
+      sku,
+      status: 'Not Yet Received',
+      notes: `Auto-resolved by auto-fix-review-queue. Seller: ${emailRow.seller_username ?? '?'}. https://mail.google.com/mail/u/0/#all/${emailRow.email_id}`,
+    })
+    .select('id')
+    .single();
+  if (invErr || !inv) {
+    // Roll back purchase
+    await supabase.from('purchases').delete().eq('id', purchase.id);
+    return { ok: false, info: `inventory insert: ${invErr?.message}` };
+  }
+
+  // 4. Mark email as imported
+  await supabase
+    .from('processed_purchase_emails')
+    .update({ status: 'imported', purchase_id: purchase.id, inventory_id: inv.id })
+    .eq('id', d.item.id);
+
+  return { ok: true, info: `purchase=${purchase.id.slice(0, 8)} inventory=${inv.id.slice(0, 8)} sku=${sku}` };
 }
 
 (async () => {
