@@ -45,8 +45,14 @@ async function handler(request: NextRequest) {
       throw new Error('BrickLink credentials not configured');
     }
 
+    // includeFiled=true so archived/filed orders are picked up too. Without
+    // this, any order the seller files quickly after fulfilment is excluded
+    // from `bricklink_transactions` and thus from the P&L report.
     const syncService = createBrickLinkTransactionSyncService(supabase);
-    const result = await syncService.syncTransactions(DEFAULT_USER_ID, { fullSync: false });
+    const result = await syncService.syncTransactions(DEFAULT_USER_ID, {
+      fullSync: false,
+      includeFiled: true,
+    });
 
     const durationMs = Date.now() - startTime;
 
