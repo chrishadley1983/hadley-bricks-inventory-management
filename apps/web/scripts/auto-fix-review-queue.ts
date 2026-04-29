@@ -149,7 +149,78 @@ class CDP {
     await new Promise((r) => setTimeout(r, waitMs)); // crude wait — Vinted is JS-heavy
   }
 
+  /**
+   * Listen for the next /api/v2/inbox request from Vinted's own JS and pull out
+   * the X-CSRF-Token. Vinted gates this API behind that token, so we re-use
+   * Vinted's own value rather than minting one.
+   */
+  captureNextInboxCsrf(timeoutMs = 10000): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.ws.off('message', handler);
+        reject(new Error('csrf capture timeout'));
+      }, timeoutMs);
+      const handler = (raw: WebSocket.RawData) => {
+        const m = JSON.parse(raw.toString());
+        if (m.method === 'Network.requestWillBeSent' && /\/api\/v2\/inbox\?/.test(m.params?.request?.url ?? '')) {
+          const t = m.params.request.headers?.['X-CSRF-Token'] || m.params.request.headers?.['x-csrf-token'];
+          if (t) {
+            clearTimeout(timer);
+            this.ws.off('message', handler);
+            resolve(t);
+          }
+        }
+      };
+      this.ws.on('message', handler);
+    });
+  }
+
   close() { this.ws?.close(); }
+}
+
+// ---------- Vinted inbox API ----------
+interface VintedConversation {
+  id: number;
+  description: string;
+  opposite_user: { id: number; login: string };
+  item_photos: Array<{ url: string; is_main: boolean }>;
+  updated_at: string;
+}
+
+async function loadInboxConversations(cdp: CDP, maxPages = 10): Promise<VintedConversation[]> {
+  await cdp.send('Network.enable');
+  const csrfPromise = cdp.captureNextInboxCsrf();
+  await cdp.navigate('https://www.vinted.co.uk/inbox', 500);
+  const csrfToken = await csrfPromise;
+  await new Promise((r) => setTimeout(r, 1500)); // let page settle so subsequent fetch shares cookies
+
+  const anonId = await cdp.eval<string>(
+    `document.cookie.split('; ').find(c => c.startsWith('anon_id='))?.slice('anon_id='.length) || ''`
+  );
+
+  const all: VintedConversation[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const result = await cdp.eval<{ conversations?: VintedConversation[]; error?: number }>(
+      `(async () => {
+        try {
+          const r = await fetch('/api/v2/inbox?page=${page}&per_page=20', {
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRF-Token': ${JSON.stringify(csrfToken)},
+              'X-Anon-Id': ${JSON.stringify(anonId)},
+            },
+          });
+          if (!r.ok) return { error: r.status };
+          return await r.json();
+        } catch (e) { return { error: 0 }; }
+      })()`
+    );
+    if (result.error || !result.conversations || result.conversations.length === 0) break;
+    all.push(...result.conversations);
+    if (result.conversations.length < 20) break;
+  }
+  return all;
 }
 
 // ---------- Stage 1: text search ----------
@@ -201,7 +272,36 @@ async function textSearch(brickset: BricksetApiClient, title: string): Promise<T
   };
 }
 
-// ---------- Stage 2: CDP scrape via Vinted inbox conversation → listing ----------
+// ---------- Stage 2: pick photos from preloaded inbox conversations ----------
+function findPhotosFromConversations(
+  conversations: VintedConversation[],
+  seller: string,
+  title: string
+): { urls: string[]; reason?: string; matchedDescription?: string } {
+  const candidates = conversations.filter((c) => c.opposite_user?.login === seller);
+  if (candidates.length === 0) {
+    return { urls: [], reason: `no conversation for seller "${seller}"` };
+  }
+  // If multiple conversations with the same seller (unlikely but possible), pick best by title overlap
+  let best = candidates[0];
+  if (candidates.length > 1) {
+    const words = title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    let bestScore = 0;
+    for (const c of candidates) {
+      const desc = (c.description || '').toLowerCase();
+      const score = words.filter((w) => desc.includes(w)).length;
+      if (score > bestScore) { best = c; bestScore = score; }
+    }
+  }
+  const urls = (best.item_photos ?? []).map((p) => p.url).filter(Boolean).slice(0, 4);
+  return {
+    urls,
+    matchedDescription: best.description,
+    reason: urls.length === 0 ? 'conversation has no item_photos' : undefined,
+  };
+}
+
+// Legacy stubs kept for older code paths — unused after refactor
 async function ensureLoggedIn(cdp: CDP): Promise<boolean> {
   await cdp.navigate('https://www.vinted.co.uk/inbox', 3500);
   const state = await cdp.eval<{ loggedIn: boolean; url: string }>(
@@ -363,7 +463,7 @@ Confidence 0..1. Only claim 'lego' if you can see clear evidence (set number on 
 
 // ---------- Pipeline ----------
 async function classify(
-  cdp: CDP | null,
+  conversations: VintedConversation[] | null,
   brickset: BricksetApiClient,
   item: QueueItem
 ): Promise<Decision> {
@@ -387,28 +487,24 @@ async function classify(
     };
   }
 
-  // Stage 2: CDP photos
-  if (SKIP_VISION || !cdp || !item.seller_username) {
+  // Stage 2: photos from preloaded inbox API response
+  if (SKIP_VISION || !conversations || !item.seller_username) {
     return {
       item,
       text: text ?? undefined,
       final: 'review',
-      reason: SKIP_VISION ? 'vision disabled' : !cdp ? 'cdp unavailable' : 'no seller',
+      reason: SKIP_VISION ? 'vision disabled' : !conversations ? 'inbox not loaded' : 'no seller',
     };
   }
-  let photos;
-  try {
-    photos = await findVintedPhotos(cdp, item.seller_username, item.item_name);
-    console.log(`   photos: ${photos.urls.length} via ${photos.source}${photos.reason ? ' (' + photos.reason + ')' : ''}`);
-  } catch (e) {
-    console.warn(`   cdp scrape error:`, e instanceof Error ? e.message : e);
-    return { item, text: text ?? undefined, final: 'review', reason: 'cdp scrape failed' };
-  }
+  const photos = findPhotosFromConversations(conversations, item.seller_username, item.item_name);
+  console.log(
+    `   photos: ${photos.urls.length}${photos.matchedDescription ? ` (matched "${photos.matchedDescription}")` : ''}${photos.reason ? ' — ' + photos.reason : ''}`
+  );
   if (photos.urls.length === 0) {
     return {
       item,
       text: text ?? undefined,
-      photos,
+      photos: { urls: [], source: 'vinted-listing', reason: photos.reason },
       final: 'review',
       reason: photos.reason ?? 'no photos found',
     };
@@ -416,18 +512,19 @@ async function classify(
 
   // Stage 3: vision
   const vision = await visionIdentify(item.item_name, text?.candidates ?? [], photos.urls);
+  const photosForDecision = { urls: photos.urls, source: 'vinted-listing' as const, reason: photos.reason };
   if (!vision) {
-    return { item, text: text ?? undefined, photos, vision: { kind: 'error', error: 'vision returned null' }, final: 'review', reason: 'vision unavailable' };
+    return { item, text: text ?? undefined, photos: photosForDecision, vision: { kind: 'error', error: 'vision returned null' }, final: 'review', reason: 'vision unavailable' };
   }
   console.log(`   vision: ${JSON.stringify(vision)}`);
   if (vision.kind === 'not_lego') {
-    return { item, text: text ?? undefined, photos, vision, final: 'dismiss', reason: `not LEGO (${vision.what_is_it})` };
+    return { item, text: text ?? undefined, photos: photosForDecision, vision, final: 'dismiss', reason: `not LEGO (${vision.what_is_it})` };
   }
   if (vision.confidence >= 0.7) {
     return {
       item,
       text: text ?? undefined,
-      photos,
+      photos: photosForDecision,
       vision,
       final: 'import',
       set_number: vision.set_number,
@@ -435,7 +532,7 @@ async function classify(
       reason: `vision confident (${vision.confidence})`,
     };
   }
-  return { item, text: text ?? undefined, photos, vision, final: 'review', reason: `vision low confidence (${vision.confidence})` };
+  return { item, text: text ?? undefined, photos: photosForDecision, vision, final: 'review', reason: `vision low confidence (${vision.confidence})` };
 }
 
 // ---------- Main ----------
@@ -479,25 +576,25 @@ async function applyDecision(d: Decision): Promise<{ ok: boolean; info: string }
 
   const brickset = new BricksetApiClient(process.env.BRICKSET_API_KEY!);
   let cdp: CDP | null = null;
+  let conversations: VintedConversation[] | null = null;
   if (!SKIP_VISION) {
     try {
       cdp = await CDP.connect();
       console.log('Connected to Chrome on port 9222.');
-      const ok = await ensureLoggedIn(cdp);
-      if (!ok) {
-        console.warn('Vinted not logged in on CDP Chrome — vision disabled.');
-        cdp = null;
-      } else {
-        console.log('Vinted logged in.');
+      conversations = await loadInboxConversations(cdp);
+      console.log(`Loaded ${conversations.length} inbox conversations via /api/v2/inbox.`);
+      if (conversations.length === 0) {
+        console.warn('No conversations returned — vision disabled (likely not logged in).');
+        conversations = null;
       }
     } catch (e) {
-      console.warn(`CDP not available (${e instanceof Error ? e.message : e}); falling back to text-only.`);
+      console.warn(`CDP/inbox load failed (${e instanceof Error ? e.message : e}); falling back to text-only.`);
     }
   }
 
   const decisions: Decision[] = [];
   for (const item of items) {
-    decisions.push(await classify(cdp, brickset, item));
+    decisions.push(await classify(conversations, brickset, item));
   }
   cdp?.close();
 
