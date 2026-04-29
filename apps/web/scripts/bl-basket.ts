@@ -15,7 +15,11 @@
  *   npx tsx scripts/bl-basket.ts --store-slug=Bruffty --shipping=2.20 --min-margin=0.20 --yes
  *
  * Flags:
- *   --store-slug=<name>     REQUIRED — BL store URL slug (e.g. Bruffty)
+ *   --store-slug=<name>     REQUIRED (unless --close set) — BL store URL slug (e.g. Bruffty)
+ *   --close=<arb_id>        Close-out mode. Skip phases 1-9; fetch BL Order API for the
+ *                           arb row's bl_order_id, insert the missing purchases row, set
+ *                           status=purchased, write actual inbound_postage_gbp.
+ *                           Use when checkout completed but the order ID wasn't pasted at phase 9.
  *   --shipping=<gbp>        Inbound postage estimate. If omitted, prompt (default £3.00).
  *   --min-ask=<gbp>         Skip items where seller's ask is below this. Default £0.10.
  *   --min-str=<ratio>       Skip items where UK sell-through is below this. Default 0.
@@ -63,9 +67,10 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
   return acc;
 }, {});
 
+const CLOSE_ARB_ID = argv['close'] && argv['close'] !== 'true' ? argv['close'] : null;
 const STORE_SLUG = argv['store-slug'];
-if (!STORE_SLUG) {
-  console.error('Required: --store-slug=<name>');
+if (!STORE_SLUG && !CLOSE_ARB_ID) {
+  console.error('Required: --store-slug=<name>  (or --close=<arbitrage_purchases.id> to close an existing basket)');
   process.exit(1);
 }
 
@@ -106,7 +111,7 @@ const VAR_FEE_PCT = BL_FEE + BRICQER_FEE + PAYPAL_PCT; // 9.4%
 const PERSONAL_MONTHLY_LOT_RATE = 0.10; // midpoint of Oct 2025 peak (19.5%) and current ramp (1.2%)
 const CART_VALIDATION_TOLERANCE = 0.05; // 5% of outlay
 
-const OUT_DIR = path.resolve(__dirname, `../../../tmp/stores/${STORE_SLUG}`);
+const OUT_DIR = path.resolve(__dirname, `../../../tmp/stores/${STORE_SLUG ?? '_close'}`);
 const LOCK_FILE = path.join(OUT_DIR, 'scan.lock');
 const INVENTORY_FILE = path.join(OUT_DIR, 'inventory.json');
 const ENRICHED_FILE = path.join(OUT_DIR, 'enriched.json');
@@ -1340,6 +1345,99 @@ async function validateCart(cdp: CDPClient, expectedOutlay: number, estimatedShi
 }
 
 // ---------------------------------------------------------------------------
+// Close: backfill purchases row for an existing arbitrage_purchases row
+// ---------------------------------------------------------------------------
+//
+// Used when the user completed checkout on BL but didn't paste the order ID
+// at phase 9 (so the row is sitting in 'cart_built' / 'placed' state with no
+// linked `purchases` row). Fetches actuals from the BL Order API rather than
+// trusting the cart-validation snapshot, which may be stale or never ran.
+
+async function closePurchase(arbId: string): Promise<void> {
+  console.log(`\n==== BL Basket Close ====\narbitrage_purchases.id = ${arbId}`);
+
+  const { data: arb, error: arbErr } = await supabase
+    .from('arbitrage_purchases')
+    .select('*')
+    .eq('id', arbId)
+    .single();
+  if (arbErr || !arb) {
+    console.error('arb fetch error:', arbErr?.message ?? 'not found');
+    process.exit(1);
+  }
+  const arbRow = arb as Record<string, unknown> & {
+    bl_order_id: string | null;
+    store_slug: string;
+    inputs: Record<string, unknown>;
+    items: Array<{ invQty: number }>;
+    status: string;
+    purchased_at: string | null;
+  };
+  if (!arbRow.bl_order_id) {
+    console.error('arb row has no bl_order_id — paste it onto the row first, or use bl-basket without --close.');
+    process.exit(1);
+  }
+  const existingPurchasesId = (arbRow.inputs as { purchases_id?: string })?.purchases_id;
+  if (existingPurchasesId) {
+    console.error(`arb row already linked to purchases.id=${existingPurchasesId}. Refusing to double-insert.`);
+    process.exit(1);
+  }
+  console.log(`Loaded arb: store=${arbRow.store_slug}, status=${arbRow.status}, order=${arbRow.bl_order_id}, lots=${arbRow.items.length}`);
+
+  console.log('Fetching BL order detail...');
+  const order = await bl.getOrder(arbRow.bl_order_id);
+  const cost = order.cost;
+  const subtotal = parseFloat(cost.subtotal);
+  const shipping = parseFloat(cost.shipping);
+  const grandTotal = parseFloat(cost.grand_total) || parseFloat(cost.final_total);
+  console.log(`  subtotal=£${subtotal.toFixed(2)}  shipping=£${shipping.toFixed(2)}  grand=£${grandTotal.toFixed(2)}  status=${order.status}`);
+
+  const totalQty = arbRow.items.reduce((s, i) => s + i.invQty, 0);
+  const purchaseRow = {
+    user_id: USER_ID,
+    purchase_date: new Date(order.date_ordered).toISOString().slice(0, 10),
+    short_description: `BrickLink ${arbRow.store_slug} #${arbRow.bl_order_id} — ${arbRow.items.length} lots / ${totalQty} pieces`,
+    description:
+      `BrickLink arbitrage purchase from ${order.seller_name} (${arbRow.store_slug}).\n\n` +
+      `Subtotal: £${subtotal.toFixed(2)}\n` +
+      `Shipping & Packaging: £${shipping.toFixed(2)}\n` +
+      `Grand Total: £${grandTotal.toFixed(2)}\n\n` +
+      `Linked arbitrage_purchases.id: ${arbId}`,
+    cost: grandTotal,
+    source: 'BrickLink',
+    payment_method: 'PayPal',
+    reference: arbRow.bl_order_id,
+  };
+  const { data: pData, error: pErr } = await supabase
+    .from('purchases')
+    .insert(purchaseRow)
+    .select('id')
+    .single();
+  if (pErr || !pData) {
+    console.error('purchases insert error:', pErr?.message);
+    process.exit(1);
+  }
+  const purchasesId = pData.id as string;
+  console.log(`  saved purchases.id = ${purchasesId} (cost £${grandTotal.toFixed(2)})`);
+
+  const newInputs = { ...arbRow.inputs, purchases_id: purchasesId };
+  const { error: updErr } = await supabase
+    .from('arbitrage_purchases')
+    .update({
+      status: 'purchased',
+      inbound_postage_gbp: shipping.toFixed(2),
+      purchased_at: arbRow.purchased_at ?? new Date(order.date_ordered).toISOString(),
+      inputs: newInputs,
+    })
+    .eq('id', arbId);
+  if (updErr) {
+    console.error('arb update error:', updErr.message);
+    process.exit(1);
+  }
+  console.log(`  arb updated → status=purchased, inbound_postage_gbp=£${shipping.toFixed(2)}, purchases_id linked`);
+}
+
+// ---------------------------------------------------------------------------
 // Phase 10: Persist
 // ---------------------------------------------------------------------------
 
@@ -1432,6 +1530,12 @@ async function persist(meta: { storeId: number; storeName: string; country: stri
 // ---------------------------------------------------------------------------
 
 async function main() {
+  if (CLOSE_ARB_ID) {
+    await closePurchase(CLOSE_ARB_ID);
+    rl.close();
+    return;
+  }
+
   ensureDir(OUT_DIR);
   acquireLock();
   console.log(`\n==== BL Basket Builder ====\nStore: ${STORE_SLUG}`);
