@@ -521,7 +521,16 @@ function parseEbayEmail(email: {
   // Try to extract set number from item name - look for 4-5 digit numbers
   // Pattern handles formats like: (40254), 40254, 75192-1
   const setNumberMatch = itemName.match(/\((\d{4,5})\)|(?:^|\s)(\d{4,5})(?:-\d)?(?:\s|$)/);
-  const setNumber = setNumberMatch ? setNumberMatch[1] || setNumberMatch[2] : null;
+  let setNumber = setNumberMatch ? setNumberMatch[1] || setNumberMatch[2] : null;
+
+  // Body fallback: eBay truncates long item titles in the subject (e.g. "Order
+  // confirmed: LEGO Star Wars: X-Wi...") which strips the set number. The full
+  // title with `(NNNNN)` lives in the body — match parens-only to avoid hitting
+  // year numbers (2026), prices, or 5-digit chunks of the order reference.
+  if (!setNumber) {
+    const bodyParenMatch = normalizedContent.match(/\((\d{4,5})\)/);
+    if (bodyParenMatch) setNumber = bodyParenMatch[1];
+  }
 
   // Infer condition from item name - default to New, mark Used only if explicit keywords
   const isUsed = /\bused\b|opened|built|incomplete|no box|played/i.test(itemName);
@@ -541,6 +550,132 @@ function parseEbayEmail(email: {
     suggested_condition: isUsed ? 'Used' : 'New',
     skip_reason: setNumber ? undefined : 'no_set_number',
   };
+}
+
+/**
+ * Parse an eBay multi-item ("Your order is confirmed") email. eBay uses this
+ * subject when one cart contains multiple won items — the subject has no item
+ * name, so the data lives entirely in the body. Each item block is delimited by
+ * "eBay Money Back Guarantee" and contains: title, Price:, Item ID:, Order
+ * number:, Seller:. Returns one candidate per *set* (a single item title may
+ * itself be an inline bundle like "40462, 40523 And 40764").
+ */
+function parseEbayMultiItemEmail(email: {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+  body?: string;
+}): Partial<PurchaseCandidate>[] {
+  const raw = email.body || email.snippet;
+  if (!raw) return [];
+
+  const norm = raw
+    .replace(/&#160;|&nbsp;/g, ' ')
+    .replace(/&#\d+;/g, '')
+    .replace(/&[a-z]+;/g, ' ')
+    .replace(/[\r\n]+/g, '\n');
+
+  const detailsMatch = norm.match(/Your order details([\s\S]*?)View order details/i);
+  const detailsBlock = detailsMatch ? detailsMatch[1] : norm;
+
+  const itemBlocks = detailsBlock
+    .split(/eBay Money Back Guarantee/i)
+    .map((b) => b.trim())
+    .filter((b) => /Price:/i.test(b) && /Item ID:/i.test(b));
+
+  if (itemBlocks.length === 0) return [];
+
+  // Order-level total: "Total charged to | £XX.XX". Falls back to subtotal sum.
+  const totalMatch = norm.match(/Total charged to[^£]*£([\d.]+)/i);
+  const orderTotal = totalMatch ? parseFloat(totalMatch[1]) : 0;
+
+  interface ParsedItem {
+    title: string;
+    price: number;
+    seller: string;
+    orderRef: string | null;
+    setNumbers: string[];
+  }
+  const items: ParsedItem[] = [];
+  for (const block of itemBlocks) {
+    const beforePrice = block.split(/Price:/i)[0];
+    const titleLines = beforePrice
+      .split('\n')
+      .map((l) => l.replace(/^\|\s*/, '').replace(/\s*\|\s*$/, '').trim())
+      .filter((l) => l.length > 1 && l !== '|');
+    const title = titleLines[titleLines.length - 1] ?? '';
+
+    const priceMatch = block.match(/Price:\s*\|?\s*£([\d.]+)/i);
+    if (!priceMatch) continue;
+    const orderMatch = block.match(/Order number:\s*\|?\s*([\d-]+)/i);
+    const sellerMatch = block.match(/Seller:\s*\|?\s*(\S+)/i);
+
+    items.push({
+      title,
+      price: parseFloat(priceMatch[1]),
+      seller: sellerMatch?.[1] ?? 'unknown',
+      orderRef: orderMatch?.[1] ?? null,
+      setNumbers: extractAllSetNumbers(title),
+    });
+  }
+
+  if (items.length === 0) return [];
+
+  const orderRef = items.find((i) => i.orderRef)?.orderRef ?? `ebay-${email.id}`;
+  const purchaseDate = new Date(email.date).toISOString().split('T')[0];
+
+  // Fan out: one candidate per set (or one skip-candidate if the title yielded none).
+  const candidates: Partial<PurchaseCandidate>[] = [];
+  let bundleIndex = 0;
+  for (const item of items) {
+    const isUsed = /\bused\b|opened|built|incomplete|no box|played/i.test(item.title);
+    if (item.setNumbers.length === 0) {
+      bundleIndex++;
+      candidates.push({
+        source: 'eBay',
+        order_reference: bundleIndex === 1 ? orderRef : `${orderRef}-${bundleIndex}`,
+        seller_username: item.seller,
+        item_name: item.title,
+        set_number: null,
+        cost: item.price,
+        purchase_date: purchaseDate,
+        email_id: email.id,
+        email_subject: email.subject,
+        email_date: email.date,
+        payment_method: 'PayPal',
+        suggested_condition: isUsed ? 'Used' : 'New',
+        skip_reason: 'no_set_number',
+        bundle_group: orderRef,
+        bundle_total_cost: orderTotal || items.reduce((s, i) => s + i.price, 0),
+        bundle_index: bundleIndex,
+      });
+      continue;
+    }
+    const perSetCost = item.price / item.setNumbers.length;
+    for (const setNumber of item.setNumbers) {
+      bundleIndex++;
+      candidates.push({
+        source: 'eBay',
+        order_reference: bundleIndex === 1 ? orderRef : `${orderRef}-${bundleIndex}`,
+        seller_username: item.seller,
+        item_name: item.title,
+        set_number: setNumber,
+        cost: perSetCost,
+        purchase_date: purchaseDate,
+        email_id: email.id,
+        email_subject: email.subject,
+        email_date: email.date,
+        payment_method: 'PayPal',
+        suggested_condition: isUsed ? 'Used' : 'New',
+        bundle_group: orderRef,
+        bundle_total_cost: orderTotal || items.reduce((s, i) => s + i.price, 0),
+        bundle_index: bundleIndex,
+      });
+    }
+  }
+  return candidates;
 }
 
 /**
@@ -730,7 +865,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Search eBay emails (both .co.uk and .com domains, both "Order confirmed" and "You won")
+      // Search eBay emails. Three subject patterns matter:
+      //   - "Order confirmed: <item>"      single-item win or BIN
+      //   - "You won: <item>"              auction win, pre-payment
+      //   - "Your order is confirmed"      multi-item cart (no item name in subject)
       const ebayEmailsUk = await fetchEmails(
         `from:ebay@ebay.co.uk subject:"Order confirmed" newer_than:${days}d`
       );
@@ -743,15 +881,28 @@ export async function GET(request: NextRequest) {
       const ebayWonCom = await fetchEmails(
         `from:ebay@ebay.com subject:"You won" newer_than:${days}d`
       );
+      const ebayMultiUk = await fetchEmails(
+        `from:ebay@ebay.co.uk subject:"Your order is confirmed" newer_than:${days}d`
+      );
+      const ebayMultiCom = await fetchEmails(
+        `from:ebay@ebay.com subject:"Your order is confirmed" newer_than:${days}d`
+      );
       // Deduplicate by email ID in case an email matches multiple queries
       const ebayEmailMap = new Map<string, (typeof ebayEmailsUk)[number]>();
-      for (const email of [...ebayEmailsUk, ...ebayEmailsCom, ...ebayWonUk, ...ebayWonCom]) {
+      for (const email of [
+        ...ebayEmailsUk,
+        ...ebayEmailsCom,
+        ...ebayWonUk,
+        ...ebayWonCom,
+        ...ebayMultiUk,
+        ...ebayMultiCom,
+      ]) {
         ebayEmailMap.set(email.id, email);
       }
       const ebayEmails = Array.from(ebayEmailMap.values());
       totalFetched += ebayEmails.length;
       console.log(
-        `[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, after dedup)`
+        `[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, ${ebayMultiUk.length} UK multi-item, ${ebayMultiCom.length} COM multi-item, after dedup)`
       );
 
       for (const email of ebayEmails) {
@@ -765,8 +916,17 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        const candidate = parseEbayEmail(email);
-        if (!candidate || !candidate.email_id) {
+        // Multi-item ("Your order is confirmed") emails have no item in the subject;
+        // route them to the body-driven multi-item parser, otherwise use the single-item one.
+        const isMultiItem = /^Your order is confirmed/i.test(email.subject);
+        const candidates: Partial<PurchaseCandidate>[] = isMultiItem
+          ? parseEbayMultiItemEmail(email)
+          : (() => {
+              const c = parseEbayEmail(email);
+              return c ? [c] : [];
+            })();
+
+        if (candidates.length === 0) {
           console.warn(
             `[scan-emails] Failed to parse eBay email: id=${email.id} subject="${email.subject}" date=${email.date}`
           );
@@ -774,43 +934,47 @@ export async function GET(request: NextRequest) {
         }
         totalParsed++;
 
-        // Check 1: Already processed (by email_id)
-        const { data: processedEmail } = await supabase
-          .from('processed_purchase_emails')
-          .select('id, status')
-          .eq('email_id', candidate.email_id)
-          .limit(1)
-          .single();
+        for (const candidate of candidates) {
+          if (!candidate.email_id) continue;
 
-        if (processedEmail) {
-          allCandidates.push({
-            ...candidate,
-            status: 'already_processed',
-          } as PurchaseCandidate);
-          continue;
-        }
+          // Check 1: Already processed (by email_id)
+          const { data: processedEmail } = await supabase
+            .from('processed_purchase_emails')
+            .select('id, status')
+            .eq('email_id', candidate.email_id)
+            .limit(1)
+            .single();
 
-        // Check 2: Already imported (by order_reference)
-        if (candidate.order_reference) {
-          const { data: existingPurchase } = await supabase
-            .from('purchases')
-            .select('id')
-            .eq('reference', candidate.order_reference)
-            .limit(1);
-
-          if (existingPurchase && existingPurchase.length > 0) {
+          if (processedEmail) {
             allCandidates.push({
               ...candidate,
-              status: 'already_imported',
+              status: 'already_processed',
             } as PurchaseCandidate);
             continue;
           }
-        }
 
-        allCandidates.push({
-          ...candidate,
-          status: 'new',
-        } as PurchaseCandidate);
+          // Check 2: Already imported (by order_reference)
+          if (candidate.order_reference) {
+            const { data: existingPurchase } = await supabase
+              .from('purchases')
+              .select('id')
+              .eq('reference', candidate.order_reference)
+              .limit(1);
+
+            if (existingPurchase && existingPurchase.length > 0) {
+              allCandidates.push({
+                ...candidate,
+                status: 'already_imported',
+              } as PurchaseCandidate);
+              continue;
+            }
+          }
+
+          allCandidates.push({
+            ...candidate,
+            status: 'new',
+          } as PurchaseCandidate);
+        }
       }
 
       // Categorize candidates
