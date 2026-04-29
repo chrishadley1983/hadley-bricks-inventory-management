@@ -486,8 +486,11 @@ function parseEbayEmail(email: {
   snippet: string;
   body?: string;
 }): Partial<PurchaseCandidate> | null {
-  // Subject patterns: "Order confirmed: [Item Name]" or "You won: [Item Name]"
-  const subjectMatch = email.subject.match(/(?:Order confirmed|You won)[:\s]*(.+)/i);
+  // Subject pattern: "Order confirmed: [Item Name]". "You won" emails are
+  // intentionally NOT processed — they arrive pre-payment with thin bodies (no
+  // cost, no order number, no seller) and would create £0 placeholder rows
+  // alongside the proper "Order confirmed" twin that arrives once the user pays.
+  const subjectMatch = email.subject.match(/Order confirmed[:\s]*(.+)/i);
   if (!subjectMatch) return null;
 
   const itemName = subjectMatch[1].replace(/\.{3}$/, '').trim(); // Remove trailing ...
@@ -865,21 +868,17 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Search eBay emails. Three subject patterns matter:
-      //   - "Order confirmed: <item>"      single-item win or BIN
-      //   - "You won: <item>"              auction win, pre-payment
+      // Search eBay emails. Two subject patterns matter:
+      //   - "Order confirmed: <item>"      single-item win or BIN (post-payment)
       //   - "Your order is confirmed"      multi-item cart (no item name in subject)
+      // "You won" emails are intentionally excluded — they arrive pre-payment with
+      // thin bodies (no cost, no order ref, no seller) and would create £0 dupes
+      // alongside the proper Order-confirmed twin once payment lands.
       const ebayEmailsUk = await fetchEmails(
         `from:ebay@ebay.co.uk subject:"Order confirmed" newer_than:${days}d`
       );
       const ebayEmailsCom = await fetchEmails(
         `from:ebay@ebay.com subject:"Order confirmed" newer_than:${days}d`
-      );
-      const ebayWonUk = await fetchEmails(
-        `from:ebay@ebay.co.uk subject:"You won" newer_than:${days}d`
-      );
-      const ebayWonCom = await fetchEmails(
-        `from:ebay@ebay.com subject:"You won" newer_than:${days}d`
       );
       const ebayMultiUk = await fetchEmails(
         `from:ebay@ebay.co.uk subject:"Your order is confirmed" newer_than:${days}d`
@@ -892,8 +891,6 @@ export async function GET(request: NextRequest) {
       for (const email of [
         ...ebayEmailsUk,
         ...ebayEmailsCom,
-        ...ebayWonUk,
-        ...ebayWonCom,
         ...ebayMultiUk,
         ...ebayMultiCom,
       ]) {
@@ -902,7 +899,7 @@ export async function GET(request: NextRequest) {
       const ebayEmails = Array.from(ebayEmailMap.values());
       totalFetched += ebayEmails.length;
       console.log(
-        `[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayWonUk.length} UK won, ${ebayWonCom.length} COM won, ${ebayMultiUk.length} UK multi-item, ${ebayMultiCom.length} COM multi-item, after dedup)`
+        `[scan-emails] Fetched ${ebayEmails.length} eBay emails from Gmail (${ebayEmailsUk.length} UK confirmed, ${ebayEmailsCom.length} COM confirmed, ${ebayMultiUk.length} UK multi-item, ${ebayMultiCom.length} COM multi-item, after dedup)`
       );
 
       for (const email of ebayEmails) {
