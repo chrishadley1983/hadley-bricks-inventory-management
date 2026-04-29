@@ -19,6 +19,14 @@ and persists the basket for downstream velocity tracking.
 
 **Usage:** `/bl-basket <store-slug>`
 
+**Close-out mode** (when user completed BL checkout but didn't paste the order ID at phase 9, or wants to retroactively link a purchases row):
+
+```bash
+cd apps/web && npx tsx scripts/bl-basket.ts --close=<arbitrage_purchases.id>
+```
+
+Fetches the BL Order API for the arb row's `bl_order_id`, inserts the missing `purchases` row using the actual subtotal/shipping/grand-total, flips `arbitrage_purchases.status` to `purchased`, writes actual `inbound_postage_gbp`, and backlinks `purchases_id` into `arb.inputs`. Refuses to double-insert.
+
 ## Arguments
 
 Parse the store URL or name for:
