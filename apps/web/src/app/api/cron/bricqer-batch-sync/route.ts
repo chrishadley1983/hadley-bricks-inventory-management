@@ -6,7 +6,7 @@
  * `daily_platform_activity` view that powers /reports/daily-activity, so without
  * this cron, BL upload activity only appears when sync is triggered manually.
  *
- * Recommended schedule: hourly.
+ * Recommended schedule: daily (Vercel Hobby tier only allows once-per-day).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
