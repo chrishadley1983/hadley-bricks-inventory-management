@@ -38,7 +38,9 @@ All cron routes require `Authorization: Bearer {CRON_SECRET}` header. Vercel Clo
 
 | Endpoint | Method | Schedule | Purpose |
 |----------|--------|----------|---------|
-| `/api/cron/full-sync` | POST | 6x daily (every 4h) | Comprehensive platform sync: eBay, Amazon, BrickLink, Brick Owl orders; ASIN tracking; stuck job detection; Shopify batch; Discord status report |
+| `/api/cron/full-sync` | POST | 6x daily (every 4h) | Comprehensive platform sync: eBay, Amazon, BrickLink, Brick Owl orders into `platform_orders`; ASIN tracking; stuck job detection; Shopify batch; Discord status report |
+| `/api/cron/bricklink-transaction-sync` | POST | Daily 7:00am UK | Incremental sync into `bricklink_transactions` (powers Profit & Loss report) |
+| `/api/cron/brickowl-transaction-sync` | POST | Daily 7:05am UK | Incremental sync into `brickowl_transactions` (powers Profit & Loss report) |
 
 ### Purchase & Email Processing
 

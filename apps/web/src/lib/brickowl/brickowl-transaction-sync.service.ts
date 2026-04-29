@@ -5,6 +5,8 @@
  * with full financial breakdown. Follows the BrickLink pattern.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { BrickOwlClient } from './client';
 import { CredentialsRepository } from '@/lib/repositories';
@@ -77,6 +79,12 @@ interface TransactionRow {
 // ============================================================================
 
 export class BrickOwlTransactionSyncService {
+  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+
+  private async getSupabase(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
   // ============================================================================
   // Connection Status
   // ============================================================================
@@ -85,7 +93,7 @@ export class BrickOwlTransactionSyncService {
    * Get connection status and sync information
    */
   async getConnectionStatus(userId: string): Promise<BrickOwlConnectionStatus> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const credentialsRepo = new CredentialsRepository(supabase);
 
     // Check if credentials exist
@@ -172,7 +180,7 @@ export class BrickOwlTransactionSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode: BrickOwlSyncMode = options?.fromDate
       ? 'HISTORICAL'
       : options?.fullSync
@@ -424,7 +432,7 @@ export class BrickOwlTransactionSyncService {
    * @param fromDate Start date (ISO string, e.g., '2024-01-01')
    */
   async performHistoricalImport(userId: string, fromDate: string): Promise<BrickOwlSyncResult> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
@@ -589,7 +597,7 @@ export class BrickOwlTransactionSyncService {
     userId: string,
     orders: BrickOwlOrderDetail[]
   ): Promise<{ created: number; updated: number; skipped: number }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     let created = 0;
     let updated = 0;
     let skipped = 0;
@@ -642,6 +650,8 @@ export class BrickOwlTransactionSyncService {
 }
 
 // Export singleton instance factory
-export function createBrickOwlTransactionSyncService(): BrickOwlTransactionSyncService {
-  return new BrickOwlTransactionSyncService();
+export function createBrickOwlTransactionSyncService(
+  supabaseOverride?: SupabaseClient<Database>
+): BrickOwlTransactionSyncService {
+  return new BrickOwlTransactionSyncService(supabaseOverride);
 }
