@@ -490,44 +490,67 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
   const ttlMs = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
   // Parts + minifigs → bricklink_part_price_cache
+  // Supabase caps `.in(...)` responses at 1000 rows by default. A single 500-part-number
+  // chunk can return >1000 cache rows when base parts (e.g. 3020 plates, 970c00 hips)
+  // have many colour variants in cache, silently dropping the surplus. That's a real bug
+  // — Hazel4576 (Apr 30) lost 973pb0898c01 Black Used to it, even though the cache row
+  // was warm from an ellis2547 scan two days earlier. We now paginate explicitly with
+  // .range() per chunk: keep fetching pages of 1000 until a page comes back short.
   const pmItems = items.filter((i) => i.itemType === 'P' || i.itemType === 'M');
   const uniquePartNos = [...new Set(pmItems.map((i) => i.itemNo))];
   const CHUNK = 500;
+  const PAGE = 1000;
+  type CacheRow = { part_number: string; part_type: string; colour_id: number; price_new: string | null; price_used: string | null; stock_available_new: number | null; stock_available_used: number | null; times_sold_new: number | null; times_sold_used: number | null; fetched_at: string };
+  let totalRowsRead = 0;
   for (let i = 0; i < uniquePartNos.length; i += CHUNK) {
     const chunk = uniquePartNos.slice(i, i + CHUNK);
-    const { data } = await supabase
-      .from('bricklink_part_price_cache')
-      .select('part_number, part_type, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used, fetched_at')
-      .in('part_number', chunk);
-    for (const row of (data ?? []) as Array<{ part_number: string; part_type: string; colour_id: number; price_new: string | null; price_used: string | null; stock_available_new: number | null; stock_available_used: number | null; times_sold_new: number | null; times_sold_used: number | null; fetched_at: string }>) {
-      const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
-      if (!fresh) continue;
-      for (const cond of ['N', 'U'] as const) {
-        const priceStr = cond === 'N' ? row.price_new : row.price_used;
-        const stock = cond === 'N' ? row.stock_available_new : row.stock_available_used;
-        const sold = cond === 'N' ? row.times_sold_new : row.times_sold_used;
-        // Need at least sold + stock recorded — partial cache rows from older partout
-        // runs that didn't always write velocity get treated as misses and re-fetched.
-        if (sold == null || stock == null) continue;
-        const key = `${row.part_type === 'PART' ? 'P' : 'M'}:${row.part_number}:${row.colour_id}:${cond}`;
-        if (priceStr != null) {
-          const price = parseFloat(priceStr);
-          if (price > 0) {
-            out.set(key, { ukSoldAvg: price, ukSoldQty: sold, ukStockQty: stock, source: 'cache' });
-            continue;
+    let pageStart = 0;
+    let pagesFetched = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('bricklink_part_price_cache')
+        .select('part_number, part_type, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used, fetched_at')
+        .in('part_number', chunk)
+        .range(pageStart, pageStart + PAGE - 1);
+      if (error) {
+        console.warn(`  cache page fetch error at chunk[${i}..${i + CHUNK}] page ${pagesFetched}: ${error.message}`);
+        break;
+      }
+      const rows = (data ?? []) as CacheRow[];
+      pagesFetched++;
+      totalRowsRead += rows.length;
+      for (const row of rows) {
+        const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
+        if (!fresh) continue;
+        for (const cond of ['N', 'U'] as const) {
+          const priceStr = cond === 'N' ? row.price_new : row.price_used;
+          const stock = cond === 'N' ? row.stock_available_new : row.stock_available_used;
+          const sold = cond === 'N' ? row.times_sold_new : row.times_sold_used;
+          // Need at least sold + stock recorded — partial cache rows from older partout
+          // runs that didn't always write velocity get treated as misses and re-fetched.
+          if (sold == null || stock == null) continue;
+          const key = `${row.part_type === 'PART' ? 'P' : 'M'}:${row.part_number}:${row.colour_id}:${cond}`;
+          if (priceStr != null) {
+            const price = parseFloat(priceStr);
+            if (price > 0) {
+              out.set(key, { ukSoldAvg: price, ukSoldQty: sold, ukStockQty: stock, source: 'cache' });
+              continue;
+            }
+          }
+          // priceStr null OR price=0 → "we asked, no UK sales found" — honour the cached null
+          // result so we don't re-pay the API for it. (See feedback memory: 9% of items legitimately
+          // have no UK 6mo sales for that exact colour×condition; current TTL gates how often
+          // we re-check whether sales materialised.)
+          if (sold === 0) {
+            out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stock, source: 'cache-none' });
           }
         }
-        // priceStr null OR price=0 → "we asked, no UK sales found" — honour the cached null
-        // result so we don't re-pay the API for it. (See feedback memory: 9% of items legitimately
-        // have no UK 6mo sales for that exact colour×condition; current TTL gates how often
-        // we re-check whether sales materialised.)
-        if (sold === 0) {
-          out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stock, source: 'cache-none' });
-        }
       }
+      if (rows.length < PAGE) break; // last page for this chunk
+      pageStart += PAGE;
     }
   }
-  console.log(`  cache hit: ${out.size} tuples`);
+  console.log(`  cache hit: ${out.size} tuples  (read ${totalRowsRead} rows across ${Math.ceil(uniquePartNos.length / CHUNK)} chunk(s))`);
 
   // Sets → brickset_sets
   const setItems = items.filter((i) => i.itemType === 'S');
