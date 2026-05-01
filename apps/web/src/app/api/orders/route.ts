@@ -43,11 +43,15 @@ export async function GET(request: NextRequest) {
 
     const { page, pageSize, platform, status, startDate, endDate } = parsed.data;
 
+    // platform='bricqer' is a deprecated aggregation path — BL/BO data now lives
+    // under platform='bricklink' / platform='brickowl' in this same table.
+    // Hide bricqer rows from the orders dashboard regardless of filter.
     const orderRepo = new OrderRepository(supabase);
     const result = await orderRepo.findByUser(
       userId,
       {
-        platform,
+        platform: platform === 'bricqer' ? undefined : platform,
+        excludePlatforms: ['bricqer'],
         status,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,

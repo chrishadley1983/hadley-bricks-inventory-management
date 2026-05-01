@@ -11,6 +11,8 @@ import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repos
 
 export interface OrderFilters {
   platform?: string;
+  /** Platforms to exclude from results (applied even when `platform` is not set). */
+  excludePlatforms?: string[];
   status?: string;
   startDate?: Date;
   endDate?: Date;
@@ -76,6 +78,12 @@ export class OrderRepository extends BaseRepository<
 
     if (filters?.platform) {
       query = query.eq('platform', filters.platform);
+    }
+
+    if (filters?.excludePlatforms && filters.excludePlatforms.length > 0) {
+      // PostgREST .not('platform', 'in', '(a,b)') — exclude any of the listed platforms
+      const list = `(${filters.excludePlatforms.map((p) => `"${p}"`).join(',')})`;
+      query = query.not('platform', 'in', list);
     }
 
     if (filters?.status) {
