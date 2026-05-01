@@ -294,8 +294,8 @@ export class OrderIssueService {
       attachments?: unknown;
     },
   ): Promise<{
-    issue: SalesOrderIssueRow;
-    message: SalesOrderIssueMessageRow;
+    issue: SalesOrderIssueRow | null;
+    message: SalesOrderIssueMessageRow | null;
     autoCreated: boolean;
     skipped: boolean;
   }> {
@@ -313,26 +313,33 @@ export class OrderIssueService {
 
     let autoCreated = false;
     if (!issue) {
+      // Sales-side guard: only auto-create issues for orders we actually SOLD.
+      // Without a matching platform_orders row, this message refers to an order
+      // we bought (or one that isn't in our system) — `sales_order_issues` should
+      // not capture those. Return skipped:true so the adapter can move on.
+      const lookup = await this.orders
+        .findByPlatformOrderId(userId, args.platform, args.platform_order_id)
+        .catch(() => null);
+      if (!lookup) {
+        return { issue: null, message: null, autoCreated: false, skipped: true };
+      }
+
       // F19: auto-create if buyer-initiated; for outbound-only seeds (us writing first)
       // we still create with discovered_by='us' so the message has somewhere to land.
       const discoveredBy: 'us' | 'buyer' = args.direction === 'inbound' ? 'buyer' : 'us';
       const initialStatus: 'awaiting_us' | 'awaiting_buyer' =
         args.direction === 'inbound' ? 'awaiting_us' : 'awaiting_buyer';
 
-      const lookup = await this.orders
-        .findByPlatformOrderId(userId, args.platform, args.platform_order_id)
-        .catch(() => null);
-
       issue = await this.issues.insert({
         user_id: userId,
         platform: args.platform,
         platform_order_id: args.platform_order_id,
-        platform_order_uuid: lookup?.id ?? null,
-        buyer_name: lookup?.buyer_name ?? null,
+        platform_order_uuid: lookup.id,
+        buyer_name: lookup.buyer_name ?? null,
         buyer_username: null,
-        buyer_email: lookup?.buyer_email ?? null,
-        order_date: lookup?.order_date ?? null,
-        order_status: lookup?.status ?? null,
+        buyer_email: lookup.buyer_email ?? null,
+        order_date: lookup.order_date ?? null,
+        order_status: lookup.status ?? null,
         discovered_by: discoveredBy,
         issue_status: initialStatus,
       });
