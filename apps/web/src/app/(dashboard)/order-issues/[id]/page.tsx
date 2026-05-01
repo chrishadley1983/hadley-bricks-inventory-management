@@ -14,7 +14,9 @@ import {
   Globe,
   Hand,
   RefreshCw,
+  Plus,
 } from 'lucide-react';
+import { AddIssueItemsDialog } from '@/components/features/order-issues/AddIssueItemsDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +87,7 @@ export default function OrderIssueDetailPage({
   const [newMessageBody, setNewMessageBody] = useState('');
   const [newMessageDirection, setNewMessageDirection] =
     useState<OrderIssueMessageDirection>('inbound');
+  const [addItemsOpen, setAddItemsOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -288,10 +291,14 @@ export default function OrderIssueDetailPage({
 
         {/* Items */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">
               Affected lots ({items.length})
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => setAddItemsOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add lots
+            </Button>
           </CardHeader>
           <CardContent>
             {items.length === 0 ? (
@@ -340,6 +347,15 @@ export default function OrderIssueDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <AddIssueItemsDialog
+        open={addItemsOpen}
+        onOpenChange={setAddItemsOpen}
+        issueId={issue.id}
+        platform={issue.platform as 'bricklink' | 'brickowl'}
+        platformOrderId={issue.platform_order_id}
+        existingOrderItemIds={items.map((it) => it.order_item_id).filter((x): x is string => !!x)}
+      />
 
       {/* Messages */}
       <Card>
