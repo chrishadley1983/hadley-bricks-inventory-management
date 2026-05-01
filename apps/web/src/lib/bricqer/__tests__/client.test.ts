@@ -328,6 +328,37 @@ describe('BricqerClient', () => {
         expect.any(Object)
       );
     });
+
+    it('should pass modified__gte as query param (Bricqer API uses modified__gte, not created_after)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({ results: [] }),
+      });
+
+      await client.getOrders({ modified__gte: '2026-04-30T00:00:00Z' });
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('modified__gte=');
+      expect(url).toContain('2026-04-30T00%3A00%3A00Z');
+      expect(url).not.toContain('created_after');
+    });
+
+    it('should pass modified__lte as query param', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({ results: [] }),
+      });
+
+      await client.getOrders({ modified__lte: '2026-05-01T23:59:59Z' });
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('modified__lte=');
+      expect(url).not.toContain('created_before');
+    });
   });
 
   describe('getAllOrders', () => {
@@ -388,6 +419,25 @@ describe('BricqerClient', () => {
         expect.stringMatching(/status=READY.*filed=false|filed=false.*status=READY/),
         expect.any(Object)
       );
+    });
+
+    it('should pass modified__gte through convertOrderParams (regression: this is the order-poll path)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({ results: [] }),
+      });
+
+      await client.getAllOrders({
+        modified__gte: '2026-04-24T00:00:00Z',
+        status: 'READY',
+      });
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('modified__gte=');
+      expect(url).toContain('status=READY');
+      expect(url).not.toContain('created_after');
     });
   });
 

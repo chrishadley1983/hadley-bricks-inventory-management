@@ -384,12 +384,12 @@ export class BricqerClient {
       queryParams.payment_status = params.payment_status;
     }
 
-    if (params?.created_after) {
-      queryParams.created_after = params.created_after;
+    if (params?.modified__gte) {
+      queryParams.modified__gte = params.modified__gte;
     }
 
-    if (params?.created_before) {
-      queryParams.created_before = params.created_before;
+    if (params?.modified__lte) {
+      queryParams.modified__lte = params.modified__lte;
     }
 
     if (params?.limit) {
@@ -446,8 +446,8 @@ export class BricqerClient {
       result.status = Array.isArray(params.status) ? params.status.join(',') : params.status;
     }
     if (params.payment_status) result.payment_status = params.payment_status;
-    if (params.created_after) result.created_after = params.created_after;
-    if (params.created_before) result.created_before = params.created_before;
+    if (params.modified__gte) result.modified__gte = params.modified__gte;
+    if (params.modified__lte) result.modified__lte = params.modified__lte;
     if (params.ordering) result.ordering = params.ordering;
     if (params.search) result.search = params.search;
     // Include archived orders filter
