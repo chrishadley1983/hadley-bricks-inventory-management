@@ -80,7 +80,12 @@ export class OrderStatusService {
 
     const normalized = platformStatus.toLowerCase();
 
-    if (normalized.includes('completed') || normalized.includes('received')) {
+    if (
+      normalized.includes('completed') ||
+      normalized.includes('received') ||
+      normalized.includes('purged')
+    ) {
+      // BrickLink uses 'PURGED' for fully archived/finalized orders — semantically Completed.
       return 'Completed';
     }
     if (normalized.includes('shipped') || normalized.includes('dispatched')) {
