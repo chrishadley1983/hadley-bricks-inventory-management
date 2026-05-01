@@ -27,7 +27,8 @@
     "setup:shopify": "tsx scripts/setup-shopify.ts",
     "validate:fp": "tsx scripts/validate-fp-detector.ts",
     "test:gmail-coverage": "tsx scripts/test-gmail-coverage.ts",
-    "sync:bl-messages": "tsx scripts/sync-bl-messages.ts"
+    "sync:bl-messages": "tsx scripts/sync-bl-messages.ts",
+    "auth:hb-gmail": "tsx scripts/auth-hb-gmail.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

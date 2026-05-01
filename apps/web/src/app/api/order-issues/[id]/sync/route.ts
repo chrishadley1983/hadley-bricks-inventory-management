@@ -35,26 +35,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const oauth = new google.auth.OAuth2(
-      process.env.GOOGLE_GMAIL_CLIENT_ID,
-      process.env.GOOGLE_GMAIL_CLIENT_SECRET,
-    );
-    oauth.setCredentials({ refresh_token: process.env.GOOGLE_GMAIL_REFRESH_TOKEN });
-    const gmail = google.gmail({ version: 'v1', auth: oauth });
-
+    const accounts = OrderIssueGmailAdapter.getAccountConfigs();
     const adapter = new OrderIssueGmailAdapter(supabase);
-    const result = await adapter.syncIssue(
-      gmail,
-      auth.userId,
-      {
-        id: issue.id,
-        platform: issue.platform as OrderIssuePlatform,
-        platform_order_id: issue.platform_order_id,
-      },
-      100,
-    );
 
-    return NextResponse.json({ data: result });
+    let totalIngested = 0;
+    let totalSkipped = 0;
+    const perAccount: Array<{ label: string; ingested: number; skipped: number; error?: string }> = [];
+
+    for (const acc of accounts) {
+      const oauth = new google.auth.OAuth2(acc.clientId, acc.clientSecret);
+      oauth.setCredentials({ refresh_token: acc.refreshToken });
+      const gmail = google.gmail({ version: 'v1', auth: oauth });
+      try {
+        const r = await adapter.syncIssue(
+          gmail,
+          auth.userId,
+          {
+            id: issue.id,
+            platform: issue.platform as OrderIssuePlatform,
+            platform_order_id: issue.platform_order_id,
+          },
+          100,
+        );
+        totalIngested += r.ingested;
+        totalSkipped += r.skipped;
+        perAccount.push({ label: acc.label, ingested: r.ingested, skipped: r.skipped });
+      } catch (e) {
+        perAccount.push({
+          label: acc.label,
+          ingested: 0,
+          skipped: 0,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    return NextResponse.json({ data: { ingested: totalIngested, skipped: totalSkipped, perAccount } });
   } catch (error) {
     console.error('[POST /api/order-issues/[id]/sync] Error:', error);
     return NextResponse.json(
