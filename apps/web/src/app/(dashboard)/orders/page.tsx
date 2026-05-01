@@ -703,16 +703,17 @@ export default function OrdersPage() {
   const getEffectiveStatus = (order: PlatformOrder): string => {
     if (order.internal_status) return order.internal_status;
     const raw = order.status ?? '';
-    // Mirror the normalize logic in OrderStatusService.normalizeStatus so the
-    // row badge matches the card pill counts. BrickLink emits 'PURGED' for
-    // fully archived/finalized orders — that's Completed in our taxonomy.
+    // Mirror OrderStatusService.normalizeStatus (precedence-sensitive). Paid is
+    // checked first because BrickOwl uses 'Payment Received' which contains both
+    // 'payment' and 'received'. BrickLink emits 'PURGED' for fully archived
+    // orders — that's Completed.
     const lower = raw.toLowerCase();
+    if (lower.includes('paid') || lower.includes('payment')) return 'Paid';
     if (lower.includes('completed') || lower.includes('received') || lower.includes('purged')) {
       return 'Completed';
     }
     if (lower.includes('shipped') || lower.includes('dispatched')) return 'Shipped';
     if (lower.includes('packed') || lower.includes('ready')) return 'Packed';
-    if (lower.includes('paid') || lower.includes('payment')) return 'Paid';
     if (lower.includes('cancel') || lower.includes('npb')) return 'Cancelled';
     return raw || 'Pending';
   };
