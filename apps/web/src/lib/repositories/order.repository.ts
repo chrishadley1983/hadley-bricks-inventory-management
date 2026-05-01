@@ -41,7 +41,8 @@ export class OrderRepository extends BaseRepository<
   private getStatusPatterns(status: string): string[] {
     switch (status) {
       case 'Completed':
-        return ['completed', 'received'];
+        // BrickLink uses 'PURGED' for fully archived/finalized orders — semantically Completed.
+        return ['completed', 'received', 'purged'];
       case 'Shipped':
         return ['shipped', 'dispatched'];
       case 'Packed':
@@ -104,6 +105,7 @@ export class OrderRepository extends BaseRepository<
         const nonPendingPatterns = [
           'completed',
           'received',
+          'purged',
           'shipped',
           'dispatched',
           'packed',
