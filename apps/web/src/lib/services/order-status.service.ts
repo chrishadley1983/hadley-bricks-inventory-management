@@ -80,6 +80,12 @@ export class OrderStatusService {
 
     const normalized = platformStatus.toLowerCase();
 
+    // Order matters: BrickOwl uses 'Payment Received' which contains BOTH 'payment'
+    // and 'received'. We want that to bucket as Paid (a stronger lifecycle signal
+    // than the ambiguous 'received'), so check Paid first.
+    if (normalized.includes('paid') || normalized.includes('payment')) {
+      return 'Paid';
+    }
     if (
       normalized.includes('completed') ||
       normalized.includes('received') ||
@@ -93,9 +99,6 @@ export class OrderStatusService {
     }
     if (normalized.includes('packed') || normalized.includes('ready')) {
       return 'Packed';
-    }
-    if (normalized.includes('paid') || normalized.includes('payment')) {
-      return 'Paid';
     }
     if (normalized.includes('cancel') || normalized.includes('npb')) {
       return 'Cancelled';
