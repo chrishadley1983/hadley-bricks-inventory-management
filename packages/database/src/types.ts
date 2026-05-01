@@ -14,6 +14,163 @@ export type Database = {
   }
   public: {
     Tables: {
+      accountability_goals: {
+        Row: {
+          auto_query: Json | null
+          auto_source: string | null
+          best_streak: number | null
+          category: string
+          completed_at: string | null
+          created_at: string | null
+          current_streak: number | null
+          current_value: number | null
+          deadline: string | null
+          description: string | null
+          direction: string
+          frequency: string | null
+          goal_type: string
+          id: string
+          last_hit_date: string | null
+          metric: string
+          start_date: string
+          start_value: number | null
+          status: string
+          target_value: number
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auto_query?: Json | null
+          auto_source?: string | null
+          best_streak?: number | null
+          category?: string
+          completed_at?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          current_value?: number | null
+          deadline?: string | null
+          description?: string | null
+          direction?: string
+          frequency?: string | null
+          goal_type: string
+          id?: string
+          last_hit_date?: string | null
+          metric: string
+          start_date?: string
+          start_value?: number | null
+          status?: string
+          target_value: number
+          title: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          auto_query?: Json | null
+          auto_source?: string | null
+          best_streak?: number | null
+          category?: string
+          completed_at?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          current_value?: number | null
+          deadline?: string | null
+          description?: string | null
+          direction?: string
+          frequency?: string | null
+          goal_type?: string
+          id?: string
+          last_hit_date?: string | null
+          metric?: string
+          start_date?: string
+          start_value?: number | null
+          status?: string
+          target_value?: number
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      accountability_milestones: {
+        Row: {
+          celebrated: boolean | null
+          created_at: string | null
+          goal_id: string
+          id: string
+          reached_at: string | null
+          target_value: number
+          title: string
+        }
+        Insert: {
+          celebrated?: boolean | null
+          created_at?: string | null
+          goal_id: string
+          id?: string
+          reached_at?: string | null
+          target_value: number
+          title: string
+        }
+        Update: {
+          celebrated?: boolean | null
+          created_at?: string | null
+          goal_id?: string
+          id?: string
+          reached_at?: string | null
+          target_value?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountability_milestones_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "accountability_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accountability_progress: {
+        Row: {
+          date: string | null
+          delta: number | null
+          goal_id: string
+          id: string
+          logged_at: string | null
+          note: string | null
+          source: string
+          value: number
+        }
+        Insert: {
+          date?: string | null
+          delta?: number | null
+          goal_id: string
+          id?: string
+          logged_at?: string | null
+          note?: string | null
+          source?: string
+          value: number
+        }
+        Update: {
+          date?: string | null
+          delta?: number | null
+          goal_id?: string
+          id?: string
+          logged_at?: string | null
+          note?: string | null
+          source?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountability_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "accountability_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_arbitrage_pricing: {
         Row: {
           asin: string
@@ -902,8 +1059,86 @@ export type Database = {
           },
         ]
       }
+      arbitrage_purchases: {
+        Row: {
+          bl_order_id: string | null
+          cart_validation: Json | null
+          created_at: string
+          id: string
+          inbound_postage_gbp: number | null
+          inputs: Json
+          items: Json
+          projected_margin_pct: number | null
+          projected_net_profit_gbp: number | null
+          projected_roi_pct: number | null
+          purchased_at: string | null
+          report_snapshot: string | null
+          status: string
+          store_country: string | null
+          store_id: number | null
+          store_slug: string
+          total_list_gbp: number | null
+          total_outlay_gbp: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bl_order_id?: string | null
+          cart_validation?: Json | null
+          created_at?: string
+          id?: string
+          inbound_postage_gbp?: number | null
+          inputs: Json
+          items: Json
+          projected_margin_pct?: number | null
+          projected_net_profit_gbp?: number | null
+          projected_roi_pct?: number | null
+          purchased_at?: string | null
+          report_snapshot?: string | null
+          status?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_slug: string
+          total_list_gbp?: number | null
+          total_outlay_gbp?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bl_order_id?: string | null
+          cart_validation?: Json | null
+          created_at?: string
+          id?: string
+          inbound_postage_gbp?: number | null
+          inputs?: Json
+          items?: Json
+          projected_margin_pct?: number | null
+          projected_net_profit_gbp?: number | null
+          projected_roi_pct?: number | null
+          purchased_at?: string | null
+          report_snapshot?: string | null
+          status?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_slug?: string
+          total_list_gbp?: number | null
+          total_outlay_gbp?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_purchases_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arbitrage_sync_status: {
         Row: {
+          checkpoint_data: Json | null
           created_at: string
           cursor_position: number | null
           error_details: Json | null
@@ -924,6 +1159,7 @@ export type Database = {
           zero_progress_count: number | null
         }
         Insert: {
+          checkpoint_data?: Json | null
           created_at?: string
           cursor_position?: number | null
           error_details?: Json | null
@@ -944,6 +1180,7 @@ export type Database = {
           zero_progress_count?: number | null
         }
         Update: {
+          checkpoint_data?: Json | null
           created_at?: string
           cursor_position?: number | null
           error_details?: Json | null
@@ -2585,6 +2822,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      commitments: {
+        Row: {
+          category: string
+          created_at: string
+          detected_at: string
+          dismiss_reason: string | null
+          dismissed_at: string | null
+          id: string
+          last_nudged_at: string | null
+          matched_pattern: string | null
+          next_nudge_after: string | null
+          nudge_count: number
+          recipient: string | null
+          resolved_at: string | null
+          source: string
+          source_context: string | null
+          source_message_id: string | null
+          status: string
+          text: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          detected_at?: string
+          dismiss_reason?: string | null
+          dismissed_at?: string | null
+          id?: string
+          last_nudged_at?: string | null
+          matched_pattern?: string | null
+          next_nudge_after?: string | null
+          nudge_count?: number
+          recipient?: string | null
+          resolved_at?: string | null
+          source: string
+          source_context?: string | null
+          source_message_id?: string | null
+          status?: string
+          text: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          detected_at?: string
+          dismiss_reason?: string | null
+          dismissed_at?: string | null
+          id?: string
+          last_nudged_at?: string | null
+          matched_pattern?: string | null
+          next_nudge_after?: string | null
+          nudge_count?: number
+          recipient?: string | null
+          resolved_at?: string | null
+          source?: string
+          source_context?: string | null
+          source_message_id?: string | null
+          status?: string
+          text?: string
+        }
+        Relationships: []
       }
       cost_model_package_costs: {
         Row: {
@@ -4545,6 +4842,339 @@ export type Database = {
           },
         ]
       }
+      fitness_exercises: {
+        Row: {
+          category: string
+          created_at: string | null
+          default_hold_s: number | null
+          default_reps: number | null
+          default_sets: number | null
+          equipment: string | null
+          form_cue: string | null
+          id: string
+          instructions: string | null
+          measurement: string
+          muscle_group: string | null
+          name: string
+          progression_note: string | null
+          slug: string
+          video_url: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          default_hold_s?: number | null
+          default_reps?: number | null
+          default_sets?: number | null
+          equipment?: string | null
+          form_cue?: string | null
+          id?: string
+          instructions?: string | null
+          measurement?: string
+          muscle_group?: string | null
+          name: string
+          progression_note?: string | null
+          slug: string
+          video_url?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          default_hold_s?: number | null
+          default_reps?: number | null
+          default_sets?: number | null
+          equipment?: string | null
+          form_cue?: string | null
+          id?: string
+          instructions?: string | null
+          measurement?: string
+          muscle_group?: string | null
+          name?: string
+          progression_note?: string | null
+          slug?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
+      fitness_mobility_sessions: {
+        Row: {
+          created_at: string | null
+          duration_min: number | null
+          id: string
+          notes: string | null
+          programme_id: string | null
+          routine: string | null
+          session_date: string
+          slot: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_min?: number | null
+          id?: string
+          notes?: string | null
+          programme_id?: string | null
+          routine?: string | null
+          session_date?: string
+          slot: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_min?: number | null
+          id?: string
+          notes?: string | null
+          programme_id?: string | null
+          routine?: string | null
+          session_date?: string
+          slot?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fitness_mobility_sessions_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "fitness_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fitness_programmes: {
+        Row: {
+          created_at: string | null
+          daily_calorie_target: number
+          daily_protein_g: number
+          daily_steps_target: number
+          duration_weeks: number
+          end_date: string
+          id: string
+          name: string
+          notes: string | null
+          split: string
+          start_date: string
+          start_weight_kg: number
+          status: string
+          target_weight_kg: number
+          tdee_kcal: number
+          updated_at: string | null
+          user_id: string
+          weekly_strength_sessions: number
+        }
+        Insert: {
+          created_at?: string | null
+          daily_calorie_target: number
+          daily_protein_g: number
+          daily_steps_target?: number
+          duration_weeks?: number
+          end_date: string
+          id?: string
+          name: string
+          notes?: string | null
+          split?: string
+          start_date: string
+          start_weight_kg: number
+          status?: string
+          target_weight_kg: number
+          tdee_kcal: number
+          updated_at?: string | null
+          user_id?: string
+          weekly_strength_sessions?: number
+        }
+        Update: {
+          created_at?: string | null
+          daily_calorie_target?: number
+          daily_protein_g?: number
+          daily_steps_target?: number
+          duration_weeks?: number
+          end_date?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          split?: string
+          start_date?: string
+          start_weight_kg?: number
+          status?: string
+          target_weight_kg?: number
+          tdee_kcal?: number
+          updated_at?: string | null
+          user_id?: string
+          weekly_strength_sessions?: number
+        }
+        Relationships: []
+      }
+      fitness_weekly_checkins: {
+        Row: {
+          adjustment_note: string | null
+          calories_adherence_pct: number | null
+          created_at: string | null
+          cumulative_loss_kg: number | null
+          id: string
+          mobility_days_hit: number | null
+          next_calorie_target: number | null
+          next_steps_target: number | null
+          notes: string | null
+          programme_id: string
+          protein_adherence_pct: number | null
+          pt_grade: string | null
+          steps_adherence_pct: number | null
+          strength_sessions_hit: number | null
+          trend_weight_kg: number | null
+          week_ending: string
+          week_no: number
+          weight_change_kg: number | null
+        }
+        Insert: {
+          adjustment_note?: string | null
+          calories_adherence_pct?: number | null
+          created_at?: string | null
+          cumulative_loss_kg?: number | null
+          id?: string
+          mobility_days_hit?: number | null
+          next_calorie_target?: number | null
+          next_steps_target?: number | null
+          notes?: string | null
+          programme_id: string
+          protein_adherence_pct?: number | null
+          pt_grade?: string | null
+          steps_adherence_pct?: number | null
+          strength_sessions_hit?: number | null
+          trend_weight_kg?: number | null
+          week_ending: string
+          week_no: number
+          weight_change_kg?: number | null
+        }
+        Update: {
+          adjustment_note?: string | null
+          calories_adherence_pct?: number | null
+          created_at?: string | null
+          cumulative_loss_kg?: number | null
+          id?: string
+          mobility_days_hit?: number | null
+          next_calorie_target?: number | null
+          next_steps_target?: number | null
+          notes?: string | null
+          programme_id?: string
+          protein_adherence_pct?: number | null
+          pt_grade?: string | null
+          steps_adherence_pct?: number | null
+          strength_sessions_hit?: number | null
+          trend_weight_kg?: number | null
+          week_ending?: string
+          week_no?: number
+          weight_change_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fitness_weekly_checkins_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "fitness_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fitness_workout_sessions: {
+        Row: {
+          created_at: string | null
+          duration_min: number | null
+          id: string
+          notes: string | null
+          pre_mood: number | null
+          pre_weight_kg: number | null
+          programme_id: string | null
+          rpe: number | null
+          session_date: string
+          session_type: string
+          user_id: string
+          week_no: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_min?: number | null
+          id?: string
+          notes?: string | null
+          pre_mood?: number | null
+          pre_weight_kg?: number | null
+          programme_id?: string | null
+          rpe?: number | null
+          session_date?: string
+          session_type: string
+          user_id?: string
+          week_no?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_min?: number | null
+          id?: string
+          notes?: string | null
+          pre_mood?: number | null
+          pre_weight_kg?: number | null
+          programme_id?: string | null
+          rpe?: number | null
+          session_date?: string
+          session_type?: string
+          user_id?: string
+          week_no?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fitness_workout_sessions_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "fitness_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fitness_workout_sets: {
+        Row: {
+          created_at: string | null
+          exercise_id: string
+          hold_s: number | null
+          id: string
+          notes: string | null
+          reps: number | null
+          session_id: string
+          set_no: number
+        }
+        Insert: {
+          created_at?: string | null
+          exercise_id: string
+          hold_s?: number | null
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          session_id: string
+          set_no: number
+        }
+        Update: {
+          created_at?: string | null
+          exercise_id?: string
+          hold_s?: number | null
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          session_id?: string
+          set_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fitness_workout_sets_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "fitness_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fitness_workout_sets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "fitness_workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       garmin_daily_summary: {
         Row: {
           active_calories: number | null
@@ -4552,6 +5182,9 @@ export type Database = {
           avg_stress: number | null
           created_at: string | null
           date: string
+          hrv_last_night: number | null
+          hrv_status: string | null
+          hrv_weekly_avg: number | null
           id: string
           max_hr: number | null
           min_hr: number | null
@@ -4570,6 +5203,9 @@ export type Database = {
           avg_stress?: number | null
           created_at?: string | null
           date: string
+          hrv_last_night?: number | null
+          hrv_status?: string | null
+          hrv_weekly_avg?: number | null
           id?: string
           max_hr?: number | null
           min_hr?: number | null
@@ -4588,6 +5224,9 @@ export type Database = {
           avg_stress?: number | null
           created_at?: string | null
           date?: string
+          hrv_last_night?: number | null
+          hrv_status?: string | null
+          hrv_weekly_avg?: number | null
           id?: string
           max_hr?: number | null
           min_hr?: number | null
@@ -6140,6 +6779,33 @@ export type Database = {
         }
         Relationships: []
       }
+      journal_entries: {
+        Row: {
+          content: string
+          created_at: string | null
+          date: string
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       knockout_matches: {
         Row: {
           away_score: number | null
@@ -6486,6 +7152,149 @@ export type Database = {
           updated_at?: string | null
           user_note?: string | null
           word_count?: number | null
+        }
+        Relationships: []
+      }
+      life_admin_alert_history: {
+        Row: {
+          alert_tier: string
+          channel: string | null
+          id: string
+          obligation_id: string
+          sent_at: string | null
+          suppressed: boolean | null
+        }
+        Insert: {
+          alert_tier: string
+          channel?: string | null
+          id?: string
+          obligation_id: string
+          sent_at?: string | null
+          suppressed?: boolean | null
+        }
+        Update: {
+          alert_tier?: string
+          channel?: string | null
+          id?: string
+          obligation_id?: string
+          sent_at?: string | null
+          suppressed?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "life_admin_alert_history_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "life_admin_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      life_admin_email_scans: {
+        Row: {
+          details: Json | null
+          emails_checked: number | null
+          id: string
+          obligations_created: number | null
+          obligations_updated: number | null
+          scanned_at: string | null
+        }
+        Insert: {
+          details?: Json | null
+          emails_checked?: number | null
+          id?: string
+          obligations_created?: number | null
+          obligations_updated?: number | null
+          scanned_at?: string | null
+        }
+        Update: {
+          details?: Json | null
+          emails_checked?: number | null
+          id?: string
+          obligations_created?: number | null
+          obligations_updated?: number | null
+          scanned_at?: string | null
+        }
+        Relationships: []
+      }
+      life_admin_obligations: {
+        Row: {
+          alert_lead_days: number[]
+          alert_priority: string
+          amount: number | null
+          auto_renews: boolean | null
+          category: string
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          due_date: string | null
+          gmail_query: string | null
+          id: string
+          last_actioned_date: string | null
+          last_email_id: string | null
+          name: string
+          notes: string | null
+          provider: string | null
+          recurrence_months: number | null
+          reference_number: string | null
+          renewal_date: string | null
+          snoozed_until: string | null
+          status: string
+          subcategory: string | null
+          updated_at: string | null
+          url: string | null
+        }
+        Insert: {
+          alert_lead_days?: number[]
+          alert_priority?: string
+          amount?: number | null
+          auto_renews?: boolean | null
+          category: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          due_date?: string | null
+          gmail_query?: string | null
+          id?: string
+          last_actioned_date?: string | null
+          last_email_id?: string | null
+          name: string
+          notes?: string | null
+          provider?: string | null
+          recurrence_months?: number | null
+          reference_number?: string | null
+          renewal_date?: string | null
+          snoozed_until?: string | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          alert_lead_days?: number[]
+          alert_priority?: string
+          amount?: number | null
+          auto_renews?: boolean | null
+          category?: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          due_date?: string | null
+          gmail_query?: string | null
+          id?: string
+          last_actioned_date?: string | null
+          last_email_id?: string | null
+          name?: string
+          notes?: string | null
+          provider?: string | null
+          recurrence_months?: number | null
+          reference_number?: string | null
+          renewal_date?: string | null
+          snoozed_until?: string | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string | null
+          url?: string | null
         }
         Relationships: []
       }
@@ -7999,6 +8808,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mood_entries: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          note: string | null
+          score: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+          score: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+          score?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       mtd_export_history: {
         Row: {
@@ -10238,6 +11077,237 @@ export type Database = {
           },
           {
             foreignKeyName: "sales_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_order_issue_items: {
+        Row: {
+          color_id: number | null
+          color_name: string | null
+          condition: string | null
+          created_at: string
+          id: string
+          issue_id: string
+          issue_type: string
+          item_name: string | null
+          item_number: string
+          item_type: string | null
+          notes: string | null
+          order_item_id: string | null
+          qty_expected: number
+          qty_missing: number | null
+          qty_received: number
+          resolved: boolean
+        }
+        Insert: {
+          color_id?: number | null
+          color_name?: string | null
+          condition?: string | null
+          created_at?: string
+          id?: string
+          issue_id: string
+          issue_type: string
+          item_name?: string | null
+          item_number: string
+          item_type?: string | null
+          notes?: string | null
+          order_item_id?: string | null
+          qty_expected: number
+          qty_missing?: number | null
+          qty_received?: number
+          resolved?: boolean
+        }
+        Update: {
+          color_id?: number | null
+          color_name?: string | null
+          condition?: string | null
+          created_at?: string
+          id?: string
+          issue_id?: string
+          issue_type?: string
+          item_name?: string | null
+          item_number?: string
+          item_type?: string | null
+          notes?: string | null
+          order_item_id?: string | null
+          qty_expected?: number
+          qty_missing?: number | null
+          qty_received?: number
+          resolved?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_issue_items_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_issue_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_order_issue_messages: {
+        Row: {
+          attachments: Json | null
+          body: string | null
+          body_html: string | null
+          content_fingerprint: string | null
+          created_at: string
+          direction: string
+          duplicate_of_id: string | null
+          external_message_id: string | null
+          from_address: string | null
+          id: string
+          issue_id: string
+          sent_at: string
+          source: string
+          subject: string | null
+          to_address: string | null
+        }
+        Insert: {
+          attachments?: Json | null
+          body?: string | null
+          body_html?: string | null
+          content_fingerprint?: string | null
+          created_at?: string
+          direction: string
+          duplicate_of_id?: string | null
+          external_message_id?: string | null
+          from_address?: string | null
+          id?: string
+          issue_id: string
+          sent_at: string
+          source: string
+          subject?: string | null
+          to_address?: string | null
+        }
+        Update: {
+          attachments?: Json | null
+          body?: string | null
+          body_html?: string | null
+          content_fingerprint?: string | null
+          created_at?: string
+          direction?: string
+          duplicate_of_id?: string | null
+          external_message_id?: string | null
+          from_address?: string | null
+          id?: string
+          issue_id?: string
+          sent_at?: string
+          source?: string
+          subject?: string | null
+          to_address?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_issue_messages_duplicate_of_id_fkey"
+            columns: ["duplicate_of_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_issue_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_issue_messages_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_order_issues: {
+        Row: {
+          buyer_email: string | null
+          buyer_name: string | null
+          buyer_username: string | null
+          created_at: string
+          credit_amount: number | null
+          discovered_by: string
+          id: string
+          issue_status: string
+          latest_message_at: string | null
+          latest_message_from: string | null
+          latest_message_preview: string | null
+          latest_message_source: string | null
+          order_date: string | null
+          order_status: string | null
+          planned_resolution: string | null
+          platform: string
+          platform_order_id: string
+          platform_order_uuid: string | null
+          refund_amount: number | null
+          replacement_qty: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          buyer_email?: string | null
+          buyer_name?: string | null
+          buyer_username?: string | null
+          created_at?: string
+          credit_amount?: number | null
+          discovered_by: string
+          id?: string
+          issue_status?: string
+          latest_message_at?: string | null
+          latest_message_from?: string | null
+          latest_message_preview?: string | null
+          latest_message_source?: string | null
+          order_date?: string | null
+          order_status?: string | null
+          planned_resolution?: string | null
+          platform: string
+          platform_order_id: string
+          platform_order_uuid?: string | null
+          refund_amount?: number | null
+          replacement_qty?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          buyer_email?: string | null
+          buyer_name?: string | null
+          buyer_username?: string | null
+          created_at?: string
+          credit_amount?: number | null
+          discovered_by?: string
+          id?: string
+          issue_status?: string
+          latest_message_at?: string | null
+          latest_message_from?: string | null
+          latest_message_preview?: string | null
+          latest_message_source?: string | null
+          order_date?: string | null
+          order_status?: string | null
+          planned_resolution?: string | null
+          platform?: string
+          platform_order_id?: string
+          platform_order_uuid?: string | null
+          refund_amount?: number | null
+          replacement_qty?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_issues_platform_order_uuid_fkey"
+            columns: ["platform_order_uuid"]
+            isOneToOne: false
+            referencedRelation: "platform_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_issues_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -14682,6 +15752,12 @@ export type Database = {
           offers_expired: number
           offers_pending: number
           total_offers_sent: number
+        }[]
+      }
+      get_orphaned_item_ids: {
+        Args: never
+        Returns: {
+          id: string
         }[]
       }
       get_orphaned_items: {
