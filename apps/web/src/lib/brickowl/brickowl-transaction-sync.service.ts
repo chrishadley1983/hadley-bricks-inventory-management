@@ -6,10 +6,10 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@hadley-bricks/database';
+import type { Database, PlatformOrderInsert } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { BrickOwlClient } from './client';
-import { CredentialsRepository } from '@/lib/repositories';
+import { CredentialsRepository, OrderRepository } from '@/lib/repositories';
 import type { BrickOwlCredentials, BrickOwlOrderDetail } from './types';
 import type {
   BrickOwlSyncResult,
@@ -591,7 +591,73 @@ export class BrickOwlTransactionSyncService {
   }
 
   /**
-   * Upsert transactions to database in batches
+   * Transform a BrickOwl order to a platform_orders row (platform='brickowl').
+   *
+   * Mirrors the BrickLink path: every BO order also lives in platform_orders so the
+   * unified orders dashboard and any downstream consumers see one shape per platform.
+   * Returns null if the order has no usable date — same skip rule as the
+   * brickowl_transactions write.
+   */
+  private transformOrderToPlatformOrder(
+    userId: string,
+    order: BrickOwlOrderDetail
+  ): PlatformOrderInsert | null {
+    const orderDate =
+      this.toISODateString(order.iso_order_time) || this.toISODateString(order.order_time);
+    if (!orderDate) return null;
+
+    const orderAny = order as unknown as Record<string, unknown>;
+
+    const subTotal = parseCurrencyValue(orderAny.sub_total);
+    const shipping = parseCurrencyValue(orderAny.ship_total);
+    const tax = parseCurrencyValue(orderAny.tax_amount);
+    const grandTotal =
+      parseCurrencyValue(orderAny.payment_total) ||
+      parseCurrencyValue(orderAny.base_order_total);
+
+    const baseCurrency = (orderAny.base_currency as string) ?? order.currency ?? 'GBP';
+    const buyerEmail = (orderAny.customer_email as string) ?? order.buyer_email ?? null;
+
+    const totalQuantity =
+      typeof orderAny.total_quantity === 'string'
+        ? parseInt(orderAny.total_quantity, 10) || 0
+        : typeof orderAny.total_quantity === 'number'
+          ? orderAny.total_quantity
+          : 0;
+
+    const statusDates = [order.processed_time, order.shipped_time, order.received_time]
+      .map((d) => this.toISODateString(d))
+      .filter((d): d is string => d !== null);
+    const platformStatusChangedAt =
+      statusDates.length > 0 ? statusDates[statusDates.length - 1] : null;
+
+    return {
+      user_id: userId,
+      platform: 'brickowl',
+      platform_order_id: String(order.order_id),
+      order_date: orderDate,
+      buyer_name: order.buyer_name,
+      buyer_email: buyerEmail,
+      status: order.status,
+      subtotal: subTotal,
+      shipping,
+      // BrickOwl doesn't model platform fees separately; tax is the closest
+      // proxy that reduces the seller's net.
+      fees: tax,
+      total: grandTotal,
+      currency: baseCurrency,
+      tracking_number: order.tracking_number ?? null,
+      items_count: totalQuantity,
+      raw_data: order as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      platform_status_changed_at: platformStatusChangedAt,
+    };
+  }
+
+  /**
+   * Upsert transactions to database in batches.
+   * Dual-writes to brickowl_transactions (full BO-native shape) AND
+   * platform_orders (unified cross-platform shape) so the orders dashboard
+   * sees brickowl alongside bricklink/amazon/ebay.
    */
   private async upsertTransactions(
     userId: string,
@@ -632,7 +698,7 @@ export class BrickOwlTransactionSyncService {
       }
     }
 
-    // Upsert in batches
+    // Upsert brickowl_transactions in batches
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { error } = await supabase
@@ -643,6 +709,23 @@ export class BrickOwlTransactionSyncService {
         console.error('[BrickOwlTransactionSyncService] Upsert error:', error);
         throw new Error(`Failed to upsert transactions: ${error.message}`);
       }
+    }
+
+    // Dual-write to platform_orders. Same skip rule (orders without a valid
+    // date) — both writes either land or skip in lockstep.
+    const platformRows = orders
+      .map((order) => this.transformOrderToPlatformOrder(userId, order))
+      .filter((row): row is PlatformOrderInsert => row !== null);
+
+    if (platformRows.length > 0) {
+      const orderRepo = new OrderRepository(supabase);
+      for (let i = 0; i < platformRows.length; i += BATCH_SIZE) {
+        const batch = platformRows.slice(i, i + BATCH_SIZE);
+        await orderRepo.upsertMany(batch);
+      }
+      console.log(
+        `[BrickOwlTransactionSyncService] Dual-wrote ${platformRows.length} rows to platform_orders`
+      );
     }
 
     return { created, updated, skipped };
