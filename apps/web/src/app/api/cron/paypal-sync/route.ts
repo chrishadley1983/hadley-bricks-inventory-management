@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { paypalTransactionSyncService } from '@/lib/paypal';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { PayPalTransactionSyncService } from '@/lib/paypal';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,11 @@ async function handler(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await paypalTransactionSyncService.syncTransactions(DEFAULT_USER_ID, {
+    // Service-role client so RLS-gated inserts (paypal_sync_log) succeed without
+    // a Supabase user session. The service singleton uses cookie auth which
+    // would fail here.
+    const service = new PayPalTransactionSyncService(createServiceRoleClient());
+    const result = await service.syncTransactions(DEFAULT_USER_ID, {
       fullSync: false,
     });
 

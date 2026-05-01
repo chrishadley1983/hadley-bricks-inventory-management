@@ -11,6 +11,8 @@
  * - Preserves user's local_category and user_notes edits
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { getSheetsClient } from '@/lib/google/sheets-client';
 
@@ -57,6 +59,18 @@ const MONZO_SHEET_NAME = 'Monzo Transactions';
 
 export class MonzoSheetsSyncService {
   /**
+   * @param supabaseOverride Optional supabase client. When omitted, the service
+   * lazily creates a cookie-auth client (for user-triggered routes). Cron routes
+   * should pass a service-role client so RLS-gated inserts (e.g. monzo_sync_log)
+   * succeed in a context with no Supabase user session.
+   */
+  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+
+  private async getSupabase(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
+  /**
    * Perform a full sync from Google Sheets
    * Loads all transactions and upserts them into the database
    */
@@ -79,7 +93,7 @@ export class MonzoSheetsSyncService {
     userId: string,
     syncType: 'FULL' | 'INCREMENTAL'
   ): Promise<MonzoSheetsSyncResult> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const startedAt = new Date();
 
     // Create sync log entry
@@ -348,7 +362,7 @@ export class MonzoSheetsSyncService {
    * Get sync status
    */
   async getSyncStatus(userId: string) {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Get latest sync
     const { data: latestSync } = await supabase

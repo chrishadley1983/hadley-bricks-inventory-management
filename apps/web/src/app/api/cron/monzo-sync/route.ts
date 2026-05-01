@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { monzoSheetsSyncService } from '@/lib/monzo/monzo-sheets-sync.service';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { MonzoSheetsSyncService } from '@/lib/monzo/monzo-sheets-sync.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,11 @@ async function handler(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await monzoSheetsSyncService.performIncrementalSync(DEFAULT_USER_ID);
+    // Service-role client so RLS-gated inserts (monzo_sync_log) succeed without
+    // a Supabase user session. The service singleton uses cookie auth which
+    // would fail here.
+    const service = new MonzoSheetsSyncService(createServiceRoleClient());
+    const result = await service.performIncrementalSync(DEFAULT_USER_ID);
 
     return NextResponse.json({ data: result });
   } catch (error) {
