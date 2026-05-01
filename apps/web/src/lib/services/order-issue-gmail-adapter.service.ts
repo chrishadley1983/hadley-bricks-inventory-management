@@ -81,21 +81,54 @@ export class OrderIssueGmailAdapter {
   }
 
   static isConfigured(): boolean {
-    return !!(
-      process.env.GOOGLE_GMAIL_CLIENT_ID &&
-      process.env.GOOGLE_GMAIL_CLIENT_SECRET &&
-      process.env.GOOGLE_GMAIL_REFRESH_TOKEN
-    );
+    return OrderIssueGmailAdapter.getAccountConfigs().length > 0;
   }
 
+  /**
+   * Resolve all configured Gmail accounts. The primary set uses GOOGLE_GMAIL_*;
+   * the Workspace inbox uses GOOGLE_GMAIL_HB_* (chris@hadleybricks.co.uk).
+   * Either or both may be present. Both share the same OAuth client by default
+   * unless dedicated client/secret env vars are provided for the second account.
+   */
+  static getAccountConfigs(): Array<{
+    label: string;
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  }> {
+    const out: Array<{ label: string; clientId: string; clientSecret: string; refreshToken: string }> = [];
+    const baseId = process.env.GOOGLE_GMAIL_CLIENT_ID;
+    const baseSecret = process.env.GOOGLE_GMAIL_CLIENT_SECRET;
+    if (baseId && baseSecret && process.env.GOOGLE_GMAIL_REFRESH_TOKEN) {
+      out.push({
+        label: 'primary',
+        clientId: baseId,
+        clientSecret: baseSecret,
+        refreshToken: process.env.GOOGLE_GMAIL_REFRESH_TOKEN,
+      });
+    }
+    if (process.env.GOOGLE_GMAIL_HB_REFRESH_TOKEN) {
+      out.push({
+        label: 'hadleybricks',
+        clientId: process.env.GOOGLE_GMAIL_HB_CLIENT_ID ?? baseId ?? '',
+        clientSecret: process.env.GOOGLE_GMAIL_HB_CLIENT_SECRET ?? baseSecret ?? '',
+        refreshToken: process.env.GOOGLE_GMAIL_HB_REFRESH_TOKEN,
+      });
+    }
+    return out.filter((c) => c.clientId && c.clientSecret && c.refreshToken);
+  }
+
+  private getClients(): Array<{ label: string; client: gmail_v1.Gmail }> {
+    return OrderIssueGmailAdapter.getAccountConfigs().map(({ label, clientId, clientSecret, refreshToken }) => {
+      const auth = new google.auth.OAuth2(clientId, clientSecret);
+      auth.setCredentials({ refresh_token: refreshToken });
+      return { label, client: google.gmail({ version: 'v1', auth }) };
+    });
+  }
+
+  /** @deprecated Use getClients(). Kept for backwards compatibility with the per-issue sync route. */
   private getClient(): gmail_v1.Gmail | null {
-    const clientId = process.env.GOOGLE_GMAIL_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_GMAIL_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_GMAIL_REFRESH_TOKEN;
-    if (!clientId || !clientSecret || !refreshToken) return null;
-    const auth = new google.auth.OAuth2(clientId, clientSecret);
-    auth.setCredentials({ refresh_token: refreshToken });
-    return google.gmail({ version: 'v1', auth });
+    return this.getClients()[0]?.client ?? null;
   }
 
   /**
@@ -115,40 +148,48 @@ export class OrderIssueGmailAdapter {
       errors: [],
     };
 
-    const client = this.getClient();
-    if (!client) {
+    const clients = this.getClients();
+    if (clients.length === 0) {
       result.errors.push({ error: 'Gmail not configured (missing GOOGLE_GMAIL_* env)' });
       return result;
     }
 
-    // Per-issue sync
+    // Per-issue sync — search every configured account, the service dedupes by external_message_id
     const { data: issues } = await this.issues.findByUser(userId, { openOnly }, { pageSize: 200 });
     for (const issue of issues) {
-      try {
-        const r = await this.syncIssue(client, userId, {
-          id: issue.id,
-          platform: issue.platform as OrderIssuePlatform,
-          platform_order_id: issue.platform_order_id,
-        }, perIssueLimit);
-        result.issuesScanned++;
-        result.messagesIngested += r.ingested;
-        result.messagesSkipped += r.skipped;
-      } catch (e) {
-        result.errors.push({
-          issueId: issue.id,
-          orderId: issue.platform_order_id,
-          error: e instanceof Error ? e.message : String(e),
-        });
+      let issueIngested = 0;
+      let issueSkipped = 0;
+      for (const { label, client } of clients) {
+        try {
+          const r = await this.syncIssue(client, userId, {
+            id: issue.id,
+            platform: issue.platform as OrderIssuePlatform,
+            platform_order_id: issue.platform_order_id,
+          }, perIssueLimit);
+          issueIngested += r.ingested;
+          issueSkipped += r.skipped;
+        } catch (e) {
+          result.errors.push({
+            issueId: issue.id,
+            orderId: issue.platform_order_id,
+            error: `[${label}] ${e instanceof Error ? e.message : String(e)}`,
+          });
+        }
       }
+      result.issuesScanned++;
+      result.messagesIngested += issueIngested;
+      result.messagesSkipped += issueSkipped;
     }
 
-    // Discovery: find buyer-initiated messages with no matching issue
-    try {
-      const discovered = await this.discoverNewIssues(client, userId, discoveryWindowDays);
-      result.discoveryCreated = discovered.created;
-      result.messagesIngested += discovered.messagesIngested;
-    } catch (e) {
-      result.errors.push({ error: e instanceof Error ? e.message : String(e) });
+    // Discovery: find buyer-initiated messages with no matching issue, every account
+    for (const { label, client } of clients) {
+      try {
+        const discovered = await this.discoverNewIssues(client, userId, discoveryWindowDays);
+        result.discoveryCreated += discovered.created;
+        result.messagesIngested += discovered.messagesIngested;
+      } catch (e) {
+        result.errors.push({ error: `[${label} discovery] ${e instanceof Error ? e.message : String(e)}` });
+      }
     }
 
     return result;

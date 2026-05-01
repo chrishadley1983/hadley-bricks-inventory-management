@@ -42,6 +42,17 @@ const USER_ID =
     ? argv['user-id']
     : process.env.SERVICE_USER_ID;
 const DEBUG = argv['debug'] === 'true';
+/**
+ * Discovery mode: also scan recent BL sales orders that don't yet have an issue.
+ * If a thread exists on BL native, ingestAutomatedMessage auto-creates the issue
+ * (the seller guard always passes since these come from platform_orders).
+ *  --discover                   enable discovery
+ *  --discover-days=<n>          window in days (default 14)
+ *  --discover-limit=<n>         max orders to scan per run (default 50)
+ */
+const DISCOVER = argv['discover'] === 'true';
+const DISCOVER_DAYS = parseInt(argv['discover-days'] ?? '14', 10);
+const DISCOVER_LIMIT = parseInt(argv['discover-limit'] ?? '50', 10);
 
 if (!USER_ID) {
   console.error('SERVICE_USER_ID env not set and --user-id not provided');
@@ -228,39 +239,67 @@ async function scrapeOrderMessages(
   );
   const service = new OrderIssueService(supabase);
 
-  // Load issues to scrape
-  let issues: Array<{ id: string; platform_order_id: string }> = [];
+  // Load orders to scrape: open issues + (optional) discovery candidates
+  type Target = { source: 'issue' | 'discovery'; platform_order_id: string };
+  const targets: Target[] = [];
+
   if (SINGLE_ORDER_ID) {
-    issues = [{ id: 'manual', platform_order_id: SINGLE_ORDER_ID }];
+    targets.push({ source: 'issue', platform_order_id: SINGLE_ORDER_ID });
   } else {
-    const { data } = await supabase
+    const { data: issuesData } = await supabase
       .from('sales_order_issues')
-      .select('id, platform_order_id')
+      .select('platform_order_id')
       .eq('user_id', USER_ID!)
       .eq('platform', 'bricklink')
       .in('issue_status', ['open', 'awaiting_buyer', 'awaiting_us']);
-    issues = data ?? [];
+    for (const r of issuesData ?? []) {
+      targets.push({ source: 'issue', platform_order_id: r.platform_order_id });
+    }
+
+    if (DISCOVER) {
+      const sinceIso = new Date(Date.now() - DISCOVER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const { data: poData } = await supabase
+        .from('platform_orders')
+        .select('platform_order_id')
+        .eq('user_id', USER_ID!)
+        .eq('platform', 'bricklink')
+        .gte('order_date', sinceIso)
+        .order('order_date', { ascending: false })
+        .limit(DISCOVER_LIMIT * 2); // overfetch since some will already have issues
+
+      const haveIssue = new Set(targets.map((t) => t.platform_order_id));
+      let added = 0;
+      for (const r of poData ?? []) {
+        if (added >= DISCOVER_LIMIT) break;
+        if (haveIssue.has(r.platform_order_id)) continue;
+        targets.push({ source: 'discovery', platform_order_id: r.platform_order_id });
+        added++;
+      }
+      console.log(`[discovery] scanning ${added} BL sales order(s) without issues from last ${DISCOVER_DAYS}d`);
+    }
   }
 
-  if (issues.length === 0) {
-    console.log('No open BrickLink issues to scrape.');
+  if (targets.length === 0) {
+    console.log('No targets to scrape.');
     return;
   }
 
-  console.log(`Scraping ${issues.length} BL order(s) via CDP...`);
+  console.log(`Scraping ${targets.length} BL order(s) via CDP...`);
   const cdp = await connectCdp();
 
   let totalIngested = 0;
   let totalSkipped = 0;
-  for (const issue of issues) {
+  let issuesCreatedByDiscovery = 0;
+  for (const t of targets) {
     try {
-      console.log(`  → ${issue.platform_order_id}`);
-      const messages = await scrapeOrderMessages(cdp, issue.platform_order_id);
+      console.log(`  → ${t.platform_order_id} [${t.source}]`);
+      const messages = await scrapeOrderMessages(cdp, t.platform_order_id);
       console.log(`    found ${messages.length} message(s)`);
+      let createdHere = false;
       for (const m of messages) {
         const result = await service.ingestAutomatedMessage(USER_ID!, {
           platform: 'bricklink',
-          platform_order_id: issue.platform_order_id,
+          platform_order_id: t.platform_order_id,
           source: 'bricklink',
           external_message_id: m.externalId,
           direction: m.direction,
@@ -271,13 +310,18 @@ async function scrapeOrderMessages(
         });
         if (result.skipped) totalSkipped++;
         else totalIngested++;
+        if (result.autoCreated) createdHere = true;
+      }
+      if (t.source === 'discovery' && createdHere) {
+        issuesCreatedByDiscovery++;
+        console.log(`    ✓ auto-created issue from BL thread`);
       }
     } catch (e) {
-      console.error(`    ✗ ${issue.platform_order_id}: ${e instanceof Error ? e.message : e}`);
+      console.error(`    ✗ ${t.platform_order_id}: ${e instanceof Error ? e.message : e}`);
     }
     await sleep(2000);
   }
   cdp.close();
 
-  console.log(`\nDone. Ingested ${totalIngested} new, skipped ${totalSkipped} duplicate.`);
+  console.log(`\nDone. Ingested ${totalIngested} new, skipped ${totalSkipped} duplicate.${issuesCreatedByDiscovery > 0 ? `  Discovery auto-created ${issuesCreatedByDiscovery} issue(s).` : ''}`);
 })();
