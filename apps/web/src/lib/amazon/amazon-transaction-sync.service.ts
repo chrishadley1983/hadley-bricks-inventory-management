@@ -5,6 +5,8 @@
  * to the local database. Supports full sync, incremental sync, and historical imports.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { CredentialsRepository } from '@/lib/repositories';
 import { createAmazonFinancesClient } from './amazon-finances.client';
@@ -95,6 +97,18 @@ interface TransactionRow {
 // ============================================================================
 
 export class AmazonTransactionSyncService {
+  /**
+   * @param supabaseOverride Optional supabase client. When omitted, lazily
+   * creates a cookie-auth client (for user-triggered routes). Cron callers
+   * must pass a service-role client (amazon_sync_log + amazon_transactions
+   * are RLS-gated and the cron has no Supabase user session).
+   */
+  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+
+  private async getSupabase(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
   // ============================================================================
   // Transaction Sync
   // ============================================================================
@@ -110,7 +124,7 @@ export class AmazonTransactionSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[AmazonTransactionSyncService] Sync mode:', syncMode);
 
@@ -319,7 +333,7 @@ export class AmazonTransactionSyncService {
     userId: string,
     fromDate: string
   ): Promise<{ transactions: AmazonSyncResult }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
@@ -376,7 +390,7 @@ export class AmazonTransactionSyncService {
     logs: AmazonSyncLogRow[];
     transactionCount: number;
   }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Check if Amazon is connected
     const credentials = await this.getCredentials(userId);
@@ -449,7 +463,7 @@ export class AmazonTransactionSyncService {
    */
   private async getCredentials(userId: string): Promise<AmazonCredentials | null> {
     try {
-      const supabase = await createClient();
+      const supabase = await this.getSupabase();
       const credentialsRepo = new CredentialsRepository(supabase);
       const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(userId, 'amazon');
       return credentials;
@@ -542,7 +556,7 @@ export class AmazonTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Generate transaction IDs and deduplicate
     const transactionMap = new Map<string, AmazonFinancialTransaction>();
