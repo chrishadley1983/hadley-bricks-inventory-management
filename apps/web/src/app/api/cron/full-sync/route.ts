@@ -744,8 +744,13 @@ export async function POST(request: NextRequest) {
           })),
 
         // BrickLink Orders
+        // includeItems=true → BL detail endpoint per order (real cost.shipping breakdown)
+        // includeFiled=true → capture orders the seller has filed (typically post-Shipped)
         withTimeout(
-          new BrickLinkSyncService(supabase).syncOrders(userId),
+          new BrickLinkSyncService(supabase).syncOrders(userId, {
+            includeItems: true,
+            includeFiled: true,
+          }),
           BRICKLINK_TIMEOUT,
           'BrickLink Orders'
         )

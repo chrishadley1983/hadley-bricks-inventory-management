@@ -309,10 +309,14 @@ export async function POST(request: NextRequest) {
       }),
 
       // BrickLink sync
-      bricklinkSyncService.syncOrders(userId).catch((e: Error) => {
-        console.error('[sync-all] BrickLink orders error:', e.message);
-        return null;
-      }),
+      // includeItems=true → fetch detail per order (real cost.shipping breakdown)
+      // includeFiled=true → capture orders the seller has filed (typically post-Shipped)
+      bricklinkSyncService
+        .syncOrders(userId, { includeItems: true, includeFiled: true })
+        .catch((e: Error) => {
+          console.error('[sync-all] BrickLink orders error:', e.message);
+          return null;
+        }),
 
       // BrickOwl sync
       brickowlSyncService.syncOrders(userId).catch((e: Error) => {
