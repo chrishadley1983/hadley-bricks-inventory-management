@@ -7,6 +7,8 @@
  * Key feature: Only stores transactions where fee_amount != 0
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { paypalAuthService } from './paypal-auth.service';
 import { PayPalApiAdapter } from './paypal-api.adapter';
@@ -60,6 +62,18 @@ interface TransactionRow {
 // ============================================================================
 
 export class PayPalTransactionSyncService {
+  /**
+   * @param supabaseOverride Optional supabase client. When omitted, the service
+   * lazily creates a cookie-auth client (for user-triggered routes). Cron routes
+   * should pass a service-role client so RLS-gated inserts (e.g. paypal_sync_log)
+   * succeed in a context with no Supabase user session.
+   */
+  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+
+  private async getSupabase(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
   // ============================================================================
   // Transaction Sync
   // ============================================================================
@@ -76,7 +90,7 @@ export class PayPalTransactionSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const syncMode: PayPalSyncMode = options?.fromDate
       ? 'HISTORICAL'
       : options?.fullSync
@@ -309,7 +323,7 @@ export class PayPalTransactionSyncService {
    * @param fromDate Start date (ISO string, e.g., '2024-01-01')
    */
   async performHistoricalImport(userId: string, fromDate: string): Promise<PayPalSyncResult> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
@@ -364,7 +378,7 @@ export class PayPalTransactionSyncService {
       lastSyncDateCursor?: string;
     };
   }> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Get running sync
     const { data: runningSync } = await supabase
@@ -430,7 +444,7 @@ export class PayPalTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     // Deduplicate transactions by transactionId
     const uniqueTransactions = Array.from(
