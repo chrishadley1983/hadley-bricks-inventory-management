@@ -80,9 +80,12 @@ export function normalizeOrder(
 
   // Calculate financial values
   const subtotal = parseCurrencyValue(cost.subtotal);
-  const shipping = parseCurrencyValue(cost.shipping);
   const fees = parseCurrencyValue(cost.salesTax_collected_by_bl);
   const total = parseCurrencyValue(cost.grand_total) || parseCurrencyValue(cost.final_total);
+  // BL list endpoint omits cost.shipping; fall back to (total - subtotal) so the
+  // platform_orders row isn't left at £0 when the cron path runs without details.
+  const shippingRaw = parseCurrencyValue(cost.shipping);
+  const shipping = shippingRaw > 0 ? shippingRaw : Math.max(0, total - subtotal);
 
   // Extract shipping address
   let shippingAddress: NormalizedOrder['shippingAddress'];
