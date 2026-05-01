@@ -1,11 +1,19 @@
 {
   "agent": "define-done",
-  "lastRun": "2026-02-23T20:00:00Z",
+  "lastRun": "2026-04-30T00:00:00Z",
   "lastCommit": null,
   "status": "success",
-  "featuresDefinedCount": 13,
-  "averageCriteriaPerFeature": 61,
+  "featuresDefinedCount": 14,
+  "averageCriteriaPerFeature": 59,
   "recentFeatures": [
+    {
+      "name": "order-issues",
+      "criteriaCount": 25,
+      "autoVerifyCount": 25,
+      "humanVerifyCount": 0,
+      "definedAt": "2026-04-30T00:00:00Z",
+      "note": "BL/BO sales-side order issue tracker. 3 new tables (sales_order_issues, sales_order_issue_items, sales_order_issue_messages). Standalone /order-issues screen. 5-source message ingestion (personal Gmail, hadleybricks email forwarded, BL CDP, BO API/CDP, Bricqer) with content_fingerprint dedup. Auto-create issues from unmatched buyer messages. Admin-only — no inventory write-backs."
+    },
     {
       "name": "scanner-set-check",
       "criteriaCount": 15,

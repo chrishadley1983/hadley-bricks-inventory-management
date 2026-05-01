@@ -35,6 +35,7 @@ import {
   Gavel,
   TrendingDown,
   Megaphone,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -59,6 +60,7 @@ const mainNavItems: NavItem[] = [
   { href: '/inventory/explorer', label: 'Inventory Explorer', icon: Search },
   { href: '/inventory/markdown', label: 'Smart Markdown', icon: TrendingDown },
   { href: '/orders', label: 'Orders', icon: FileText },
+  { href: '/order-issues', label: 'Order Issues', icon: AlertTriangle },
   { href: '/transactions', label: 'Transactions', icon: Landmark },
   { href: '/set-lookup', label: 'Set Lookup', icon: Search },
   { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
