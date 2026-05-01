@@ -119,6 +119,33 @@ export class BricqerSyncService {
       const client = await this.getClient(userId);
       console.log('[BricqerSyncService] Client created successfully');
 
+      // Decide on incremental cursor. Bricqer's /orders/order/ honours
+      // modified__gte (verified live; created_after is silently ignored —
+      // see PR #374). For incremental syncs, anchor at MAX(synced_at) - 1h
+      // (the buffer covers any partial-failure race; upserts are idempotent
+      // so re-fetching the buffered hour is free). Cold start defaults to 7
+      // days ago, mirroring OrderPollService. Skip the cursor when the
+      // caller explicitly asked for a full sync or a bounded one-off.
+      const skipIncremental = options.fullSync === true || options.limit !== undefined;
+      let modifiedAfter: string | undefined;
+      if (!skipIncremental) {
+        const { data: cursorRow } = await this.supabase
+          .from('platform_orders')
+          .select('synced_at')
+          .eq('user_id', userId)
+          .eq('platform', 'bricqer')
+          .order('synced_at', { ascending: false })
+          .limit(1);
+        const lastSync = (cursorRow as { synced_at: string }[] | null)?.[0]?.synced_at;
+        const anchor = lastSync
+          ? new Date(new Date(lastSync).getTime() - 60 * 60 * 1000)
+          : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        modifiedAfter = anchor.toISOString();
+        console.log('[BricqerSyncService] Incremental cursor:', modifiedAfter);
+      } else {
+        console.log('[BricqerSyncService] Full sync (no cursor)');
+      }
+
       // Get orders - Bricqer uses uppercase status values (READY, SHIPPED, etc.)
       // Default to including archived orders (filed=true) unless explicitly set to false
       console.log('[BricqerSyncService] Fetching orders...');
@@ -130,11 +157,17 @@ export class BricqerSyncService {
         // Fetch both archived (filed=true) and active (filed=false) orders
         // Use getAllOrders to handle pagination properly
         console.log('[BricqerSyncService] Fetching archived orders...');
-        const archivedOrders = await client.getAllOrders({ filed: true });
+        const archivedOrders = await client.getAllOrders({
+          filed: true,
+          modified__gte: modifiedAfter,
+        });
         console.log('[BricqerSyncService] Found', archivedOrders.length, 'archived orders');
 
         console.log('[BricqerSyncService] Fetching active orders...');
-        const activeOrders = await client.getAllOrders({ filed: false });
+        const activeOrders = await client.getAllOrders({
+          filed: false,
+          modified__gte: modifiedAfter,
+        });
         console.log('[BricqerSyncService] Found', activeOrders.length, 'active orders');
 
         // Combine, removing duplicates by id
@@ -147,7 +180,10 @@ export class BricqerSyncService {
         }
       } else {
         // Only fetch active orders
-        allOrders = await client.getAllOrders({ filed: false });
+        allOrders = await client.getAllOrders({
+          filed: false,
+          modified__gte: modifiedAfter,
+        });
       }
 
       console.log(

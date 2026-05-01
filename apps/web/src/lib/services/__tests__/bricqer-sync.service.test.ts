@@ -82,13 +82,30 @@ vi.mock('../../repositories', () => ({
 
 describe('BricqerSyncService', () => {
   let service: BricqerSyncService;
+  // Supabase chain stub for the incremental cursor query.
+  // syncOrders() reads MAX(synced_at) WHERE platform='bricqer'; tests can override
+  // via cursorChain.limit.mockResolvedValueOnce(...) to simulate a cold start vs.
+  // an established cursor.
+  const cursorChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue({ data: null }),
+  };
   const mockSupabase = {
-    from: vi.fn(),
+    from: vi.fn().mockReturnValue(cursorChain),
   } as never;
   const testUserId = 'test-user-id';
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-establish chain returns after clearAllMocks
+    cursorChain.select.mockReturnThis();
+    cursorChain.eq.mockReturnThis();
+    cursorChain.order.mockReturnThis();
+    cursorChain.limit.mockResolvedValue({ data: null });
+    (mockSupabase as { from: ReturnType<typeof vi.fn> }).from.mockReturnValue(cursorChain);
+
     service = new BricqerSyncService(mockSupabase);
 
     // Default mock: credentials exist
@@ -244,8 +261,69 @@ describe('BricqerSyncService', () => {
     it('should call getAllOrders for both archived and active orders by default', async () => {
       await service.syncOrders(testUserId);
 
-      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith({ filed: true });
-      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith({ filed: false });
+      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ filed: true })
+      );
+      expect(mockBricqerClient.getAllOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ filed: false })
+      );
+    });
+
+    it('should pass modified__gte from MAX(synced_at) - 1h on warm-start incremental sync', async () => {
+      const lastSync = '2026-04-30T12:00:00.000Z';
+      cursorChain.limit.mockResolvedValueOnce({ data: [{ synced_at: lastSync }] });
+
+      await service.syncOrders(testUserId);
+
+      const expectedCursor = new Date(
+        new Date(lastSync).getTime() - 60 * 60 * 1000
+      ).toISOString();
+      const archivedCall = mockBricqerClient.getAllOrders.mock.calls.find(
+        (c) => c[0]?.filed === true
+      );
+      const activeCall = mockBricqerClient.getAllOrders.mock.calls.find(
+        (c) => c[0]?.filed === false
+      );
+      expect(archivedCall?.[0]).toMatchObject({ modified__gte: expectedCursor });
+      expect(activeCall?.[0]).toMatchObject({ modified__gte: expectedCursor });
+    });
+
+    it('should anchor at 7 days ago on cold start (no prior synced_at)', async () => {
+      cursorChain.limit.mockResolvedValueOnce({ data: null });
+      const before = Date.now();
+
+      await service.syncOrders(testUserId);
+
+      const after = Date.now();
+      const archivedCall = mockBricqerClient.getAllOrders.mock.calls.find(
+        (c) => c[0]?.filed === true
+      );
+      const cursorMs = new Date(archivedCall?.[0].modified__gte).getTime();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      expect(cursorMs).toBeGreaterThanOrEqual(before - sevenDaysMs - 1000);
+      expect(cursorMs).toBeLessThanOrEqual(after - sevenDaysMs + 1000);
+    });
+
+    it('should NOT pass modified__gte when fullSync=true', async () => {
+      cursorChain.limit.mockResolvedValueOnce({
+        data: [{ synced_at: '2026-04-30T12:00:00.000Z' }],
+      });
+
+      await service.syncOrders(testUserId, { fullSync: true });
+
+      const archivedCall = mockBricqerClient.getAllOrders.mock.calls.find(
+        (c) => c[0]?.filed === true
+      );
+      expect(archivedCall?.[0].modified__gte).toBeUndefined();
+    });
+
+    it('should NOT pass modified__gte when limit is set (bounded one-off)', async () => {
+      await service.syncOrders(testUserId, { limit: 50 });
+
+      const archivedCall = mockBricqerClient.getAllOrders.mock.calls.find(
+        (c) => c[0]?.filed === true
+      );
+      expect(archivedCall?.[0].modified__gte).toBeUndefined();
     });
 
     it('should include items when requested', async () => {
