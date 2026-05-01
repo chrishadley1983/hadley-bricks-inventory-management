@@ -87,7 +87,8 @@ interface PlatformStatus {
 
 interface AllPlatformsStatusResponse {
   data: {
-    bricqer?: PlatformStatus;
+    bricklink?: PlatformStatus;
+    brickowl?: PlatformStatus;
     ebay?: PlatformStatus;
     amazon?: PlatformStatus;
   };
@@ -499,14 +500,22 @@ export default function OrdersPage() {
     refetchInterval: 60000,
   });
 
-  const bricqerStatus = platformStatuses?.data?.bricqer;
+  const bricklinkStatus = platformStatuses?.data?.bricklink;
+  const brickowlStatus = platformStatuses?.data?.brickowl;
   const amazonStatus = platformStatuses?.data?.amazon;
 
-  // Platform-specific status summaries (must be after bricqerStatus/amazonStatus are defined)
-  const { data: bricqerStatusSummary } = useQuery({
-    queryKey: ['orders', 'status-summary', 'bricqer', timeframe],
-    queryFn: () => fetchStatusSummary(timeframe, 'bricqer'),
-    enabled: bricqerStatus?.isConfigured,
+  // Platform-specific status summaries (must be after status reads are defined)
+  const { data: bricklinkStatusSummary } = useQuery({
+    queryKey: ['orders', 'status-summary', 'bricklink', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe, 'bricklink'),
+    enabled: bricklinkStatus?.isConfigured,
+    refetchInterval: 30000,
+  });
+
+  const { data: brickowlStatusSummary } = useQuery({
+    queryKey: ['orders', 'status-summary', 'brickowl', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe, 'brickowl'),
+    enabled: brickowlStatus?.isConfigured,
     refetchInterval: 30000,
   });
 
@@ -589,18 +598,13 @@ export default function OrdersPage() {
   const totalOrderCount = platformOrdersTotal + ebayOrdersTotal;
 
   const hasAnyPlatformConfigured =
-    bricqerStatus?.isConfigured || amazonStatus?.isConfigured || ebayConnected;
+    bricklinkStatus?.isConfigured ||
+    brickowlStatus?.isConfigured ||
+    amazonStatus?.isConfigured ||
+    ebayConnected;
 
   const syncMutation = useMutation({
     mutationFn: triggerSync,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
-    },
-  });
-
-  const bricqerSyncMutation = useMutation({
-    mutationFn: () => triggerPlatformSync('bricqer'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
@@ -818,110 +822,184 @@ export default function OrdersPage() {
         </div>
 
         {/* Platform Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* Bricqer Card */}
-          <Card className={`${platform === 'bricqer' ? 'ring-2 ring-primary' : ''}`}>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* BrickLink Card */}
+          <Card className={`${platform === 'bricklink' ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle
                 className="text-sm font-medium cursor-pointer hover:text-primary"
-                onClick={() => setPlatform(platform === 'bricqer' ? 'all' : 'bricqer')}
+                onClick={() => setPlatform(platform === 'bricklink' ? 'all' : 'bricklink')}
               >
-                Bricqer
+                BrickLink
               </CardTitle>
-              {bricqerStatus?.isConfigured ? (
+              {bricklinkStatus?.isConfigured ? (
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               ) : (
                 <AlertTriangle className="h-4 w-4 text-yellow-500" />
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {bricqerStatus?.isConfigured ? (
+              {bricklinkStatus?.isConfigured ? (
                 <>
                   <div className="space-y-1">
                     <div
                       className="text-2xl font-bold cursor-pointer hover:text-primary"
                       onClick={() => {
-                        setPlatform('bricqer');
+                        setPlatform('bricklink');
                         setStatus('all');
                       }}
                     >
-                      {(bricqerStatusSummary?.total || 0).toLocaleString()} orders
+                      {(bricklinkStatusSummary?.total || 0).toLocaleString()} orders
                     </div>
                     <div className="flex gap-2 text-xs flex-wrap">
                       <span
                         className="text-yellow-600 cursor-pointer hover:underline"
                         onClick={() => {
-                          setPlatform('bricqer');
+                          setPlatform('bricklink');
                           setStatus('Pending');
                         }}
                       >
-                        {bricqerStatusSummary?.data?.Pending || 0} Pending
+                        {bricklinkStatusSummary?.data?.Pending || 0} Pending
                       </span>
                       <span
                         className="text-purple-600 cursor-pointer hover:underline"
                         onClick={() => {
-                          setPlatform('bricqer');
+                          setPlatform('bricklink');
                           setStatus('Paid');
                         }}
                       >
-                        {bricqerStatusSummary?.data?.Paid || 0} Paid
+                        {bricklinkStatusSummary?.data?.Paid || 0} Paid
                       </span>
                       <span
                         className="text-blue-600 cursor-pointer hover:underline"
                         onClick={() => {
-                          setPlatform('bricqer');
+                          setPlatform('bricklink');
                           setStatus('Shipped');
                         }}
                       >
-                        {bricqerStatusSummary?.data?.Shipped || 0} Shipped
+                        {bricklinkStatusSummary?.data?.Shipped || 0} Shipped
                       </span>
                       <span
                         className="text-green-600 cursor-pointer hover:underline"
                         onClick={() => {
-                          setPlatform('bricqer');
+                          setPlatform('bricklink');
                           setStatus('Completed');
                         }}
                       >
-                        {bricqerStatusSummary?.data?.Completed || 0} Done
+                        {bricklinkStatusSummary?.data?.Completed || 0} Done
                       </span>
                       <span
                         className="text-red-600 cursor-pointer hover:underline"
                         onClick={() => {
-                          setPlatform('bricqer');
+                          setPlatform('bricklink');
                           setStatus('Cancelled');
                         }}
                       >
-                        {bricqerStatusSummary?.data?.Cancelled || 0} Cancelled
+                        {bricklinkStatusSummary?.data?.Cancelled || 0} Cancelled
                       </span>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {bricqerStatus.lastSyncedAt
-                      ? `Last sync: ${format(new Date(bricqerStatus.lastSyncedAt), 'MMM d, h:mm a')}`
+                    {bricklinkStatus.lastSyncedAt
+                      ? `Last sync: ${format(new Date(bricklinkStatus.lastSyncedAt), 'MMM d, h:mm a')}`
                       : 'Never synced'}
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      bricqerSyncMutation.mutate();
-                    }}
-                    disabled={bricqerSyncMutation.isPending}
-                  >
-                    {bricqerSyncMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Sync Bricqer
-                      </>
-                    )}
-                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
+                  <Link href="/settings/integrations">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* BrickOwl Card */}
+          <Card className={`${platform === 'brickowl' ? 'ring-2 ring-primary' : ''}`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle
+                className="text-sm font-medium cursor-pointer hover:text-primary"
+                onClick={() => setPlatform(platform === 'brickowl' ? 'all' : 'brickowl')}
+              >
+                BrickOwl
+              </CardTitle>
+              {brickowlStatus?.isConfigured ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {brickowlStatus?.isConfigured ? (
+                <>
+                  <div className="space-y-1">
+                    <div
+                      className="text-2xl font-bold cursor-pointer hover:text-primary"
+                      onClick={() => {
+                        setPlatform('brickowl');
+                        setStatus('all');
+                      }}
+                    >
+                      {(brickowlStatusSummary?.total || 0).toLocaleString()} orders
+                    </div>
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      <span
+                        className="text-yellow-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('brickowl');
+                          setStatus('Pending');
+                        }}
+                      >
+                        {brickowlStatusSummary?.data?.Pending || 0} Pending
+                      </span>
+                      <span
+                        className="text-purple-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('brickowl');
+                          setStatus('Paid');
+                        }}
+                      >
+                        {brickowlStatusSummary?.data?.Paid || 0} Paid
+                      </span>
+                      <span
+                        className="text-blue-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('brickowl');
+                          setStatus('Shipped');
+                        }}
+                      >
+                        {brickowlStatusSummary?.data?.Shipped || 0} Shipped
+                      </span>
+                      <span
+                        className="text-green-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('brickowl');
+                          setStatus('Completed');
+                        }}
+                      >
+                        {brickowlStatusSummary?.data?.Completed || 0} Done
+                      </span>
+                      <span
+                        className="text-red-600 cursor-pointer hover:underline"
+                        onClick={() => {
+                          setPlatform('brickowl');
+                          setStatus('Cancelled');
+                        }}
+                      >
+                        {brickowlStatusSummary?.data?.Cancelled || 0} Cancelled
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {brickowlStatus.lastSyncedAt
+                      ? `Last sync: ${format(new Date(brickowlStatus.lastSyncedAt), 'MMM d, h:mm a')}`
+                      : 'Never synced'}
+                  </p>
                 </>
               ) : (
                 <>
