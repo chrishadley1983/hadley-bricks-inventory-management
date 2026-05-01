@@ -10,7 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
-import { paypalAuthService } from './paypal-auth.service';
+import { paypalAuthService, PayPalAuthService } from './paypal-auth.service';
 import { PayPalApiAdapter } from './paypal-api.adapter';
 import type {
   PayPalTransactionResponse,
@@ -72,6 +72,18 @@ export class PayPalTransactionSyncService {
 
   private async getSupabase(): Promise<SupabaseClient<Database>> {
     return this.supabaseOverride ?? (await createClient());
+  }
+
+  /**
+   * Pick the right auth service: in cron context (with override) we instantiate
+   * a fresh PayPalAuthService that shares the same service-role supabase client,
+   * so paypal_credentials reads succeed under RLS. User context falls back to
+   * the singleton (cookie auth, as before).
+   */
+  private getAuthService(): PayPalAuthService {
+    return this.supabaseOverride
+      ? new PayPalAuthService(this.supabaseOverride)
+      : paypalAuthService;
   }
 
   // ============================================================================
@@ -145,7 +157,8 @@ export class PayPalTransactionSyncService {
     try {
       // Get access token and create API adapter
       console.log('[PayPalTransactionSyncService] Getting access token...');
-      const accessToken = await paypalAuthService.getAccessToken(userId);
+      const authService = this.getAuthService();
+      const accessToken = await authService.getAccessToken(userId);
       if (!accessToken) {
         console.error('[PayPalTransactionSyncService] No valid access token found');
         throw new Error('No valid PayPal access token. Please reconnect to PayPal.');
@@ -153,7 +166,7 @@ export class PayPalTransactionSyncService {
       console.log('[PayPalTransactionSyncService] Access token obtained');
 
       // Get credentials to determine sandbox mode
-      const credentials = await paypalAuthService.getCredentials(userId);
+      const credentials = await authService.getCredentials(userId);
       const sandbox = credentials?.sandbox ?? false;
 
       // Create API adapter

@@ -5,6 +5,8 @@
  * Manages token storage, refresh, and connection status.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/crypto';
 import type {
@@ -43,6 +45,17 @@ export interface PayPalCredentialsInput {
 // ============================================================================
 
 export class PayPalAuthService {
+  /**
+   * @param supabaseOverride Optional supabase client. When omitted, lazily
+   * creates a cookie-auth client. Cron callers must pass a service-role client
+   * (paypal_credentials and paypal_oauth_tokens are RLS-gated).
+   */
+  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+
+  private async getSupabase(): Promise<SupabaseClient<Database>> {
+    return this.supabaseOverride ?? (await createClient());
+  }
+
   // ============================================================================
   // Credentials Management
   // ============================================================================
@@ -55,7 +68,7 @@ export class PayPalAuthService {
     credentials: PayPalCredentialsInput
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const supabase = await createClient();
+      const supabase = await this.getSupabase();
 
       // First, test the credentials by getting an access token
       const tokenResult = await this.getNewAccessToken(
@@ -108,7 +121,7 @@ export class PayPalAuthService {
    * Get stored credentials for a user (decrypts sensitive fields)
    */
   async getCredentials(userId: string): Promise<PayPalCredentialsRow | null> {
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
 
     const { data, error } = await supabase
       .from('paypal_credentials')
@@ -145,7 +158,7 @@ export class PayPalAuthService {
    */
   async deleteCredentials(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const supabase = await createClient();
+      const supabase = await this.getSupabase();
 
       // Delete credentials
       const { error: credError } = await supabase
@@ -214,7 +227,7 @@ export class PayPalAuthService {
     }
 
     // Update stored token (encrypted)
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + tokenResult.expiresIn * 1000);
     const encryptedToken = await encrypt(tokenResult.token);
@@ -322,7 +335,7 @@ export class PayPalAuthService {
     }
 
     // Get transaction count
-    const supabase = await createClient();
+    const supabase = await this.getSupabase();
     const { count: transactionCount } = await supabase
       .from('paypal_transactions')
       .select('*', { count: 'exact', head: true })
