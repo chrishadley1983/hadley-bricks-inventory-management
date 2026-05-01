@@ -274,10 +274,10 @@ export class OrderPollService {
       // Fetch recent orders. Use getAllOrders to paginate past the default 100-row cap
       // (a busy day on BrickLink + BrickOwl can easily exceed that). On cold start
       // (null cursor), anchor at 7 days ago to avoid replaying months of history.
-      const createdAfter =
+      const modifiedAfter =
         lastCursor || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const orders = await client.getAllOrders({
-        created_after: createdAfter,
+        modified__gte: modifiedAfter,
         status: 'READY',
       });
 

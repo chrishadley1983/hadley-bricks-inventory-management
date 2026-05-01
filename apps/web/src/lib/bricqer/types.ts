@@ -223,10 +223,10 @@ export interface BricqerOrderListParams {
   status?: BricqerOrderStatus | BricqerOrderStatus[];
   /** Filter by payment status */
   payment_status?: BricqerPaymentStatus;
-  /** Filter by date range start (ISO format) */
-  created_after?: string;
-  /** Filter by date range end (ISO format) */
-  created_before?: string;
+  /** Filter by modified date range start (ISO format) — orders modified on or after */
+  modified__gte?: string;
+  /** Filter by modified date range end (ISO format) — orders modified on or before */
+  modified__lte?: string;
   /** Limit number of results */
   limit?: number;
   /** Offset for pagination */
