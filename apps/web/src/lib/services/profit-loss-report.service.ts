@@ -481,6 +481,52 @@ async function queryAmazonRefunds(
 }
 
 /**
+ * Query PayPal Fees (fee_amount on paypal_transactions by transaction_date).
+ * Covers the per-sale PayPal fees that get netted off Brick Owl / BrickLink
+ * payouts and never show up in Monzo, so without this row they're missing
+ * from the P&L entirely.
+ */
+async function queryPayPalFees(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+  const allData: { transaction_date: string; fee_amount: number | null }[] = [];
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('paypal_transactions')
+      .select('transaction_date, fee_amount')
+      .eq('user_id', userId)
+      .gte('transaction_date', startDate)
+      .lte('transaction_date', endDate)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) throw error;
+
+    allData.push(...(data || []));
+    hasMore = (data?.length || 0) === pageSize;
+    page++;
+  }
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.fee_amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({
+    month,
+    total,
+  }));
+}
+
+/**
  * Query Monzo transactions by local_category with pagination to handle >1000 rows
  */
 async function queryMonzoByCategory(
@@ -1243,6 +1289,12 @@ function getRowDefinitions(): RowDefinition[] {
     },
     {
       category: 'Selling Fees',
+      transactionType: 'PayPal Fees',
+      queryFn: queryPayPalFees,
+      signMultiplier: -1,
+    },
+    {
+      category: 'Selling Fees',
       transactionType: 'eBay Insertion Fees',
       queryFn: (supabase, userId, startDate, endDate) =>
         queryEbayFeesByType(supabase, userId, startDate, endDate, 'INSERTION_FEE'),
@@ -1338,7 +1390,7 @@ function getRowDefinitions(): RowDefinition[] {
     },
     {
       category: 'Bills',
-      transactionType: 'Website',
+      transactionType: 'Website / Software',
       queryFn: (supabase, userId, startDate, endDate) =>
         queryMonzoByCategory(supabase, userId, startDate, endDate, 'Software'),
       signMultiplier: -1,
