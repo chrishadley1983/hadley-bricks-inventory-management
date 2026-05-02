@@ -201,7 +201,7 @@ describe('ProfitLossReportService', () => {
   });
 
   describe('row definitions', () => {
-    it('should define 26 row types across all categories', async () => {
+    it('should define 29 row types across all categories', async () => {
       // This test verifies the service structure by checking the total rows when includeZeroRows is true
       const mockSupabase = createSupabaseMock();
       const service = new ProfitLossReportService(mockSupabase as never);
@@ -218,16 +218,18 @@ describe('ProfitLossReportService', () => {
       const stockPurchaseRows = result.rows.filter((r) => r.category === 'Stock Purchase');
       const packingRows = result.rows.filter((r) => r.category === 'Packing & Postage');
       const billsRows = result.rows.filter((r) => r.category === 'Bills');
+      const homeCostsRows = result.rows.filter((r) => r.category === 'Home Costs');
 
       // Expected row counts per category
       expect(incomeRows.length).toBe(6); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Amazon Sales, Amazon Refunds
-      expect(sellingFeesRows.length).toBe(10); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, 8 eBay fee types
+      expect(sellingFeesRows.length).toBe(11); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, PayPal Fees, 8 eBay fee types
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(2); // Postage, Packing Materials
-      expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website, Office, Mileage
+      expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website / Software, Office, Mileage
+      expect(homeCostsRows.length).toBe(3); // Use of Home, Phone & Broadband, Insurance
 
-      // Total should be 25 rows (6 income + 10 selling fees + 2 stock + 2 packing + 5 bills)
-      expect(result.rows.length).toBe(25);
+      // Total should be 29 rows (6 income + 11 selling fees + 2 stock + 2 packing + 5 bills + 3 home costs)
+      expect(result.rows.length).toBe(29);
     });
 
     it('should include expected Income row types', async () => {
@@ -290,7 +292,7 @@ describe('ProfitLossReportService', () => {
 
       expect(billsRowTypes).toContain('Amazon Subscription');
       expect(billsRowTypes).toContain('Banking Fees / Subscriptions');
-      expect(billsRowTypes).toContain('Website');
+      expect(billsRowTypes).toContain('Website / Software');
       expect(billsRowTypes).toContain('Office');
       expect(billsRowTypes).toContain('Mileage');
     });
