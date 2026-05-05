@@ -33,6 +33,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Kill-switch: set INVENTORY_ENRICH_CRON_ENABLED=false in env to pause this
+    // cron without redeploying (e.g. while running the cache-cleanup script
+    // and waiting for the colour-id-pollution fix to verify in production).
+    if (process.env.INVENTORY_ENRICH_CRON_ENABLED === 'false') {
+      console.log('[Cron InventoryEnrich] Skipped: INVENTORY_ENRICH_CRON_ENABLED=false');
+      return NextResponse.json({ skipped: true, reason: 'disabled by env flag' });
+    }
+
     execution = await jobExecutionService.start(JOB_NAME, 'cron');
 
     const supabase = createServiceRoleClient();
