@@ -84,10 +84,19 @@ export class EnrichmentService {
 
     const client = new BrickLinkClient(creds);
 
-    // 2. Get distinct items from snapshot that need enrichment
-    //    We fetch consolidated (item_number, color_id, condition, item_type)
+    // 2. Build BL colour-name → BL colour_id map. The snapshot stores Bricqer's
+    //    internal color_id enum (NOT BL's), but both sides use BL's American
+    //    colour names — so we translate by name.
+    const blColours = await client.getColors();
+    const blColorByName = new Map<string, number>();
+    for (const c of blColours) {
+      blColorByName.set(c.color_name.toLowerCase().trim(), c.color_id);
+    }
+
+    // 3. Get distinct items from snapshot that need enrichment
+    //    We fetch consolidated (item_number, BL_colour_id, condition, item_type)
     //    ordered by total value descending (most valuable first)
-    const candidates = await this.getUnenrichedItems(maxItems);
+    const candidates = await this.getUnenrichedItems(maxItems, blColorByName);
 
     if (candidates.length === 0) {
       return { totalProcessed: 0, alreadyCached: 0, newlyFetched: 0, errors: 0 };
@@ -157,15 +166,24 @@ export class EnrichmentService {
 
   /**
    * Get snapshot items that don't have fresh BrickLink data.
-   * Returns consolidated unique (item_number, color_id, condition, item_type) combos.
+   * Returns consolidated unique (item_number, BL_color_id, condition, item_type) combos.
+   *
+   * IMPORTANT: snapshot.color_id is Bricqer's internal enum (NOT BL's). We
+   * translate Bricqer→BL via color_name; rows whose name doesn't map to a BL
+   * colour are dropped so we never write Bricqer ids into the BL cache.
+   *
+   * Freshness is condition-aware: a cache row is "fresh" for a candidate only
+   * if the relevant new/used columns are populated, not just by date.
    */
   private async getUnenrichedItems(
-    limit: number
-  ): Promise<Array<{ itemNumber: string; colorId: number; condition: string; itemType: string; totalValue: number }>> {
+    limit: number,
+    blColorByName: Map<string, number>
+  ): Promise<Array<{ itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string; totalValue: number }>> {
     // Get top items by value from snapshot
     const allItems: Array<{
       item_number: string;
       color_id: number | null;
+      color_name: string | null;
       condition: string;
       item_type: string;
       bricqer_price: number;
@@ -177,7 +195,7 @@ export class EnrichmentService {
     while (true) {
       const { data } = await this.supabase
         .from('bricqer_inventory_snapshot')
-        .select('item_number, color_id, condition, item_type, bricqer_price, quantity')
+        .select('item_number, color_id, color_name, condition, item_type, bricqer_price, quantity')
         .eq('user_id', this.userId)
         .not('color_id', 'is', null)
         .range(offset, offset + pageSize - 1);
@@ -188,55 +206,76 @@ export class EnrichmentService {
       offset += pageSize;
     }
 
-    // Consolidate by (item_number, color_id, condition, item_type) and sum value
-    const map = new Map<string, { itemNumber: string; colorId: number; condition: string; itemType: string; totalValue: number }>();
+    // Consolidate by (item_number, BL_color_id, condition, item_type) and sum value.
+    // Translate Bricqer color_id → BL color_id via color_name; skip unmappable rows.
+    const map = new Map<string, { itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string; totalValue: number }>();
+    let unmappable = 0;
 
     for (const item of allItems) {
-      if (item.color_id === null) continue;
-      const key = `${item.item_number}|${item.color_id}|${item.condition}`;
+      if (item.color_id === null || !item.color_name) continue;
+      const blColorId = blColorByName.get(item.color_name.toLowerCase().trim());
+      if (blColorId === undefined) {
+        unmappable++;
+        continue;
+      }
+      const key = `${item.item_number}|${blColorId}|${item.condition}`;
       const existing = map.get(key);
       if (existing) {
         existing.totalValue += item.bricqer_price * item.quantity;
       } else {
         map.set(key, {
           itemNumber: item.item_number,
-          colorId: item.color_id,
+          colorId: blColorId,
+          colorName: item.color_name,
           condition: item.condition,
           itemType: item.item_type,
           totalValue: item.bricqer_price * item.quantity,
         });
       }
     }
+    if (unmappable > 0) {
+      console.warn(`[Enrichment] dropped ${unmappable} snapshot rows whose color_name didn't map to a BL colour`);
+    }
 
-    // Check which ones already have fresh cache entries
+    // Check which ones already have fresh cache entries (condition-aware).
     const candidates = Array.from(map.values());
     const partNumbers = [...new Set(candidates.map((c) => c.itemNumber))];
 
-    // Fetch existing cache entries
     const freshThresholdMs = 90 * 24 * 60 * 60 * 1000; // 90 days
     const freshAfter = new Date(Date.now() - freshThresholdMs).toISOString();
 
-    const cachedSet = new Set<string>();
-    let cacheOffset = 0;
-    while (true) {
+    type CacheRow = {
+      part_number: string;
+      colour_id: number;
+      stock_available_new: number | null;
+      stock_available_used: number | null;
+      times_sold_new: number | null;
+      times_sold_used: number | null;
+    };
+    const cacheMap = new Map<string, CacheRow>();
+    const CHUNK = 500;
+    for (let i = 0; i < partNumbers.length; i += CHUNK) {
+      const chunk = partNumbers.slice(i, i + CHUNK);
       const { data: cached } = await this.supabase
         .from('bricklink_part_price_cache')
-        .select('part_number, colour_id')
-        .in('part_number', partNumbers.slice(cacheOffset, cacheOffset + 500))
+        .select('part_number, colour_id, stock_available_new, stock_available_used, times_sold_new, times_sold_used')
+        .in('part_number', chunk)
         .gte('fetched_at', freshAfter);
-
-      if (!cached || cached.length === 0) break;
-      for (const c of cached) {
-        cachedSet.add(`${c.part_number}|${c.colour_id}`);
+      for (const c of (cached ?? []) as CacheRow[]) {
+        cacheMap.set(`${c.part_number}|${c.colour_id}`, c);
       }
-      cacheOffset += 500;
-      if (cacheOffset >= partNumbers.length) break;
     }
 
-    // Filter out already-cached items
-    const unenriched = candidates.filter(
-      (c) => !cachedSet.has(`${c.itemNumber}|${c.colorId}`)
-    );
+    // Filter: keep candidates whose specific condition's columns are NOT already populated.
+    const unenriched = candidates.filter((c) => {
+      const cached = cacheMap.get(`${c.itemNumber}|${c.colorId}`);
+      if (!cached) return true;
+      const isNew = c.condition === 'New';
+      const stock = isNew ? cached.stock_available_new : cached.stock_available_used;
+      const sold = isNew ? cached.times_sold_new : cached.times_sold_used;
+      // Already-fresh-for-this-condition iff at least one of the two non-null
+      return stock == null && sold == null;
+    });
 
     // Sort by value descending and take top N
     unenriched.sort((a, b) => b.totalValue - a.totalValue);
@@ -246,10 +285,12 @@ export class EnrichmentService {
   /**
    * Fetch BrickLink price data for a single item and cache it.
    * Makes 2 API calls: stock + sold for the item's condition.
+   *
+   * `item.colorId` MUST be a BrickLink color_id, not a Bricqer one.
    */
   private async fetchAndCache(
     client: BrickLinkClient,
-    item: { itemNumber: string; colorId: number; condition: string; itemType: string }
+    item: { itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string }
   ): Promise<void> {
     const blType = toBrickLinkType(item.itemType);
     const blCondition = item.condition === 'New' ? 'N' : 'U';
@@ -291,6 +332,7 @@ export class EnrichmentService {
           part_number: item.itemNumber,
           part_type: blType,
           colour_id: item.colorId,
+          colour_name: item.colorName,
           fetched_at: now,
           updated_at: now,
           ...(isNew
