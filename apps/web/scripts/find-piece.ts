@@ -139,6 +139,25 @@ const INCLUDE_SETS = argv['include-sets'] === 'true';
 const ARM_PARTS = new Set(['981', '982']);
 const RUN_NAME_PATTERN = !!COLOR_NAME && PARTS.some((p) => ARM_PARTS.has(p));
 
+/**
+ * Detect torso family root for a BL part number.
+ *
+ * `973pXX`, `973pbXXXX`, `973pxXXX`, `973bpbXXX` etc. are *printed-pattern
+ * torsos*. The optional trailing `cYY` (1–2 digits) encodes the arm/hand
+ * assembly variant. Same family root = same printed body; different `cYY` =
+ * different arm assembly. So if you have a cracked `973pbXXXXc01` you can
+ * potentially combine the bare-body `973pbXXXX` with arms from the damaged
+ * one to fulfil the order.
+ *
+ * Returns null for non-torso parts and for plain-torso codes like `973c000`
+ * / `973c00` (the trailing zeros there are part of the pattern, not an arm
+ * suffix — these don't have variants worth surfacing).
+ */
+function torsoFamilyRoot(partNo: string): string | null {
+  const m = partNo.match(/^(973(?:bpb|pb|px|pa|p)\w+?)(c\d{1,2})?$/);
+  return m ? m[1] : null;
+}
+
 if (COLOR_NAME && !BL_COLOR_ID && !SKIP_SUPERSETS) {
   console.error(
     `\nNo BL color_id mapping for "${COLOR_NAME}". Either add it to BL_COLOR_IDS or pass --bl-color-id=N. Use --skip-supersets to bypass the BL API step.`,
@@ -559,6 +578,41 @@ async function main() {
     namePatternRows = INCLUDE_ZERO ? all : all.filter((r) => (r.quantity ?? 0) > 0);
   }
 
+  // ── Phase 3c: torso family variants ───────────────────────────────────────
+  // Same-print sibling torsos with different arm-assembly suffix. Useful when
+  // an assembled `973pbXXXXcYY` is unavailable but the bare `973pbXXXX` body
+  // is in stock — combine with arms recovered from a damaged unit.
+  const familyRoots = new Set<string>();
+  for (const p of PARTS) {
+    const root = torsoFamilyRoot(p);
+    if (root) familyRoots.add(root);
+  }
+  const exactInputSet = new Set(PARTS.map((p) => p.toLowerCase()));
+  let familyVariants: SnapshotRow[] = [];
+  if (familyRoots.size > 0) {
+    for (const root of familyRoots) {
+      const rows = await paginate<SnapshotRow>((offset) => {
+        let q = supabase
+          .from('bricqer_inventory_snapshot')
+          .select(
+            'bricqer_item_id, item_type, item_number, item_name, color_id, color_name, condition, quantity, storage_location, bricqer_price',
+          )
+          .eq('item_type', 'Part')
+          .like('item_number', `${root}%`);
+        if (COLOR_NAME) q = q.ilike('color_name', COLOR_NAME);
+        return q.range(offset, offset + 999) as unknown as Promise<{
+          data: SnapshotRow[] | null;
+          error: unknown;
+        }>;
+      });
+      for (const r of rows) {
+        if (exactInputSet.has(r.item_number.toLowerCase())) continue;
+        if (!INCLUDE_ZERO && (r.quantity ?? 0) <= 0) continue;
+        familyVariants.push(r);
+      }
+    }
+  }
+
   // Build owned-row lists for downstream intersection (containers from BL supersets)
   type OwnedContainerRow = {
     no: string;
@@ -609,6 +663,7 @@ async function main() {
     for (const g of standalone) for (const r of g.rows) partNumbers.add(r.item_number);
     for (const c of torsoLikeContainers) partNumbers.add(c.no);
     for (const r of namePatternRows) partNumbers.add(r.item_number);
+    for (const r of familyVariants) partNumbers.add(r.item_number);
     partCache = await fetchPartPrices([...partNumbers]);
 
     const figIds = figs.map((f) => f.no);
@@ -641,6 +696,7 @@ async function main() {
     for (const g of standalone) for (const r of g.rows) flag(r.item_number, r.color_name, r.condition);
     for (const c of torsoLikeContainers) flag(c.no, c.colorName, c.condition);
     for (const r of namePatternRows) flag(r.item_number, r.color_name, r.condition);
+    for (const r of familyVariants) flag(r.item_number, r.color_name, r.condition);
 
     if (misses.length > 0) {
       const cap = Math.min(misses.length, MAX_FETCH);
@@ -747,6 +803,30 @@ async function main() {
     }
   }
 
+  // Related torso family variants — same printed pattern, different arm/assembly suffix.
+  if (familyRoots.size > 0) {
+    const totalUnits = familyVariants.reduce((a, r) => a + (r.quantity ?? 0), 0);
+    const rootList = [...familyRoots].join(', ');
+    console.log(
+      `\n🧬 Related torso family variants (same pattern as ${rootList}, different arm/assembly): ${familyVariants.length} lots / ${totalUnits} units`,
+    );
+    console.log(`   Use case: bare-body 973pbXXXX + arms recovered from a damaged 973pbXXXXcYY`);
+    console.log(`   = a working assembly when the cYY isn't available standalone.`);
+    if (familyVariants.length === 0) {
+      console.log('   (none)');
+    } else {
+      console.log(
+        `   ${'item'.padEnd(13)} ${'colour'.padEnd(15)} ${'qty'.padStart(3)}  ${'cond'.padEnd(5)} ${'loc'.padEnd(11)} ${'list £'.padStart(6)} ${'STR'.padStart(4)}  name`,
+      );
+      for (const r of familyVariants.sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0))) {
+        const { str } = pickPartPriceStr(partCache, r.item_number, r.color_name, r.condition);
+        console.log(
+          `   ${fmt(r.item_number, 13)} ${fmt(r.color_name, 15)} ${String(r.quantity).padStart(3)}  ${fmt(r.condition, 5)} ${fmt(r.storage_location, 11)} ${fmtPrice(r.bricqer_price)} ${fmtStr(str)}  ${(r.item_name ?? '').slice(0, 50)}`,
+        );
+      }
+    }
+  }
+
   if (SKIP_SUPERSETS) {
     console.log('\n(--skip-supersets set; no container cross-reference)');
     return;
@@ -838,11 +918,15 @@ async function main() {
   );
   const torsoUnits = torsoLikeContainers.reduce((a, c) => a + c.qty, 0);
   const namePatternUnits = namePatternRows.reduce((a, r) => a + (r.quantity ?? 0), 0);
+  const familyUnits = familyVariants.reduce((a, r) => a + (r.quantity ?? 0), 0);
   const figUnits = figs.reduce((a, f) => a + f.qty, 0);
   console.log('\n── Summary ────────────────────────────────────────────────────────');
   console.log(
     `   Standalone:           ${standalone.reduce((a, g) => a + g.rows.length, 0)} lots / ${standaloneUnits} units`,
   );
+  if (familyRoots.size > 0) {
+    console.log(`   Family variants:      ${familyVariants.length} lots / ${familyUnits} units`);
+  }
   console.log(`   Containing parts:     ${torsoLikeContainers.length} lots / ${torsoUnits} units`);
   if (RUN_NAME_PATTERN) {
     console.log(`   Name-pattern torsos:  ${namePatternRows.length} lots / ${namePatternUnits} units`);
