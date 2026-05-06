@@ -68,6 +68,13 @@ Trigger phrasings:
      (catches plain `973c000` "Same Color Arms" assemblies)
    This compensates for BL's supersets endpoint not decomposing torso
    assemblies into separate arm-part entries.
+3b. **Torso family variants (torsos only)** — when any input part is a printed
+    torso (`973p…`, `973pb…`, `973px…`, `973pa…`, `973bpb…`), also pulls
+    sibling rows sharing the same family root with a different `cYY` arm
+    suffix (or no suffix). Use case: when a `973pbXXXXcYY` assembly is
+    damaged or missing and the bare-body `973pbXXXX` is in stock, recombine
+    arms from the damaged unit with the bare body to produce a working
+    assembly.
 4. **Intersect + price/STR enrich** — rolls owned rows up by item_number, then
    bulk-fetches `bricklink_part_price_cache` (parts/torsos) and
    `minifig_price_cache` (minifigs) for £ and STR columns. STR for parts is
