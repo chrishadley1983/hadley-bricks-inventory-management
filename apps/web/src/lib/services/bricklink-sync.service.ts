@@ -118,8 +118,18 @@ export class BrickLinkSyncService {
     try {
       const client = await this.getClient(userId);
 
-      // Get sales orders (direction=out) - single API call
-      const orders = await client.getSalesOrders(undefined, options.includeFiled);
+      // BL API returns either active OR filed orders per call (filed param is exclusive,
+      // not additive). Mirror BrickLinkTransactionSyncService: always fetch active, plus
+      // filed when requested, then merge by order_id.
+      const activeOrders = await client.getSalesOrders(undefined, false);
+      let orders = activeOrders;
+      if (options.includeFiled) {
+        const filedOrders = await client.getSalesOrders(undefined, true);
+        const orderMap = new Map<number, (typeof activeOrders)[0]>();
+        for (const o of activeOrders) orderMap.set(o.order_id, o);
+        for (const o of filedOrders) orderMap.set(o.order_id, o);
+        orders = Array.from(orderMap.values());
+      }
       result.ordersProcessed = orders.length;
 
       // For incremental sync, get existing order timestamps from DB
