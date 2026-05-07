@@ -387,12 +387,17 @@ async function connectCdp(): Promise<CDPClient> {
 async function preflight(cdp: CDPClient): Promise<{ storeId: number; storeName: string; country: string; isUK: boolean }> {
   console.log('\n[1/10] Preflight...');
   await cdp.navigate(`https://store.bricklink.com/${STORE_SLUG}#/shop`);
+  await new Promise((r) => setTimeout(r, 3000));
   const meta = await cdp.evaluate<string>(`(() => {
     const sf = window.StoreFront;
     const bodyText = (document.body.innerText || '').slice(0, 2000);
     const isUK = /United Kingdom/i.test(bodyText);
     const countryMatch = bodyText.match(/\\bBy\\s+\\S+[^\\n]*?in\\s+([^\\n]+?)\\s{2,}/);
-    const country = isUK ? 'United Kingdom' : (countryMatch ? countryMatch[1] : 'unknown');
+    const sfCountry = sf?.store?.country;
+    const country = isUK
+      ? 'United Kingdom'
+      : (countryMatch ? countryMatch[1]
+        : (sfCountry === 'GB' || sfCountry === 'UK' ? 'United Kingdom' : (sfCountry ?? 'unknown')));
     return JSON.stringify({ storeId: sf?.store?.id, storeName: sf?.store?.name, country });
   })()`);
   const parsed = JSON.parse(meta) as { storeId: number; storeName: string; country: string };
