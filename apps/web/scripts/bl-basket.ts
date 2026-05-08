@@ -219,8 +219,47 @@ const DAMAGE_KEYWORDS = new Set([
 ]);
 const NEGATION_PREFIXES: string[][] = [['no'], ['without'], ['not'], ['free', 'of'], ['free', 'from'], ['zero']];
 
+/**
+ * Boilerplate disclaimers that some sellers paste onto every used item ("Good condition
+ * used minifigures but there may be small marks or dents on this item as it is a used
+ * part.") trip the damage filter on most of their inventory even though no specific
+ * item is actually damaged. We detect these by exact-string repetition: if the same
+ * description appears on >= BOILERPLATE_PCT of inventory, it's a stock disclaimer not
+ * a per-item condition note. Computed once per run after scrape.
+ *
+ * TickaBrick (Apr 30 2026) was the trigger — 4,750 of 5,379 items rejected by the
+ * damage filter, dominated by 5 boilerplate strings each repeated on 5–30% of stock.
+ */
+const BOILERPLATE_PCT = parseFloat(argv['boilerplate-pct'] ?? '0.03');
+const BOILERPLATE_DESCRIPTIONS = new Set<string>();
+
+function computeBoilerplate(items: { description: string | null }[]): { totalDescs: number; boilerplateCount: number; itemsCovered: number; samples: { desc: string; count: number }[] } {
+  BOILERPLATE_DESCRIPTIONS.clear();
+  if (items.length === 0) return { totalDescs: 0, boilerplateCount: 0, itemsCovered: 0, samples: [] };
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const d = (it.description ?? '').trim();
+    if (!d) continue;
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  const minOccur = Math.max(2, Math.ceil(items.length * BOILERPLATE_PCT));
+  const samples: { desc: string; count: number }[] = [];
+  let itemsCovered = 0;
+  for (const [desc, n] of counts) {
+    if (n >= minOccur) {
+      BOILERPLATE_DESCRIPTIONS.add(desc);
+      samples.push({ desc, count: n });
+      itemsCovered += n;
+    }
+  }
+  samples.sort((a, b) => b.count - a.count);
+  return { totalDescs: counts.size, boilerplateCount: BOILERPLATE_DESCRIPTIONS.size, itemsCovered, samples };
+}
+
 function hasDamageNote(desc: string | null | undefined): { flag: boolean; keyword?: string } {
   if (!desc) return { flag: false };
+  // Seller boilerplate doesn't describe per-item damage — skip it.
+  if (BOILERPLATE_DESCRIPTIONS.has(desc.trim())) return { flag: false };
   const cleaned = desc.toLowerCase().replace(/[-–—,;:()/]/g, ' ').replace(/[.!?"']/g, '').replace(/\s+/g, ' ').trim();
   const words = cleaned.split(/\s+/);
   for (let i = 0; i < words.length; i++) {
@@ -1667,6 +1706,13 @@ async function main() {
     reportText = fs.existsSync(REPORT_FILE) ? fs.readFileSync(REPORT_FILE, 'utf8') : renderReport(enriched, meta, inputs);
   } else {
     const scraped = await scrapeInventory(cdp, meta.storeId);
+    const bp = computeBoilerplate(scraped);
+    if (bp.boilerplateCount > 0) {
+      console.log(`  boilerplate descriptions: ${bp.boilerplateCount} string(s) cover ${bp.itemsCovered}/${scraped.length} items (${(bp.itemsCovered / scraped.length * 100).toFixed(0)}%) — exempt from damage filter`);
+      for (const s of bp.samples.slice(0, 3)) {
+        console.log(`    ${s.count}× "${s.desc.slice(0, 90)}${s.desc.length > 90 ? '…' : ''}"`);
+      }
+    }
     const priceMap = await enrichWithPrices(scraped);
     enriched = scoreAll(scraped, priceMap, inputs);
     writeJson(ENRICHED_FILE, enriched);
