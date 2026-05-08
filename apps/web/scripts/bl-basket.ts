@@ -69,7 +69,7 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
 
 const CLOSE_ARB_ID = argv['close'] && argv['close'] !== 'true' ? argv['close'] : null;
 const STORE_SLUG = argv['store-slug'];
-if (!STORE_SLUG && !CLOSE_ARB_ID) {
+if (!STORE_SLUG && !CLOSE_ARB_ID && require.main === module) {
   console.error('Required: --store-slug=<name>  (or --close=<arbitrage_purchases.id> to close an existing basket)');
   process.exit(1);
 }
@@ -846,21 +846,88 @@ function ceilP(n: number) { return Math.ceil(n * 100) / 100; }
 function floorP(n: number) { return Math.floor(n * 100) / 100; }
 function escXml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-function generateWantedXml(passed: EnrichedItem[]): string {
-  const xml = ['<INVENTORY>'];
+/**
+ * BL's wanted-list format treats (itemType, itemNo, colourId, condition) as a
+ * unique key — uploads with duplicate keys fail with "duplicate item/color
+ * combinations". A single seller can list the same part/colour/condition as
+ * multiple inventory rows (different storage, different remarks, different
+ * prices), each of which we scrape as its own EnrichedItem. Before XML
+ * generation we group those rows back together so BL accepts the upload.
+ *
+ * Merge semantics:
+ *   - MINQTY = sum of invQty (we still want every piece across the dupes)
+ *   - MAXPRICE = max of the per-row gated ceiling (so the more expensive row
+ *     stays eligible — BL fulfils greedily from cheapest, so the lower-priced
+ *     row gets pulled first naturally)
+ *   - listPrice/lotProfit on the report row are the same across dupes (same
+ *     UK 6MA × multiplier) so totals are unaffected.
+ */
+export interface WantedEntry {
+  itemType: StoreItemCode;
+  itemNo: string;
+  colourId: number;
+  condition: ItemCondition;
+  totalQty: number;
+  maxPrice: number;
+  listPrice: number;
+  totalLotProfit: number;
+  mergedFrom: number;
+  highestAsk: number;
+}
+
+export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
+  const groups = new Map<string, WantedEntry>();
   for (const l of passed) {
     const listPrice = l.listPrice ?? l.unitPriceGBP;
     const breakEven = floorP(listPrice * (1 - VAR_FEE_PCT));
     const maxPrice = Math.max(Math.min(ceilP(l.unitPriceGBP * 1.05), breakEven), ceilP(l.unitPriceGBP));
+    const key = `${l.itemType}|${l.itemNo}|${l.colourId}|${l.condition}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.totalQty += l.invQty;
+      existing.maxPrice = Math.max(existing.maxPrice, maxPrice);
+      existing.totalLotProfit += l.lotProfit ?? 0;
+      existing.highestAsk = Math.max(existing.highestAsk, l.unitPriceGBP);
+      existing.mergedFrom += 1;
+    } else {
+      groups.set(key, {
+        itemType: l.itemType,
+        itemNo: l.itemNo,
+        colourId: l.colourId,
+        condition: l.condition,
+        totalQty: l.invQty,
+        maxPrice,
+        listPrice,
+        totalLotProfit: l.lotProfit ?? 0,
+        mergedFrom: 1,
+        highestAsk: l.unitPriceGBP,
+      });
+    }
+  }
+  return Array.from(groups.values());
+}
+
+function generateWantedXml(passed: EnrichedItem[]): string {
+  const entries = dedupeWantedEntries(passed);
+  const merged = entries.filter((e) => e.mergedFrom > 1);
+  if (merged.length > 0) {
+    const collapsed = merged.reduce((s, e) => s + (e.mergedFrom - 1), 0);
+    console.log(`  deduped ${merged.length} (item, colour, condition) tuple(s) — collapsed ${collapsed} extra row(s) into the parent entry`);
+  }
+  const xml = ['<INVENTORY>'];
+  for (const e of entries) {
     xml.push('  <ITEM>');
-    xml.push(`    <ITEMTYPE>${l.itemType}</ITEMTYPE>`);
-    xml.push(`    <ITEMID>${escXml(l.itemNo)}</ITEMID>`);
-    if (l.itemType === 'P') xml.push(`    <COLOR>${l.colourId}</COLOR>`);
-    xml.push(`    <MAXPRICE>${maxPrice.toFixed(2)}</MAXPRICE>`);
-    xml.push(`    <MINQTY>${l.invQty}</MINQTY>`);
-    xml.push(`    <CONDITION>${l.condition}</CONDITION>`);
+    xml.push(`    <ITEMTYPE>${e.itemType}</ITEMTYPE>`);
+    xml.push(`    <ITEMID>${escXml(e.itemNo)}</ITEMID>`);
+    if (e.itemType === 'P') xml.push(`    <COLOR>${e.colourId}</COLOR>`);
+    xml.push(`    <MAXPRICE>${e.maxPrice.toFixed(2)}</MAXPRICE>`);
+    xml.push(`    <MINQTY>${e.totalQty}</MINQTY>`);
+    xml.push(`    <CONDITION>${e.condition}</CONDITION>`);
     xml.push('    <NOTIFY>N</NOTIFY>');
-    xml.push(`    <REMARKS>ask ${l.unitPriceGBP.toFixed(2)} list ${listPrice.toFixed(2)} lot ${(l.lotProfit ?? 0).toFixed(2)}</REMARKS>`);
+    const remarks = e.mergedFrom > 1
+      ? `ask≤${e.highestAsk.toFixed(2)} list ${e.listPrice.toFixed(2)} lot ${e.totalLotProfit.toFixed(2)} (merged ${e.mergedFrom} rows)`
+      : `ask ${e.highestAsk.toFixed(2)} list ${e.listPrice.toFixed(2)} lot ${e.totalLotProfit.toFixed(2)}`;
+    xml.push(`    <REMARKS>${remarks}</REMARKS>`);
     xml.push('  </ITEM>');
   }
   xml.push('</INVENTORY>');
@@ -1642,4 +1709,6 @@ async function main() {
   rl.close();
 }
 
-main().catch((err) => { console.error('FATAL:', err); process.exit(1); });
+if (require.main === module) {
+  main().catch((err) => { console.error('FATAL:', err); process.exit(1); });
+}
