@@ -72,7 +72,8 @@ export interface BrickOwlOrder {
   ship_post_code?: string;
   ship_phone?: string;
   base_order_total: string;
-  order_total: string;
+  order_total?: string;
+  payment_total?: string;
   coupon_discount?: string;
   combined_shipping_discount?: string;
   payment_method_type?: string;
@@ -85,13 +86,17 @@ export interface BrickOwlOrder {
   tracking_url?: string;
   sub_total?: string;
   total_tax?: string;
+  tax_amount?: string;
   total_shipping?: string;
+  ship_total?: string;
   total_discount?: string;
+  brickowl_fee?: string;
   total_lots?: number;
   total_qty?: number;
   weight?: string;
   affiliate?: string;
   currency?: string;
+  base_currency?: string;
   buyer_note?: string;
   seller_note?: string;
   public_note?: string;
