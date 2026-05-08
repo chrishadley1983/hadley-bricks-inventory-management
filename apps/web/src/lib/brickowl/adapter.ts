@@ -82,12 +82,27 @@ export function normalizeOrder(
   order: BrickOwlOrderDetail | BrickOwlOrder,
   items: BrickOwlOrderItem[] = []
 ): NormalizedBrickOwlOrder {
-  // Calculate financial values
+  // Calculate financial values.
+  // Live BO API uses different field names than the public docs:
+  //   - `ship_total` is shipping (not `total_shipping`)
+  //   - `base_order_total` is the gross paid total (not `order_total`, which is omitted)
+  //   - `brickowl_fee` is the BO commission (not `sales_tax_collected_by_bo`)
+  // Fall back to the documented names so legacy/cached payloads still work.
   const subtotal = parseCurrencyValue(order.sub_total || order.base_order_total);
-  const shipping = parseCurrencyValue(order.total_shipping);
-  const fees = parseCurrencyValue(order.sales_tax_collected_by_bo || order.total_tax);
-  const total = parseCurrencyValue(order.order_total);
-  const currency = order.currency || 'GBP';
+  const total = parseCurrencyValue(
+    order.order_total || order.payment_total || order.base_order_total
+  );
+  const shippingExplicit = parseCurrencyValue(order.ship_total || order.total_shipping);
+  const shipping =
+    shippingExplicit > 0
+      ? shippingExplicit
+      : subtotal > 0 && total > subtotal
+      ? Math.round((total - subtotal) * 100) / 100
+      : 0;
+  const fees = parseCurrencyValue(
+    order.brickowl_fee || order.sales_tax_collected_by_bo || order.tax_amount || order.total_tax
+  );
+  const currency = order.currency || order.base_currency || 'GBP';
 
   // Build shipping address
   let shippingAddress: NormalizedBrickOwlOrder['shippingAddress'];

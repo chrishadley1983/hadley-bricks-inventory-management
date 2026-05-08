@@ -287,12 +287,21 @@ export class BrickLinkTransactionSyncService {
 
         if (syncConfig?.last_sync_date_cursor) {
           const cursorDate = new Date(syncConfig.last_sync_date_cursor);
+          // Include an order if EITHER its order date OR its status-changed date is
+          // at/after the cursor. Filtering on date_ordered alone causes orders that
+          // were synced while still PENDING to be permanently skipped once the
+          // cursor advances past them — even though their cost.grand_total updates
+          // when the order moves to PAID and BL recomputes shipping/VAT. That
+          // produced silent under-reporting on the P&L.
           ordersToProcess = allOrders.filter((order) => {
             const orderDate = new Date(order.date_ordered);
-            return orderDate >= cursorDate;
+            const statusChanged = order.date_status_changed
+              ? new Date(order.date_status_changed)
+              : null;
+            return orderDate >= cursorDate || (statusChanged !== null && statusChanged >= cursorDate);
           });
           console.log(
-            `[BrickLinkTransactionSyncService] Filtered to ${ordersToProcess.length} orders since ${syncConfig.last_sync_date_cursor}`
+            `[BrickLinkTransactionSyncService] Filtered to ${ordersToProcess.length} orders since ${syncConfig.last_sync_date_cursor} (by order or status-changed date)`
           );
         }
       } else if (syncMode === 'HISTORICAL' && options?.fromDate) {
@@ -317,13 +326,20 @@ export class BrickLinkTransactionSyncService {
         updated
       );
 
-      // Update sync cursor to newest order date
+      // Advance cursor to the newest of (date_ordered, date_status_changed)
+      // across the processed batch. Tracking both ensures the next incremental
+      // sync picks up orders whose status (and therefore grand_total) changes
+      // between syncs.
       const newestDate =
         ordersToProcess.length > 0
           ? ordersToProcess
               .reduce((newest, order) => {
                 const orderDate = new Date(order.date_ordered);
-                return orderDate > newest ? orderDate : newest;
+                const statusChanged = order.date_status_changed
+                  ? new Date(order.date_status_changed)
+                  : new Date(0);
+                const candidate = orderDate > statusChanged ? orderDate : statusChanged;
+                return candidate > newest ? candidate : newest;
               }, new Date(0))
               .toISOString()
           : new Date().toISOString();
