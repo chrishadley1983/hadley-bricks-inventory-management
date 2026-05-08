@@ -332,12 +332,36 @@ describe('BrickLinkSyncService', () => {
       expect(result.errors[0]).toContain('Order 123');
     });
 
-    it('should include filed orders when includeFiled is true', async () => {
+    it('should fetch only active orders by default', async () => {
       mockBrickLinkClient.getSalesOrders.mockResolvedValue([]);
 
-      await service.syncOrders('test-user-id', { includeFiled: true });
+      await service.syncOrders('test-user-id');
 
-      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenCalledWith(undefined, true);
+      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenCalledTimes(1);
+      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenCalledWith(undefined, false);
+    });
+
+    it('should fetch active and filed orders and merge them when includeFiled is true', async () => {
+      // BL API filed param is exclusive — ensure we issue both calls and dedupe.
+      mockBrickLinkClient.getSalesOrders
+        .mockResolvedValueOnce([
+          { order_id: 1, status: 'Paid' },
+          { order_id: 2, status: 'Pending' },
+        ])
+        .mockResolvedValueOnce([
+          { order_id: 2, status: 'Shipped' },
+          { order_id: 3, status: 'Completed' },
+        ]);
+      mockOrderRepo.getOrderStatusTimestamps.mockResolvedValue(new Map());
+      mockOrderRepo.upsert.mockResolvedValue({ id: 'new-id' });
+
+      const result = await service.syncOrders('test-user-id', { includeFiled: true });
+
+      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenCalledTimes(2);
+      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenNthCalledWith(1, undefined, false);
+      expect(mockBrickLinkClient.getSalesOrders).toHaveBeenNthCalledWith(2, undefined, true);
+      // 3 unique orders after dedupe (order_id 2 appears in both lists)
+      expect(result.ordersProcessed).toBe(3);
     });
   });
 
