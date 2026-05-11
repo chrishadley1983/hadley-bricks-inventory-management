@@ -343,13 +343,21 @@ function staleScreen(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: nu
   return { cacheCovered, medianRatio, p25, p75, bargainBombs, verdict };
 }
 
+// Bricqer auto-pricing multipliers — updated 2026-05-11.
+// Previous brackets (kept here for diffability):
+//   N >=0.5 → 1.05 / <0.5 → 0.90
+//   U >=1 → 1.25 / >=0.75 → 1.15 / >=0.5 → 1.10 / >=0.25 → 0.90 / <0.25 → 0.85
+// Also note Bricqer now disables auto-pricing for items with a comment, or where
+// definition.lego_type == 'S' (sets). Fresh basket inventory has no comment, and
+// sets are already filtered out of the projection above (see itemType === 'S'),
+// so neither gate changes the bl-basket output.
 function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
+  if (condition === 'N') return sellThru >= 0.5 ? 1.10 : 0.85;
+  if (sellThru >= 1) return 1.40;
+  if (sellThru >= 0.75) return 1.25;
+  if (sellThru >= 0.5) return 1.15;
+  if (sellThru >= 0.25) return 0.93;
+  return 0.90;
 }
 
 // ---------------------------------------------------------------------------
