@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
+import { KeepaClient } from '@/lib/keepa/keepa-client';
 
 const ApproveItemSchema = z.object({
   set_number: z.string().min(1, 'Set number is required'),
@@ -47,13 +48,60 @@ interface EnrichedItem {
   set_name: string;
   amazon_asin: string | undefined;
   list_price: number | undefined;
+  list_price_source: 'keepa_90d_avg' | 'spapi_buy_box' | 'spapi_lowest_new' | undefined;
 }
 
-/** Enrich a single item with ASIN, name (from ASIN title or Brickset), and Amazon pricing */
+/**
+ * Resolve a list price for an ASIN. Prefer the Keepa 90d Buy Box average — it's
+ * the most reliable benchmark because SP-API returns null when no featured offer
+ * is active right now (common for older/niche sets), and current spot prices can
+ * be skewed by a single junk listing when there's no recent trading history.
+ * Falls back to SP-API only if Keepa has nothing.
+ */
+async function resolveListPrice(
+  asin: string
+): Promise<{ price: number | undefined; source: EnrichedItem['list_price_source'] }> {
+  const keepa = new KeepaClient();
+  if (keepa.isConfigured()) {
+    try {
+      const products = await keepa.fetchProducts([asin]);
+      const product = products.find((p) => p.asin === asin);
+      if (product) {
+        const pricing = keepa.extractCurrentPricing(product);
+        if (pricing.was90dAvg) return { price: pricing.was90dAvg, source: 'keepa_90d_avg' };
+        // No 90d avg = sparse trading history. Spot Buy Box / New can be a single
+        // junk listing — store null and let the backfill cron retry later.
+      }
+    } catch (err) {
+      console.warn(`[resolveListPrice] Keepa lookup error for ${asin}:`, err);
+    }
+  }
+
+  try {
+    const pricingResponse = await internalFetch(
+      `/api/service/amazon/competitive-summary?asins=${encodeURIComponent(asin)}`
+    );
+    if (pricingResponse.ok) {
+      const pricingData = await pricingResponse.json();
+      const asinPricing = pricingData.data?.[asin];
+      if (asinPricing?.buyBoxPrice) return { price: asinPricing.buyBoxPrice, source: 'spapi_buy_box' };
+      if (asinPricing?.lowestNewPrice) return { price: asinPricing.lowestNewPrice, source: 'spapi_lowest_new' };
+    } else {
+      console.warn(`[resolveListPrice] SP-API pricing failed for ${asin}: ${pricingResponse.status}`);
+    }
+  } catch (err) {
+    console.warn(`[resolveListPrice] SP-API pricing error for ${asin}:`, err);
+  }
+
+  return { price: undefined, source: undefined };
+}
+
+/** Enrich a single item with ASIN, name (from ASIN title or Brickset), and pricing */
 async function enrichItem(setNumber: string, condition: 'New' | 'Used'): Promise<EnrichedItem> {
   let setName = setNumber; // Fallback to set number, never use bundle name
   let amazonAsin: string | undefined;
   let listPrice: number | undefined;
+  let listPriceSource: EnrichedItem['list_price_source'];
 
   // ASIN lookup (also returns title which is a good name source)
   try {
@@ -89,24 +137,10 @@ async function enrichItem(setNumber: string, condition: 'New' | 'Used'): Promise
     // Brickset is optional - ASIN title or set_number used as fallback
   }
 
-  // Amazon pricing
   if (amazonAsin) {
-    try {
-      const pricingResponse = await internalFetch(
-        `/api/service/amazon/competitive-summary?asins=${encodeURIComponent(amazonAsin)}`
-      );
-      if (pricingResponse.ok) {
-        const pricingData = await pricingResponse.json();
-        const asinPricing = pricingData.data?.[amazonAsin];
-        listPrice = asinPricing?.buyBoxPrice ?? asinPricing?.lowestNewPrice;
-      } else {
-        console.warn(
-          `[enrichItem] Amazon pricing failed for ${amazonAsin}: ${pricingResponse.status}`
-        );
-      }
-    } catch (err) {
-      console.warn(`[enrichItem] Amazon pricing error for ${amazonAsin}:`, err);
-    }
+    const resolved = await resolveListPrice(amazonAsin);
+    listPrice = resolved.price;
+    listPriceSource = resolved.source;
   }
 
   return {
@@ -115,6 +149,7 @@ async function enrichItem(setNumber: string, condition: 'New' | 'Used'): Promise
     set_name: setName,
     amazon_asin: amazonAsin,
     list_price: listPrice,
+    list_price_source: listPriceSource,
   };
 }
 
@@ -248,6 +283,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       set_name: string;
       allocated_cost: number;
       list_price: number | null;
+      list_price_source: string | null;
       roi_percent: number | null;
       amazon_asin: string | null;
     }> = [];
@@ -311,6 +347,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         set_name: enriched.set_name,
         allocated_cost: itemCost,
         list_price: enriched.list_price ?? null,
+        list_price_source: enriched.list_price_source ?? null,
         roi_percent: roiPercent,
         amazon_asin: enriched.amazon_asin ?? null,
       });
