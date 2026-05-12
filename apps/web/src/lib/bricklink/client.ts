@@ -6,6 +6,7 @@
  */
 
 import { createHmac, randomBytes } from 'crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BrickLinkCredentials,
   BrickLinkResponse,
@@ -28,8 +29,41 @@ const BASE_URL = 'https://api.bricklink.com/api/store/v1';
 /** Default rate limit (BrickLink allows 5000 requests/day) */
 const DAILY_LIMIT = 5000;
 
+/**
+ * Our share of the BL daily budget. Bricqer also burns against this consumer
+ * key with no visibility, so we leave headroom. Override via constructor.
+ */
+const DEFAULT_OUR_DAILY_BUDGET = 3500;
+
+/** How long to cache the daily count between Supabase reads (ms). */
+const COUNT_CACHE_TTL_MS = 60_000;
+
 /** Request timeout in milliseconds (90s to allow for slow API responses) */
 const REQUEST_TIMEOUT = 90000;
+
+export interface BrickLinkClientOptions {
+  /**
+   * Supabase service-role client used to read + increment the daily call
+   * counter. Without it, no counter and no soft gate — manual scripts that
+   * don't need quota tracking can omit this.
+   *
+   * Typed as <any> because callers (cron services, UI routes, manual scripts)
+   * pass clients with varying Database generics — and `bricklink_api_calls_daily`
+   * + the increment RPC aren't in generated types until the migration ships.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase?: SupabaseClient<any>;
+  /**
+   * Caller context recorded in `bricklink_api_calls_daily.by_caller`
+   * (e.g. 'cron-full-sync', 'partout-service', 'bl-basket-script').
+   */
+  caller?: string;
+  /**
+   * Our share of BL's 5000/day quota. Throws RateLimitError when reached.
+   * Default 3500 — leaves headroom for Bricqer's invisible share.
+   */
+  dailyBudget?: number;
+}
 
 /**
  * Error class for BrickLink API errors
@@ -64,9 +98,18 @@ export class RateLimitError extends BrickLinkApiError {
 export class BrickLinkClient {
   private credentials: BrickLinkCredentials;
   private rateLimitInfo: RateLimitInfo | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private supabase?: SupabaseClient<any>;
+  private caller: string;
+  private dailyBudget: number;
+  private dailyCount: number | null = null;
+  private dailyCountFetchedAt = 0;
 
-  constructor(credentials: BrickLinkCredentials) {
+  constructor(credentials: BrickLinkCredentials, options?: BrickLinkClientOptions) {
     this.credentials = credentials;
+    this.supabase = options?.supabase;
+    this.caller = options?.caller ?? 'unknown';
+    this.dailyBudget = options?.dailyBudget ?? DEFAULT_OUR_DAILY_BUDGET;
   }
 
   /**
@@ -74,6 +117,77 @@ export class BrickLinkClient {
    */
   getRateLimitInfo(): RateLimitInfo | null {
     return this.rateLimitInfo;
+  }
+
+  /**
+   * Read today's daily count (cached for COUNT_CACHE_TTL_MS) and throw
+   * RateLimitError if it has reached our share of BL's 5000/day quota.
+   *
+   * Fails open: if the counter is unreachable, calls proceed rather than
+   * stalling the whole app. The next-day warning email remains the
+   * backstop in that case.
+   */
+  private async checkBudget(): Promise<void> {
+    if (!this.supabase) return;
+
+    const now = Date.now();
+    if (this.dailyCount === null || now - this.dailyCountFetchedAt > COUNT_CACHE_TTL_MS) {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data, error } = await this.supabase
+          .from('bricklink_api_calls_daily')
+          .select('count')
+          .eq('call_date', today)
+          .maybeSingle();
+        if (error) {
+          console.warn('[BrickLinkClient] Failed to read daily count:', error.message);
+          return;
+        }
+        this.dailyCount = data?.count ?? 0;
+        this.dailyCountFetchedAt = now;
+      } catch (err) {
+        console.warn('[BrickLinkClient] Failed to read daily count:', err);
+        return;
+      }
+    }
+
+    if (this.dailyCount >= this.dailyBudget) {
+      const tomorrowUtc = new Date();
+      tomorrowUtc.setUTCHours(24, 0, 0, 0);
+      throw new RateLimitError(
+        `BrickLink daily budget exhausted (${this.dailyCount}/${this.dailyBudget}). Resets at UTC midnight.`,
+        {
+          remaining: 0,
+          resetTime: tomorrowUtc,
+          dailyLimit: this.dailyBudget,
+          dailyRemaining: 0,
+        }
+      );
+    }
+  }
+
+  /**
+   * Increment the daily counter via atomic RPC. Fire-and-forget — must not
+   * slow down the BL request or fail it if Supabase is unreachable.
+   */
+  private async incrementCounter(): Promise<void> {
+    if (!this.supabase) return;
+
+    try {
+      const { data, error } = await this.supabase.rpc('increment_bricklink_api_call', {
+        p_caller: this.caller,
+      });
+      if (error) {
+        console.warn('[BrickLinkClient] Failed to increment counter:', error.message);
+        return;
+      }
+      if (typeof data === 'number') {
+        this.dailyCount = data;
+        this.dailyCountFetchedAt = Date.now();
+      }
+    } catch (err) {
+      console.warn('[BrickLinkClient] Failed to increment counter:', err);
+    }
   }
 
   /**
@@ -165,6 +279,9 @@ export class BrickLinkClient {
     endpoint: string,
     queryParams?: Record<string, string | string[] | boolean | undefined>
   ): Promise<T> {
+    // Soft gate: refuse before signing if today's count is at budget.
+    await this.checkBudget();
+
     // Build URL with query parameters and collect string params for OAuth
     const url = new URL(`${BASE_URL}${endpoint}`);
     const stringParams: Record<string, string> = {};
@@ -206,6 +323,10 @@ export class BrickLinkClient {
       });
 
       clearTimeout(timeoutId);
+
+      // Count this call — BL counts errored responses too, so increment for
+      // any HTTP response. Fire-and-forget so a slow Supabase doesn't stall.
+      void this.incrementCounter();
 
       // Update rate limit info from headers if available
       this.updateRateLimitInfo(response.headers);

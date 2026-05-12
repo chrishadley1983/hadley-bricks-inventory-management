@@ -42,10 +42,12 @@ export interface BrickLinkSyncOptions {
 export class BrickLinkSyncService {
   private orderRepo: OrderRepository;
   private credentialsRepo: CredentialsRepository;
+  private supabase: SupabaseClient<Database>;
 
   constructor(supabase: SupabaseClient<Database>) {
     this.orderRepo = new OrderRepository(supabase);
     this.credentialsRepo = new CredentialsRepository(supabase);
+    this.supabase = supabase;
   }
 
   /**
@@ -61,7 +63,10 @@ export class BrickLinkSyncService {
       throw new Error('BrickLink credentials not configured');
     }
 
-    return new BrickLinkClient(credentials);
+    return new BrickLinkClient(credentials, {
+      supabase: this.supabase,
+      caller: 'bricklink-sync-service',
+    });
   }
 
   /**
@@ -76,7 +81,10 @@ export class BrickLinkSyncService {
    * Test BrickLink connection with provided credentials (doesn't read from DB)
    */
   async testConnectionWithCredentials(credentials: BrickLinkCredentials): Promise<boolean> {
-    const client = new BrickLinkClient(credentials);
+    const client = new BrickLinkClient(credentials, {
+      supabase: this.supabase,
+      caller: 'bricklink-test-connection',
+    });
     return client.testConnection();
   }
 

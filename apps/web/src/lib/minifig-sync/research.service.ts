@@ -296,7 +296,10 @@ export class ResearchService {
       throw new Error('BrickLink credentials not configured');
     }
 
-    return new BrickLinkClient(credentials);
+    return new BrickLinkClient(credentials, {
+      supabase: this.supabase,
+      caller: 'minifig-research',
+    });
   }
 
   /**

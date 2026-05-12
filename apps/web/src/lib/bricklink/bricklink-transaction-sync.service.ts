@@ -244,7 +244,10 @@ export class BrickLinkTransactionSyncService {
         throw new Error('BrickLink credentials not configured');
       }
 
-      const client = new BrickLinkClient(credentials);
+      const client = new BrickLinkClient(credentials, {
+        supabase,
+        caller: 'cron-bricklink-transaction-sync',
+      });
       console.log('[BrickLinkTransactionSyncService] BrickLink client ready');
 
       // Fetch all sales orders from BrickLink
