@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { InventoryPullService } from '@/lib/minifig-sync/inventory-pull.service';
 import { OrderPollService } from '@/lib/minifig-sync/order-poll.service';
-import { RepricingService } from '@/lib/minifig-sync/repricing.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
@@ -16,7 +15,6 @@ export const maxDuration = 300;
  * 2. Inventory pull from Bricqer
  * 3. Bricqer order polling
  * 4. Research refresh (expired cache)
- * 5. Repricing (Mondays only)
  */
 async function handler(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
@@ -67,19 +65,9 @@ async function handler(request: NextRequest) {
     // Re-enable once Chrome extension or alternative approach is in place.
     results.researchRefresh = { message: 'Research refresh disabled', itemsRefreshed: 0 };
 
-    // 5. Repricing (Mondays only)
-    const dayOfWeek = new Date().getUTCDay();
-    if (dayOfWeek === 1) {
-      try {
-        const repricingService = new RepricingService(supabase, DEFAULT_USER_ID);
-        results.repricing = await repricingService.repriceStaleListings();
-      } catch (err) {
-        console.error('[daily-inventory] Repricing failed:', err);
-        results.repricing = { error: err instanceof Error ? err.message : String(err) };
-      }
-    } else {
-      results.repricing = { skipped: true, reason: 'Only runs on Mondays' };
-    }
+    // Step 5 (Monday repricing) removed — was making 1 unbounded BL API call per
+    // stale PUBLISHED minifig, contributing to BL daily-quota overage.
+    results.repricing = { skipped: true, reason: 'Disabled — unbounded BL API calls' };
 
     const itemsProcessed =
       (typeof results.inventoryPull === 'object' && results.inventoryPull !== null
