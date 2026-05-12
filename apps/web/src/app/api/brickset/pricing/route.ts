@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { getEbayBrowseClient } from '@/lib/ebay';
@@ -175,9 +177,9 @@ export async function GET(request: NextRequest) {
         // eBay pricing (Used)
         fetchEbayPricing(baseSetNumber, 'used'),
         // BrickLink pricing (New)
-        fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'N'),
+        fetchBricklinkPricing(credentialsRepo, supabase, userId, setNumber, 'N'),
         // BrickLink pricing (Used)
-        fetchBricklinkPricing(credentialsRepo, userId, setNumber, 'U'),
+        fetchBricklinkPricing(credentialsRepo, supabase, userId, setNumber, 'U'),
         // Amazon pricing (requires EAN/UPC to find ASIN)
         fetchAmazonPricing(credentialsRepo, userId, ean || upc || null),
       ]);
@@ -290,6 +292,7 @@ async function fetchEbayPricing(
  */
 async function fetchBricklinkPricing(
   credentialsRepo: CredentialsRepository,
+  supabase: SupabaseClient<Database>,
   userId: string,
   setNumber: string,
   condition: 'N' | 'U' = 'N'
@@ -308,7 +311,10 @@ async function fetchBricklinkPricing(
       return null;
     }
 
-    const blClient = new BrickLinkClient(credentials);
+    const blClient = new BrickLinkClient(credentials, {
+      supabase,
+      caller: 'brickset-pricing',
+    });
 
     // Get price guide for specified condition in UK
     const priceGuide = await blClient.getSetPriceGuide(setNumber, {

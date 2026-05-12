@@ -74,7 +74,10 @@ export async function GET(
     }
 
     // 4. Create services
-    const brickLinkClient = new BrickLinkClient(credentials);
+    const brickLinkClient = new BrickLinkClient(credentials, {
+      supabase,
+      caller: 'partout',
+    });
     const cacheService = new PartPriceCacheService(supabase);
     const partoutService = new PartoutService(brickLinkClient, cacheService);
 

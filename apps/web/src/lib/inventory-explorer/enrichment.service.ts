@@ -82,7 +82,10 @@ export class EnrichmentService {
       throw new Error('BrickLink credentials not configured');
     }
 
-    const client = new BrickLinkClient(creds);
+    const client = new BrickLinkClient(creds, {
+      supabase: this.supabase,
+      caller: 'cron-inventory-enrich',
+    });
 
     // 2. Build BL colour-name → BL colour_id map. The snapshot stores Bricqer's
     //    internal color_id enum (NOT BL's), but both sides use BL's American
