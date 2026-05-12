@@ -20,18 +20,17 @@ import type {
   BrickLinkItemType,
   BrickLinkSubsetEntry,
   BrickLinkSubsetOptions,
+  BrickLinkSupersetEntry,
   BrickLinkColor,
   RateLimitInfo,
 } from './types';
 
 const BASE_URL = 'https://api.bricklink.com/api/store/v1';
 
-/** Default rate limit (BrickLink allows 5000 requests/day) */
-const DAILY_LIMIT = 5000;
-
 /**
- * Our share of the BL daily budget. Bricqer also burns against this consumer
- * key with no visibility, so we leave headroom. Override via constructor.
+ * Our share of the BL daily budget. BL's documented limit is 5000/day per
+ * consumer key — but Bricqer also burns against the same key with no
+ * visibility, so we leave headroom. Override via constructor.
  */
 const DEFAULT_OUR_DAILY_BUDGET = 3500;
 
@@ -97,7 +96,6 @@ export class RateLimitError extends BrickLinkApiError {
  */
 export class BrickLinkClient {
   private credentials: BrickLinkCredentials;
-  private rateLimitInfo: RateLimitInfo | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private supabase?: SupabaseClient<any>;
   private caller: string;
@@ -110,13 +108,6 @@ export class BrickLinkClient {
     this.supabase = options?.supabase;
     this.caller = options?.caller ?? 'unknown';
     this.dailyBudget = options?.dailyBudget ?? DEFAULT_OUR_DAILY_BUDGET;
-  }
-
-  /**
-   * Get current rate limit information
-   */
-  getRateLimitInfo(): RateLimitInfo | null {
-    return this.rateLimitInfo;
   }
 
   /**
@@ -326,23 +317,11 @@ export class BrickLinkClient {
 
       // Count this call — BL counts errored responses too, so increment for
       // any HTTP response. Fire-and-forget so a slow Supabase doesn't stall.
+      // Note: BL does NOT enforce the 5000/day limit at request time. There is
+      // no HTTP 429, no rate-limit headers, no quota endpoint — the only signal
+      // is a next-day warning email. The soft gate above (checkBudget) is our
+      // only real-time enforcement.
       void this.incrementCounter();
-
-      // Update rate limit info from headers if available
-      this.updateRateLimitInfo(response.headers);
-
-      // Handle rate limiting
-      if (response.status === 429) {
-        throw new RateLimitError(
-          'BrickLink API rate limit exceeded',
-          this.rateLimitInfo || {
-            remaining: 0,
-            resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            dailyLimit: DAILY_LIMIT,
-            dailyRemaining: 0,
-          }
-        );
-      }
 
       const data = (await response.json()) as BrickLinkResponse<T>;
 
@@ -364,25 +343,6 @@ export class BrickLinkClient {
       }
 
       throw new BrickLinkApiError(error instanceof Error ? error.message : 'Unknown error', 500);
-    }
-  }
-
-  /**
-   * Update rate limit info from response headers
-   */
-  private updateRateLimitInfo(headers: Headers): void {
-    // BrickLink may provide rate limit headers
-    // This is a placeholder - actual headers may vary
-    const remaining = headers.get('X-RateLimit-Remaining');
-    const reset = headers.get('X-RateLimit-Reset');
-
-    if (remaining !== null) {
-      this.rateLimitInfo = {
-        remaining: parseInt(remaining, 10),
-        resetTime: reset ? new Date(parseInt(reset, 10) * 1000) : new Date(),
-        dailyLimit: DAILY_LIMIT,
-        dailyRemaining: parseInt(remaining, 10),
-      };
     }
   }
 
@@ -631,6 +591,27 @@ export class BrickLinkClient {
     const endpoint = `/items/${type}/${encodeURIComponent(no)}/subsets`;
     console.log('[BrickLinkClient.getSubsets] Fetching subsets for:', type, no);
     return this.request<BrickLinkSubsetEntry[]>('GET', endpoint, queryParams);
+  }
+
+  /**
+   * Get supersets (sets that contain this item) for an item.
+   * Returns blocks grouped by container colour.
+   * @param type Item type (typically PART or MINIFIG)
+   * @param no Item number
+   * @param options Optional colour filter
+   */
+  async getSupersets(
+    type: BrickLinkItemType,
+    no: string,
+    options: { colorId?: number } = {}
+  ): Promise<BrickLinkSupersetEntry[]> {
+    const queryParams: Record<string, string | undefined> = {};
+    if (options.colorId !== undefined) {
+      queryParams.color_id = options.colorId.toString();
+    }
+    const endpoint = `/items/${type}/${encodeURIComponent(no)}/supersets`;
+    console.log('[BrickLinkClient.getSupersets] Fetching supersets for:', type, no);
+    return this.request<BrickLinkSupersetEntry[]>('GET', endpoint, queryParams);
   }
 
   /**

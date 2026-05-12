@@ -66,7 +66,11 @@ interface TransactionRow {
 // ============================================================================
 
 export class BrickLinkTransactionSyncService {
-  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
+  constructor(
+    private readonly supabaseOverride?: SupabaseClient<Database>,
+    /** Caller tag recorded on BL API calls. Defaults to cron tag for backwards compat. */
+    private readonly caller: string = 'cron-bricklink-transaction-sync'
+  ) {}
 
   private async getSupabase(): Promise<SupabaseClient<Database>> {
     return this.supabaseOverride ?? (await createClient());
@@ -246,7 +250,7 @@ export class BrickLinkTransactionSyncService {
 
       const client = new BrickLinkClient(credentials, {
         supabase,
-        caller: 'cron-bricklink-transaction-sync',
+        caller: this.caller,
       });
       console.log('[BrickLinkTransactionSyncService] BrickLink client ready');
 
@@ -571,7 +575,9 @@ export class BrickLinkTransactionSyncService {
 
 // Export singleton instance factory
 export function createBrickLinkTransactionSyncService(
-  supabaseOverride?: SupabaseClient<Database>
+  supabaseOverride?: SupabaseClient<Database>,
+  /** Caller tag recorded on BL API calls. Default suits cron use; pass 'manual-*' from UI routes. */
+  caller?: string
 ): BrickLinkTransactionSyncService {
-  return new BrickLinkTransactionSyncService(supabaseOverride);
+  return new BrickLinkTransactionSyncService(supabaseOverride, caller);
 }

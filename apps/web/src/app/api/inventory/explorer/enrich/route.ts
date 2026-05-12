@@ -28,7 +28,7 @@ export async function POST() {
         };
 
         try {
-          const service = new EnrichmentService(supabase, user.id);
+          const service = new EnrichmentService(supabase, user.id, 'manual-inventory-enrich');
           const result = await service.enrich({
             onProgress: (progress) => {
               send('progress', progress);

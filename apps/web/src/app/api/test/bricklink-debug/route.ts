@@ -58,7 +58,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'BrickLink credentials not configured' }, { status: 400 });
     }
 
-    const client = new BrickLinkClient(credentials);
+    const client = new BrickLinkClient(credentials, {
+      supabase,
+      caller: 'test-bricklink-debug',
+    });
 
     // Get price guide WITHOUT country filter to get price_detail (global)
     const globalPriceGuide = await client.getSetPriceGuide(setNumber, {
