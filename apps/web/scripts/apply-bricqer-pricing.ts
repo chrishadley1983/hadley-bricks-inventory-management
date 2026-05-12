@@ -24,8 +24,9 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BrickLinkClient, BrickLinkApiError } from '../src/lib/bricklink/client';
+import { BrickLinkApiError } from '../src/lib/bricklink/client';
 import type { BrickLinkItemType } from '../src/lib/bricklink/types';
+import { createScriptBlContext } from './_bl-client';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -93,16 +94,7 @@ interface BricqerLot {
   rejectReason?: string;
 }
 
-const creds = {
-  consumerKey: process.env.BRICKLINK_CONSUMER_KEY ?? '',
-  consumerSecret: process.env.BRICKLINK_CONSUMER_SECRET ?? '',
-  tokenValue: process.env.BRICKLINK_TOKEN_VALUE ?? '',
-  tokenSecret: process.env.BRICKLINK_TOKEN_SECRET ?? '',
-};
-for (const [k, v] of Object.entries(creds)) {
-  if (!v) { console.error(`Missing BRICKLINK_${k}`); process.exit(1); }
-}
-const bl = new BrickLinkClient(creds);
+const { bl } = createScriptBlContext('apply-bricqer-pricing-script');
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

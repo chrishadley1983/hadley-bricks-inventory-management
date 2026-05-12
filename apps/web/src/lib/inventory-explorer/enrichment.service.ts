@@ -60,7 +60,9 @@ export const MAX_ITEMS_DAILY_REFRESH = 200;
 export class EnrichmentService {
   constructor(
     private supabase: SupabaseClient<Database>,
-    private userId: string
+    private userId: string,
+    /** Caller tag recorded on BL API calls. Defaults to 'cron-inventory-enrich' for backwards compat. */
+    private caller: string = 'cron-inventory-enrich'
   ) {}
 
   /**
@@ -84,7 +86,7 @@ export class EnrichmentService {
 
     const client = new BrickLinkClient(creds, {
       supabase: this.supabase,
-      caller: 'cron-inventory-enrich',
+      caller: this.caller,
     });
 
     // 2. Build BL colour-name → BL colour_id map. The snapshot stores Bricqer's

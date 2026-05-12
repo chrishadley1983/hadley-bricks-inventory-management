@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
     const { fromDate } = parsed.data;
 
     // Perform historical import
-    const syncService = createBrickLinkTransactionSyncService();
+    const syncService = createBrickLinkTransactionSyncService(
+      undefined,
+      'manual-bricklink-historical'
+    );
     const result = await syncService.performHistoricalImport(user.id, fromDate);
 
     return NextResponse.json(result);

@@ -47,7 +47,10 @@ export async function POST(request: NextRequest) {
     }
 
     const syncService = new BrickLinkSyncService(supabase);
-    const transactionSyncService = createBrickLinkTransactionSyncService();
+    const transactionSyncService = createBrickLinkTransactionSyncService(
+      supabase,
+      'manual-bricklink-sync'
+    );
 
     // Reset before sync if requested (clears bad data from previous syncs)
     if (options.resetBeforeSync) {

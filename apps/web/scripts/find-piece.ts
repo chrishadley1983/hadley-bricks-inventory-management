@@ -27,9 +27,8 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 config({ path: resolve(__dirname, '../.env.local') });
 
-import { createClient } from '@supabase/supabase-js';
-import { CredentialsRepository } from '../src/lib/repositories/credentials.repository';
-import type { Database } from '@hadley-bricks/database';
+import { createScriptBlContext } from './_bl-client';
+import { BrickLinkApiError } from '../src/lib/bricklink/client';
 
 const BL_COLOR_IDS: Record<string, number> = {
   // Greys
@@ -165,55 +164,9 @@ if (COLOR_NAME && !BL_COLOR_ID && !SKIP_SUPERSETS) {
   process.exit(1);
 }
 
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-// ── BL OAuth helpers ────────────────────────────────────────────────────────
-async function blOauth(opts: {
-  url: string;
-  consumerKey: string;
-  consumerSecret: string;
-  tokenValue: string;
-  tokenSecret: string;
-}) {
-  const crypto = await import('node:crypto');
-  const { url, consumerKey, consumerSecret, tokenValue, tokenSecret } = opts;
-  const u = new URL(url);
-  const params: Record<string, string> = {};
-  u.searchParams.forEach((v, k) => {
-    params[k] = v;
-  });
-  const oauthParams: Record<string, string> = {
-    oauth_consumer_key: consumerKey,
-    oauth_token: tokenValue,
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: String(Math.floor(Date.now() / 1000)),
-    oauth_nonce: crypto.randomBytes(16).toString('hex'),
-    oauth_version: '1.0',
-  };
-  const all = { ...params, ...oauthParams };
-  const baseString = [
-    'GET',
-    encodeURIComponent(`${u.protocol}//${u.host}${u.pathname}`),
-    encodeURIComponent(
-      Object.keys(all)
-        .sort()
-        .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(all[k])}`)
-        .join('&'),
-    ),
-  ].join('&');
-  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
-  const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
-  const authParams = { ...oauthParams, oauth_signature: signature };
-  const authHeader =
-    'OAuth ' +
-    Object.keys(authParams)
-      .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(authParams[k as keyof typeof authParams])}"`)
-      .join(', ');
-  return fetch(url, { headers: { Authorization: authHeader, Accept: 'application/json' } });
-}
+// BrickLinkClient is wired with daily-counter tracking via _bl-client helper.
+// Calls flow through the persistent counter + soft gate. No hand-rolled OAuth.
+const { bl, supabase } = createScriptBlContext('find-piece-script');
 
 type SnapshotRow = {
   bricqer_item_id: number;
@@ -266,49 +219,27 @@ type SupersetEntry = {
   containerColorId?: number;
 };
 
-async function getBlCreds() {
-  const { data: orderRows } = await supabase
-    .from('platform_orders')
-    .select('user_id')
-    .eq('platform', 'bricklink')
-    .limit(1);
-  const userId = orderRows?.[0]?.user_id;
-  if (!userId) throw new Error('No BrickLink user_id found in platform_orders');
-  const credRepo = new CredentialsRepository(supabase);
-  const blCreds = await credRepo.getCredentials(userId, 'bricklink');
-  if (!blCreds) throw new Error('No BL credentials');
-  const consumerKey =
-    (blCreds as { consumerKey?: string; apiKey?: string }).consumerKey ?? blCreds.apiKey;
-  const consumerSecret = (blCreds as { consumerSecret?: string }).consumerSecret;
-  const tokenValue = (blCreds as { tokenValue?: string }).tokenValue;
-  const tokenSecret = (blCreds as { tokenSecret?: string }).tokenSecret;
-  if (!consumerKey || !consumerSecret || !tokenValue || !tokenSecret) {
-    throw new Error('Missing BL OAuth fields on credentials row.');
+async function fetchSupersets(partNo: string): Promise<SupersetEntry[]> {
+  let blocks;
+  try {
+    blocks = await bl.getSupersets('PART', partNo, { colorId: BL_COLOR_ID });
+  } catch (err) {
+    if (err instanceof BrickLinkApiError) {
+      console.warn(`[BL ${partNo}] ${err.code}: ${err.message}`);
+      return [];
+    }
+    throw err;
   }
-  return { consumerKey, consumerSecret, tokenValue, tokenSecret };
-}
-
-async function fetchSupersets(
-  partNo: string,
-  creds: { consumerKey: string; consumerSecret: string; tokenValue: string; tokenSecret: string },
-): Promise<SupersetEntry[]> {
-  const url =
-    BL_COLOR_ID !== undefined
-      ? `https://api.bricklink.com/api/store/v1/items/PART/${encodeURIComponent(partNo)}/supersets?color_id=${BL_COLOR_ID}`
-      : `https://api.bricklink.com/api/store/v1/items/PART/${encodeURIComponent(partNo)}/supersets`;
-  const r = await blOauth({ url, ...creds });
-  const text = await r.text();
-  if (!r.ok) {
-    console.warn(`[BL ${partNo}] ${r.status}: ${text.slice(0, 200)}`);
-    return [];
-  }
-  const json = JSON.parse(text);
-  const blocks = (json?.data ?? []) as Array<{ color_id: number; entries: SupersetEntry[] }>;
   const out: SupersetEntry[] = [];
   for (const block of blocks) {
     if (BL_COLOR_ID !== undefined && block.color_id !== BL_COLOR_ID) continue;
     for (const e of block.entries ?? []) {
-      out.push({ ...e, containerColorId: block.color_id });
+      out.push({
+        item: e.item,
+        quantity: e.quantity,
+        appear_as: e.appear_as,
+        containerColorId: block.color_id,
+      });
     }
   }
   return out;
@@ -388,23 +319,30 @@ type PriceGuideResp = {
   currency_code: string;
 };
 
-async function fetchPriceGuide(
-  args: { partNo: string; colorId: number; condition: 'N' | 'U'; guideType: 'sold' | 'stock' },
-  creds: { consumerKey: string; consumerSecret: string; tokenValue: string; tokenSecret: string },
-): Promise<PriceGuideResp | null> {
-  const url =
-    `https://api.bricklink.com/api/store/v1/items/PART/${encodeURIComponent(args.partNo)}/price` +
-    `?color_id=${args.colorId}&country_code=UK&new_or_used=${args.condition}` +
-    `&guide_type=${args.guideType}&currency_code=GBP`;
-  const r = await blOauth({ url, ...creds });
-  const text = await r.text();
-  if (!r.ok) {
-    if (r.status === 429) throw new Error('rate-limited');
-    console.warn(`  [BL ${args.partNo}:${args.colorId} ${args.condition}/${args.guideType}] ${r.status}: ${text.slice(0, 120)}`);
-    return null;
+async function fetchPriceGuide(args: {
+  partNo: string;
+  colorId: number;
+  condition: 'N' | 'U';
+  guideType: 'sold' | 'stock';
+}): Promise<PriceGuideResp | null> {
+  try {
+    const guide = await bl.getPartPriceGuide('PART', args.partNo, args.colorId, {
+      condition: args.condition,
+      countryCode: 'UK',
+      currencyCode: 'GBP',
+      guideType: args.guideType,
+    });
+    return guide as unknown as PriceGuideResp;
+  } catch (err) {
+    if (err instanceof BrickLinkApiError) {
+      if (err.code === 429) throw new Error('rate-limited');
+      console.warn(
+        `  [BL ${args.partNo}:${args.colorId} ${args.condition}/${args.guideType}] ${err.code}: ${err.message}`,
+      );
+      return null;
+    }
+    throw err;
   }
-  const json = JSON.parse(text);
-  return (json?.data ?? null) as PriceGuideResp | null;
 }
 
 function pickPartPriceStr(
@@ -464,9 +402,8 @@ async function main() {
   // ── Phase 2: BL supersets ─────────────────────────────────────────────────
   const supersetByPart: Map<string, SupersetEntry[]> = new Map();
   if (!SKIP_SUPERSETS) {
-    const creds = await getBlCreds();
     for (const partNo of PARTS) {
-      const entries = await fetchSupersets(partNo, creds);
+      const entries = await fetchSupersets(partNo);
       supersetByPart.set(partNo, entries);
       const m = entries.filter((e) => e.item.type === 'MINIFIG').length;
       const p = entries.filter((e) => e.item.type === 'PART').length;
@@ -703,16 +640,15 @@ async function main() {
       console.log(
         `\n[fetch] ${misses.length} cache miss(es) — fetching ${cap} from BL Price Guide (${cap * 2} calls @ 250ms)…`,
       );
-      const creds = await getBlCreds();
       const dirtyKeys = new Set<string>();
       let fetched = 0;
       for (const m of misses.slice(0, cap)) {
         const key = `${m.partNumber}:${m.blColorId}`;
         try {
           await new Promise((res) => setTimeout(res, 250));
-          const sold = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'sold' }, creds);
+          const sold = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'sold' });
           await new Promise((res) => setTimeout(res, 250));
-          const stock = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'stock' }, creds);
+          const stock = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'stock' });
           fetched++;
           const avg = sold ? parseFloat(sold.avg_price) : 0;
           const soldQty = sold?.total_quantity ?? 0;

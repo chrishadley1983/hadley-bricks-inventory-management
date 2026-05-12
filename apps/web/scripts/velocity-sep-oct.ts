@@ -4,20 +4,10 @@
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createClient } from '@supabase/supabase-js';
-import { BrickLinkClient } from '../src/lib/bricklink/client';
+import { createScriptBlContext } from './_bl-client';
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
-const bl = new BrickLinkClient({
-  consumerKey: process.env.BRICKLINK_CONSUMER_KEY!,
-  consumerSecret: process.env.BRICKLINK_CONSUMER_SECRET!,
-  tokenValue: process.env.BRICKLINK_TOKEN_VALUE!,
-  tokenSecret: process.env.BRICKLINK_TOKEN_SECRET!,
-});
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const { bl, supabase } = createScriptBlContext('velocity-sep-oct-script');
 
 (async () => {
   // ========= 1. BL orders in Sep + Oct 2025 =========
