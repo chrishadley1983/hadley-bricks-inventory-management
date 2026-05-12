@@ -46,7 +46,12 @@ export interface BrickLinkClientOptions {
    * Supabase service-role client used to read + increment the daily call
    * counter. Without it, no counter and no soft gate — manual scripts that
    * don't need quota tracking can omit this.
+   *
+   * Typed as <any> because callers (cron services, UI routes, manual scripts)
+   * pass clients with varying Database generics — and `bricklink_api_calls_daily`
+   * + the increment RPC aren't in generated types until the migration ships.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase?: SupabaseClient<any>;
   /**
    * Caller context recorded in `bricklink_api_calls_daily.by_caller`
@@ -93,6 +98,7 @@ export class RateLimitError extends BrickLinkApiError {
 export class BrickLinkClient {
   private credentials: BrickLinkCredentials;
   private rateLimitInfo: RateLimitInfo | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private supabase?: SupabaseClient<any>;
   private caller: string;
   private dailyBudget: number;
