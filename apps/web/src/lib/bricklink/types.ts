@@ -330,6 +330,27 @@ export interface BrickLinkSubsetOptions {
 }
 
 // ============================================
+// Superset Types (sets that contain a given part)
+// ============================================
+
+/** A single superset entry — a set/minifig that contains the queried part */
+export interface BrickLinkSupersetEntryItem {
+  item: {
+    no: string;
+    name: string;
+    type: BrickLinkItemType;
+  };
+  quantity: number;
+  appear_as: string;
+}
+
+/** Superset response from BrickLink API — grouped by container colour */
+export interface BrickLinkSupersetEntry {
+  color_id: number;
+  entries: BrickLinkSupersetEntryItem[];
+}
+
+// ============================================
 // Color Types
 // ============================================
 
