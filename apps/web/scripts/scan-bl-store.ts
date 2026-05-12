@@ -101,7 +101,7 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
-const bl = new BrickLinkClient(creds);
+const bl = new BrickLinkClient(creds, { supabase, caller: 'scan-bl-store-script' });
 
 // ---------------------------------------------------------------------------
 // Types

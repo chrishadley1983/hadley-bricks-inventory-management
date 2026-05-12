@@ -90,7 +90,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const bl = new BrickLinkClient(creds);
+const bl = new BrickLinkClient(creds, { supabase, caller: 'scan-ninjago-arbitrage-script' });
 
 // ---------------------------------------------------------------------------
 // Types

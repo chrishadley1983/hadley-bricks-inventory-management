@@ -38,7 +38,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const bl = new BrickLinkClient(blCreds);
+  const bl = new BrickLinkClient(blCreds, { supabase, caller: 'backfill-bl-orders-since-reopen-script' });
 
   console.log(`Loading BL orders from platform_orders since ${SINCE}…`);
   const { data: rows, error } = await supabase
