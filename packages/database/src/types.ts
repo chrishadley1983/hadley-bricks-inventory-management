@@ -1301,6 +1301,30 @@ export type Database = {
           },
         ]
       }
+      bricklink_api_calls_daily: {
+        Row: {
+          by_caller: Json
+          call_date: string
+          count: number
+          last_call_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          by_caller?: Json
+          call_date: string
+          count?: number
+          last_call_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          by_caller?: Json
+          call_date?: string
+          count?: number
+          last_call_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_arbitrage_pricing: {
         Row: {
           avg_price: number | null
@@ -13988,6 +14012,108 @@ export type Database = {
         }
         Relationships: []
       }
+      vinted_sniper_decisions: {
+        Row: {
+          amazon_price: number | null
+          asin: string | null
+          brand: string | null
+          catalog_hit: boolean | null
+          catalog_name: string | null
+          catalog_theme: string | null
+          cog: number | null
+          condition_text: string | null
+          decision: string
+          decision_reason: string | null
+          id: string
+          image_url: string | null
+          listing_id: string
+          listing_url: string | null
+          margin_pct: number | null
+          name_match: boolean | null
+          price_incl_num: number | null
+          price_num: number | null
+          profit: number | null
+          raw_title: string | null
+          rrp: number | null
+          scanned_at: string
+          set_name: string | null
+          set_num_text: string | null
+          set_num_used: string | null
+          set_num_vision: string | null
+          theme_mismatch: boolean | null
+          vision_confidence: string | null
+          vision_features: Json | null
+          vision_raw: string | null
+          was_price_90d: number | null
+        }
+        Insert: {
+          amazon_price?: number | null
+          asin?: string | null
+          brand?: string | null
+          catalog_hit?: boolean | null
+          catalog_name?: string | null
+          catalog_theme?: string | null
+          cog?: number | null
+          condition_text?: string | null
+          decision: string
+          decision_reason?: string | null
+          id?: string
+          image_url?: string | null
+          listing_id: string
+          listing_url?: string | null
+          margin_pct?: number | null
+          name_match?: boolean | null
+          price_incl_num?: number | null
+          price_num?: number | null
+          profit?: number | null
+          raw_title?: string | null
+          rrp?: number | null
+          scanned_at?: string
+          set_name?: string | null
+          set_num_text?: string | null
+          set_num_used?: string | null
+          set_num_vision?: string | null
+          theme_mismatch?: boolean | null
+          vision_confidence?: string | null
+          vision_features?: Json | null
+          vision_raw?: string | null
+          was_price_90d?: number | null
+        }
+        Update: {
+          amazon_price?: number | null
+          asin?: string | null
+          brand?: string | null
+          catalog_hit?: boolean | null
+          catalog_name?: string | null
+          catalog_theme?: string | null
+          cog?: number | null
+          condition_text?: string | null
+          decision?: string
+          decision_reason?: string | null
+          id?: string
+          image_url?: string | null
+          listing_id?: string
+          listing_url?: string | null
+          margin_pct?: number | null
+          name_match?: boolean | null
+          price_incl_num?: number | null
+          price_num?: number | null
+          profit?: number | null
+          raw_title?: string | null
+          rrp?: number | null
+          scanned_at?: string
+          set_name?: string | null
+          set_num_text?: string | null
+          set_num_used?: string | null
+          set_num_vision?: string | null
+          theme_mismatch?: boolean | null
+          vision_confidence?: string | null
+          vision_features?: Json | null
+          vision_raw?: string | null
+          was_price_90d?: number | null
+        }
+        Relationships: []
+      }
       vinted_watchlist: {
         Row: {
           asin: string | null
@@ -15841,6 +15967,10 @@ export type Database = {
             }[]
           }
       get_uk_financial_year: { Args: { input_date: string }; Returns: number }
+      increment_bricklink_api_call: {
+        Args: { p_caller?: string }
+        Returns: number
+      }
       initialize_seeded_asins: {
         Args: never
         Returns: {

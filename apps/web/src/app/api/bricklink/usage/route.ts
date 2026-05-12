@@ -15,13 +15,6 @@ export const runtime = 'nodejs';
 
 const BL_DAILY_LIMIT = 5000;
 
-interface DailyCountRow {
-  count: number;
-  by_caller: Record<string, number> | null;
-  last_call_at: string | null;
-  updated_at: string;
-}
-
 export async function GET() {
   const supabase = await createClient();
 
@@ -33,17 +26,7 @@ export async function GET() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // Cast to any: bricklink_api_calls_daily is added in this PR's migration
-  // and is not yet in generated DB types until `npm run db:types` runs post-merge.
-  const { data, error } = await (supabase as unknown as {
-    from: (table: string) => {
-      select: (cols: string) => {
-        eq: (col: string, val: string) => {
-          maybeSingle: () => Promise<{ data: DailyCountRow | null; error: { message: string } | null }>;
-        };
-      };
-    };
-  })
+  const { data, error } = await supabase
     .from('bricklink_api_calls_daily')
     .select('count, by_caller, last_call_at, updated_at')
     .eq('call_date', today)
@@ -55,7 +38,7 @@ export async function GET() {
   }
 
   const count = data?.count ?? 0;
-  const byCaller = data?.by_caller ?? {};
+  const byCaller = (data?.by_caller as Record<string, number> | null) ?? {};
 
   return NextResponse.json({
     date: today,
