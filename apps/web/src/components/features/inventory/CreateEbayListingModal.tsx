@@ -104,6 +104,7 @@ interface CreateEbayListingModalProps {
     listing_value?: number | null;
     status?: string | null;
     ebay_listing_id?: string | null;
+    storage_location?: string | null;
   };
 }
 
@@ -161,8 +162,8 @@ export function CreateEbayListingModal({
   // Quality review popup state
   const [showQualityReview, setShowQualityReview] = useState(false);
 
-  // Storage location state
-  const [storageLocation, setStorageLocation] = useState('');
+  // Storage location state — pre-fill from inventory item if set
+  const [storageLocation, setStorageLocation] = useState(inventoryItem.storage_location ?? '');
 
   // Hooks
   const {
