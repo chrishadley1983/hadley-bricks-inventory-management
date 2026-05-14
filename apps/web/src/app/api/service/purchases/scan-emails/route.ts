@@ -14,32 +14,16 @@ import {
   getEmailBody as gmailGetEmailBody,
   isGmailConfigured,
 } from '@/lib/google/gmail-client';
+import {
+  type PurchaseCandidate,
+  extractAllSetNumbers,
+  parseEbayEmail,
+} from './parsers';
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(30).optional().default(7),
   includeProcessed: z.coerce.boolean().optional().default(false),
 });
-
-interface PurchaseCandidate {
-  source: 'Vinted' | 'eBay';
-  order_reference: string;
-  seller_username: string;
-  item_name: string;
-  set_number: string | null;
-  cost: number;
-  purchase_date: string;
-  email_id: string;
-  email_subject: string;
-  email_date: string;
-  payment_method: string;
-  suggested_condition: 'New' | 'Used';
-  status: 'new' | 'already_processed' | 'already_imported';
-  skip_reason?: string;
-  bundle_group?: string; // Shared group ID for bundle items (original order_reference)
-  bundle_total_cost?: number; // Total cost of the bundle
-  bundle_index?: number; // 1-based index within bundle
-  forwarded_from?: string; // Set when email was forwarded (e.g. 'ph2026@proton.me')
-}
 
 // Hadley API base URL (fallback for local dev without Gmail OAuth creds)
 const HADLEY_API_BASE = 'http://172.19.64.1:8100';
@@ -161,39 +145,6 @@ function extractBundleItems(body: string): string[] {
     .split('\n')
     .map((line) => line.replace(/^\|?\s*/, '').trim())
     .filter((line) => line.length > 0 && !line.startsWith('|'));
-}
-
-/**
- * Extract ALL LEGO set numbers from text.
- * Handles comma-separated in parentheses like (30666,30565,30679),
- * single in parentheses like (10786), and standalone like 40461.
- */
-function extractAllSetNumbers(text: string): string[] {
-  // Pattern 1: Comma-separated numbers in parentheses like (30666,30565,30679)
-  const multiParenMatch = text.match(/\(([\d,\s-]+)\)/);
-  if (multiParenMatch) {
-    const nums = multiParenMatch[1]
-      .split(/[,\s]+/)
-      .map((n) => n.replace(/-\d$/, '').trim())
-      .filter((n) => /^\d{4,5}$/.test(n));
-    if (nums.length > 1) return nums;
-    if (nums.length === 1) return nums;
-  }
-
-  // Pattern 2: Single number in parentheses like (10786)
-  const singleParenMatch = text.match(/\((\d{4,5})\)/);
-  if (singleParenMatch) return [singleParenMatch[1]];
-
-  // Pattern 3: Standalone 4-5 digit numbers (deduplicated)
-  const seen = new Set<string>();
-  const results: string[] = [];
-  for (const match of text.matchAll(/\b(\d{4,5})(?:-\d)?\b/g)) {
-    if (!seen.has(match[1])) {
-      seen.add(match[1]);
-      results.push(match[1]);
-    }
-  }
-  return results;
 }
 
 /**
@@ -475,85 +426,6 @@ function parseVintedEmail(email: {
   ];
 }
 
-/**
- * Parse eBay purchase confirmation email
- */
-function parseEbayEmail(email: {
-  id: string;
-  subject: string;
-  from: string;
-  date: string;
-  snippet: string;
-  body?: string;
-}): Partial<PurchaseCandidate> | null {
-  // Subject pattern: "Order confirmed: [Item Name]". "You won" emails are
-  // intentionally NOT processed — they arrive pre-payment with thin bodies (no
-  // cost, no order number, no seller) and would create £0 placeholder rows
-  // alongside the proper "Order confirmed" twin that arrives once the user pays.
-  const subjectMatch = email.subject.match(/Order confirmed[:\s]*(.+)/i);
-  if (!subjectMatch) return null;
-
-  const itemName = subjectMatch[1].replace(/\.{3}$/, '').trim(); // Remove trailing ...
-  const content = email.body || email.snippet;
-
-  // Normalize content - replace multiple whitespace/newlines with single space for matching
-  const normalizedContent = content.replace(/[\r\n\s]+/g, ' ');
-
-  // Extract total price: "Total charged to ... £XX.XX" (what was actually paid)
-  // Fallback to item price if total not found
-  let cost = 0;
-  const totalMatch = normalizedContent.match(/Total charged to[^£]*£([\d.]+)/i);
-  if (totalMatch) {
-    cost = parseFloat(totalMatch[1]);
-  } else {
-    // Fallback: "Price: £XX.XX" with possible whitespace
-    const priceMatch = normalizedContent.match(/Price:\s*£([\d.]+)/i);
-    if (priceMatch) {
-      cost = parseFloat(priceMatch[1]);
-    }
-  }
-
-  // Extract seller: "Seller: username" with possible whitespace
-  const sellerMatch = normalizedContent.match(/Seller:\s*(\w+)/i);
-  const seller = sellerMatch ? sellerMatch[1].trim() : 'unknown';
-
-  // Extract order reference: "Order number: XX-XXXXX-XXXXX"
-  const orderMatch = normalizedContent.match(/Order number:\s*([\d-]+)/i);
-  const orderRef = orderMatch ? orderMatch[1] : `ebay-${email.id}`;
-
-  // Try to extract set number from item name - look for 4-5 digit numbers
-  // Pattern handles formats like: (40254), 40254, 75192-1
-  const setNumberMatch = itemName.match(/\((\d{4,5})\)|(?:^|\s)(\d{4,5})(?:-\d)?(?:\s|$)/);
-  let setNumber = setNumberMatch ? setNumberMatch[1] || setNumberMatch[2] : null;
-
-  // Body fallback: eBay truncates long item titles in the subject (e.g. "Order
-  // confirmed: LEGO Star Wars: X-Wi...") which strips the set number. The full
-  // title with `(NNNNN)` lives in the body — match parens-only to avoid hitting
-  // year numbers (2026), prices, or 5-digit chunks of the order reference.
-  if (!setNumber) {
-    const bodyParenMatch = normalizedContent.match(/\((\d{4,5})\)/);
-    if (bodyParenMatch) setNumber = bodyParenMatch[1];
-  }
-
-  // Infer condition from item name - default to New, mark Used only if explicit keywords
-  const isUsed = /\bused\b|opened|built|incomplete|no box|played/i.test(itemName);
-
-  return {
-    source: 'eBay',
-    order_reference: orderRef,
-    seller_username: seller,
-    item_name: itemName,
-    set_number: setNumber,
-    cost,
-    purchase_date: new Date(email.date).toISOString().split('T')[0],
-    email_id: email.id,
-    email_subject: email.subject,
-    email_date: email.date,
-    payment_method: 'PayPal',
-    suggested_condition: isUsed ? 'Used' : 'New',
-    skip_reason: setNumber ? undefined : 'no_set_number',
-  };
-}
 
 /**
  * Parse an eBay multi-item ("Your order is confirmed") email. eBay uses this
