@@ -260,20 +260,36 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // 3. Record successful import in processed_purchase_emails
-          await supabase.from('processed_purchase_emails').insert({
-            email_id: item.email_id,
-            source: item.source,
-            order_reference: item.order_reference,
-            purchase_id: purchase.id,
-            inventory_id: inventory.id,
-            status: 'imported',
-            email_subject: item.email_subject,
-            email_date: item.email_date,
-            item_name: item.set_name,
-            cost: item.cost,
-            seller_username: item.seller_username,
-          });
+          // 3. Record successful import in processed_purchase_emails. We always
+          // log insert errors loudly — a silent failure here means the email
+          // can reappear as `status=new` in subsequent scans, leaking duplicate
+          // inserts past the dedup checks above. Same email can yield multiple
+          // candidates (e.g. multi-item "Your order is confirmed" bundles), so
+          // use upsert to make repeat inserts a no-op rather than a hard error.
+          const { error: processedInsertError } = await supabase
+            .from('processed_purchase_emails')
+            .upsert(
+              {
+                email_id: item.email_id,
+                source: item.source,
+                order_reference: item.order_reference,
+                purchase_id: purchase.id,
+                inventory_id: inventory.id,
+                status: 'imported',
+                email_subject: item.email_subject,
+                email_date: item.email_date,
+                item_name: item.set_name,
+                cost: item.cost,
+                seller_username: item.seller_username,
+              },
+              { onConflict: 'email_id', ignoreDuplicates: true }
+            );
+          if (processedInsertError) {
+            console.error(
+              `[batch-import] processed_purchase_emails insert failed for imported ${item.email_id} (${item.set_number}):`,
+              processedInsertError
+            );
+          }
 
           // Calculate ROI if list price is available
           let roiPercent: number | null = null;
@@ -576,19 +592,33 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Record as skipped
-          await supabase.from('processed_purchase_emails').insert({
-            email_id: skipItem.email_id,
-            source: skipItem.source,
-            order_reference: skipItem.order_reference,
-            status: 'skipped',
-            skip_reason: skipItem.skip_reason,
-            email_subject: skipItem.email_subject,
-            email_date: skipItem.email_date,
-            item_name: skipItem.item_name,
-            cost: skipItem.cost,
-            seller_username: skipItem.seller_username,
-          });
+          // Record as skipped. Without surfacing insert errors here, items
+          // re-appear as `status=new` on every subsequent scan and never land
+          // in either the review queue or the dedup table.
+          const { error: skipInsertError } = await supabase
+            .from('processed_purchase_emails')
+            .upsert(
+              {
+                email_id: skipItem.email_id,
+                source: skipItem.source,
+                order_reference: skipItem.order_reference,
+                status: 'skipped',
+                skip_reason: skipItem.skip_reason,
+                email_subject: skipItem.email_subject,
+                email_date: skipItem.email_date,
+                item_name: skipItem.item_name,
+                cost: skipItem.cost,
+                seller_username: skipItem.seller_username,
+              },
+              { onConflict: 'email_id', ignoreDuplicates: true }
+            );
+          if (skipInsertError) {
+            console.error(
+              `[batch-import] processed_purchase_emails skip insert failed for ${skipItem.email_id}:`,
+              skipInsertError
+            );
+            continue;
+          }
 
           skipped.push({
             email_id: skipItem.email_id,
