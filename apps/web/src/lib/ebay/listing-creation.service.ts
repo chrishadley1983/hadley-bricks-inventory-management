@@ -134,6 +134,29 @@ export class ListingCreationService {
     this.startTime = Date.now();
     this.initializeSteps();
 
+    // Retry short-circuit: if a pending non-expired preview session already
+    // exists for this item, re-emit its (possibly user-edited) listing as the
+    // preview and skip AI regen + photo re-upload. The user's previous edits
+    // are restored automatically because persistEditedListingToSession writes
+    // them back at the start of every continueFromPreview call.
+    if (onPreview) {
+      const existing = await this.findActiveSessionForItem(request.inventoryItemId);
+      if (existing) {
+        console.log(
+          `[ListingCreationService] Reusing existing preview session ${existing.sessionId} for item ${request.inventoryItemId}`
+        );
+        onPreview({
+          sessionId: existing.sessionId,
+          listing: existing.listing,
+          qualityReview: existing.qualityReview,
+          qualityReviewFailed: false,
+          price: request.price,
+          photoUrls: existing.photoUrls,
+        });
+        return null;
+      }
+    }
+
     let auditId: string | undefined;
     let generatedListing: AIGeneratedListing | undefined;
     let imageUrls: string[] = [];
@@ -1553,7 +1576,8 @@ Return JSON with these fields (omit any you're not confident about):
   private async saveDraft(
     request: ListingCreationRequest,
     errorMessage: string,
-    errorStep: string
+    errorStep: string,
+    editedListing?: AIGeneratedListing
   ): Promise<string> {
     const draftData = {
       price: request.price,
@@ -1565,6 +1589,8 @@ Return JSON with these fields (omit any you're not confident about):
       listingType: request.listingType,
       scheduledDate: request.scheduledDate,
       policyOverrides: request.policyOverrides,
+      storageLocation: request.storageLocation,
+      editedListing,
     };
 
     const errorContext = {
@@ -1751,6 +1777,64 @@ Return JSON with these fields (omit any you're not confident about):
   }
 
   /**
+   * Persist the user's edited listing back to the preview session and extend
+   * its expiry. Called at the start of continueFromPreview so the user's edits
+   * (title/description/condition description) survive any subsequent failure
+   * and can be restored if they click "Try Again".
+   */
+  private async persistEditedListingToSession(
+    sessionId: string,
+    editedListing: AIGeneratedListing
+  ): Promise<void> {
+    const newExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const { error } = await this.supabase
+      .from('listing_preview_sessions')
+      .update({
+        generated_listing: editedListing as unknown as Json,
+        expires_at: newExpiresAt,
+      })
+      .eq('id', sessionId)
+      .eq('user_id', this.userId);
+    if (error) {
+      console.error(
+        '[ListingCreationService] Failed to persist edited listing to session:',
+        error
+      );
+    }
+  }
+
+  /**
+   * Find the most recent pending, non-expired preview session for an inventory
+   * item. Used by createListing to short-circuit to an existing session on
+   * retry, preserving the user's edits without regenerating the AI listing or
+   * re-uploading photos.
+   */
+  private async findActiveSessionForItem(inventoryItemId: string): Promise<{
+    sessionId: string;
+    listing: AIGeneratedListing;
+    qualityReview: QualityReviewResult | null;
+    photoUrls: string[];
+  } | null> {
+    const { data, error } = await this.supabase
+      .from('listing_preview_sessions')
+      .select('id, generated_listing, quality_review, photo_urls')
+      .eq('user_id', this.userId)
+      .eq('inventory_item_id', inventoryItemId)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      sessionId: data.id,
+      listing: data.generated_listing as unknown as AIGeneratedListing,
+      qualityReview: (data.quality_review as unknown as QualityReviewResult) ?? null,
+      photoUrls: (data.photo_urls as string[]) ?? [],
+    };
+  }
+
+  /**
    * Mark session as confirmed and update with edited listing
    */
   async markSessionConfirmed(sessionId: string): Promise<void> {
@@ -1827,8 +1911,10 @@ Return JSON with these fields (omit any you're not confident about):
     let ebayListingId: string | undefined;
 
     try {
-      // Mark session as confirmed
-      await this.markSessionConfirmed(sessionId);
+      // Persist user's edits to the session and extend expiry BEFORE calling
+      // eBay. If the create step fails, the session stays in 'pending' status
+      // with the edits stored — the next "Try Again" click can resume from it.
+      await this.persistEditedListingToSession(sessionId, editedListing);
 
       // Get inventory item for later steps
       const item = await this.validateInventoryItem(request.inventoryItemId);
@@ -1914,6 +2000,10 @@ Return JSON with these fields (omit any you're not confident about):
         console.warn(`[ListingCreationService] ${storageLocationWarning}`);
       }
 
+      // Mark session as confirmed only after full success so that retries on
+      // failure can still find the session via findActiveSessionForItem.
+      await this.markSessionConfirmed(sessionId);
+
       return {
         success: true,
         listingId: ebayListingId!,
@@ -1938,12 +2028,44 @@ Return JSON with these fields (omit any you're not confident about):
         error
       );
 
+      // Write an audit row so failures are queryable in listing_creation_audit.
+      // createAuditRecord ignores its `item` arg, so skip the re-fetch.
+      if (!auditId) {
+        try {
+          auditId = await this.createAuditRecord(
+            request,
+            undefined,
+            editedListing,
+            ebayListingId,
+            ebayOfferId,
+            'failed',
+            errorMessage,
+            failedStep,
+            qualityReview ?? undefined,
+            qualityLoopIterations
+          );
+        } catch (auditErr) {
+          console.error('[ListingCreationService] Failed to write failure audit:', auditErr);
+        }
+      }
+
+      // Save a draft so the user can resume later. The edited listing is also
+      // persisted on the preview session itself (see persistEditedListingToSession),
+      // but drafts survive longer than the 30-minute session expiry.
+      let draftSaved = false;
+      try {
+        await this.saveDraft(request, errorMessage, failedStep, editedListing);
+        draftSaved = true;
+      } catch (draftErr) {
+        console.error('[ListingCreationService] Failed to save draft on failure:', draftErr);
+      }
+
       return {
         success: false,
         error: errorMessage,
         failedStep,
         auditId,
-        draftSaved: false,
+        draftSaved,
       };
     }
   }

@@ -568,6 +568,7 @@ export function InventoryDetail({ id }: InventoryDetailProps) {
           listing_value: item.listing_value,
           status: item.status,
           ebay_listing_id: item.ebay_listing_id,
+          storage_location: item.storage_location,
         }}
       />
 

@@ -950,10 +950,19 @@ export class EbayApiAdapter {
           const errorResponse = errorBody as EbayErrorResponse | null;
           console.error(`[EbayApiAdapter] Error response:`, JSON.stringify(errorResponse, null, 2));
 
-          // Check if this is a signature error - provide more helpful message
-          const errorMessage =
-            errorResponse?.errors?.[0]?.message ||
-            `HTTP ${response.status}: ${response.statusText}`;
+          // Build a detailed error message including every error returned by eBay,
+          // not just the first one's `message`. Surfaces errorId, longMessage, and
+          // parameters so downstream logs/audits can pinpoint what eBay rejected.
+          const formatEbayError = (e: EbayErrorResponse['errors'][number]): string => {
+            const params = e.parameters?.length
+              ? ` [${e.parameters.map((p) => `${p.name}=${p.value}`).join(', ')}]`
+              : '';
+            const long = e.longMessage && e.longMessage !== e.message ? ` (${e.longMessage})` : '';
+            return `eBay errorId=${e.errorId}: ${e.message}${long}${params}`;
+          };
+          const errorMessage = errorResponse?.errors?.length
+            ? errorResponse.errors.map(formatEbayError).join(' | ')
+            : `HTTP ${response.status}: ${response.statusText}`;
           const isSignatureError =
             errorMessage.toLowerCase().includes('signature') ||
             errorMessage.toLowerCase().includes('x-ebay-signature-key');
