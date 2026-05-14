@@ -2029,14 +2029,12 @@ Return JSON with these fields (omit any you're not confident about):
       );
 
       // Write an audit row so failures are queryable in listing_creation_audit.
+      // createAuditRecord ignores its `item` arg, so skip the re-fetch.
       if (!auditId) {
         try {
-          const itemForAudit = await this.validateInventoryItem(request.inventoryItemId).catch(
-            () => undefined
-          );
           auditId = await this.createAuditRecord(
             request,
-            itemForAudit,
+            undefined,
             editedListing,
             ebayListingId,
             ebayOfferId,
