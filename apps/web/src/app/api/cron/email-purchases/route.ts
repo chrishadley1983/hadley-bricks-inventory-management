@@ -200,15 +200,19 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Brickset lookup (overrides ASIN title if available)
+        // Brickset lookup (overrides ASIN title if available). The endpoint
+        // returns `data.setName` — older code here read `data.name` and
+        // silently fell back to the ASIN title, leaving imported items with
+        // the eBay subject (often truncated) instead of the real LEGO name.
         try {
           const bricksetResponse = await internalFetch(
             `/api/service/brickset/lookup?setNumber=${encodeURIComponent(candidate.set_number)}`
           );
           if (bricksetResponse.ok) {
             const bricksetData = await bricksetResponse.json();
-            if (bricksetData.data?.name) {
-              setName = bricksetData.data.name;
+            const bsName = bricksetData.data?.setName ?? bricksetData.data?.name;
+            if (bsName) {
+              setName = bsName;
             }
           }
         } catch {
