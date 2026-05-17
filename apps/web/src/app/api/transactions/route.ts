@@ -19,9 +19,17 @@ const QuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   sortField: z
-    .enum(['created', 'amount', 'merchant_name', 'description', 'local_category', 'user_notes'])
+    .enum([
+      'created',
+      'amount',
+      'display_merchant_name',
+      'display_description',
+      'local_category',
+      'user_notes',
+    ])
     .default('created'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
+  includeArchived: z.coerce.boolean().default(false),
 });
 
 export async function GET(request: NextRequest) {
@@ -50,6 +58,7 @@ export async function GET(request: NextRequest) {
       endDate: searchParams.get('endDate') || undefined,
       sortField: searchParams.get('sortField') || 'created',
       sortDirection: searchParams.get('sortDirection') || 'desc',
+      includeArchived: searchParams.get('includeArchived') || false,
     });
 
     if (!params.success) {
@@ -69,6 +78,7 @@ export async function GET(request: NextRequest) {
       endDate,
       sortField,
       sortDirection,
+      includeArchived,
     } = params.data;
 
     // 3. Build query for Monzo transactions
@@ -79,8 +89,20 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id);
 
     // Apply filters
+    if (!includeArchived) {
+      query = query.eq('is_archived', false);
+    }
     if (search) {
-      query = query.or(`description.ilike.%${search}%,merchant_name.ilike.%${search}%`);
+      // PostgREST .or() splits on commas and uses parens for grouping, so a raw
+      // search value containing those characters could append additional filter
+      // conditions. RLS still pins user_id, but strip them to avoid result-set
+      // distortion. Merchant names rarely contain , or ( anyway.
+      const safeSearch = search.replace(/[,()]/g, ' ').trim();
+      if (safeSearch) {
+        query = query.or(
+          `description.ilike.%${safeSearch}%,merchant_name.ilike.%${safeSearch}%,user_description.ilike.%${safeSearch}%,user_merchant_name.ilike.%${safeSearch}%`
+        );
+      }
     }
     if (category) {
       query = query.eq('category', category);
@@ -121,6 +143,7 @@ export async function GET(request: NextRequest) {
         p_start_date: startDate || undefined,
         p_end_date: endDate || undefined,
         p_search: search || undefined,
+        p_include_archived: includeArchived,
       }
     );
 
