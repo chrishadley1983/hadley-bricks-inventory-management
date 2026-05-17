@@ -14,6 +14,9 @@ const UpdateSchema = z.object({
   user_notes: z.string().optional(),
   local_category: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  user_merchant_name: z.string().nullable().optional(),
+  user_description: z.string().nullable().optional(),
+  is_archived: z.boolean().optional(),
 });
 
 /**
@@ -108,6 +111,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (parsed.data.tags !== undefined) {
       updateData.tags = parsed.data.tags;
+    }
+    if (parsed.data.user_merchant_name !== undefined) {
+      // Empty string → null so the display fallback works
+      updateData.user_merchant_name = parsed.data.user_merchant_name || null;
+    }
+    if (parsed.data.user_description !== undefined) {
+      updateData.user_description = parsed.data.user_description || null;
+    }
+    if (parsed.data.is_archived !== undefined) {
+      updateData.is_archived = parsed.data.is_archived;
     }
 
     const { data, error } = await supabase

@@ -8744,8 +8744,11 @@ export type Database = {
           data_source: string | null
           decline_reason: string | null
           description: string | null
+          display_description: string | null
+          display_merchant_name: string | null
           emoji: string | null
           id: string
+          is_archived: boolean
           is_load: boolean | null
           local_amount: number | null
           local_category: string | null
@@ -8760,7 +8763,9 @@ export type Database = {
           transaction_time: string | null
           transaction_type: string | null
           updated_at: string
+          user_description: string | null
           user_id: string
+          user_merchant_name: string | null
           user_notes: string | null
         }
         Insert: {
@@ -8774,8 +8779,11 @@ export type Database = {
           data_source?: string | null
           decline_reason?: string | null
           description?: string | null
+          display_description?: string | null
+          display_merchant_name?: string | null
           emoji?: string | null
           id?: string
+          is_archived?: boolean
           is_load?: boolean | null
           local_amount?: number | null
           local_category?: string | null
@@ -8790,7 +8798,9 @@ export type Database = {
           transaction_time?: string | null
           transaction_type?: string | null
           updated_at?: string
+          user_description?: string | null
           user_id: string
+          user_merchant_name?: string | null
           user_notes?: string | null
         }
         Update: {
@@ -8804,8 +8814,11 @@ export type Database = {
           data_source?: string | null
           decline_reason?: string | null
           description?: string | null
+          display_description?: string | null
+          display_merchant_name?: string | null
           emoji?: string | null
           id?: string
+          is_archived?: boolean
           is_load?: boolean | null
           local_amount?: number | null
           local_category?: string | null
@@ -8820,7 +8833,9 @@ export type Database = {
           transaction_time?: string | null
           transaction_type?: string | null
           updated_at?: string
+          user_description?: string | null
           user_id?: string
+          user_merchant_name?: string | null
           user_notes?: string | null
         }
         Relationships: [
@@ -15588,6 +15603,7 @@ export type Database = {
         Args: {
           p_category?: string
           p_end_date?: string
+          p_include_archived?: boolean
           p_local_category?: string
           p_search?: string
           p_start_date?: string

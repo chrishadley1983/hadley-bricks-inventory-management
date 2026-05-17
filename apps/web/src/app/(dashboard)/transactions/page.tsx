@@ -70,6 +70,9 @@ interface MonzoTransaction {
   currency: string;
   description: string;
   merchant_name: string | null;
+  user_merchant_name: string | null;
+  user_description: string | null;
+  is_archived: boolean;
   category: string;
   local_category: string | null;
   user_notes: string | null;
@@ -345,8 +348,8 @@ interface AmazonTransactionsResponse {
 
 type MonzoSortField =
   | 'created'
-  | 'merchant_name'
-  | 'description'
+  | 'display_merchant_name'
+  | 'display_description'
   | 'amount'
   | 'local_category'
   | 'user_notes';
@@ -432,6 +435,7 @@ async function fetchMonzoTransactions(params: {
   endDate?: string;
   sortField?: MonzoSortField;
   sortDirection?: SortDirection;
+  includeArchived?: boolean;
 }): Promise<TransactionsResponse> {
   const searchParams = new URLSearchParams({
     page: String(params.page),
@@ -444,6 +448,7 @@ async function fetchMonzoTransactions(params: {
   if (params.endDate) searchParams.set('endDate', params.endDate);
   if (params.sortField) searchParams.set('sortField', params.sortField);
   if (params.sortDirection) searchParams.set('sortDirection', params.sortDirection);
+  if (params.includeArchived) searchParams.set('includeArchived', 'true');
 
   const response = await fetch(`/api/transactions?${searchParams.toString()}`);
   if (!response.ok) throw new Error('Failed to fetch transactions');
@@ -470,7 +475,14 @@ async function syncMonzo(): Promise<{
 
 async function updateMonzoTransaction(
   id: string,
-  data: { user_notes?: string; local_category?: string | null; tags?: string[] }
+  data: {
+    user_notes?: string;
+    local_category?: string | null;
+    tags?: string[];
+    user_merchant_name?: string | null;
+    user_description?: string | null;
+    is_archived?: boolean;
+  }
 ): Promise<{ data: MonzoTransaction }> {
   const response = await fetch(`/api/transactions/${id}`, {
     method: 'PATCH',
@@ -711,6 +723,9 @@ export default function TransactionsPage() {
   );
   const [editNotes, setEditNotes] = useState('');
   const [editLocalCategory, setEditLocalCategory] = useState<string>('');
+  const [editUserMerchantName, setEditUserMerchantName] = useState<string>('');
+  const [editUserDescription, setEditUserDescription] = useState<string>('');
+  const [monzoIncludeArchived, setMonzoIncludeArchived] = useState(false);
   const [monzoMessage, setMonzoMessage] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -1062,6 +1077,7 @@ export default function TransactionsPage() {
       monzoDateRangeKey,
       monzoSortField,
       monzoSortDirection,
+      monzoIncludeArchived,
     ],
     queryFn: () =>
       fetchMonzoTransactions({
@@ -1073,6 +1089,7 @@ export default function TransactionsPage() {
         endDate: monzoDateRange?.end.toISOString(),
         sortField: monzoSortField,
         sortDirection: monzoSortDirection,
+        includeArchived: monzoIncludeArchived,
       }),
     enabled: monzoStatus?.data?.connection?.isConnected && activeTab === 'monzo',
   });
@@ -1249,10 +1266,20 @@ export default function TransactionsPage() {
   });
 
   const monzoUpdateMutation = useMutation({
-    mutationFn: (data: { id: string; user_notes?: string; local_category?: string | null }) =>
+    mutationFn: (data: {
+      id: string;
+      user_notes?: string;
+      local_category?: string | null;
+      user_merchant_name?: string | null;
+      user_description?: string | null;
+      is_archived?: boolean;
+    }) =>
       updateMonzoTransaction(data.id, {
         user_notes: data.user_notes,
         local_category: data.local_category,
+        user_merchant_name: data.user_merchant_name,
+        user_description: data.user_description,
+        is_archived: data.is_archived,
       }),
     onSuccess: () => {
       setMonzoMessage({ type: 'success', message: 'Transaction updated successfully' });
@@ -1272,6 +1299,8 @@ export default function TransactionsPage() {
     setSelectedMonzoTransaction(transaction);
     setEditNotes(transaction.user_notes || '');
     setEditLocalCategory(transaction.local_category || '');
+    setEditUserMerchantName(transaction.user_merchant_name || '');
+    setEditUserDescription(transaction.user_description || '');
   };
 
   const handleSaveMonzoTransaction = () => {
@@ -1280,6 +1309,16 @@ export default function TransactionsPage() {
       id: selectedMonzoTransaction.id,
       user_notes: editNotes,
       local_category: editLocalCategory || null,
+      user_merchant_name: editUserMerchantName.trim() || null,
+      user_description: editUserDescription.trim() || null,
+    });
+  };
+
+  const handleToggleArchiveMonzoTransaction = () => {
+    if (!selectedMonzoTransaction) return;
+    monzoUpdateMutation.mutate({
+      id: selectedMonzoTransaction.id,
+      is_archived: !selectedMonzoTransaction.is_archived,
     });
   };
 
@@ -1657,7 +1696,7 @@ export default function TransactionsPage() {
               <div className="flex flex-wrap gap-4">
                 <div className="flex-1 min-w-[200px]">
                   <Input
-                    placeholder="Search merchant or description..."
+                    placeholder="Search merchant or description (incl. your overrides)..."
                     value={monzoSearch}
                     onChange={(e) => setMonzoSearch(e.target.value)}
                   />
@@ -1698,6 +1737,16 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  variant={monzoIncludeArchived ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setMonzoIncludeArchived((v) => !v);
+                    setMonzoPage(1);
+                  }}
+                >
+                  {monzoIncludeArchived ? 'Hide archived' : 'Show archived'}
+                </Button>
               </div>
             )}
 
@@ -1728,20 +1777,20 @@ export default function TransactionsPage() {
                               <Button
                                 variant="ghost"
                                 className="h-auto p-0 font-medium hover:bg-transparent"
-                                onClick={() => handleMonzoSort('merchant_name')}
+                                onClick={() => handleMonzoSort('display_merchant_name')}
                               >
                                 Merchant
-                                <MonzoSortIcon field="merchant_name" />
+                                <MonzoSortIcon field="display_merchant_name" />
                               </Button>
                             </TableHead>
                             <TableHead>
                               <Button
                                 variant="ghost"
                                 className="h-auto p-0 font-medium hover:bg-transparent"
-                                onClick={() => handleMonzoSort('description')}
+                                onClick={() => handleMonzoSort('display_description')}
                               >
                                 Description
-                                <MonzoSortIcon field="description" />
+                                <MonzoSortIcon field="display_description" />
                               </Button>
                             </TableHead>
                             <TableHead className="text-right">
@@ -1788,16 +1837,40 @@ export default function TransactionsPage() {
                               </TableCell>
                             </TableRow>
                           ) : (
-                            monzoTransactionsData?.data?.transactions?.map((transaction) => (
-                              <TableRow key={transaction.id}>
+                            monzoTransactionsData?.data?.transactions?.map((transaction) => {
+                              const displayMerchant =
+                                transaction.user_merchant_name || transaction.merchant_name;
+                              const merchantEdited = !!transaction.user_merchant_name;
+                              const displayDescription =
+                                transaction.user_description || transaction.description;
+                              const descriptionEdited = !!transaction.user_description;
+                              return (
+                              <TableRow
+                                key={transaction.id}
+                                className={transaction.is_archived ? 'opacity-50' : ''}
+                              >
                                 <TableCell className="whitespace-nowrap">
                                   {formatDate(transaction.created)}
                                 </TableCell>
-                                <TableCell className="font-medium">
-                                  {transaction.merchant_name || '-'}
+                                <TableCell
+                                  className={`font-medium ${merchantEdited ? 'italic' : ''}`}
+                                  title={
+                                    merchantEdited && transaction.merchant_name
+                                      ? `Originally: ${transaction.merchant_name}`
+                                      : undefined
+                                  }
+                                >
+                                  {displayMerchant || '-'}
                                 </TableCell>
-                                <TableCell className="max-w-[200px] truncate">
-                                  {transaction.description}
+                                <TableCell
+                                  className={`max-w-[200px] truncate ${descriptionEdited ? 'italic' : ''}`}
+                                  title={
+                                    descriptionEdited && transaction.description
+                                      ? `Originally: ${transaction.description}`
+                                      : undefined
+                                  }
+                                >
+                                  {displayDescription}
                                 </TableCell>
                                 <TableCell
                                   className={`text-right font-medium whitespace-nowrap ${
@@ -1831,7 +1904,8 @@ export default function TransactionsPage() {
                                   </Button>
                                 </TableCell>
                               </TableRow>
-                            ))
+                              );
+                            })
                           )}
                         </TableBody>
                       </Table>
@@ -3626,11 +3700,11 @@ export default function TransactionsPage() {
           open={!!selectedMonzoTransaction}
           onOpenChange={() => setSelectedMonzoTransaction(null)}
         >
-          <SheetContent>
+          <SheetContent className="overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Edit Transaction</SheetTitle>
               <SheetDescription>
-                Add notes and categorize this transaction for your records.
+                Override the merchant or description and your edits will stick through every refresh.
               </SheetDescription>
             </SheetHeader>
             {selectedMonzoTransaction && (
@@ -3641,12 +3715,6 @@ export default function TransactionsPage() {
                     <span className="text-muted-foreground">Date</span>
                     <span className="font-medium">
                       {formatDateTime(selectedMonzoTransaction.created)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Merchant</span>
-                    <span className="font-medium">
-                      {selectedMonzoTransaction.merchant_name || '-'}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -3670,14 +3738,71 @@ export default function TransactionsPage() {
                         selectedMonzoTransaction.category}
                     </Badge>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Description</span>
-                    <p className="mt-1 text-sm">{selectedMonzoTransaction.description}</p>
-                  </div>
+                  {selectedMonzoTransaction.is_archived && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status</span>
+                      <Badge variant="secondary">Archived</Badge>
+                    </div>
+                  )}
                 </div>
 
                 {/* Editable fields */}
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="userMerchantName">Merchant</Label>
+                      {selectedMonzoTransaction.user_merchant_name && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 text-xs"
+                          onClick={() => setEditUserMerchantName('')}
+                        >
+                          Reset to original
+                        </Button>
+                      )}
+                    </div>
+                    <Input
+                      id="userMerchantName"
+                      value={editUserMerchantName}
+                      placeholder={selectedMonzoTransaction.merchant_name || '(no merchant)'}
+                      onChange={(e) => setEditUserMerchantName(e.target.value)}
+                    />
+                    {selectedMonzoTransaction.merchant_name && (
+                      <p className="text-xs text-muted-foreground">
+                        Original: {selectedMonzoTransaction.merchant_name}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="userDescription">Description</Label>
+                      {selectedMonzoTransaction.user_description && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 text-xs"
+                          onClick={() => setEditUserDescription('')}
+                        >
+                          Reset to original
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      id="userDescription"
+                      value={editUserDescription}
+                      placeholder={selectedMonzoTransaction.description || '(no description)'}
+                      onChange={(e) => setEditUserDescription(e.target.value)}
+                      rows={2}
+                    />
+                    {selectedMonzoTransaction.description && (
+                      <p className="text-xs text-muted-foreground">
+                        Original: {selectedMonzoTransaction.description}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="localCategory">My Category</Label>
                     <Select
@@ -3737,6 +3862,15 @@ export default function TransactionsPage() {
                     Cancel
                   </Button>
                 </div>
+
+                <Button
+                  variant={selectedMonzoTransaction.is_archived ? 'outline' : 'secondary'}
+                  className="w-full"
+                  onClick={handleToggleArchiveMonzoTransaction}
+                  disabled={monzoUpdateMutation.isPending}
+                >
+                  {selectedMonzoTransaction.is_archived ? 'Unarchive' : 'Archive (hide from list)'}
+                </Button>
               </div>
             )}
           </SheetContent>
