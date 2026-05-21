@@ -20,15 +20,15 @@
  * - quantity_polling: Continue polling quantity feed
  * - quantity_verifying: Verify price + quantity are live on Amazon
  *
- * Recommended schedule: Every 1-2 minutes during business hours
- * Example: "* /2 * * * *" (every 2 minutes)
+ * Recommended schedule: Every 10 minutes (was every 5 — reduced to halve
+ * Vercel Fluid Active CPU usage). The slowest two-phase step
+ * (`price_verifying`) waits up to 2 hours for Amazon to make the price
+ * live, so sub-10-minute cadence buys nothing.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
-import { discordService } from '@/lib/notifications';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
@@ -58,12 +58,79 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Use service role client to query across all users
+    const supabase = createServiceRoleClient();
+
+    // Slim early-exit guard: cheap HEAD count before paying for the full handler.
+    // Most invocations have nothing to process; skipping the work branch avoids
+    // loading AmazonSyncService and its transitive deps.
+    const [
+      { count: pendingTwoPhase, error: pendingErr },
+      { count: pendingVerify, error: verifyCountErr },
+    ] = await Promise.all([
+      supabase
+        .from('amazon_sync_feeds')
+        .select('id', { count: 'exact', head: true })
+        .eq('sync_mode', 'two_phase')
+        .in('two_phase_step', PROCESSABLE_STEPS),
+      supabase
+        .from('amazon_sync_feeds')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'done_verifying')
+        .neq('sync_mode', 'two_phase'),
+    ]);
+
+    if (pendingErr) {
+      console.error('[Cron AmazonSync] Error counting feeds:', pendingErr);
+      throw pendingErr;
+    }
+    if (verifyCountErr) {
+      console.error('[Cron AmazonSync] Error counting verify feeds:', verifyCountErr);
+    }
+
+    if ((pendingTwoPhase ?? 0) === 0 && (pendingVerify ?? 0) === 0) {
+      // Single-write noop record: lets operators still answer "did the
+      // scheduler fire amazon-sync at 14:30?" via `job_execution_history`,
+      // at half the DB cost of the original start+complete pattern (1 INSERT
+      // instead of INSERT+UPDATE). Fire-and-forget — never blocks the response.
+      const durationMs = Date.now() - startTime;
+      supabase
+        .from('job_execution_history')
+        .insert({
+          job_name: 'amazon-sync',
+          trigger: 'cron',
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          duration_ms: durationMs,
+          items_processed: 0,
+          items_failed: 0,
+          result_summary: { noop: true, message: 'No feeds need processing' },
+          http_status: 200,
+        })
+        .then(({ error }) => {
+          if (error) console.warn('[Cron AmazonSync] Noop record failed:', error.message);
+        });
+
+      return NextResponse.json({
+        success: true,
+        message: 'No feeds need processing',
+        feedsProcessed: 0,
+        duration: durationMs,
+      });
+    }
+
     execution = await jobExecutionService.start('amazon-sync', 'cron');
 
     console.log('[Cron AmazonSync] Starting two-phase sync processing');
 
-    // Use service role client to query across all users
-    const supabase = createServiceRoleClient();
+    // Lazy-load the heavy service + Discord client only when there's work.
+    // These imports collectively pull in the Amazon SP-API clients, schema
+    // validators, etc. — keeping them out of the cold-start path on no-op runs
+    // is the biggest CPU saving.
+    const [{ AmazonSyncService }, { discordService }] = await Promise.all([
+      import('@/lib/amazon/amazon-sync.service'),
+      import('@/lib/notifications'),
+    ]);
 
     // Find all feeds that need processing (across all users)
     const { data: feeds, error: feedsError } = await supabase
@@ -92,19 +159,6 @@ export async function POST(request: NextRequest) {
 
     if (verifyError) {
       console.error('[Cron AmazonSync] Error fetching verify feeds:', verifyError);
-    }
-
-    const totalFeeds = (feeds?.length ?? 0) + (verifyFeeds?.length ?? 0);
-
-    if (totalFeeds === 0) {
-      console.log('[Cron AmazonSync] No feeds need processing');
-      await execution.complete({ message: 'No feeds need processing' }, 200, 0, 0);
-      return NextResponse.json({
-        success: true,
-        message: 'No feeds need processing',
-        feedsProcessed: 0,
-        duration: Date.now() - startTime,
-      });
     }
 
     console.log(
