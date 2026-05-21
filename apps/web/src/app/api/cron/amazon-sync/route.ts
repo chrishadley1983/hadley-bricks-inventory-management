@@ -89,13 +89,33 @@ export async function POST(request: NextRequest) {
     }
 
     if ((pendingTwoPhase ?? 0) === 0 && (pendingVerify ?? 0) === 0) {
-      // No execution row written for no-op runs — keeps the history table clean
-      // and avoids a write per invocation.
+      // Single-write noop record: lets operators still answer "did the
+      // scheduler fire amazon-sync at 14:30?" via `job_execution_history`,
+      // at half the DB cost of the original start+complete pattern (1 INSERT
+      // instead of INSERT+UPDATE). Fire-and-forget — never blocks the response.
+      const durationMs = Date.now() - startTime;
+      supabase
+        .from('job_execution_history')
+        .insert({
+          job_name: 'amazon-sync',
+          trigger: 'cron',
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          duration_ms: durationMs,
+          items_processed: 0,
+          items_failed: 0,
+          result_summary: { noop: true, message: 'No feeds need processing' },
+          http_status: 200,
+        })
+        .then(({ error }) => {
+          if (error) console.warn('[Cron AmazonSync] Noop record failed:', error.message);
+        });
+
       return NextResponse.json({
         success: true,
         message: 'No feeds need processing',
         feedsProcessed: 0,
-        duration: Date.now() - startTime,
+        duration: durationMs,
       });
     }
 
