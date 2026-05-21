@@ -13,16 +13,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { EbayOrderSyncService, EbayAutoSyncService, EbayInventoryLinkingService } from '@/lib/ebay';
-import { AmazonSyncService } from '@/lib/services/amazon-sync.service';
-import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
-import { BrickLinkSyncService } from '@/lib/services/bricklink-sync.service';
-import { BrickOwlSyncService } from '@/lib/services/brickowl-sync.service';
-import { AmazonArbitrageSyncService } from '@/lib/arbitrage/amazon-sync.service';
-import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
-import { ShopifySyncService } from '@/lib/shopify/sync.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
+
+// Heavy service imports are deferred to inside the handler. Loading them
+// at module scope was paying the cold-start CPU cost (Amazon SP-API clients,
+// BrickLink/BrickOwl adapters, Shopify GraphQL client, Discord webhook
+// client) on every invocation — even on the unauthorized / no-users paths.
+// See `loadServices()` below.
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
@@ -441,8 +439,54 @@ function getNextRunTime(): string {
   });
 }
 
+/**
+ * Lazy-load all heavy service modules in parallel.
+ * Called only after the auth check passes and there's work to do.
+ */
+async function loadServices() {
+  const [
+    ebay,
+    amazon,
+    amazonLinking,
+    bricklink,
+    brickowl,
+    amazonArbitrage,
+    shopify,
+    notifications,
+  ] = await Promise.all([
+    import('@/lib/ebay'),
+    import('@/lib/services/amazon-sync.service'),
+    import('@/lib/amazon/amazon-inventory-linking.service'),
+    import('@/lib/services/bricklink-sync.service'),
+    import('@/lib/services/brickowl-sync.service'),
+    import('@/lib/arbitrage/amazon-sync.service'),
+    import('@/lib/shopify/sync.service'),
+    import('@/lib/notifications/discord.service'),
+  ]);
+
+  return {
+    EbayOrderSyncService: ebay.EbayOrderSyncService,
+    EbayAutoSyncService: ebay.EbayAutoSyncService,
+    EbayInventoryLinkingService: ebay.EbayInventoryLinkingService,
+    AmazonSyncService: amazon.AmazonSyncService,
+    AmazonInventoryLinkingService: amazonLinking.AmazonInventoryLinkingService,
+    BrickLinkSyncService: bricklink.BrickLinkSyncService,
+    BrickOwlSyncService: brickowl.BrickOwlSyncService,
+    AmazonArbitrageSyncService: amazonArbitrage.AmazonArbitrageSyncService,
+    ShopifySyncService: shopify.ShopifySyncService,
+    discordService: notifications.discordService,
+    DiscordColors: notifications.DiscordColors,
+  };
+}
+
+type LoadedServices = Awaited<ReturnType<typeof loadServices>>;
+
 /** Send Discord status report */
-async function sendDiscordReport(results: FullSyncResults): Promise<void> {
+async function sendDiscordReport(
+  results: FullSyncResults,
+  discordService: LoadedServices['discordService'],
+  DiscordColors: LoadedServices['DiscordColors']
+): Promise<void> {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -644,6 +688,23 @@ export async function POST(request: NextRequest) {
     execution = await jobExecutionService.start('full-sync', 'cron');
 
     console.log('[Cron FullSync] Starting full sync job');
+
+    // Lazy-load all heavy service modules in parallel, after auth has passed.
+    // Unauthorized requests skip this entirely.
+    const services = await loadServices();
+    const {
+      EbayOrderSyncService,
+      EbayAutoSyncService,
+      EbayInventoryLinkingService,
+      AmazonSyncService,
+      AmazonInventoryLinkingService,
+      BrickLinkSyncService,
+      BrickOwlSyncService,
+      AmazonArbitrageSyncService,
+      ShopifySyncService,
+      discordService,
+      DiscordColors,
+    } = services;
 
     const supabase = createServiceRoleClient();
     const results: FullSyncResults = {
@@ -952,7 +1013,7 @@ export async function POST(request: NextRequest) {
 
     // Step 9: Send Discord notification
     console.log('[Cron FullSync] Sending Discord notification...');
-    await sendDiscordReport(results);
+    await sendDiscordReport(results, discordService, DiscordColors);
 
     console.log(`[Cron FullSync] Completed in ${results.totalDurationMs}ms`);
 
@@ -981,8 +1042,10 @@ export async function POST(request: NextRequest) {
 
     await execution.fail(error, 500);
 
-    // Try to send error notification to Discord
+    // Try to send error notification to Discord. Lazy-load here so the catch
+    // block doesn't depend on whether `loadServices()` ran or threw.
     try {
+      const { discordService } = await import('@/lib/notifications/discord.service');
       await discordService.sendAlert({
         title: '❌ Full Sync Job Failed',
         message: error instanceof Error ? error.message : 'Unknown error',
