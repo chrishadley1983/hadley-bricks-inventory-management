@@ -1,8 +1,20 @@
 {
-  "commit": "8f96854",
-  "branch": "feature/bricklink-store-deal-finder",
-  "prNumber": 219,
-  "mergedAt": "2026-03-03T09:04:42Z",
-  "previousCommit": "7211c95",
-  "deploymentVerified": true
+  "commit": "22b57e4",
+  "branch": "chore/reduce-vercel-cpu",
+  "prNumber": 407,
+  "mergedAt": "2026-05-21T07:32:00Z",
+  "previousCommit": "c9a8941",
+  "deploymentVerified": true,
+  "verifiedAt": "2026-05-21T07:38:00Z",
+  "testsRun": [
+    "vercel-production-deploy-success",
+    "root-307-auth-redirect",
+    "amazon-sync-401-no-auth",
+    "amazon-sync-401-bad-auth",
+    "full-sync-401-no-auth",
+    "vercel-usage-401-regression-check",
+    "login-200"
+  ],
+  "testsPassed": true,
+  "notes": "Cuts Vercel Fluid Active CPU on Hobby plan (was at 132% of the 14,400s monthly cap). Three changes: (1) amazon-sync schedule */5 -> */10 in gcp/setup.ps1 — 288 -> 144 invocations/day; (2) early-exit guard in amazon-sync route does a slim HEAD count(*) before loading AmazonSyncService + discordService (deferred via dynamic import), with a single-row noop record on the exit path to preserve scheduler observability (CR-001 fix); (3) full-sync defers all 8 heavy service modules (eBay, Amazon, Amazon linking, BrickLink, BrickOwl, Amazon arbitrage, Shopify, Discord) into a single parallel loadServices() call after auth passes. ACTION REQUIRED post-merge: apply the schedule change to live GCP Cloud Scheduler with `gcloud scheduler jobs update http amazon-two-phase-sync --location=europe-west2 --schedule=\"*/10 * * * *\"` — until that's run, the GCP scheduler still fires every 5 minutes. The early-exit guard takes effect immediately on production. Smoke tests confirm all changed cron endpoints still gate on CRON_SECRET (401 without auth) and the lazy-loaded modules don't break route initialisation."
 }
