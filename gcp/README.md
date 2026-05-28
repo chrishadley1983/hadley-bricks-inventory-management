@@ -199,6 +199,19 @@ gcloud scheduler jobs create http vinted-collections \
   --time-zone="Europe/London" \
   --description="Daily Vinted parcel collection check"
 
+# Monzo Sheets Sync - daily at 6:40am UK time (before the 7am financial syncs)
+# Pulls the Monzo Transactions tab from the Lego Planning sheet into monzo_transactions
+# (the P&L's source of Monzo categories). Preserves manual local_category edits.
+gcloud scheduler jobs create http monzo-sync \
+  --location=europe-west2 \
+  --schedule="40 6 * * *" \
+  --uri="$APP_URL/api/cron/monzo-sync" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $CRON_SECRET,Content-Type=application/json" \
+  --time-zone="Europe/London" \
+  --attempt-deadline="320s" \
+  --description="Daily Monzo Google Sheets sync into monzo_transactions"
+
 # Vercel Usage Report - daily at 7am UK time
 gcloud scheduler jobs create http vercel-usage-report \
   --location=europe-west2 \

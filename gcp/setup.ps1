@@ -103,7 +103,8 @@ function Create-SchedulerJob {
         [string]$Uri,
         [string]$Description,
         [string]$Body = "",
-        [bool]$UseOIDC = $false
+        [bool]$UseOIDC = $false,
+        [string]$TimeZone = "UTC"
     )
 
     Write-Host "  Creating job: $Name" -ForegroundColor Yellow
@@ -117,7 +118,7 @@ function Create-SchedulerJob {
         "--schedule=$Schedule",
         "--uri=$Uri",
         "--http-method=POST",
-        "--time-zone=UTC",
+        "--time-zone=$TimeZone",
         "--description=$Description"
     )
 
@@ -148,6 +149,7 @@ Create-SchedulerJob -Name "amazon-pricing-sync" -Schedule "0 4 * * *" -Uri $FUNC
 # Additional fire-and-forget jobs
 Create-SchedulerJob -Name "email-purchases" -Schedule "17 2 * * *" -Uri "$APP_URL/api/cron/email-purchases" -Description "Daily email purchase import (Vinted/eBay)"
 Create-SchedulerJob -Name "vinted-collections" -Schedule "0 8 * * *" -Uri "$APP_URL/api/cron/vinted-collections" -Description "Daily Vinted parcel collection check"
+Create-SchedulerJob -Name "monzo-sync" -Schedule "40 6 * * *" -Uri "$APP_URL/api/cron/monzo-sync" -Description "Daily Monzo Google Sheets sync into monzo_transactions" -TimeZone "Europe/London"
 Create-SchedulerJob -Name "retirement-sync" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/retirement-sync" -Description "Daily retirement data sync from Brickset/BrickTap"
 Create-SchedulerJob -Name "rebrickable-sync" -Schedule "0 4 * * 0" -Uri "$APP_URL/api/cron/rebrickable-sync" -Description "Weekly Rebrickable set data sync"
 Create-SchedulerJob -Name "investment-sync" -Schedule "0 5 * * *" -Uri "$APP_URL/api/cron/investment-sync" -Description "Daily investment ASIN linkage and classification"
