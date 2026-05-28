@@ -38,7 +38,9 @@
       "Bash(python -c \"from domains.second_brain.conversation import capture_conversation; print\\(''Import OK''\\)\")",
       "Bash(python -c \"from domains.peterbot import config; print\\(getattr\\(config, ''CAPTURE_STORE_DB'', ''NOT FOUND''\\)\\)\")",
       "Bash(python scripts/migrate_peterbot_mem.py --dry-run --limit 5)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "mcp__1079a1aa-4d11-4488-b25b-5670ed2329f8__download_file_content",
+      "mcp__1079a1aa-4d11-4488-b25b-5670ed2329f8__get_file_metadata"
     ]
   },
   "hooks": {
