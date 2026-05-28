@@ -21,6 +21,7 @@
     "migrate:bricklink-uploads": "tsx scripts/migrate-bricklink-uploads.ts",
     "validate:reconcile": "tsx scripts/reconcile-data.ts",
     "sheets:test": "tsx scripts/test-sheets-connection.ts",
+    "monzo:audit": "tsx scripts/audit-monzo-categories.ts",
     "seed:brickset": "tsx src/scripts/seed-brickset-data.ts",
     "terapeak:login": "tsx scripts/capture-terapeak-cookies.ts",
     "bricklink:login": "tsx scripts/capture-bricklink-session.ts",
