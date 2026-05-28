@@ -534,7 +534,8 @@ async function queryMonzoByCategory(
   userId: string,
   startDate: string,
   endDate: string,
-  localCategory: string
+  localCategory: string,
+  netRefunds = false
 ): Promise<MonthlyAggregation[]> {
   // Paginate to handle Supabase's 1000 row limit
   const pageSize = 1000;
@@ -543,15 +544,22 @@ async function queryMonzoByCategory(
   const allData: { created: string; amount: number }[] = [];
 
   while (hasMore) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('monzo_transactions')
       .select('created, amount')
       .eq('user_id', userId)
       .eq('local_category', localCategory)
-      .lt('amount', 0) // Only spending (negative amounts)
       .gte('created', startDate)
-      .lte('created', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+      .lte('created', endDate);
+
+    // For COGS categories (netRefunds) we sum ALL amounts so refunds/sales
+    // (positive) net off the spending (negative). Other categories stay
+    // spending-only.
+    if (!netRefunds) {
+      query = query.lt('amount', 0); // Only spending (negative amounts)
+    }
+
+    const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) throw error;
 
@@ -573,8 +581,12 @@ async function queryMonzoByCategory(
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     const month = row.created.substring(0, 7);
-    // Convert from pence to pounds and make positive
-    const amountPounds = Math.abs(Number(row.amount || 0)) / 100;
+    // Convert pence -> pounds. When netting, use -amount so spending (negative)
+    // becomes a positive cost and refunds/sales (positive) subtract from it;
+    // otherwise take the spending magnitude as before.
+    const amountPounds = netRefunds
+      ? -Number(row.amount || 0) / 100
+      : Math.abs(Number(row.amount || 0)) / 100;
     monthMap.set(month, (monthMap.get(month) || 0) + amountPounds);
   }
 
@@ -957,8 +969,9 @@ async function queryLegoStockPurchases(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Use the generic Monzo category query with pagination
-  return queryMonzoByCategory(supabase, userId, startDate, endDate, 'Lego Stock');
+  // Use the generic Monzo category query with pagination.
+  // netRefunds: refunds/sales in this COGS category net off the purchase cost.
+  return queryMonzoByCategory(supabase, userId, startDate, endDate, 'Lego Stock', true);
 }
 
 /**
@@ -970,8 +983,9 @@ async function queryLegoPartsPurchases(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Use the generic Monzo category query with pagination
-  return queryMonzoByCategory(supabase, userId, startDate, endDate, 'Lego Parts');
+  // Use the generic Monzo category query with pagination.
+  // netRefunds: refunds/sales in this COGS category net off the parts cost.
+  return queryMonzoByCategory(supabase, userId, startDate, endDate, 'Lego Parts', true);
 }
 
 /**
