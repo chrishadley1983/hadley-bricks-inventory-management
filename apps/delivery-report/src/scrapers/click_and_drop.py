@@ -47,22 +47,39 @@ def scrape_tracking(days: int = 28) -> dict[str, dict]:
 
 
 def _dismiss_cookie_modal(page: Page) -> None:
-    """Dismiss the Tealium GDPR cookie consent modal if present."""
+    """Dismiss cookie consent dialog if present.
+
+    Royal Mail replaced their Tealium GDPR modal with a native <dialog>
+    element ("Your Royal Mail cookie preferences") in mid-2026. We try
+    the new dialog first, then fall back to the legacy Tealium removal.
+    """
     try:
-        # Aggressively remove the modal and ALL its overlays via JS first
+        # New Royal Mail cookie dialog (native <dialog> element)
+        accept_btn = page.locator('dialog button:has-text("Accept all")')
+        if accept_btn.count() > 0 and accept_btn.first.is_visible():
+            accept_btn.first.click()
+            log.info("Clicked 'Accept all' on RM cookie dialog")
+            time.sleep(1)
+            return
+
+        reject_btn = page.locator('dialog button:has-text("Reject all")')
+        if reject_btn.count() > 0 and reject_btn.first.is_visible():
+            reject_btn.first.click()
+            log.info("Clicked 'Reject all' on RM cookie dialog")
+            time.sleep(1)
+            return
+
+        # Legacy Tealium GDPR modal (kept as fallback)
         removed = page.evaluate("""() => {
             let removed = 0;
-            // Remove the modal itself
             const modal = document.getElementById('__tealiumGDPRecModal');
             if (modal) { modal.remove(); removed++; }
-            // Remove any privacy prompt elements that intercept clicks
             document.querySelectorAll(
                 '.privacy_prompt_footer, .privacy_prompt_content, ' +
                 '.privacy_prompt, [class*="privacy_prompt"], ' +
                 '[class*="tealium"], [id*="tealium"], ' +
                 '[class*="cookie-consent"], [class*="gdpr"]'
             ).forEach(e => { e.remove(); removed++; });
-            // Remove any fixed/absolute overlays that might block clicks
             document.querySelectorAll('div[style*="position: fixed"], div[style*="position:fixed"]').forEach(e => {
                 if (e.style.zIndex > 100 || e.querySelector('[class*="privacy"], [class*="cookie"], [class*="consent"]')) {
                     e.remove(); removed++;
@@ -71,7 +88,7 @@ def _dismiss_cookie_modal(page: Page) -> None:
             return removed;
         }""")
         if removed:
-            log.info("Removed %d GDPR/cookie modal elements via JS", removed)
+            log.info("Removed %d legacy cookie modal elements via JS", removed)
             time.sleep(0.5)
     except Exception as e:
         log.debug("Cookie modal dismissal: %s", e)
