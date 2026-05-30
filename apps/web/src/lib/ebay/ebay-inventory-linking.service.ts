@@ -1131,6 +1131,15 @@ export class EbayInventoryLinkingService {
     queueItemId: string,
     reason: 'skipped' | 'no_inventory'
   ): Promise<{ success: boolean; error?: string }> {
+    // Grab the underlying line item before updating, so a 'no_inventory'
+    // decision can be stamped durably on the line item itself.
+    const { data: queueRow } = await this.supabase
+      .from('ebay_inventory_resolution_queue')
+      .select('ebay_line_item_id')
+      .eq('id', queueItemId)
+      .eq('user_id', this.userId)
+      .single();
+
     const { error } = await this.supabase
       .from('ebay_inventory_resolution_queue')
       .update({
@@ -1144,6 +1153,20 @@ export class EbayInventoryLinkingService {
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // 'no_inventory' is a conscious "won't link" decision. Stamp it on the line
+    // item so it survives queue-row cleanup and is excluded from unlinked counts
+    // regardless of whether the queue row still exists.
+    if (reason === 'no_inventory' && queueRow?.ebay_line_item_id) {
+      await this.supabase
+        .from('ebay_order_line_items')
+        .update({
+          link_ignored: true,
+          link_ignored_reason: 'no_inventory',
+          link_ignored_at: new Date().toISOString(),
+        })
+        .eq('id', queueRow.ebay_line_item_id);
     }
 
     return { success: true };

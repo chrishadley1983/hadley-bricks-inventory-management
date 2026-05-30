@@ -3860,6 +3860,9 @@ export type Database = {
           legacy_item_id: string | null
           line_item_cost_amount: number
           line_item_cost_currency: string
+          link_ignored: boolean
+          link_ignored_at: string | null
+          link_ignored_reason: string | null
           listing_marketplace_id: string | null
           order_id: string
           properties: Json | null
@@ -3885,6 +3888,9 @@ export type Database = {
           legacy_item_id?: string | null
           line_item_cost_amount: number
           line_item_cost_currency: string
+          link_ignored?: boolean
+          link_ignored_at?: string | null
+          link_ignored_reason?: string | null
           listing_marketplace_id?: string | null
           order_id: string
           properties?: Json | null
@@ -3910,6 +3916,9 @@ export type Database = {
           legacy_item_id?: string | null
           line_item_cost_amount?: number
           line_item_cost_currency?: string
+          link_ignored?: boolean
+          link_ignored_at?: string | null
+          link_ignored_reason?: string | null
           listing_marketplace_id?: string | null
           order_id?: string
           properties?: Json | null
@@ -9201,6 +9210,9 @@ export type Database = {
           item_name: string | null
           item_number: string
           item_type: string | null
+          link_ignored: boolean
+          link_ignored_at: string | null
+          link_ignored_reason: string | null
           order_id: string
           quantity: number
           total_price: number | null
@@ -9219,6 +9231,9 @@ export type Database = {
           item_name?: string | null
           item_number: string
           item_type?: string | null
+          link_ignored?: boolean
+          link_ignored_at?: string | null
+          link_ignored_reason?: string | null
           order_id: string
           quantity?: number
           total_price?: number | null
@@ -9237,6 +9252,9 @@ export type Database = {
           item_name?: string | null
           item_number?: string
           item_type?: string | null
+          link_ignored?: boolean
+          link_ignored_at?: string | null
+          link_ignored_reason?: string | null
           order_id?: string
           quantity?: number
           total_price?: number | null

@@ -1004,6 +1004,15 @@ export class AmazonInventoryLinkingService {
     queueItemId: string,
     reason: 'skipped' | 'no_inventory'
   ): Promise<{ success: boolean; error?: string }> {
+    // Grab the underlying order item before updating, so a 'no_inventory'
+    // decision can be stamped durably on the order item itself.
+    const { data: queueRow } = await this.supabase
+      .from('amazon_inventory_resolution_queue')
+      .select('order_item_id')
+      .eq('id', queueItemId)
+      .eq('user_id', this.userId)
+      .single();
+
     const { error } = await this.supabase
       .from('amazon_inventory_resolution_queue')
       .update({
@@ -1017,6 +1026,20 @@ export class AmazonInventoryLinkingService {
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // 'no_inventory' is a conscious "won't link" decision. Stamp it on the order
+    // item so it survives queue-row cleanup and is excluded from unlinked counts
+    // regardless of whether the queue row still exists.
+    if (reason === 'no_inventory' && queueRow?.order_item_id) {
+      await this.supabase
+        .from('order_items')
+        .update({
+          link_ignored: true,
+          link_ignored_reason: 'no_inventory',
+          link_ignored_at: new Date().toISOString(),
+        })
+        .eq('id', queueRow.order_item_id);
     }
 
     return { success: true };
