@@ -234,6 +234,38 @@ export class NegotiationScoringService {
   }
 
   /**
+   * Get the maximum discount permitted by the user's configured rules.
+   *
+   * This is the ceiling for re-offer escalation: offers must never discount
+   * more aggressively than the highest configured rule. Deeper price cuts are
+   * managed deliberately via eBay markdown, not the auto-offer escalation ladder.
+   *
+   * @param userId The user ID for custom rules lookup
+   * @param supabase Supabase client for database access
+   * @returns The highest configured discount percentage (clamped to MIN/MAX)
+   */
+  async getMaxConfiguredDiscount(userId: string, supabase: SupabaseClient): Promise<number> {
+    const { data: rules, error } = await supabase
+      .from('negotiation_discount_rules')
+      .select('discount_percentage')
+      .eq('user_id', userId);
+
+    let maxRuleDiscount: number;
+    if (error || !rules || rules.length === 0) {
+      if (error) {
+        console.error('[NegotiationScoringService] Error fetching rules for max discount:', error);
+      }
+      // Fall back to the highest discount in the default mapping
+      maxRuleDiscount = Math.max(...DEFAULT_DISCOUNT_MAP.map((r) => r.discount));
+    } else {
+      maxRuleDiscount = Math.max(...rules.map((r) => r.discount_percentage));
+    }
+
+    // Never below the floor, never above the absolute system ceiling
+    return Math.min(MAX_DISCOUNT_PERCENTAGE, Math.max(MIN_DISCOUNT_PERCENTAGE, maxRuleDiscount));
+  }
+
+  /**
    * Get discount from default mapping
    */
   private getDefaultDiscount(score: number): number {

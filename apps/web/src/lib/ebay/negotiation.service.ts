@@ -29,9 +29,6 @@ import type {
 // Offer duration in days (used for calculating expiry)
 const OFFER_DURATION_DAYS = 4;
 
-// Maximum discount percentage allowed
-const MAX_DISCOUNT_PERCENTAGE = 50;
-
 // Default offer message template with placeholder support
 const DEFAULT_OFFER_MESSAGE_TEMPLATE =
   "Thank you for your interest! We're offering you an exclusive {discount}% discount on this item. Don't miss out on this special offer!";
@@ -384,6 +381,14 @@ export class NegotiationService {
       }
     }
 
+    // The ceiling for re-offer escalation: the highest discount permitted by the
+    // user's configured rules. Escalation must never exceed this — deeper price
+    // cuts are managed deliberately via eBay markdown, not the auto-offer ladder.
+    const maxConfiguredDiscount = await this.scoringService!.getMaxConfiguredDiscount(
+      userId,
+      supabase
+    );
+
     // Enrich each eligible item
     const enrichedItems: EnrichedEligibleItem[] = [];
 
@@ -466,9 +471,10 @@ export class NegotiationService {
           // (e.g., gained watchers, sold some stock)
           const lastScore = reOfferCheck.lastScore ?? 0;
           if (scoreResult.score >= lastScore) {
-            // Score still warrants escalation - apply escalated discount
+            // Score still warrants escalation - apply escalated discount, but
+            // never above the user's configured rule cap (deeper = markdown).
             finalDiscount = Math.min(
-              MAX_DISCOUNT_PERCENTAGE,
+              maxConfiguredDiscount,
               Math.max(
                 MIN_DISCOUNT_PERCENTAGE,
                 reOfferCheck.lastDiscount + config.reOfferEscalationPercent
