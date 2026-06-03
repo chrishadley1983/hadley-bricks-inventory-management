@@ -201,7 +201,7 @@ function computeEbay(input: EngineInput, floor: number): EngineOutput {
   }
 
   let raw = currentPrice * (1 - reductionPct / 100);
-  let step = ageDays >= config.ebay_step3_days ? 3 : ageDays >= config.ebay_step2_days ? 2 : 1;
+  const step = ageDays >= config.ebay_step3_days ? 3 : ageDays >= config.ebay_step2_days ? 2 : 1;
 
   // Deep-age accelerant: non-HOT items at step 3+ pushed at least to floor.
   if (ageDays >= config.ebay_step3_days && tier !== 'HOT' && floor > 0) {
