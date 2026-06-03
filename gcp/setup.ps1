@@ -6,7 +6,7 @@
 # ============================================================================
 
 $GCP_PROJECT = "gen-lang-client-0823893317"  # Hadley Bricks Admin
-$CRON_SECRET = "Emmie2018!!!"                # CRON_SECRET from Vercel env vars
+$CRON_SECRET = "hadley-bricks-cron-2026-101183"  # CRON_SECRET from Vercel env vars (must match Vercel; stale values 401 every job)
 $APP_URL = "https://hadley-bricks-inventory-management.vercel.app"
 $REGION = "europe-west2"
 
@@ -150,6 +150,7 @@ Create-SchedulerJob -Name "amazon-pricing-sync" -Schedule "0 4 * * *" -Uri $FUNC
 Create-SchedulerJob -Name "email-purchases" -Schedule "17 2 * * *" -Uri "$APP_URL/api/cron/email-purchases" -Description "Daily email purchase import (Vinted/eBay)"
 Create-SchedulerJob -Name "vinted-collections" -Schedule "0 8 * * *" -Uri "$APP_URL/api/cron/vinted-collections" -Description "Daily Vinted parcel collection check"
 Create-SchedulerJob -Name "monzo-sync" -Schedule "40 6 * * *" -Uri "$APP_URL/api/cron/monzo-sync" -Description "Daily Monzo Google Sheets sync into monzo_transactions" -TimeZone "Europe/London"
+Create-SchedulerJob -Name "paypal-sync" -Schedule "10 7 1,8,15,22,29 * *" -Uri "$APP_URL/api/cron/paypal-sync" -Description "Incremental PayPal fee transaction sync (1st of month + every 7 days) into paypal_transactions" -TimeZone "Europe/London"
 Create-SchedulerJob -Name "retirement-sync" -Schedule "0 6 * * *" -Uri "$APP_URL/api/cron/retirement-sync" -Description "Daily retirement data sync from Brickset/BrickTap"
 Create-SchedulerJob -Name "rebrickable-sync" -Schedule "0 4 * * 0" -Uri "$APP_URL/api/cron/rebrickable-sync" -Description "Weekly Rebrickable set data sync"
 Create-SchedulerJob -Name "investment-sync" -Schedule "0 5 * * *" -Uri "$APP_URL/api/cron/investment-sync" -Description "Daily investment ASIN linkage and classification"
