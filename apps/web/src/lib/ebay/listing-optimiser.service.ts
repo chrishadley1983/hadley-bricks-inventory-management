@@ -28,8 +28,8 @@ import type {
 } from '@/lib/platform-stock/ebay/types';
 import type { Json } from '@hadley-bricks/database';
 
-// Gemini 3 Pro model ID
-const GEMINI_MODEL = 'gemini-3-pro-preview';
+// Gemini 3.1 Pro model ID (gemini-3-pro-preview was retired by Google → 404)
+const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 let geminiClient: GoogleGenAI | null = null;
 

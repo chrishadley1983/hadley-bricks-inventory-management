@@ -111,7 +111,7 @@ describe('Gemini Client', () => {
 
       expect(mockGenerateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           config: {
             thinkingConfig: {
               thinkingLevel: 'HIGH',
@@ -557,7 +557,7 @@ describe('Gemini Client', () => {
 
       expect(mockGenerateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           config: {
             thinkingConfig: {
               thinkingLevel: 'HIGH',

@@ -13,10 +13,14 @@ import { GoogleGenAI, ThinkingLevel, type Part } from '@google/genai';
 
 /**
  * Gemini model IDs
- * - gemini-3-pro-preview: Most intelligent - best for reasoning, agentic tasks, accurate OCR
+ * - gemini-3.1-pro-preview: Most intelligent - best for reasoning, agentic tasks, accurate OCR
  * - gemini-3-flash-preview: Fast + Pro-level intelligence for verification
+ *
+ * Note: gemini-3-pro-preview was retired by Google (generateContent → 404
+ * NOT_FOUND); replaced with gemini-3.1-pro-preview (like-for-like pricing).
+ * gemini-3-flash-preview still works and is the cheapest 3.x flash, so it stays.
  */
-const GEMINI_MODEL_PRIMARY = 'gemini-3-pro-preview';
+const GEMINI_MODEL_PRIMARY = 'gemini-3.1-pro-preview';
 const GEMINI_MODEL_FAST = 'gemini-3-flash-preview';
 
 let geminiClient: GoogleGenAI | null = null;

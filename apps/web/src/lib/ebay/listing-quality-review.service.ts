@@ -19,8 +19,8 @@ import type { AIGeneratedListing, QualityReviewResult } from './listing-creation
 import type { GeneratedListingResponse } from '@/lib/ai/prompts/generate-listing';
 import { sendMessageForJSON } from '@/lib/ai/claude-client';
 
-// Gemini 3 Pro model ID
-const GEMINI_MODEL = 'gemini-3-pro-preview';
+// Gemini 3.1 Pro model ID (gemini-3-pro-preview was retired by Google → 404)
+const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 let geminiClient: GoogleGenAI | null = null;
 
