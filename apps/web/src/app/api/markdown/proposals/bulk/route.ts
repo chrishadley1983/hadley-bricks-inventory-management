@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { applyProposalLive } from '@/lib/markdown/apply.service';
 
 const bulkSchema = z.object({
   actions: z.array(
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
         const { data: proposal } = await (supabase as any)
           .from('markdown_proposals')
-          .select('id, inventory_item_id, proposed_action, proposed_price, status')
+          .select('id, inventory_item_id, platform, proposed_action, proposed_price, status')
           .eq('id', id)
+          .eq('user_id', user.id)
           .eq('status', 'PENDING')
           .single();
 
@@ -50,32 +52,29 @@ export async function POST(request: NextRequest) {
         }
 
         if (action === 'approve') {
-          // Apply markdown price change
-          if (proposal.proposed_action === 'MARKDOWN' && proposal.proposed_price) {
-            const { error: updateError } = await supabase
-              .from('inventory_items')
-              .update({
-                listing_value: proposal.proposed_price,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', proposal.inventory_item_id);
+          // Push the price change LIVE to the platform (no-op for auctions).
+          const applyResult = await applyProposalLive(supabase, user.id, proposal);
 
-            if (updateError) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabase as any)
-                .from('markdown_proposals')
-                .update({ status: 'FAILED', error_message: updateError.message, updated_at: new Date().toISOString() })
-                .eq('id', id);
-              results.failed++;
-              results.errors.push(`${id}: ${updateError.message}`);
-              continue;
-            }
+          if (!applyResult.success) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from('markdown_proposals')
+              .update({ status: 'FAILED', error_message: applyResult.error, updated_at: new Date().toISOString() })
+              .eq('id', id);
+            results.failed++;
+            results.errors.push(`${id}: ${applyResult.error}`);
+            continue;
           }
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase as any)
             .from('markdown_proposals')
-            .update({ status: 'APPROVED', updated_at: new Date().toISOString() })
+            .update({
+              status: 'APPROVED',
+              pushed_to_platform: applyResult.pushed,
+              applied_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', id);
           results.approved++;
         } else {

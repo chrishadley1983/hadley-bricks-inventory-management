@@ -88,6 +88,33 @@ export interface ListingRefreshReportParams {
   failedItems: ListingRefreshFailedItem[];
 }
 
+export interface MarkdownDigestSuggestion {
+  setNumber: string | null;
+  itemName: string | null;
+  platform: 'amazon' | 'ebay';
+  currentPrice: number;
+  suggestedPrice: number;
+  diagnosisReason: string;
+  ageDays: number;
+  floor: number;
+}
+
+export interface MarkdownDigestAuction {
+  setNumber: string | null;
+  itemName: string | null;
+  currentPrice: number;
+  ageDays: number;
+  suggestedEndDate: string | null;
+  reason: string;
+}
+
+export interface MarkdownDigestParams {
+  userEmail: string;
+  suggestions: MarkdownDigestSuggestion[];
+  auctions: MarkdownDigestAuction[];
+  appBaseUrl?: string;
+}
+
 export interface TwoPhaseSuccessParams {
   userEmail: string;
   feedId: string;
@@ -842,6 +869,125 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     `;
 
     const subject = `eBay Refresh: ${refreshed.length} listings refreshed${reductions.length > 0 ? `, ${reductions.length} price reductions (£${Math.abs(totalValueChange).toFixed(2)})` : ''}`;
+
+    await this.send({ to: userEmail, subject, html });
+  }
+
+  /**
+   * Send the unified 30-day markdown suggestion digest (both platforms).
+   * Sections: suggested price changes + eBay auction recommendations.
+   * See docs/features/unified-markdown/design.md §9.
+   */
+  async sendMarkdownDigest(params: MarkdownDigestParams): Promise<void> {
+    const { userEmail, suggestions, auctions, appBaseUrl } = params;
+
+    const totalReduction = suggestions.reduce(
+      (sum, s) => sum + Math.max(0, s.currentPrice - s.suggestedPrice),
+      0
+    );
+    const ebayCount = suggestions.filter((s) => s.platform === 'ebay').length;
+    const amazonCount = suggestions.filter((s) => s.platform === 'amazon').length;
+    const markdownUrl = `${appBaseUrl || ''}/inventory/markdown`;
+
+    const tile = (value: string, label: string, color: string) => `
+      <div style="background:${color}1a;padding:12px 16px;border-radius:8px;flex:1;">
+        <div style="font-size:24px;font-weight:700;color:${color};">${value}</div>
+        <div style="font-size:12px;color:#666;">${label}</div>
+      </div>`;
+
+    const suggestionRows = suggestions
+      .map((s) => {
+        const delta = s.currentPrice - s.suggestedPrice;
+        const pct = s.currentPrice > 0 ? ((delta / s.currentPrice) * 100).toFixed(1) : '0';
+        return `<tr>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(s.setNumber || '-')}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml((s.itemName || '').slice(0, 48))}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${s.platform === 'amazon' ? 'AMZ' : 'eBay'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${s.currentPrice.toFixed(2)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;color:#16A34A;">£${s.suggestedPrice.toFixed(2)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;color:#DC2626;">-£${delta.toFixed(2)} (${pct}%)</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(s.diagnosisReason)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${s.ageDays}d</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${s.floor.toFixed(2)}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    const auctionRows = auctions
+      .map(
+        (a) => `<tr>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(a.setNumber || '-')}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml((a.itemName || '').slice(0, 48))}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${a.currentPrice.toFixed(2)}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${a.ageDays}d</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${a.suggestedEndDate ? new Date(a.suggestedEndDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(a.reason)}</td>
+        </tr>`
+      )
+      .join('\n');
+
+    const suggestionsSection =
+      suggestions.length > 0
+        ? `
+      <h3 style="color:#333;margin-top:24px;">Suggested price changes (${suggestions.length})</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F3F4F6;">
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Set #</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Platform</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Current</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Suggested</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Change</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Reason</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Age</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Floor</th>
+        </tr></thead>
+        <tbody>${suggestionRows}</tbody>
+      </table>`
+        : '<p style="color:#666;">No price-change suggestions today.</p>';
+
+    const auctionsSection =
+      auctions.length > 0
+        ? `
+      <h3 style="color:#7C3AED;margin-top:24px;">Auction recommendations (${auctions.length})</h3>
+      <p style="color:#666;font-size:12px;margin-top:0;">Low-demand aged eBay listings — convert to auction manually if you agree.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F5F3FF;">
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Set #</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Current</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Age</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Suggested end</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Reason</th>
+        </tr></thead>
+        <tbody>${auctionRows}</tbody>
+      </table>`
+        : '';
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:960px;margin:0 auto;">
+        <h2 style="color:#333;margin-bottom:4px;">MARKDOWN SUGGESTIONS</h2>
+        <p style="color:#666;margin-top:0;">30-day pricing review — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+
+        <div style="display:flex;gap:16px;margin:16px 0;">
+          ${tile(String(ebayCount), 'eBay suggestions', '#2563EB')}
+          ${tile(String(amazonCount), 'Amazon suggestions', '#EA580C')}
+          ${tile(String(auctions.length), 'Auctions recommended', '#7C3AED')}
+          ${tile(`£${totalReduction.toFixed(2)}`, 'Total proposed reduction', '#16A34A')}
+        </div>
+
+        <p style="margin:8px 0;"><a href="${markdownUrl}" style="color:#2563eb;font-weight:600;">Review &amp; approve in Smart Markdown →</a></p>
+
+        ${suggestionsSection}
+        ${auctionsSection}
+
+        <p style="color:#999;font-size:11px;margin-top:24px;">
+          Suggestions require approval before any price change. eBay listings auto-relist at 90 days separately.
+        </p>
+      </div>
+    `;
+
+    const subject = `Markdown: ${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''}${auctions.length > 0 ? `, ${auctions.length} auction rec${auctions.length !== 1 ? 's' : ''}` : ''} (£${totalReduction.toFixed(2)})`;
 
     await this.send({ to: userEmail, subject, html });
   }

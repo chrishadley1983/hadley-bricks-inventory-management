@@ -30,6 +30,11 @@ export interface MarkdownConfig {
   auction_default_duration_days: number;
   auction_max_per_day: number;
   auction_enabled: boolean;
+  // Unified markdown cadence (see docs/features/unified-markdown/design.md)
+  suggest_interval_days: number;
+  relist_age_days: number;
+  min_change_pct: number;
+  report_email: string | null;
 }
 
 export interface InventoryItemForMarkdown {
@@ -49,6 +54,7 @@ export interface InventoryItemForMarkdown {
   amazon_asin: string | null;
   ebay_listing_id: string | null;
   sales_rank: number | null;
+  next_markdown_eval_at: string | null;
 }
 
 export interface PricingData {
