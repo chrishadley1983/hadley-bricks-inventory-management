@@ -15,7 +15,7 @@ import type { BricqerInventoryProblem } from '@/lib/bricqer/types';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export interface EmailOptions {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   text?: string;
@@ -478,7 +478,7 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
    * Send Vercel usage monitoring report with RAG-status metrics table
    */
   async sendVercelUsageReport(params: {
-    userEmail: string;
+    userEmail: string | string[];
     report: VercelUsageReport;
   }): Promise<void> {
     const { userEmail, report } = params;

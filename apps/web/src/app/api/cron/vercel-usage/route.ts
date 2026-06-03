@@ -36,7 +36,7 @@ import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const USER_EMAIL = 'chris@hadleybricks.co.uk';
+const USER_EMAILS = ['chris@hadleybricks.co.uk', 'chrishadley1983@gmail.com'];
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Send email report
     await emailService.sendVercelUsageReport({
-      userEmail: USER_EMAIL,
+      userEmail: USER_EMAILS,
       report,
     });
 
