@@ -194,14 +194,26 @@ function computeEbay(input: EngineInput, floor: number): EngineOutput {
     };
   }
 
-  // Engagement-tier reduction (+ Used surcharge, suppressed for HOT).
-  let reductionPct = EBAY_TIER_REDUCTION[tier];
-  if (isUsed(condition) && tier !== 'HOT') {
-    reductionPct += USED_EXTRA_PCT;
+  // eBay reduction combines two signals (design §4.4 — "as currently done"):
+  //  - engagement tier (HOT/WARM/COOL/COLD), and
+  //  - aging-step reduction (ebay_step{1,2}_reduction_pct) by listing age.
+  // We take the deeper of the two so aged listings still cut even when warm,
+  // while HOT (strong demand) is never discounted.
+  const step = ageDays >= config.ebay_step3_days ? 3 : ageDays >= config.ebay_step2_days ? 2 : 1;
+  let reductionPct: number;
+  if (tier === 'HOT') {
+    reductionPct = 0; // don't discount proven demand
+  } else {
+    const tierReduction = EBAY_TIER_REDUCTION[tier];
+    const agingReduction =
+      ageDays >= config.ebay_step2_days
+        ? config.ebay_step2_reduction_pct
+        : config.ebay_step1_reduction_pct;
+    reductionPct = Math.max(tierReduction, agingReduction);
+    if (isUsed(condition)) reductionPct += USED_EXTRA_PCT;
   }
 
   let raw = currentPrice * (1 - reductionPct / 100);
-  const step = ageDays >= config.ebay_step3_days ? 3 : ageDays >= config.ebay_step2_days ? 2 : 1;
 
   // Deep-age accelerant: non-HOT items at step 3+ pushed at least to floor.
   if (ageDays >= config.ebay_step3_days && tier !== 'HOT' && floor > 0) {

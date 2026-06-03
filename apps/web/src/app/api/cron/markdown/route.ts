@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', DEFAULT_USER_ID)
         .eq('status', 'LISTED')
         .or(`next_markdown_eval_at.is.null,next_markdown_eval_at.lte.${today}`)
+        .order('id', { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
 
       if (itemsError) throw new Error(`Failed to fetch items: ${itemsError.message}`);
@@ -183,20 +184,31 @@ export async function POST(request: NextRequest) {
 
     // 6. Evaluate each due item
     const newProposals: MarkdownProposal[] = [];
-    const evaluatedIds: string[] = [];
+    // Only roll the eval clock for items that reached a genuine decision this run.
+    // NOT rolled: items skipped due to an existing pending proposal (so they're
+    // re-surfaced promptly if that proposal is later rejected) and items that
+    // errored (so a transient failure retries next run).
+    const idsToRoll: string[] = [];
     let held = 0;
     let skipped = 0;
     let errors = 0;
 
     for (const item of dueItems) {
-      evaluatedIds.push(item.id);
-
-      if (existingItemIds.has(item.id) || item.markdown_hold) {
+      // Existing pending proposal already covers this item — leave clock untouched.
+      if (existingItemIds.has(item.id)) {
         skipped++;
+        continue;
+      }
+
+      // markdown_hold is a deliberate decision — roll forward, don't re-check daily.
+      if (item.markdown_hold) {
+        skipped++;
+        idsToRoll.push(item.id);
         continue;
       }
       if (!item.listing_value || !item.cost) {
         held++;
+        idsToRoll.push(item.id);
         continue;
       }
 
@@ -223,13 +235,16 @@ export async function POST(request: NextRequest) {
 
         if (out.action === 'HOLD') {
           held++;
+          idsToRoll.push(item.id);
           continue;
         }
         if (out.action === 'REPRICE' && out.reductionPct < config.min_change_pct) {
           held++;
+          idsToRoll.push(item.id);
           continue; // change too small to surface
         }
 
+        idsToRoll.push(item.id);
         newProposals.push({
           user_id: item.user_id,
           inventory_item_id: item.id,
@@ -271,12 +286,12 @@ export async function POST(request: NextRequest) {
       if (insertError) throw new Error(`Failed to insert proposals: ${insertError.message}`);
     }
 
-    // 9. Roll next_markdown_eval_at forward for every evaluated item
+    // 9. Roll next_markdown_eval_at forward — only for items decided this run
     const nextEval = new Date();
     nextEval.setDate(nextEval.getDate() + config.suggest_interval_days);
     const nextEvalISO = nextEval.toISOString().split('T')[0];
-    for (let i = 0; i < evaluatedIds.length; i += 200) {
-      const batch = evaluatedIds.slice(i, i + 200);
+    for (let i = 0; i < idsToRoll.length; i += 200) {
+      const batch = idsToRoll.slice(i, i + 200);
       await supabase
         .from('inventory_items')
         .update({ next_markdown_eval_at: nextEvalISO })
@@ -319,7 +334,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = {
-      itemsEvaluated: evaluatedIds.length,
+      itemsEvaluated: dueItems.length,
+      itemsRolled: idsToRoll.length,
       proposalsCreated: newProposals.length,
       markdownProposals: newProposals.filter((p) => p.proposed_action === 'MARKDOWN').length,
       auctionProposals: auctionProposals.length,

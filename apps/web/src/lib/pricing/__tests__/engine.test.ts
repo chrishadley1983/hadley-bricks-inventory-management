@@ -194,6 +194,16 @@ describe('eBay engagement pricing', () => {
     expect(out.targetPrice === null || out.targetPrice <= 5).toBe(true);
   });
 
+  it('applies the deeper of tier vs aging-step reduction (WARM past step2)', () => {
+    // WARM (watchers>=2, viewsPerDay>=1) → tier 5%, but age>=step2 → step2 reduction 10%.
+    // max(5,10)=10% → 20 * 0.90 = 18 → charm 17.99
+    const out = computeTarget(
+      base({ currentPrice: 20, watchers: 3, views: 150, ageDays: 100, condition: 'new', cost: 2 })
+    );
+    expect(out.tier).toBe('WARM');
+    expect(out.targetPrice).toBe(17.99);
+  });
+
   it('deep-age non-HOT item recommends auction at step4', () => {
     const out = computeTarget(
       base({ currentPrice: 20, watchers: 0, views: 0, ageDays: 200, cost: 2 })
