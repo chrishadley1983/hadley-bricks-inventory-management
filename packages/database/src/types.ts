@@ -5475,6 +5475,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "golden_tickets_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: true
+            referencedRelation: "tournament_leaderboard"
+            referencedColumns: ["entry_id"]
+          },
+          {
             foreignKeyName: "golden_tickets_new_team_id_fkey"
             columns: ["new_team_id"]
             isOneToOne: false
@@ -5562,6 +5569,7 @@ export type Database = {
           match_number: number | null
           scheduled_at: string | null
           sort_order: number
+          stadium: string | null
           venue: string | null
         }
         Insert: {
@@ -5574,6 +5582,7 @@ export type Database = {
           match_number?: number | null
           scheduled_at?: string | null
           sort_order?: number
+          stadium?: string | null
           venue?: string | null
         }
         Update: {
@@ -5586,6 +5595,7 @@ export type Database = {
           match_number?: number | null
           scheduled_at?: string | null
           sort_order?: number
+          stadium?: string | null
           venue?: string | null
         }
         Relationships: [
@@ -5650,6 +5660,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tournament_entries"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_predictions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_leaderboard"
+            referencedColumns: ["entry_id"]
           },
           {
             foreignKeyName: "group_predictions_group_id_fkey"
@@ -6225,6 +6242,7 @@ export type Database = {
           listing_platform: string | null
           listing_value: number | null
           markdown_hold: boolean
+          next_markdown_eval_at: string | null
           notes: string | null
           purchase_date: string | null
           purchase_id: string | null
@@ -6266,6 +6284,7 @@ export type Database = {
           listing_platform?: string | null
           listing_value?: number | null
           markdown_hold?: boolean
+          next_markdown_eval_at?: string | null
           notes?: string | null
           purchase_date?: string | null
           purchase_id?: string | null
@@ -6307,6 +6326,7 @@ export type Database = {
           listing_platform?: string | null
           listing_value?: number | null
           markdown_hold?: boolean
+          next_markdown_eval_at?: string | null
           notes?: string | null
           purchase_date?: string | null
           purchase_id?: string | null
@@ -6854,6 +6874,7 @@ export type Database = {
           round: string
           scheduled_at: string | null
           sort_order: number
+          stadium: string | null
           tournament_id: string
           venue: string | null
           winner_team_id: string | null
@@ -6872,6 +6893,7 @@ export type Database = {
           round: string
           scheduled_at?: string | null
           sort_order: number
+          stadium?: string | null
           tournament_id: string
           venue?: string | null
           winner_team_id?: string | null
@@ -6890,6 +6912,7 @@ export type Database = {
           round?: string
           scheduled_at?: string | null
           sort_order?: number
+          stadium?: string | null
           tournament_id?: string
           venue?: string | null
           winner_team_id?: string | null
@@ -6960,6 +6983,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tournament_entries"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knockout_predictions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_leaderboard"
+            referencedColumns: ["entry_id"]
           },
           {
             foreignKeyName: "knockout_predictions_match_id_fkey"
@@ -7801,8 +7831,12 @@ export type Database = {
           ebay_step4_days: number
           id: string
           low_demand_sales_rank: number
+          min_change_pct: number
           mode: string
           overpriced_threshold_pct: number
+          relist_age_days: number
+          report_email: string | null
+          suggest_interval_days: number
           updated_at: string
           user_id: string
         }
@@ -7827,8 +7861,12 @@ export type Database = {
           ebay_step4_days?: number
           id?: string
           low_demand_sales_rank?: number
+          min_change_pct?: number
           mode?: string
           overpriced_threshold_pct?: number
+          relist_age_days?: number
+          report_email?: string | null
+          suggest_interval_days?: number
           updated_at?: string
           user_id: string
         }
@@ -7853,8 +7891,12 @@ export type Database = {
           ebay_step4_days?: number
           id?: string
           low_demand_sales_rank?: number
+          min_change_pct?: number
           mode?: string
           overpriced_threshold_pct?: number
+          relist_age_days?: number
+          report_email?: string | null
+          suggest_interval_days?: number
           updated_at?: string
           user_id?: string
         }
@@ -7863,6 +7905,7 @@ export type Database = {
       markdown_proposals: {
         Row: {
           aging_days: number
+          applied_at: string | null
           auction_duration_days: number | null
           auction_end_date: string | null
           created_at: string
@@ -7879,6 +7922,7 @@ export type Database = {
           price_floor: number
           proposed_action: string
           proposed_price: number | null
+          pushed_to_platform: boolean
           sales_rank: number | null
           set_number: string | null
           status: string
@@ -7887,6 +7931,7 @@ export type Database = {
         }
         Insert: {
           aging_days: number
+          applied_at?: string | null
           auction_duration_days?: number | null
           auction_end_date?: string | null
           created_at?: string
@@ -7903,6 +7948,7 @@ export type Database = {
           price_floor: number
           proposed_action: string
           proposed_price?: number | null
+          pushed_to_platform?: boolean
           sales_rank?: number | null
           set_number?: string | null
           status?: string
@@ -7911,6 +7957,7 @@ export type Database = {
         }
         Update: {
           aging_days?: number
+          applied_at?: string | null
           auction_duration_days?: number | null
           auction_end_date?: string | null
           created_at?: string
@@ -7927,6 +7974,7 @@ export type Database = {
           price_floor?: number
           proposed_action?: string
           proposed_price?: number | null
+          pushed_to_platform?: boolean
           sales_rank?: number | null
           set_number?: string | null
           status?: string
@@ -9984,6 +10032,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "player_achievements_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_leaderboard"
+            referencedColumns: ["entry_id"]
+          },
+          {
             foreignKeyName: "player_achievements_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
@@ -9999,8 +10054,10 @@ export type Database = {
           created_at: string | null
           display_name: string
           email: string
+          email_notifications_enabled: boolean
           id: string
           nickname: string | null
+          unsubscribe_token: string
         }
         Insert: {
           auth_user_id?: string | null
@@ -10008,8 +10065,10 @@ export type Database = {
           created_at?: string | null
           display_name: string
           email: string
+          email_notifications_enabled?: boolean
           id?: string
           nickname?: string | null
+          unsubscribe_token?: string
         }
         Update: {
           auth_user_id?: string | null
@@ -10017,8 +10076,10 @@ export type Database = {
           created_at?: string | null
           display_name?: string
           email?: string
+          email_notifications_enabled?: boolean
           id?: string
           nickname?: string | null
+          unsubscribe_token?: string
         }
         Relationships: []
       }
@@ -13382,6 +13443,46 @@ export type Database = {
           },
         ]
       }
+      tournament_testers: {
+        Row: {
+          created_at: string | null
+          player_id: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          player_id: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string | null
+          player_id?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_testers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_testers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_testers_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           created_at: string | null
@@ -13389,6 +13490,7 @@ export type Database = {
           group_stage_deadline: string | null
           group_stage_prize_pct: number | null
           id: string
+          is_visible: boolean
           knockout_stage_deadline: string | null
           name: string
           overall_prize_pct: number | null
@@ -13406,6 +13508,7 @@ export type Database = {
           group_stage_deadline?: string | null
           group_stage_prize_pct?: number | null
           id?: string
+          is_visible?: boolean
           knockout_stage_deadline?: string | null
           name: string
           overall_prize_pct?: number | null
@@ -13423,6 +13526,7 @@ export type Database = {
           group_stage_deadline?: string | null
           group_stage_prize_pct?: number | null
           id?: string
+          is_visible?: boolean
           knockout_stage_deadline?: string | null
           name?: string
           overall_prize_pct?: number | null
@@ -14715,6 +14819,44 @@ export type Database = {
           },
         ]
       }
+      honours_with_tournament: {
+        Row: {
+          description: string | null
+          id: string | null
+          player: Json | null
+          player_id: string | null
+          player_name: string | null
+          points: number | null
+          prize_amount_gbp: number | null
+          prize_type: string | null
+          sort_order: number | null
+          tournament: Json | null
+          tournament_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honours_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honours_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honours_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items_with_age: {
         Row: {
           age_bracket: string | null
@@ -14959,6 +15101,47 @@ export type Database = {
           total_gbp: number | null
         }
         Relationships: []
+      }
+      tournament_leaderboard: {
+        Row: {
+          avatar_url: string | null
+          display_name: string | null
+          entry_id: string | null
+          group_stage_points: number | null
+          group_stage_rank: number | null
+          knockout_points: number | null
+          nickname: string | null
+          overall_rank: number | null
+          player_id: string | null
+          tiebreaker_diff: number | null
+          tiebreaker_goals: number | null
+          total_points: number | null
+          tournament_id: string | null
+          tournament_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_player_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entries_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_seeded_arbitrage_items: {
         Row: {
@@ -16013,6 +16196,7 @@ export type Database = {
         }[]
       }
       is_admin: { Args: never; Returns: boolean }
+      is_tournament_tester: { Args: { t_id: string }; Returns: boolean }
       keyword_search_knowledge: {
         Args: {
           capture_types?: string[]
@@ -16109,6 +16293,7 @@ export type Database = {
       seed_workflow_data:
         | { Args: never; Returns: undefined }
         | { Args: { p_user_id: string }; Returns: undefined }
+      shares_tournament: { Args: { p_player: string }; Returns: boolean }
     }
     Enums: {
       idea_source:

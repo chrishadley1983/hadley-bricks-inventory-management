@@ -21,6 +21,10 @@ const configUpdateSchema = z.object({
   auction_default_duration_days: z.number().int().min(1).max(10).optional(),
   auction_max_per_day: z.number().int().min(1).max(10).optional(),
   auction_enabled: z.boolean().optional(),
+  suggest_interval_days: z.number().int().min(1).max(180).optional(),
+  relist_age_days: z.number().int().min(1).max(365).optional(),
+  min_change_pct: z.number().min(0).max(50).optional(),
+  report_email: z.string().email().nullable().optional(),
 });
 
 export async function GET() {
@@ -35,7 +39,7 @@ export async function GET() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
     const { data, error } = await (supabase as any)
       .from('markdown_config')
-      .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, created_at, updated_at')
+      .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, suggest_interval_days, relist_age_days, min_change_pct, report_email, created_at, updated_at')
       .eq('user_id', user.id)
       .single();
 

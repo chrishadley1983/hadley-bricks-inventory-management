@@ -98,6 +98,10 @@ interface Config {
   auction_default_duration_days: number;
   auction_max_per_day: number;
   auction_enabled: boolean;
+  suggest_interval_days?: number;
+  relist_age_days?: number;
+  min_change_pct?: number;
+  report_email?: string | null;
 }
 
 // ---- Hooks ----
@@ -258,6 +262,9 @@ function ActionBadge({ action }: { action: string }) {
   if (action === 'AUCTION') {
     return <Badge variant="outline" className="border-purple-500 text-purple-700 bg-purple-50">Auction</Badge>;
   }
+  if (action === 'RELIST') {
+    return <Badge variant="outline" className="border-teal-500 text-teal-700 bg-teal-50">Relist</Badge>;
+  }
   return <Badge variant="secondary">{action}</Badge>;
 }
 
@@ -349,7 +356,7 @@ export default function MarkdownPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Smart Markdown</h1>
           <p className="text-muted-foreground">
-            Automated price management for aged inventory
+            30-day price suggestions (eBay + Amazon) · eBay auto-relists at 90 days
           </p>
         </div>
         <div className="flex gap-2">
@@ -378,22 +385,15 @@ export default function MarkdownPage() {
               </DialogHeader>
               {config && (
                 <div className="space-y-6 pt-4">
-                  {/* Mode toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Auto Mode</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {config.mode === 'auto'
-                          ? 'Overpriced items are repriced automatically. Auction proposals still require approval.'
-                          : 'All proposals require manual approval before any price changes.'}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={config.mode === 'auto'}
-                      onCheckedChange={(checked: boolean) =>
-                        updateConfig.mutate({ mode: checked ? 'auto' : 'review' })
-                      }
-                    />
+                  {/* Cadence (read-only) */}
+                  <div className="space-y-0.5">
+                    <Label className="text-base">How it works</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Every <strong>{config.suggest_interval_days ?? 30} days</strong> each listing is
+                      reviewed and price suggestions are emailed for your approval (eBay + Amazon).
+                      eBay listings are automatically ended, re-priced and re-listed at{' '}
+                      <strong>{config.relist_age_days ?? 90} days</strong>.
+                    </p>
                   </div>
 
                   {/* Auction toggle */}
@@ -572,6 +572,7 @@ export default function MarkdownPage() {
             <SelectItem value="all">All Actions</SelectItem>
             <SelectItem value="MARKDOWN">Markdown</SelectItem>
             <SelectItem value="AUCTION">Auction</SelectItem>
+            <SelectItem value="RELIST">Relist</SelectItem>
           </SelectContent>
         </Select>
 
