@@ -12,6 +12,7 @@ import type {
   NormalizedOrder,
   NormalizedOrderItem,
 } from './types';
+import { parseCurrencyValue } from '@/lib/utils/currency';
 
 /**
  * Map BrickLink order status to normalized status
@@ -36,16 +37,6 @@ function normalizeStatus(status: string): string {
   };
 
   return statusMap[status] || status;
-}
-
-/**
- * Parse a currency string to a number
- */
-function parseCurrencyValue(value: string | undefined | null): number {
-  if (!value) return 0;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
 }
 
 /**

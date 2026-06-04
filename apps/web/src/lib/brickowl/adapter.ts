@@ -13,6 +13,7 @@ import type {
   NormalizedBrickOwlOrder,
   NormalizedBrickOwlOrderItem,
 } from './types';
+import { parseCurrencyValue } from '@/lib/utils/currency';
 
 /**
  * Map Brick Owl order status to normalized status
@@ -39,16 +40,6 @@ function normalizeStatus(status: string): string {
 function normalizeCondition(condition: BrickOwlItemCondition): 'New' | 'Used' {
   // 'new' = New, 'usedn' = Used Near Mint, 'usedg' = Used Good, 'useda' = Used Acceptable
   return condition === 'new' ? 'New' : 'Used';
-}
-
-/**
- * Parse a currency/price string to a number
- */
-function parseCurrencyValue(value: string | undefined | null): number {
-  if (!value) return 0;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
 }
 
 /**

@@ -6,6 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Resolve after `ms` milliseconds. Shared replacement for the per-client
+ * `private sleep()` helpers / inline `new Promise(r => setTimeout(r, ms))`.
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Format a number as currency (GBP)
  */
 export function formatCurrency(amount: number | string | null | undefined, currency?: string | null): string {

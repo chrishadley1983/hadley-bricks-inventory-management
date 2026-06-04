@@ -189,19 +189,8 @@ export const BRICKOWL_PAYMENT_STATUS_LABELS: Record<string, string> = {
 // Helper Functions
 // ============================================================================
 
-/**
- * Parse a currency string value to a number
- * Handles various formats: "12.34", "£12.34", "", null, undefined, unknown
- */
-export function parseCurrencyValue(value: unknown): number {
-  if (value === undefined || value === null) return 0;
-  if (typeof value === 'number') return value;
-  if (typeof value !== 'string') return 0;
-  if (value === '') return 0;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
-}
+/** Re-exported from the shared currency helper (see @/lib/utils/currency). */
+export { parseCurrencyValue } from '@/lib/utils/currency';
 
 /**
  * Get a friendly status label

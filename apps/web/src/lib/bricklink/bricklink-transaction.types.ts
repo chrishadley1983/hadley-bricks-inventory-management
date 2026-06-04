@@ -193,16 +193,8 @@ export const BRICKLINK_STATUS_LABELS: Record<string, string> = {
 // Helper Functions
 // ============================================================================
 
-/**
- * Parse a currency string value to a number
- * Handles various formats: "12.34", "£12.34", "", null, undefined
- */
-export function parseCurrencyValue(value: string | undefined | null): number {
-  if (!value) return 0;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
-}
+/** Re-exported from the shared currency helper (see @/lib/utils/currency). */
+export { parseCurrencyValue } from '@/lib/utils/currency';
 
 /**
  * Get a friendly status label

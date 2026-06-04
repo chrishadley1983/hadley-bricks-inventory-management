@@ -8,6 +8,8 @@
 // JSON Type (for Supabase compatibility)
 // ============================================================================
 
+import { parseCurrencyValue } from '@/lib/utils/currency';
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 // ============================================================================
@@ -148,17 +150,8 @@ export interface BrickLinkUploadsResponse {
 // Helper Functions
 // ============================================================================
 
-/**
- * Parse a currency string value to a number
- * Handles various formats: "12.34", "£12.34", "", null, undefined
- */
-export function parseCurrencyValue(value: string | number | undefined | null): number {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === 'number') return value;
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
-}
+/** Re-exported from the shared currency helper (see @/lib/utils/currency). */
+export { parseCurrencyValue };
 
 /**
  * Format a date string for display
