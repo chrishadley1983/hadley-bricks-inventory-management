@@ -160,27 +160,6 @@ describe('OrderFulfilmentService', () => {
     });
   });
 
-  describe('getUnfulfilledOrders (deprecated)', () => {
-    it('should return empty array for eBay platform', async () => {
-      const result = await service.getUnfulfilledOrders('user-1', 'ebay');
-
-      expect(result).toEqual([]);
-    });
-
-    it('should fetch Amazon orders with various statuses', async () => {
-      const mockOrders = [
-        { id: 'order-1', status: 'Shipped' },
-        { id: 'order-2', status: 'Unshipped' },
-      ];
-
-      mockSupabase.setNextResponse({ data: mockOrders, error: null });
-
-      const result = await service.getUnfulfilledOrders('user-1', 'amazon');
-
-      expect(result).toHaveLength(2);
-    });
-  });
-
   describe('matchOrderToInventory', () => {
     it('should throw error when order not found', async () => {
       mockFindByIdWithItems.mockResolvedValue(null);
@@ -678,29 +657,6 @@ describe('OrderFulfilmentService', () => {
       await expect(service.getOrdersReadyForConfirmation('user-1', 'ebay')).rejects.toThrow(
         'Failed to fetch shipped eBay orders'
       );
-    });
-  });
-
-  describe('getUnfulfilledOrders (deprecated)', () => {
-    it('should throw error on Amazon query failure', async () => {
-      mockSupabase.setNextResponse({
-        data: null,
-        error: { message: 'Database error' },
-      });
-
-      await expect(service.getUnfulfilledOrders('user-1', 'amazon')).rejects.toThrow(
-        'Failed to fetch unfulfilled Amazon orders'
-      );
-    });
-
-    it('should include PartiallyShipped status for Amazon', async () => {
-      const mockOrders = [{ id: 'order-1', status: 'PartiallyShipped' }];
-
-      mockSupabase.setNextResponse({ data: mockOrders, error: null });
-
-      const result = await service.getUnfulfilledOrders('user-1', 'amazon');
-
-      expect(result).toHaveLength(1);
     });
   });
 });

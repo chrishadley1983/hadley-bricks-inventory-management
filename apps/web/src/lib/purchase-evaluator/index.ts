@@ -19,7 +19,6 @@ export {
   calculateCOGPercent,
   calculateEbayProfit,
   calculateItemProfitability,
-  allocateCostsProportionally,
   allocateCostsEqually,
   calculateEvaluationSummary,
 } from './calculations';

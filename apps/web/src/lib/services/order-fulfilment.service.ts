@@ -152,38 +152,6 @@ export class OrderFulfilmentService {
   }
 
   /**
-   * @deprecated Use getOrdersReadyForConfirmation instead
-   * Get unfulfilled orders for a platform that are ready for confirmation
-   * (Completed/Shipped status, not yet fulfilled_at set)
-   */
-  async getUnfulfilledOrders(
-    userId: string,
-    platform: 'amazon' | 'ebay'
-  ): Promise<PlatformOrder[]> {
-    // For platform_orders (Amazon uses this)
-    if (platform === 'amazon') {
-      const { data, error } = await this.supabase
-        .from('platform_orders')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('platform', 'amazon')
-        .is('fulfilled_at', null)
-        .in('status', ['Shipped', 'Completed', 'Unshipped', 'PartiallyShipped'])
-        .order('order_date', { ascending: true });
-
-      if (error) {
-        throw new Error(`Failed to fetch unfulfilled Amazon orders: ${error.message}`);
-      }
-
-      return (data ?? []) as PlatformOrder[];
-    }
-
-    // For eBay, we use ebay_orders table
-    // This is handled separately through the eBay picking list flow
-    return [];
-  }
-
-  /**
    * Match order items to inventory based on ASIN (Amazon) or SKU mapping (eBay)
    */
   async matchOrderToInventory(
