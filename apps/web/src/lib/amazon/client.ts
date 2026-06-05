@@ -19,6 +19,7 @@ import type {
   GetOrdersParams,
   AmazonOrderStatus,
 } from './types';
+import { sleep } from '@/lib/utils';
 import { EU_ENDPOINT, MARKETPLACE_INFO } from './types';
 
 /** LWA Token endpoint */
@@ -99,9 +100,6 @@ export class AmazonClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   /**
    * Get a valid access token, refreshing if necessary
@@ -190,7 +188,7 @@ export class AmazonClient {
         if (error instanceof AmazonRateLimitError) {
           const waitTime = Math.max(0, error.rateLimitInfo.resetTime.getTime() - Date.now());
           console.log(`[AmazonClient] Rate limited, waiting ${waitTime}ms...`);
-          await this.sleep(waitTime + 1000); // Add 1s buffer
+          await sleep(waitTime + 1000); // Add 1s buffer
           continue;
         }
 
@@ -200,7 +198,7 @@ export class AmazonClient {
           console.log(
             `[AmazonClient] Retrying request in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
           );
-          await this.sleep(delay);
+          await sleep(delay);
         }
       }
     }
@@ -433,7 +431,7 @@ export class AmazonClient {
 
       // Small delay between pages to respect rate limits
       if (nextToken) {
-        await this.sleep(200);
+        await sleep(200);
       }
     } while (nextToken && page < maxPages);
 
@@ -513,7 +511,7 @@ export class AmazonClient {
       nextToken = response.payload.NextToken;
 
       if (nextToken) {
-        await this.sleep(200);
+        await sleep(200);
       }
     } while (nextToken);
 

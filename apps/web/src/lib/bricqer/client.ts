@@ -23,6 +23,7 @@ import type {
   BricqerPurchaseDetail,
   BricqerInventoryProblem,
 } from './types';
+import { sleep } from '@/lib/utils';
 
 /** Request timeout in milliseconds */
 const REQUEST_TIMEOUT = 30000;
@@ -112,9 +113,6 @@ export class BricqerClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   /**
    * Make an authenticated request to the Bricqer API with retry logic
@@ -188,7 +186,7 @@ export class BricqerClient {
           console.log(
             `[Bricqer] Rate limited. Waiting ${Math.round(cappedWaitMs / 1000)}s until reset (rate limit wait ${rateLimitWaits}/${maxRateLimitWaits})`
           );
-          await this.sleep(cappedWaitMs);
+          await sleep(cappedWaitMs);
           continue;
         }
 
@@ -201,7 +199,7 @@ export class BricqerClient {
         console.log(
           `[Bricqer] Retrying request in ${delay}ms (attempt ${errorRetries}/${MAX_RETRIES})`
         );
-        await this.sleep(delay);
+        await sleep(delay);
       }
     }
 
@@ -311,7 +309,7 @@ export class BricqerClient {
         console.log(
           `[Bricqer] Rate limit low (${remaining} remaining). Waiting ${Math.round(waitMs / 1000)}s for reset...`
         );
-        await this.sleep(waitMs);
+        await sleep(waitMs);
       }
     }
   }

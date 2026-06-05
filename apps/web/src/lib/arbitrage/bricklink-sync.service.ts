@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database, Json } from '@hadley-bricks/database';
 import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '../bricklink/client';
 import type {
@@ -232,7 +233,7 @@ export class BrickLinkArbitrageSyncService {
       }
 
       // Rate limit
-      await this.delay(RATE_LIMIT_DELAY);
+      await sleep(RATE_LIMIT_DELAY);
 
       // Report progress
       onProgress?.(i + 1, total);
@@ -379,7 +380,7 @@ export class BrickLinkArbitrageSyncService {
       }
 
       // Rate limit
-      await this.delay(RATE_LIMIT_DELAY);
+      await sleep(RATE_LIMIT_DELAY);
     }
 
     // Update watchlist timestamps for successfully synced items
@@ -550,7 +551,4 @@ export class BrickLinkArbitrageSyncService {
   /**
    * Delay helper
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

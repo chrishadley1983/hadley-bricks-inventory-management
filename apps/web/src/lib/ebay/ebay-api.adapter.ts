@@ -44,6 +44,7 @@ import type {
   EbayBulkDeleteAdsRequest,
   EbayBulkAdResponse,
 } from './types';
+import { sleep } from '@/lib/utils';
 import type { EbaySigningKeys, SignedRequestHeaders } from './ebay-signature.service';
 import { ebaySignatureService } from './ebay-signature.service';
 
@@ -940,7 +941,7 @@ export class EbayApiAdapter {
             ? parseInt(retryAfter, 10) * 1000
             : RETRY_DELAY_MS * (attempt + 1);
           console.warn(`[EbayApiAdapter] Rate limited, retrying after ${delayMs}ms`);
-          await this.delay(delayMs);
+          await sleep(delayMs);
           continue;
         }
 
@@ -1013,7 +1014,7 @@ export class EbayApiAdapter {
         if (attempt < MAX_RETRIES - 1) {
           const delayMs = RETRY_DELAY_MS * Math.pow(2, attempt);
           console.warn(`[EbayApiAdapter] Request failed, retrying in ${delayMs}ms`, error);
-          await this.delay(delayMs);
+          await sleep(delayMs);
         }
       }
     }
@@ -1029,7 +1030,7 @@ export class EbayApiAdapter {
     const timeSinceLastRequest = now - this.lastRequestTime;
 
     if (timeSinceLastRequest < DEFAULT_RATE_LIMIT_DELAY_MS) {
-      await this.delay(DEFAULT_RATE_LIMIT_DELAY_MS - timeSinceLastRequest);
+      await sleep(DEFAULT_RATE_LIMIT_DELAY_MS - timeSinceLastRequest);
     }
 
     this.lastRequestTime = Date.now();
@@ -1038,7 +1039,4 @@ export class EbayApiAdapter {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

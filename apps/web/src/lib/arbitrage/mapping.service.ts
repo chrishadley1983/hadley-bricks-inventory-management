@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
 import { BrickLinkClient, BrickLinkApiError } from '../bricklink/client';
 import type { BrickLinkCredentials } from '../bricklink/types';
@@ -221,7 +222,7 @@ export class MappingService {
       }
 
       // Rate limit: 200ms between BrickLink API calls
-      await this.delay(200);
+      await sleep(200);
 
       // Report progress
       onProgress?.(i + 1, total);
@@ -283,7 +284,4 @@ export class MappingService {
   /**
    * Delay helper for rate limiting
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

@@ -9,6 +9,7 @@
  */
 
 import type { AmazonCredentials } from './types';
+import { sleep } from '@/lib/utils';
 
 // ============================================================================
 // CONSTANTS
@@ -364,7 +365,7 @@ export class AmazonPricingClient {
           console.log(
             `[AmazonPricingClient] Waiting ${BATCH_DELAY_PRICING_MS}ms before next batch...`
           );
-          await this.sleep(BATCH_DELAY_PRICING_MS);
+          await sleep(BATCH_DELAY_PRICING_MS);
         }
       }
       return results;
@@ -487,7 +488,7 @@ export class AmazonPricingClient {
 
         // Rate limit between batches (slower rate for this API: 0.033 req/sec = ~30s per request)
         if (i + MAX_BATCH_SIZE < asins.length) {
-          await this.sleep(35000); // 35 seconds between batches to stay under rate limit
+          await sleep(35000); // 35 seconds between batches to stay under rate limit
         }
       }
       return results;
@@ -716,7 +717,7 @@ export class AmazonPricingClient {
     }
 
     // Rate limiting delay
-    await this.sleep(API_DELAY_MS);
+    await sleep(API_DELAY_MS);
 
     const response = await fetch(url, options);
 
@@ -730,7 +731,7 @@ export class AmazonPricingClient {
         ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
         : 20000;
       console.warn(`[AmazonPricingClient] Rate limited (attempt ${_retryCount + 1}/2), waiting ${waitTime / 1000}s...`);
-      await this.sleep(waitTime);
+      await sleep(waitTime);
       return this.request<T>(path, method, body, _retryCount + 1);
     }
 
@@ -812,9 +813,6 @@ export class AmazonPricingClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 /**

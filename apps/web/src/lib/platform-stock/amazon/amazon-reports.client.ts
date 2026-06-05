@@ -12,6 +12,7 @@
  */
 
 import type { AmazonCredentials } from '@/lib/amazon/types';
+import { sleep } from '@/lib/utils';
 
 // ============================================================================
 // CONSTANTS
@@ -190,7 +191,7 @@ export class AmazonReportsClient {
       }
 
       // Wait before next poll
-      await this.sleep(pollIntervalMs);
+      await sleep(pollIntervalMs);
     }
 
     throw new Error(`Report generation timed out after ${maxWaitMs / 1000} seconds`);
@@ -321,14 +322,14 @@ export class AmazonReportsClient {
     }
 
     // Rate limiting delay
-    await this.sleep(API_DELAY_MS);
+    await sleep(API_DELAY_MS);
 
     const response = await fetch(url, options);
 
     // Handle rate limiting
     if (response.status === 429) {
       console.warn('[AmazonReportsClient] Rate limited, waiting 60s...');
-      await this.sleep(60000);
+      await sleep(60000);
       return this.request<T>(path, method, body);
     }
 
@@ -415,9 +416,6 @@ export class AmazonReportsClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   /**
    * Decompress GZIP data

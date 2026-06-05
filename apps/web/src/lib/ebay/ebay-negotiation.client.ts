@@ -14,6 +14,7 @@ import type {
   SendOfferRequest,
   EbayNegotiationErrorResponse,
 } from './negotiation.types';
+import { sleep } from '@/lib/utils';
 
 // ============================================================================
 // Constants
@@ -212,7 +213,7 @@ export class EbayNegotiationClient {
             `[EbayNegotiationClient] Rate limited, retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`
           );
 
-          await this.delay(delayMs);
+          await sleep(delayMs);
           continue;
         }
 
@@ -255,7 +256,7 @@ export class EbayNegotiationClient {
             `[EbayNegotiationClient] Request failed, retrying (attempt ${attempt}/${MAX_RETRIES}):`,
             error instanceof Error ? error.message : 'Unknown error'
           );
-          await this.delay(RETRY_DELAY_MS * attempt);
+          await sleep(RETRY_DELAY_MS * attempt);
         }
       }
     }
@@ -266,7 +267,4 @@ export class EbayNegotiationClient {
   /**
    * Delay execution for the specified milliseconds
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

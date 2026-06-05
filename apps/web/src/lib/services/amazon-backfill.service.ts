@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database, PlatformOrder, OrderItemInsert } from '@hadley-bricks/database';
 import { AmazonClient, AmazonRateLimitError } from '../amazon';
 import type { AmazonCredentials } from '../amazon';
@@ -262,7 +263,7 @@ export class AmazonBackfillService {
         if (error instanceof AmazonRateLimitError) {
           const waitTime = Math.max(delayMs * 2, 2000);
           console.log(`[AmazonBackfillService] Rate limited, waiting ${waitTime}ms...`);
-          await this.sleep(waitTime);
+          await sleep(waitTime);
         }
       }
 
@@ -276,7 +277,7 @@ export class AmazonBackfillService {
 
       // Delay between requests
       if (progress.processed < orders.length) {
-        await this.sleep(delayMs);
+        await sleep(delayMs);
       }
     }
 
@@ -304,7 +305,4 @@ export class AmazonBackfillService {
     progressMap.delete(userId);
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

@@ -9,6 +9,7 @@
  */
 
 import type { AmazonCredentials } from './types';
+import { sleep } from '@/lib/utils';
 
 // ============================================================================
 // CONSTANTS
@@ -307,7 +308,7 @@ export class AmazonCatalogClient {
     };
 
     // Rate limiting delay
-    await this.sleep(API_DELAY_MS);
+    await sleep(API_DELAY_MS);
 
     const response = await fetch(url, options);
 
@@ -322,7 +323,7 @@ export class AmazonCatalogClient {
       console.warn(
         `[AmazonCatalogClient] Rate limited, waiting ${waitTime / 1000}s (retry ${retryCount + 1}/${MAX_RETRIES})...`
       );
-      await this.sleep(waitTime);
+      await sleep(waitTime);
       return this.request<T>(path, method, retryCount + 1);
     }
 
@@ -456,9 +457,6 @@ export class AmazonCatalogClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 /**

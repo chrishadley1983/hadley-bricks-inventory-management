@@ -8,6 +8,7 @@
  */
 
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { sleep } from '@/lib/utils';
 import type {
   TradingApiConfig,
   GetMyeBaySellingParams,
@@ -504,7 +505,7 @@ export class EbayTradingClient {
         if (attempt < MAX_RETRIES - 1) {
           const delayMs = RETRY_DELAY_MS * Math.pow(2, attempt);
           console.warn(`[EbayTradingClient] Request failed, retrying in ${delayMs}ms:`, error);
-          await this.delay(delayMs);
+          await sleep(delayMs);
         }
       }
     }
@@ -680,9 +681,6 @@ export class EbayTradingClient {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   // ============================================================================
   // Request Builders
@@ -1060,7 +1058,7 @@ export class EbayTradingClient {
         if (attempt < MAX_RETRIES - 1) {
           const delayMs = RETRY_DELAY_MS * Math.pow(2, attempt);
           console.warn(`[EbayTradingClient] ${callName} failed, retrying in ${delayMs}ms:`, error);
-          await this.delay(delayMs);
+          await sleep(delayMs);
         }
       }
     }

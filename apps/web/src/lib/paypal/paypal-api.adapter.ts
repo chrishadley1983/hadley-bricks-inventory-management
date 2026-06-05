@@ -10,6 +10,7 @@ import type {
   PayPalTransactionFetchParams,
   PayPalApiError,
 } from './types';
+import { sleep } from '@/lib/utils';
 import { PayPalApiException } from './types';
 
 // ============================================================================
@@ -269,7 +270,7 @@ export class PayPalApiAdapter {
             ? parseInt(retryAfter, 10) * 1000
             : RETRY_DELAY_MS * (attempt + 1);
           console.warn(`[PayPalApiAdapter] Rate limited, retrying after ${delayMs}ms`);
-          await this.delay(delayMs);
+          await sleep(delayMs);
           continue;
         }
 
@@ -317,7 +318,7 @@ export class PayPalApiAdapter {
         if (attempt < MAX_RETRIES - 1) {
           const delayMs = RETRY_DELAY_MS * Math.pow(2, attempt);
           console.warn(`[PayPalApiAdapter] Request failed, retrying in ${delayMs}ms`, error);
-          await this.delay(delayMs);
+          await sleep(delayMs);
         }
       }
     }
@@ -333,7 +334,7 @@ export class PayPalApiAdapter {
     const timeSinceLastRequest = now - this.lastRequestTime;
 
     if (timeSinceLastRequest < DEFAULT_RATE_LIMIT_DELAY_MS) {
-      await this.delay(DEFAULT_RATE_LIMIT_DELAY_MS - timeSinceLastRequest);
+      await sleep(DEFAULT_RATE_LIMIT_DELAY_MS - timeSinceLastRequest);
     }
 
     this.lastRequestTime = Date.now();
@@ -342,7 +343,4 @@ export class PayPalApiAdapter {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
