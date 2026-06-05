@@ -10,6 +10,30 @@
 
 ---
 
+## Implementation Status (updated 2026-06-05)
+
+Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
+
+**Done & committed — all typecheck-green; 90 targeted tests pass:**
+- `0025353` — Phases 1–5: removed 2 unused deps (`@google/generative-ai`, `@reduxjs/toolkit`); ~20 dead src files + dead barrels; 5 dead/debug API routes; 4 superseded symbols (`allocateCostsProportionally`, `getUnfulfilledOrders`, `getAuctionCountForDate`, gmail private `getClient`) + their tests; ~31 obsolete one-off scripts / stray root files.
+- `cd17099` — Phase 6 (partial): `parseCurrencyValue` consolidated into `lib/utils/currency.ts` (§1.5, proven behavior-equivalent across all 5 sites); added shared `sleep()` to `lib/utils.ts` and `verifyCronAuth()` in `lib/api/cron-auth.ts`.
+
+**Decision (2026-06-05):** scope this change set to **behavior-neutral consolidations only**; take the truly high-blast-radius refactors as separate, individually-tested PRs.
+
+**Remaining for this branch (safe consolidations):**
+- Adopt `sleep` across ~30 platform-client sites.
+- Adopt `verifyCronAuth` across ~43 `app/api/cron/**` routes (preserving per-route warn logs).
+- Adopt `formatCurrency` only at provably-equivalent inline sites (skip any with custom fraction digits / differing null handling).
+- Verify: `typecheck` + `lint` + `test:batched` + `build`; then code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
+
+**Deferred to separate follow-up PRs (high blast radius — do incrementally behind tests):**
+- §1.1 Supabase pagination adoption onto `fetchAllRecords`/`fetchPaginated` (~60 sites, incl. ~17 copies in `profit-loss-report.service.ts`).
+- §1.2 `withAuth` / `validateAuth` HOF across ~327 route handlers (auth-critical).
+- §1.6 `formatCurrency` adoption at the `src/lib` sites needing per-site equivalence review.
+- §1.7–§1.10 generic `fetchWithRetry`, `BaseTransactionSyncService`, shared `OAuthTokenManager`, shared `TransactionRow` base type (financial/security paths).
+
+---
+
 ## Summary
 
 | Category | Findings | High conf. | Headline |
