@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatCurrency } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -85,8 +86,7 @@ export function RepriceDialog({ item, onClose, onSuccess }: RepriceDialogProps) 
 
   if (!item) return null;
 
-  const formatGBP = (n: number) =>
-    new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
+  const formatGBP = (n: number) => formatCurrency(n);
 
   return (
     <Dialog open={!!item} onOpenChange={(open: boolean) => !open && onClose()}>
