@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { CostAllocationService } from '@/lib/services/cost-allocation.service';
 import { emailService } from '@/lib/email/email.service';
@@ -27,13 +28,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret (skip if not set - development mode)
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron CostAllocation] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'CostAllocation');
+    if (unauthorized) return unauthorized;
 
     // Detect trigger type
     const trigger = request.headers.get('x-trigger') === 'manual' ? 'manual' : 'cron';

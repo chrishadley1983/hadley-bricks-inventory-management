@@ -16,6 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { discordService } from '@/lib/notifications';
 import { emailService } from '@/lib/email/email.service';
@@ -161,11 +162,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Auth
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const execution = await jobExecutionService.start('vinted-collections', 'cron');
     const supabase = createServiceRoleClient();

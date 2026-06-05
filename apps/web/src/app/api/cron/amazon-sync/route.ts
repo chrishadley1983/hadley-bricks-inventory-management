@@ -27,6 +27,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
@@ -50,13 +51,8 @@ export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret (Vercel adds Authorization header for cron jobs)
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron AmazonSync] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'AmazonSync');
+    if (unauthorized) return unauthorized;
 
     // Use service role client to query across all users
     const supabase = createServiceRoleClient();

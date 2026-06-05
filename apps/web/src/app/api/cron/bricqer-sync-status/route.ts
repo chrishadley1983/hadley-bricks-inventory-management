@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { BricqerClient } from '@/lib/bricqer/client';
 import type { BricqerCredentials, BricqerInventoryProblem } from '@/lib/bricqer/types';
@@ -41,12 +42,8 @@ async function handler(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
 
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron BricqerSyncStatus] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'BricqerSyncStatus');
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('bricqer-sync-status', 'cron');
 

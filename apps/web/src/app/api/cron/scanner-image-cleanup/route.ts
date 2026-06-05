@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
@@ -30,13 +31,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron ScannerImageCleanup] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'ScannerImageCleanup');
+    if (unauthorized) return unauthorized;
 
     // Parse optional query params
     const { searchParams } = new URL(request.url);

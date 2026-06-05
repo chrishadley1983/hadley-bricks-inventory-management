@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayPromotedListingsService } from '@/lib/ebay/ebay-promoted-listings.service';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
@@ -204,11 +205,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const { searchParams } = new URL(request.url);
     const isReport = searchParams.get('report') === 'true';

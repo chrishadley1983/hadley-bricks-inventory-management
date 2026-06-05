@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EnrichmentService, MAX_ITEMS_DAILY_REFRESH } from '@/lib/inventory-explorer/enrichment.service';
 import { discordService } from '@/lib/notifications';
@@ -26,12 +27,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     // Kill-switch: set INVENTORY_ENRICH_CRON_ENABLED=false in env to pause this
     // cron without redeploying (e.g. while running the cache-cleanup script

@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getNegotiationService } from '@/lib/ebay/negotiation.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
@@ -25,13 +26,8 @@ export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
     // Verify cron secret (Vercel adds Authorization header for cron jobs)
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron Negotiation] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'Negotiation');
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('negotiation', 'cron');
 

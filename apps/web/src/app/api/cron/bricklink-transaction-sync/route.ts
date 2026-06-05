@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { createBrickLinkTransactionSyncService } from '@/lib/bricklink/bricklink-transaction-sync.service';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
@@ -29,12 +30,8 @@ async function handler(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
 
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron BrickLinkTransactionSync] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'BrickLinkTransactionSync');
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('bricklink-transaction-sync', 'cron');
 
