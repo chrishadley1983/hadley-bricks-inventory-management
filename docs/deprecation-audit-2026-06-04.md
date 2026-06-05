@@ -20,11 +20,12 @@ Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 
 **Decision (2026-06-05):** scope this change set to **behavior-neutral consolidations only**; take the truly high-blast-radius refactors as separate, individually-tested PRs.
 
-**Remaining for this branch (safe consolidations):**
-- Adopt `sleep` across ~30 platform-client sites.
-- Adopt `verifyCronAuth` across ~43 `app/api/cron/**` routes (preserving per-route warn logs).
-- Adopt `formatCurrency` only at provably-equivalent inline sites (skip any with custom fraction digits / differing null handling).
-- Verify: `typecheck` + `lint` + `test:batched` + `build`; then code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
+**Safe consolidations — DONE & committed (typecheck + lint green):**
+- `7b6176c` — `verifyCronAuth` adopted across 28 standard `app/api/cron/**` routes (per-route warn labels preserved). Non-standard `order-issues-sync` (combined `x-api-key`) and `investment-retrain` left as-is.
+- `de4b4d6` — shared `sleep()` adopted across 24 platform clients/services (removed per-class `sleep`/`delay`; one dead `delay()` cleaned up).
+- `a8c90d1` — shared `formatCurrency` adopted in the 4 buy-box-gap inline GBP formatters (delegated; behavior identical).
+
+**Remaining:** `test:batched` + `build` → code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
 
 **Deferred to separate follow-up PRs (high blast radius — do incrementally behind tests):**
 - §1.1 Supabase pagination adoption onto `fetchAllRecords`/`fetchPaginated` (~60 sites, incl. ~17 copies in `profit-loss-report.service.ts`).
