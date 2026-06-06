@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { HistoricalAppreciationService } from '@/lib/investment';
 import { ModelTrainingService } from '@/lib/investment/ml';
@@ -24,13 +25,8 @@ export const maxDuration = 300; // 5 minutes
 export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
-    // Verify CRON_SECRET
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('investment-retrain', 'cron');
 
