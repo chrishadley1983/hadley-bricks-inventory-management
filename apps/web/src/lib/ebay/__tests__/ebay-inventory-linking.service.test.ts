@@ -275,7 +275,7 @@ describe('EbayInventoryLinkingService', () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   range: vi.fn().mockResolvedValue({ data: [], error: null }),
                 }),
@@ -302,7 +302,7 @@ describe('EbayInventoryLinkingService', () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   range: vi.fn().mockResolvedValue({ data: [], error: null }),
                 }),
@@ -325,7 +325,7 @@ describe('EbayInventoryLinkingService', () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   range: vi.fn().mockResolvedValue({ data: [], error: null }),
                 }),
@@ -414,6 +414,17 @@ describe('EbayInventoryLinkingService', () => {
       });
 
       mockSupabase.from.mockReturnValue({
+        // skipQueueItem first SELECTs the line item, then UPDATEs the queue row
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { ebay_line_item_id: 'line-item-123' },
+                error: null,
+              }),
+            }),
+          }),
+        }),
         update: updateMock,
       });
 
@@ -425,6 +436,16 @@ describe('EbayInventoryLinkingService', () => {
 
     it('should return error on database failure', async () => {
       mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { ebay_line_item_id: 'line-item-123' },
+                error: null,
+              }),
+            }),
+          }),
+        }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -1178,11 +1199,10 @@ describe('EbayInventoryLinkingService', () => {
         if (table === 'ebay_order_line_items') {
           return {
             select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { message: 'Database error' },
-                }),
+              // processFulfilledOrder fetches line items with .select().eq() (no .is)
+              eq: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: 'Database error' },
               }),
             }),
           };
@@ -1214,7 +1234,7 @@ describe('EbayInventoryLinkingService', () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   range: vi.fn().mockResolvedValue({
                     data: null,
@@ -1230,7 +1250,7 @@ describe('EbayInventoryLinkingService', () => {
       const result = await service.processHistoricalOrders();
 
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('Failed to fetch orders page 0');
+      expect(result.errors[0]).toContain('Failed to fetch fulfilled orders page 0');
     });
   });
 
