@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
 import type { AmazonCredentials } from '../amazon';
 import { createAmazonPricingClient, type AsinCompetitiveSummaryData } from '../amazon';
@@ -268,7 +269,7 @@ export class AmazonArbitrageSyncService {
         const pricingData = await pricingClient.getCompetitivePricing(asins, UK_MARKETPLACE_ID);
 
         // Wait for competitive pricing rate limit before next API call
-        await this.delay(COMPETITIVE_PRICING_DELAY);
+        await sleep(COMPETITIVE_PRICING_DELAY);
 
         // Fetch competitive summary for batch (v2022-05-01 API - 0.033 req/sec limit)
         // This API provides WasPrice and detailed offer data
@@ -276,7 +277,7 @@ export class AmazonArbitrageSyncService {
         try {
           summaryData = await pricingClient.getCompetitiveSummary(asins, UK_MARKETPLACE_ID);
           // Wait for competitive summary rate limit (30 sec) before next batch
-          await this.delay(COMPETITIVE_SUMMARY_DELAY);
+          await sleep(COMPETITIVE_SUMMARY_DELAY);
         } catch (summaryErr) {
           console.warn(
             `[AmazonArbitrageSyncService.syncPricing] Could not fetch competitive summary:`,
@@ -342,7 +343,7 @@ export class AmazonArbitrageSyncService {
         );
         failed += batch.length;
         // Still respect rate limits on error
-        await this.delay(COMPETITIVE_PRICING_DELAY);
+        await sleep(COMPETITIVE_PRICING_DELAY);
       }
 
       // Report progress
@@ -486,9 +487,6 @@ export class AmazonArbitrageSyncService {
   /**
    * Delay helper
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   /**
    * Sync pricing for a batch of ASINs (resumable version)
@@ -631,14 +629,14 @@ export class AmazonArbitrageSyncService {
         const pricingData = await pricingClient.getCompetitivePricing(asins, UK_MARKETPLACE_ID);
 
         // Wait for competitive pricing rate limit before next API call
-        await this.delay(COMPETITIVE_PRICING_DELAY);
+        await sleep(COMPETITIVE_PRICING_DELAY);
 
         // Fetch competitive summary for batch (v2022-05-01 API - 0.033 req/sec limit)
         let summaryData: AsinCompetitiveSummaryData[] = [];
         try {
           summaryData = await pricingClient.getCompetitiveSummary(asins, UK_MARKETPLACE_ID);
           // Wait for competitive summary rate limit (30 sec) before next batch
-          await this.delay(COMPETITIVE_SUMMARY_DELAY);
+          await sleep(COMPETITIVE_SUMMARY_DELAY);
         } catch (summaryErr) {
           console.warn(
             `[AmazonArbitrageSyncService.syncPricingBatch] Could not fetch competitive summary:`,
@@ -701,7 +699,7 @@ export class AmazonArbitrageSyncService {
           err
         );
         failed += batch.length;
-        await this.delay(COMPETITIVE_PRICING_DELAY);
+        await sleep(COMPETITIVE_PRICING_DELAY);
       }
     }
 

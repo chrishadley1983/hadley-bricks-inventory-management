@@ -4,7 +4,6 @@ import {
   calculateEbayProfit,
   calculateItemProfitability,
   allocateCostsByBuyBox,
-  allocateCostsProportionally,
   allocateCostsEqually,
   calculateEvaluationSummary,
 } from '../calculations';
@@ -439,38 +438,6 @@ describe('Purchase Evaluator Calculations', () => {
 
       // Should use Buy Box (100), not Was Price or override
       expect(result[0]).toBe(50);
-    });
-  });
-
-  describe('allocateCostsProportionally (deprecated)', () => {
-    it('should allocate costs proportionally by RRP', () => {
-      const items = [
-        { ukRetailPrice: 100, quantity: 1 },
-        { ukRetailPrice: 200, quantity: 1 },
-      ];
-
-      const result = allocateCostsProportionally(items, 150);
-
-      expect(result[0]).toBeCloseTo(50, 2);
-      expect(result[1]).toBeCloseTo(100, 2);
-    });
-
-    it('should split equally when no items have RRP', () => {
-      const items = [
-        { ukRetailPrice: null, quantity: 1 },
-        { ukRetailPrice: null, quantity: 1 },
-      ];
-
-      const result = allocateCostsProportionally(items, 100);
-
-      expect(result[0]).toBe(50);
-      expect(result[1]).toBe(50);
-    });
-
-    it('should handle empty items', () => {
-      const result = allocateCostsProportionally([], 100);
-
-      expect(result).toEqual([]);
     });
   });
 

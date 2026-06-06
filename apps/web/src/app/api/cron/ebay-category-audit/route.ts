@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
@@ -33,13 +34,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron EbayCategoryAudit] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'EbayCategoryAudit');
+    if (unauthorized) return unauthorized;
 
     console.log('[Cron EbayCategoryAudit] Starting weekly audit...');
 

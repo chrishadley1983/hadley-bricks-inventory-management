@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { OrderPollService } from '@/lib/minifig-sync/order-poll.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
@@ -8,12 +9,8 @@ export const maxDuration = 300;
 
 async function handler(request: NextRequest) {
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const supabase = createServiceRoleClient();
     const service = new OrderPollService(supabase, DEFAULT_USER_ID);

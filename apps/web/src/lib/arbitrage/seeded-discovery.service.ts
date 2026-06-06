@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database, Json } from '@hadley-bricks/database';
 import { AmazonCatalogClient, type CatalogSearchItem } from '../amazon/amazon-catalog.client';
 import type { AmazonCredentials } from '../amazon/types';
@@ -289,12 +290,12 @@ export class SeededAsinDiscoveryService {
       onProgress?.(processed, pendingSets.length, found, set.set_number);
 
       // Rate limiting
-      await this.delay(DISCOVERY_RATE_LIMIT_MS);
+      await sleep(DISCOVERY_RATE_LIMIT_MS);
 
       // Batch pause
       if (processed % DISCOVERY_BATCH_SIZE === 0 && processed < pendingSets.length) {
         console.log(`[SeededDiscovery] Processed ${processed}/${pendingSets.length}, pausing...`);
-        await this.delay(DISCOVERY_BATCH_PAUSE_MS);
+        await sleep(DISCOVERY_BATCH_PAUSE_MS);
       }
     }
 
@@ -839,9 +840,6 @@ export class SeededAsinDiscoveryService {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 /**

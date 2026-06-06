@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatCurrency } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { Scale, RefreshCw, Trophy } from 'lucide-react';
@@ -56,7 +57,7 @@ async function fetchBuyBoxGap(): Promise<BuyBoxGapResponse> {
 }
 
 function formatGBP(n: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
+  return formatCurrency(n);
 }
 
 export default function BuyBoxGapPage() {

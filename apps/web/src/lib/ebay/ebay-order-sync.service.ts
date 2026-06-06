@@ -8,6 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { sleep } from '@/lib/utils';
 import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import { EbayInventoryLinkingService } from './ebay-inventory-linking.service';
@@ -330,7 +331,7 @@ export class EbayOrderSyncService {
             await this.upsertFulfilments(dbOrderId, fulfilments.fulfillments);
             fulfilmentsProcessed += fulfilments.fulfillments.length;
           }
-          await this.delay(RATE_LIMIT_DELAY_MS);
+          await sleep(RATE_LIMIT_DELAY_MS);
         } catch (error) {
           // Fulfilment fetch failed - log but continue
           console.warn(
@@ -548,7 +549,7 @@ export class EbayOrderSyncService {
         hasMore = false;
       } else {
         offset += MAX_ORDERS_PER_PAGE;
-        await this.delay(RATE_LIMIT_DELAY_MS);
+        await sleep(RATE_LIMIT_DELAY_MS);
       }
     }
 
@@ -599,7 +600,7 @@ export class EbayOrderSyncService {
       chunkStart.setSeconds(chunkStart.getSeconds() + 1); // Avoid overlap
 
       // Small delay between chunks
-      await this.delay(RATE_LIMIT_DELAY_MS * 2);
+      await sleep(RATE_LIMIT_DELAY_MS * 2);
     }
 
     return allOrders;
@@ -907,9 +908,6 @@ export class EbayOrderSyncService {
   /**
    * Delay helper for rate limiting
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // Export a default instance

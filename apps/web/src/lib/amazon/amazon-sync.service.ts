@@ -2207,9 +2207,6 @@ export class AmazonSyncService {
   /**
    * Helper to add delay
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   // ==========================================================================
   // FEED POLLING

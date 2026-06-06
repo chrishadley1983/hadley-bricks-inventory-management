@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { discordService } from '@/lib/notifications';
 import { emailService } from '@/lib/email';
 import type { PurchaseImportEmailItem } from '@/lib/email';
@@ -104,13 +105,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // 1. Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron EmailPurchases] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'EmailPurchases');
+    if (unauthorized) return unauthorized;
 
     const execution = await jobExecutionService.start('email-purchases', 'cron');
 

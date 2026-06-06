@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { CredentialsRepository } from '@/lib/repositories';
@@ -697,7 +698,7 @@ export class AmazonTransactionSyncService {
 
       // Small delay between batches
       if (i + BATCH_SIZE < transactionRows.length) {
-        await this.delay(RATE_LIMIT_DELAY_MS);
+        await sleep(RATE_LIMIT_DELAY_MS);
       }
     }
 
@@ -707,9 +708,6 @@ export class AmazonTransactionSyncService {
   /**
    * Delay helper for rate limiting
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // Export a default instance

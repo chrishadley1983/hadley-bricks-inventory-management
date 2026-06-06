@@ -8,6 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { sleep } from '@/lib/utils';
 import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import type {
@@ -262,7 +263,7 @@ export class EbayTransactionSyncService {
             hasMore = false;
           } else {
             offset += MAX_TRANSACTIONS_PER_PAGE;
-            await this.delay(RATE_LIMIT_DELAY_MS);
+            await sleep(RATE_LIMIT_DELAY_MS);
           }
         } catch (apiError) {
           console.error('[EbayTransactionSyncService] API error fetching transactions:', apiError);
@@ -487,7 +488,7 @@ export class EbayTransactionSyncService {
             hasMore = false;
           } else {
             offset += MAX_PAYOUTS_PER_PAGE;
-            await this.delay(RATE_LIMIT_DELAY_MS);
+            await sleep(RATE_LIMIT_DELAY_MS);
           }
         } catch (apiError) {
           console.error('[EbayTransactionSyncService] API error fetching payouts:', apiError);
@@ -921,9 +922,6 @@ export class EbayTransactionSyncService {
   /**
    * Delay helper for rate limiting
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // Export a default instance

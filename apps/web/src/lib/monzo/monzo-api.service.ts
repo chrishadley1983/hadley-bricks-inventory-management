@@ -9,6 +9,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { sleep } from '@/lib/utils';
 import { monzoAuthService } from './monzo-auth.service';
 import type {
   MonzoApiTransaction,
@@ -149,7 +150,7 @@ export class MonzoApiService {
 
           // Small delay to avoid rate limiting
           if (hasMore) {
-            await this.delay(RATE_LIMIT_DELAY_MS);
+            await sleep(RATE_LIMIT_DELAY_MS);
           }
         }
       }
@@ -279,7 +280,7 @@ export class MonzoApiService {
 
           // Small delay to avoid rate limiting
           if (hasMore) {
-            await this.delay(RATE_LIMIT_DELAY_MS);
+            await sleep(RATE_LIMIT_DELAY_MS);
           }
         }
       }
@@ -481,9 +482,6 @@ export class MonzoApiService {
   /**
    * Delay helper for rate limiting
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // Export a default instance

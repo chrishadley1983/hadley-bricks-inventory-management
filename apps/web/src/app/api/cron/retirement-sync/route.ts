@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { RetirementSyncService } from '@/lib/retirement';
 import { discordService } from '@/lib/notifications';
@@ -29,13 +30,8 @@ export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
     // 1. Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron RetirementSync] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'RetirementSync');
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('retirement-sync', 'cron');
 

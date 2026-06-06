@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
 import {
   EbayTradingClient,
@@ -215,7 +216,7 @@ export class BestOfferBulkUpdateService {
 
       // Rate limiting delay between API calls
       if (i < listings.length - 1) {
-        await this.delay(API_CALL_DELAY_MS);
+        await sleep(API_CALL_DELAY_MS);
       }
     }
 
@@ -411,9 +412,6 @@ export class BestOfferBulkUpdateService {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // ============================================================================

@@ -89,23 +89,3 @@ export async function scheduleAuctions(
     schedule.set(endDate, (schedule.get(endDate) || 0) + 1);
   }
 }
-
-/**
- * Get the number of auctions scheduled for a specific date.
- */
-export async function getAuctionCountForDate(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  date: string
-): Promise<number> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count } = await (supabase as any)
-    .from('markdown_proposals')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('proposed_action', 'AUCTION')
-    .in('status', ['APPROVED', 'AUTO_APPLIED', 'PENDING'])
-    .eq('auction_end_date', date);
-
-  return count || 0;
-}

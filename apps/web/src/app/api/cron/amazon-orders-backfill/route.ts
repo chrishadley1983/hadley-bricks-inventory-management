@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AmazonBackfillService } from '@/lib/services/amazon-backfill.service';
 import { DEFAULT_USER_ID } from '@/lib/minifig-sync/types';
@@ -19,11 +20,8 @@ const POLL_DEADLINE_MS = 270_000; // 4.5 min — leaves buffer under maxDuration
 
 async function handler(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const supabase = createServiceRoleClient();
     const service = new AmazonBackfillService(supabase);

@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { RebrickableSyncService } from '@/lib/rebrickable';
 import { discordService } from '@/lib/notifications';
@@ -25,13 +26,8 @@ export async function POST(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
     // 1. Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron RebrickableSync] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'RebrickableSync');
+    if (unauthorized) return unauthorized;
 
     // 2. Verify API key exists
     const apiKey = process.env.REBRICKABLE_API_KEY;

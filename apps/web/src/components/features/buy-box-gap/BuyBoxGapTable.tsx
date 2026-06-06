@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RepriceDialog } from './RepriceDialog';
 import type { BuyBoxGapRow } from '@/app/api/reports/buy-box-gap/route';
+import { formatCurrency } from '@/lib/utils';
 
 function formatGBP(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '\u2014';
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
+  return formatCurrency(n);
 }
 
 function formatPct(n: number | null | undefined): string {

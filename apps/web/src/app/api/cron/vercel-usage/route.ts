@@ -26,6 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { vercelUsageService } from '@/lib/services/vercel-usage.service';
 import type { ManualUsageData, VercelUsageReport } from '@/lib/services/vercel-usage.service';
 import { emailService } from '@/lib/email/email.service';
@@ -44,13 +45,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Verify cron secret (skip if not set - development mode)
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[Cron VercelUsage] Unauthorized request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request, 'VercelUsage');
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('vercel-usage', 'cron');
 

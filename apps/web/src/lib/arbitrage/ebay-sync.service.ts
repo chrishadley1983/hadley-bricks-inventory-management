@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database, Json } from '@hadley-bricks/database';
 import { getEbayBrowseClient, type EbayItemSummary } from '../ebay/ebay-browse.client';
 import { isValidLegoListing } from './ebay-listing-validator';
@@ -212,7 +213,7 @@ export class EbayArbitrageSyncService {
 
       // Delay between batches to avoid rate limits
       if (batchStart + BATCH_SIZE < setNumbers.length) {
-        await this.delay(BATCH_DELAY);
+        await sleep(BATCH_DELAY);
       }
     }
 
@@ -347,7 +348,7 @@ export class EbayArbitrageSyncService {
 
       // Delay between batches to avoid rate limits
       if (batchStart + BATCH_SIZE < setNumbers.length) {
-        await this.delay(BATCH_DELAY);
+        await sleep(BATCH_DELAY);
       }
     }
 
@@ -526,7 +527,4 @@ export class EbayArbitrageSyncService {
   /**
    * Delay helper
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

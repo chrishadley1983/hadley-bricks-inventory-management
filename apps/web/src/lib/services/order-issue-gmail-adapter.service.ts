@@ -126,11 +126,6 @@ export class OrderIssueGmailAdapter {
     });
   }
 
-  /** @deprecated Use getClients(). Kept for backwards compatibility with the per-issue sync route. */
-  private getClient(): gmail_v1.Gmail | null {
-    return this.getClients()[0]?.client ?? null;
-  }
-
   /**
    * Run Gmail sync for a user. Pulls messages for every non-closed issue + discovers new ones.
    */

@@ -11,6 +11,7 @@
  */
 
 import type { AmazonCredentials } from './types';
+import { sleep } from '@/lib/utils';
 import type { ListingsFeedPatch, ListingsValidationResult } from './amazon-sync.types';
 
 // ============================================================================
@@ -217,7 +218,7 @@ export class AmazonListingsClient {
       results.push(result);
 
       // Small delay between requests
-      await this.sleep(API_DELAY_MS);
+      await sleep(API_DELAY_MS);
     }
 
     const validCount = results.filter((r) => r.status === 'VALID').length;
@@ -513,7 +514,7 @@ export class AmazonListingsClient {
     }
 
     // Rate limiting delay
-    await this.sleep(API_DELAY_MS);
+    await sleep(API_DELAY_MS);
 
     const response = await fetch(url, options);
 
@@ -522,7 +523,7 @@ export class AmazonListingsClient {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
       console.warn(`[AmazonListingsClient] Rate limited, waiting ${waitTime / 1000}s...`);
-      await this.sleep(waitTime);
+      await sleep(waitTime);
       return this.request<T>(path, method, body);
     }
 
@@ -606,9 +607,6 @@ export class AmazonListingsClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 /**

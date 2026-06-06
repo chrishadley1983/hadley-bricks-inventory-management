@@ -6,6 +6,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAnalyticsClient } from './ebay-analytics.client';
@@ -631,7 +632,7 @@ export class EbayListingRefreshService {
         item.status = 'fetched';
         fetchedCount++;
 
-        await this.delay(RATE_LIMIT_DELAY_MS);
+        await sleep(RATE_LIMIT_DELAY_MS);
       } catch (error) {
         failedCount++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -697,7 +698,7 @@ export class EbayListingRefreshService {
           throw new Error(result.errorMessage || 'Failed to end listing');
         }
 
-        await this.delay(RATE_LIMIT_DELAY_MS);
+        await sleep(RATE_LIMIT_DELAY_MS);
       } catch (error) {
         failedCount++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -833,7 +834,7 @@ export class EbayListingRefreshService {
           throw new Error(result.errorMessage || 'Failed to create listing');
         }
 
-        await this.delay(RATE_LIMIT_DELAY_MS);
+        await sleep(RATE_LIMIT_DELAY_MS);
       } catch (error) {
         failedCount++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1016,7 +1017,4 @@ export class EbayListingRefreshService {
   /**
    * Delay execution
    */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

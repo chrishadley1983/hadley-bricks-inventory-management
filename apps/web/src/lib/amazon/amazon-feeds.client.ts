@@ -14,6 +14,7 @@
  */
 
 import type { AmazonCredentials } from './types';
+import { sleep } from '@/lib/utils';
 import type {
   CreateFeedDocumentResponse,
   CreateFeedResponse,
@@ -228,7 +229,7 @@ export class AmazonFeedsClient {
       }
 
       // Wait before next poll
-      await this.sleep(pollIntervalMs);
+      await sleep(pollIntervalMs);
     }
 
     throw new Error(`Feed processing timed out after ${maxWaitMs / 1000} seconds`);
@@ -381,7 +382,7 @@ export class AmazonFeedsClient {
     }
 
     // Rate limiting delay
-    await this.sleep(API_DELAY_MS);
+    await sleep(API_DELAY_MS);
 
     const response = await fetch(url, options);
 
@@ -390,7 +391,7 @@ export class AmazonFeedsClient {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
       console.warn(`[AmazonFeedsClient] Rate limited, waiting ${waitTime / 1000}s...`);
-      await this.sleep(waitTime);
+      await sleep(waitTime);
       return this.request<T>(path, method, body);
     }
 
@@ -477,9 +478,6 @@ export class AmazonFeedsClient {
   /**
    * Sleep for a given duration
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   /**
    * Decompress GZIP data
