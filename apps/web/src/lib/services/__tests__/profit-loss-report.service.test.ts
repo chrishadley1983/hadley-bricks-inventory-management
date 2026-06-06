@@ -17,16 +17,27 @@ function createSupabaseMock(mockData: Record<string, unknown[]> = {}) {
     const chain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      gt: vi.fn().mockReturnThis(),
       lt: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
       lte: vi.fn().mockReturnThis(),
-      range: vi.fn().mockImplementation(() => createChainableResult(tableData)),
+      or: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      // range no longer terminates the chain: fetchAllRecords (now used by the
+      // service) chains filters AFTER .range(), so the chain must stay
+      // chainable and instead be awaitable via the `then` below.
+      range: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockImplementation(() => {
         // For findEarliestDate queries, return first item if available
         return createChainableResult(tableData.length > 0 ? [tableData[0]] : []);
       }),
+      // Make the chain awaitable; resolves to this table's mock rows.
+      then: (onFulfilled: (r: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+        Promise.resolve(createChainableResult(tableData)).then(onFulfilled, onRejected),
     };
 
     return chain;
