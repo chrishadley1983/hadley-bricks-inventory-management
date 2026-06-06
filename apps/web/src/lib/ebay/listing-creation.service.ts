@@ -437,7 +437,8 @@ export class ListingCreationService {
           ebayListingId!,
           `https://www.ebay.co.uk/itm/${ebayListingId}`,
           ebaySku,
-          request.storageLocation
+          request.storageLocation,
+          request.price
         );
       });
       const storageLocationWarning = updateResult?.storageLocationWarning;
@@ -1418,7 +1419,8 @@ Return JSON with these fields (omit any you're not confident about):
     listingId: string,
     listingUrl: string,
     sku: string,
-    storageLocation?: string
+    storageLocation?: string,
+    listingValue?: number
   ): Promise<{ storageLocationWarning?: string }> {
     // First, update the core listing info including SKU (required - will throw on failure)
     const now = new Date().toISOString();
@@ -1430,6 +1432,11 @@ Return JSON with these fields (omit any you're not confident about):
       listing_platform: 'ebay',
       listing_date: now,
       updated_at: now,
+      // Persist the list price the user set so it shows on the inventory record
+      // (backs the grid's "List Price" column). Mirrors how storage_location persists.
+      ...(typeof listingValue === 'number' && !Number.isNaN(listingValue)
+        ? { listing_value: listingValue }
+        : {}),
     };
 
     const { error: coreError } = await this.supabase
@@ -1972,7 +1979,8 @@ Return JSON with these fields (omit any you're not confident about):
           ebayListingId!,
           `https://www.ebay.co.uk/itm/${ebayListingId}`,
           ebaySku,
-          request.storageLocation
+          request.storageLocation,
+          request.price
         );
       });
       const storageLocationWarning = updateResult?.storageLocationWarning;
