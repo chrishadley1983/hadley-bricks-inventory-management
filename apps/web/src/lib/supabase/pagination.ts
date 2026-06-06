@@ -33,6 +33,8 @@ export async function getAccurateCount<T extends TableName>(
     gte?: Partial<Record<string, number | string>>;
     lt?: Partial<Record<string, number>>;
     lte?: Partial<Record<string, number | string>>;
+    in?: Partial<Record<string, FilterValue[]>>;
+    notIn?: Partial<Record<string, FilterValue[]>>;
     or?: string;
     isNull?: string[];
     isNotNull?: string[];
@@ -81,6 +83,20 @@ export async function getAccurateCount<T extends TableName>(
     if (filters.lte) {
       for (const [key, value] of Object.entries(filters.lte)) {
         query = query.lte(key, value);
+      }
+    }
+
+    // Apply in filters
+    if (filters.in) {
+      for (const [key, values] of Object.entries(filters.in)) {
+        query = query.in(key, values);
+      }
+    }
+
+    // Apply notIn filters (NOT IN list)
+    if (filters.notIn) {
+      for (const [key, values] of Object.entries(filters.notIn)) {
+        query = query.not(key, 'in', `(${(values as FilterValue[]).join(',')})`);
       }
     }
 
@@ -139,6 +155,8 @@ export async function fetchAllRecords<T extends TableName>(
     gte?: Partial<Record<string, number | string>>;
     lt?: Partial<Record<string, number>>;
     lte?: Partial<Record<string, number | string>>;
+    in?: Partial<Record<string, FilterValue[]>>;
+    notIn?: Partial<Record<string, FilterValue[]>>;
     or?: string;
     isNull?: string[];
     isNotNull?: string[];
@@ -193,6 +211,18 @@ export async function fetchAllRecords<T extends TableName>(
     if (options?.lte) {
       for (const [key, value] of Object.entries(options.lte)) {
         query = query.lte(key, value);
+      }
+    }
+
+    if (options?.in) {
+      for (const [key, values] of Object.entries(options.in)) {
+        query = query.in(key, values);
+      }
+    }
+
+    if (options?.notIn) {
+      for (const [key, values] of Object.entries(options.notIn)) {
+        query = query.not(key, 'in', `(${(values as FilterValue[]).join(',')})`);
       }
     }
 
@@ -264,6 +294,8 @@ export async function fetchPaginated<T extends TableName>(
     gte?: Partial<Record<string, number | string>>;
     lt?: Partial<Record<string, number>>;
     lte?: Partial<Record<string, number | string>>;
+    in?: Partial<Record<string, FilterValue[]>>;
+    notIn?: Partial<Record<string, FilterValue[]>>;
     or?: string;
     isNull?: string[];
     isNotNull?: string[];
@@ -326,6 +358,19 @@ export async function fetchPaginated<T extends TableName>(
     for (const [key, value] of Object.entries(options.lte)) {
       dataQuery = dataQuery.lte(key, value);
       countQuery = countQuery.lte(key, value);
+    }
+  }
+  if (options?.in) {
+    for (const [key, values] of Object.entries(options.in)) {
+      dataQuery = dataQuery.in(key, values);
+      countQuery = countQuery.in(key, values);
+    }
+  }
+  if (options?.notIn) {
+    for (const [key, values] of Object.entries(options.notIn)) {
+      const list = `(${(values as FilterValue[]).join(',')})`;
+      dataQuery = dataQuery.not(key, 'in', list);
+      countQuery = countQuery.not(key, 'in', list);
     }
   }
   if (options?.or) {

@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -170,32 +171,12 @@ async function queryEbayGrossSales(
 
   const refundedOrderIds = new Set((refundedOrders || []).map((o) => o.ebay_order_id));
 
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: {
-    transaction_date: string;
-    gross_transaction_amount: number | null;
-    ebay_order_id: string | null;
-  }[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, gross_transaction_amount, ebay_order_id')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'SALE')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, gross_transaction_amount, ebay_order_id',
+    eq: { user_id: userId, transaction_type: 'SALE' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   // Filter out sales for fully refunded orders and aggregate by month
   const monthMap = new Map<string, number>();
@@ -213,7 +194,7 @@ async function queryEbayGrossSales(
   }
 
   console.log(
-    `[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded (${page} pages)`
+    `[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded`
   );
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -231,29 +212,12 @@ async function queryEbayRefunds(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { transaction_date: string; amount: number | null }[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, amount')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'REFUND')
-      .eq('booking_entry', 'DEBIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount',
+    eq: { user_id: userId, transaction_type: 'REFUND', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -282,30 +246,15 @@ async function queryBrickLinkGrossSales(
   // captured automatically rather than silently dropped.
   const excludedStatuses = ['CANCELLED'];
 
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { order_date: string; base_grand_total: number | null }[] = [];
+  const allData = await fetchAllRecords(supabase, 'bricklink_transactions', {
+    select: 'order_date, base_grand_total',
+    eq: { user_id: userId },
+    notIn: { order_status: excludedStatuses },
+    gte: { order_date: startDate },
+    lte: { order_date: endDate },
+  });
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('bricklink_transactions')
-      .select('order_date, base_grand_total')
-      .eq('user_id', userId)
-      .not('order_status', 'in', `(${excludedStatuses.join(',')})`)
-      .gte('order_date', startDate)
-      .lte('order_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
-
-  console.log(`[P&L] BrickLink Gross Sales: found ${allData.length} orders (${page} pages)`);
+  console.log(`[P&L] BrickLink Gross Sales: found ${allData.length} orders`);
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -338,30 +287,15 @@ async function queryBrickOwlGrossSales(
   // pre-shipment statuses now count toward gross sales.
   const excludedStatuses = ['Cancelled'];
 
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { order_date: string; base_grand_total: number | null }[] = [];
+  const allData = await fetchAllRecords(supabase, 'brickowl_transactions', {
+    select: 'order_date, base_grand_total',
+    eq: { user_id: userId },
+    notIn: { order_status: excludedStatuses },
+    gte: { order_date: startDate },
+    lte: { order_date: endDate },
+  });
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('brickowl_transactions')
-      .select('order_date, base_grand_total')
-      .eq('user_id', userId)
-      .not('order_status', 'in', `(${excludedStatuses.join(',')})`)
-      .gte('order_date', startDate)
-      .lte('order_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
-
-  console.log(`[P&L] BrickOwl Gross Sales: found ${allData.length} orders (${page} pages)`);
+  console.log(`[P&L] BrickOwl Gross Sales: found ${allData.length} orders`);
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -391,31 +325,15 @@ async function queryAmazonSales(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { order_date: string | null; total: number | null }[] = [];
+  const allData = await fetchAllRecords(supabase, 'platform_orders', {
+    select: 'order_date, total',
+    eq: { user_id: userId, platform: 'amazon' },
+    in: { status: ['Shipped', 'Paid'] },
+    gte: { order_date: startDate },
+    lte: { order_date: endDate },
+  });
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('platform_orders')
-      .select('order_date, total')
-      .eq('user_id', userId)
-      .eq('platform', 'amazon')
-      .in('status', ['Shipped', 'Paid'])
-      .gte('order_date', startDate)
-      .lte('order_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
-
-  console.log(`[P&L] Amazon Sales: found ${allData.length} orders (${page} pages)`);
+  console.log(`[P&L] Amazon Sales: found ${allData.length} orders`);
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -444,28 +362,13 @@ async function queryAmazonRefunds(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { posted_date: string; total_amount: number | null }[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('amazon_transactions')
-      .select('posted_date, total_amount')
-      .eq('user_id', userId)
-      .in('transaction_type', ['Refund', 'GuaranteeClaimRefund'])
-      .gte('posted_date', startDate)
-      .lte('posted_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, total_amount',
+    eq: { user_id: userId },
+    in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
+    gte: { posted_date: startDate },
+    lte: { posted_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -492,26 +395,12 @@ async function queryPayPalFees(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { transaction_date: string; fee_amount: number | null }[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('paypal_transactions')
-      .select('transaction_date, fee_amount')
-      .eq('user_id', userId)
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'paypal_transactions', {
+    select: 'transaction_date, fee_amount',
+    eq: { user_id: userId },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -537,41 +426,21 @@ async function queryMonzoByCategory(
   localCategory: string,
   netRefunds = false
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { created: string; amount: number }[] = [];
-
-  while (hasMore) {
-    let query = supabase
-      .from('monzo_transactions')
-      .select('created, amount')
-      .eq('user_id', userId)
-      .eq('local_category', localCategory)
-      .gte('created', startDate)
-      .lte('created', endDate);
-
-    // For COGS categories (netRefunds) we sum ALL amounts so refunds/sales
-    // (positive) net off the spending (negative). Other categories stay
-    // spending-only.
-    if (!netRefunds) {
-      query = query.lt('amount', 0); // Only spending (negative amounts)
-    }
-
-    const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  // For COGS categories (netRefunds) we sum ALL amounts so refunds/sales
+  // (positive) net off the spending (negative). Other categories stay
+  // spending-only (lt amount 0).
+  const allData = await fetchAllRecords(supabase, 'monzo_transactions', {
+    select: 'created, amount',
+    eq: { user_id: userId, local_category: localCategory },
+    gte: { created: startDate },
+    lte: { created: endDate },
+    ...(netRefunds ? {} : { lt: { amount: 0 } }),
+  });
 
   // Debug logging for Postage
   if (localCategory === 'Postage') {
     console.log(
-      `[P&L] Postage query: ${startDate} to ${endDate}, found ${allData.length} records (${page} pages)`
+      `[P&L] Postage query: ${startDate} to ${endDate}, found ${allData.length} records`
     );
     if (allData.length > 0) {
       console.log(`[P&L] Sample Postage record:`, allData[0]);
@@ -619,29 +488,12 @@ async function queryAmazonFees(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  const allData: { posted_date: string | null; total_fees: number | null }[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('amazon_transactions')
-      .select('posted_date, total_fees')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'Shipment')
-      .eq('transaction_status', 'RELEASED')
-      .gte('posted_date', startDate)
-      .lte('posted_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, total_fees',
+    eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
+    gte: { posted_date: startDate },
+    lte: { posted_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -666,30 +518,12 @@ async function queryEbayFeesByType(
   endDate: string,
   feeType: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  type EbayFeeRow = { transaction_date: string; amount: number | null; raw_response: unknown };
-  const allData: EbayFeeRow[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, amount, raw_response')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'NON_SALE_CHARGE')
-      .eq('booking_entry', 'DEBIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount, raw_response',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -716,30 +550,12 @@ async function queryEbaySaleFeesByType(
   endDate: string,
   feeType: string
 ): Promise<MonthlyAggregation[]> {
-  // Paginate to handle Supabase's 1000 row limit
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  type EbaySaleRow = { transaction_date: string; raw_response: unknown };
-  const allData: EbaySaleRow[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, raw_response')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'SALE')
-      .eq('booking_entry', 'CREDIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, raw_response',
+    eq: { user_id: userId, transaction_type: 'SALE', booking_entry: 'CREDIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -816,53 +632,21 @@ async function queryEbayAdFeesStandard(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const pageSize = 1000;
+  // Get AD_FEE charges
+  const allCharges = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount, raw_response',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
-  // Get AD_FEE charges with pagination
-  type ChargeRow = { transaction_date: string; amount: number | null; raw_response: unknown };
-  let chargePage = 0;
-  let chargeHasMore = true;
-  const allCharges: ChargeRow[] = [];
-
-  while (chargeHasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, amount, raw_response')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'NON_SALE_CHARGE')
-      .eq('booking_entry', 'DEBIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(chargePage * pageSize, (chargePage + 1) * pageSize - 1);
-
-    if (error) throw error;
-    allCharges.push(...(data || []));
-    chargeHasMore = (data?.length || 0) === pageSize;
-    chargePage++;
-  }
-
-  // Get fee refunds (CREDIT entries) with pagination
-  type RefundRow = { transaction_date: string; amount: number | null };
-  let refundPage = 0;
-  let refundHasMore = true;
-  const allRefunds: RefundRow[] = [];
-
-  while (refundHasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, amount')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'NON_SALE_CHARGE')
-      .eq('booking_entry', 'CREDIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(refundPage * pageSize, (refundPage + 1) * pageSize - 1);
-
-    if (error) throw error;
-    allRefunds.push(...(data || []));
-    refundHasMore = (data?.length || 0) === pageSize;
-    refundPage++;
-  }
+  // Get fee refunds (CREDIT entries)
+  const allRefunds = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'CREDIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
 
@@ -915,28 +699,12 @@ async function queryEbayShopFee(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  type ShopFeeRow = { transaction_date: string; amount: number | null; raw_response: unknown };
-  const allData: ShopFeeRow[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('ebay_transactions')
-      .select('transaction_date, amount, raw_response')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'NON_SALE_CHARGE')
-      .eq('booking_entry', 'DEBIT')
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount, raw_response',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lte: { transaction_date: endDate },
+  });
 
   // Date range pattern: YYYY-MM-DD - YYYY-MM-DD
   const dateRangePattern = /^\d{4}-\d{2}-\d{2} - \d{4}-\d{2}-\d{2}$/;
@@ -997,27 +765,12 @@ async function queryAmazonSubscription(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  type AmazonSubRow = { posted_date: string; total_amount: number | null };
-  const allData: AmazonSubRow[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('amazon_transactions')
-      .select('posted_date, total_amount')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'ServiceFee')
-      .gte('posted_date', startDate)
-      .lte('posted_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, total_amount',
+    eq: { user_id: userId, transaction_type: 'ServiceFee' },
+    gte: { posted_date: startDate },
+    lte: { posted_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -1040,26 +793,12 @@ async function queryMileage(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  type MileageRow = { tracking_date: string; amount_claimed: number | null };
-  const allData: MileageRow[] = [];
-
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('mileage_tracking')
-      .select('tracking_date, amount_claimed')
-      .eq('user_id', userId)
-      .gte('tracking_date', startDate)
-      .lte('tracking_date', endDate)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-
-    if (error) throw error;
-    allData.push(...(data || []));
-    hasMore = (data?.length || 0) === pageSize;
-    page++;
-  }
+  const allData = await fetchAllRecords(supabase, 'mileage_tracking', {
+    select: 'tracking_date, amount_claimed',
+    eq: { user_id: userId },
+    gte: { tracking_date: startDate },
+    lte: { tracking_date: endDate },
+  });
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
