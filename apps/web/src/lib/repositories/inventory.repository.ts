@@ -8,6 +8,7 @@ import type {
   ItemCondition,
 } from '@hadley-bricks/database';
 import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repository';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { getDualWriteService, isDualWriteEnabled } from '@/lib/migration';
 import { createPerfLogger } from '@/lib/perf';
 
@@ -569,42 +570,18 @@ export class InventoryRepository extends BaseRepository<
   async getCountByStatus(options?: { platform?: string }): Promise<Record<string, number>> {
     const perf = createPerfLogger('InventoryRepo.getCountByStatus');
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const counts: Record<string, number> = {};
-    let totalRows = 0;
 
-    while (hasMore) {
-      const endPage = perf.start(`page ${page + 1}`);
-      let query = this.supabase
-        .from(this.tableName)
-        .select('status')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    const items = await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'status',
+      ...(options?.platform ? { eq: { listing_platform: options.platform } } : {}),
+    });
+    items.forEach((item) => {
+      const status = item.status || 'unknown';
+      counts[status] = (counts[status] || 0) + 1;
+    });
 
-      if (options?.platform) {
-        query = query.eq('listing_platform', options.platform);
-      }
-
-      const { data, error } = await query;
-      endPage();
-
-      if (error) {
-        throw new Error(`Failed to get inventory count by status: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      totalRows += items.length;
-      items.forEach((item) => {
-        const status = item.status || 'unknown';
-        counts[status] = (counts[status] || 0) + 1;
-      });
-
-      hasMore = items.length === pageSize;
-      page++;
-    }
-
-    perf.log('complete', { pages: page, rows: totalRows });
+    perf.log('complete', { rows: items.length });
     perf.end();
     return counts;
   }

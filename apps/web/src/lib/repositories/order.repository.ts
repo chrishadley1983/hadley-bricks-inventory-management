@@ -8,6 +8,7 @@ import type {
   OrderItemInsert,
 } from '@hadley-bricks/database';
 import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repository';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 export interface OrderFilters {
   platform?: string;
@@ -330,41 +331,20 @@ export class OrderRepository extends BaseRepository<
     totalRevenue: number;
     ordersByStatus: Record<string, number>;
   }> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const ordersByStatus: Record<string, number> = {};
     let totalRevenue = 0;
     let totalOrders = 0;
 
-    while (hasMore) {
-      let query = this.supabase
-        .from('platform_orders')
-        .select('status, total')
-        .eq('user_id', userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    const orders = await fetchAllRecords(this.supabase, 'platform_orders', {
+      select: 'status, total',
+      eq: { user_id: userId, ...(platform ? { platform } : {}) },
+    });
 
-      if (platform) {
-        query = query.eq('platform', platform);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(`Failed to get order stats: ${error.message}`);
-      }
-
-      const orders = data ?? [];
-
-      for (const order of orders) {
-        const status = order.status || 'Unknown';
-        ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
-        totalRevenue += order.total || 0;
-        totalOrders++;
-      }
-
-      hasMore = orders.length === pageSize;
-      page++;
+    for (const order of orders) {
+      const status = order.status || 'Unknown';
+      ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
+      totalRevenue += order.total || 0;
+      totalOrders++;
     }
 
     return {
@@ -418,33 +398,17 @@ export class OrderRepository extends BaseRepository<
     userId: string,
     platform: string
   ): Promise<Map<string, Date | null>> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const timestamps = new Map<string, Date | null>();
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('platform_orders')
-        .select('platform_order_id, platform_status_changed_at')
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to get order timestamps: ${error.message}`);
-      }
-
-      const orders = data ?? [];
-      for (const order of orders) {
-        timestamps.set(
-          order.platform_order_id,
-          order.platform_status_changed_at ? new Date(order.platform_status_changed_at) : null
-        );
-      }
-
-      hasMore = orders.length === pageSize;
-      page++;
+    const orders = await fetchAllRecords(this.supabase, 'platform_orders', {
+      select: 'platform_order_id, platform_status_changed_at',
+      eq: { user_id: userId, platform },
+    });
+    for (const order of orders) {
+      timestamps.set(
+        order.platform_order_id,
+        order.platform_status_changed_at ? new Date(order.platform_status_changed_at) : null
+      );
     }
 
     return timestamps;

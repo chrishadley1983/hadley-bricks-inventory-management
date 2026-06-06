@@ -79,7 +79,19 @@ const createMockSupabase = () => {
       then: (resolve: (value: unknown) => void, reject?: (error: unknown) => void) => {
         const key = `${tableName}_query`;
         const response = mockResponses.get(key) || { data: [], error: null, count: 0 };
-        return Promise.resolve(response).then(resolve, reject);
+        // Simulate Supabase range pagination so fetch-all loops terminate:
+        // return only the rows within [rangeFrom, rangeTo].
+        const paged =
+          response && Array.isArray((response as { data?: unknown }).data)
+            ? {
+                ...response,
+                data: (response as { data: unknown[] }).data.slice(
+                  builderState.rangeFrom,
+                  builderState.rangeTo + 1
+                ),
+              }
+            : response;
+        return Promise.resolve(paged).then(resolve, reject);
       },
     };
 
@@ -732,7 +744,7 @@ describe('InventoryRepository', () => {
       });
 
       await expect(repository.getCountByStatus()).rejects.toThrow(
-        'Failed to get inventory count by status'
+        'Failed to fetch inventory_items'
       );
     });
 

@@ -2,6 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OrderRepository } from '../order.repository';
 import { testBrickLinkOrders, testBrickOwlOrders } from '@/test/fixtures';
 
+// Chainable + awaitable Supabase query mock. fetchAllRecords (used by getStats)
+// chains filters AFTER .range() then awaits, so the chain must stay chainable
+// and resolve to { data } via `then`.
+function makeChainableQuery(data: unknown[]) {
+  const q = {
+    select: vi.fn(() => q),
+    eq: vi.fn(() => q),
+    in: vi.fn(() => q),
+    not: vi.fn(() => q),
+    gte: vi.fn(() => q),
+    lte: vi.fn(() => q),
+    lt: vi.fn(() => q),
+    or: vi.fn(() => q),
+    is: vi.fn(() => q),
+    order: vi.fn(() => q),
+    range: vi.fn(() => q),
+    then: (onF: (r: unknown) => unknown, onR?: (e: unknown) => unknown) =>
+      Promise.resolve({ data, error: null }).then(onF, onR),
+  };
+  return q;
+}
+
 describe('OrderRepository', () => {
   let repository: OrderRepository;
   let mockSupabase: {
@@ -426,13 +448,7 @@ describe('OrderRepository', () => {
         { status: 'Completed', total: 50 },
       ];
 
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({ data: orders, error: null }),
-          }),
-        }),
-      });
+      mockSupabase.from.mockReturnValue(makeChainableQuery(orders));
 
       const result = await repository.getStats('test-user-id');
 
@@ -446,30 +462,17 @@ describe('OrderRepository', () => {
     });
 
     it('should filter by platform', async () => {
-      // The query chains: .select().eq(user_id).range().eq(platform)
-      const platformEq = vi.fn().mockResolvedValue({ data: [], error: null });
-      const mockQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnValue({
-          eq: platformEq,
-        }),
-      };
-      mockSupabase.from.mockReturnValue(mockQuery);
+      const query = makeChainableQuery([]);
+      mockSupabase.from.mockReturnValue(query);
 
       await repository.getStats('test-user-id', 'bricklink');
 
-      expect(platformEq).toHaveBeenCalledWith('platform', 'bricklink');
+      // fetchAllRecords applies the conditional platform filter as an eq()
+      expect(query.eq).toHaveBeenCalledWith('platform', 'bricklink');
     });
 
     it('should handle empty orders', async () => {
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      });
+      mockSupabase.from.mockReturnValue(makeChainableQuery([]));
 
       const result = await repository.getStats('test-user-id');
 
