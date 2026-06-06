@@ -10,7 +10,7 @@
 
 ---
 
-## Implementation Status (updated 2026-06-05)
+## Implementation Status (updated 2026-06-06)
 
 Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 
@@ -25,7 +25,11 @@ Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 - `de4b4d6` — shared `sleep()` adopted across 24 platform clients/services (removed per-class `sleep`/`delay`; one dead `delay()` cleaned up).
 - `a8c90d1` — shared `formatCurrency` adopted in the 4 buy-box-gap inline GBP formatters (delegated; behavior identical).
 
-**Remaining:** `test:batched` + `build` → code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
+**§1.3 completion (2026-06-06):** `7b6176c` only covered 28 of the standard cron routes; migrated the remaining **13** that still hand-rolled the identical bearer check — `amazon-fee-reconcile`, `amazon-orders-backfill`, `amazon-transactions-sync`, `ebay-auctions`, `monzo-sync`, `paypal-sync`, `spapi-buybox-overlay`, and `minifigs/{daily-inventory,poll-bricqer-orders,poll-ebay-orders,process-removals,reprice,research-refresh}` — to `verifyCronAuth`. Coverage now **41 cron routes**; only `order-issues-sync` (combined `x-api-key`) and `investment-retrain` keep bespoke checks. Behaviour-identical (no-warn routes → no-label helper call). Typecheck green.
+
+**Verification (2026-06-06, restored worktree):** `typecheck` ✅ · `lint` ✅ (pre-existing warnings only) · `build` ✅ (production build passes, full route table) · tests: the audit consolidations are **test-neutral** — every failure in `test:batched` was proven pre-existing (5 `bricqer/client.test.ts` real-timer retry flakes + 1 `bricklink/adapter.test.ts` `normalizeOrder` shipping-fallback case, all reproduced against `origin/main`); the "0/6 batches" was vitest fork-pool worker crashes (a known large-suite memory issue), not assertion failures. `parseCurrencyValue` equivalence reconfirmed (brickowl/bricqer adapter tests green).
+
+**Remaining:** code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
 
 **Deferred to separate follow-up PRs (high blast radius — do incrementally behind tests):**
 - §1.1 Supabase pagination adoption onto `fetchAllRecords`/`fetchPaginated` (~60 sites, incl. ~17 copies in `profit-loss-report.service.ts`).

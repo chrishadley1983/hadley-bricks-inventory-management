@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { InventoryPullService } from '@/lib/minifig-sync/inventory-pull.service';
 import { OrderPollService } from '@/lib/minifig-sync/order-poll.service';
@@ -19,12 +20,8 @@ export const maxDuration = 300;
 async function handler(request: NextRequest) {
   let execution: ExecutionHandle = noopHandle;
   try {
-    const authHeader = request.headers.get('Authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const unauthorized = verifyCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     execution = await jobExecutionService.start('minifig-daily-inventory', 'cron');
 
