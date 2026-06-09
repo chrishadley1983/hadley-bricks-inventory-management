@@ -80,8 +80,15 @@ export async function POST(request: NextRequest) {
     for (const config of configs) {
       try {
         // Service-role client lets EbayStockService read eBay credentials and
-        // write platform_listings without a user session.
-        const service = new EbayStockService(supabase, config.user_id, new EbayAuthService());
+        // write platform_listings without a user session. EbayAuthService must
+        // also receive the service-role client — otherwise it falls back to a
+        // cookie-based client with no session and can't read ebay_credentials
+        // (RLS), failing with "eBay not connected".
+        const service = new EbayStockService(
+          supabase,
+          config.user_id,
+          new EbayAuthService(undefined, supabase)
+        );
 
         // Don't stack imports if one is already running for this user.
         const latestImport = await service.getLatestImport();
