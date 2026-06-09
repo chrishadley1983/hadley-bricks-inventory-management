@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/bricqer-batch-sync",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/ebay-stock-sync",
+      "schedule": "0 6 * * *"
     }
   ]
 }
