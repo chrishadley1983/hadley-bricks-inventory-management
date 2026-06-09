@@ -38,6 +38,97 @@ import type {
 type PlatformListingInsert = Database['public']['Tables']['platform_listings']['Insert'];
 
 // ============================================================================
+// SKU-based inventory relinking (pure planner)
+// ============================================================================
+
+/** Minimal active-listing shape needed to plan relinks */
+export interface SkuRelinkListing {
+  platformItemId: string;
+  platformSku: string | null;
+}
+
+/** Minimal inventory shape needed to plan relinks */
+export interface SkuRelinkInventoryItem {
+  id: string;
+  sku: string | null;
+  ebayListingId: string | null;
+}
+
+export interface SkuRelinkPlan {
+  /** Items whose ebay_listing_id has drifted from the current live listing */
+  relinks: Array<{ inventoryItemId: string; oldListingId: string | null; newListingId: string }>;
+  /** ebay_sku_mappings to upsert (every unambiguous SKU match) */
+  mappings: Array<{ ebaySku: string; inventoryItemId: string }>;
+  /** Count of SKUs skipped because they were not 1:1 (ambiguous) */
+  skippedAmbiguous: number;
+}
+
+const normaliseSku = (sku: string | null): string | null => {
+  const trimmed = sku?.trim();
+  return trimmed ? trimmed : null;
+};
+
+/**
+ * Plan SKU-based relinking between live eBay listings and inventory.
+ *
+ * The SKU is the stable identifier that survives relists (the eBay item ID
+ * changes on relist; the seller SKU does not). For every SKU that maps to
+ * exactly one live listing AND exactly one inventory item, we (a) ensure a SKU
+ * mapping exists and (b) refresh the inventory item's ebay_listing_id if it has
+ * drifted. SKUs that are ambiguous on either side are left untouched.
+ *
+ * Pure function — no IO — so it is easy to unit test.
+ */
+export function computeSkuRelinkPlan(
+  listings: SkuRelinkListing[],
+  inventory: SkuRelinkInventoryItem[]
+): SkuRelinkPlan {
+  const listingIdsBySku = new Map<string, Set<string>>();
+  for (const listing of listings) {
+    const sku = normaliseSku(listing.platformSku);
+    if (!sku || !listing.platformItemId) continue;
+    const set = listingIdsBySku.get(sku) ?? new Set<string>();
+    set.add(String(listing.platformItemId));
+    listingIdsBySku.set(sku, set);
+  }
+
+  const invIdsBySku = new Map<string, Set<string>>();
+  for (const item of inventory) {
+    const sku = normaliseSku(item.sku);
+    if (!sku) continue;
+    const set = invIdsBySku.get(sku) ?? new Set<string>();
+    set.add(item.id);
+    invIdsBySku.set(sku, set);
+  }
+  const inventoryById = new Map(inventory.map((item) => [item.id, item]));
+
+  const relinks: SkuRelinkPlan['relinks'] = [];
+  const mappings: SkuRelinkPlan['mappings'] = [];
+  let skippedAmbiguous = 0;
+
+  for (const [sku, invIds] of invIdsBySku) {
+    const listingIds = listingIdsBySku.get(sku);
+    if (!listingIds) continue; // SKU not currently active on eBay — nothing to link
+
+    if (listingIds.size !== 1 || invIds.size !== 1) {
+      skippedAmbiguous++;
+      continue;
+    }
+
+    const newListingId = [...listingIds][0];
+    const inventoryItemId = [...invIds][0];
+    mappings.push({ ebaySku: sku, inventoryItemId });
+
+    const item = inventoryById.get(inventoryItemId);
+    if (item && String(item.ebayListingId ?? '') !== newListingId) {
+      relinks.push({ inventoryItemId, oldListingId: item.ebayListingId ?? null, newListingId });
+    }
+  }
+
+  return { relinks, mappings, skippedAmbiguous };
+}
+
+// ============================================================================
 // EbayStockService Class
 // ============================================================================
 
@@ -100,6 +191,15 @@ export class EbayStockService extends PlatformStockService {
       // Ensure IDs are strings for consistent comparison
       const currentItemIds = new Set(allListings.map((l) => String(l.platformItemId)));
       await this.deleteStaleListings(currentItemIds);
+
+      // 6.5 Reconcile inventory <-> eBay links by SKU (best-effort; never fail the
+      // import). Refreshes inventory.ebay_listing_id for items relisted under a new
+      // listing ID and keeps ebay_sku_mappings populated for the negotiation engine.
+      try {
+        await this.reconcileInventoryLinks(allListings);
+      } catch (linkError) {
+        console.error('[EbayStockService] reconcileInventoryLinks threw:', linkError);
+      }
 
       // 7. Validate SKUs and get issues
       const skuValidation = await this.validateSkus();
@@ -260,6 +360,97 @@ export class EbayStockService extends PlatformStockService {
         );
       }
     }
+  }
+
+  /**
+   * Reconcile inventory <-> eBay links by SKU after an import.
+   *
+   * Loads currently-LISTED inventory, plans unambiguous SKU matches against the
+   * freshly-imported active listings, then refreshes drifted ebay_listing_id
+   * values and upserts ebay_sku_mappings. Best-effort: errors are logged, never
+   * thrown, so they cannot fail the import.
+   */
+  private async reconcileInventoryLinks(
+    listings: ParsedEbayListing[]
+  ): Promise<{ relinked: number; mapped: number; skippedAmbiguous: number }> {
+    // Load LISTED inventory (paginate — Supabase caps at 1000 rows per request)
+    const inventory: SkuRelinkInventoryItem[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.supabase
+        .from('inventory_items')
+        .select('id, sku, ebay_listing_id')
+        .eq('user_id', this.userId)
+        .eq('status', 'LISTED')
+        .range(from, from + PAGE - 1);
+
+      if (error) {
+        console.error('[EbayStockService] reconcileInventoryLinks: inventory fetch failed:', error);
+        return { relinked: 0, mapped: 0, skippedAmbiguous: 0 };
+      }
+
+      const rows = data ?? [];
+      for (const row of rows) {
+        inventory.push({ id: row.id, sku: row.sku, ebayListingId: row.ebay_listing_id ?? null });
+      }
+      if (rows.length < PAGE) break;
+    }
+
+    const plan = computeSkuRelinkPlan(
+      listings.map((l) => ({ platformItemId: l.platformItemId, platformSku: l.platformSku })),
+      inventory
+    );
+
+    // Refresh drifted listing IDs (usually a handful per run)
+    let relinked = 0;
+    for (const relink of plan.relinks) {
+      const { error } = await this.supabase
+        .from('inventory_items')
+        .update({
+          ebay_listing_id: relink.newListingId,
+          ebay_listing_url: `https://www.ebay.co.uk/itm/${relink.newListingId}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', relink.inventoryItemId)
+        .eq('user_id', this.userId);
+
+      if (error) {
+        console.error(
+          `[EbayStockService] reconcileInventoryLinks: relink failed for ${relink.inventoryItemId}:`,
+          error
+        );
+      } else {
+        relinked++;
+      }
+    }
+
+    // Upsert SKU mappings in batches
+    let mapped = 0;
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < plan.mappings.length; i += BATCH_SIZE) {
+      const batch = plan.mappings.slice(i, i + BATCH_SIZE).map((m) => ({
+        user_id: this.userId,
+        ebay_sku: m.ebaySku,
+        inventory_item_id: m.inventoryItemId,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await this.supabase
+        .from('ebay_sku_mappings')
+        .upsert(batch, { onConflict: 'user_id,ebay_sku' });
+
+      if (error) {
+        console.error('[EbayStockService] reconcileInventoryLinks: mapping upsert failed:', error);
+      } else {
+        mapped += batch.length;
+      }
+    }
+
+    console.log(
+      `[EbayStockService] reconcileInventoryLinks: relinked ${relinked}, mapped ${mapped}, ` +
+        `skippedAmbiguous ${plan.skippedAmbiguous}`
+    );
+    return { relinked, mapped, skippedAmbiguous: plan.skippedAmbiguous };
   }
 
   // ============================================================================
