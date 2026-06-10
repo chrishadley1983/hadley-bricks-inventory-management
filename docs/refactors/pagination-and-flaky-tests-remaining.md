@@ -1,6 +1,6 @@
 # Remaining work: §1.1 Supabase pagination + test-suite stabilisation
 
-_Last updated: 2026-06-10_
+_Last updated: 2026-06-10 (evening) — **BOTH THREADS COMPLETE** (§1.1 via PR #425, flaky suite via PR #424)._
 
 Tracks the open work spun out of the deprecation/dead-code audit
 (`docs/deprecation-audit-2026-06-04.md`). Two threads: finishing the §1.1
@@ -18,35 +18,34 @@ orderBy`. **Equivalence rule:** PostgREST builder-call order is irrelevant, so
 `fetchAllRecords` (filters chained after `.range()`) sends an identical request to
 the old loop.
 
-### Done
+### Done — §1.1 COMPLETE ✅
 - **PR #418** — `profit-loss-report.service.ts`: all 16 loops migrated; helper
   extended with `in`/`notIn` + unit tests. Shipped + prod-verified.
-- **PR #419** (this PR) — `order` / `purchase` / `inventory` repositories: 6
-  fetch-all loops (`getStats`, `getOrderStatusTimestamps`, `getMonthlyTotal`,
-  `getRolling12MonthTotal`, `getTotalsBySource`, `getCountByStatus`).
+- **PR #419** — `order` / `purchase` / `inventory` repositories: 6 fetch-all loops.
+- **PR #425** (2026-06-10, squash `a87d4625`) — **all remaining qualifying loops**:
+  ~44 loops across 41 files (api routes, arbitrage, investment, keepa,
+  minifig-sync, services, repos, platform-stock, misc sync services). Net −651
+  lines. Helper `lt`/`gt` widened to `number | string` for ISO-date filters.
+  Verified by workflow on merged main: full suite 118/118 files (3083 tests),
+  typecheck clean, 7 realigned test files isolation-green, and **live DB
+  equivalence** — `fetchAllRecords` row counts exactly match `count: 'exact'`
+  on platform_orders (2697), inventory_items (6134), minifig_sync_items (386),
+  brickset_sets (28798 — ~29 pages), proving multi-page fetches are complete.
 
-### Remaining (~74 hand-rolled `.range(` loops)
-Migrate file-by-file, each as its own small PR, verifying query equivalence.
-High-value clusters the audit named:
+### Deliberately NOT migrated (by design, not remaining work)
+- View-backed loops (`arbitrage_current_view` ×3) — helper is typed to Tables.
+- External-API pagination (Bricqer, eBay, Monzo, Rebrickable, Shopify GraphQL).
+- Per-page-write loops (investment classification/scoring/asin-linkage,
+  minifig inventory-pull) — streaming semantics, not fetch-all duplication.
+- `.ilike` loops (amazon-stock ×2) — unsupported filter.
+- Limit-bounded scans with early exits (brickset CSV import, keepa discovery
+  title-match, buy-box-gap snapshot dedupe).
+- Chunked `.in()` lookups — not range pagination.
+- Single-page dynamic-filter UI list queries (`findAllFiltered`, `findAll*`).
 
-- `lib/services/` — `reporting.service.ts`, `order-status.service.ts`,
-  `amazon-backfill.service.ts`, `amazon-fee-reconciliation.service.ts`,
-  `bricklink-upload.service.ts`, `cost-allocation.service.ts`.
-- `lib/keepa/keepa-import.service.ts` (×4), `lib/keepa/keepa-discovery.service.ts`.
-- `lib/investment/*` (asin-linkage, classification, historical-appreciation,
-  scoring, ml/feature-engineering).
-- `lib/arbitrage/*`, `lib/minifig-sync/*`, `lib/inventory-explorer/*`,
-  `lib/monzo/monzo-sheets-sync.service.ts`, `lib/shopify/sync.service.ts`,
-  `lib/ebay/*`, `lib/retirement/*`, `lib/repricing/*`, `lib/platform-stock/*`.
-- Several `app/api/**` routes and `app/api/cron/**` routes.
-
-**Out of scope** (do NOT fold into pagination work): single-page dynamic-filter
-UI list queries (`inventory.repository` `findAllFiltered`, `order`/`purchase`
-`findAll*`) — these are not duplication and are riskier to touch.
-
-Enumerate with: `grep -rlE "\.range\(" apps/web/src --include=*.ts | grep -v supabase/pagination.ts`
-then within each, the fetch-all loops are the `while (hasMore)` ones (not the
-single `.range(from,to)` UI queries).
+**Behaviour note:** ~18 previously error-swallowing loops (silently continued
+with partial data) now log + return empty on a pagination error — all-or-nothing
+instead of silent partial.
 
 ---
 
