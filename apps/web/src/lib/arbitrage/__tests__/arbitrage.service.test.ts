@@ -4,10 +4,15 @@ import { ArbitrageService } from '../arbitrage.service';
 // Create mock Supabase client
 const createMockSupabase = () => {
   const mockFrom = vi.fn();
+  // The service calls RPCs (get_excluded_ebay_listing_ids, get_arbitrage_summary_stats).
+  // Default to empty/no-op; individual tests override via _mockRpc as needed.
+  const mockRpc = vi.fn().mockResolvedValue({ data: [], error: null });
 
   return {
     from: mockFrom,
+    rpc: mockRpc,
     _mockFrom: mockFrom,
+    _mockRpc: mockRpc,
   };
 };
 
@@ -26,16 +31,7 @@ describe('ArbitrageService', () => {
     it('should fetch arbitrage data with default options', async () => {
       const userId = 'user-123';
 
-      // Mock excluded eBay listings query
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({
-            data: [],
-            error: null,
-          })
-        ),
-      });
+      // Excluded eBay listings now come from an RPC (default-mocked to []).
 
       // Mock main arbitrage query
       mockSupabase._mockFrom.mockReturnValueOnce({
@@ -85,16 +81,7 @@ describe('ArbitrageService', () => {
     it('should apply show filter for opportunities', async () => {
       const userId = 'user-123';
 
-      // Mock excluded eBay listings query
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({
-            data: [],
-            error: null,
-          })
-        ),
-      });
+      // Excluded eBay listings now come from an RPC (default-mocked to []).
 
       // Mock main query with gte filter
       const mockGte = vi.fn().mockReturnThis();
@@ -130,25 +117,21 @@ describe('ArbitrageService', () => {
 
       await service.getArbitrageData(userId, { show: 'opportunities', minMargin: 30 });
 
-      expect(mockGte).toHaveBeenCalledWith('margin_percent', 30);
+      expect(mockGte).toHaveBeenCalledWith('profit_margin_percent', 30);
     });
 
     it('should handle errors gracefully', async () => {
       const userId = 'user-123';
 
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({
-            data: [],
-            error: null,
-          })
-        ),
-      });
-
+      // Excluded eBay listings now come from an RPC (default-mocked to []).
       mockSupabase._mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        gt: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         range: vi.fn(() =>
           Promise.resolve({
@@ -466,77 +449,29 @@ describe('ArbitrageService', () => {
 
   describe('getSummaryStats', () => {
     it('should return summary statistics', async () => {
-      // Mock total items count (tracked_asins) - .eq().eq() chain
-      const mockEq2Total = vi.fn(() =>
-        Promise.resolve({
-          count: 100,
-          error: null,
-        })
-      );
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() => ({ eq: mockEq2Total })),
+      // total_items / bl_opportunities / ebay_opportunities now come from the
+      // get_arbitrage_summary_stats RPC (single call to avoid statement timeouts).
+      mockSupabase._mockRpc.mockResolvedValueOnce({
+        data: { total_items: 100, bl_opportunities: 25, ebay_opportunities: 15 },
+        error: null,
       });
 
-      // Mock opportunities count (arbitrage_current_view) - .eq().gte() chain
+      // excluded count (tracked_asins) - .eq().eq() chain (runs in Promise.all with the RPC)
       mockSupabase._mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() => ({
-          gte: vi.fn(() =>
-            Promise.resolve({
-              count: 25,
-              error: null,
-            })
-          ),
-        })),
+        eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ count: 5, error: null })) })),
       });
 
-      // Mock eBay opportunities count (arbitrage_current_view) - .eq().gte() chain
+      // getUnmappedCount - total (tracked_asins) - .eq().eq() chain
       mockSupabase._mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() => ({
-          gte: vi.fn(() =>
-            Promise.resolve({
-              count: 15,
-              error: null,
-            })
-          ),
-        })),
+        eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ count: 100, error: null })) })),
       });
 
-      // Mock excluded count (tracked_asins) - .eq().eq() chain
-      const mockEq2Excluded = vi.fn(() =>
-        Promise.resolve({
-          count: 5,
-          error: null,
-        })
-      );
+      // getUnmappedCount - mapped (asin_bricklink_mapping) - single .eq()
       mockSupabase._mockFrom.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() => ({ eq: mockEq2Excluded })),
-      });
-
-      // Mock for getUnmappedCount - total (tracked_asins) - .eq().eq() chain
-      const mockEq2UnmappedTotal = vi.fn(() =>
-        Promise.resolve({
-          count: 100,
-          error: null,
-        })
-      );
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() => ({ eq: mockEq2UnmappedTotal })),
-      });
-
-      // Mock for getUnmappedCount - mapped (asin_bricklink_mapping) - single .eq()
-      mockSupabase._mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn(() =>
-          Promise.resolve({
-            count: 90,
-            error: null,
-          })
-        ),
+        eq: vi.fn(() => Promise.resolve({ count: 90, error: null })),
       });
 
       const result = await service.getSummaryStats('user-123');

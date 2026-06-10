@@ -6,6 +6,13 @@ import type { BricqerCredentials } from '../types';
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// Make retry/backoff/rate-limit waits instant — the client otherwise sleeps
+// for real (up to 60s per 429 wait), which blows the test timeout.
+vi.mock('@/lib/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils')>()),
+  sleep: vi.fn(() => Promise.resolve()),
+}));
+
 describe('BricqerClient', () => {
   const credentials: BricqerCredentials = {
     tenantUrl: 'https://test.bricqer.com',
@@ -501,53 +508,9 @@ describe('BricqerClient', () => {
   });
 
   describe('getOrderItems', () => {
-    it('should fetch order items', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: new Headers(),
-        json: () =>
-          Promise.resolve([
-            { id: 1, name: 'Item 1', quantity: 2 },
-            { id: 2, name: 'Item 2', quantity: 5 },
-          ]),
-      });
-
-      const items = await client.getOrderItems(123);
-
-      expect(items).toHaveLength(2);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.bricqer.com/api/v1/orders/order/123/items/',
-        expect.any(Object)
-      );
-    });
-
-    it('should handle object response with items array', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: new Headers(),
-        json: () =>
-          Promise.resolve({
-            items: [{ id: 1, name: 'Item 1' }],
-          }),
-      });
-
-      const items = await client.getOrderItems(123);
-
-      expect(items).toHaveLength(1);
-    });
-
-    it('should fallback to order detail when items endpoint returns 404', async () => {
-      // First call - items endpoint 404
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        headers: new Headers(),
-        json: () => Promise.resolve({ detail: 'Not found' }),
-      });
-
-      // Second call - order detail with items
+    // Items come from the order detail's batchSet[].itemSet[] — there is no
+    // /orders/order/{id}/items/ endpoint in the Bricqer API.
+    it('should flatten batchSet items from the order detail', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -555,14 +518,72 @@ describe('BricqerClient', () => {
         json: () =>
           Promise.resolve({
             id: 123,
-            items: [{ id: 1, name: 'Item from order' }],
+            batchSet: [
+              {
+                itemSet: [
+                  {
+                    id: 1,
+                    description: 'Item 1',
+                    quantity: 2,
+                    price: 1.5,
+                    condition: 'N',
+                    color: { id: 11, name: 'Black' },
+                    legoId: '3001',
+                    legoType: 'P',
+                    picture: 'https://img/1.jpg',
+                  },
+                  { id: 2, description: 'Item 2', quantity: 5, price: 0.2 },
+                ],
+              },
+            ],
           }),
       });
 
       const items = await client.getOrderItems(123);
 
-      expect(items).toHaveLength(1);
-      expect(items[0].name).toBe('Item from order');
+      expect(items).toHaveLength(2);
+      expect(items[0].name).toBe('Item 1');
+      expect(items[0].total).toBe(3);
+      expect(items[0].bricklink_id).toBe('3001');
+      expect(items[0].color).toBe('Black');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test.bricqer.com/api/v1/orders/order/123/',
+        expect.any(Object)
+      );
+    });
+
+    it('should return empty array when order has no batchSet', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({ id: 123 }),
+      });
+
+      const items = await client.getOrderItems(123);
+
+      expect(items).toHaveLength(0);
+    });
+
+    it('should flatten items across multiple batches', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            batchSet: [
+              { itemSet: [{ id: 1, description: 'Batch 1 item', quantity: 1, price: 1 }] },
+              { itemSet: [{ id: 2, description: 'Batch 2 item', quantity: 1, price: 2 }] },
+            ],
+          }),
+      });
+
+      const items = await client.getOrderItems(123);
+
+      expect(items).toHaveLength(2);
+      expect(items[1].name).toBe('Batch 2 item');
     });
   });
 
@@ -599,12 +620,16 @@ describe('BricqerClient', () => {
           }),
       });
 
-      // Items request
+      // getOrderItems re-fetches the order detail and flattens batchSet
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers(),
-        json: () => Promise.resolve([{ id: 1, name: 'Item 1' }]),
+        json: () =>
+          Promise.resolve({
+            id: 123,
+            batchSet: [{ itemSet: [{ id: 1, description: 'Item 1', quantity: 1, price: 1 }] }],
+          }),
       });
 
       const result = await client.getOrderWithItems(123);
@@ -944,11 +969,10 @@ describe('BricqerClient', () => {
       await expect(client.getOrders()).rejects.toThrow(BricqerAuthError);
     });
 
-    it('should throw BricqerRateLimitError for 429 without retrying', async () => {
-      // Rate limit errors should not be retried (they're 4xx errors except we check status)
-      // But actually, looking at the code, 429 IS retried because of the condition:
-      // error.statusCode !== 429
-      // Let's just verify the error type
+    it('should throw BricqerRateLimitError when 429 persists past max waits', async () => {
+      // 429s are waited-out (up to maxRateLimitWaits) rather than error-retried;
+      // sleep is mocked so the waits are instant. A permanently rate-limited
+      // endpoint eventually surfaces BricqerRateLimitError.
       mockFetch.mockResolvedValue({
         ok: false,
         status: 429,

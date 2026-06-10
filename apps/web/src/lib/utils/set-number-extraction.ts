@@ -26,9 +26,9 @@ const EXCLUSION_KEYWORDS = [
  * Ordered by specificity - more specific patterns first
  */
 const SET_NUMBER_PATTERNS: RegExp[] = [
-  /set[:\s-]*(\d{4,5})/i, // "Set 12345" or "Set: 12345"
-  /lego[:\s-]*(\d{4,5})/i, // "LEGO 12345" or "LEGO: 12345"
-  /#(\d{4,5})/, // "#12345"
+  /set[:\s-]*(\d{4,5})(?!\d)/i, // "Set 12345" or "Set: 12345"
+  /lego[:\s-]*(\d{4,5})(?!\d)/i, // "LEGO 12345" or "LEGO: 12345"
+  /#(\d{4,5})(?!\d)/, // "#12345"
   /\b(\d{4,5})\b/, // Standalone 4-5 digit numbers
 ];
 

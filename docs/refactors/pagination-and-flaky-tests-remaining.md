@@ -76,24 +76,28 @@ Each failure is **test-vs-source drift** (the service/route was refactored, the
 mock/assertion wasn't updated). Fix the test (or the source where it's a genuine
 bug), not the ordering.
 
-### Progress — branch `chore/stabilise-flaky-tests` (6 / 24 done)
+### Progress — branch `chore/stabilise-flaky-tests` (24 / 24 done ✅ 2026-06-10)
 | File | Tests | Status | Cause / fix |
 |---|---|---|---|
 | `bricklink/__tests__/adapter.test.ts` | 1 | ✅ | stale assertion — shipping omitted now falls back to `total-subtotal` |
-| `utils/__tests__/set-number-extraction.test.ts` | 1 | ✅ | **real source bug** — `(\d{4,5})` matched `'10000'` from `'LEGO 100000'`; added `(?!\d)` |
+| `utils/__tests__/set-number-extraction.test.ts` | 1 | ✅ | **real source bug** — `(\d{4,5})` matched `'10000'` from `'LEGO 100000'`; added `(?!\d)` + explicit 6-digit regression tests |
 | `arbitrage/__tests__/arbitrage.service.test.ts` | 4 | ✅ | service moved to RPCs (`get_excluded_ebay_listing_ids`, `get_arbitrage_summary_stats`) + `profit_margin_percent`; added `.rpc` mock, dropped obsolete from-mocks, rewrote summary test |
-| `bricqer/__tests__/client.test.ts` | 5 | ⬜ | real-timer 429 retry; `429 without retrying` waits 15s. Use fake timers or mock `sleep` from `@/lib/utils` |
-| `app/api/__tests__/orders.test.ts` | 5 | ⬜ | route now returns **400** (Zod validation) before 401/404/403 — tests send now-invalid payloads / wrong setup |
-| `platform-stock/__tests__/platform-stock.service.test.ts` | 3 | ⬜ | `getListings` total `0` vs `150` — mock builder's `.range()` isn't terminal/thenable, so `await query` never yields `{data,count}` |
-| `platform-stock/ebay/__tests__/ebay-trading.client.test.ts` | 2 | ⬜ | retry count + condition mapping (`null` vs `'New'`) |
-| `platform-stock/amazon/__tests__/amazon-stock.service.test.ts` | 1 | ⬜ | inherited `getListings` — same non-terminal `.range` mock issue |
-| `repositories/__tests__/order.repository.test.ts` | 1 | ⬜ | `replaceOrderItems` now calls `getOrderItems` (`from().select()`) before delete/insert; test only spies delete/insert, so `from()` is undefined |
-| `app/api/__tests__/arbitrage.test.ts` | 1 | ⬜ | default-params assertion |
+| `bricqer/__tests__/client.test.ts` | 5 | ✅ | mocked `sleep` from `@/lib/utils` (waits instant); `getOrderItems` tests realigned to `batchSet[].itemSet[]` flattening (the `/items/` endpoint never existed) |
+| `app/api/__tests__/orders.test.ts` | 5 | ✅ | DELETE route Zod-validates id as UUID (400) before auth — tests now use a valid UUID; added explicit 400 case |
+| `platform-stock/__tests__/platform-stock.service.test.ts` | 3 | ✅ | helper's `.range()` made terminal (service awaits after `.order().range()`); dropped 7 redundant per-test overrides |
+| `platform-stock/ebay/__tests__/ebay-trading.client.test.ts` | 2 | ✅ | auth errors (931/932) abort without retry (expect 1 call); `conditionDescription` maps `ConditionDescription`, not `ConditionDisplayName` |
+| `platform-stock/amazon/__tests__/amazon-stock.service.test.ts` | 1 | ✅ | mock chain swapped to `.order().range()` terminal |
+| `repositories/__tests__/order.repository.test.ts` | 1 | ✅ | spy `getOrderItems` (link-preserve read); inserts stamped with `inventory_item_id` |
+| `app/api/__tests__/arbitrage.test.ts` | 1 | ✅ | defaults are now `minMargin: 0` + `maxCog: 100` (filters off by default) |
+| `services/__tests__/order-status.service.test.ts` | 3 | ✅ | **found during post-fix validation** (not in original 24): pagination test mocked `.range()` to always return a full 1000-row page → service's `while(orders.length === pageSize)` never terminated → worker OOM (`Worker exited unexpectedly` in full-suite runs); also 2 filter mocks with stale nesting (service chains `.range()` before conditional filters) |
+
+All 11 files verified isolation-green post-fix (347 tests). Branch rebased onto
+origin/main (post-#419) before the remaining fixes.
 
 ### After all 24 are isolation-green
-1. Push `chore/stabilise-flaky-tests`, open PR, **merge** (CI now stable).
+1. ~~Push `chore/stabilise-flaky-tests`, open PR, **merge** (CI now stable).~~ ← in progress
 2. Future pagination/other PRs go green reliably.
-3. (Recommended) Harden the config so ordering can't re-break things:
+3. (Recommended, not yet done) Harden the config so ordering can't re-break things:
    `restoreMocks: true` and/or per-file timer hygiene (`afterEach(vi.useRealTimers)`
    in offending files); consider `maxWorkers: 1` for determinism if needed.
 

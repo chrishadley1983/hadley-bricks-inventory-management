@@ -352,7 +352,9 @@ describe('BrickLink Adapter', () => {
         const result = normalizeOrder(order);
 
         expect(result.subtotal).toBe(0);
-        expect(result.shipping).toBe(0);
+        // cost.shipping omitted -> adapter intentionally falls back to
+        // (total - subtotal) for the BL list endpoint, so shipping = 50 - 0.
+        expect(result.shipping).toBe(50);
         expect(result.total).toBe(50);
       });
 

@@ -526,38 +526,34 @@ describe('OrderStatusService', () => {
       expect(result.Completed).toBe(1);
     });
 
-    it('should filter by platform when provided', async () => {
-      const mockOrders = [{ internal_status: 'Paid', status: null }];
+    // The service applies .range() before the conditional .eq/.gte/.lte filters
+    // (builder call order is irrelevant to PostgREST), so these mocks need a
+    // flexible self-returning chain that resolves when awaited.
+    const createSummaryChain = (mockOrders: unknown[]) => {
+      const chain: Record<string, unknown> = {};
+      chain.select = vi.fn().mockReturnValue(chain);
+      chain.eq = vi.fn().mockReturnValue(chain);
+      chain.gte = vi.fn().mockReturnValue(chain);
+      chain.lte = vi.fn().mockReturnValue(chain);
+      chain.range = vi.fn().mockReturnValue(chain);
+      chain.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: mockOrders, error: null }).then(resolve);
+      return chain;
+    };
 
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
-            }),
-          }),
-        }),
-      });
+    it('should filter by platform when provided', async () => {
+      const chain = createSummaryChain([{ internal_status: 'Paid', status: null }]);
+      mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.getStatusSummary('test-user-id', 'amazon');
 
       expect(result.Paid).toBe(1);
+      expect(chain.eq).toHaveBeenCalledWith('platform', 'amazon');
     });
 
     it('should filter by date range when provided', async () => {
-      const mockOrders = [{ internal_status: 'Shipped', status: null }];
-
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            gte: vi.fn().mockReturnValue({
-              lte: vi.fn().mockReturnValue({
-                range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
-              }),
-            }),
-          }),
-        }),
-      });
+      const chain = createSummaryChain([{ internal_status: 'Shipped', status: null }]);
+      mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.getStatusSummary('test-user-id', undefined, {
         startDate: new Date('2024-01-01'),
@@ -565,6 +561,8 @@ describe('OrderStatusService', () => {
       });
 
       expect(result.Shipped).toBe(1);
+      expect(chain.gte).toHaveBeenCalledWith('order_date', '2024-01-01');
+      expect(chain.lte).toHaveBeenCalledWith('order_date', '2024-12-31');
     });
 
     it('should throw error on query failure', async () => {
@@ -585,20 +583,26 @@ describe('OrderStatusService', () => {
     });
 
     it('should handle pagination for large datasets', async () => {
-      // Mock 1000 orders (pagination boundary)
-      const mockOrders = Array(1000).fill({ internal_status: 'Pending', status: null });
+      // Service fetches page-by-page while pages come back full (1000 rows),
+      // so the mock must return a short final page or the loop never ends.
+      const fullPage = Array(1000).fill({ internal_status: 'Pending', status: null });
+      const finalPage = Array(250).fill({ internal_status: 'Pending', status: null });
+
+      const range = vi
+        .fn()
+        .mockResolvedValueOnce({ data: fullPage, error: null })
+        .mockResolvedValueOnce({ data: finalPage, error: null });
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
-          }),
+          eq: vi.fn().mockReturnValue({ range }),
         }),
       });
 
       const result = await service.getStatusSummary('test-user-id');
 
-      expect(result.Pending).toBe(1000);
+      expect(result.Pending).toBe(1250);
+      expect(range).toHaveBeenCalledTimes(2);
     });
   });
 

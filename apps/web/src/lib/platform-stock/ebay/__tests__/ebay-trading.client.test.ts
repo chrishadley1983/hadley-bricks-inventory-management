@@ -497,11 +497,6 @@ describe('EbayTradingClient', () => {
     it('should not retry on auth errors', async () => {
       vi.useRealTimers();
 
-      // Note: The implementation checks for errorCode === '931' as string,
-      // but XML parser returns numbers. So auth errors may still be retried.
-      // This test verifies the current behavior (retries happen).
-      // If the implementation is fixed to handle numeric error codes,
-      // this test should be updated to expect 1 call.
       const errorResponse = createGetSellerListResponse({
         ack: 'Failure',
         errors: [
@@ -520,9 +515,8 @@ describe('EbayTradingClient', () => {
 
       await expect(client.getActiveListings()).rejects.toThrow();
 
-      // XML parser converts '931' to number 931, so string comparison fails
-      // and retries happen (3 calls = initial + 2 retries)
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // Auth token errors (931/932) abort immediately — no retries
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -737,6 +731,7 @@ describe('EbayTradingClient', () => {
     </SellingStatus>
     <ConditionID>1000</ConditionID>
     <ConditionDisplayName>New</ConditionDisplayName>
+    <ConditionDescription>Minor shelf wear on box</ConditionDescription>
     <PrimaryCategory>
       <CategoryID>cat-19006</CategoryID>
       <CategoryName>LEGO Sets</CategoryName>
@@ -777,7 +772,9 @@ describe('EbayTradingClient', () => {
       expect(result.startPrice).toBe(99.99);
       expect(result.currency).toBe('GBP');
       expect(result.conditionId).toBe(1000);
-      expect(result.conditionDescription).toBe('New');
+      // conditionDescription = seller's custom notes (ConditionDescription),
+      // not the eBay condition name (ConditionDisplayName)
+      expect(result.conditionDescription).toBe('Minor shelf wear on box');
       expect(result.categoryId).toBe('cat-19006');
       expect(result.categoryName).toBe('LEGO Sets');
       expect(result.bestOfferEnabled).toBe(true);
