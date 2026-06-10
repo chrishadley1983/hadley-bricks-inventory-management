@@ -5,6 +5,8 @@
  * Based on PayPal Transaction Search API v1 specification.
  */
 
+import type { Json } from '@/lib/sync/transaction-sync-base';
+
 // ============================================================================
 // Common Types
 // ============================================================================
@@ -237,8 +239,8 @@ export interface PayPalCredentialsRow {
   updated_at: string;
 }
 
-// Supabase Json type compatibility
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+// Supabase Json type compatibility — shared declaration, re-exported
+export type { Json };
 
 export interface PayPalTransactionRow {
   id: string;

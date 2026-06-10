@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/crypto';
+import { getValidAccessToken } from '@/lib/auth/oauth-token-manager';
 import type {
   PayPalTokenResponse,
   PayPalCredentialsRow,
@@ -203,44 +204,43 @@ export class PayPalAuthService {
       return null;
     }
 
-    // Check if we have a valid token
-    if (credentials.access_token && credentials.access_token_expires_at) {
-      const expiresAt = new Date(credentials.access_token_expires_at);
-      const now = new Date();
+    return getValidAccessToken({
+      accessToken: credentials.access_token,
+      expiresAt: credentials.access_token_expires_at,
+      refreshBufferMs: TOKEN_REFRESH_BUFFER_MS,
+      // PayPal keeps the stored token only when token + expiry are present
+      // and it is strictly more than the buffer away from expiry.
+      validityCheck: 'fresh-check',
+      refresh: async () => {
+        // Token expired or missing, get a new one
+        const tokenResult = await this.getNewAccessToken(
+          credentials.client_id,
+          credentials.client_secret,
+          credentials.sandbox
+        );
 
-      // Return existing token if not expired
-      if (expiresAt.getTime() - now.getTime() > TOKEN_REFRESH_BUFFER_MS) {
-        return credentials.access_token;
-      }
-    }
+        if (!tokenResult.success || !tokenResult.token) {
+          console.error('[PayPalAuthService] Failed to get new access token');
+          return null;
+        }
 
-    // Token expired or missing, get a new one
-    const tokenResult = await this.getNewAccessToken(
-      credentials.client_id,
-      credentials.client_secret,
-      credentials.sandbox
-    );
+        // Update stored token (encrypted)
+        const supabase = await this.getSupabase();
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + tokenResult.expiresIn * 1000);
+        const encryptedToken = await encrypt(tokenResult.token);
 
-    if (!tokenResult.success || !tokenResult.token) {
-      console.error('[PayPalAuthService] Failed to get new access token');
-      return null;
-    }
+        await supabase
+          .from('paypal_credentials')
+          .update({
+            access_token: encryptedToken,
+            access_token_expires_at: expiresAt.toISOString(),
+          })
+          .eq('user_id', userId);
 
-    // Update stored token (encrypted)
-    const supabase = await this.getSupabase();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + tokenResult.expiresIn * 1000);
-    const encryptedToken = await encrypt(tokenResult.token);
-
-    await supabase
-      .from('paypal_credentials')
-      .update({
-        access_token: encryptedToken,
-        access_token_expires_at: expiresAt.toISOString(),
-      })
-      .eq('user_id', userId);
-
-    return tokenResult.token;
+        return tokenResult.token;
+      },
+    });
   }
 
   /**

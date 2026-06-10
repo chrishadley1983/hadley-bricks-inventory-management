@@ -32,6 +32,7 @@ import type {
   InventoryItemSummary,
   DiscrepancyType,
 } from '@/lib/platform-stock';
+import { formatCurrency } from '@/lib/utils';
 
 interface ComparisonViewProps {
   platform: string;
@@ -39,10 +40,7 @@ interface ComparisonViewProps {
 
 function formatPrice(price: number | null): string {
   if (price === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(price);
+  return formatCurrency(price);
 }
 
 function formatDifference(diff: number): string {

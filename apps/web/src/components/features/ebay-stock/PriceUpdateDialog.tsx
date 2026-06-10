@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 interface PriceUpdateDialogProps {
   isOpen: boolean;
@@ -39,10 +40,7 @@ interface PriceUpdateDialogProps {
 
 function formatPrice(price: number | null): string {
   if (price === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(price);
+  return formatCurrency(price);
 }
 
 export function PriceUpdateDialog({

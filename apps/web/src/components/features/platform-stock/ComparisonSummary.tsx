@@ -11,7 +11,7 @@ import {
   ShoppingCart,
   Link2Off,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import type {
   ComparisonSummary as ComparisonSummaryType,
   DiscrepancyType,
@@ -65,7 +65,7 @@ function SummaryCard({
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{new Intl.NumberFormat('en-GB').format(value)}</div>
+        <div className="text-2xl font-bold">{formatNumber(value)}</div>
         {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
       </CardContent>
     </Card>

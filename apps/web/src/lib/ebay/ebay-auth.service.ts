@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { getValidAccessToken } from '@/lib/auth/oauth-token-manager';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EbayTokenResponse } from './types';
 import type {
@@ -236,17 +237,16 @@ export class EbayAuthService {
       return null;
     }
 
-    // Check if token needs refresh
-    const expiresAt = new Date(credentials.access_token_expires_at);
-    const now = new Date();
-
-    if (expiresAt.getTime() - now.getTime() < TOKEN_REFRESH_BUFFER_MS) {
-      // Token expired or about to expire, refresh it
-      const refreshed = await this.refreshAccessToken(userId, credentials.refresh_token);
-      return refreshed ? refreshed.access_token : null;
-    }
-
-    return credentials.access_token;
+    return getValidAccessToken({
+      accessToken: credentials.access_token,
+      expiresAt: credentials.access_token_expires_at,
+      refreshBufferMs: TOKEN_REFRESH_BUFFER_MS,
+      refresh: async () => {
+        // Token expired or about to expire, refresh it
+        const refreshed = await this.refreshAccessToken(userId, credentials.refresh_token);
+        return refreshed ? refreshed.access_token : null;
+      },
+    });
   }
 
   /**

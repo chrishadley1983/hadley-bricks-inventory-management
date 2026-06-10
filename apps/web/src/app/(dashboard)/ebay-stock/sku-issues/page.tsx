@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEbaySkuIssues } from '@/hooks/use-ebay-stock';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 
 // Dynamic import for Header
 const Header = dynamic(
@@ -244,12 +245,7 @@ export default function SkuIssuesPage() {
                             </TableCell>
                             <TableCell className="text-right">{issue.quantity}</TableCell>
                             <TableCell className="text-right">
-                              {issue.price
-                                ? new Intl.NumberFormat('en-GB', {
-                                    style: 'currency',
-                                    currency: 'GBP',
-                                  }).format(issue.price)
-                                : '-'}
+                              {issue.price ? formatCurrency(issue.price) : '-'}
                             </TableCell>
                             <TableCell>
                               <Badge variant="secondary">{issue.listingStatus}</Badge>
@@ -339,12 +335,7 @@ export default function SkuIssuesPage() {
                                 </TableCell>
                                 <TableCell className="text-right">{item.quantity}</TableCell>
                                 <TableCell className="text-right">
-                                  {item.price
-                                    ? new Intl.NumberFormat('en-GB', {
-                                        style: 'currency',
-                                        currency: 'GBP',
-                                      }).format(item.price)
-                                    : '-'}
+                                  {item.price ? formatCurrency(item.price) : '-'}
                                 </TableCell>
                                 <TableCell>
                                   {item.viewItemUrl && (

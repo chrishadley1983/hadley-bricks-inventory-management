@@ -6,7 +6,7 @@ import { ArrowUpDown, ExternalLink } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import type { BuyBoxGapRow } from '@/app/api/reports/buy-box-gap/route';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatSalesRank } from '@/lib/utils';
 
 function formatGBP(n: number | null | undefined): string {
   return formatCurrency(n);
@@ -15,11 +15,6 @@ function formatGBP(n: number | null | undefined): string {
 function formatPct(n: number | null | undefined): string {
   if (n === null || n === undefined) return '\u2014';
   return `${n.toFixed(1)}%`;
-}
-
-function formatRank(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '\u2014';
-  return `#${new Intl.NumberFormat('en-GB').format(n)}`;
 }
 
 function profitColor(margin: number | null | undefined): string {
@@ -138,7 +133,7 @@ const columns: ColumnDef<BuyBoxGapRow>[] = [
       </Button>
     ),
     cell: ({ row }) => (
-      <span className="tabular-nums text-sm">{formatRank(row.original.salesRank)}</span>
+      <span className="tabular-nums text-sm">{formatSalesRank(row.original.salesRank)}</span>
     ),
   },
   {

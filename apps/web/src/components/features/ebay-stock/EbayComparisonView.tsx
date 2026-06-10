@@ -29,13 +29,11 @@ import { EbayComparisonFilters } from './EbayComparisonFilters';
 import type { EbayComparisonFilters as EbayComparisonFiltersType } from '@/lib/platform-stock/ebay/types';
 import type { EbayStockComparison } from '@/lib/platform-stock/ebay/types';
 import type { DiscrepancyType, InventoryItemSummary } from '@/lib/platform-stock/types';
+import { formatCurrency } from '@/lib/utils';
 
 function formatPrice(price: number | null): string {
   if (price === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(price);
+  return formatCurrency(price);
 }
 
 function formatDifference(diff: number): string {

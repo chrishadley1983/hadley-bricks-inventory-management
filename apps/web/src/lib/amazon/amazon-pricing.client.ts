@@ -10,6 +10,12 @@
 
 import type { AmazonCredentials } from './types';
 import { sleep } from '@/lib/utils';
+import {
+  isRetryableError,
+  retryableDelay,
+  RetryableError,
+  withRetry,
+} from '@/lib/utils/fetch-with-retry';
 
 // ============================================================================
 // CONSTANTS
@@ -692,69 +698,68 @@ export class AmazonPricingClient {
   /**
    * Make an authenticated request to the SP-API
    */
-  private async request<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body?: unknown,
-    _retryCount = 0
-  ): Promise<T> {
-    const accessToken = await this.getAccessToken();
+  private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
+    return withRetry<T>(
+      async (attempt) => {
+        const accessToken = await this.getAccessToken();
 
-    const url = `${this.endpoint}${path}`;
-    const headers: Record<string, string> = {
-      'x-amz-access-token': accessToken,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
+        const url = `${this.endpoint}${path}`;
+        const headers: Record<string, string> = {
+          'x-amz-access-token': accessToken,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        };
 
-    const options: RequestInit = {
-      method,
-      headers,
-    };
+        const options: RequestInit = {
+          method,
+          headers,
+        };
 
-    if (body && method === 'POST') {
-      options.body = JSON.stringify(body);
-    }
-
-    // Rate limiting delay
-    await sleep(API_DELAY_MS);
-
-    const response = await fetch(url, options);
-
-    // Handle rate limiting — cap fallback at 20s to avoid exceeding Vercel's 60s timeout
-    if (response.status === 429) {
-      if (_retryCount >= 2) {
-        throw new Error('Rate limited by Amazon SP-API after 2 retries — aborting');
-      }
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter
-        ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
-        : 20000;
-      console.warn(`[AmazonPricingClient] Rate limited (attempt ${_retryCount + 1}/2), waiting ${waitTime / 1000}s...`);
-      await sleep(waitTime);
-      return this.request<T>(path, method, body, _retryCount + 1);
-    }
-
-    // Handle auth errors
-    if (response.status === 401 || response.status === 403) {
-      this.tokenData = null;
-      throw new Error('Invalid or expired access token');
-    }
-
-    if (!response.ok) {
-      let errorMessage = `Request failed with status ${response.status}`;
-      try {
-        const errorData = (await response.json()) as { errors?: AmazonApiError[] };
-        if (errorData.errors && errorData.errors.length > 0) {
-          errorMessage = errorData.errors.map((e) => e.message).join('; ');
+        if (body && method === 'POST') {
+          options.body = JSON.stringify(body);
         }
-      } catch {
-        // Ignore JSON parse errors
-      }
-      throw new Error(errorMessage);
-    }
 
-    return response.json() as Promise<T>;
+        // Rate limiting delay
+        await sleep(API_DELAY_MS);
+
+        const response = await fetch(url, options);
+
+        // Handle rate limiting — cap fallback at 20s to avoid exceeding Vercel's 60s timeout
+        if (response.status === 429) {
+          if (attempt >= 2) {
+            throw new Error('Rate limited by Amazon SP-API after 2 retries — aborting');
+          }
+          const retryAfter = response.headers.get('Retry-After');
+          const waitTime = retryAfter
+            ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
+            : 20000;
+          console.warn(`[AmazonPricingClient] Rate limited (attempt ${attempt + 1}/2), waiting ${waitTime / 1000}s...`);
+          throw new RetryableError('Rate limited by Amazon SP-API', waitTime);
+        }
+
+        // Handle auth errors
+        if (response.status === 401 || response.status === 403) {
+          this.tokenData = null;
+          throw new Error('Invalid or expired access token');
+        }
+
+        if (!response.ok) {
+          let errorMessage = `Request failed with status ${response.status}`;
+          try {
+            const errorData = (await response.json()) as { errors?: AmazonApiError[] };
+            if (errorData.errors && errorData.errors.length > 0) {
+              errorMessage = errorData.errors.map((e) => e.message).join('; ');
+            }
+          } catch {
+            // Ignore JSON parse errors
+          }
+          throw new Error(errorMessage);
+        }
+
+        return response.json() as Promise<T>;
+      },
+      { maxRetries: 2, backoff: retryableDelay, isRetryable: isRetryableError }
+    );
   }
 
   // ==========================================================================

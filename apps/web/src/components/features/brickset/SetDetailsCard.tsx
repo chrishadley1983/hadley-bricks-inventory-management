@@ -6,6 +6,7 @@ import type { BricksetSet } from '@/lib/brickset';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { formatCurrency } from '@/lib/utils';
 
 interface PricingStats {
   minPrice: number | null;
@@ -67,10 +68,7 @@ function isValidImageUrl(url: string | null | undefined): boolean {
 
 function formatPrice(price: number | null, currency: string): string {
   if (price === null) return '—';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(price);
+  return formatCurrency(price, currency);
 }
 
 function formatDate(date: string | null): string {

@@ -7,7 +7,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import { createClient } from '@/lib/supabase/server';
+import {
+  BaseTransactionSyncService,
+  type BaseTransactionRow,
+} from '@/lib/sync/transaction-sync-base';
 import { BrickLinkClient } from './client';
 import { CredentialsRepository } from '@/lib/repositories';
 import type { BrickLinkCredentials, BrickLinkOrderSummary } from './types';
@@ -21,17 +24,10 @@ import type {
 import { parseCurrencyValue } from './bricklink-transaction.types';
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-const BATCH_SIZE = 100; // Upsert batch size
-
-// ============================================================================
 // Types
 // ============================================================================
 
-interface TransactionRow {
-  user_id: string;
+interface TransactionRow extends Omit<BaseTransactionRow, 'currency'> {
   bricklink_order_id: string;
   order_date: string;
   status_changed_date: string | null;
@@ -58,22 +54,19 @@ interface TransactionRow {
   buyer_location: string | null;
   order_note: string | null;
   seller_remarks: string | null;
-  raw_response: Json;
 }
 
 // ============================================================================
 // BrickLinkTransactionSyncService Class
 // ============================================================================
 
-export class BrickLinkTransactionSyncService {
+export class BrickLinkTransactionSyncService extends BaseTransactionSyncService {
   constructor(
-    private readonly supabaseOverride?: SupabaseClient<Database>,
+    supabaseOverride?: SupabaseClient<Database>,
     /** Caller tag recorded on BL API calls. Defaults to cron tag for backwards compat. */
     private readonly caller: string = 'cron-bricklink-transaction-sync'
-  ) {}
-
-  private async getSupabase(): Promise<SupabaseClient<Database>> {
-    return this.supabaseOverride ?? (await createClient());
+  ) {
+    super(supabaseOverride);
   }
 
   // ============================================================================
@@ -530,19 +523,17 @@ export class BrickLinkTransactionSyncService {
     userId: string,
     orders: BrickLinkOrderSummary[]
   ): Promise<{ created: number; updated: number }> {
-    const supabase = await this.getSupabase();
     let created = 0;
     let updated = 0;
 
     // Get existing order IDs for this user
     const orderIds = orders.map((o) => String(o.order_id));
-    const { data: existingOrders } = await supabase
-      .from('bricklink_transactions')
-      .select('bricklink_order_id')
-      .eq('user_id', userId)
-      .in('bricklink_order_id', orderIds);
-
-    const existingOrderIds = new Set(existingOrders?.map((o) => o.bricklink_order_id) || []);
+    const existingOrderIds = await this.fetchExistingIds(
+      'bricklink_transactions',
+      'bricklink_order_id',
+      userId,
+      orderIds
+    );
 
     // Transform orders to rows
     const rows = orders.map((order) => this.transformOrderToRow(userId, order));
@@ -557,17 +548,12 @@ export class BrickLinkTransactionSyncService {
     }
 
     // Upsert in batches
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase
-        .from('bricklink_transactions')
-        .upsert(batch, { onConflict: 'user_id,bricklink_order_id' });
-
-      if (error) {
-        console.error('[BrickLinkTransactionSyncService] Upsert error:', error);
-        throw new Error(`Failed to upsert transactions: ${error.message}`);
-      }
-    }
+    await this.batchUpsert(
+      'bricklink_transactions',
+      rows,
+      'user_id,bricklink_order_id',
+      'BrickLinkTransactionSyncService'
+    );
 
     return { created, updated };
   }

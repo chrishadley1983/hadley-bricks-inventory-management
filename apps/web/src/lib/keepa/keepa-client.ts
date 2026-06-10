@@ -10,6 +10,13 @@
  * Domain 2 = Amazon UK (amazon.co.uk)
  */
 
+import { sleep } from '@/lib/utils';
+import {
+  isRetryableError,
+  RetryableError,
+  withRetry,
+} from '@/lib/utils/fetch-with-retry';
+
 /**
  * Keepa stats object returned when stats parameter is set.
  * Contains current, average, min, max values for each CSV type.
@@ -478,37 +485,42 @@ export class KeepaClient {
    * Fetch with automatic 429 retry. Waits for token refill and retries up to maxRetries times.
    */
   private async fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    return withRetry(
+      async (attempt) => {
+        const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
 
-      if (response.status === 429) {
-        if (attempt === maxRetries) {
-          throw new Error(`Keepa API error: 429 Too Many Requests (after ${maxRetries} retries)`);
+        if (response.status === 429) {
+          if (attempt === maxRetries) {
+            throw new Error(
+              `Keepa API error: 429 Too Many Requests (after ${maxRetries} retries)`
+            );
+          }
+          // Parse response to get refillIn. The wait happens here (not via the
+          // retry backoff) because it depends on the response body and resets
+          // token-tracking state between attempts.
+          try {
+            const data = await response.json();
+            const refillIn = data.refillIn ?? 60_000;
+            const waitMs = Math.max(refillIn, 10_000) + 2_000;
+            console.log(
+              `[Keepa] 429 rate limited (attempt ${attempt + 1}/${maxRetries}), waiting ${Math.round(waitMs / 1000)}s for refill`
+            );
+            await sleep(waitMs);
+            // Also reset rate limit state
+            this.tokensLeft = 0;
+            await this.waitForRateLimit(1);
+          } catch {
+            // If we can't parse the response, wait a fixed 60s
+            console.log(`[Keepa] 429 rate limited, waiting 60s`);
+            await sleep(60_000);
+          }
+          throw new RetryableError('Keepa API rate limited (429)');
         }
-        // Parse response to get refillIn
-        try {
-          const data = await response.json();
-          const refillIn = data.refillIn ?? 60_000;
-          const waitMs = Math.max(refillIn, 10_000) + 2_000;
-          console.log(
-            `[Keepa] 429 rate limited (attempt ${attempt + 1}/${maxRetries}), waiting ${Math.round(waitMs / 1000)}s for refill`
-          );
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          // Also reset rate limit state
-          this.tokensLeft = 0;
-          await this.waitForRateLimit(1);
-        } catch {
-          // If we can't parse the response, wait a fixed 60s
-          console.log(`[Keepa] 429 rate limited, waiting 60s`);
-          await new Promise((resolve) => setTimeout(resolve, 60_000));
-        }
-        continue;
-      }
 
-      return response;
-    }
-
-    throw new Error('Unreachable');
+        return response;
+      },
+      { maxRetries, backoff: () => 0, isRetryable: isRetryableError }
+    );
   }
 
   /**

@@ -4,26 +4,33 @@
  * Types for BrickOwl transaction sync service following the BrickLink pattern
  */
 
+import type {
+  BaseTransactionRow,
+  Json,
+  SyncMode,
+  SyncRunStatus,
+} from '@/lib/sync/transaction-sync-base';
+
 // ============================================================================
-// JSON Type (for Supabase compatibility)
+// JSON Type (for Supabase compatibility) — shared declaration, re-exported
 // ============================================================================
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type { Json };
 
 // ============================================================================
 // Sync Mode Types
 // ============================================================================
 
-export type BrickOwlSyncMode = 'FULL' | 'INCREMENTAL' | 'HISTORICAL';
-export type BrickOwlSyncStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type BrickOwlSyncMode = SyncMode;
+export type BrickOwlSyncStatus = SyncRunStatus;
 
 // ============================================================================
 // Database Row Types
 // ============================================================================
 
-export interface BrickOwlTransactionRow {
+// BrickOwl rows use `base_currency` rather than the shared `currency` column.
+export interface BrickOwlTransactionRow extends Omit<BaseTransactionRow, 'currency'> {
   id: string;
-  user_id: string;
   brickowl_order_id: string;
   order_date: string;
   status_changed_date: string | null;
@@ -48,7 +55,6 @@ export interface BrickOwlTransactionRow {
   buyer_note: string | null;
   seller_note: string | null;
   public_note: string | null;
-  raw_response: Json;
   created_at: string;
   updated_at: string;
 }

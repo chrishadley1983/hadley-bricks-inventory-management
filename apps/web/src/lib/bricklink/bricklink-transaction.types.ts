@@ -4,26 +4,33 @@
  * Types for BrickLink transaction sync service following the PayPal pattern
  */
 
+import type {
+  BaseTransactionRow,
+  Json,
+  SyncMode,
+  SyncRunStatus,
+} from '@/lib/sync/transaction-sync-base';
+
 // ============================================================================
-// JSON Type (for Supabase compatibility)
+// JSON Type (for Supabase compatibility) — shared declaration, re-exported
 // ============================================================================
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type { Json };
 
 // ============================================================================
 // Sync Mode Types
 // ============================================================================
 
-export type BrickLinkSyncMode = 'FULL' | 'INCREMENTAL' | 'HISTORICAL';
-export type BrickLinkSyncStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type BrickLinkSyncMode = SyncMode;
+export type BrickLinkSyncStatus = SyncRunStatus;
 
 // ============================================================================
 // Database Row Types
 // ============================================================================
 
-export interface BrickLinkTransactionRow {
+// BrickLink rows use `base_currency` rather than the shared `currency` column.
+export interface BrickLinkTransactionRow extends Omit<BaseTransactionRow, 'currency'> {
   id: string;
-  user_id: string;
   bricklink_order_id: string;
   order_date: string;
   status_changed_date: string | null;
@@ -50,7 +57,6 @@ export interface BrickLinkTransactionRow {
   buyer_location: string | null;
   order_note: string | null;
   seller_remarks: string | null;
-  raw_response: Json;
   created_at: string;
   updated_at: string;
 }

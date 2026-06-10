@@ -9,7 +9,11 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import { createClient } from '@/lib/supabase/server';
+import {
+  BaseTransactionSyncService,
+  type BaseTransactionRow,
+  type Json,
+} from '@/lib/sync/transaction-sync-base';
 import { paypalAuthService, PayPalAuthService } from './paypal-auth.service';
 import { PayPalApiAdapter } from './paypal-api.adapter';
 import type {
@@ -17,22 +21,19 @@ import type {
   PayPalSyncResult,
   PayPalSyncMode,
   PayPalSyncOptions,
-  Json,
 } from './types';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const BATCH_SIZE = 100; // Upsert batch size
 const DEFAULT_SYNC_DAYS = 31; // Default days back for incremental sync
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface TransactionRow {
-  user_id: string;
+interface TransactionRow extends BaseTransactionRow {
   paypal_transaction_id: string;
   transaction_date: string;
   transaction_updated_date: string | null;
@@ -44,7 +45,6 @@ interface TransactionRow {
   fee_amount: number;
   net_amount: number;
   balance_amount: number | null;
-  currency: string;
   description: string | null;
   from_email: string | null;
   payer_name: string | null;
@@ -54,24 +54,21 @@ interface TransactionRow {
   vat_amount: number | null;
   invoice_id: string | null;
   reference_txn_id: string | null;
-  raw_response: Json;
 }
 
 // ============================================================================
 // PayPalTransactionSyncService Class
 // ============================================================================
 
-export class PayPalTransactionSyncService {
+export class PayPalTransactionSyncService extends BaseTransactionSyncService {
   /**
    * @param supabaseOverride Optional supabase client. When omitted, the service
    * lazily creates a cookie-auth client (for user-triggered routes). Cron routes
    * should pass a service-role client so RLS-gated inserts (e.g. paypal_sync_log)
    * succeed in a context with no Supabase user session.
    */
-  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
-
-  private async getSupabase(): Promise<SupabaseClient<Database>> {
-    return this.supabaseOverride ?? (await createClient());
+  constructor(supabaseOverride?: SupabaseClient<Database>) {
+    super(supabaseOverride);
   }
 
   /**
@@ -457,8 +454,6 @@ export class PayPalTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await this.getSupabase();
-
     // Deduplicate transactions by transactionId
     const uniqueTransactions = Array.from(
       new Map(transactions.map((tx) => [tx.transaction_info.transaction_id, tx])).values()
@@ -468,16 +463,12 @@ export class PayPalTransactionSyncService {
     );
 
     // Get existing transaction IDs
-    const { data: existingTransactions } = await supabase
-      .from('paypal_transactions')
-      .select('paypal_transaction_id')
-      .eq('user_id', userId)
-      .in(
-        'paypal_transaction_id',
-        uniqueTransactions.map((t) => t.transaction_info.transaction_id)
-      );
-
-    const existingIds = new Set(existingTransactions?.map((t) => t.paypal_transaction_id) || []);
+    const existingIds = await this.fetchExistingIds(
+      'paypal_transactions',
+      'paypal_transaction_id',
+      userId,
+      uniqueTransactions.map((t) => t.transaction_info.transaction_id)
+    );
 
     // Transform transactions
     const transactionRows: TransactionRow[] = uniqueTransactions.map((tx) => {
@@ -530,28 +521,25 @@ export class PayPalTransactionSyncService {
     });
 
     // Upsert in batches
+    await this.batchUpsert(
+      'paypal_transactions',
+      transactionRows,
+      'user_id,paypal_transaction_id',
+      'PayPalTransactionSyncService',
+      {
+        logMessage: 'Failed to upsert transactions:',
+        errorMessage: () => 'Failed to save transactions',
+        ignoreDuplicates: false,
+      }
+    );
+
     let created = 0;
     let updated = 0;
-
-    for (let i = 0; i < transactionRows.length; i += BATCH_SIZE) {
-      const batch = transactionRows.slice(i, i + BATCH_SIZE);
-
-      const { error } = await supabase.from('paypal_transactions').upsert(batch, {
-        onConflict: 'user_id,paypal_transaction_id',
-        ignoreDuplicates: false,
-      });
-
-      if (error) {
-        console.error('[PayPalTransactionSyncService] Failed to upsert transactions:', error);
-        throw new Error('Failed to save transactions');
-      }
-
-      for (const row of batch) {
-        if (existingIds.has(row.paypal_transaction_id)) {
-          updated++;
-        } else {
-          created++;
-        }
+    for (const row of transactionRows) {
+      if (existingIds.has(row.paypal_transaction_id)) {
+        updated++;
+      } else {
+        created++;
       }
     }
 

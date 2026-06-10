@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
+import { formatCurrency, formatNumber } from '@/lib/utils';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -35,15 +36,11 @@ const Header = dynamic(
 // Helper: format GBP
 // ============================================
 function gbp(value: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatCurrency(value);
 }
 
 function num(value: number): string {
-  return new Intl.NumberFormat('en-GB').format(value);
+  return formatNumber(value);
 }
 
 // ============================================

@@ -82,12 +82,8 @@ export function useListingCounts() {
 }
 
 // Re-export from canonical location
-import { formatCurrency } from '@/lib/utils';
-export { formatCurrency };
-
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-GB').format(value);
-}
+import { formatCurrency, formatNumber } from '@/lib/utils';
+export { formatCurrency, formatNumber };
 
 export function getProgressPercentage(current: number, target: number): number {
   if (target <= 0) return 0;

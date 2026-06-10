@@ -8,6 +8,7 @@
  * Where: TargetProfit = SellPrice × TargetMargin
  */
 
+import { formatCurrency } from '@/lib/utils';
 import type { EbayFeeBreakdown, AmazonFeeBreakdown, AuctionBreakdown } from './photo-types';
 
 // ============================================
@@ -347,10 +348,7 @@ export function calculateLotMaxPurchasePrice(
  * Format currency value for display
  */
 export function formatMaxPrice(value: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(value);
+  return formatCurrency(value);
 }
 
 /**

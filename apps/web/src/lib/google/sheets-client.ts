@@ -1,5 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 
+import { withRetry as runWithRetry } from '@/lib/utils/fetch-with-retry';
+
 /**
  * Resolve the Google private key from environment variables.
  * Supports multiple formats for flexibility across environments:
@@ -103,36 +105,28 @@ export class GoogleSheetsClient {
     maxRetries: number = 3,
     baseDelay: number = 1000
   ): Promise<T> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error: unknown) {
-        const isLastAttempt = attempt === maxRetries;
-        const err = error as { code?: number | string; status?: number; message?: string };
-
-        // Check if error is retryable
+    return runWithRetry(operation, {
+      maxRetries,
+      // Exponential backoff + jitter
+      backoff: (attempt) => baseDelay * Math.pow(2, attempt) + Math.random() * 500,
+      isRetryable: (error) => {
+        const err = error as { code?: number | string; status?: number };
         const isRateLimited = err.code === 429 || err.status === 429;
         const isServerError =
           (typeof err.status === 'number' && err.status >= 500) ||
           (typeof err.code === 'number' && err.code >= 500);
         const isConnectionReset =
           err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND';
-        const isRetryable = isRateLimited || isServerError || isConnectionReset;
-
-        if (!isRetryable || isLastAttempt) {
-          throw error;
-        }
-
-        // Calculate delay with exponential backoff + jitter
-        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
+        return isRateLimited || isServerError || isConnectionReset;
+      },
+      onRetry: (attempt, error, delayMs) => {
+        const err = error as { code?: number | string; message?: string };
         console.warn(
-          `[GoogleSheetsClient] Retrying after ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`,
+          `[GoogleSheetsClient] Retrying after ${Math.round(delayMs)}ms (attempt ${attempt + 1}/${maxRetries})`,
           err.message || err.code
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-    throw new Error('Max retries exceeded');
+      },
+    });
   }
 
   /**

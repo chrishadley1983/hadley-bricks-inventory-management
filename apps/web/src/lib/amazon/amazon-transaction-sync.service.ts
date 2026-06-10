@@ -6,9 +6,12 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sleep } from '@/lib/utils';
 import type { Database } from '@hadley-bricks/database';
-import { createClient } from '@/lib/supabase/server';
+import {
+  BaseTransactionSyncService,
+  type BaseTransactionRow,
+  type Json,
+} from '@/lib/sync/transaction-sync-base';
 import { CredentialsRepository } from '@/lib/repositories';
 import { createAmazonFinancesClient } from './amazon-finances.client';
 import {
@@ -20,14 +23,10 @@ import {
   type AmazonSyncLogRow,
 } from './types';
 
-// JSON type for raw_response fields
-type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
 // ============================================================================
 // Constants
 // ============================================================================
 
-const BATCH_SIZE = 100;
 const RATE_LIMIT_DELAY_MS = 150;
 
 // ============================================================================
@@ -52,8 +51,7 @@ export interface AmazonSyncOptions {
   toDate?: string; // ISO date string for historical imports
 }
 
-interface TransactionRow {
-  user_id: string;
+interface TransactionRow extends BaseTransactionRow {
   amazon_transaction_id: string;
   amazon_order_id: string | null;
   seller_order_id: string | null;
@@ -63,7 +61,6 @@ interface TransactionRow {
   posted_date: string;
   description: string | null;
   total_amount: number;
-  currency: string;
   referral_fee: number | null;
   fba_fulfillment_fee: number | null;
   fba_per_unit_fee: number | null;
@@ -90,24 +87,21 @@ interface TransactionRow {
   breakdowns: Json | null;
   contexts: Json | null;
   related_identifiers: Json | null;
-  raw_response: Json;
 }
 
 // ============================================================================
 // AmazonTransactionSyncService Class
 // ============================================================================
 
-export class AmazonTransactionSyncService {
+export class AmazonTransactionSyncService extends BaseTransactionSyncService {
   /**
    * @param supabaseOverride Optional supabase client. When omitted, lazily
    * creates a cookie-auth client (for user-triggered routes). Cron callers
    * must pass a service-role client (amazon_sync_log + amazon_transactions
    * are RLS-gated and the cron has no Supabase user session).
    */
-  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
-
-  private async getSupabase(): Promise<SupabaseClient<Database>> {
-    return this.supabaseOverride ?? (await createClient());
+  constructor(supabaseOverride?: SupabaseClient<Database>) {
+    super(supabaseOverride);
   }
 
   // ============================================================================
@@ -557,8 +551,6 @@ export class AmazonTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await this.getSupabase();
-
     // Generate transaction IDs and deduplicate
     const transactionMap = new Map<string, AmazonFinancialTransaction>();
     for (const tx of transactions) {
@@ -578,16 +570,12 @@ export class AmazonTransactionSyncService {
     );
 
     // Get existing transaction IDs
-    const { data: existingTransactions } = await supabase
-      .from('amazon_transactions')
-      .select('amazon_transaction_id')
-      .eq('user_id', userId)
-      .in(
-        'amazon_transaction_id',
-        uniqueTransactions.map(([id]) => id)
-      );
-
-    const existingIds = new Set(existingTransactions?.map((t) => t.amazon_transaction_id) || []);
+    const existingIds = await this.fetchExistingIds(
+      'amazon_transactions',
+      'amazon_transaction_id',
+      userId,
+      uniqueTransactions.map(([id]) => id)
+    );
 
     // Transform transactions
     const transactionRows: TransactionRow[] = uniqueTransactions.map(([txId, tx]) => {
@@ -671,43 +659,32 @@ export class AmazonTransactionSyncService {
       };
     });
 
-    // Upsert in batches
+    // Upsert in batches (with a small delay between batches)
+    await this.batchUpsert(
+      'amazon_transactions',
+      transactionRows,
+      'user_id,amazon_transaction_id',
+      'AmazonTransactionSyncService',
+      {
+        logMessage: 'Failed to upsert transactions:',
+        errorMessage: () => 'Failed to save transactions',
+        ignoreDuplicates: false,
+        interBatchDelayMs: RATE_LIMIT_DELAY_MS,
+      }
+    );
+
     let created = 0;
     let updated = 0;
-
-    for (let i = 0; i < transactionRows.length; i += BATCH_SIZE) {
-      const batch = transactionRows.slice(i, i + BATCH_SIZE);
-
-      const { error } = await supabase.from('amazon_transactions').upsert(batch, {
-        onConflict: 'user_id,amazon_transaction_id',
-        ignoreDuplicates: false,
-      });
-
-      if (error) {
-        console.error('[AmazonTransactionSyncService] Failed to upsert transactions:', error);
-        throw new Error('Failed to save transactions');
-      }
-
-      for (const row of batch) {
-        if (existingIds.has(row.amazon_transaction_id)) {
-          updated++;
-        } else {
-          created++;
-        }
-      }
-
-      // Small delay between batches
-      if (i + BATCH_SIZE < transactionRows.length) {
-        await sleep(RATE_LIMIT_DELAY_MS);
+    for (const row of transactionRows) {
+      if (existingIds.has(row.amazon_transaction_id)) {
+        updated++;
+      } else {
+        created++;
       }
     }
 
     return { created, updated };
   }
-
-  /**
-   * Delay helper for rate limiting
-   */
 }
 
 // Export a default instance
