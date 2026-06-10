@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { BrickLinkArbitrageSyncService } from '@/lib/arbitrage';
 
 export async function GET(request: NextRequest) {
@@ -12,15 +12,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const asin = request.nextUrl.searchParams.get('asin') ?? 'B0BBSB69YX';
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import {
   sendMessageForJSON,
   PARSE_PURCHASE_SYSTEM_PROMPT,
@@ -19,15 +19,8 @@ const RequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Validate input
     const body = await request.json();

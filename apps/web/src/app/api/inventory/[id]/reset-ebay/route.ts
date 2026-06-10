@@ -10,22 +10,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
     // Auth check
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     console.log('[POST /api/inventory/[id]/reset-ebay] Resetting eBay listing for:', id);
 

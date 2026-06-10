@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 // Create tag schema
 const CreateTagSchema = z.object({
@@ -24,15 +24,8 @@ const CreateTagSchema = z.object({
 export async function GET() {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Fetch tags
     const { data, error } = await supabase
@@ -59,15 +52,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Parse and validate body
     const body = await request.json();

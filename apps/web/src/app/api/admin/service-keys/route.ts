@@ -9,7 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { generateServiceKey } from '@/lib/middleware/service-auth';
 import { z } from 'zod';
 
@@ -34,16 +35,9 @@ const RevokeKeySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse body
     const body = await request.json();
@@ -115,16 +109,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Get all keys (using service role to bypass RLS)
     const serviceClient = createServiceRoleClient();
@@ -168,16 +155,9 @@ export async function GET(_request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse body
     const body = await request.json();

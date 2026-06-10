@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { ReportingService } from '@/lib/services';
 
 const GetQuerySchema = z.object({
@@ -24,15 +24,8 @@ const BatchPutBodySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const parsed = GetQuerySchema.safeParse(searchParams);
@@ -65,15 +58,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = PostBodySchema.safeParse(body);
@@ -103,15 +89,8 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = BatchPutBodySchema.safeParse(body);

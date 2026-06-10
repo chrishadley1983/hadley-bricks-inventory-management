@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { WorkflowService } from '@/lib/services/workflow.service';
 import { z } from 'zod';
 import type { TaskStatus } from '@hadley-bricks/database';
@@ -29,15 +29,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = UpdateStatusSchema.safeParse(body);
@@ -87,15 +80,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = UpdateTaskSchema.safeParse(body);
@@ -170,15 +156,8 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Verify task belongs to user and is an off_system task without a definition
     const { data: task, error: taskError } = await supabase

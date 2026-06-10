@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 
@@ -25,15 +25,8 @@ export async function PUT(
     const { itemId } = await params;
 
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Validate input
     const body = await request.json();

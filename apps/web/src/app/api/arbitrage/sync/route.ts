@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Increase timeout for sync operations (max 5 minutes for Pro plan, 60s for Hobby)
 export const maxDuration = 300;
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import {
   ArbitrageService,
   AmazonArbitrageSyncService,
@@ -40,15 +40,8 @@ const TriggerSyncSchema = z.object({
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const service = new ArbitrageService(supabase);
     const status = await service.getSyncStatus(user.id);
@@ -72,15 +65,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = TriggerSyncSchema.safeParse(body);

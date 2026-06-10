@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { InventoryService } from '@/lib/services';
 import { createPerfLogger } from '@/lib/perf';
 
@@ -16,16 +16,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const endAuth = perf.start('auth');
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { user, supabase, unauthorized } = await requireUser();
     endAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (unauthorized) return unauthorized;
 
     const excludeSold = request.nextUrl.searchParams.get('excludeSold') === 'true';
     const platform = request.nextUrl.searchParams.get('platform') || undefined;

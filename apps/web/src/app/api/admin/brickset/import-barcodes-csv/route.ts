@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -46,16 +47,9 @@ function parseCSVLine(line: string): string[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse and validate body options
     const body = await request.json().catch(() => ({}));

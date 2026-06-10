@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { SELLING_PLATFORMS } from '@hadley-bricks/database';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { InventoryService } from '@/lib/services';
 import { createPerfLogger } from '@/lib/perf';
 import { validateAuth } from '@/lib/api/validate-auth';
@@ -99,16 +100,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const endAuth = perf.start('auth');
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { user, supabase, unauthorized } = await requireUser();
     endAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (unauthorized) return unauthorized;
 
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams.entries());

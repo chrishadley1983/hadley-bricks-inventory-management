@@ -8,7 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { BricksetApiClient } from '@/lib/brickset/brickset-api';
 import { BricksetCredentialsService } from '@/lib/services/brickset-credentials.service';
 import { z } from 'zod';
@@ -21,16 +22,9 @@ const RefreshSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse body
     const body = await request.json();
@@ -174,16 +168,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Count sets with missing barcodes
     const { count: missingEan } = await supabase

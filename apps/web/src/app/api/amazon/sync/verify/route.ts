@@ -7,23 +7,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { AmazonListingsClient } from '@/lib/amazon/amazon-listings.client';
 import type { AmazonCredentials } from '@/lib/amazon/types';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Get SKU from query params
     const { searchParams } = new URL(request.url);

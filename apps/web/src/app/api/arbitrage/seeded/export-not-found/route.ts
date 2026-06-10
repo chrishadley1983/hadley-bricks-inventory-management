@@ -6,7 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 interface SeededAsinRow {
   id: string;
@@ -27,16 +28,9 @@ interface SeededAsinRow {
 
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Use service role to read all data
     const serviceClient = createServiceRoleClient();

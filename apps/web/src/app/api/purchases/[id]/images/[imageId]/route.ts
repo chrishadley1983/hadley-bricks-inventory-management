@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { PurchaseImageService } from '@/lib/services/purchase-image.service';
 
 const UpdateCaptionSchema = z.object({
@@ -24,15 +24,8 @@ export async function DELETE(
 ) {
   try {
     const { id: purchaseId, imageId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Verify purchase belongs to user
     const { data: purchase, error: purchaseError } = await supabase
@@ -73,15 +66,8 @@ export async function PATCH(
 ) {
   try {
     const { id: purchaseId, imageId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Verify purchase belongs to user
     const { data: purchase, error: purchaseError } = await supabase

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import type { AmazonCredentials } from '@/lib/amazon/types';
 import { SeededAsinDiscoveryService } from '@/lib/arbitrage/seeded-discovery.service';
@@ -28,16 +29,9 @@ const DiscoveryActionSchema = z.object({
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Use the seeded_discovery_summary view for accurate counts (avoids 1000 row limit)
     const { data: summaryData } = await supabase
@@ -117,16 +111,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
     // Check auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse and validate body
     const body = await request.json();

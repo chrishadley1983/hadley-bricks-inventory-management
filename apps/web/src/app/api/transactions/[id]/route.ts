@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 // Update schema
 const UpdateSchema = z.object({
@@ -27,15 +27,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
 
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Fetch transaction
     const { data, error } = await supabase
@@ -68,15 +61,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
 
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Parse and validate body
     const body = await request.json();

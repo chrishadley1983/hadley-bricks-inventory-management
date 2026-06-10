@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 /**
  * GET /api/inventory/listing-counts
@@ -7,16 +7,8 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Query active listings count by platform using listing_platform field
     const [ebayResult, amazonResult, bricklinkResult, brickowlResult] = await Promise.all([

@@ -7,7 +7,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayAuctionScannerService } from '@/lib/ebay-auctions';
 import { calculateMaxBidForMargin } from '@/lib/ebay-auctions/auction-profit-calculator';
 import { discordService } from '@/lib/notifications/discord.service';
@@ -17,12 +18,8 @@ export const maxDuration = 60;
 
 export async function POST() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const serviceSupabase = createServiceRoleClient();
     const scanner = new EbayAuctionScannerService(serviceSupabase);

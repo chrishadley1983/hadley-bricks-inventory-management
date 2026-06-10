@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { BricqerBatchSyncService } from '@/lib/bricqer/bricqer-batch-sync.service';
 
 const SyncOptionsSchema = z.object({
@@ -14,15 +14,8 @@ const SyncOptionsSchema = z.object({
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const syncService = new BricqerBatchSyncService();
     const status = await syncService.getConnectionStatus(user.id);
@@ -40,15 +33,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse options from body (optional)
     let options = {};

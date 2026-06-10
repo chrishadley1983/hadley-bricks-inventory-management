@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 type TimeCategory = 'Development' | 'Listing' | 'Shipping' | 'Sourcing' | 'Admin' | 'Other';
 
@@ -9,16 +9,8 @@ type TimeCategory = 'Development' | 'Listing' | 'Shipping' | 'Sourcing' | 'Admin
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Get today's date in UTC
     const now = new Date();

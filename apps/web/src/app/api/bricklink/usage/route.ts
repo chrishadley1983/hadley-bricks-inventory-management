@@ -9,20 +9,16 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 export const runtime = 'nodejs';
 
 const BL_DAILY_LIMIT = 5000;
 
 export async function GET() {
-  const supabase = await createClient();
-
   // Auth check — any authenticated user can see usage
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { supabase, unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
 
   const today = new Date().toISOString().slice(0, 10);
 
