@@ -169,11 +169,9 @@ function createChainedQuery(
   chain.range = createChainMethod();
   chain.single = vi.fn().mockResolvedValue(mockResult);
 
-  // Make final methods return the result
-  chain.range = vi.fn().mockReturnValue({
-    ...chain,
-    order: vi.fn().mockResolvedValue(mockResult),
-  });
+  // Terminal: the service builds .order(...).range(...) then awaits the query,
+  // so .range() resolves the result directly
+  chain.range = vi.fn().mockResolvedValue(mockResult);
 
   return chain;
 }
@@ -304,10 +302,6 @@ describe('PlatformStockService', () => {
       ];
 
       const chain = createChainedQuery({ data: mockListings, count: 2 });
-      // Override range to return proper structure for pagination
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: mockListings, error: null, count: 2 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       const result = await service.getListings({}, 1, 50);
@@ -320,9 +314,6 @@ describe('PlatformStockService', () => {
 
     it('should filter by listing status', async () => {
       const chain = createChainedQuery({ data: [], count: 0 });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await service.getListings({ listingStatus: 'Active' }, 1, 50);
@@ -333,9 +324,6 @@ describe('PlatformStockService', () => {
 
     it('should filter by fulfillment channel', async () => {
       const chain = createChainedQuery({ data: [], count: 0 });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await service.getListings({ fulfillmentChannel: 'FBA' }, 1, 50);
@@ -345,9 +333,6 @@ describe('PlatformStockService', () => {
 
     it('should filter by hasQuantity', async () => {
       const chain = createChainedQuery({ data: [], count: 0 });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await service.getListings({ hasQuantity: true }, 1, 50);
@@ -357,9 +342,6 @@ describe('PlatformStockService', () => {
 
     it('should filter by search term', async () => {
       const chain = createChainedQuery({ data: [], count: 0 });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await service.getListings({ search: 'LEGO' }, 1, 50);
@@ -369,9 +351,6 @@ describe('PlatformStockService', () => {
 
     it('should throw error on database failure', async () => {
       const chain = createChainedQuery({ data: null, error: { message: 'Query failed' } });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'Query failed' } }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await expect(service.getListings({}, 1, 50)).rejects.toThrow('Failed to fetch listings');
@@ -383,9 +362,6 @@ describe('PlatformStockService', () => {
       );
 
       const chain = createChainedQuery({ data: mockListings, count: 150 });
-      chain.range = vi.fn().mockReturnValue({
-        order: vi.fn().mockResolvedValue({ data: mockListings, error: null, count: 150 }),
-      });
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       const result = await service.getListings({}, 2, 50);

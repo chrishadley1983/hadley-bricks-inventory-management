@@ -1256,8 +1256,9 @@ describe('AmazonStockService', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                range: vi.fn().mockReturnValue({
-                  order: vi.fn().mockResolvedValue({
+                // Service chains .order(...).range(...) then awaits the query
+                order: vi.fn().mockReturnValue({
+                  range: vi.fn().mockResolvedValue({
                     data: [
                       {
                         id: 'listing-1',
