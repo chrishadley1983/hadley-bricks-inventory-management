@@ -10,7 +10,7 @@
 
 ---
 
-## Implementation Status (updated 2026-06-10 — all items complete except §1.2)
+## Implementation Status (updated 2026-06-10 — ✅ AUDIT FULLY COMPLETE)
 
 Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 
@@ -38,7 +38,9 @@ Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 - ✅ §1.8 `BaseTransactionSyncService` — COMPLETE via PR #427: `lib/sync/transaction-sync-base.ts` (getSupabase pattern, batched upserts, existing-id prequery) extended by all 5 platform sync services; sync-log lifecycle/connection status deliberately kept inline (shapes differ). Live read-only `getConnectionStatus` probe green (BL 1007 tx, BO 114 tx).
 - ✅ §1.9 `OAuthTokenManager` — COMPLETE via PR #427: `lib/auth/oauth-token-manager.ts` with both boundary semantics preserved (`isTokenExpired` vs `isTokenFresh`); PayPal/eBay/Google-Calendar full adoption, Monzo partial (no refresh flow exists).
 - ✅ §1.10 shared row types — COMPLETE via PR #427: `Json` re-exported from `@hadley-bricks/database` (4 dupes removed); `BaseTransactionRow` extended by all 5 platforms (BL/BO via `Omit<…,'currency'>` — they use `base_currency`).
-- ⬜ §1.2 `withAuth` / `validateAuth` HOF across ~327 route handlers (auth-critical) — the only remaining audit item.
+- ✅ §1.2 auth gate — COMPLETE via PR #429 (squash `9c6d5579`): shared `requireUser()` (`lib/api/require-user.ts`, unit-tested) adopted across 450+ handlers in 310 route files (net −2,993 lines). Deliberately cookie-only (blanket `validateAuth` adoption would have silently added x-api-key auth to every route); 14 files keep inline gates by design (6 SSE streams, 4 custom 401 bodies, 2 logging gates, 1 hybrid service-role, 1 validateAuth handler). Verified by 11/11-check workflow incl. **live production probes**: 6 migrated endpoints + the cron sentinel all return the exact standard 401 unauthenticated on the deployed merge commit.
+
+**The audit is closed.** All sections (§1.1–§1.10, dead code, scripts, deps) implemented or deliberately scoped out with reasons recorded above.
 
 ---
 
