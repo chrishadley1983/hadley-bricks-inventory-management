@@ -7,6 +7,7 @@ import { CredentialsRepository } from '../repositories/credentials.repository';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
 import { calculateMarkupPrice } from './pricing-engine';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { SyncProgressCallback } from '@/types/minifig-sync-stream';
 
 interface PullOptions {
@@ -233,31 +234,20 @@ export class InventoryPullService {
   private async loadExistingItems(): Promise<
     Map<string, { id: string; bricqer_price: number | null; updated_at: string | null }>
   > {
-    const existingItems: Array<{
+    let existingItems: Array<{
       id: string;
       bricqer_item_id: string;
       bricqer_price: number | null;
       updated_at: string | null;
     }> = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data } = await this.supabase
-        .from('minifig_sync_items')
-        .select('id, bricqer_item_id, bricqer_price, updated_at')
-        .eq('user_id', this.userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-      existingItems.push(
-        ...((data ?? []) as Array<{
-          id: string;
-          bricqer_item_id: string;
-          bricqer_price: number | null;
-          updated_at: string | null;
-        }>)
-      );
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    try {
+      existingItems = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+        select: 'id, bricqer_item_id, bricqer_price, updated_at',
+        eq: { user_id: this.userId },
+      });
+    } catch (err) {
+      console.error('[InventoryPullService] Failed to load existing sync items:', err);
+      existingItems = [];
     }
     return new Map(existingItems.map((item) => [item.bricqer_item_id, item]));
   }

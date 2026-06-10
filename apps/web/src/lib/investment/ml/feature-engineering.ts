@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /**
  * Raw features extracted from the database before normalisation.
@@ -188,32 +189,27 @@ export async function fetchThemeAverages(supabase: SupabaseClient): Promise<Map<
   // Paginate investment_historical to get all appreciation data
   const allHistorical: { set_num: string; appreciation: number }[] = [];
   const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('investment_historical')
-      .select('set_num, actual_1yr_appreciation')
-      .in('data_quality', ['good', 'partial'])
-      .not('actual_1yr_appreciation', 'is', null)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+  let historicalRows: Record<string, unknown>[] = [];
+  try {
+    historicalRows = (await fetchAllRecords(supabase, 'investment_historical', {
+      select: 'set_num, actual_1yr_appreciation',
+      in: { data_quality: ['good', 'partial'] },
+      isNotNull: ['actual_1yr_appreciation'],
+    })) as unknown as Record<string, unknown>[];
+  } catch (err) {
+    console.error(
+      '[FeatureEng] Error fetching historical for theme averages:',
+      err instanceof Error ? err.message : err
+    );
+    historicalRows = [];
+  }
 
-    if (error || !data || data.length === 0) {
-      hasMore = false;
-      break;
-    }
-
-    for (const row of data) {
-      const h = row as Record<string, unknown>;
-      allHistorical.push({
-        set_num: h.set_num as string,
-        appreciation: h.actual_1yr_appreciation as number,
-      });
-    }
-
-    hasMore = data.length === pageSize;
-    page++;
+  for (const h of historicalRows) {
+    allHistorical.push({
+      set_num: h.set_num as string,
+      appreciation: h.actual_1yr_appreciation as number,
+    });
   }
 
   if (allHistorical.length === 0) return themeAvgs;

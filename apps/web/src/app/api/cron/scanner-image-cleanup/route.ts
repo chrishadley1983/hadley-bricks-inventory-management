@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
@@ -63,33 +64,13 @@ export async function POST(request: NextRequest) {
     const cutoffIso = cutoffDate.toISOString();
 
     // Collect all expired session IDs (paginated)
-    const expiredSessionIds: string[] = [];
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: sessions, error: sessionsError } = await (supabase as any)
-        .from('scanner_sessions')
-        .select('id')
-        .lt('ended_at', cutoffIso)
-        .not('ended_at', 'is', null)
-        .range(from, to);
-
-      if (sessionsError) {
-        throw new Error(`Failed to query scanner_sessions: ${sessionsError.message}`);
-      }
-
-      for (const session of sessions ?? []) {
-        expiredSessionIds.push(session.id as string);
-      }
-
-      hasMore = (sessions?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
+    const expiredSessions = await fetchAllRecords(supabase, 'scanner_sessions', {
+      select: 'id',
+      lt: { ended_at: cutoffIso },
+      isNotNull: ['ended_at'],
+      pageSize: PAGE_SIZE,
+    });
+    const expiredSessionIds: string[] = expiredSessions.map((session) => session.id);
 
     console.log(`[Cron ScannerImageCleanup] Found ${expiredSessionIds.length} expired sessions`);
 

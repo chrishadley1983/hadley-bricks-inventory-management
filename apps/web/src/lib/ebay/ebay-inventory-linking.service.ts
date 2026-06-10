@@ -16,6 +16,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // ============================================================================
 // Types
@@ -391,9 +392,6 @@ export class EbayInventoryLinkingService {
 
     // Get all fulfilled orders that need inventory linking
     // Includes: no status (null), pre_linked (linked during PAID but not marked SOLD), partial
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const allFulfilledOrders: Array<{
       id: string;
       ebay_order_id: string;
@@ -401,33 +399,24 @@ export class EbayInventoryLinkingService {
       type: 'fulfilled';
     }> = [];
 
-    while (hasMore) {
-      const { data: orders, error } = await this.supabase
-        .from('ebay_orders')
-        .select('id, ebay_order_id, creation_date')
-        .eq('user_id', this.userId)
-        .eq('order_fulfilment_status', 'FULFILLED')
-        .or(
-          'inventory_link_status.is.null,inventory_link_status.eq.pre_linked,inventory_link_status.eq.partial'
-        )
-        .order('creation_date', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        result.errors.push(`Failed to fetch fulfilled orders page ${page}: ${error.message}`);
-        break;
-      }
+    try {
+      const orders = (await fetchAllRecords(this.supabase, 'ebay_orders', {
+        select: 'id, ebay_order_id, creation_date',
+        eq: { user_id: this.userId, order_fulfilment_status: 'FULFILLED' },
+        or: 'inventory_link_status.is.null,inventory_link_status.eq.pre_linked,inventory_link_status.eq.partial',
+        orderBy: { column: 'creation_date', ascending: false },
+      })) as unknown as Array<{ id: string; ebay_order_id: string; creation_date: string }>;
 
       allFulfilledOrders.push(
-        ...(orders || []).map(
-          (o: { id: string; ebay_order_id: string; creation_date: string }) => ({
-            ...o,
-            type: 'fulfilled' as const,
-          })
-        )
+        ...orders.map((o) => ({
+          ...o,
+          type: 'fulfilled' as const,
+        }))
       );
-      hasMore = (orders?.length || 0) === pageSize;
-      page++;
+    } catch (error) {
+      result.errors.push(
+        `Failed to fetch fulfilled orders: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
 
     // Also get PAID orders if requested
@@ -438,35 +427,25 @@ export class EbayInventoryLinkingService {
       type: 'paid';
     }> = [];
     if (options.includePaid) {
-      page = 0;
-      hasMore = true;
-
-      while (hasMore) {
-        const { data: orders, error } = await this.supabase
-          .from('ebay_orders')
-          .select('id, ebay_order_id, creation_date')
-          .eq('user_id', this.userId)
-          .eq('order_payment_status', 'PAID')
-          .neq('order_fulfilment_status', 'FULFILLED') // Exclude already fulfilled
-          .is('inventory_link_status', null)
-          .order('creation_date', { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (error) {
-          result.errors.push(`Failed to fetch paid orders page ${page}: ${error.message}`);
-          break;
-        }
+      try {
+        const orders = (await fetchAllRecords(this.supabase, 'ebay_orders', {
+          select: 'id, ebay_order_id, creation_date',
+          eq: { user_id: this.userId, order_payment_status: 'PAID' },
+          neq: { order_fulfilment_status: 'FULFILLED' }, // Exclude already fulfilled
+          isNull: ['inventory_link_status'],
+          orderBy: { column: 'creation_date', ascending: false },
+        })) as unknown as Array<{ id: string; ebay_order_id: string; creation_date: string }>;
 
         allPaidOrders.push(
-          ...(orders || []).map(
-            (o: { id: string; ebay_order_id: string; creation_date: string }) => ({
-              ...o,
-              type: 'paid' as const,
-            })
-          )
+          ...orders.map((o) => ({
+            ...o,
+            type: 'paid' as const,
+          }))
         );
-        hasMore = (orders?.length || 0) === pageSize;
-        page++;
+      } catch (error) {
+        result.errors.push(
+          `Failed to fetch paid orders: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
 

@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /** Transaction row structure from amazon_transactions table */
 interface AmazonTransactionRow {
@@ -112,25 +113,8 @@ export class AmazonFeeReconciliationService {
       // Find sold Amazon inventory items with pagination (Supabase max 1000 rows)
       // If reconcileAll is true, get ALL sold Amazon items
       // Otherwise, only get items missing fee data (sold_fees_amount is null or 0)
-      const PAGE_SIZE = 1000;
-      let page = 0;
-      let hasMore = true;
-      const itemsToReconcile: Array<{
-        id: string;
-        set_number: string;
-        sold_order_id: string | null;
-        sold_price: number | null;
-        sold_gross_amount: number | null;
-        sold_fees_amount: number | null;
-        sold_net_amount: number | null;
-        sold_postage_received: number | null;
-      }> = [];
-
-      while (hasMore) {
-        let query = this.supabase
-          .from('inventory_items')
-          .select(
-            `
+      const itemsToReconcile = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: `
             id,
             set_number,
             sold_order_id,
@@ -139,35 +123,24 @@ export class AmazonFeeReconciliationService {
             sold_fees_amount,
             sold_net_amount,
             sold_postage_received
-          `
-          )
-          .eq('user_id', userId)
-          .eq('status', 'SOLD')
-          .eq('sold_platform', 'amazon')
-          .not('sold_order_id', 'is', null)
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
+          `,
+        eq: { user_id: userId, status: 'SOLD', sold_platform: 'amazon' },
+        isNotNull: ['sold_order_id'],
         // Only filter for missing fees if not reconciling all
-        if (!reconcileAll) {
-          query = query.or('sold_fees_amount.is.null,sold_fees_amount.eq.0');
-        }
-
-        const { data, error: fetchError } = await query;
-
-        if (fetchError) {
-          result.errors.push(
-            `Failed to fetch inventory items page ${page + 1}: ${fetchError.message}`
-          );
-          return result;
-        }
-
-        itemsToReconcile.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === PAGE_SIZE;
-        page++;
-      }
+        ...(reconcileAll ? {} : { or: 'sold_fees_amount.is.null,sold_fees_amount.eq.0' }),
+      })) as unknown as Array<{
+        id: string;
+        set_number: string;
+        sold_order_id: string | null;
+        sold_price: number | null;
+        sold_gross_amount: number | null;
+        sold_fees_amount: number | null;
+        sold_net_amount: number | null;
+        sold_postage_received: number | null;
+      }>;
 
       console.log(
-        `[AmazonFeeReconciliation] Fetched ${itemsToReconcile.length} total inventory items across ${page} pages`
+        `[AmazonFeeReconciliation] Fetched ${itemsToReconcile.length} total inventory items`
       );
 
       if (!itemsToReconcile || itemsToReconcile.length === 0) {

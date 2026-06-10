@@ -12,6 +12,7 @@ import type {
   OrderStatusHistory,
   OrderStatus,
 } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /**
  * Valid status transitions for order workflow
@@ -369,49 +370,37 @@ export class OrderStatusService {
       Cancelled: 0,
     };
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
+    let data: PlatformOrder[];
+    try {
+      data = (await fetchAllRecords(this.supabase, 'platform_orders', {
+        select: 'internal_status, status',
+        eq: {
+          user_id: userId,
+          ...(platform ? { platform } : {}),
+        },
+        ...(options?.startDate
+          ? { gte: { order_date: options.startDate.toISOString().split('T')[0] } }
+          : {}),
+        ...(options?.endDate
+          ? { lte: { order_date: options.endDate.toISOString().split('T')[0] } }
+          : {}),
+      })) as PlatformOrder[];
+    } catch (error) {
+      throw new Error(
+        `Failed to get status summary: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
 
-    while (hasMore) {
-      let query = this.supabase
-        .from('platform_orders')
-        .select('internal_status, status')
-        .eq('user_id', userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (platform) {
-        query = query.eq('platform', platform);
-      }
-
-      if (options?.startDate) {
-        query = query.gte('order_date', options.startDate.toISOString().split('T')[0]);
-      }
-
-      if (options?.endDate) {
-        query = query.lte('order_date', options.endDate.toISOString().split('T')[0]);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(`Failed to get status summary: ${error.message}`);
-      }
-
-      const orders = (data || []) as Array<{
-        internal_status: string | null;
-        status: string | null;
-      }>;
-      for (const order of orders) {
-        // Use internal_status if set, otherwise normalize the raw status field
-        const status = order.internal_status
-          ? (order.internal_status as OrderStatus)
-          : this.normalizeStatus(order.status);
-        summary[status] = (summary[status] || 0) + 1;
-      }
-
-      hasMore = orders.length === pageSize;
-      page++;
+    const orders = data as Array<{
+      internal_status: string | null;
+      status: string | null;
+    }>;
+    for (const order of orders) {
+      // Use internal_status if set, otherwise normalize the raw status field
+      const status = order.internal_status
+        ? (order.internal_status as OrderStatus)
+        : this.normalizeStatus(order.status);
+      summary[status] = (summary[status] || 0) + 1;
     }
 
     return summary;

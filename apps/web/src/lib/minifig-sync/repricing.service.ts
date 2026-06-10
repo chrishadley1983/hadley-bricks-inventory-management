@@ -12,6 +12,7 @@ import { ResearchService } from './research.service';
 import { MinifigJobTracker } from './job-tracker';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { MinifigSyncItem } from './types';
 
 interface RepricingResult {
@@ -57,21 +58,15 @@ export class RepricingService {
       staleDate.setDate(staleDate.getDate() - staleDays);
 
       // Paginated query for stale items (M1)
-      const staleItems: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMorePages = true;
-      while (hasMorePages) {
-        const { data } = await this.supabase
-          .from('minifig_sync_items')
-          .select('*')
-          .eq('user_id', this.userId)
-          .eq('listing_status', 'PUBLISHED')
-          .lt('updated_at', staleDate.toISOString())
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        staleItems.push(...(data ?? []));
-        hasMorePages = (data?.length ?? 0) === pageSize;
-        page++;
+      let staleItems: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      try {
+        staleItems = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+          eq: { user_id: this.userId, listing_status: 'PUBLISHED' },
+          lt: { updated_at: staleDate.toISOString() },
+        });
+      } catch (err) {
+        console.error('[RepricingService] Failed to load stale items:', err);
+        staleItems = [];
       }
 
       itemsChecked = staleItems.length;

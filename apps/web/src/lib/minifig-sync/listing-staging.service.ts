@@ -13,6 +13,7 @@ import { EbayBusinessPoliciesService } from '@/lib/ebay/ebay-business-policies.s
 import type { EbayInventoryItem, EbayOfferRequest } from '@/lib/ebay/types';
 import { ListingGenerationService } from '@/lib/ebay/listing-generation.service';
 import type { AIGeneratedListing } from '@/lib/ebay/listing-creation.types';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { MinifigConfigService } from './config.service';
 import { MinifigJobTracker } from './job-tracker';
 import { buildSku } from './types';
@@ -119,29 +120,16 @@ export class ListingStagingService {
 
       // Query qualifying items (F36) — paginated (M1)
       await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Loading qualifying items...' });
-      const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        let query = this.supabase
-          .from('minifig_sync_items')
-          .select('*')
-          .eq('user_id', this.userId)
-          .eq('meets_threshold', true)
-          .eq('listing_status', 'NOT_LISTED')
-          .not('bricklink_id', 'is', null)
-          .not('recommended_price', 'is', null)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (itemIds?.length) {
-          query = query.in('id', itemIds);
-        }
-
-        const { data } = await query;
-        items.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+      let items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      try {
+        items = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+          eq: { user_id: this.userId, meets_threshold: true, listing_status: 'NOT_LISTED' },
+          isNotNull: ['bricklink_id', 'recommended_price'],
+          ...(itemIds?.length ? { in: { id: itemIds } } : {}),
+        });
+      } catch (err) {
+        console.error('[ListingStagingService] Failed to load qualifying items:', err);
+        items = [];
       }
 
       // Apply limit if specified

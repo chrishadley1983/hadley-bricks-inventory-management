@@ -45,6 +45,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { EbayListing } from './types';
 import type {
   ArbitrageViewItem,
@@ -130,25 +131,11 @@ export class EbayFpDetectorService {
     if (this.validSetNumbers) return this.validSetNumbers;
 
     const validNumbers = new Set<string>();
-    const pageSize = 1000;
-    let offset = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select('set_number')
-        .range(offset, offset + pageSize - 1);
-
-      if (error) {
-        console.error('[EbayFpDetector] Failed to load set numbers:', error);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
+    try {
+      const data = await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select: 'set_number',
+      });
 
       for (const row of data) {
         const setNum = this.extractSetNumber(row.set_number);
@@ -156,9 +143,8 @@ export class EbayFpDetectorService {
           validNumbers.add(setNum);
         }
       }
-
-      hasMore = data.length === pageSize;
-      offset += pageSize;
+    } catch (error) {
+      console.error('[EbayFpDetector] Failed to load set numbers:', error);
     }
 
     console.log(`[EbayFpDetector] Loaded ${validNumbers.size} valid set numbers`);
@@ -173,27 +159,13 @@ export class EbayFpDetectorService {
     if (this.excludedBySet) return this.excludedBySet;
 
     const excludedBySet = new Map<string, Set<string>>();
-    const pageSize = 1000;
-    let offset = 0;
-    let hasMore = true;
     let totalCount = 0;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('excluded_ebay_listings')
-        .select('ebay_item_id, set_number')
-        .eq('user_id', userId)
-        .range(offset, offset + pageSize - 1);
-
-      if (error) {
-        console.error('[EbayFpDetector] Failed to load excluded listings:', error);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
+    try {
+      const data = await fetchAllRecords(this.supabase, 'excluded_ebay_listings', {
+        select: 'ebay_item_id, set_number',
+        eq: { user_id: userId },
+      });
 
       for (const row of data) {
         const setKey = row.set_number;
@@ -203,9 +175,8 @@ export class EbayFpDetectorService {
         excludedBySet.get(setKey)!.add(row.ebay_item_id);
         totalCount++;
       }
-
-      hasMore = data.length === pageSize;
-      offset += pageSize;
+    } catch (error) {
+      console.error('[EbayFpDetector] Failed to load excluded listings:', error);
     }
 
     console.log(

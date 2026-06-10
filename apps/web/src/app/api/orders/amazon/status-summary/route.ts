@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /**
  * GET /api/orders/amazon/status-summary
@@ -18,9 +19,6 @@ export async function GET() {
     }
 
     // Get all Amazon orders with pagination to handle >1000 orders
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const statusCounts: Record<string, number> = {
       Pending: 0,
       Paid: 0,
@@ -30,33 +28,20 @@ export async function GET() {
     };
     let total = 0;
 
-    while (hasMore) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: orders, error } = await (supabase as any)
-        .from('platform_orders')
-        .select('status, internal_status')
-        .eq('user_id', user.id)
-        .eq('platform', 'amazon')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    const orders = (await fetchAllRecords(supabase, 'platform_orders', {
+      select: 'status, internal_status',
+      eq: { user_id: user.id, platform: 'amazon' },
+    })) as unknown as Array<{ status: string | null; internal_status: string | null }>;
 
-      if (error) {
-        console.error('[GET /api/orders/amazon/status-summary] Error:', error);
-        return NextResponse.json({ error: 'Failed to fetch order summary' }, { status: 500 });
+    for (const order of orders) {
+      total++;
+      const normalizedStatus = normalizeStatus(order.internal_status || order.status);
+      if (statusCounts[normalizedStatus] !== undefined) {
+        statusCounts[normalizedStatus]++;
+      } else {
+        // Default to Pending for unknown statuses
+        statusCounts.Pending++;
       }
-
-      for (const order of orders || []) {
-        total++;
-        const normalizedStatus = normalizeStatus(order.internal_status || order.status);
-        if (statusCounts[normalizedStatus] !== undefined) {
-          statusCounts[normalizedStatus]++;
-        } else {
-          // Default to Pending for unknown statuses
-          statusCounts.Pending++;
-        }
-      }
-
-      hasMore = (orders?.length || 0) === pageSize;
-      page++;
     }
 
     return NextResponse.json({

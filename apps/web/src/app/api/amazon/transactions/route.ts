@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -124,51 +125,24 @@ export async function GET(request: NextRequest) {
       sortOrder,
     } = parsed.data;
 
-    // Helper to build query with filters
-    // Note: Date filtering (fromDate/toDate) is applied AFTER enrichment using purchase_date
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const applyFilters = (baseQuery: any) => {
-      let q = baseQuery.eq('user_id', user.id);
-
-      if (transactionType) {
-        q = q.eq('transaction_type', transactionType);
-      }
-      if (marketplace) {
-        q = q.eq('marketplace_id', marketplace);
-      }
-      // Date filtering moved to after enrichment to use purchase_date
-      if (search) {
-        q = q.or(
-          `asin.ilike.%${search}%,seller_sku.ilike.%${search}%,amazon_order_id.ilike.%${search}%,item_title.ilike.%${search}%`
-        );
-      }
-
-      return q;
-    };
-
     // First, get ALL transactions matching filters (for deduplication)
     // We need to fetch all to properly dedupe DEFERRED/RELEASED
-    const allTransactions: AmazonTransactionRow[] = [];
-    const fetchPageSize = 1000;
-    let fetchOffset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error: fetchError } = await applyFilters(
-        supabase.from('amazon_transactions').select('*')
-      )
-        .order('posted_date', { ascending: sortOrder === 'asc' })
-        .range(fetchOffset, fetchOffset + fetchPageSize - 1);
-
-      if (fetchError) {
-        console.error('[GET /api/amazon/transactions] Fetch error:', fetchError);
-        return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
-      }
-
-      allTransactions.push(...(data as AmazonTransactionRow[]));
-      hasMore = data?.length === fetchPageSize;
-      fetchOffset += fetchPageSize;
+    // Note: Date filtering (fromDate/toDate) is applied AFTER enrichment using purchase_date
+    const eqFilters: Record<string, string> = { user_id: user.id };
+    if (transactionType) {
+      eqFilters.transaction_type = transactionType;
     }
+    if (marketplace) {
+      eqFilters.marketplace_id = marketplace;
+    }
+
+    const allTransactions = (await fetchAllRecords(supabase, 'amazon_transactions', {
+      eq: eqFilters,
+      or: search
+        ? `asin.ilike.%${search}%,seller_sku.ilike.%${search}%,amazon_order_id.ilike.%${search}%,item_title.ilike.%${search}%`
+        : undefined,
+      orderBy: { column: 'posted_date', ascending: sortOrder === 'asc' },
+    })) as unknown as AmazonTransactionRow[];
 
     // Deduplicate - prefer RELEASED over DEFERRED for same order
     const dedupedTransactions = deduplicateTransactions(allTransactions);

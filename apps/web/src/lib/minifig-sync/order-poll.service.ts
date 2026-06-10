@@ -13,6 +13,7 @@ import { BricqerClient } from '@/lib/bricqer/client';
 import type { BricqerCredentials } from '@/lib/bricqer/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { discordService, DiscordColors } from '@/lib/notifications/discord.service';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { MinifigJobTracker } from './job-tracker';
 import { isMinifigSku, parseSku } from './types';
 import type { MinifigJobType } from './types';
@@ -92,20 +93,16 @@ export class OrderPollService {
           bricklink_id: string | null;
         }
       >();
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await this.supabase
-          .from('minifig_sync_items')
-          .select('id, bricqer_item_id, listing_status, name, bricklink_id')
-          .eq('user_id', this.userId)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        for (const row of data ?? []) {
+      try {
+        const syncItems = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+          select: 'id, bricqer_item_id, listing_status, name, bricklink_id',
+          eq: { user_id: this.userId },
+        });
+        for (const row of syncItems) {
           syncItemsByBricqerId.set(row.bricqer_item_id, row);
         }
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+      } catch (err) {
+        console.error('[OrderPollService] Failed to load sync items:', err);
       }
 
       for (const order of orders) {
@@ -285,7 +282,7 @@ export class OrderPollService {
       let latestDate = lastCursor || '';
 
       // Get all published sync items for matching — build a map by bricqer_item_id for O(1) lookup
-      const publishedItems: Array<{
+      let publishedItems: Array<{
         id: string;
         bricqer_item_id: string;
         bricklink_id: string | null;
@@ -293,19 +290,14 @@ export class OrderPollService {
         ebay_offer_id: string | null;
         name: string | null;
       }> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await this.supabase
-          .from('minifig_sync_items')
-          .select('id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id, name')
-          .eq('user_id', this.userId)
-          .eq('listing_status', 'PUBLISHED')
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        publishedItems.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+      try {
+        publishedItems = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+          select: 'id, bricqer_item_id, bricklink_id, listing_status, ebay_offer_id, name',
+          eq: { user_id: this.userId, listing_status: 'PUBLISHED' },
+        });
+      } catch (err) {
+        console.error('[OrderPollService] Failed to load published sync items:', err);
+        publishedItems = [];
       }
 
       // Build lookup map by bricqer_item_id for accurate matching (C3)

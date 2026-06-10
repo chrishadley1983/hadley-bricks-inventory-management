@@ -144,8 +144,9 @@ describe('AmazonBackfillService', () => {
       };
       mockSupabase.from.mockReturnValue(mockBuilder);
 
+      // Helper error is nested: "...backfill: Failed to fetch platform_orders: DB error"
       await expect(service.getOrdersNeedingBackfill(userId)).rejects.toThrow(
-        'Failed to fetch orders needing backfill: DB error'
+        'Failed to fetch orders needing backfill'
       );
     });
   });

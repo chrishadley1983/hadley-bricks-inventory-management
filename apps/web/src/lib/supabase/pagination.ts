@@ -29,9 +29,9 @@ export async function getAccurateCount<T extends TableName>(
   filters?: {
     eq?: Partial<Record<string, FilterValue>>;
     neq?: Partial<Record<string, FilterValue>>;
-    gt?: Partial<Record<string, number>>;
+    gt?: Partial<Record<string, number | string>>;
     gte?: Partial<Record<string, number | string>>;
-    lt?: Partial<Record<string, number>>;
+    lt?: Partial<Record<string, number | string>>;
     lte?: Partial<Record<string, number | string>>;
     in?: Partial<Record<string, FilterValue[]>>;
     notIn?: Partial<Record<string, FilterValue[]>>;
@@ -151,9 +151,9 @@ export async function fetchAllRecords<T extends TableName>(
     select?: string;
     eq?: Partial<Record<string, FilterValue>>;
     neq?: Partial<Record<string, FilterValue>>;
-    gt?: Partial<Record<string, number>>;
+    gt?: Partial<Record<string, number | string>>;
     gte?: Partial<Record<string, number | string>>;
-    lt?: Partial<Record<string, number>>;
+    lt?: Partial<Record<string, number | string>>;
     lte?: Partial<Record<string, number | string>>;
     in?: Partial<Record<string, FilterValue[]>>;
     notIn?: Partial<Record<string, FilterValue[]>>;
@@ -290,9 +290,9 @@ export async function fetchPaginated<T extends TableName>(
     select?: string;
     eq?: Partial<Record<string, FilterValue>>;
     neq?: Partial<Record<string, FilterValue>>;
-    gt?: Partial<Record<string, number>>;
+    gt?: Partial<Record<string, number | string>>;
     gte?: Partial<Record<string, number | string>>;
-    lt?: Partial<Record<string, number>>;
+    lt?: Partial<Record<string, number | string>>;
     lte?: Partial<Record<string, number | string>>;
     in?: Partial<Record<string, FilterValue[]>>;
     notIn?: Partial<Record<string, FilterValue[]>>;

@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type {
   StockPlatform,
   PlatformListing,
@@ -203,31 +204,18 @@ export abstract class PlatformStockService {
    * Uses pagination internally to handle Supabase's 1000 row limit
    */
   protected async getAllListings(): Promise<PlatformListing[]> {
-    const allListings: PlatformListing[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('platform_listings')
-        .select('*')
-        .eq('user_id', this.userId)
-        .eq('platform', this.platform)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to fetch listings: ${error.message}`);
-      }
-
-      const listings = (data || []).map((row) => this.mapListingRow(row as PlatformListingRow));
-      allListings.push(...listings);
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    let rows: PlatformListingRow[];
+    try {
+      rows = await fetchAllRecords(this.supabase, 'platform_listings', {
+        eq: { user_id: this.userId, platform: this.platform },
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch listings: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
-    return allListings;
+    return rows.map((row) => this.mapListingRow(row));
   }
 
   /**

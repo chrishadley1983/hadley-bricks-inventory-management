@@ -1230,27 +1230,19 @@ describe('EbayInventoryLinkingService', () => {
 
   describe('processHistoricalOrders error handling', () => {
     it('should handle database errors during order fetching', async () => {
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              or: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  range: vi.fn().mockResolvedValue({
-                    data: null,
-                    error: { message: 'Connection timeout' },
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      });
+      // fetchAllRecords chains select().range().eq()... and awaits the builder
+      const chain: Record<string, unknown> = {};
+      for (const m of ['select', 'eq', 'neq', 'in', 'or', 'is', 'not', 'order', 'range']) {
+        chain[m] = vi.fn().mockReturnValue(chain);
+      }
+      chain.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: { message: 'Connection timeout' } }).then(resolve);
+      mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.processHistoricalOrders();
 
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('Failed to fetch fulfilled orders page 0');
+      expect(result.errors[0]).toContain('Failed to fetch fulfilled orders');
     });
   });
 

@@ -597,47 +597,31 @@ export class InventoryRepository extends BaseRepository<
   }): Promise<{ cost: number; listingValue: number }> {
     const perf = createPerfLogger('InventoryRepo.getTotalValue');
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     let cost = 0;
     let listingValue = 0;
-    let totalRows = 0;
 
-    while (hasMore) {
-      const endPage = perf.start(`page ${page + 1}`);
-      let query = this.supabase
-        .from(this.tableName)
-        .select('cost, listing_value, status')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (options?.platform) {
-        query = query.eq('listing_platform', options.platform);
-      }
-
-      const { data, error } = await query;
-      endPage();
-
-      if (error) {
-        throw new Error(`Failed to get inventory value: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      totalRows += items.length;
-      items.forEach((item) => {
-        // Skip excluded statuses
-        if (options?.excludeStatuses?.includes(item.status as InventoryStatus)) {
-          return;
-        }
-        cost += item.cost ?? 0;
-        listingValue += item.listing_value ?? 0;
-      });
-
-      hasMore = items.length === pageSize;
-      page++;
+    let items: InventoryItem[];
+    try {
+      items = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: 'cost, listing_value, status',
+        ...(options?.platform ? { eq: { listing_platform: options.platform } } : {}),
+      })) as InventoryItem[];
+    } catch (error) {
+      throw new Error(
+        `Failed to get inventory value: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
-    perf.log('complete', { pages: page, rows: totalRows });
+    items.forEach((item) => {
+      // Skip excluded statuses
+      if (options?.excludeStatuses?.includes(item.status as InventoryStatus)) {
+        return;
+      }
+      cost += item.cost ?? 0;
+      listingValue += item.listing_value ?? 0;
+    });
+
+    perf.log('complete', { rows: items.length });
     perf.end();
     return { cost, listingValue };
   }
@@ -651,54 +635,38 @@ export class InventoryRepository extends BaseRepository<
   }): Promise<Record<string, { cost: number; listingValue: number; count: number }>> {
     const perf = createPerfLogger('InventoryRepo.getValueByStatus');
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const byStatus: Record<string, { cost: number; listingValue: number; count: number }> = {};
-    let totalRows = 0;
 
-    while (hasMore) {
-      const endPage = perf.start(`page ${page + 1}`);
-      let query = this.supabase
-        .from(this.tableName)
-        .select('cost, listing_value, status')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (options?.platform) {
-        query = query.eq('listing_platform', options.platform);
-      }
-
-      const { data, error } = await query;
-      endPage();
-
-      if (error) {
-        throw new Error(`Failed to get inventory value by status: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      totalRows += items.length;
-      items.forEach((item) => {
-        let status = item.status || 'unknown';
-
-        // Split BACKLOG into valued and unvalued
-        if (status === 'BACKLOG') {
-          const hasValue = item.listing_value !== null && item.listing_value > 0;
-          status = hasValue ? 'BACKLOG_VALUED' : 'BACKLOG_UNVALUED';
-        }
-
-        if (!byStatus[status]) {
-          byStatus[status] = { cost: 0, listingValue: 0, count: 0 };
-        }
-        byStatus[status].cost += item.cost ?? 0;
-        byStatus[status].listingValue += item.listing_value ?? 0;
-        byStatus[status].count += 1;
-      });
-
-      hasMore = items.length === pageSize;
-      page++;
+    let items: InventoryItem[];
+    try {
+      items = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: 'cost, listing_value, status',
+        ...(options?.platform ? { eq: { listing_platform: options.platform } } : {}),
+      })) as InventoryItem[];
+    } catch (error) {
+      throw new Error(
+        `Failed to get inventory value by status: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
-    perf.log('complete', { pages: page, rows: totalRows });
+    items.forEach((item) => {
+      let status = item.status || 'unknown';
+
+      // Split BACKLOG into valued and unvalued
+      if (status === 'BACKLOG') {
+        const hasValue = item.listing_value !== null && item.listing_value > 0;
+        status = hasValue ? 'BACKLOG_VALUED' : 'BACKLOG_UNVALUED';
+      }
+
+      if (!byStatus[status]) {
+        byStatus[status] = { cost: 0, listingValue: 0, count: 0 };
+      }
+      byStatus[status].cost += item.cost ?? 0;
+      byStatus[status].listingValue += item.listing_value ?? 0;
+      byStatus[status].count += 1;
+    });
+
+    perf.log('complete', { rows: items.length });
     perf.end();
     return byStatus;
   }
@@ -708,32 +676,25 @@ export class InventoryRepository extends BaseRepository<
    * Uses pagination to handle >1000 records
    */
   async getDistinctPlatforms(): Promise<string[]> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const platforms = new Set<string>();
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from(this.tableName)
-        .select('listing_platform')
-        .not('listing_platform', 'is', null)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to get distinct platforms: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      items.forEach((item) => {
-        if (item.listing_platform) {
-          platforms.add(item.listing_platform);
-        }
-      });
-
-      hasMore = items.length === pageSize;
-      page++;
+    let items: InventoryItem[];
+    try {
+      items = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: 'listing_platform',
+        isNotNull: ['listing_platform'],
+      })) as InventoryItem[];
+    } catch (error) {
+      throw new Error(
+        `Failed to get distinct platforms: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
+
+    items.forEach((item) => {
+      if (item.listing_platform) {
+        platforms.add(item.listing_platform);
+      }
+    });
 
     return Array.from(platforms).sort();
   }

@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { AmazonCredentials } from '../amazon/types';
 import { createAmazonPricingClient } from '../amazon/amazon-pricing.client';
 import { createAmazonListingsClient } from '../amazon/amazon-listings.client';
@@ -455,47 +456,22 @@ export class RepricingService {
    * Get ALL Amazon listings with qty >= minQuantity (no pagination at DB level)
    */
   private async getAllAmazonListings(filters: RepricingFilters): Promise<PlatformListingRow[]> {
-    const pageSize = 1000; // Supabase limit
-    let page = 0;
-    const allListings: PlatformListingRow[] = [];
-    let hasMore = true;
+    const data = await fetchAllRecords(this.supabase, 'platform_listings', {
+      eq: { user_id: this.userId, platform: PLATFORM_AMAZON },
+      gte: { quantity: filters.minQuantity ?? 1 },
+      orderBy: { column: 'title', ascending: true },
+    });
 
-    while (hasMore) {
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
-
-      const query = this.supabase
-        .from('platform_listings')
-        .select('*')
-        .eq('user_id', this.userId)
-        .eq('platform', PLATFORM_AMAZON)
-        .gte('quantity', filters.minQuantity ?? 1)
-        .range(from, to)
-        .order('title', { ascending: true });
-
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(`Failed to fetch listings: ${error.message}`);
-      }
-
-      const items: PlatformListingRow[] = (data || []).map((row) => ({
-        id: row.id,
-        platformItemId: row.platform_item_id,
-        platformSku: row.platform_sku,
-        title: row.title,
-        quantity: row.quantity ?? 0,
-        price: row.price,
-        listingStatus: row.listing_status ?? 'Unknown',
-        fulfillmentChannel: row.fulfillment_channel,
-      }));
-
-      allListings.push(...items);
-      hasMore = items.length === pageSize;
-      page++;
-    }
-
-    return allListings;
+    return data.map((row) => ({
+      id: row.id,
+      platformItemId: row.platform_item_id,
+      platformSku: row.platform_sku,
+      title: row.title,
+      quantity: row.quantity ?? 0,
+      price: row.price,
+      listingStatus: row.listing_status ?? 'Unknown',
+      fulfillmentChannel: row.fulfillment_channel,
+    }));
   }
 
   /**
@@ -511,33 +487,29 @@ export class RepricingService {
     }
 
     // Query ALL inventory items for this user (we'll match by multiple fields)
-    const pageSize = 1000;
-    let page = 0;
-    const allItems: Array<{
+    let allItems: Array<{
       id: string;
       amazon_asin: string | null;
       set_number: string | null;
       sku: string | null;
       cost: number | null;
     }> = [];
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('inventory_items')
-        .select('id, amazon_asin, set_number, sku, cost')
-        .eq('user_id', this.userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('[RepricingService] Error fetching inventory costs:', error);
-        break;
-      }
-
-      allItems.push(...(data || []));
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    try {
+      allItems = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: 'id, amazon_asin, set_number, sku, cost',
+        eq: { user_id: this.userId },
+        orderBy: { column: 'created_at', ascending: false },
+      })) as unknown as Array<{
+        id: string;
+        amazon_asin: string | null;
+        set_number: string | null;
+        sku: string | null;
+        cost: number | null;
+      }>;
+    } catch (error) {
+      // Original pagination loop logged the error and continued with what it had — preserve that.
+      console.error('[RepricingService] Error fetching inventory costs:', error);
     }
 
     // Create primary map by ASIN (first occurrence wins due to ordering)

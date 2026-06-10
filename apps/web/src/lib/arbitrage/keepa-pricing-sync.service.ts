@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { KeepaClient } from '../keepa/keepa-client';
 
 const BATCH_SIZE = 10; // Keepa max per request
@@ -41,35 +42,21 @@ export class KeepaPricingSyncService {
    * Find seeded ASINs that have no amazon_arbitrage_pricing rows
    */
   async getSeededAsinsWithoutPricing(): Promise<string[]> {
-    const allAsins: string[] = [];
     const pageSize = 1000;
-    let offset = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('seeded_asins')
-        .select('asin')
-        .eq('discovery_status', 'found')
-        .not('asin', 'is', null)
-        .range(offset, offset + pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to fetch seeded ASINs: ${error.message}`);
-      }
-
-      const asins = (data ?? []).map((r) => r.asin).filter((a): a is string => a !== null);
-      allAsins.push(...asins);
-      hasMore = (data?.length ?? 0) === pageSize;
-      offset += pageSize;
-    }
+    const seededRows = await fetchAllRecords(this.supabase, 'seeded_asins', {
+      select: 'asin',
+      eq: { discovery_status: 'found' },
+      isNotNull: ['asin'],
+    });
+    const allAsins = seededRows.map((r) => r.asin).filter((a): a is string => a !== null);
 
     if (allAsins.length === 0) return [];
 
     // Find which ASINs already have pricing
     const withPricing = new Set<string>();
-    offset = 0;
-    hasMore = true;
+    let offset = 0;
+    let hasMore = true;
 
     while (hasMore) {
       const { data, error } = await this.supabase

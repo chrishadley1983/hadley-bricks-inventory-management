@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sleep } from '@/lib/utils';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { Database, PlatformOrder, OrderItemInsert } from '@hadley-bricks/database';
 import { AmazonClient, AmazonRateLimitError } from '../amazon';
 import type { AmazonCredentials } from '../amazon';
@@ -81,33 +82,18 @@ export class AmazonBackfillService {
    * Uses pagination to handle >1000 orders
    */
   async getOrdersNeedingBackfill(userId: string): Promise<PlatformOrder[]> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    const allOrders: PlatformOrder[] = [];
-
-    while (hasMore) {
-      // Get orders where items_count is 0 or NULL
-      const { data, error } = await this.supabase
-        .from('platform_orders')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('platform', 'amazon')
-        .or('items_count.eq.0,items_count.is.null')
-        .order('order_date', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to fetch orders needing backfill: ${error.message}`);
-      }
-
-      const orders = (data ?? []) as PlatformOrder[];
-      allOrders.push(...orders);
-      hasMore = orders.length === pageSize;
-      page++;
+    // Get orders where items_count is 0 or NULL
+    try {
+      return (await fetchAllRecords(this.supabase, 'platform_orders', {
+        eq: { user_id: userId, platform: 'amazon' },
+        or: 'items_count.eq.0,items_count.is.null',
+        orderBy: { column: 'order_date', ascending: false },
+      })) as PlatformOrder[];
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch orders needing backfill: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
-
-    return allOrders;
   }
 
   /**

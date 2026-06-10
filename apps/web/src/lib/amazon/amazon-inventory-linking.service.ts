@@ -18,6 +18,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // ============================================================================
 // Types
@@ -301,30 +302,20 @@ export class AmazonInventoryLinkingService {
     };
 
     // Get all shipped Amazon orders without inventory linking - with pagination
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    const allOrders: Array<{ id: string; platform_order_id: string; order_date: string }> = [];
+    let allOrders: Array<{ id: string; platform_order_id: string; order_date: string }> = [];
 
-    while (hasMore) {
-      const { data: orders, error } = await this.supabase
-        .from('platform_orders')
-        .select('id, platform_order_id, order_date')
-        .eq('user_id', this.userId)
-        .eq('platform', 'amazon')
-        .in('status', ['Shipped', 'Delivered']) // Amazon shipped statuses
-        .is('inventory_link_status', null)
-        .order('order_date', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        result.errors.push(`Failed to fetch orders page ${page}: ${error.message}`);
-        break;
-      }
-
-      allOrders.push(...(orders || []));
-      hasMore = (orders?.length || 0) === pageSize;
-      page++;
+    try {
+      allOrders = (await fetchAllRecords(this.supabase, 'platform_orders', {
+        select: 'id, platform_order_id, order_date',
+        eq: { user_id: this.userId, platform: 'amazon' },
+        in: { status: ['Shipped', 'Delivered'] }, // Amazon shipped statuses
+        isNull: ['inventory_link_status'],
+        orderBy: { column: 'order_date', ascending: false },
+      })) as unknown as Array<{ id: string; platform_order_id: string; order_date: string }>;
+    } catch (error) {
+      result.errors.push(
+        `Failed to fetch orders: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
 
     console.log(`[AmazonInventoryLinking] Processing ${allOrders.length} historical orders`);
