@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Purchase, PurchaseInsert, PurchaseUpdate } from '@hadley-bricks/database';
 import { BaseRepository, PaginationOptions, PaginatedResult } from './base.repository';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /**
  * Filter options for purchase queries
@@ -121,30 +122,13 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    let total = 0;
+    const items = await fetchAllRecords(this.supabase, 'purchases', {
+      select: 'cost',
+      gte: { purchase_date: startDate },
+      lte: { purchase_date: endDate },
+    });
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from(this.tableName)
-        .select('cost')
-        .gte('purchase_date', startDate)
-        .lte('purchase_date', endDate)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to get monthly total: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      total += items.reduce((sum, item) => sum + (item.cost ?? 0), 0);
-      hasMore = items.length === pageSize;
-      page++;
-    }
-
-    return total;
+    return items.reduce((sum, item) => sum + (item.cost ?? 0), 0);
   }
 
   /**
@@ -156,29 +140,12 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
     const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
     const startDate = oneYearAgo.toISOString().split('T')[0];
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    let total = 0;
+    const items = await fetchAllRecords(this.supabase, 'purchases', {
+      select: 'cost',
+      gte: { purchase_date: startDate },
+    });
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from(this.tableName)
-        .select('cost')
-        .gte('purchase_date', startDate)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to get rolling 12-month total: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      total += items.reduce((sum, item) => sum + (item.cost ?? 0), 0);
-      hasMore = items.length === pageSize;
-      page++;
-    }
-
-    return total;
+    return items.reduce((sum, item) => sum + (item.cost ?? 0), 0);
   }
 
   /**
@@ -186,30 +153,15 @@ export class PurchaseRepository extends BaseRepository<Purchase, PurchaseInsert,
    * Uses pagination to handle >1000 records
    */
   async getTotalsBySource(): Promise<Record<string, number>> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const totals: Record<string, number> = {};
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from(this.tableName)
-        .select('source, cost')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw new Error(`Failed to get totals by source: ${error.message}`);
-      }
-
-      const items = data ?? [];
-      items.forEach((item) => {
-        const source = item.source || 'Unknown';
-        totals[source] = (totals[source] || 0) + (item.cost ?? 0);
-      });
-
-      hasMore = items.length === pageSize;
-      page++;
-    }
+    const items = await fetchAllRecords(this.supabase, 'purchases', {
+      select: 'source, cost',
+    });
+    items.forEach((item) => {
+      const source = item.source || 'Unknown';
+      totals[source] = (totals[source] || 0) + (item.cost ?? 0);
+    });
 
     return totals;
   }
