@@ -409,13 +409,29 @@ describe('Orders API Routes', () => {
   // ==========================================================================
 
   describe('DELETE /api/orders/[id]', () => {
-    it('should return 401 when not authenticated', async () => {
-      vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);
+    // Route validates the id as a UUID (400) before auth/ownership checks
+    const validOrderId = '11111111-1111-4111-8111-111111111111';
+
+    it('should return 400 for a non-UUID order id', async () => {
+      vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
 
       const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
         method: 'DELETE',
       });
       const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      vi.mocked(createClient).mockResolvedValue(createUnauthenticatedClient() as never);
+
+      const request = new NextRequest(`http://localhost:3000/api/orders/${validOrderId}`, {
+        method: 'DELETE',
+      });
+      const response = await DeleteOrder(request, {
+        params: Promise.resolve({ id: validOrderId }),
+      });
 
       expect(response.status).toBe(401);
     });
@@ -424,11 +440,11 @@ describe('Orders API Routes', () => {
       vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
       mockOrderRepo.findById.mockResolvedValue(null);
 
-      const request = new NextRequest('http://localhost:3000/api/orders/nonexistent', {
+      const request = new NextRequest(`http://localhost:3000/api/orders/${validOrderId}`, {
         method: 'DELETE',
       });
       const response = await DeleteOrder(request, {
-        params: Promise.resolve({ id: 'nonexistent' }),
+        params: Promise.resolve({ id: validOrderId }),
       });
 
       expect(response.status).toBe(404);
@@ -439,10 +455,12 @@ describe('Orders API Routes', () => {
       vi.mocked(createClient).mockResolvedValue(createAuthenticatedClient() as never);
       mockOrderRepo.findById.mockResolvedValue(otherUserOrder);
 
-      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+      const request = new NextRequest(`http://localhost:3000/api/orders/${validOrderId}`, {
         method: 'DELETE',
       });
-      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+      const response = await DeleteOrder(request, {
+        params: Promise.resolve({ id: validOrderId }),
+      });
 
       expect(response.status).toBe(403);
     });
@@ -452,15 +470,17 @@ describe('Orders API Routes', () => {
       mockOrderRepo.findById.mockResolvedValue(createMockOrder());
       mockOrderRepo.delete.mockResolvedValue(undefined);
 
-      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+      const request = new NextRequest(`http://localhost:3000/api/orders/${validOrderId}`, {
         method: 'DELETE',
       });
-      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+      const response = await DeleteOrder(request, {
+        params: Promise.resolve({ id: validOrderId }),
+      });
 
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json.success).toBe(true);
-      expect(mockOrderRepo.delete).toHaveBeenCalledWith('order-001');
+      expect(mockOrderRepo.delete).toHaveBeenCalledWith(validOrderId);
     });
 
     it('should return 500 on service error', async () => {
@@ -468,10 +488,12 @@ describe('Orders API Routes', () => {
       mockOrderRepo.findById.mockResolvedValue(createMockOrder());
       mockOrderRepo.delete.mockRejectedValue(new Error('Database error'));
 
-      const request = new NextRequest('http://localhost:3000/api/orders/order-001', {
+      const request = new NextRequest(`http://localhost:3000/api/orders/${validOrderId}`, {
         method: 'DELETE',
       });
-      const response = await DeleteOrder(request, { params: Promise.resolve({ id: 'order-001' }) });
+      const response = await DeleteOrder(request, {
+        params: Promise.resolve({ id: validOrderId }),
+      });
 
       expect(response.status).toBe(500);
     });
