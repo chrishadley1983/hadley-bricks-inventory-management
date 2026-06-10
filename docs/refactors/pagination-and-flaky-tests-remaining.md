@@ -89,8 +89,9 @@ bug), not the ordering.
 | `platform-stock/amazon/__tests__/amazon-stock.service.test.ts` | 1 | ✅ | mock chain swapped to `.order().range()` terminal |
 | `repositories/__tests__/order.repository.test.ts` | 1 | ✅ | spy `getOrderItems` (link-preserve read); inserts stamped with `inventory_item_id` |
 | `app/api/__tests__/arbitrage.test.ts` | 1 | ✅ | defaults are now `minMargin: 0` + `maxCog: 100` (filters off by default) |
+| `services/__tests__/order-status.service.test.ts` | 3 | ✅ | **found during post-fix validation** (not in original 24): pagination test mocked `.range()` to always return a full 1000-row page → service's `while(orders.length === pageSize)` never terminated → worker OOM (`Worker exited unexpectedly` in full-suite runs); also 2 filter mocks with stale nesting (service chains `.range()` before conditional filters) |
 
-All 10 files verified isolation-green post-fix (306 tests). Branch rebased onto
+All 11 files verified isolation-green post-fix (347 tests). Branch rebased onto
 origin/main (post-#419) before the remaining fixes.
 
 ### After all 24 are isolation-green
