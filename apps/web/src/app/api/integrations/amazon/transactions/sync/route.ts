@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { amazonTransactionSyncService } from '@/lib/amazon';
 import { AmazonInventoryLinkingService } from '@/lib/amazon/amazon-inventory-linking.service';
 
@@ -14,15 +14,8 @@ const SyncSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json().catch(() => ({}));
     const parsed = SyncSchema.safeParse(body);
@@ -74,15 +67,8 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Get comprehensive sync status
     const status = await amazonTransactionSyncService.getSyncStatus(user.id);

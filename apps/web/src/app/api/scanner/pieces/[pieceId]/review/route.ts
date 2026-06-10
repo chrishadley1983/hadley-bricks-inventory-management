@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { ScannerRepository } from '@/lib/repositories/scanner.repository';
 
 export const runtime = 'nodejs';
@@ -23,15 +23,8 @@ export async function PATCH(
   { params }: { params: Promise<{ pieceId: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const { pieceId } = await params;
 

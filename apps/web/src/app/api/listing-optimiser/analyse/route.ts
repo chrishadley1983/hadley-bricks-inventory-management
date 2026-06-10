@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { getListingOptimiserService } from '@/lib/ebay/listing-optimiser.service';
 
 const AnalyseRequestSchema = z.object({
@@ -16,15 +16,8 @@ const AnalyseRequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Validate input
     const body = await request.json();

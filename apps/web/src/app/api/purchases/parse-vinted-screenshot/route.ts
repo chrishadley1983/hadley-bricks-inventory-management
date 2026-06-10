@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { sendMessageWithImagesForJSON, type ImageMediaType } from '@/lib/ai/claude-client';
 import {
   PARSE_VINTED_SCREENSHOT_SYSTEM_PROMPT,
@@ -27,15 +27,8 @@ const RequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Validate request body
     const body = await request.json();

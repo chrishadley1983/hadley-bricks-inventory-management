@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
@@ -31,15 +31,8 @@ function mapEbayStatusToUI(
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { orderId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Fetch order with line items and fulfilments
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

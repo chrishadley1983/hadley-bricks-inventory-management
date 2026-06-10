@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { BrickLinkClient } from '@/lib/bricklink/client';
 import { CredentialsRepository } from '@/lib/repositories';
 import type { BrickLinkCredentials } from '@/lib/bricklink/types';
@@ -14,15 +14,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Get set number from ASIN mapping or use default test set
     const asin = request.nextUrl.searchParams.get('asin') ?? 'B0BBSB69YX';

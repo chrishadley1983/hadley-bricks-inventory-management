@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { ArbitrageService } from '@/lib/arbitrage';
 import { BrickLinkStoreDealService } from '@/lib/arbitrage/bricklink-store-deal.service';
 import { BrickLinkSessionExpiredError } from '@/lib/arbitrage/bricklink-store-scraper';
@@ -20,15 +20,8 @@ const BatchScrapeSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json().catch(() => ({}));
     const parsed = BatchScrapeSchema.safeParse(body);

@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { monzoSheetsSyncService } from '@/lib/monzo/monzo-sheets-sync.service';
 
 // Schema for POST request
@@ -22,15 +22,8 @@ const SyncRequestSchema = z.object({
 export async function GET() {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Get sync status from sheets service
     const syncStatus = await monzoSheetsSyncService.getSyncStatus(user.id);
@@ -50,15 +43,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // 2. Check if sync is already running
     const syncStatus = await monzoSheetsSyncService.getSyncStatus(user.id);

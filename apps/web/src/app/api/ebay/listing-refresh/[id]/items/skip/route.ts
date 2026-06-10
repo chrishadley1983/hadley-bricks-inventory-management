@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.service';
 
 const BulkSkipSchema = z.object({
@@ -18,15 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
 
     // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Validate input
     const body = await request.json();

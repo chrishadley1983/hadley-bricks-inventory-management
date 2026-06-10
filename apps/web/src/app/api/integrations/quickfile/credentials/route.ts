@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 import { CredentialsRepository } from '@/lib/repositories';
 import { QuickFileService } from '@/lib/services/quickfile.service';
 import type { QuickFileCredentials } from '@/types/mtd-export';
@@ -16,15 +16,8 @@ const CredentialsSchema = z.object({
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const credentialsRepo = new CredentialsRepository(supabase);
     const hasCredentials = await credentialsRepo.hasCredentials(user.id, 'quickfile');
@@ -44,15 +37,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const body = await request.json();
     const parsed = CredentialsSchema.safeParse(body);
@@ -98,15 +84,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     const credentialsRepo = new CredentialsRepository(supabase);
     await credentialsRepo.deleteCredentials(user.id, 'quickfile');

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/api/require-user';
 
 interface RouteParams {
   params: Promise<{ orderId: string }>;
@@ -19,15 +19,8 @@ const ConfirmSchema = z.object({
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { orderId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, supabase, unauthorized } = await requireUser();
+    if (unauthorized) return unauthorized;
 
     // Parse request body
     const body = await request.json().catch(() => ({}));
