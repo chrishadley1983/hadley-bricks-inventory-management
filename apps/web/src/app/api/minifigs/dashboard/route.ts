@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 export const runtime = 'nodejs';
 
@@ -14,61 +15,48 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Paginated fetch helpers for queries that may exceed 1000 rows (M1)
-    async function fetchStatusCounts() {
-      const results: Array<{ listing_status: string | null }> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await supabase
-          .from('minifig_sync_items')
-          .select('listing_status')
-          .eq('user_id', user!.id)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        results.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+    // Paginated fetch helpers for queries that may exceed 1000 rows (M1).
+    // Errors are logged and treated as empty results (the original loops
+    // ignored query errors rather than failing the whole dashboard).
+    async function fetchStatusCounts(): Promise<Array<{ listing_status: string | null }>> {
+      try {
+        return (await fetchAllRecords(supabase, 'minifig_sync_items', {
+          select: 'listing_status',
+          eq: { user_id: user!.id },
+        })) as unknown as Array<{ listing_status: string | null }>;
+      } catch (err) {
+        console.error('[GET /api/minifigs/dashboard] Status counts fetch failed:', err);
+        return [];
       }
-      return results;
     }
 
-    async function fetchExecutedRemovals() {
-      const results: Array<{ sale_price: number | null; sold_on: string }> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await supabase
-          .from('minifig_removal_queue')
-          .select('sale_price, sold_on')
-          .eq('user_id', user!.id)
-          .eq('status', 'EXECUTED')
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        results.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+    async function fetchExecutedRemovals(): Promise<
+      Array<{ sale_price: number | null; sold_on: string }>
+    > {
+      try {
+        return (await fetchAllRecords(supabase, 'minifig_removal_queue', {
+          select: 'sale_price, sold_on',
+          eq: { user_id: user!.id, status: 'EXECUTED' },
+        })) as unknown as Array<{ sale_price: number | null; sold_on: string }>;
+      } catch (err) {
+        console.error('[GET /api/minifigs/dashboard] Executed removals fetch failed:', err);
+        return [];
       }
-      return results;
     }
 
-    async function fetchSoldItems() {
-      const results: Array<{ created_at: string | null; updated_at: string | null }> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await supabase
-          .from('minifig_sync_items')
-          .select('created_at, updated_at')
-          .eq('user_id', user!.id)
-          .in('listing_status', ['SOLD_EBAY', 'SOLD_BRICQER'])
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        results.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+    async function fetchSoldItems(): Promise<
+      Array<{ created_at: string | null; updated_at: string | null }>
+    > {
+      try {
+        return (await fetchAllRecords(supabase, 'minifig_sync_items', {
+          select: 'created_at, updated_at',
+          eq: { user_id: user!.id },
+          in: { listing_status: ['SOLD_EBAY', 'SOLD_BRICQER'] },
+        })) as unknown as Array<{ created_at: string | null; updated_at: string | null }>;
+      } catch (err) {
+        console.error('[GET /api/minifigs/dashboard] Sold items fetch failed:', err);
+        return [];
       }
-      return results;
     }
 
     // Run all independent queries in parallel (M2)

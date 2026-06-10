@@ -10,6 +10,7 @@ import type { Database } from '@hadley-bricks/database';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
 import type { EbayConditionEnum, EbayInventoryItem } from '@/lib/ebay/types';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type { MinifigSyncItem } from './types';
 
 interface QualityCheckResult {
@@ -144,20 +145,14 @@ export class ListingActionsService {
     errors: Array<{ itemId: string; error: string }>;
   }> {
     // Paginated fetch for staged items (CR-009)
-    const stagedItems: MinifigSyncItem[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data } = await this.supabase
-        .from('minifig_sync_items')
-        .select('*')
-        .eq('user_id', this.userId)
-        .eq('listing_status', 'STAGED')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-      stagedItems.push(...((data ?? []) as MinifigSyncItem[]));
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    let stagedItems: MinifigSyncItem[] = [];
+    try {
+      stagedItems = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+        eq: { user_id: this.userId, listing_status: 'STAGED' },
+      });
+    } catch (err) {
+      console.error('[ListingActionsService] Failed to fetch staged items:', err);
+      stagedItems = [];
     }
 
     let published = 0;

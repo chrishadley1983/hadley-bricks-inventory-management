@@ -11,6 +11,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 export interface HistoricalAppreciationResult {
   total_retired_sets: number;
@@ -106,44 +107,32 @@ export class HistoricalAppreciationService {
    */
   private async fetchRetiredSets(): Promise<RetiredSet[]> {
     const sets: RetiredSet[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select(
-          'set_number, uk_retail_price, exit_date, expected_retirement_date, has_amazon_listing'
-        )
-        .eq('retirement_status' as string, 'retired')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select:
+          'set_number, uk_retail_price, exit_date, expected_retirement_date, has_amazon_listing',
+        eq: { retirement_status: 'retired' },
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[HistoricalAppreciation] Error fetching retired sets:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[HistoricalAppreciation] Error fetching retired sets:', error.message);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      for (const row of data) {
-        const record = row as unknown as Record<string, unknown>;
-        // Prefer exit_date (backfilled from Brickset CSV + us_date_removed), fall back to expected_retirement_date
-        const retiredDate =
-          (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
-        sets.push({
-          set_number: record.set_number as string,
-          uk_retail_price: record.uk_retail_price as number | null,
-          retired_date: retiredDate,
-          has_amazon_listing: record.has_amazon_listing as boolean | null,
-        });
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
+    for (const record of rows) {
+      // Prefer exit_date (backfilled from Brickset CSV + us_date_removed), fall back to expected_retirement_date
+      const retiredDate =
+        (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
+      sets.push({
+        set_number: record.set_number as string,
+        uk_retail_price: record.uk_retail_price as number | null,
+        retired_date: retiredDate,
+        has_amazon_listing: record.has_amazon_listing as boolean | null,
+      });
     }
 
     return sets;
@@ -155,48 +144,36 @@ export class HistoricalAppreciationService {
    */
   private async batchFetchSnapshots(setNums: string[]): Promise<Map<string, PriceSnapshot[]>> {
     const snapshotsBySet = new Map<string, PriceSnapshot[]>();
-    const pageSize = 1000;
 
     // Fetch in chunks of set numbers to avoid query size limits
     for (let chunkStart = 0; chunkStart < setNums.length; chunkStart += 100) {
       const setNumChunk = setNums.slice(chunkStart, chunkStart + 100);
-      let page = 0;
-      let hasMore = true;
 
-      while (hasMore) {
-        const { data, error } = await this.supabase
-          .from('price_snapshots')
-          .select('set_num, date, price_gbp, sales_rank')
-          .in('set_num', setNumChunk)
-          .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
-          .order('date', { ascending: true })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+      let rows: Record<string, unknown>[] = [];
+      try {
+        rows = (await fetchAllRecords(this.supabase, 'price_snapshots', {
+          select: 'set_num, date, price_gbp, sales_rank',
+          in: { set_num: setNumChunk, source: ['keepa_amazon_buybox', 'amazon_buybox'] },
+          orderBy: { column: 'date', ascending: true },
+        })) as unknown as Record<string, unknown>[];
+      } catch (err) {
+        console.error(
+          '[HistoricalAppreciation] Error fetching snapshots:',
+          err instanceof Error ? err.message : err
+        );
+        continue;
+      }
 
-        if (error) {
-          console.error('[HistoricalAppreciation] Error fetching snapshots:', error.message);
-          break;
-        }
-
-        if (!data || data.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        for (const row of data) {
-          const r = row as Record<string, unknown>;
-          const setNum = r.set_num as string;
-          const existing = snapshotsBySet.get(setNum) ?? [];
-          existing.push({
-            set_num: setNum,
-            date: r.date as string,
-            price_gbp: r.price_gbp as number | null,
-            sales_rank: r.sales_rank as number | null,
-          });
-          snapshotsBySet.set(setNum, existing);
-        }
-
-        hasMore = data.length === pageSize;
-        page++;
+      for (const r of rows) {
+        const setNum = r.set_num as string;
+        const existing = snapshotsBySet.get(setNum) ?? [];
+        existing.push({
+          set_num: setNum,
+          date: r.date as string,
+          price_gbp: r.price_gbp as number | null,
+          sales_rank: r.sales_rank as number | null,
+        });
+        snapshotsBySet.set(setNum, existing);
       }
     }
 

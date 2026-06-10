@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { KeepaClient, type KeepaProduct, type KeepaImportResult } from './keepa-client';
 
 export interface KeepaImportOptions {
@@ -119,36 +120,25 @@ export class KeepaImportService {
    */
   private async fetchRetiredSetAsins(): Promise<string[]> {
     const asins: string[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select('amazon_asin')
-        .eq('retirement_status' as string, 'retired')
-        .eq('has_amazon_listing' as string, true)
-        .not('amazon_asin' as string, 'is', null)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select: 'amazon_asin',
+        eq: { retirement_status: 'retired', has_amazon_listing: true },
+        isNotNull: ['amazon_asin'],
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaImport] Error fetching retired set ASINs:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaImport] Error fetching retired set ASINs:', error.message);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      for (const row of data) {
-        const asin = (row as unknown as Record<string, unknown>).amazon_asin as string;
-        if (asin) asins.push(asin);
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
+    for (const row of rows) {
+      const asin = row.amazon_asin as string;
+      if (asin) asins.push(asin);
     }
 
     return [...new Set(asins)]; // Deduplicate
@@ -159,35 +149,25 @@ export class KeepaImportService {
    */
   private async fetchAllSetAsins(): Promise<string[]> {
     const asins: string[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select('amazon_asin')
-        .eq('has_amazon_listing' as string, true)
-        .not('amazon_asin' as string, 'is', null)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select: 'amazon_asin',
+        eq: { has_amazon_listing: true },
+        isNotNull: ['amazon_asin'],
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaImport] Error fetching ASINs:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaImport] Error fetching ASINs:', error.message);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      for (const row of data) {
-        const asin = (row as unknown as Record<string, unknown>).amazon_asin as string;
-        if (asin) asins.push(asin);
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
+    for (const row of rows) {
+      const asin = row.amazon_asin as string;
+      if (asin) asins.push(asin);
     }
 
     return [...new Set(asins)];
@@ -231,34 +211,24 @@ export class KeepaImportService {
    */
   private async getSetNumsWithPriceData(): Promise<Set<string>> {
     const setNums = new Set<string>();
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('price_snapshots')
-        .select('set_num')
-        .eq('source', 'keepa_amazon_buybox')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'price_snapshots', {
+        select: 'set_num',
+        eq: { source: 'keepa_amazon_buybox' },
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaImport] Error fetching existing price data:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaImport] Error fetching existing price data:', error.message);
-        break;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      for (const row of data) {
-        const setNum = (row as unknown as Record<string, unknown>).set_num as string;
-        if (setNum) setNums.add(setNum);
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
+    for (const row of rows) {
+      const setNum = row.set_num as string;
+      if (setNum) setNums.add(setNum);
     }
 
     return setNums;

@@ -7,35 +7,21 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 export async function GET() {
   try {
     const supabase = createServiceRoleClient();
 
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
+    const rows = await fetchAllRecords(supabase, 'brickset_sets', {
+      select: 'theme',
+      isNotNull: ['theme'],
+    });
+
     const themeSet = new Set<string>();
-
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('brickset_sets')
-        .select('theme')
-        .not('theme', 'is', null)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('[GET /api/investment/themes] Query error:', error.message);
-        return NextResponse.json({ error: 'Database query failed' }, { status: 500 });
-      }
-
-      for (const row of data ?? []) {
-        const theme = (row as Record<string, unknown>).theme as string;
-        if (theme) themeSet.add(theme);
-      }
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    for (const row of rows) {
+      const theme = (row as Record<string, unknown>).theme as string;
+      if (theme) themeSet.add(theme);
     }
 
     const themes = [...themeSet].sort((a, b) => a.localeCompare(b));

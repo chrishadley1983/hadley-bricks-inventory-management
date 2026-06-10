@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // Amazon FBM UK fee constants
 const REFERRAL_FEE_RATE = 0.15;
@@ -80,37 +81,23 @@ export async function GET() {
     }
 
     // Step 1: Get in-stock ASINs from tracked_asins
+    const trackedRows = await fetchAllRecords(supabase, 'tracked_asins', {
+      select: 'asin, name, price, quantity',
+      eq: { status: 'active' },
+      gt: { quantity: 0 },
+      pageSize: 500,
+    });
     const allTracked: Array<{
       asin: string;
       name: string | null;
       price: number | null;
       quantity: number;
-    }> = [];
-    const pageSize = 500;
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('tracked_asins')
-        .select('asin, name, price, quantity')
-        .eq('status', 'active')
-        .gt('quantity', 0)
-        .range(offset, offset + pageSize - 1);
-
-      if (error) throw new Error(`tracked_asins query: ${error.message}`);
-      if (!data || data.length === 0) break;
-      for (const row of data) {
-        allTracked.push({
-          asin: row.asin,
-          name: row.name,
-          price: row.price,
-          quantity: row.quantity ?? 0,
-        });
-      }
-      hasMore = data.length === pageSize;
-      offset += pageSize;
-    }
+    }> = trackedRows.map((row) => ({
+      asin: row.asin,
+      name: row.name,
+      price: row.price,
+      quantity: row.quantity ?? 0,
+    }));
 
     if (allTracked.length === 0) {
       return NextResponse.json({ data: { items: [], summary: { totalInStock: 0, losingBuyBox: 0, winningBuyBox: 0, matchBB: 0, review: 0, loss: 0, noCost: 0, avgGap: 0, totalGapValue: 0 } } });

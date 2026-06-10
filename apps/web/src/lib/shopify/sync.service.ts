@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { ShopifyClient } from './client';
 import { calculateShopifyPrice, formatShopifyPrice } from './pricing';
 import {
@@ -813,9 +814,6 @@ export class ShopifySyncService {
     const existingIds = new Set(existingMappings?.map((m) => m.inventory_item_id) || []);
 
     // Fetch unsynced LISTED items with grouping fields (paginate for >1000)
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const unsyncedItems: Array<{
       id: string;
       set_number: string | null;
@@ -823,24 +821,28 @@ export class ShopifySyncService {
       listing_value: number | null;
     }> = [];
 
-    while (hasMore) {
-      const { data } = await this.supabase
-        .from('inventory_items')
-        .select('id, set_number, condition, listing_value')
-        .eq('user_id', this.userId)
-        .eq('status', 'LISTED')
-        .not('set_number', 'is', null)
-        .neq('set_number', 'NA')
-        .order('created_at', { ascending: true })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    try {
+      const items = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: 'id, set_number, condition, listing_value',
+        eq: { user_id: this.userId, status: 'LISTED' },
+        neq: { set_number: 'NA' },
+        isNotNull: ['set_number'],
+        orderBy: { column: 'created_at', ascending: true },
+      })) as unknown as Array<{
+        id: string;
+        set_number: string | null;
+        condition: string | null;
+        listing_value: number | null;
+      }>;
 
-      for (const item of data ?? []) {
+      for (const item of items) {
         if (!existingIds.has(item.id)) {
           unsyncedItems.push(item);
         }
       }
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    } catch (error) {
+      // Original pagination loop ignored fetch errors (treated as no data) — preserve that.
+      console.error('[ShopifySync] Error fetching unsynced LISTED items:', error);
     }
 
     // Group by (set_number, condition, listing_value)

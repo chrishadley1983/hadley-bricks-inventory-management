@@ -7,6 +7,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 export interface ExcludedBrickLinkStore {
   id: string;
@@ -15,8 +16,6 @@ export interface ExcludedBrickLinkStore {
   excludedAt: string;
 }
 
-const PAGE_SIZE = 1000;
-
 export class BrickLinkStoreExclusionService {
   constructor(private supabase: SupabaseClient<Database>) {}
 
@@ -24,37 +23,18 @@ export class BrickLinkStoreExclusionService {
    * Get all excluded stores for a user.
    */
   async getExcludedStores(userId: string): Promise<ExcludedBrickLinkStore[]> {
-    const stores: ExcludedBrickLinkStore[] = [];
-    let page = 0;
-    let hasMore = true;
+    const data = await fetchAllRecords(this.supabase, 'excluded_bricklink_stores', {
+      select: 'id, store_name, reason, excluded_at',
+      eq: { user_id: userId },
+      orderBy: { column: 'excluded_at', ascending: false },
+    });
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('excluded_bricklink_stores')
-        .select('id, store_name, reason, excluded_at')
-        .eq('user_id', userId)
-        .order('excluded_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) {
-        console.error('[BrickLinkStoreExclusionService.getExcludedStores] Error:', error);
-        throw new Error(`Failed to fetch excluded stores: ${error.message}`);
-      }
-
-      for (const row of data ?? []) {
-        stores.push({
-          id: row.id,
-          storeName: row.store_name,
-          reason: row.reason,
-          excludedAt: row.excluded_at,
-        });
-      }
-
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
-
-    return stores;
+    return data.map((row) => ({
+      id: row.id,
+      storeName: row.store_name,
+      reason: row.reason,
+      excludedAt: row.excluded_at,
+    }));
   }
 
   /**

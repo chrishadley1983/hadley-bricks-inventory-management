@@ -503,6 +503,25 @@ describe('OrderStatusService', () => {
   });
 
   describe('getStatusSummary', () => {
+    // getStatusSummary fetches via fetchAllRecords (select().range().eq()...
+    // then awaits the builder), so mocks are flexible self-returning chains
+    // resolving one page of results per await (last page repeats).
+    const createSummaryChain = (pages: unknown[][]) => {
+      let call = 0;
+      const chain: Record<string, unknown> = {};
+      chain.select = vi.fn().mockReturnValue(chain);
+      chain.eq = vi.fn().mockReturnValue(chain);
+      chain.gte = vi.fn().mockReturnValue(chain);
+      chain.lte = vi.fn().mockReturnValue(chain);
+      chain.range = vi.fn().mockReturnValue(chain);
+      chain.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({
+          data: pages[Math.min(call++, pages.length - 1)],
+          error: null,
+        }).then(resolve);
+      return chain;
+    };
+
     it('should return count by status', async () => {
       const mockOrders = [
         { internal_status: 'Paid', status: null },
@@ -511,13 +530,7 @@ describe('OrderStatusService', () => {
         { internal_status: null, status: 'completed' }, // Will normalize to Completed
       ];
 
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({ data: mockOrders, error: null }),
-          }),
-        }),
-      });
+      mockSupabase.from.mockReturnValue(createSummaryChain([mockOrders]));
 
       const result = await service.getStatusSummary('test-user-id');
 
@@ -526,23 +539,8 @@ describe('OrderStatusService', () => {
       expect(result.Completed).toBe(1);
     });
 
-    // The service applies .range() before the conditional .eq/.gte/.lte filters
-    // (builder call order is irrelevant to PostgREST), so these mocks need a
-    // flexible self-returning chain that resolves when awaited.
-    const createSummaryChain = (mockOrders: unknown[]) => {
-      const chain: Record<string, unknown> = {};
-      chain.select = vi.fn().mockReturnValue(chain);
-      chain.eq = vi.fn().mockReturnValue(chain);
-      chain.gte = vi.fn().mockReturnValue(chain);
-      chain.lte = vi.fn().mockReturnValue(chain);
-      chain.range = vi.fn().mockReturnValue(chain);
-      chain.then = (resolve: (value: unknown) => unknown) =>
-        Promise.resolve({ data: mockOrders, error: null }).then(resolve);
-      return chain;
-    };
-
     it('should filter by platform when provided', async () => {
-      const chain = createSummaryChain([{ internal_status: 'Paid', status: null }]);
+      const chain = createSummaryChain([[{ internal_status: 'Paid', status: null }]]);
       mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.getStatusSummary('test-user-id', 'amazon');
@@ -552,7 +550,7 @@ describe('OrderStatusService', () => {
     });
 
     it('should filter by date range when provided', async () => {
-      const chain = createSummaryChain([{ internal_status: 'Shipped', status: null }]);
+      const chain = createSummaryChain([[{ internal_status: 'Shipped', status: null }]]);
       mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.getStatusSummary('test-user-id', undefined, {
@@ -566,16 +564,13 @@ describe('OrderStatusService', () => {
     });
 
     it('should throw error on query failure', async () => {
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
-        }),
-      });
+      const chain: Record<string, unknown> = {};
+      chain.select = vi.fn().mockReturnValue(chain);
+      chain.eq = vi.fn().mockReturnValue(chain);
+      chain.range = vi.fn().mockReturnValue(chain);
+      chain.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: { message: 'Database error' } }).then(resolve);
+      mockSupabase.from.mockReturnValue(chain);
 
       await expect(service.getStatusSummary('test-user-id')).rejects.toThrow(
         'Failed to get status summary'
@@ -583,26 +578,18 @@ describe('OrderStatusService', () => {
     });
 
     it('should handle pagination for large datasets', async () => {
-      // Service fetches page-by-page while pages come back full (1000 rows),
-      // so the mock must return a short final page or the loop never ends.
+      // fetchAllRecords pages while pages come back full (1000 rows), so the
+      // mock must return a short final page or the loop never ends.
       const fullPage = Array(1000).fill({ internal_status: 'Pending', status: null });
       const finalPage = Array(250).fill({ internal_status: 'Pending', status: null });
 
-      const range = vi
-        .fn()
-        .mockResolvedValueOnce({ data: fullPage, error: null })
-        .mockResolvedValueOnce({ data: finalPage, error: null });
-
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({ range }),
-        }),
-      });
+      const chain = createSummaryChain([fullPage, finalPage]);
+      mockSupabase.from.mockReturnValue(chain);
 
       const result = await service.getStatusSummary('test-user-id');
 
       expect(result.Pending).toBe(1250);
-      expect(range).toHaveBeenCalledTimes(2);
+      expect(chain.range).toHaveBeenCalledTimes(2);
     });
   });
 

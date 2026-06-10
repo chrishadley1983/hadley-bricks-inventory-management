@@ -13,6 +13,7 @@
 
 import * as tf from '@tensorflow/tfjs';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { ModelTrainingService } from './ml/model-training.service';
 import {
   featuresToVector,
@@ -429,39 +430,32 @@ export class InvestmentScoringService {
   private async fetchDemandData(): Promise<Map<string, { salesRank: number; offerCount: number }>> {
     const demandMap = new Map<string, { salesRank: number; offerCount: number }>();
 
-    // Paginate price snapshots ordered by date desc, keeping most recent per set
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
+    // Fetch price snapshots ordered by date desc, keeping most recent per set
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'price_snapshots', {
+        select: 'set_num, sales_rank, seller_count, date',
+        in: { source: ['keepa_amazon_buybox', 'amazon_buybox'] },
+        isNotNull: ['sales_rank'],
+        orderBy: { column: 'date', ascending: false },
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[Scoring] Error fetching demand data:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-    while (hasMore) {
-      const { data } = await this.supabase
-        .from('price_snapshots')
-        .select('set_num, sales_rank, seller_count, date')
-        .in('source', ['keepa_amazon_buybox', 'amazon_buybox'])
-        .not('sales_rank', 'is', null)
-        .order('date', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
+    // Keep most recent entry per set (data is ordered by date desc)
+    for (const r of rows) {
+      const setNum = r.set_num as string;
+      if (!demandMap.has(setNum)) {
+        demandMap.set(setNum, {
+          salesRank: (r.sales_rank as number) ?? 0,
+          offerCount: (r.seller_count as number) ?? 0,
+        });
       }
-
-      // Keep most recent entry per set (data is ordered by date desc)
-      for (const row of data) {
-        const r = row as Record<string, unknown>;
-        const setNum = r.set_num as string;
-        if (!demandMap.has(setNum)) {
-          demandMap.set(setNum, {
-            salesRank: (r.sales_rank as number) ?? 0,
-            offerCount: (r.seller_count as number) ?? 0,
-          });
-        }
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
     }
 
     return demandMap;

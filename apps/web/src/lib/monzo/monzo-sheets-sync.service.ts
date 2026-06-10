@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { getSheetsClient } from '@/lib/google/sheets-client';
 
 // ============================================================================
@@ -149,25 +150,24 @@ export class MonzoSheetsSyncService {
 
       // Get existing transaction IDs to check for updates vs inserts
       // Use pagination to handle >1000 transactions (Supabase row limit)
-      const existingTransactions: Array<{
+      let existingTransactions: Array<{
         monzo_transaction_id: string;
         local_category: string | null;
         user_notes: string | null;
       }> = [];
-      const PAGE_SIZE = 1000;
-      let page = 0;
-      let hasMore = true;
 
-      while (hasMore) {
-        const { data } = await supabase
-          .from('monzo_transactions')
-          .select('monzo_transaction_id, local_category, user_notes')
-          .eq('user_id', userId)
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-        existingTransactions.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === PAGE_SIZE;
-        page++;
+      try {
+        existingTransactions = (await fetchAllRecords(supabase, 'monzo_transactions', {
+          select: 'monzo_transaction_id, local_category, user_notes',
+          eq: { user_id: userId },
+        })) as unknown as Array<{
+          monzo_transaction_id: string;
+          local_category: string | null;
+          user_notes: string | null;
+        }>;
+      } catch {
+        // Original pagination loop ignored fetch errors (treated as no data) — preserve that.
+        existingTransactions = [];
       }
 
       console.log(

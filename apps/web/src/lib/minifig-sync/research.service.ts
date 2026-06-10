@@ -3,6 +3,7 @@ import type { Database } from '@hadley-bricks/database';
 import { BrickLinkClient, RateLimitError } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { PriceCacheService } from './price-cache';
 import { MinifigConfigService } from './config.service';
 import { PricingEngine } from './pricing-engine';
@@ -94,26 +95,16 @@ export class ResearchService {
 
       // Get items to research (must have a bricklink_id) — paginated (M1)
       await onProgress?.({ type: 'stage', stage: 'fetch', message: 'Loading sync items...' });
-      const items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        let query = this.supabase
-          .from('minifig_sync_items')
-          .select('*')
-          .eq('user_id', this.userId)
-          .not('bricklink_id', 'is', null)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (itemIds?.length) {
-          query = query.in('id', itemIds);
-        }
-
-        const { data } = await query;
-        items.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+      let items: Array<Database['public']['Tables']['minifig_sync_items']['Row']> = [];
+      try {
+        items = await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+          eq: { user_id: this.userId },
+          isNotNull: ['bricklink_id'],
+          ...(itemIds?.length ? { in: { id: itemIds } } : {}),
+        });
+      } catch (err) {
+        console.error('[ResearchService] Failed to load sync items:', err);
+        items = [];
       }
 
       await onProgress?.({ type: 'stage', stage: 'research', message: 'Researching pricing...' });

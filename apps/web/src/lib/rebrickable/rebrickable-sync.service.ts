@@ -12,6 +12,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { RebrickableApiClient } from './rebrickable-api';
 import type { RebrickableSet, RebrickableTheme, RebrickableSyncResult } from './types';
 
@@ -142,27 +143,20 @@ export class RebrickableSyncService {
   /** Get all existing set numbers from brickset_sets */
   private async getExistingSetNumbers(): Promise<Set<string>> {
     const setNumbers = new Set<string>();
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select('set_number')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('[RebrickableSync] Error fetching existing sets:', error.message);
-        break;
-      }
-
-      for (const row of data ?? []) {
+    try {
+      const rows = await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select: 'set_number',
+      });
+      for (const row of rows) {
         setNumbers.add(row.set_number);
       }
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    } catch (error) {
+      // Original pagination loop logged the error and continued with what it had — preserve that.
+      console.error(
+        '[RebrickableSync] Error fetching existing sets:',
+        error instanceof Error ? error.message : error
+      );
     }
 
     return setNumbers;

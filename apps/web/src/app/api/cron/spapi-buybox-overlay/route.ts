@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { createAmazonPricingClient } from '@/lib/amazon';
 import { CredentialsRepository } from '@/lib/repositories';
 import { discordService } from '@/lib/notifications';
@@ -49,27 +50,13 @@ export async function POST(request: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
 
     // Get all in-stock ASINs (sorted for deterministic cursor)
-    const inStockAsins: string[] = [];
-    const PAGE_SIZE = 1000;
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('tracked_asins')
-        .select('asin')
-        .eq('user_id', DEFAULT_USER_ID)
-        .eq('status', 'active')
-        .gt('quantity', 0)
-        .order('asin', { ascending: true })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) throw new Error(`Failed to fetch tracked ASINs: ${error.message}`);
-      if (!data || data.length === 0) break;
-      inStockAsins.push(...data.map((r) => r.asin));
-      hasMore = data.length === PAGE_SIZE;
-      page++;
-    }
+    const trackedRows = await fetchAllRecords(supabase, 'tracked_asins', {
+      select: 'asin',
+      eq: { user_id: DEFAULT_USER_ID, status: 'active' },
+      gt: { quantity: 0 },
+      orderBy: { column: 'asin', ascending: true },
+    });
+    const inStockAsins: string[] = trackedRows.map((r) => r.asin);
 
     if (inStockAsins.length === 0) {
       await execution.complete({ reason: 'no in-stock ASINs' }, 200, 0, 0);

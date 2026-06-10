@@ -10,6 +10,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { KeepaClient, type KeepaProduct } from './keepa-client';
 import { extractSetNumber, calculateTitleMatchConfidence } from '@/lib/utils/levenshtein';
 
@@ -337,28 +338,23 @@ export class KeepaDiscoveryService {
   /** Get all brickset_set IDs that already have a 'found' seeded_asins row. */
   private async getFoundSetIds(): Promise<Set<string>> {
     const ids = new Set<string>();
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('seeded_asins')
-        .select('brickset_set_id')
-        .eq('discovery_status', 'found')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'seeded_asins', {
+        select: 'brickset_set_id',
+        eq: { discovery_status: 'found' },
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaDiscovery] Error fetching found set IDs:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaDiscovery] Error fetching found set IDs:', error.message);
-        break;
-      }
-
-      for (const row of data ?? []) {
-        ids.add((row as unknown as Record<string, unknown>).brickset_set_id as string);
-      }
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    for (const row of rows) {
+      ids.add(row.brickset_set_id as string);
     }
 
     return ids;
@@ -499,29 +495,24 @@ export class KeepaDiscoveryService {
   /** Get all ASINs currently in seeded_asins (for deduplication). */
   private async getKnownAsins(): Promise<Set<string>> {
     const asins = new Set<string>();
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('seeded_asins')
-        .select('asin')
-        .not('asin', 'is', null)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'seeded_asins', {
+        select: 'asin',
+        isNotNull: ['asin'],
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaDiscovery] Error fetching known ASINs:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaDiscovery] Error fetching known ASINs:', error.message);
-        break;
-      }
-
-      for (const row of data ?? []) {
-        const asin = (row as unknown as Record<string, unknown>).asin as string;
-        if (asin) asins.add(asin);
-      }
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    for (const row of rows) {
+      const asin = row.asin as string;
+      if (asin) asins.add(asin);
     }
 
     return asins;
@@ -533,44 +524,33 @@ export class KeepaDiscoveryService {
   > {
     const foundSetIds = await this.getFoundSetIds();
     const results: { id: string; set_number: string; name: string; ean?: string }[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('brickset_sets')
-        .select('id, set_number, set_name, ean')
-        .gte('year_from', 2010)
-        .order('set_number', { ascending: true })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = (await fetchAllRecords(this.supabase, 'brickset_sets', {
+        select: 'id, set_number, set_name, ean',
+        gte: { year_from: 2010 },
+        orderBy: { column: 'set_number', ascending: true },
+      })) as unknown as Record<string, unknown>[];
+    } catch (err) {
+      console.error(
+        '[KeepaDiscovery] Error fetching unmatched sets:',
+        err instanceof Error ? err.message : err
+      );
+      rows = [];
+    }
 
-      if (error) {
-        console.error('[KeepaDiscovery] Error fetching unmatched sets:', error.message);
-        break;
-      }
+    for (const record of rows) {
+      const id = record.id as string;
 
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
+      if (foundSetIds.has(id)) continue;
 
-      for (const row of data) {
-        const record = row as unknown as Record<string, unknown>;
-        const id = record.id as string;
-
-        if (foundSetIds.has(id)) continue;
-
-        results.push({
-          id,
-          set_number: record.set_number as string,
-          name: record.set_name as string,
-          ean: (record.ean as string) ?? undefined,
-        });
-      }
-
-      hasMore = data.length === pageSize;
-      page++;
+      results.push({
+        id,
+        set_number: record.set_number as string,
+        name: record.set_name as string,
+        ean: (record.ean as string) ?? undefined,
+      });
     }
 
     return results;

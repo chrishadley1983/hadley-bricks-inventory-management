@@ -10,6 +10,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import type {
   RetirementConfidence,
   RetirementRollupResult,
@@ -61,33 +62,27 @@ export class RetirementSyncService {
       console.log('[RetirementSync] Syncing from Brickset cache...');
 
       // Fetch sets with retirement-relevant data
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
       const records: RetirementSourceRecord[] = [];
 
-      while (hasMore) {
-        const { data, error } = await this.supabase
-          .from('brickset_sets')
-          .select('set_number, availability, exit_date, us_date_removed, year_from')
-          .not('availability', 'is', null)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+      try {
+        const rows = await fetchAllRecords(this.supabase, 'brickset_sets', {
+          select: 'set_number, availability, exit_date, us_date_removed, year_from',
+          isNotNull: ['availability'],
+        });
 
-        if (error) {
-          console.error('[RetirementSync] Brickset query error:', error.message);
-          break;
-        }
-
-        for (const row of data ?? []) {
+        for (const row of rows) {
           const record = this.mapBricksetToRetirement(row);
           if (record) {
             records.push(record);
             processed++;
           }
         }
-
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
+      } catch (error) {
+        // Original pagination loop logged the error and continued with what it had — preserve that.
+        console.error(
+          '[RetirementSync] Brickset query error:',
+          error instanceof Error ? error.message : error
+        );
       }
 
       // Upsert in batches
@@ -509,30 +504,22 @@ export class RetirementSyncService {
     console.log('[RetirementSync] Calculating rollup...');
 
     // Fetch all retirement sources grouped by set_num
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
     const sourcesBySet = new Map<string, RetirementSourceRecord[]>();
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('retirement_sources')
-        .select('*')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    try {
+      const rows = await fetchAllRecords(this.supabase, 'retirement_sources');
 
-      if (error) {
-        console.error('[RetirementSync] Rollup query error:', error.message);
-        break;
-      }
-
-      for (const row of data ?? []) {
+      for (const row of rows) {
         const existing = sourcesBySet.get(row.set_num) ?? [];
-        existing.push(row as RetirementSourceRecord);
+        existing.push(row as unknown as RetirementSourceRecord);
         sourcesBySet.set(row.set_num, existing);
       }
-
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    } catch (error) {
+      // Original pagination loop logged the error and continued with what it had — preserve that.
+      console.error(
+        '[RetirementSync] Rollup query error:',
+        error instanceof Error ? error.message : error
+      );
     }
 
     console.log(`[RetirementSync] Rollup: ${sourcesBySet.size} sets with retirement data`);

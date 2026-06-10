@@ -462,34 +462,33 @@ describe('AmazonStockService', () => {
         callCount.from++;
 
         if (table === 'platform_listings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  range: vi.fn().mockResolvedValue({
-                    data: (options.listings || []).map((l) => ({
-                      id: `listing-${l.platform_item_id}`,
-                      user_id: userId,
-                      platform: 'amazon',
-                      platform_sku: l.platform_sku,
-                      platform_item_id: l.platform_item_id,
-                      title: l.title,
-                      quantity: l.quantity,
-                      price: l.price,
-                      currency: 'GBP',
-                      listing_status: l.listing_status,
-                      fulfillment_channel: l.fulfillment_channel,
-                      import_id: 'import-1',
-                      raw_data: null,
-                      created_at: '2024-01-01T00:00:00Z',
-                      updated_at: '2024-01-01T00:00:00Z',
-                    })),
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          } as unknown as ReturnType<typeof mockSupabase.from>;
+          // getAllListings now goes through fetchAllRecords, which chains
+          // select().range().eq()... in that order and awaits the builder —
+          // use a flexible self-returning thenable chain.
+          const listingRows = (options.listings || []).map((l) => ({
+            id: `listing-${l.platform_item_id}`,
+            user_id: userId,
+            platform: 'amazon',
+            platform_sku: l.platform_sku,
+            platform_item_id: l.platform_item_id,
+            title: l.title,
+            quantity: l.quantity,
+            price: l.price,
+            currency: 'GBP',
+            listing_status: l.listing_status,
+            fulfillment_channel: l.fulfillment_channel,
+            import_id: 'import-1',
+            raw_data: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          }));
+          const chain: Record<string, unknown> = {};
+          for (const m of ['select', 'eq', 'neq', 'in', 'or', 'is', 'not', 'order', 'range']) {
+            chain[m] = vi.fn().mockReturnValue(chain);
+          }
+          chain.then = (resolve: (value: unknown) => unknown) =>
+            Promise.resolve({ data: listingRows, error: null }).then(resolve);
+          return chain as unknown as ReturnType<typeof mockSupabase.from>;
         }
 
         if (table === 'inventory_items') {

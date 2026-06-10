@@ -9,8 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-
-const PAGE_SIZE = 1000; // Supabase returns max 1000 rows
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 /**
  * Normalize a set number to BrickLink format.
@@ -342,40 +341,33 @@ export class ArbitrageWatchlistService {
     userId: string
   ): Promise<{ asin: string; bricklinkSetNumber: string | null }[]> {
     const results: { asin: string; bricklinkSetNumber: string | null }[] = [];
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
+    try {
       // Get inventory items that have been sold on Amazon (have an amazon_asin and linked to an order)
-      const { data, error } = await this.supabase
-        .from('inventory_items')
-        .select(
-          `
+      const data = (await fetchAllRecords(this.supabase, 'inventory_items', {
+        select: `
           amazon_asin,
           set_number,
           order_items!inventory_item_id(
             order_id,
             platform_orders!inner(platform)
           )
-        `
-        )
-        .eq('user_id', userId)
-        .not('amazon_asin', 'is', null)
-        .not('order_items', 'is', null)
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) {
-        console.error('[ArbitrageWatchlistService.getSoldAmazonAsins] Error:', error);
-        break;
-      }
-
-      // Deduplicate by ASIN and filter for Amazon orders
-      const seenAsins = new Set(results.map((r) => r.asin));
-      for (const item of data ?? []) {
-        const orderItems = item.order_items as unknown as Array<{
+        `,
+        eq: { user_id: userId },
+        isNotNull: ['amazon_asin', 'order_items'],
+      })) as unknown as Array<{
+        amazon_asin: string | null;
+        set_number: string | null;
+        order_items: Array<{
           order_id: string;
           platform_orders: { platform: string } | null;
         }> | null;
+      }>;
+
+      // Deduplicate by ASIN and filter for Amazon orders
+      const seenAsins = new Set<string>();
+      for (const item of data) {
+        const orderItems = item.order_items;
 
         // Check if any order is from Amazon
         const hasAmazonOrder = orderItems?.some((oi) => oi.platform_orders?.platform === 'amazon');
@@ -388,9 +380,8 @@ export class ArbitrageWatchlistService {
           });
         }
       }
-
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
+    } catch (error) {
+      console.error('[ArbitrageWatchlistService.getSoldAmazonAsins] Error:', error);
     }
 
     return results;
@@ -407,18 +398,14 @@ export class ArbitrageWatchlistService {
     userId: string
   ): Promise<{ asin: string | null; bricklinkSetNumber: string }[]> {
     const results: { asin: string | null; bricklinkSetNumber: string }[] = [];
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
+    try {
       // Get seeded ASINs that are:
       // 1. Enabled by the user
       // 2. From retired sets (us_date_removed < now)
       // 3. Have pricing data (buy_box_price or was_price_90d)
-      const { data, error } = await this.supabase
-        .from('user_seeded_asin_preferences')
-        .select(
-          `
+      const data = (await fetchAllRecords(this.supabase, 'user_seeded_asin_preferences', {
+        select: `
           manual_asin_override,
           seeded_asins!inner(
             asin,
@@ -427,25 +414,24 @@ export class ArbitrageWatchlistService {
               us_date_removed
             )
           )
-        `
-        )
-        .eq('user_id', userId)
-        .eq('include_in_sync', true)
-        .eq('user_status', 'active')
-        .not('seeded_asins.brickset_sets.us_date_removed', 'is', null)
-        .lt('seeded_asins.brickset_sets.us_date_removed', new Date().toISOString().split('T')[0])
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error) {
-        console.error('[ArbitrageWatchlistService.getRetiredSeededWithPricing] Error:', error);
-        break;
-      }
-
-      for (const item of data ?? []) {
-        const sa = item.seeded_asins as unknown as {
+        `,
+        eq: { user_id: userId, include_in_sync: true, user_status: 'active' },
+        isNotNull: ['seeded_asins.brickset_sets.us_date_removed'],
+        lt: {
+          'seeded_asins.brickset_sets.us_date_removed': new Date()
+            .toISOString()
+            .split('T')[0],
+        },
+      })) as unknown as Array<{
+        manual_asin_override: string | null;
+        seeded_asins: {
           asin: string | null;
           brickset_sets: { set_number: string; us_date_removed: string | null } | null;
-        };
+        } | null;
+      }>;
+
+      for (const item of data) {
+        const sa = item.seeded_asins;
         const asin = item.manual_asin_override ?? sa?.asin ?? null;
         const setNumber = sa?.brickset_sets?.set_number;
 
@@ -456,9 +442,8 @@ export class ArbitrageWatchlistService {
           });
         }
       }
-
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
+    } catch (error) {
+      console.error('[ArbitrageWatchlistService.getRetiredSeededWithPricing] Error:', error);
     }
 
     // Filter to only those with pricing data
@@ -502,22 +487,13 @@ export class ArbitrageWatchlistService {
    */
   private async getAllWatchlistItems(userId: string): Promise<WatchlistItem[]> {
     const results: WatchlistItem[] = [];
-    let page = 0;
-    let hasMore = true;
 
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('arbitrage_watchlist')
-        .select('*')
-        .eq('user_id', userId)
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    try {
+      const data = await fetchAllRecords(this.supabase, 'arbitrage_watchlist', {
+        eq: { user_id: userId },
+      });
 
-      if (error) {
-        console.error('[ArbitrageWatchlistService.getAllWatchlistItems] Error:', error);
-        break;
-      }
-
-      for (const item of data ?? []) {
+      for (const item of data) {
         results.push({
           id: item.id,
           asin: item.asin,
@@ -528,9 +504,8 @@ export class ArbitrageWatchlistService {
           isActive: item.is_active,
         });
       }
-
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
+    } catch (error) {
+      console.error('[ArbitrageWatchlistService.getAllWatchlistItems] Error:', error);
     }
 
     return results;

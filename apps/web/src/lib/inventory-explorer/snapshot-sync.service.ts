@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { BricqerClient } from '../bricqer/client';
 import type { BricqerCredentials, BricqerInventoryItem } from '../bricqer/types';
 import { CredentialsRepository } from '../repositories/credentials.repository';
@@ -267,21 +268,17 @@ export class SnapshotSyncService {
    */
   private async removeStaleItems(currentBricqerIds: number[]): Promise<number> {
     // Get all existing bricqer_item_ids in snapshot
-    const allExisting: number[] = [];
-    let offset = 0;
-    const pageSize = 1000;
+    let allExisting: number[] = [];
 
-    while (true) {
-      const { data } = await this.supabase
-        .from('bricqer_inventory_snapshot')
-        .select('bricqer_item_id')
-        .eq('user_id', this.userId)
-        .range(offset, offset + pageSize - 1);
-
-      if (!data || data.length === 0) break;
-      allExisting.push(...data.map((r) => r.bricqer_item_id));
-      if (data.length < pageSize) break;
-      offset += pageSize;
+    try {
+      const rows = await fetchAllRecords(this.supabase, 'bricqer_inventory_snapshot', {
+        select: 'bricqer_item_id',
+        eq: { user_id: this.userId },
+      });
+      allExisting = rows.map((r) => r.bricqer_item_id);
+    } catch {
+      // Original pagination loop ignored fetch errors (treated as no data) — preserve that.
+      allExisting = [];
     }
 
     // Find IDs to remove

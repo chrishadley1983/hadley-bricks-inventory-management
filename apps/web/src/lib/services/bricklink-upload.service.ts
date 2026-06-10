@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // ============================================================================
 // Types
@@ -286,26 +287,11 @@ export class BrickLinkUploadService {
   async getSummary(): Promise<UploadSummary> {
     // Get all uploads for summary calculations
     // Using pagination to handle large datasets
-    const pageSize = 1000;
-    let allUploads: BrickLinkUpload[] = [];
-    let hasMore = true;
-    let page = 0;
-
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('bricklink_uploads')
-        .select('*')
-        .eq('user_id', this.userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        throw error;
-      }
-
-      allUploads = [...allUploads, ...(data ?? [])];
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
-    }
+    const allUploads: BrickLinkUpload[] = await fetchAllRecords(
+      this.supabase,
+      'bricklink_uploads',
+      { eq: { user_id: this.userId } }
+    );
 
     // Calculate totals
     const totalUploads = allUploads.length;

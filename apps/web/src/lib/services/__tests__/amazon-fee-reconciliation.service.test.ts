@@ -417,9 +417,7 @@ describe('AmazonFeeReconciliationService', () => {
       const result = await service.reconcileFees(userId);
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain(
-        'Failed to fetch inventory items page 1: DB connection failed'
-      );
+      expect(result.errors).toContain('Failed to fetch inventory_items: DB connection failed');
     });
 
     it('should handle update errors', async () => {

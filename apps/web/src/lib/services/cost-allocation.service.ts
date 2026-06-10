@@ -15,6 +15,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -252,28 +254,17 @@ export class CostAllocationService {
    * Paginated fetch of all purchases for a user (1000-row pages).
    */
   async fetchAllPurchases(userId: string): Promise<PurchaseRow[]> {
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    const allPurchases: PurchaseRow[] = [];
-
-    while (hasMore) {
-      const { data, error } = await this.supabase
-        .from('purchases')
-        .select('id, cost, description, source')
-        .eq('user_id', userId)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('[CostAllocation] Failed to fetch purchases page:', error.message);
-        break;
-      }
-
-      allPurchases.push(...(data ?? []));
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
+    try {
+      return (await fetchAllRecords(this.supabase as SupabaseClient<Database>, 'purchases', {
+        select: 'id, cost, description, source',
+        eq: { user_id: userId },
+      })) as unknown as PurchaseRow[];
+    } catch (error) {
+      console.error(
+        '[CostAllocation] Failed to fetch purchases:',
+        error instanceof Error ? error.message : error
+      );
+      return [];
     }
-
-    return allPurchases;
   }
 }

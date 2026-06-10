@@ -176,6 +176,24 @@ function createChainedQuery(
   return chain;
 }
 
+/**
+ * Flexible chain for fetchAllRecords-style queries: every builder method
+ * returns the chain, and awaiting the chain yields the next result from the
+ * queue (last result repeats). Mirrors select().range().eq()... call order.
+ */
+function makeFetchAllChain(results: Array<{ data: unknown; error: unknown }>) {
+  let call = 0;
+  const chain: Record<string, ReturnType<typeof vi.fn>> & {
+    then?: (resolve: (value: unknown) => unknown) => Promise<unknown>;
+  } = {};
+  for (const m of ['select', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'or', 'is', 'not', 'order', 'range']) {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  }
+  chain.then = (resolve: (value: unknown) => unknown) =>
+    Promise.resolve(results[Math.min(call++, results.length - 1)]).then(resolve);
+  return chain;
+}
+
 // ============================================================================
 // TESTS
 // ============================================================================
@@ -384,8 +402,7 @@ describe('PlatformStockService', () => {
       );
 
       // Simulate a single page (less than 1000 items = no more pages)
-      const chain = createChainedQuery({ data: allListings });
-      chain.range = vi.fn().mockResolvedValue({ data: allListings, error: null });
+      const chain = makeFetchAllChain([{ data: allListings, error: null }]);
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       const result = await service.testGetAllListings();
@@ -403,15 +420,10 @@ describe('PlatformStockService', () => {
         createMockListingRow({ id: `listing-${1000 + i}` })
       );
 
-      let callCount = 0;
-      const chain = createChainedQuery({});
-      chain.range = vi.fn().mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          return Promise.resolve({ data: page1, error: null });
-        }
-        return Promise.resolve({ data: page2, error: null });
-      });
+      const chain = makeFetchAllChain([
+        { data: page1, error: null },
+        { data: page2, error: null },
+      ]);
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       const result = await service.testGetAllListings();
@@ -421,11 +433,7 @@ describe('PlatformStockService', () => {
     });
 
     it('should throw error on database failure', async () => {
-      const chain = createChainedQuery({});
-      chain.range = vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'Database error' },
-      });
+      const chain = makeFetchAllChain([{ data: null, error: { message: 'Database error' } }]);
       (mockSupabase.from as ReturnType<typeof vi.fn>).mockReturnValue(chain);
 
       await expect(service.testGetAllListings()).rejects.toThrow('Failed to fetch listings');

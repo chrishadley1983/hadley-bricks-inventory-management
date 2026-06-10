@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
 import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
@@ -23,28 +24,10 @@ export async function POST(request: NextRequest) {
     const userId = auth.userId;
 
     // Get all pending removals — paginated (M2)
-    const removals: Array<Record<string, unknown>> = [];
-    {
-      const pageSize = 1000;
-      let page = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data, error: fetchError } = await supabase
-          .from('minifig_removal_queue')
-          .select('*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)')
-          .eq('user_id', userId)
-          .eq('status', 'PENDING')
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (fetchError) {
-          throw new Error(fetchError.message);
-        }
-
-        removals.push(...(data ?? []));
-        hasMore = (data?.length ?? 0) === pageSize;
-        page++;
-      }
-    }
+    const removals = (await fetchAllRecords(supabase, 'minifig_removal_queue', {
+      select: '*, minifig_sync_items!minifig_removal_queue_minifig_sync_id_fkey(*)',
+      eq: { user_id: userId, status: 'PENDING' },
+    })) as unknown as Array<Record<string, unknown>>;
 
     let approved = 0;
     let failed = 0;

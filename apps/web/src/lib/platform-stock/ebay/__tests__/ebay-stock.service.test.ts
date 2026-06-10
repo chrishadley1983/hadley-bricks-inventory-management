@@ -52,6 +52,20 @@ function createMockSupabase() {
   return mockSupabase;
 }
 
+/**
+ * Flexible chain for fetchAllRecords-style queries (getAllListings):
+ * every builder method returns the chain; awaiting it yields {data, error}.
+ */
+function makeFetchAllChain(data: unknown, error: unknown = null) {
+  const chain: Record<string, unknown> = {};
+  for (const m of ['select', 'eq', 'neq', 'in', 'or', 'is', 'not', 'order', 'range']) {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  }
+  chain.then = (resolve: (value: unknown) => unknown) =>
+    Promise.resolve({ data, error }).then(resolve);
+  return chain;
+}
+
 function createMockPlatformListing(
   overrides: Partial<{
     id: string;
@@ -393,26 +407,17 @@ describe('EbayStockService', () => {
       (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn(
         (table: string) => {
           if (table === 'platform_listings') {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
-                    range: vi.fn().mockResolvedValue({
-                      data: platformListings.map((l) => ({
-                        platform_sku: l.platform_sku,
-                        title: l.title,
-                        quantity: l.quantity,
-                        price: l.price,
-                        listing_status: l.listing_status,
-                        platform_item_id: l.platform_item_id,
-                        raw_data: l.raw_data,
-                      })),
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            };
+            return makeFetchAllChain(
+              platformListings.map((l) => ({
+                platform_sku: l.platform_sku,
+                title: l.title,
+                quantity: l.quantity,
+                price: l.price,
+                listing_status: l.listing_status,
+                platform_item_id: l.platform_item_id,
+                raw_data: l.raw_data,
+              }))
+            );
           }
           if (table === 'inventory_items') {
             return {
@@ -746,18 +751,7 @@ describe('EbayStockService', () => {
       (mockSupabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi.fn(
         (table: string) => {
           if (table === 'platform_listings') {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
-                    range: vi.fn().mockResolvedValue({
-                      data: [],
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            };
+            return makeFetchAllChain([]);
           }
           if (table === 'inventory_items') {
             return {

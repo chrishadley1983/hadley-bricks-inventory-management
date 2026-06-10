@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { discordService } from '@/lib/notifications/discord.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
@@ -112,30 +113,17 @@ export async function POST(request: NextRequest) {
     );
 
     // 3. Fetch LISTED items DUE for evaluation (next_markdown_eval_at <= today or null)
-    const dueItems: InventoryItemForMarkdown[] = [];
-    let page = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const from = page * PAGE_SIZE;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: items, error: itemsError } = await (supabase as any)
-        .from('inventory_items')
-        .select(
-          'id, user_id, set_number, item_name, condition, status, cost, listing_value, listing_platform, listing_date, purchase_date, created_at, markdown_hold, amazon_asin, ebay_listing_id, next_markdown_eval_at'
-        )
-        .eq('user_id', DEFAULT_USER_ID)
-        .eq('status', 'LISTED')
-        .or(`next_markdown_eval_at.is.null,next_markdown_eval_at.lte.${today}`)
-        .order('id', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-
-      if (itemsError) throw new Error(`Failed to fetch items: ${itemsError.message}`);
-      for (const item of items || []) {
-        dueItems.push({ ...item, sales_rank: null } as InventoryItemForMarkdown);
-      }
-      hasMore = (items?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
+    const fetchedItems = await fetchAllRecords(supabase, 'inventory_items', {
+      select:
+        'id, user_id, set_number, item_name, condition, status, cost, listing_value, listing_platform, listing_date, purchase_date, created_at, markdown_hold, amazon_asin, ebay_listing_id, next_markdown_eval_at',
+      eq: { user_id: DEFAULT_USER_ID, status: 'LISTED' },
+      or: `next_markdown_eval_at.is.null,next_markdown_eval_at.lte.${today}`,
+      orderBy: { column: 'id', ascending: true },
+      pageSize: PAGE_SIZE,
+    });
+    const dueItems: InventoryItemForMarkdown[] = fetchedItems.map(
+      (item) => ({ ...item, sales_rank: null }) as unknown as InventoryItemForMarkdown
+    );
 
     // 4. Amazon pricing (Keepa) for due Amazon items
     const amazonAsins = dueItems

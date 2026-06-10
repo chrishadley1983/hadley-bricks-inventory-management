@@ -7,6 +7,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { BrickLinkStoreScraper, BrickLinkSessionExpiredError } from './bricklink-store-scraper';
 import { BrickLinkStoreExclusionService } from './bricklink-store-exclusion.service';
 
@@ -236,40 +237,15 @@ export class BrickLinkStoreDealService {
   ): Promise<StoreListing[]> {
     const { excludeStores = true, maxAgeDays = 7 } = options;
 
-    const allData: Array<Record<string, unknown>> = [];
-    let page = 0;
-    let hasMore = true;
+    // Filter by max age
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - maxAgeDays);
 
-    while (hasMore) {
-      let query = this.supabase
-        .from('bricklink_store_listings')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('bricklink_set_number', setNumber)
-        .order('estimated_total', { ascending: true })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      // Filter by max age
-      if (maxAgeDays > 0) {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - maxAgeDays);
-        query = query.gte('scraped_at', cutoff.toISOString());
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('[BrickLinkStoreDealService.getListingsForSet] Error:', error);
-        throw new Error(`Failed to fetch listings: ${error.message}`);
-      }
-
-      for (const row of data ?? []) {
-        allData.push(row as Record<string, unknown>);
-      }
-
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      page++;
-    }
+    const allData = (await fetchAllRecords(this.supabase, 'bricklink_store_listings', {
+      eq: { user_id: userId, bricklink_set_number: setNumber },
+      ...(maxAgeDays > 0 ? { gte: { scraped_at: cutoff.toISOString() } } : {}),
+      orderBy: { column: 'estimated_total', ascending: true },
+    })) as unknown as Array<Record<string, unknown>>;
 
     // Get exclusions for tagging
     const excludedNames = excludeStores
