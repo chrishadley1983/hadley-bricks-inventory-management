@@ -78,6 +78,14 @@ describe('Set Number Extraction', () => {
       expect(extractSetNumber('LEGO 999')).toBeNull(); // Below 1000
     });
 
+    it('should not extract a 4-5 digit prefix from longer digit runs', () => {
+      expect(extractSetNumber('LEGO 123456')).toBeNull();
+      expect(extractSetNumber('Set 7519212')).toBeNull();
+      expect(extractSetNumber('#423991')).toBeNull();
+      // But a valid set number elsewhere in the text still wins
+      expect(extractSetNumber('LEGO 123456 box contains 75192')).toBe('75192');
+    });
+
     it('should handle mixed case correctly', () => {
       expect(extractSetNumber('lego 75192 MILLENNIUM FALCON')).toBe('75192');
       expect(extractSetNumber('SET 10300 DeLorean')).toBe('10300');
