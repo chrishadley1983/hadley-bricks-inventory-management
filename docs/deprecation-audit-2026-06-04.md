@@ -10,7 +10,7 @@
 
 ---
 
-## Implementation Status (updated 2026-06-06)
+## Implementation Status (updated 2026-06-10 — all items complete except §1.2)
 
 Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 
@@ -31,11 +31,14 @@ Branch: `refactor/deprecation-audit-cleanup` (pushed to origin).
 
 **Remaining:** code review → merge → Vercel production deploy (run `npm run db:push` if the `20260603000001_unified_markdown.sql` migration is unapplied) → smoke test.
 
-**Deferred to separate follow-up PRs (high blast radius — do incrementally behind tests):**
-- §1.1 Supabase pagination adoption onto `fetchAllRecords`/`fetchPaginated` (~60 sites, incl. ~17 copies in `profit-loss-report.service.ts`).
-- §1.2 `withAuth` / `validateAuth` HOF across ~327 route handlers (auth-critical).
-- §1.6 `formatCurrency` adoption at the `src/lib` sites needing per-site equivalence review.
-- §1.7–§1.10 generic `fetchWithRetry`, `BaseTransactionSyncService`, shared `OAuthTokenManager`, shared `TransactionRow` base type (financial/security paths).
+**Follow-up PRs — status (2026-06-10):**
+- ✅ §1.1 Supabase pagination — COMPLETE via PRs #418/#419/#425; live-DB-equivalence verified (see `docs/refactors/pagination-and-flaky-tests-remaining.md`).
+- ✅ §1.6 `formatCurrency` — COMPLETE via PR #427: all 30 inline `Intl.NumberFormat` sites across 24 files onto shared `formatCurrency`/`formatCurrencyWhole`/`formatNumber`/`formatSalesRank`; 55-case output-equivalence probe green.
+- ✅ §1.7 generic retry — COMPLETE via PR #427: `lib/utils/fetch-with-retry.ts` adopted in rebrickable/keepa/sheets + amazon pricing/feeds/listings (catalog & finances skipped — retry entangled with token refresh); 6-case behaviour probe green.
+- ✅ §1.8 `BaseTransactionSyncService` — COMPLETE via PR #427: `lib/sync/transaction-sync-base.ts` (getSupabase pattern, batched upserts, existing-id prequery) extended by all 5 platform sync services; sync-log lifecycle/connection status deliberately kept inline (shapes differ). Live read-only `getConnectionStatus` probe green (BL 1007 tx, BO 114 tx).
+- ✅ §1.9 `OAuthTokenManager` — COMPLETE via PR #427: `lib/auth/oauth-token-manager.ts` with both boundary semantics preserved (`isTokenExpired` vs `isTokenFresh`); PayPal/eBay/Google-Calendar full adoption, Monzo partial (no refresh flow exists).
+- ✅ §1.10 shared row types — COMPLETE via PR #427: `Json` re-exported from `@hadley-bricks/database` (4 dupes removed); `BaseTransactionRow` extended by all 5 platforms (BL/BO via `Omit<…,'currency'>` — they use `base_currency`).
+- ⬜ §1.2 `withAuth` / `validateAuth` HOF across ~327 route handlers (auth-critical) — the only remaining audit item.
 
 ---
 
