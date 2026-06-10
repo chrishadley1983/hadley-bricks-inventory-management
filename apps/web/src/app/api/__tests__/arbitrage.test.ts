@@ -163,7 +163,8 @@ describe('Arbitrage API Routes', () => {
       expect(mockServiceMethods.getArbitrageData).toHaveBeenCalledWith(
         'user-123',
         expect.objectContaining({
-          minMargin: 30, // default
+          minMargin: 0, // default (filter off unless requested)
+          maxCog: 100, // default (filter off unless requested)
           show: 'all', // default
           sortField: 'margin', // default
           sortDirection: 'desc', // default

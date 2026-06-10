@@ -422,6 +422,8 @@ describe('OrderRepository', () => {
         { set_number: '76139', quantity: 2 },
       ];
 
+      // replaceOrderItems first reads existing items to preserve inventory links
+      const getItemsSpy = vi.spyOn(repository, 'getOrderItems').mockResolvedValue([]);
       const deleteItemsSpy = vi.spyOn(repository, 'deleteOrderItems').mockResolvedValue();
       const insertItemsSpy = vi.spyOn(repository, 'insertOrderItems').mockResolvedValue([
         { id: 'item-1', order_id: 'order-001', ...newItems[0] },
@@ -430,10 +432,11 @@ describe('OrderRepository', () => {
 
       const result = await repository.replaceOrderItems('order-001', newItems as never);
 
+      expect(getItemsSpy).toHaveBeenCalledWith('order-001');
       expect(deleteItemsSpy).toHaveBeenCalledWith('order-001');
       expect(insertItemsSpy).toHaveBeenCalledWith([
-        { order_id: 'order-001', ...newItems[0] },
-        { order_id: 'order-001', ...newItems[1] },
+        { order_id: 'order-001', inventory_item_id: null, ...newItems[0] },
+        { order_id: 'order-001', inventory_item_id: null, ...newItems[1] },
       ]);
       expect(result).toHaveLength(2);
     });
