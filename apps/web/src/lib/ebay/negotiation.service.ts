@@ -10,6 +10,7 @@ import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { EbayNegotiationClient, EbayNegotiationApiError } from './ebay-negotiation.client';
 import { NegotiationScoringService, MIN_DISCOUNT_PERCENTAGE } from './negotiation-scoring.service';
 import { discordService } from '@/lib/notifications';
+import { formatCurrency } from '@/lib/utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   NegotiationConfig,
@@ -39,10 +40,7 @@ const DEFAULT_OFFER_MESSAGE_TEMPLATE =
  * Format a price with currency symbol
  */
 function formatPrice(price: number, currency: string = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(price);
+  return formatCurrency(price, currency);
 }
 
 /**

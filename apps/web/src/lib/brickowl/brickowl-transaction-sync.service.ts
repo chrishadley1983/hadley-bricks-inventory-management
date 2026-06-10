@@ -7,7 +7,11 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, PlatformOrderInsert } from '@hadley-bricks/database';
-import { createClient } from '@/lib/supabase/server';
+import {
+  BaseTransactionSyncService,
+  TX_SYNC_BATCH_SIZE,
+  type BaseTransactionRow,
+} from '@/lib/sync/transaction-sync-base';
 import { BrickOwlClient } from './client';
 import { CredentialsRepository, OrderRepository } from '@/lib/repositories';
 import type { BrickOwlCredentials, BrickOwlOrderDetail } from './types';
@@ -36,17 +40,10 @@ interface BrickOwlOrderListItem {
 }
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-const BATCH_SIZE = 100; // Upsert batch size
-
-// ============================================================================
 // Types
 // ============================================================================
 
-interface TransactionRow {
-  user_id: string;
+interface TransactionRow extends Omit<BaseTransactionRow, 'currency'> {
   brickowl_order_id: string;
   order_date: string;
   status_changed_date: string | null;
@@ -71,20 +68,13 @@ interface TransactionRow {
   buyer_note: string | null;
   seller_note: string | null;
   public_note: string | null;
-  raw_response: Json;
 }
 
 // ============================================================================
 // BrickOwlTransactionSyncService Class
 // ============================================================================
 
-export class BrickOwlTransactionSyncService {
-  constructor(private readonly supabaseOverride?: SupabaseClient<Database>) {}
-
-  private async getSupabase(): Promise<SupabaseClient<Database>> {
-    return this.supabaseOverride ?? (await createClient());
-  }
-
+export class BrickOwlTransactionSyncService extends BaseTransactionSyncService {
   // ============================================================================
   // Connection Status
   // ============================================================================
@@ -670,13 +660,12 @@ export class BrickOwlTransactionSyncService {
 
     // Get existing order IDs for this user
     const orderIds = orders.map((o) => String(o.order_id));
-    const { data: existingOrders } = await supabase
-      .from('brickowl_transactions')
-      .select('brickowl_order_id')
-      .eq('user_id', userId)
-      .in('brickowl_order_id', orderIds);
-
-    const existingOrderIds = new Set(existingOrders?.map((o) => o.brickowl_order_id) || []);
+    const existingOrderIds = await this.fetchExistingIds(
+      'brickowl_transactions',
+      'brickowl_order_id',
+      userId,
+      orderIds
+    );
 
     // Transform orders to rows, filtering out nulls (orders without valid dates)
     const rows = orders
@@ -699,17 +688,12 @@ export class BrickOwlTransactionSyncService {
     }
 
     // Upsert brickowl_transactions in batches
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase
-        .from('brickowl_transactions')
-        .upsert(batch, { onConflict: 'user_id,brickowl_order_id' });
-
-      if (error) {
-        console.error('[BrickOwlTransactionSyncService] Upsert error:', error);
-        throw new Error(`Failed to upsert transactions: ${error.message}`);
-      }
-    }
+    await this.batchUpsert(
+      'brickowl_transactions',
+      rows,
+      'user_id,brickowl_order_id',
+      'BrickOwlTransactionSyncService'
+    );
 
     // Dual-write to platform_orders. Same skip rule (orders without a valid
     // date) — both writes either land or skip in lockstep.
@@ -719,8 +703,8 @@ export class BrickOwlTransactionSyncService {
 
     if (platformRows.length > 0) {
       const orderRepo = new OrderRepository(supabase);
-      for (let i = 0; i < platformRows.length; i += BATCH_SIZE) {
-        const batch = platformRows.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < platformRows.length; i += TX_SYNC_BATCH_SIZE) {
+        const batch = platformRows.slice(i, i + TX_SYNC_BATCH_SIZE);
         await orderRepo.upsertMany(batch);
       }
       console.log(

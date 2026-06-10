@@ -53,6 +53,7 @@ import { BRICKLINK_STATUS_LABELS } from '@/lib/bricklink';
 import { BRICKOWL_STATUS_LABELS } from '@/lib/brickowl';
 import { AMAZON_TRANSACTION_TYPE_LABELS, AMAZON_MARKETPLACE_LABELS } from '@/lib/amazon/types';
 import { usePerfPage } from '@/hooks/use-perf';
+import { formatCurrency } from '@/lib/utils';
 
 const Header = dynamic(
   () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
@@ -646,18 +647,11 @@ async function fetchAmazonTransactions(params: {
 // ============================================================================
 
 function formatAmount(amountInPence: number, currency: string = 'GBP'): string {
-  const amount = amountInPence / 100;
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amountInPence / 100, currency);
 }
 
 function formatEbayAmount(amount: number, currency: string = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amount, currency);
 }
 
 function formatDate(dateString: string): string {

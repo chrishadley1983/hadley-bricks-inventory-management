@@ -15,6 +15,12 @@
 
 import type { AmazonCredentials } from './types';
 import { sleep } from '@/lib/utils';
+import {
+  isRetryableError,
+  retryableDelay,
+  RetryableError,
+  withRetry,
+} from '@/lib/utils/fetch-with-retry';
 import type {
   CreateFeedDocumentResponse,
   CreateFeedResponse,
@@ -363,60 +369,68 @@ export class AmazonFeedsClient {
    * Make an authenticated request to the SP-API
    */
   private async request<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
-    const accessToken = await this.getAccessToken();
+    return withRetry<T>(
+      async () => {
+        const accessToken = await this.getAccessToken();
 
-    const url = `${this.endpoint}${path}`;
-    const headers: Record<string, string> = {
-      'x-amz-access-token': accessToken,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-
-    const options: RequestInit = {
-      method,
-      headers,
-    };
-
-    if (body && method === 'POST') {
-      options.body = JSON.stringify(body);
-    }
-
-    // Rate limiting delay
-    await sleep(API_DELAY_MS);
-
-    const response = await fetch(url, options);
-
-    // Handle rate limiting
-    if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
-      console.warn(`[AmazonFeedsClient] Rate limited, waiting ${waitTime / 1000}s...`);
-      await sleep(waitTime);
-      return this.request<T>(path, method, body);
-    }
-
-    // Handle auth errors
-    if (response.status === 401 || response.status === 403) {
-      this.tokenData = null; // Clear token to force refresh
-      throw new Error('Invalid or expired access token');
-    }
-
-    if (!response.ok) {
-      let errorMessage = `Request failed with status ${response.status}`;
-      try {
-        const errorData = (await response.json()) as {
-          errors?: AmazonApiError[];
+        const url = `${this.endpoint}${path}`;
+        const headers: Record<string, string> = {
+          'x-amz-access-token': accessToken,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
         };
-        if (errorData.errors && errorData.errors.length > 0) {
-          errorMessage = errorData.errors.map((e) => e.message).join('; ');
-        }
-      } catch {
-        // Ignore JSON parse errors
-      }
-      throw new Error(errorMessage);
-    }
 
-    return response.json() as Promise<T>;
+        const options: RequestInit = {
+          method,
+          headers,
+        };
+
+        if (body && method === 'POST') {
+          options.body = JSON.stringify(body);
+        }
+
+        // Rate limiting delay
+        await sleep(API_DELAY_MS);
+
+        const response = await fetch(url, options);
+
+        // Handle rate limiting (retried indefinitely, as before)
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
+          console.warn(`[AmazonFeedsClient] Rate limited, waiting ${waitTime / 1000}s...`);
+          throw new RetryableError('Rate limited by Amazon SP-API', waitTime);
+        }
+
+        // Handle auth errors
+        if (response.status === 401 || response.status === 403) {
+          this.tokenData = null; // Clear token to force refresh
+          throw new Error('Invalid or expired access token');
+        }
+
+        if (!response.ok) {
+          let errorMessage = `Request failed with status ${response.status}`;
+          try {
+            const errorData = (await response.json()) as {
+              errors?: AmazonApiError[];
+            };
+            if (errorData.errors && errorData.errors.length > 0) {
+              errorMessage = errorData.errors.map((e) => e.message).join('; ');
+            }
+          } catch {
+            // Ignore JSON parse errors
+          }
+          throw new Error(errorMessage);
+        }
+
+        return response.json() as Promise<T>;
+      },
+      {
+        maxRetries: Number.POSITIVE_INFINITY,
+        backoff: retryableDelay,
+        isRetryable: isRetryableError,
+      }
+    );
   }
 
   // ==========================================================================

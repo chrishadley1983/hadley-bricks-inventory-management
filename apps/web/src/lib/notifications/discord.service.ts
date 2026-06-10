@@ -21,6 +21,8 @@
  *    - DISCORD_WEBHOOK_PETER_CHAT
  */
 
+import { formatSalesRank } from '@/lib/utils';
+
 export interface SyncFailureParams {
   feedId: string;
   itemCount: number;
@@ -475,7 +477,7 @@ export class DiscordService {
     if (salesRank) {
       fields.push({
         name: '📈 Sales Rank',
-        value: `#${new Intl.NumberFormat('en-GB').format(salesRank)}`,
+        value: formatSalesRank(salesRank),
         inline: true,
       });
     }

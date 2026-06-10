@@ -7,6 +7,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/crypto';
+import { getValidAccessToken } from '@/lib/auth/oauth-token-manager';
 import type {
   GoogleCalendarConnectionStatus,
   GoogleCalendarOAuthState,
@@ -215,28 +216,27 @@ export class GoogleCalendarAuthService {
       return null;
     }
 
-    const expiresAt = new Date(credentials.access_token_expires_at);
-    const now = new Date();
+    return getValidAccessToken({
+      accessToken: credentials.access_token,
+      expiresAt: credentials.access_token_expires_at,
+      refreshBufferMs: TOKEN_EXPIRY_BUFFER_MS,
+      refresh: async () => {
+        // Need to refresh
+        if (!credentials.refresh_token) {
+          console.warn('[GoogleCalendarAuthService] No refresh token available for user:', userId);
+          return null;
+        }
 
-    // Check if token is expired or about to expire
-    if (expiresAt.getTime() - now.getTime() < TOKEN_EXPIRY_BUFFER_MS) {
-      // Need to refresh
-      if (!credentials.refresh_token) {
-        console.warn('[GoogleCalendarAuthService] No refresh token available for user:', userId);
-        return null;
-      }
-
-      try {
-        const newTokens = await this.refreshAccessToken(credentials.refresh_token);
-        await this.updateAccessToken(userId, newTokens);
-        return newTokens.access_token;
-      } catch (error) {
-        console.error('[GoogleCalendarAuthService] Failed to refresh token:', error);
-        return null;
-      }
-    }
-
-    return credentials.access_token;
+        try {
+          const newTokens = await this.refreshAccessToken(credentials.refresh_token);
+          await this.updateAccessToken(userId, newTokens);
+          return newTokens.access_token;
+        } catch (error) {
+          console.error('[GoogleCalendarAuthService] Failed to refresh token:', error);
+          return null;
+        }
+      },
+    });
   }
 
   // ============================================================================

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EngagementBadge } from './EngagementPopover';
 import type { EligibleListing } from '@/lib/ebay/listing-refresh.types';
+import { formatCurrency } from '@/lib/utils';
 
 interface EligibleListingsTableProps {
   listings: EligibleListing[];
@@ -32,13 +33,6 @@ export function EligibleListingsTable({
     },
     [onSelectionChange]
   );
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: currency || 'GBP',
-    }).format(amount);
-  };
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-GB', {

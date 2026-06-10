@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 
 interface StatCardProps {
   title: string;
@@ -29,14 +29,11 @@ export function StatCard({
     if (typeof val === 'string') return val;
     switch (format) {
       case 'currency':
-        return new Intl.NumberFormat('en-GB', {
-          style: 'currency',
-          currency: 'GBP',
-        }).format(val);
+        return formatCurrency(val);
       case 'percent':
         return `${val.toFixed(1)}%`;
       default:
-        return new Intl.NumberFormat('en-GB').format(val);
+        return formatNumber(val);
     }
   };
 

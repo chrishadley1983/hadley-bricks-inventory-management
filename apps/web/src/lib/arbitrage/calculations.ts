@@ -6,6 +6,7 @@
  */
 
 import type { ProfitCalculation, AmazonFBMProfitBreakdown } from './types';
+import { formatCurrency, formatSalesRank as formatSalesRankShared } from '@/lib/utils';
 
 // ============================================
 // Amazon FBM UK Fee Constants (2026)
@@ -105,10 +106,7 @@ export function formatCurrencyGBP(amount: number | null): string {
   if (amount === null || amount === undefined) {
     return '—';
   }
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
+  return formatCurrency(amount);
 }
 
 /**
@@ -121,7 +119,7 @@ export function formatSalesRank(rank: number | null): string {
   if (rank === null || rank === undefined) {
     return '—';
   }
-  return `#${new Intl.NumberFormat('en-GB').format(rank)}`;
+  return formatSalesRankShared(rank);
 }
 
 /**

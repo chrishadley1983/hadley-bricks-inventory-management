@@ -4,6 +4,8 @@
  * Type definitions for Monzo API responses and internal service types.
  */
 
+import { formatCurrency } from '@/lib/utils';
+
 // ============================================================================
 // Monzo API Response Types
 // ============================================================================
@@ -252,11 +254,7 @@ export const MONZO_CATEGORY_LABELS: Record<MonzoCategory, string> = {
  * Format amount from minor units (pence) to display string
  */
 export function formatMonzoAmount(amountInPence: number, currency: string = 'GBP'): string {
-  const amount = amountInPence / 100;
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amountInPence / 100, currency);
 }
 
 /**

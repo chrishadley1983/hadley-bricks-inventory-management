@@ -11,7 +11,7 @@ import { PushPriceButton } from './PushPriceButton';
 import { ProfitCalculator } from './ProfitCalculator';
 import { usePushPrice } from '@/hooks/use-repricing';
 import type { RepricingItem, PushStatus } from '@/lib/repricing';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface RepricingRowProps {
   item: RepricingItem;
@@ -43,15 +43,6 @@ export function RepricingRow({ item }: RepricingRowProps) {
 
   // Has price changed from original?
   const priceChanged = pendingPrice !== null && pendingPrice !== item.yourPrice;
-
-  // Format currency
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return '—';
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP',
-    }).format(amount);
-  };
 
   // Format diff with color
   const formatDiff = (diff: number | null) => {

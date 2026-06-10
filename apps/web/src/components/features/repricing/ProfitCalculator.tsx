@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { calculateAmazonFBMProfit } from '@/lib/arbitrage/calculations';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ProfitCalculatorProps {
   salePrice: number;
@@ -27,12 +27,6 @@ export function ProfitCalculator({ salePrice, productCost, className }: ProfitCa
 
   const isProfit = breakdown.totalProfit >= 0;
   const profitColor = isProfit ? 'text-green-600' : 'text-red-600';
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP',
-    }).format(amount);
 
   const formatPercent = (percent: number) => {
     const sign = percent >= 0 ? '+' : '';

@@ -27,6 +27,40 @@ export function formatCurrency(amount: number | string | null | undefined, curre
 }
 
 /**
+ * Format a number as whole-pound currency (no pence) — dashboards/metric cards
+ */
+export function formatCurrencyWhole(
+  amount: number | string | null | undefined,
+  currency?: string | null
+): string {
+  if (amount == null) return '—';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '—';
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: currency || 'GBP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+/**
+ * Format a plain number with en-GB thousands separators
+ */
+export function formatNumber(value: number | null | undefined): string {
+  if (value == null || isNaN(value)) return '—';
+  return new Intl.NumberFormat('en-GB').format(value);
+}
+
+/**
+ * Format a sales rank as e.g. "#12,345"
+ */
+export function formatSalesRank(rank: number | null | undefined): string {
+  if (rank == null || isNaN(rank)) return '—';
+  return `#${new Intl.NumberFormat('en-GB').format(rank)}`;
+}
+
+/**
  * Format a date string for display
  */
 export function formatDate(dateString: string | null | undefined): string {

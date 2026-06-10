@@ -10,6 +10,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/crypto';
+import { isTokenExpired } from '@/lib/auth/oauth-token-manager';
 import type {
   MonzoTokenResponse,
   MonzoAuthConfig,
@@ -188,11 +189,8 @@ export class MonzoAuthService {
       return null;
     }
 
-    // Check if token is expired
-    const expiresAt = new Date(credentials.access_token_expires_at);
-    const now = new Date();
-
-    if (expiresAt < now) {
+    // Check if token is expired (Monzo tokens cannot be refreshed)
+    if (isTokenExpired(credentials.access_token_expires_at)) {
       console.warn('[MonzoAuthService] Access token expired for user:', userId);
       return null;
     }

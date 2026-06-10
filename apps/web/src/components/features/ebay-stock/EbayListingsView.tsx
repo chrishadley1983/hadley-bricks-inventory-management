@@ -40,6 +40,7 @@ import { EbayListingsFilters } from './EbayListingsFilters';
 import { PriceUpdateDialog } from './PriceUpdateDialog';
 import type { EbayListingFilters, EbayListingData } from '@/lib/platform-stock/ebay/types';
 import type { PlatformListing, ListingStatus } from '@/lib/platform-stock/types';
+import { formatCurrency } from '@/lib/utils';
 
 // Column definitions
 type ColumnKey =
@@ -86,10 +87,7 @@ function getStatusBadgeVariant(
 
 function formatPrice(price: number | null): string {
   if (price === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(price);
+  return formatCurrency(price);
 }
 
 // Price editing state type

@@ -8,6 +8,14 @@
  * @see https://rebrickable.com/api/v3/docs/
  */
 
+import { sleep } from '@/lib/utils';
+import {
+  isRetryableError,
+  retryableDelay,
+  RetryableError,
+  withRetry,
+} from '@/lib/utils/fetch-with-retry';
+
 import type {
   RebrickableMinifig,
   RebrickableMinifigSet,
@@ -61,41 +69,48 @@ export class RebrickableApiClient {
 
   /** Fetch with 429 rate-limit retry (up to 3 attempts with exponential backoff) */
   async fetchWithRetry<T>(url: string, maxRetries = 3): Promise<T> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `key ${this.apiKey}`,
-          Accept: 'application/json',
-        },
-      });
+    return withRetry<T>(
+      async (attempt) => {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `key ${this.apiKey}`,
+            Accept: 'application/json',
+          },
+        });
 
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        const waitMs = retryAfter
-          ? parseInt(retryAfter, 10) * 1000
-          : Math.min(2000 * Math.pow(2, attempt), 10000);
-        console.warn(
-          `[RebrickableAPI] Rate limited (429), waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`
-        );
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          const waitMs = retryAfter
+            ? parseInt(retryAfter, 10) * 1000
+            : Math.min(2000 * Math.pow(2, attempt), 10000);
+          console.warn(
+            `[RebrickableAPI] Rate limited (429), waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`
+          );
 
-      if (!response.ok) {
-        throw new RebrickableApiError(
-          `Rebrickable API error: ${response.status} ${response.statusText}`,
-          response.status,
-          response.statusText
-        );
-      }
+          if (attempt === maxRetries) {
+            // Final attempt: the original loop still waited before throwing.
+            await sleep(waitMs);
+            throw new RebrickableApiError(
+              'Rebrickable API rate limit exceeded after retries',
+              429,
+              'Too Many Requests'
+            );
+          }
 
-      return response.json() as Promise<T>;
-    }
+          throw new RetryableError('Rebrickable API rate limited (429)', waitMs);
+        }
 
-    throw new RebrickableApiError(
-      'Rebrickable API rate limit exceeded after retries',
-      429,
-      'Too Many Requests'
+        if (!response.ok) {
+          throw new RebrickableApiError(
+            `Rebrickable API error: ${response.status} ${response.statusText}`,
+            response.status,
+            response.statusText
+          );
+        }
+
+        return response.json() as Promise<T>;
+      },
+      { maxRetries, backoff: retryableDelay, isRetryable: isRetryableError }
     );
   }
 

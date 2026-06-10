@@ -7,8 +7,11 @@
  * Based on the Monzo sync pattern with adaptations for eBay's API structure.
  */
 
-import { createClient } from '@/lib/supabase/server';
 import { sleep } from '@/lib/utils';
+import {
+  BaseTransactionSyncService,
+  type BaseTransactionRow,
+} from '@/lib/sync/transaction-sync-base';
 import { EbayAuthService, ebayAuthService } from './ebay-auth.service';
 import { EbayApiAdapter } from './ebay-api.adapter';
 import type {
@@ -17,14 +20,13 @@ import type {
   EbayTransactionsResponse,
   EbayPayoutsResponse,
 } from './types';
-import type { Json } from '@hadley-bricks/database';
+import type { Database, Json } from '@hadley-bricks/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const BATCH_SIZE = 100; // Upsert batch size
 const MAX_TRANSACTIONS_PER_PAGE = 1000; // eBay's max for getTransactions
 const MAX_PAYOUTS_PER_PAGE = 200; // eBay max for getPayouts
 const RATE_LIMIT_DELAY_MS = 150; // Delay between paginated requests
@@ -61,15 +63,13 @@ export interface EbaySyncOptions {
   toDate?: string; // ISO date string for historical imports
 }
 
-interface TransactionRow {
-  user_id: string;
+interface TransactionRow extends BaseTransactionRow {
   ebay_transaction_id: string;
   ebay_order_id: string | null;
   transaction_type: string;
   transaction_status: string;
   transaction_date: string;
   amount: number;
-  currency: string;
   booking_entry: string;
   payout_id: string | null;
   buyer_username: string | null;
@@ -88,30 +88,25 @@ interface TransactionRow {
   item_title: string | null;
   custom_label: string | null;
   quantity: number | null;
-  raw_response: Json;
 }
 
-interface PayoutRow {
-  user_id: string;
+interface PayoutRow extends BaseTransactionRow {
   ebay_payout_id: string;
   payout_status: string;
   payout_date: string;
   amount: number;
-  currency: string;
   payout_instrument: Json | null;
   transaction_count: number | null;
   payout_memo: string | null;
   bank_reference: string | null;
   last_attempted_payout_date: string | null;
-  raw_response: Json;
 }
 
 // ============================================================================
 // EbayTransactionSyncService Class
 // ============================================================================
 
-export class EbayTransactionSyncService {
-  private injectedSupabase: SupabaseClient | null = null;
+export class EbayTransactionSyncService extends BaseTransactionSyncService {
   private authService: EbayAuthService;
 
   /**
@@ -119,19 +114,19 @@ export class EbayTransactionSyncService {
    * @param supabase Optional Supabase client (for cron/background jobs that need service role access)
    */
   constructor(supabase?: SupabaseClient) {
-    this.injectedSupabase = supabase || null;
+    super(supabase as SupabaseClient<Database> | undefined);
     // Create auth service with same Supabase client for consistency
     this.authService = supabase ? new EbayAuthService(undefined, supabase) : ebayAuthService;
   }
 
   /**
-   * Get the Supabase client - uses injected client if available, otherwise creates cookie-based client
+   * Untyped Supabase client wrapper. This file predates the typed client and
+   * its queries are written against an untyped SupabaseClient; casting here
+   * (rather than adopting the typed base getSupabase return) avoids a cascade
+   * of type errors with zero runtime change.
    */
-  private async getSupabase(): Promise<SupabaseClient> {
-    if (this.injectedSupabase) {
-      return this.injectedSupabase;
-    }
-    return createClient();
+  private async getDb(): Promise<SupabaseClient> {
+    return (await this.getSupabase()) as SupabaseClient;
   }
 
   // ============================================================================
@@ -149,7 +144,7 @@ export class EbayTransactionSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await this.getSupabase();
+    const supabase = await this.getDb();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[EbayTransactionSyncService] Sync mode:', syncMode);
 
@@ -376,7 +371,7 @@ export class EbayTransactionSyncService {
       options
     );
     const startedAt = new Date();
-    const supabase = await this.getSupabase();
+    const supabase = await this.getDb();
     const syncMode = options?.fromDate ? 'HISTORICAL' : options?.fullSync ? 'FULL' : 'INCREMENTAL';
     console.log('[EbayTransactionSyncService] Payout sync mode:', syncMode);
 
@@ -594,7 +589,7 @@ export class EbayTransactionSyncService {
     userId: string,
     fromDate: string
   ): Promise<{ transactions: EbaySyncResult; payouts: EbaySyncResult }> {
-    const supabase = await this.getSupabase();
+    const supabase = await this.getDb();
     const toDate = new Date().toISOString();
 
     // Update sync config to track historical import
@@ -647,7 +642,7 @@ export class EbayTransactionSyncService {
     };
     config?: { autoSyncEnabled: boolean; nextSyncAt?: Date; historicalImportCompleted: boolean };
   }> {
-    const supabase = await this.getSupabase();
+    const supabase = await this.getDb();
 
     // Get running syncs
     const { data: runningSyncs } = await supabase
@@ -735,8 +730,6 @@ export class EbayTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await this.getSupabase();
-
     // Deduplicate transactions by transactionId (eBay API can return duplicates across pages)
     const uniqueTransactions = Array.from(
       new Map(transactions.map((tx) => [tx.transactionId, tx])).values()
@@ -746,16 +739,12 @@ export class EbayTransactionSyncService {
     );
 
     // Get existing transaction IDs
-    const { data: existingTransactions } = await supabase
-      .from('ebay_transactions')
-      .select('ebay_transaction_id')
-      .eq('user_id', userId)
-      .in(
-        'ebay_transaction_id',
-        uniqueTransactions.map((t) => t.transactionId)
-      );
-
-    const existingIds = new Set(existingTransactions?.map((t) => t.ebay_transaction_id) || []);
+    const existingIds = await this.fetchExistingIds(
+      'ebay_transactions',
+      'ebay_transaction_id',
+      userId,
+      uniqueTransactions.map((t) => t.transactionId)
+    );
 
     // Transform transactions
     const transactionRows: TransactionRow[] = uniqueTransactions.map((tx) => {
@@ -815,28 +804,25 @@ export class EbayTransactionSyncService {
     });
 
     // Upsert in batches
+    await this.batchUpsert(
+      'ebay_transactions',
+      transactionRows,
+      'user_id,ebay_transaction_id',
+      'EbayTransactionSyncService',
+      {
+        logMessage: 'Failed to upsert transactions:',
+        errorMessage: () => 'Failed to save transactions',
+        ignoreDuplicates: false,
+      }
+    );
+
     let created = 0;
     let updated = 0;
-
-    for (let i = 0; i < transactionRows.length; i += BATCH_SIZE) {
-      const batch = transactionRows.slice(i, i + BATCH_SIZE);
-
-      const { error } = await supabase.from('ebay_transactions').upsert(batch, {
-        onConflict: 'user_id,ebay_transaction_id',
-        ignoreDuplicates: false,
-      });
-
-      if (error) {
-        console.error('[EbayTransactionSyncService] Failed to upsert transactions:', error);
-        throw new Error('Failed to save transactions');
-      }
-
-      for (const row of batch) {
-        if (existingIds.has(row.ebay_transaction_id)) {
-          updated++;
-        } else {
-          created++;
-        }
+    for (const row of transactionRows) {
+      if (existingIds.has(row.ebay_transaction_id)) {
+        updated++;
+      } else {
+        created++;
       }
     }
 
@@ -854,8 +840,6 @@ export class EbayTransactionSyncService {
       return { created: 0, updated: 0 };
     }
 
-    const supabase = await this.getSupabase();
-
     // Deduplicate payouts by payoutId (eBay API can return duplicates across pages)
     const uniquePayouts = Array.from(new Map(payouts.map((p) => [p.payoutId, p])).values());
     console.log(
@@ -863,16 +847,12 @@ export class EbayTransactionSyncService {
     );
 
     // Get existing payout IDs
-    const { data: existingPayouts } = await supabase
-      .from('ebay_payouts')
-      .select('ebay_payout_id')
-      .eq('user_id', userId)
-      .in(
-        'ebay_payout_id',
-        uniquePayouts.map((p) => p.payoutId)
-      );
-
-    const existingIds = new Set(existingPayouts?.map((p) => p.ebay_payout_id) || []);
+    const existingIds = await this.fetchExistingIds(
+      'ebay_payouts',
+      'ebay_payout_id',
+      userId,
+      uniquePayouts.map((p) => p.payoutId)
+    );
 
     // Transform payouts
     const payoutRows: PayoutRow[] = uniquePayouts.map((p) => ({
@@ -891,37 +871,30 @@ export class EbayTransactionSyncService {
     }));
 
     // Upsert in batches
+    await this.batchUpsert(
+      'ebay_payouts',
+      payoutRows,
+      'user_id,ebay_payout_id',
+      'EbayTransactionSyncService',
+      {
+        logMessage: 'Failed to upsert payouts:',
+        errorMessage: () => 'Failed to save payouts',
+        ignoreDuplicates: false,
+      }
+    );
+
     let created = 0;
     let updated = 0;
-
-    for (let i = 0; i < payoutRows.length; i += BATCH_SIZE) {
-      const batch = payoutRows.slice(i, i + BATCH_SIZE);
-
-      const { error } = await supabase.from('ebay_payouts').upsert(batch, {
-        onConflict: 'user_id,ebay_payout_id',
-        ignoreDuplicates: false,
-      });
-
-      if (error) {
-        console.error('[EbayTransactionSyncService] Failed to upsert payouts:', error);
-        throw new Error('Failed to save payouts');
-      }
-
-      for (const row of batch) {
-        if (existingIds.has(row.ebay_payout_id)) {
-          updated++;
-        } else {
-          created++;
-        }
+    for (const row of payoutRows) {
+      if (existingIds.has(row.ebay_payout_id)) {
+        updated++;
+      } else {
+        created++;
       }
     }
 
     return { created, updated };
   }
-
-  /**
-   * Delay helper for rate limiting
-   */
 }
 
 // Export a default instance

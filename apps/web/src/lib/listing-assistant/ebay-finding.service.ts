@@ -6,6 +6,7 @@
  */
 
 import { getEbayFindingClient, type SoldListingsResult } from '@/lib/ebay/ebay-finding.client';
+import { formatCurrency } from '@/lib/utils';
 import type { EbaySoldItem } from './types';
 
 /**
@@ -90,10 +91,7 @@ function formatDate(isoDate: string): string {
  * Format price for display
  */
 export function formatPrice(price: number, currency: string = 'GBP'): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(price);
+  return formatCurrency(price, currency);
 }
 
 /**

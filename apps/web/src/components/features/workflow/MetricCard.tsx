@@ -1,7 +1,7 @@
 'use client';
 
 import { Sparkline } from './Sparkline';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyWhole, formatNumber } from '@/lib/utils';
 
 interface MetricCardProps {
   /** Label for the metric */
@@ -38,14 +38,9 @@ export function MetricCard({
     formatValue ||
     ((value: number) => {
       if (isCurrency) {
-        return new Intl.NumberFormat('en-GB', {
-          style: 'currency',
-          currency: 'GBP',
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
-        }).format(value);
+        return formatCurrencyWhole(value);
       }
-      return new Intl.NumberFormat('en-GB').format(value);
+      return formatNumber(value);
     });
 
   const getGapText = () => {

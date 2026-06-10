@@ -25,6 +25,7 @@ import { Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePlatformListings } from '@/hooks/use-platform-stock';
 import { ListingsFilters } from './ListingsFilters';
 import type { ListingFilters, PlatformListing, ListingStatus } from '@/lib/platform-stock';
+import { formatCurrency } from '@/lib/utils';
 
 interface ListingsViewProps {
   platform: string;
@@ -70,10 +71,7 @@ function getStatusBadgeVariant(
 
 function formatPrice(price: number | null): string {
   if (price === null) return '-';
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(price);
+  return formatCurrency(price);
 }
 
 export function ListingsView({ platform }: ListingsViewProps) {
