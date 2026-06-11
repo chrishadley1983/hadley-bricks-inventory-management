@@ -4661,6 +4661,75 @@ export type Database = {
         }
         Relationships: []
       }
+      energy_events: {
+        Row: {
+          avg_demand_w: number | null
+          cost_pence: number | null
+          created_at: string | null
+          detail: Json | null
+          ended_at: string | null
+          energy_kwh: number | null
+          event_type: string
+          id: string
+          peak_demand_w: number | null
+          started_at: string
+        }
+        Insert: {
+          avg_demand_w?: number | null
+          cost_pence?: number | null
+          created_at?: string | null
+          detail?: Json | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          event_type: string
+          id?: string
+          peak_demand_w?: number | null
+          started_at: string
+        }
+        Update: {
+          avg_demand_w?: number | null
+          cost_pence?: number | null
+          created_at?: string | null
+          detail?: Json | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          event_type?: string
+          id?: string
+          peak_demand_w?: number | null
+          started_at?: string
+        }
+        Relationships: []
+      }
+      energy_live: {
+        Row: {
+          consumption_wh: number | null
+          created_at: string | null
+          demand_w_avg: number | null
+          demand_w_max: number | null
+          demand_w_min: number | null
+          minute_start: string
+          sample_count: number | null
+        }
+        Insert: {
+          consumption_wh?: number | null
+          created_at?: string | null
+          demand_w_avg?: number | null
+          demand_w_max?: number | null
+          demand_w_min?: number | null
+          minute_start: string
+          sample_count?: number | null
+        }
+        Update: {
+          consumption_wh?: number | null
+          created_at?: string | null
+          demand_w_avg?: number | null
+          demand_w_max?: number | null
+          demand_w_min?: number | null
+          minute_start?: string
+          sample_count?: number | null
+        }
+        Relationships: []
+      }
       energy_tariffs: {
         Row: {
           created_at: string | null
@@ -8682,6 +8751,48 @@ export type Database = {
           last_poll_cursor?: string | null
           started_at?: string | null
           status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      monzo_balance_snapshots: {
+        Row: {
+          balance_pence: number
+          created_at: string
+          id: string
+          latest_transaction_at: string | null
+          low_balance_alerted: boolean
+          pot_total_pence: number | null
+          pots: Json | null
+          snapshot_date: string
+          source: string
+          transaction_count: number | null
+          user_id: string
+        }
+        Insert: {
+          balance_pence: number
+          created_at?: string
+          id?: string
+          latest_transaction_at?: string | null
+          low_balance_alerted?: boolean
+          pot_total_pence?: number | null
+          pots?: Json | null
+          snapshot_date: string
+          source: string
+          transaction_count?: number | null
+          user_id: string
+        }
+        Update: {
+          balance_pence?: number
+          created_at?: string
+          id?: string
+          latest_transaction_at?: string | null
+          low_balance_alerted?: boolean
+          pot_total_pence?: number | null
+          pots?: Json | null
+          snapshot_date?: string
+          source?: string
+          transaction_count?: number | null
           user_id?: string
         }
         Relationships: []
@@ -16229,6 +16340,14 @@ export type Database = {
           summary: string
           title: string
           topics: string[]
+        }[]
+      }
+      monzo_computed_balance: {
+        Args: { p_user_id: string }
+        Returns: {
+          balance_pence: number
+          latest_transaction_at: string
+          transaction_count: number
         }[]
       }
       search_inventory_excluding_linked: {
