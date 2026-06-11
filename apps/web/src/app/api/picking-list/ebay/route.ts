@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { locationFromSku } from './location-from-sku';
 
 /**
  * Natural sort comparison for strings with numeric suffixes
@@ -225,6 +226,14 @@ export async function GET(request: NextRequest) {
             matchStatus = 'matched';
             location = inventory.storage_location;
             setNo = inventory.set_number || inventory.sku;
+          }
+        }
+
+        // Fallback: derive location from the SKU itself when inventory has none
+        if (!location) {
+          const skuLocation = locationFromSku(lineItem.sku);
+          if (skuLocation) {
+            location = `${skuLocation} (from SKU)`;
           }
         }
 
