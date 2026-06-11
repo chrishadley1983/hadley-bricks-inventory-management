@@ -1,20 +1,19 @@
 {
-  "commit": "22b57e4",
-  "branch": "chore/reduce-vercel-cpu",
-  "prNumber": 407,
-  "mergedAt": "2026-05-21T07:32:00Z",
-  "previousCommit": "c9a8941",
+  "commit": "e4c54c31",
+  "branch": "fix/ebay-picklist-sku-location-fallback",
+  "prNumber": 431,
+  "mergedAt": "2026-06-11T12:21:00Z",
+  "previousCommit": "22b57e4",
   "deploymentVerified": true,
-  "verifiedAt": "2026-05-21T07:38:00Z",
+  "verifiedAt": "2026-06-11T12:28:00Z",
   "testsRun": [
     "vercel-production-deploy-success",
+    "picking-list-ebay-401-no-auth",
+    "picking-list-amazon-401-regression-check",
     "root-307-auth-redirect",
-    "amazon-sync-401-no-auth",
-    "amazon-sync-401-bad-auth",
-    "full-sync-401-no-auth",
-    "vercel-usage-401-regression-check",
-    "login-200"
+    "pick-ebay-page-200",
+    "sql-simulation-pohatu-resolves-from-sku"
   ],
   "testsPassed": true,
-  "notes": "Cuts Vercel Fluid Active CPU on Hobby plan (was at 132% of the 14,400s monthly cap). Three changes: (1) amazon-sync schedule */5 -> */10 in gcp/setup.ps1 — 288 -> 144 invocations/day; (2) early-exit guard in amazon-sync route does a slim HEAD count(*) before loading AmazonSyncService + discordService (deferred via dynamic import), with a single-row noop record on the exit path to preserve scheduler observability (CR-001 fix); (3) full-sync defers all 8 heavy service modules (eBay, Amazon, Amazon linking, BrickLink, BrickOwl, Amazon arbitrage, Shopify, Discord) into a single parallel loadServices() call after auth passes. ACTION REQUIRED post-merge: apply the schedule change to live GCP Cloud Scheduler with `gcloud scheduler jobs update http amazon-two-phase-sync --location=europe-west2 --schedule=\"*/10 * * * *\"` — until that's run, the GCP scheduler still fires every 5 minutes. The early-exit guard takes effect immediately on production. Smoke tests confirm all changed cron endpoints still gate on CRON_SECRET (401 without auth) and the lazy-loaded modules don't break route initialisation."
+  "notes": "eBay picking list now falls back to the SKU-embedded location (eBay SKU convention 'U<id> - <location>', e.g. 'U2222 - Garage - E1') when the matched inventory item has no storage_location, rendered as 'Garage - E1 (from SKU)'. Inventory storage_location always wins when present because the SKU records the at-listing location and can be stale. Fully unmatched line items also get a pickable location but stay in the unmatched warning. No DB backfill of storage_location (1,517 of 1,819 pattern-SKU eBay items lack it; backfilling would write stale at-listing locations as current truth). SQL simulation of the deployed logic confirms the triggering item (8531 BIONICLE Pohatu, order 10-14754-53645) resolves to 'Garage - E1 (from SKU)'."
 }
