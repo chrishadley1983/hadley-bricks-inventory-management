@@ -50,19 +50,32 @@ SCHOOL_SENDERS = [
 
 
 def get_gmail_service():
-    """Get authenticated Gmail service."""
-    creds = None
-    if os.path.exists(GMAIL_CREDS_PATH):
-        creds = Credentials.from_authorized_user_file(GMAIL_CREDS_PATH, SCOPES)
+    """Get authenticated Gmail service.
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            print(f"ERROR: Gmail credentials not found at {GMAIL_CREDS_PATH}")
-            print("Gmail parsing will use MCP Gmail tool as fallback (run from Claude Code).")
-            return None
+    Uses env-based refresh-token auth (GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN
+    from discord-messenger/.env) — same as hadley_api/google_auth.py. The old
+    file-based token.json was removed in the Mar 2026 secrets hardening,
+    which silently killed this parser for 3 months (it exited 0 without it).
+    """
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(
+        os.path.expanduser("~"), "claude-projects", "Discord-Messenger", ".env"))
 
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
+    if not all([client_id, client_secret, refresh_token]):
+        print("ERROR: GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN not in environment")
+        sys.exit(1)  # hard fail — a quiet return hid this for months
+
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    creds.refresh(Request())
     return build("gmail", "v1", credentials=creds)
 
 
@@ -191,8 +204,8 @@ def main():
     service = get_gmail_service()
 
     if not service:
-        print("Gmail API not available. Use Claude Code MCP tools instead.")
-        return
+        print("Gmail API not available")
+        sys.exit(1)
 
     # Search for recent school emails (last 14 days)
     after_date = (date.today() - timedelta(days=14)).strftime("%Y/%m/%d")
