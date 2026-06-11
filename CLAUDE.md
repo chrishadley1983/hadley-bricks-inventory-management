@@ -15,6 +15,12 @@ LEGO resale business management — inventory, purchases, orders across Amazon, 
 - Migrations pushed directly to cloud: `npm run db:push`
 - Types generated from cloud: `npm run db:types`
 - No `db:reset` — manual reset via Supabase dashboard only
+- **Shared project**: other repos (tournament/chat app, energy) also apply migrations to this
+  Supabase project via MCP. `supabase/migrations/` mirrors the FULL remote history, including
+  their migrations. If `db:push` reports remote-only versions, run `npx supabase migration fetch`
+  (then `git checkout -- supabase/migrations` to restore overwritten files, keeping only the new
+  ones). Never apply migrations with `execute_sql` — use `db:push` or MCP `apply_migration` so
+  the history table stays in sync.
 
 ### Supabase 1,000 Row Limit
 
