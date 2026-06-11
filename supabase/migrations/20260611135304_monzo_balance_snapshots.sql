@@ -50,4 +50,4 @@ AS $$
   FROM monzo_transactions
   WHERE user_id = p_user_id
     AND decline_reason IS NULL;
-$$;
+$$;;
