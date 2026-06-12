@@ -22,7 +22,7 @@ from supabase import create_client
 
 sys.path.insert(0, os.path.dirname(__file__))
 from config import (
-    SUPABASE_URL, SUPABASE_KEY, ANTHROPIC_API_KEY,
+    SUPABASE_URL, SUPABASE_KEY,
     CHILDREN, ACADEMIC_YEAR
 )
 
@@ -80,10 +80,22 @@ def get_gmail_service():
 
 
 def search_emails(service, query: str, max_results: int = 20) -> list[dict]:
-    """Search Gmail and return message details."""
-    results = service.users().messages().list(
-        userId="me", q=query, maxResults=max_results
-    ).execute()
+    """Search Gmail and return message details.
+
+    Retries once on a stale pooled connection: after the minutes-long
+    Claude extraction phase, httplib2's idle TLS socket gets aborted by
+    Windows (WinError 10053) and httplib2 doesn't reconnect on its own.
+    """
+    try:
+        results = service.users().messages().list(
+            userId="me", q=query, maxResults=max_results
+        ).execute()
+    except (ConnectionError, OSError):
+        print("  (Gmail connection went stale — reconnecting)")
+        service = get_gmail_service()
+        results = service.users().messages().list(
+            userId="me", q=query, maxResults=max_results
+        ).execute()
 
     messages = []
     for msg_ref in results.get("messages", []):
@@ -114,12 +126,34 @@ def search_emails(service, query: str, max_results: int = 20) -> list[dict]:
     return messages
 
 
+def _claude_extract(prompt: str, max_tokens: int = 1500) -> str | None:
+    """One-shot Claude call via Hadley API /claude/extract (OAuth-backed).
+
+    Replaces direct anthropic.Anthropic(api_key=...) calls — raw API keys
+    are metered/revocable (the old one died with a 401 on 12 Jun 2026)
+    while /claude/extract rides the Max subscription via the extract
+    channel, with claude -p fallback.
+    """
+    import requests
+    try:
+        resp = requests.post(
+            "http://localhost:8100/claude/extract",
+            json={"prompt": prompt, "max_tokens": max_tokens},
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            print(f"  claude/extract error: {data['error']}")
+            return None
+        return (data.get("result") or "").strip()
+    except Exception as e:
+        print(f"  claude/extract request failed: {e}")
+        return None
+
+
 def extract_spellings_with_claude(email_body: str, child_name: str, year_group: str) -> dict | None:
     """Use Claude to extract spelling words from a class email."""
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
     prompt = f"""This is an email from {child_name}'s class teacher at Stocks Green Primary ({year_group}).
 Extract any spelling words or spelling list from this email.
 
@@ -134,13 +168,9 @@ If there are no spellings in this email, return null.
 Email:
 {email_body[:4000]}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    text = _claude_extract(prompt, max_tokens=1000)
+    if text is None:
+        return None
     if text.lower() == "null" or "no spelling" in text.lower():
         return None
     try:
@@ -156,10 +186,6 @@ Email:
 
 def extract_events_with_claude(email_body: str, email_subject: str, email_date: str) -> list[dict]:
     """Use Claude to extract event dates from a school email."""
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
     prompt = f"""Extract any school event dates from this email from Stocks Green Primary School.
 Subject: {email_subject}
 Date: {email_date}
@@ -177,13 +203,9 @@ Return a JSON array. Return [] if no events found.
 Email body:
 {email_body[:4000]}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    text = _claude_extract(prompt, max_tokens=1500)
+    if not text:
+        return []
     try:
         if text.startswith("["):
             return json.loads(text)
@@ -222,7 +244,7 @@ def main():
 
         for email in emails:
             print(f"    [{email['date']}] {email['subject']}")
-            if ANTHROPIC_API_KEY:
+            if True:  # extraction via Hadley API /claude/extract — no key needed
                 spellings = extract_spellings_with_claude(email["body"], child_name, year_group)
                 if spellings and spellings.get("words"):
                     print(f"    -> Found spellings: {spellings['words']}")
@@ -248,7 +270,7 @@ def main():
     events_saved = 0
     for email in school_emails:
         print(f"    [{email['date']}] {email['subject']}")
-        if ANTHROPIC_API_KEY:
+        if True:  # extraction via Hadley API /claude/extract — no key needed
             events = extract_events_with_claude(email["body"], email["subject"], email["date"])
             for event in events:
                 try:

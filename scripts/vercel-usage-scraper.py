@@ -200,13 +200,32 @@ def scrape_vercel_usage() -> dict[str, float]:
     from playwright.sync_api import sync_playwright
     import socket
 
-    # Check CDP is available
+    # Check CDP is available; auto-launch Chrome-Vinted headless if not
+    # (the 06:30 scheduled run can't rely on Chrome already being up —
+    # this gap contributed to the silent 3-week outage to 12 Jun 2026).
     try:
         with socket.create_connection(("127.0.0.1", 9222), timeout=2):
             pass
     except (ConnectionRefusedError, OSError):
-        log.error("Chrome CDP not available on port 9222")
-        return {}
+        log.info("Chrome CDP not running — launching Chrome-Vinted headless")
+        import subprocess
+        subprocess.Popen([
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            "--remote-debugging-port=9222",
+            r"--user-data-dir=C:\Users\Chris Hadley\AppData\Local\Google\Chrome-Vinted",
+            "--headless=new", "--disable-gpu", "--no-first-run",
+            "--no-default-browser-check", "about:blank",
+        ])
+        for _ in range(15):
+            time.sleep(1)
+            try:
+                with socket.create_connection(("127.0.0.1", 9222), timeout=1):
+                    break
+            except OSError:
+                continue
+        else:
+            log.error("Chrome CDP not available on port 9222 after launch attempt")
+            return {}
 
     results = {}
 
@@ -306,6 +325,22 @@ def upsert_metrics(metrics: dict[str, float]) -> None:
         log.error("Failed to upsert metrics: %s", e)
 
 
+def _hadley_auth_key() -> str:
+    """HADLEY_AUTH_KEY from env or the discord-messenger .env (Task
+    Scheduler runs without the interactive environment)."""
+    key = os.environ.get("HADLEY_AUTH_KEY", "")
+    if key:
+        return key
+    dm_env = os.path.join(os.path.expanduser("~"), "claude-projects",
+                          "discord-messenger", ".env")
+    if os.path.exists(dm_env):
+        with open(dm_env) as f:
+            for line in f:
+                if line.startswith("HADLEY_AUTH_KEY="):
+                    return line.split("=", 1)[1].strip()
+    return ""
+
+
 def main():
     log.info("=== Vercel Usage Scraper Starting ===")
 
@@ -314,7 +349,28 @@ def main():
     if metrics:
         upsert_metrics(metrics)
     else:
-        log.warning("No metrics scraped — check Chrome CDP and Vercel login state")
+        # Fail LOUDLY: a warning + exit 0 hid an expired Vercel session for
+        # 3 weeks (22 May - 12 Jun 2026) while the usage report ran on stale
+        # data. Alert #alerts (throttled) and give Task Scheduler a real
+        # failure code.
+        log.error("No metrics scraped — Vercel login likely expired (run scripts/login_vercel.py)")
+        try:
+            req = urllib.request.Request(
+                "http://localhost:8100/alert",
+                data=json.dumps({
+                    "message": "Vercel usage scraper got no metrics — Vercel session "
+                               "likely expired. Run scripts/login_vercel.py in the HB repo.",
+                    "source": "vercel-scraper",
+                    "throttle_minutes": 720,
+                }).encode(),
+                headers={"Content-Type": "application/json",
+                         "x-api-key": _hadley_auth_key()},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            log.warning("alert post failed: %s", e)
+        sys.exit(1)
 
     log.info("=== Vercel Usage Scraper Complete ===")
 
