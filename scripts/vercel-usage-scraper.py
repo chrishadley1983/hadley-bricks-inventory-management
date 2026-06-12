@@ -306,6 +306,22 @@ def upsert_metrics(metrics: dict[str, float]) -> None:
         log.error("Failed to upsert metrics: %s", e)
 
 
+def _hadley_auth_key() -> str:
+    """HADLEY_AUTH_KEY from env or the discord-messenger .env (Task
+    Scheduler runs without the interactive environment)."""
+    key = os.environ.get("HADLEY_AUTH_KEY", "")
+    if key:
+        return key
+    dm_env = os.path.join(os.path.expanduser("~"), "claude-projects",
+                          "discord-messenger", ".env")
+    if os.path.exists(dm_env):
+        with open(dm_env) as f:
+            for line in f:
+                if line.startswith("HADLEY_AUTH_KEY="):
+                    return line.split("=", 1)[1].strip()
+    return ""
+
+
 def main():
     log.info("=== Vercel Usage Scraper Starting ===")
 
@@ -314,7 +330,28 @@ def main():
     if metrics:
         upsert_metrics(metrics)
     else:
-        log.warning("No metrics scraped — check Chrome CDP and Vercel login state")
+        # Fail LOUDLY: a warning + exit 0 hid an expired Vercel session for
+        # 3 weeks (22 May - 12 Jun 2026) while the usage report ran on stale
+        # data. Alert #alerts (throttled) and give Task Scheduler a real
+        # failure code.
+        log.error("No metrics scraped — Vercel login likely expired (run scripts/login_vercel.py)")
+        try:
+            req = urllib.request.Request(
+                "http://localhost:8100/alert",
+                data=json.dumps({
+                    "message": "Vercel usage scraper got no metrics — Vercel session "
+                               "likely expired. Run scripts/login_vercel.py in the HB repo.",
+                    "source": "vercel-scraper",
+                    "throttle_minutes": 720,
+                }).encode(),
+                headers={"Content-Type": "application/json",
+                         "x-api-key": _hadley_auth_key()},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            log.warning("alert post failed: %s", e)
+        sys.exit(1)
 
     log.info("=== Vercel Usage Scraper Complete ===")
 

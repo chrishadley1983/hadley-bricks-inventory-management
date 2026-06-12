@@ -165,6 +165,28 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
     description = 'All metrics below 50% of Hobby plan limits.';
   }
 
+  // Cycle context + projection so over-limit numbers are actionable:
+  // "75% with 2 days left" vs "75% with 20 days left" need different
+  // responses. Per-day metrics (Deployments) never project.
+  const dayMs = 86_400_000;
+  const periodStart = new Date(report.period.start).getTime();
+  const periodEnd = new Date(report.period.end).getTime();
+  const cycleDays = Math.max(1, Math.round((periodEnd - periodStart) / dayMs));
+  const dayOfCycle = Math.min(
+    cycleDays,
+    Math.max(1, Math.ceil((Date.now() - periodStart) / dayMs))
+  );
+  const projections = report.metrics
+    .filter((m) => m.status !== 'GREEN' && !m.limitFormatted.includes('per day'))
+    .map((m) => {
+      const projected = (m.usedPercent / dayOfCycle) * cycleDays;
+      return `· ${m.name}: on track for ${projected.toFixed(0)}% by cycle end`;
+    });
+  description += `\n\nDay ${dayOfCycle}/${cycleDays} of billing cycle`;
+  if (projections.length > 0) {
+    description += '\n' + projections.join('\n');
+  }
+
   description += `\n\nPeriod: ${report.period.formatted}`;
   if (!report.fromApi) {
     description += '\n_Data: manual input (API unavailable)_';

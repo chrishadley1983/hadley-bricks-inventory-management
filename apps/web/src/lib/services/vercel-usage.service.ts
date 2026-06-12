@@ -155,7 +155,7 @@ const HOBBY_LIMITS: HobbyLimit[] = [
   },
   // Build (v2 API — not on dashboard usage page)
   { name: 'Build Minutes', key: 'buildMinutes', limit: 6000, unit: 'minutes' },
-  { name: 'Deployments', key: 'deployments', limit: 100, unit: 'per day' },
+  { name: 'Deployments', key: 'deployments', limit: 100, unit: 'per day (peak)' },
 ];
 
 /** Maps scraped_metrics keys to HOBBY_LIMITS metric names */
@@ -473,15 +473,20 @@ export class VercelUsageService {
     // Aggregate daily build metrics across the period
     const buildDays = buildsData.data ?? [];
     let totalBuildSeconds = 0;
-    let totalDeployments = 0;
+    // Deployments is a PER-DAY limit (100/day on Hobby) — comparing the
+    // period total against it produced false "145%" alarms (12 Jun 2026).
+    // The meaningful number is the busiest single day in the period.
+    let peakDailyDeployments = 0;
 
     for (const day of buildDays) {
       totalBuildSeconds += day.build_build_seconds ?? 0;
-      totalDeployments += (day.build_completed_count ?? 0) + (day.build_failed_count ?? 0);
+      const dayDeployments =
+        (day.build_completed_count ?? 0) + (day.build_failed_count ?? 0);
+      if (dayDeployments > peakDailyDeployments) peakDailyDeployments = dayDeployments;
     }
 
     manualData.buildMinutes = totalBuildSeconds / 60;
-    manualData.deployments = totalDeployments;
+    manualData.deployments = peakDailyDeployments;
 
     console.log(
       `[VercelUsageService] v2 API aggregated: ${reqDays.length} request days, ${buildDays.length} build days, ` +
