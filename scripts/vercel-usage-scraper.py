@@ -200,13 +200,32 @@ def scrape_vercel_usage() -> dict[str, float]:
     from playwright.sync_api import sync_playwright
     import socket
 
-    # Check CDP is available
+    # Check CDP is available; auto-launch Chrome-Vinted headless if not
+    # (the 06:30 scheduled run can't rely on Chrome already being up —
+    # this gap contributed to the silent 3-week outage to 12 Jun 2026).
     try:
         with socket.create_connection(("127.0.0.1", 9222), timeout=2):
             pass
     except (ConnectionRefusedError, OSError):
-        log.error("Chrome CDP not available on port 9222")
-        return {}
+        log.info("Chrome CDP not running — launching Chrome-Vinted headless")
+        import subprocess
+        subprocess.Popen([
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            "--remote-debugging-port=9222",
+            r"--user-data-dir=C:\Users\Chris Hadley\AppData\Local\Google\Chrome-Vinted",
+            "--headless=new", "--disable-gpu", "--no-first-run",
+            "--no-default-browser-check", "about:blank",
+        ])
+        for _ in range(15):
+            time.sleep(1)
+            try:
+                with socket.create_connection(("127.0.0.1", 9222), timeout=1):
+                    break
+            except OSError:
+                continue
+        else:
+            log.error("Chrome CDP not available on port 9222 after launch attempt")
+            return {}
 
     results = {}
 
