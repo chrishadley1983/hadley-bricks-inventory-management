@@ -35,6 +35,18 @@ import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.se
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
+// Human-readable per-day slope in the metric's base unit.
+function formatSlope(perDay: number, unit: string): string {
+  const v = Math.abs(perDay);
+  if (unit === 'seconds') {
+    if (v >= 3600) return `${(v / 3600).toFixed(1)}h`;
+    return `${Math.round(v / 60)}m`;
+  }
+  if (unit === 'GB-Hrs' || unit === 'GB') return `${v.toFixed(1)} ${unit}`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+  return `${Math.round(v)}`;
+}
+
 // metric.name -> scraped_metrics.key, for the trend lookup
 const METRIC_KEY_BY_NAME: Record<string, string> = {
   'Fluid Active CPU': 'vercel_fluid_active_cpu',
@@ -185,7 +197,8 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
   // roll off the back of the window.
   try {
     const supabase = createServiceRoleClient();
-    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const dayMs = 86_400_000;
+    const threeDaysAgo = new Date(Date.now() - 3 * dayMs).toISOString();
     const trends: string[] = [];
     for (const m of nonGreenMetrics) {
       const key = METRIC_KEY_BY_NAME[m.name];
@@ -198,14 +211,36 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
         .order('scraped_at', { ascending: false })
         .limit(1);
       const prior = data?.[0]?.value != null ? Number(data[0].value) : null;
+      const priorAt = data?.[0]?.scraped_at ? new Date(data[0].scraped_at).getTime() : null;
       const now = m.current;
-      if (prior == null || !isFinite(prior) || prior === 0) continue;
+      if (prior == null || priorAt == null || !isFinite(prior) || prior === 0) continue;
+
       const deltaPct = ((now - prior) / prior) * 100;
       const arrow = deltaPct > 2 ? '🔺' : deltaPct < -2 ? '🔻' : '▪️';
-      trends.push(`${arrow} ${m.name}: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs 3d ago`);
+      let line = `${arrow} ${m.name}: ${m.currentFormatted} now (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs 3d ago)`;
+
+      // Projection: the rolling-30d window is a 30-day sum, so the recent
+      // per-day rate, annualised over 30 days, is where it will SETTLE once
+      // all 30 days reflect the current regime. Estimate the per-day rate
+      // from how the window has moved (Δwindow/day ≈ today's daily usage −
+      // the day rolling off; when declining post-migration, |slope| is the
+      // gap, and the window converges to the new steady state).
+      const daysElapsed = Math.max(1, (Date.now() - priorAt) / dayMs);
+      const slopePerDay = (now - prior) / daysElapsed; // signed
+      if (slopePerDay < 0) {
+        // declining — extrapolate to where it crosses the limit / settles
+        const overLimit = m.current - m.limit;
+        if (overLimit > 0) {
+          const daysToLimit = overLimit / -slopePerDay;
+          line += `\n   → falling ~${formatSlope(slopePerDay, m.unit)}/day; under limit in ~${Math.ceil(daysToLimit)}d if it holds`;
+        }
+      } else {
+        line += `\n   → not yet falling — migration effect surfaces as pre-change days roll off (~5d)`;
+      }
+      trends.push(line);
     }
     if (trends.length > 0) {
-      description += '\n\n3-day trend (rolling-30d window):\n' + trends.join('\n');
+      description += '\n\nRolling-30d window — actual + trend:\n' + trends.join('\n');
     }
   } catch {
     // trend is best-effort context, never block the report
