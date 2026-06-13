@@ -324,6 +324,24 @@ def upsert_metrics(metrics: dict[str, float]) -> None:
     except Exception as e:
         log.error("Failed to upsert metrics: %s", e)
 
+    # Also append to vercel_usage_history (one row per key per day) — the
+    # scraped_metrics PK is `key` so it overwrites, leaving no history for
+    # the report's trend/projection. PK there is (key, scrape_date) so this
+    # is idempotent within a day and accumulates across days.
+    today = datetime.now().strftime("%Y-%m-%d")
+    hist_rows = [{"key": r["key"], "scrape_date": today,
+                  "value": r["value"], "unit": r["unit"],
+                  "scraped_at": now} for r in rows]
+    hist_req = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/vercel_usage_history",
+        data=json.dumps(hist_rows).encode(), headers=HEADERS, method="POST")
+    try:
+        with urllib.request.urlopen(hist_req) as resp:
+            resp.read()
+        log.info("Appended %d metrics to vercel_usage_history", len(hist_rows))
+    except Exception as e:
+        log.error("Failed to append usage history: %s", e)
+
 
 def _hadley_auth_key() -> str:
     """HADLEY_AUTH_KEY from env or the discord-messenger .env (Task

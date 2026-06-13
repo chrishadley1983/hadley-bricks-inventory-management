@@ -198,41 +198,58 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
   try {
     const supabase = createServiceRoleClient();
     const dayMs = 86_400_000;
-    const threeDaysAgo = new Date(Date.now() - 3 * dayMs).toISOString();
+    // Use the EARLIEST history point within the last 5 days as the baseline
+    // (vercel_usage_history keeps one row per key per day; scraped_metrics
+    // itself can't — its PK is `key` so it overwrites). Works with as little
+    // as 2 days of history rather than requiring exactly a 3-day-old point.
+    const windowStart = new Date(Date.now() - 5 * dayMs).toISOString().slice(0, 10);
     const trends: string[] = [];
     for (const m of nonGreenMetrics) {
       const key = METRIC_KEY_BY_NAME[m.name];
       if (!key) continue;
-      const { data } = await supabase
-        .from('scraped_metrics')
-        .select('value, scraped_at')
+      // vercel_usage_history isn't in the generated Supabase types — cast.
+      const { data } = await (supabase as unknown as {
+        from: (t: string) => any;
+      })
+        .from('vercel_usage_history')
+        .select('value, scrape_date')
         .eq('key', key)
-        .lte('scraped_at', threeDaysAgo)
-        .order('scraped_at', { ascending: false })
+        .gte('scrape_date', windowStart)
+        .order('scrape_date', { ascending: true })
         .limit(1);
-      const prior = data?.[0]?.value != null ? Number(data[0].value) : null;
-      const priorAt = data?.[0]?.scraped_at ? new Date(data[0].scraped_at).getTime() : null;
+      const row = (data as Array<{ value: number | string | null; scrape_date: string }> | null)?.[0];
+      const prior = row?.value != null ? Number(row.value) : null;
+      const priorAt = row?.scrape_date ? new Date(row.scrape_date).getTime() : null;
       const now = m.current;
-      if (prior == null || priorAt == null || !isFinite(prior) || prior === 0) continue;
+      // need a baseline at least ~1 day old to compute a slope
+      if (prior == null || priorAt == null || !isFinite(prior) || prior === 0) {
+        trends.push(`▪️ ${m.name}: ${m.currentFormatted} now (building trend — needs a few days of history)`);
+        continue;
+      }
+      const daysElapsed = (Date.now() - priorAt) / dayMs;
+      if (daysElapsed < 0.5) {
+        trends.push(`▪️ ${m.name}: ${m.currentFormatted} now (building trend)`);
+        continue;
+      }
 
       const deltaPct = ((now - prior) / prior) * 100;
       const arrow = deltaPct > 2 ? '🔺' : deltaPct < -2 ? '🔻' : '▪️';
-      let line = `${arrow} ${m.name}: ${m.currentFormatted} now (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs 3d ago)`;
+      const dStr = daysElapsed >= 1.5 ? `${Math.round(daysElapsed)}d` : '1d';
+      let line = `${arrow} ${m.name}: ${m.currentFormatted} now (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs ${dStr} ago)`;
 
-      // Projection: the rolling-30d window is a 30-day sum, so the recent
-      // per-day rate, annualised over 30 days, is where it will SETTLE once
-      // all 30 days reflect the current regime. Estimate the per-day rate
-      // from how the window has moved (Δwindow/day ≈ today's daily usage −
-      // the day rolling off; when declining post-migration, |slope| is the
-      // gap, and the window converges to the new steady state).
-      const daysElapsed = Math.max(1, (Date.now() - priorAt) / dayMs);
+      // Rolling-30d window: the recent per-day slope shows where it's headed.
+      // Deliberately NOT a precise ETA — a 2-point slope over a few days is
+      // a direction, not a forecast — so phrase it as "trending under limit
+      // in roughly N days".
       const slopePerDay = (now - prior) / daysElapsed; // signed
-      if (slopePerDay < 0) {
-        // declining — extrapolate to where it crosses the limit / settles
+      if (slopePerDay < -1e-9) {
         const overLimit = m.current - m.limit;
         if (overLimit > 0) {
-          const daysToLimit = overLimit / -slopePerDay;
-          line += `\n   → falling ~${formatSlope(slopePerDay, m.unit)}/day; under limit in ~${Math.ceil(daysToLimit)}d if it holds`;
+          const weeks = overLimit / -slopePerDay / 7;
+          const when = weeks < 1 ? 'within ~a week' : `in roughly ${Math.round(weeks)} week(s)`;
+          line += `\n   → falling ~${formatSlope(slopePerDay, m.unit)}/day; on current trend, under limit ${when}`;
+        } else {
+          line += `\n   → falling ~${formatSlope(slopePerDay, m.unit)}/day`;
         }
       } else {
         line += `\n   → not yet falling — migration effect surfaces as pre-change days roll off (~5d)`;
