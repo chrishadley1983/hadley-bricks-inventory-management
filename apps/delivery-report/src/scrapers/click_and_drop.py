@@ -229,8 +229,32 @@ def _download_xls(page: Page) -> Path | None:
         log.warning("Page text preview: %s", body_text)
         return None
 
+    # Dismiss any announcement overlay first: a Royal Mail uib-modal popup
+    # (30 May - 1 Jun 2026) intercepted pointer events here and caused every
+    # run in that window to time out — the month's whole 18% failure rate
+    # came from one popup.
+    try:
+        page.keyboard.press("Escape")
+        page.evaluate(
+            "document.querySelectorAll('div[uib-modal-window], .modal-backdrop')"
+            ".forEach(el => el.remove())"
+        )
+    except Exception:
+        pass
+
     log.info("Clicking 'Export to XLS' button to open modal")
-    btn.first.click()
+    try:
+        btn.first.click(timeout=15000)
+    except Exception:
+        # last resort for an overlay we couldn't identify: force the click on
+        # the page-level button ONLY (never force the modal's submit — the
+        # export date-range modal must genuinely be interactable)
+        log.warning("Normal click blocked — removing overlays and force-clicking")
+        page.evaluate(
+            "document.querySelectorAll('div[uib-modal-window], .modal-backdrop')"
+            ".forEach(el => el.remove())"
+        )
+        btn.first.click(force=True)
 
     # Step 2: Wait for the export modal to appear in #modal-root
     try:
