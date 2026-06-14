@@ -209,6 +209,7 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
       if (!key) continue;
       // vercel_usage_history isn't in the generated Supabase types — cast.
       const { data } = await (supabase as unknown as {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         from: (t: string) => any;
       })
         .from('vercel_usage_history')
