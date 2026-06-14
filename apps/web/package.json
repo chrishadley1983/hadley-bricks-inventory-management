@@ -28,7 +28,12 @@
     "validate:fp": "tsx scripts/validate-fp-detector.ts",
     "test:gmail-coverage": "tsx scripts/test-gmail-coverage.ts",
     "sync:bl-messages": "tsx scripts/sync-bl-messages.ts",
-    "auth:hb-gmail": "tsx scripts/auth-hb-gmail.ts"
+    "auth:hb-gmail": "tsx scripts/auth-hb-gmail.ts",
+    "store-quality": "tsx scripts/store-quality.ts",
+    "store-quality:refresh": "tsx scripts/refresh-bricqer-snapshot.ts",
+    "store-quality:enrich": "tsx scripts/enrich-store-quality.ts",
+    "source-demand-gaps": "tsx scripts/source-demand-gaps.ts",
+    "evaluate-job-lot": "tsx scripts/evaluate-job-lot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
