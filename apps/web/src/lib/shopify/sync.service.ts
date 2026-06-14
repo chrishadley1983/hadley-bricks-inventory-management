@@ -11,7 +11,13 @@ import {
   getOrGenerateAIDescription,
 } from './descriptions';
 import { resolveImages, fetchEbayListing } from './images';
-import type { ShopifyConfig, ShopifyProductPayload, BatchSyncSummary, SyncResult } from './types';
+import type {
+  ShopifyConfig,
+  ShopifyProductPayload,
+  BatchSyncSummary,
+  ReconcileSummary,
+  SyncResult,
+} from './types';
 
 /**
  * Shopify sync service — orchestrates one-way sync from HB → Shopify.
@@ -59,6 +65,111 @@ export class ShopifySyncService {
   private getConfig(): ShopifyConfig {
     if (!this.config) throw new Error('Config not loaded — call getClient() first');
     return this.config;
+  }
+
+  // ── RECONCILE QUANTITIES ──────────────────────────────────────
+
+  /**
+   * Clamp every active Shopify variant down to the true number of units we own
+   * and have LISTED. Guards against the overstatement that allows oversell:
+   * a used single is physically unique, so any qty > 1 is wrong, and a grouped
+   * sealed product must never show more than its LISTED member count.
+   *
+   * The true count is derived from the `shopify_products` mapping where one
+   * exists, and otherwise (orphan products with no mapping) by matching the
+   * variant SKU back to LISTED `inventory_items` — by SKU, or by id-prefix for
+   * SKU-less items whose Shopify SKU is `id.substring(0,8)`. Only ever reduces.
+   */
+  async reconcileInventoryQuantities(): Promise<ReconcileSummary> {
+    const client = await this.getClient();
+    const config = this.getConfig();
+    const summary: ReconcileSummary = {
+      products_scanned: 0,
+      variants_scanned: 0,
+      overstated_found: 0,
+      reduced: 0,
+      failed: 0,
+      reductions: [],
+      errors: [],
+    };
+
+    if (!config.location_id) {
+      summary.errors.push({ sku: null, error: 'No location_id configured' });
+      return summary;
+    }
+
+    // 1. Mapped LISTED counts per Shopify product id.
+    const mappedListed = new Map<string, number>();
+    const mappedPids = new Set<string>();
+    const mappings = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'shopify_product_id, inventory_items(status)',
+      eq: { user_id: this.userId },
+      isNotNull: ['shopify_product_id'],
+    })) as unknown as Array<{
+      shopify_product_id: string | null;
+      inventory_items: { status: string | null } | null;
+    }>;
+    for (const m of mappings) {
+      if (!m.shopify_product_id) continue;
+      const k = String(m.shopify_product_id);
+      mappedPids.add(k);
+      mappedListed.set(k, (mappedListed.get(k) ?? 0) + (m.inventory_items?.status === 'LISTED' ? 1 : 0));
+    }
+
+    // 2. LISTED inventory indexed by sku and by id-prefix (for orphan resolution).
+    const listedBySku = new Map<string, number>();
+    const listedByIdPrefix = new Map<string, number>();
+    const listedItems = (await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'id, sku',
+      eq: { user_id: this.userId, status: 'LISTED' },
+    })) as unknown as Array<{ id: string; sku: string | null }>;
+    for (const it of listedItems) {
+      if (it.sku) listedBySku.set(it.sku, (listedBySku.get(it.sku) ?? 0) + 1);
+      const pre = String(it.id).slice(0, 8);
+      listedByIdPrefix.set(pre, (listedByIdPrefix.get(pre) ?? 0) + 1);
+    }
+
+    const isHex8 = (s: string) => /^[0-9a-f]{8}$/.test(s);
+    const resolveTarget = (pid: string, sku: string | null): number => {
+      if (mappedPids.has(pid)) return mappedListed.get(pid) ?? 0;
+      if (!sku) return 0;
+      return isHex8(sku) ? (listedByIdPrefix.get(sku) ?? 0) : (listedBySku.get(sku) ?? 0);
+    };
+
+    // 3. Scan live products and clamp overstated active variants.
+    const products = await client.getProducts({
+      fields: 'id,title,status,variants',
+    });
+    summary.products_scanned = products.length;
+
+    for (const product of products) {
+      const pid = String(product.id);
+      for (const variant of product.variants ?? []) {
+        summary.variants_scanned++;
+        const qty = variant.inventory_quantity ?? 0;
+        if (product.status !== 'active' || qty <= 1) continue;
+        const target = resolveTarget(pid, variant.sku);
+        if (target >= qty) continue; // not overstated (or we'd be increasing)
+        summary.overstated_found++;
+        try {
+          await client.setInventoryLevel(
+            String(variant.inventory_item_id),
+            config.location_id,
+            target
+          );
+          summary.reduced++;
+          summary.reductions.push({ sku: variant.sku, from: qty, to: target, mapped: mappedPids.has(pid) });
+        } catch (err) {
+          summary.failed++;
+          summary.errors.push({
+            sku: variant.sku,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    return summary;
   }
 
   // ── CREATE ────────────────────────────────────────────────────

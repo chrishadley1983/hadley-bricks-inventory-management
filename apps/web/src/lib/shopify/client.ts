@@ -1,4 +1,9 @@
-import type { ShopifyConfig, ShopifyProductPayload, ShopifyProductResponse } from './types';
+import type {
+  ShopifyConfig,
+  ShopifyOrder,
+  ShopifyProductPayload,
+  ShopifyProductResponse,
+} from './types';
 
 class RetryableError extends Error {
   constructor(
@@ -207,6 +212,127 @@ export class ShopifyClient {
 
   async getLocations(): Promise<{ locations: Array<{ id: number; name: string }> }> {
     return this.request('GET', '/locations.json');
+  }
+
+  /**
+   * Fetch all products (paged via the Link header) with the given fields.
+   * Used by quantity reconciliation, which must see every live variant —
+   * including ones with no `shopify_products` mapping row.
+   */
+  async getProducts(opts: { fields?: string; limit?: number; maxPages?: number } = {}): Promise<
+    Array<{
+      id: number;
+      title: string;
+      status: string;
+      variants: Array<{ id: number; sku: string | null; inventory_item_id: number; inventory_quantity: number }>;
+    }>
+  > {
+    const params = new URLSearchParams({
+      limit: String(opts.limit ?? 250),
+      fields: opts.fields ?? 'id,title,status,variants',
+    });
+    const maxPages = opts.maxPages ?? 60;
+    let url = `https://${this.shopDomain}/admin/api/${this.apiVersion}/products.json?${params.toString()}`;
+    const all: Array<{
+      id: number;
+      title: string;
+      status: string;
+      variants: Array<{ id: number; sku: string | null; inventory_item_id: number; inventory_quantity: number }>;
+    }> = [];
+
+    for (let page = 0; url && page < maxPages; page++) {
+      const token = await this.getToken();
+      await this.waitForBucket();
+      const response = await fetch(url, {
+        headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
+      });
+      const callLimit = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
+      if (callLimit) {
+        const [used, max] = callLimit.split('/').map(Number);
+        this.bucket = max - used;
+      }
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After') || '2';
+        await sleep(parseFloat(retryAfter) * 1000);
+        continue;
+      }
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Shopify products fetch failed (${response.status}): ${text}`);
+      }
+      const json = (await response.json()) as { products?: typeof all };
+      if (json.products?.length) all.push(...json.products);
+      const link = response.headers.get('link') || '';
+      const next = link.match(/<([^>]+)>;\s*rel="next"/);
+      url = next ? next[1] : '';
+    }
+    return all;
+  }
+
+  // ── Order Operations ────────────────────────────────────────
+
+  /**
+   * Fetch orders, paging through all results via the Link header.
+   *
+   * Uses the same token + rate-limit handling as `request`, but reads the
+   * `Link` header for cursor pagination (which `request` discards). Defaults to
+   * paid orders so we only act on real sales.
+   */
+  async getOrders(opts: {
+    updatedAtMin?: string;
+    status?: string;
+    financialStatus?: string;
+    limit?: number;
+    maxPages?: number;
+  } = {}): Promise<ShopifyOrder[]> {
+    const params = new URLSearchParams({
+      status: opts.status ?? 'any',
+      financial_status: opts.financialStatus ?? 'paid',
+      limit: String(opts.limit ?? 250),
+      fields:
+        'id,name,created_at,updated_at,cancelled_at,financial_status,fulfillment_status,currency,total_price,subtotal_price,total_tax,total_shipping_price_set,total_discounts,email,customer,line_items,refunds',
+    });
+    if (opts.updatedAtMin) params.set('updated_at_min', opts.updatedAtMin);
+
+    const maxPages = opts.maxPages ?? 40;
+    let url = `https://${this.shopDomain}/admin/api/${this.apiVersion}/orders.json?${params.toString()}`;
+    const all: ShopifyOrder[] = [];
+
+    for (let page = 0; url && page < maxPages; page++) {
+      const token = await this.getToken();
+      await this.waitForBucket();
+
+      const response = await fetch(url, {
+        headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
+      });
+
+      const callLimit = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
+      if (callLimit) {
+        const [used, max] = callLimit.split('/').map(Number);
+        this.bucket = max - used;
+      }
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After') || '2';
+        await sleep(parseFloat(retryAfter) * 1000);
+        continue; // retry same url
+      }
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Shopify orders fetch failed (${response.status}): ${text}`);
+      }
+
+      const json = (await response.json()) as { orders?: ShopifyOrder[] };
+      if (json.orders?.length) all.push(...json.orders);
+
+      const link = response.headers.get('link') || '';
+      const next = link.match(/<([^>]+)>;\s*rel="next"/);
+      url = next ? next[1] : '';
+    }
+
+    return all;
   }
 
   // ── Theme/Asset Operations ─────────────────────────────────
