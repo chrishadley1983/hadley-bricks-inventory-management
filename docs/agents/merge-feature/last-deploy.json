@@ -1,19 +1,20 @@
 {
-  "commit": "e4c54c31",
-  "branch": "fix/ebay-picklist-sku-location-fallback",
-  "prNumber": 431,
-  "mergedAt": "2026-06-11T12:21:00Z",
-  "previousCommit": "22b57e4",
+  "commit": "a5b89aa3",
+  "branch": "feature/store-quality",
+  "prNumber": 439,
+  "mergedAt": "2026-06-14T10:20:57Z",
+  "previousCommit": "9f74ed70",
   "deploymentVerified": true,
-  "verifiedAt": "2026-06-11T12:28:00Z",
+  "verifiedAt": "2026-06-14T10:26:07Z",
   "testsRun": [
     "vercel-production-deploy-success",
-    "picking-list-ebay-401-no-auth",
-    "picking-list-amazon-401-regression-check",
-    "root-307-auth-redirect",
-    "pick-ebay-page-200",
-    "sql-simulation-pohatu-resolves-from-sku"
+    "root-200",
+    "dashboard-200",
+    "login-200",
+    "ci-typecheck-lint-test-green",
+    "store-quality-runs-schema-verified-26col-rls-3policies",
+    "store-quality-cli-end-to-end-run-persisted-composite-46.4"
   ],
   "testsPassed": true,
-  "notes": "eBay picking list now falls back to the SKU-embedded location (eBay SKU convention 'U<id> - <location>', e.g. 'U2222 - Garage - E1') when the matched inventory item has no storage_location, rendered as 'Garage - E1 (from SKU)'. Inventory storage_location always wins when present because the SKU records the at-listing location and can be stale. Fully unmatched line items also get a pickable location but stay in the unmatched warning. No DB backfill of storage_location (1,517 of 1,819 pattern-SKU eBay items lack it; backfilling would write stale at-listing locations as current truth). SQL simulation of the deployed logic confirms the triggering item (8531 BIONICLE Pohatu, order 10-14754-53645) resolves to 'Garage - E1 (from SKU)'."
+  "notes": "Store-quality feature (PR #439): cached-only six-dimension BL/Bricqer Store Quality scorecard (velocity/picking/margin/ageing/coverage/freshness) plus sourcing scripts (source-demand-gaps, evaluate-job-lot) and snapshot refresh/enrich. CLI-only — no app route imports src/lib/store-quality, so the production UI is unchanged; the deploy ships the lib + dev npm scripts only. Migration 20260614074058_store_quality_runs (owner-scoped RLS) was already applied to cloud; the local file was renamed from 20260614120000 to match remote history so db:push stays in sync. End-to-end run against live prod data produced composite 46.4 over 20,628 lots / GBP 15,918.57, persisted to store_quality_runs (now 4 rows; verified 26 columns, RLS enabled, 3 policies). This deploy also greened a pre-existing CI lint error (no-explicit-any in the vercel-usage route from #438) that had left the lint gate red on main. previousCommit is the prior live main HEAD (9f74ed70, PR #438) for accurate rollback."
 }
