@@ -70,6 +70,7 @@ interface FullSyncResults {
   amazonLinking: { autoLinked: number; queuedForResolution: number; autoCompleted: number } | null;
   ebayLinking: { autoLinked: number; queuedForResolution: number } | null;
   shopifyArchiveSync: SyncResult | null;
+  shopifyOrderSync: SyncResult | null;
   shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
   stuckJobsReset: number;
@@ -709,6 +710,7 @@ export async function POST(request: NextRequest) {
       amazonLinking: null,
       ebayLinking: null,
       shopifyArchiveSync: null,
+      shopifyOrderSync: null,
       shopifyAlignment: null,
       stuckJobs: [],
       stuckJobsReset: 0,
@@ -982,6 +984,60 @@ export async function POST(request: NextRequest) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         results.shopifyArchiveSync = {
           platform: 'Shopify Archive',
+          status:
+            errorMsg.includes('config') || errorMsg.includes('disabled') ? 'skipped' : 'failed',
+          error: errorMsg,
+        };
+      }
+    }
+
+    // Step 5b: Shopify inbound sales — ingest Shopify orders, mark items SOLD,
+    // de-list them on eBay, then reconcile Shopify quantities. Closes the
+    // double-sell gap where a Shopify sale left the same item live on eBay.
+    // Resolve the Shopify-enabled user directly (may differ from userIds[0],
+    // which is the first user with eBay/Amazon credentials).
+    const { data: shopifyUserRows } = await supabase
+      .from('shopify_config')
+      .select('user_id')
+      .eq('sync_enabled', true)
+      .limit(1);
+    const shopifyUserId = shopifyUserRows?.[0]?.user_id;
+    if (shopifyUserId) {
+      const userId = shopifyUserId;
+      console.log('[Cron FullSync] Running Shopify inbound order sync...');
+      try {
+        const [{ ShopifyOrderSyncService }, { ShopifySyncService: ShopifySyncSvc }] =
+          await Promise.all([
+            import('@/lib/shopify/order-sync.service'),
+            import('@/lib/shopify/sync.service'),
+          ]);
+        const orderResult = await withTimeout(
+          new ShopifyOrderSyncService(supabase, userId).syncOrders(),
+          180000,
+          'Shopify Order Sync'
+        );
+        // Reconcile quantities (orphans + drift) after ingestion.
+        const reconcile = await withTimeout(
+          new ShopifySyncSvc(supabase, userId).reconcileInventoryQuantities(),
+          180000,
+          'Shopify Reconcile'
+        ).catch((e) => ({ reduced: 0, errors: [{ sku: null, error: String(e) }] }));
+
+        results.shopifyOrderSync = {
+          platform: 'Shopify Order Sync',
+          status: orderResult.success ? 'success' : 'failed',
+          processed: orderResult.lineItemsProcessed,
+          updated: orderResult.itemsMarkedSold,
+          created: reconcile.reduced,
+          error: orderResult.errors.length ? orderResult.errors[0].error : undefined,
+        };
+        console.log(
+          `[Cron FullSync] Shopify orders: ${orderResult.itemsMarkedSold} sold, ${orderResult.ebayListingsEnded} eBay ended, ${reconcile.reduced} qty clamped`
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        results.shopifyOrderSync = {
+          platform: 'Shopify Order Sync',
           status:
             errorMsg.includes('config') || errorMsg.includes('disabled') ? 'skipped' : 'failed',
           error: errorMsg,

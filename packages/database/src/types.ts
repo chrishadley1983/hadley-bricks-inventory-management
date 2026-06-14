@@ -12178,6 +12178,7 @@ export type Database = {
           created_at: string
           default_discount_pct: number | null
           id: string
+          last_order_sync_at: string | null
           location_id: string | null
           shop_domain: string
           sync_enabled: boolean
@@ -12192,6 +12193,7 @@ export type Database = {
           created_at?: string
           default_discount_pct?: number | null
           id?: string
+          last_order_sync_at?: string | null
           location_id?: string | null
           shop_domain: string
           sync_enabled?: boolean
@@ -12206,6 +12208,7 @@ export type Database = {
           created_at?: string
           default_discount_pct?: number | null
           id?: string
+          last_order_sync_at?: string | null
           location_id?: string | null
           shop_domain?: string
           sync_enabled?: boolean
@@ -12688,6 +12691,101 @@ export type Database = {
           },
           {
             foreignKeyName: "stock_pickups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_quality_runs: {
+        Row: {
+          ageing_score: number | null
+          avg_value_per_lot: number | null
+          blind_high_value_count: number | null
+          composite_score: number | null
+          coverage_score: number | null
+          created_at: string
+          dead_overstock_value: number | null
+          freshness_score: number | null
+          id: string
+          margin_score: number | null
+          picking_score: number | null
+          price_coverage: number | null
+          segment: string
+          snapshot_age_days: number | null
+          snapshot_date: string | null
+          stuck_high_count: number | null
+          sub_floor_lot_share: number | null
+          summary: Json | null
+          total_lots: number | null
+          total_pieces: number | null
+          total_value: number | null
+          under_priced_count: number | null
+          user_id: string
+          velocity_coverage: number | null
+          velocity_score: number | null
+          window_days: number
+        }
+        Insert: {
+          ageing_score?: number | null
+          avg_value_per_lot?: number | null
+          blind_high_value_count?: number | null
+          composite_score?: number | null
+          coverage_score?: number | null
+          created_at?: string
+          dead_overstock_value?: number | null
+          freshness_score?: number | null
+          id?: string
+          margin_score?: number | null
+          picking_score?: number | null
+          price_coverage?: number | null
+          segment: string
+          snapshot_age_days?: number | null
+          snapshot_date?: string | null
+          stuck_high_count?: number | null
+          sub_floor_lot_share?: number | null
+          summary?: Json | null
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          under_priced_count?: number | null
+          user_id: string
+          velocity_coverage?: number | null
+          velocity_score?: number | null
+          window_days: number
+        }
+        Update: {
+          ageing_score?: number | null
+          avg_value_per_lot?: number | null
+          blind_high_value_count?: number | null
+          composite_score?: number | null
+          coverage_score?: number | null
+          created_at?: string
+          dead_overstock_value?: number | null
+          freshness_score?: number | null
+          id?: string
+          margin_score?: number | null
+          picking_score?: number | null
+          price_coverage?: number | null
+          segment?: string
+          snapshot_age_days?: number | null
+          snapshot_date?: string | null
+          stuck_high_count?: number | null
+          sub_floor_lot_share?: number | null
+          summary?: Json | null
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          under_priced_count?: number | null
+          user_id?: string
+          velocity_coverage?: number | null
+          velocity_score?: number | null
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_quality_runs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -13907,6 +14005,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vercel_usage_history: {
+        Row: {
+          key: string
+          scrape_date: string
+          scraped_at: string | null
+          unit: string | null
+          value: number | null
+        }
+        Insert: {
+          key: string
+          scrape_date: string
+          scraped_at?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Update: {
+          key?: string
+          scrape_date?: string
+          scraped_at?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Relationships: []
       }
       vinted_collections_reported: {
         Row: {
