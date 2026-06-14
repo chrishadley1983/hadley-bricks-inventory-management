@@ -1,20 +1,24 @@
 {
-  "commit": "a5b89aa3",
-  "branch": "feature/store-quality",
-  "prNumber": 439,
-  "mergedAt": "2026-06-14T10:20:57Z",
-  "previousCommit": "9f74ed70",
+  "commit": "52c28110",
+  "branch": "feature/shopify-sale-sync-delist",
+  "prNumber": 441,
+  "mergedAt": "2026-06-14T13:25:12Z",
+  "previousCommit": "a5b89aa3",
   "deploymentVerified": true,
-  "verifiedAt": "2026-06-14T10:26:07Z",
+  "verifiedAt": "2026-06-14T13:38:00Z",
   "testsRun": [
+    "ci-typecheck-lint-test-green-3m36s",
     "vercel-production-deploy-success",
-    "root-200",
-    "dashboard-200",
+    "new-cron-route-deployed-GET-405",
+    "new-cron-POST-no-auth-401",
+    "new-cron-POST-wrong-secret-401",
+    "root-307-login-redirect",
     "login-200",
-    "ci-typecheck-lint-test-green",
-    "store-quality-runs-schema-verified-26col-rls-3policies",
-    "store-quality-cli-end-to-end-run-persisted-composite-46.4"
+    "full-sync-route-401-no-regression",
+    "migration-history-verified-20260614120000-and-20260614130000",
+    "chk_sold_platform-and-chk_platform_orders_platform-widened-shopify",
+    "367-unit-tests-pass-incl-17-new"
   ],
   "testsPassed": true,
-  "notes": "Store-quality feature (PR #439): cached-only six-dimension BL/Bricqer Store Quality scorecard (velocity/picking/margin/ageing/coverage/freshness) plus sourcing scripts (source-demand-gaps, evaluate-job-lot) and snapshot refresh/enrich. CLI-only — no app route imports src/lib/store-quality, so the production UI is unchanged; the deploy ships the lib + dev npm scripts only. Migration 20260614074058_store_quality_runs (owner-scoped RLS) was already applied to cloud; the local file was renamed from 20260614120000 to match remote history so db:push stays in sync. End-to-end run against live prod data produced composite 46.4 over 20,628 lots / GBP 15,918.57, persisted to store_quality_runs (now 4 rows; verified 26 columns, RLS enabled, 3 policies). This deploy also greened a pre-existing CI lint error (no-explicit-any in the vercel-usage route from #438) that had left the lint gate red on main. previousCommit is the prior live main HEAD (9f74ed70, PR #438) for accurate rollback."
+  "notes": "Shopify inbound sale sync (PR #441): adds the missing Shopify->HB path. ShopifyOrderSyncService polls paid Shopify orders, marks matched LISTED inventory SOLD (sold_platform='shopify', discount/refund-aware, idempotent), archives/decrements the Shopify product, and ends the matching eBay listing via new EbayDelistingService (EndFixedPriceItem, idempotent on already-ended, SKU-less id-prefix fallback). ShopifySyncService.reconcileInventoryQuantities clamps overstated Shopify qty (mapped+orphan) to true LISTED count. Wired into the scheduled full-sync cron (Step 5b) + dedicated /api/cron/shopify-orders route. Two migrations applied to cloud: chk_sold_platform widened to allow shopify/brickowl, chk_platform_orders_platform widened to allow shopify (BOTH required - missing the 2nd would make the feature inert; caught in code review), shopify_config.last_order_sync_at cursor added, set 6474 backfilled sold_platform='shopify'. Pre-merge Track A: clamped 104 live overstated Shopify variants to true LISTED count (oversell exposure now 0). Historical order #1002 will be auto-ingested into platform_orders on the first production cron run. previousCommit a5b89aa3 (PR #439) for rollback."
 }
