@@ -90,7 +90,11 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
 
 def parse_term_dates_with_claude(text: str, academic_year: str) -> dict:
     """Use Claude to extract structured term dates from PDF text."""
+    import time
+
     import anthropic
+
+    from ai_usage_audit import log_ai_usage
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -107,10 +111,29 @@ Return ONLY valid JSON with keys: terms, inset_days, half_terms. No other text.
 Text from PDF:
 {text[:6000]}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
+    started = time.time()
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as exc:
+        log_ai_usage(
+            feature="school_term_dates",
+            model="claude-sonnet-4-6",
+            status="error",
+            error=str(exc),
+            request_ms=int((time.time() - started) * 1000),
+        )
+        raise
+
+    log_ai_usage(
+        feature="school_term_dates",
+        model=response.model,
+        usage=response.usage,
+        request_ms=int((time.time() - started) * 1000),
+        anthropic_message_id=response.id,
     )
 
     resp_text = response.content[0].text.strip()
