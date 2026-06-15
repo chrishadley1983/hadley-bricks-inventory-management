@@ -854,26 +854,36 @@ export class ShopifySyncService {
         .eq('shopify_status', 'active');
       if ((activeCount ?? 0) > 0) continue;
 
-      // Quantity = number of LISTED items mapped to this product.
+      // LISTED items mapped to this product (drives both qty and which mapping
+      // rows we re-activate).
       const { data: listedRows } = await this.supabase
         .from('shopify_products')
-        .select('inventory_items!inner(status)')
+        .select('inventory_item_id, inventory_items!inner(status)')
         .eq('user_id', this.userId)
         .eq('shopify_product_id', pid)
         .eq('inventory_items.status', 'LISTED');
-      const qty = Math.max(1, listedRows?.length ?? 1);
+      const listedMappingIds = (listedRows || [])
+        .map((r: { inventory_item_id: string | null }) => r.inventory_item_id)
+        .filter((id: string | null): id is string => !!id);
+      if (listedMappingIds.length === 0) continue;
+      const qty = Math.max(1, listedMappingIds.length);
 
       try {
         await client.updateProduct(pid, { status: 'active' });
         if (config.location_id && invItem) {
           await client.setInventoryLevel(invItem, config.location_id, qty);
         }
+        // Only mark the LISTED items' mappings active — NOT sold siblings of a
+        // grouped product, which must stay archived (else the archive step and
+        // this step flip-flop on every run).
         await this.supabase
           .from('shopify_products')
           .update({ shopify_status: 'active', sync_status: 'synced', last_synced_at: new Date().toISOString() })
           .eq('user_id', this.userId)
-          .eq('shopify_product_id', pid);
+          .eq('shopify_product_id', pid)
+          .in('inventory_item_id', listedMappingIds);
         summary.items_reactivated = (summary.items_reactivated ?? 0) + 1;
+        summary.items_processed += listedMappingIds.length;
       } catch (err) {
         summary.items_failed++;
         summary.errors.push({
@@ -1006,14 +1016,17 @@ export class ShopifySyncService {
       condition: string | null;
       listing_value: number | null;
       item_name: string | null;
+      ebay_listing_id: string | null;
     }> = [];
 
     try {
       // Fetch all LISTED items, then include set-numbered ones PLUS minifigs with
       // no real set number (NA/null) so collectable minifigs also reach Shopify.
       // Non-minifig NA/null items (loose parts, bundles) remain excluded.
+      // NA/null-set minifigs are only included when they have an eBay listing, so
+      // resolveImages can pull a real photo (avoids imageless products).
       const items = (await fetchAllRecords(this.supabase, 'inventory_items', {
-        select: 'id, set_number, condition, listing_value, item_name',
+        select: 'id, set_number, condition, listing_value, item_name, ebay_listing_id',
         eq: { user_id: this.userId, status: 'LISTED' },
         orderBy: { column: 'created_at', ascending: true },
       })) as unknown as Array<{
@@ -1022,13 +1035,17 @@ export class ShopifySyncService {
         condition: string | null;
         listing_value: number | null;
         item_name: string | null;
+        ebay_listing_id: string | null;
       }>;
 
       for (const item of items) {
         if (existingIds.has(item.id)) continue;
         const sn = (item.set_number ?? '').trim();
         const hasRealSet = sn !== '' && sn.toUpperCase() !== 'NA';
-        if (hasRealSet || isMinifigure(item)) {
+        if (hasRealSet) {
+          unsyncedItems.push(item);
+        } else if (isMinifigure(item) && item.ebay_listing_id) {
+          // NA/null-set minifig with an eBay listing -> has a photo source.
           unsyncedItems.push(item);
         }
       }
@@ -1063,20 +1080,27 @@ export class ShopifySyncService {
 
       const ids = group.map((g) => g.id);
       const rep = group[0];
+      const repSet = (rep.set_number ?? '').trim();
+      const repHasRealSet = repSet !== '' && repSet.toUpperCase() !== 'NA';
 
-      // Check if any sibling with the same key is already synced
-      const { data: syncedSiblings } = await this.supabase
-        .from('shopify_products')
-        .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
-        .eq('user_id', this.userId)
-        .eq('sync_status', 'synced')
-        .neq('shopify_product_id', '')
-        .eq('inventory_items.set_number', rep.set_number!)
-        .eq('inventory_items.condition', rep.condition!)
-        .eq('inventory_items.listing_value', rep.listing_value!)
-        .limit(1);
-
-      const existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+      // Check if any sibling with the same (set, condition, value) is already
+      // synced — but ONLY for real-set items. NA/null-set minifigs must never
+      // merge (they are keyed individually as MF-<id>); a set_number='NA' sibling
+      // lookup would wrongly merge distinct minifigs into one product.
+      let existingProductId: string | undefined;
+      if (repHasRealSet) {
+        const { data: syncedSiblings } = await this.supabase
+          .from('shopify_products')
+          .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
+          .eq('user_id', this.userId)
+          .eq('sync_status', 'synced')
+          .neq('shopify_product_id', '')
+          .eq('inventory_items.set_number', rep.set_number!)
+          .eq('inventory_items.condition', rep.condition!)
+          .eq('inventory_items.listing_value', rep.listing_value!)
+          .limit(1);
+        existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+      }
 
       let result: SyncResult;
 

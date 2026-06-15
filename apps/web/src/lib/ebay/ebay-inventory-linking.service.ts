@@ -181,6 +181,31 @@ export class EbayInventoryLinkingService {
   // Active-listing auto-link (eBay listing -> HB inventory)
   // --------------------------------------------------------------------------
 
+  /** Fetch ALL active eBay platform_listings, paginated past the 1,000-row cap. */
+  private async fetchActiveEbayListings(
+    columns: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any[]> {
+    const out: unknown[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.supabase
+        .from('platform_listings')
+        .select(columns)
+        .eq('user_id', this.userId)
+        .eq('platform', 'ebay')
+        .ilike('listing_status', 'active')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error('[EbayLinking] fetchActiveEbayListings error:', error);
+        break;
+      }
+      out.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  }
+
   /**
    * Link active eBay listings to a single LISTED inventory item by writing
    * `inventory_items.ebay_listing_id` (+ upserting `ebay_sku_mappings`).
@@ -200,22 +225,18 @@ export class EbayInventoryLinkingService {
       links: [],
     };
 
-    const { data: listings } = await this.supabase
-      .from('platform_listings')
-      .select('platform_item_id, platform_sku, title')
-      .eq('user_id', this.userId)
-      .eq('platform', 'ebay')
-      .ilike('listing_status', 'active');
-    const active = (listings || []).filter((l: { platform_item_id: string | null }) => l.platform_item_id);
+    const active = (
+      await this.fetchActiveEbayListings('platform_item_id, platform_sku, title')
+    ).filter((l: { platform_item_id: string | null }) => l.platform_item_id);
     result.activeListings = active.length;
 
     // Listing ids already linked + items already linked (avoid double-linking one item).
-    const { data: linkedRows } = await this.supabase
-      .from('inventory_items')
-      .select('ebay_listing_id')
-      .eq('user_id', this.userId)
-      .not('ebay_listing_id', 'is', null);
-    const linkedListingIds = new Set<string>((linkedRows || []).map((r: { ebay_listing_id: string }) => String(r.ebay_listing_id)));
+    const linkedRows = (await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'ebay_listing_id',
+      eq: { user_id: this.userId },
+      isNotNull: ['ebay_listing_id'],
+    })) as unknown as Array<{ ebay_listing_id: string }>;
+    const linkedListingIds = new Set<string>(linkedRows.map((r) => String(r.ebay_listing_id)));
     const usedItemIds = new Set<string>();
 
     for (const l of active) {
@@ -229,13 +250,17 @@ export class EbayInventoryLinkingService {
       );
       if (candidates.length === 1) {
         const item = candidates[0];
-        const { error } = await this.supabase
+        const { data: updated, error } = await this.supabase
           .from('inventory_items')
           .update({ ebay_listing_id: lid })
           .eq('id', item.id)
           .eq('user_id', this.userId)
-          .is('ebay_listing_id', null);
-        if (!error) {
+          .is('ebay_listing_id', null)
+          .select('id');
+        // Only count + write the mapping when a row actually changed (guards
+        // against over-counting and stale mappings if the item was linked
+        // concurrently between read and write).
+        if (!error && updated && updated.length > 0) {
           if (l.platform_sku) {
             await this.supabase
               .from('ebay_sku_mappings')
@@ -285,10 +310,13 @@ export class EbayInventoryLinkingService {
       const r = await this.listedUnlinked((q) => q.eq('sku', ebaySku));
       if (r.length) return r;
     }
-    // Tier 3: sku leading-token (strip " - Garage - ..." style suffix)
+    // Tier 3: sku leading-token (strip " - Garage - ..." style suffix).
+    // Require an alphanumeric token (e.g. U2218, N264) before interpolating into
+    // a PostgREST .or() filter — a comma/special char in the SKU would otherwise
+    // break or inject the filter.
     if (ebaySku && ebaySku.includes(' - ')) {
       const token = ebaySku.slice(0, ebaySku.indexOf(' - ')).trim();
-      if (token.length > 2) {
+      if (token.length > 2 && /^[A-Za-z0-9]+$/.test(token)) {
         const r = await this.listedUnlinked((q) => q.or(`sku.eq.${token},sku.ilike.${token} - %`));
         if (r.length) return r;
       }
@@ -332,7 +360,12 @@ export class EbayInventoryLinkingService {
     const cc = t.match(/\b([a-z]{2,7}\d{2,5}[a-z]?)\b/i); // sw0505, col117, coltlbm42
     if (cc && /[a-z]/i.test(cc[1]) && /\d/.test(cc[1])) return cc[1];
     const bare = t.match(/\b(\d{4,7})\b/);
-    return bare ? bare[1] : null;
+    if (bare) {
+      const n = parseInt(bare[1], 10);
+      // Skip 4-digit year-like numbers (e.g. "Vintage 1999", "2015") — not set numbers.
+      if (!(bare[1].length === 4 && n >= 1900 && n <= 2099)) return bare[1];
+    }
+    return null;
   }
 
   /**
@@ -340,20 +373,16 @@ export class EbayInventoryLinkingService {
    * the listing is live but no LISTED item points at it via ebay_listing_id.
    */
   async detectLiveEbayNoStock(): Promise<LiveEbayNoStock> {
-    const { data: listings } = await this.supabase
-      .from('platform_listings')
-      .select('platform_item_id, platform_sku, title, price, quantity')
-      .eq('user_id', this.userId)
-      .eq('platform', 'ebay')
-      .ilike('listing_status', 'active');
+    const listings = await this.fetchActiveEbayListings(
+      'platform_item_id, platform_sku, title, price, quantity'
+    );
 
-    const { data: listedLinked } = await this.supabase
-      .from('inventory_items')
-      .select('ebay_listing_id')
-      .eq('user_id', this.userId)
-      .eq('status', 'LISTED')
-      .not('ebay_listing_id', 'is', null);
-    const backed = new Set<string>((listedLinked || []).map((r: { ebay_listing_id: string }) => String(r.ebay_listing_id)));
+    const listedLinked = (await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'ebay_listing_id',
+      eq: { user_id: this.userId, status: 'LISTED' },
+      isNotNull: ['ebay_listing_id'],
+    })) as unknown as Array<{ ebay_listing_id: string }>;
+    const backed = new Set<string>(listedLinked.map((r) => String(r.ebay_listing_id)));
 
     // Exclude obvious non-HB side inventory by sku convention.
     const isNonHb = (sku: string | null) =>
