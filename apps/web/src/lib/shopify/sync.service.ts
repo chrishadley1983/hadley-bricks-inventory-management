@@ -816,6 +816,74 @@ export class ShopifySyncService {
    * Creates products for LISTED items not yet on Shopify,
    * archives products for items no longer LISTED.
    */
+  /**
+   * Re-activate Shopify products that are archived in our mapping but whose
+   * inventory item is LISTED again (e.g. restocked / wrongly archived). Sets the
+   * product back to active, restores quantity to the LISTED-mapped count, and
+   * marks the mapping active. Skips products that already have an active mapping.
+   */
+  private async reactivateRelistedProducts(summary: BatchSyncSummary): Promise<void> {
+    const { data: rows } = await this.supabase
+      .from('shopify_products')
+      .select('shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)')
+      .eq('user_id', this.userId)
+      .eq('shopify_status', 'archived')
+      .eq('inventory_items.status', 'LISTED');
+    if (!rows || rows.length === 0) return;
+
+    const byProduct = new Map<string, string | null>();
+    for (const r of rows as Array<{ shopify_product_id: string | null; shopify_inventory_item_id: string | null }>) {
+      if (r.shopify_product_id && !byProduct.has(r.shopify_product_id)) {
+        byProduct.set(r.shopify_product_id, r.shopify_inventory_item_id);
+      }
+    }
+
+    const client = await this.getClient();
+    const config = this.getConfig();
+
+    let processed = 0;
+    for (const [pid, invItem] of byProduct) {
+      if (processed >= 100) break; // safety cap
+      processed++;
+      // Skip if the product already has an active mapping (handled elsewhere).
+      const { count: activeCount } = await this.supabase
+        .from('shopify_products')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', this.userId)
+        .eq('shopify_product_id', pid)
+        .eq('shopify_status', 'active');
+      if ((activeCount ?? 0) > 0) continue;
+
+      // Quantity = number of LISTED items mapped to this product.
+      const { data: listedRows } = await this.supabase
+        .from('shopify_products')
+        .select('inventory_items!inner(status)')
+        .eq('user_id', this.userId)
+        .eq('shopify_product_id', pid)
+        .eq('inventory_items.status', 'LISTED');
+      const qty = Math.max(1, listedRows?.length ?? 1);
+
+      try {
+        await client.updateProduct(pid, { status: 'active' });
+        if (config.location_id && invItem) {
+          await client.setInventoryLevel(invItem, config.location_id, qty);
+        }
+        await this.supabase
+          .from('shopify_products')
+          .update({ shopify_status: 'active', sync_status: 'synced', last_synced_at: new Date().toISOString() })
+          .eq('user_id', this.userId)
+          .eq('shopify_product_id', pid);
+        summary.items_reactivated = (summary.items_reactivated ?? 0) + 1;
+      } catch (err) {
+        summary.items_failed++;
+        summary.errors.push({
+          item_id: pid,
+          error: `Reactivate failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+  }
+
   async batchSync(limit = 50): Promise<BatchSyncSummary> {
     const startTime = Date.now();
     const summary: BatchSyncSummary = {
@@ -824,6 +892,7 @@ export class ShopifySyncService {
       items_added_to_group: 0,
       items_updated: 0,
       items_archived: 0,
+      items_reactivated: 0,
       items_failed: 0,
       errors: [],
       duration_ms: 0,
@@ -916,6 +985,12 @@ export class ShopifySyncService {
       }
     }
 
+    // 1b. Re-activate archived products whose item is LISTED again. The create
+    // step below skips any item that already has a mapping (active OR archived),
+    // so a re-listed item with an archived mapping would otherwise stay off
+    // Shopify forever.
+    await this.reactivateRelistedProducts(summary);
+
     // 2. Create products for LISTED items not yet on Shopify (with grouping)
     const { data: existingMappings } = await this.supabase
       .from('shopify_products')
@@ -930,24 +1005,30 @@ export class ShopifySyncService {
       set_number: string | null;
       condition: string | null;
       listing_value: number | null;
+      item_name: string | null;
     }> = [];
 
     try {
+      // Fetch all LISTED items, then include set-numbered ones PLUS minifigs with
+      // no real set number (NA/null) so collectable minifigs also reach Shopify.
+      // Non-minifig NA/null items (loose parts, bundles) remain excluded.
       const items = (await fetchAllRecords(this.supabase, 'inventory_items', {
-        select: 'id, set_number, condition, listing_value',
+        select: 'id, set_number, condition, listing_value, item_name',
         eq: { user_id: this.userId, status: 'LISTED' },
-        neq: { set_number: 'NA' },
-        isNotNull: ['set_number'],
         orderBy: { column: 'created_at', ascending: true },
       })) as unknown as Array<{
         id: string;
         set_number: string | null;
         condition: string | null;
         listing_value: number | null;
+        item_name: string | null;
       }>;
 
       for (const item of items) {
-        if (!existingIds.has(item.id)) {
+        if (existingIds.has(item.id)) continue;
+        const sn = (item.set_number ?? '').trim();
+        const hasRealSet = sn !== '' && sn.toUpperCase() !== 'NA';
+        if (hasRealSet || isMinifigure(item)) {
           unsyncedItems.push(item);
         }
       }
@@ -956,10 +1037,16 @@ export class ShopifySyncService {
       console.error('[ShopifySync] Error fetching unsynced LISTED items:', error);
     }
 
-    // Group by (set_number, condition, listing_value)
+    // Group by (set_number, condition, listing_value). Minifigs with no real set
+    // number must NOT group together — key each individually so they become
+    // separate Shopify products.
     const groups = new Map<string, typeof unsyncedItems>();
     for (const item of unsyncedItems) {
-      const key = `${item.set_number}|${(item.condition ?? 'N').toUpperCase()}|${item.listing_value ?? 0}`;
+      const sn = (item.set_number ?? '').trim();
+      const hasRealSet = sn !== '' && sn.toUpperCase() !== 'NA';
+      const key = hasRealSet
+        ? `${item.set_number}|${(item.condition ?? 'N').toUpperCase()}|${item.listing_value ?? 0}`
+        : `MF-${item.id}`;
       const group = groups.get(key);
       if (group) {
         group.push(item);

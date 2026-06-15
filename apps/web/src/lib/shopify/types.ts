@@ -224,6 +224,8 @@ export interface BatchSyncSummary {
   items_added_to_group: number;
   items_updated: number;
   items_archived: number;
+  /** Archived products re-activated because their item is LISTED again. */
+  items_reactivated?: number;
   items_failed: number;
   errors: Array<{ item_id: string; error: string }>;
   duration_ms: number;

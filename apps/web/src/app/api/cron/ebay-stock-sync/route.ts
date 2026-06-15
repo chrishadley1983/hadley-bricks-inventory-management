@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayStockService } from '@/lib/platform-stock/ebay';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { EbayInventoryLinkingService } from '@/lib/ebay/ebay-inventory-linking.service';
+import { discordService } from '@/lib/notifications';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
@@ -70,11 +72,17 @@ export async function POST(request: NextRequest) {
 
     let totalListings = 0;
     let usersFailed = 0;
+    let totalLinked = 0;
+    let totalAmbiguous = 0;
+    let totalLiveNoStock = 0;
     const userResults: Array<{
       userId: string;
       status: string;
       listings?: number;
       error?: string;
+      linked?: number;
+      ambiguous?: number;
+      liveNoStock?: number;
     }> = [];
 
     for (const config of configs) {
@@ -104,10 +112,35 @@ export async function POST(request: NextRequest) {
         const count = result.processedRows ?? result.totalRows ?? 0;
         totalListings += count;
 
-        userResults.push({ userId: config.user_id, status: result.status, listings: count });
+        const userResult: (typeof userResults)[number] = {
+          userId: config.user_id,
+          status: result.status,
+          listings: count,
+        };
+        userResults.push(userResult);
         console.log(
           `[Cron eBay Stock Sync] User ${config.user_id}: imported ${count} listings (${result.status})`
         );
+
+        // Auto-link the freshly-synced active listings to HB inventory, and
+        // detect live listings with no LISTED stock (double-sell risk). Failures
+        // here must not fail the sync itself.
+        try {
+          const linker = new EbayInventoryLinkingService(supabase, config.user_id);
+          const link = await linker.autoLinkActiveListings();
+          const noStock = await linker.detectLiveEbayNoStock();
+          totalLinked += link.newlyLinked;
+          totalAmbiguous += link.ambiguous;
+          totalLiveNoStock += noStock.count;
+          userResult.linked = link.newlyLinked;
+          userResult.ambiguous = link.ambiguous;
+          userResult.liveNoStock = noStock.count;
+          console.log(
+            `[Cron eBay Stock Sync] User ${config.user_id}: auto-linked ${link.newlyLinked}, ambiguous ${link.ambiguous}, live-no-stock ${noStock.count}`
+          );
+        } catch (linkErr) {
+          console.error('[Cron eBay Stock Sync] Auto-link/detect failed:', linkErr);
+        }
       } catch (error) {
         usersFailed++;
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -120,8 +153,19 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      `[Cron eBay Stock Sync] Complete: ${totalListings} listings across ${configs.length} user(s), ${usersFailed} failed`
+      `[Cron eBay Stock Sync] Complete: ${totalListings} listings across ${configs.length} user(s), ${usersFailed} failed; auto-linked ${totalLinked}, live-no-stock ${totalLiveNoStock}`
     );
+
+    // Alert on live eBay listings with no LISTED stock (double-sell risk).
+    if (totalLiveNoStock > 0) {
+      discordService
+        .sendSyncStatus({
+          title: '⚠️ eBay listings live with no HB stock',
+          message: `${totalLiveNoStock} active eBay listing(s) have no LISTED inventory backing them — potential double-sell. Auto-linked ${totalLinked} this run; ${totalAmbiguous} ambiguous left for review.`,
+          success: false,
+        })
+        .catch(() => {});
+    }
 
     await execution.complete(
       { usersProcessed: configs.length, totalListings },
@@ -135,6 +179,9 @@ export async function POST(request: NextRequest) {
       usersProcessed: configs.length,
       totalListings,
       usersFailed,
+      totalLinked,
+      totalAmbiguous,
+      totalLiveNoStock,
       userResults,
     });
   } catch (error) {

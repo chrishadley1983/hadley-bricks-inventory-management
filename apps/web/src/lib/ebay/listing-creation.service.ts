@@ -1449,6 +1449,23 @@ Return JSON with these fields (omit any you're not confident about):
       throw new Error(`Failed to update inventory: ${coreError.message}`);
     }
 
+    // Persist the eBay SKU -> inventory link so the daily auto-linker can recover
+    // the connection even if the SKU later drifts (location suffixes, relists).
+    // Non-fatal: a mapping failure must not block the listing.
+    if (sku) {
+      const { error: mapError } = await this.supabase
+        .from('ebay_sku_mappings')
+        .upsert(
+          { user_id: this.userId, ebay_sku: sku, inventory_item_id: itemId },
+          { onConflict: 'user_id,ebay_sku' }
+        );
+      if (mapError) {
+        console.warn(
+          `[ListingCreationService] ebay_sku_mappings upsert failed for ${itemId}: ${mapError.message}`
+        );
+      }
+    }
+
     // Storage location update - if provided, update separately (E2: failure should not block listing)
     if (storageLocation !== undefined && storageLocation.trim() !== '') {
       const { error: storageError } = await this.supabase
