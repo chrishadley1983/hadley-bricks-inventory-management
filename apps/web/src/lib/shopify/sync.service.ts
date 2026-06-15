@@ -15,6 +15,7 @@ import type {
   ShopifyConfig,
   ShopifyProductPayload,
   BatchSyncSummary,
+  DedupeSummary,
   ReconcileSummary,
   SyncResult,
 } from './types';
@@ -65,6 +66,180 @@ export class ShopifySyncService {
   private getConfig(): ShopifyConfig {
     if (!this.config) throw new Error('Config not loaded — call getClient() first');
     return this.config;
+  }
+
+  // ── DEDUP GUARD ───────────────────────────────────────────────
+
+  /**
+   * Adopt an existing Shopify product instead of creating a duplicate.
+   *
+   * A product for `variantSku` can already exist on Shopify even when our
+   * mapping table has no row for these items — e.g. the inventory item was
+   * deleted & re-created (minifig-sync re-pull / set re-import), cascading away
+   * the old `shopify_products` row while the Shopify product itself survived.
+   * Creating again would leave a second, orphaned product (the ghost
+   * "Sold out" card). When such a product exists we refresh + re-activate it
+   * and (re)link the mapping for every passed item.
+   *
+   * Returns a SyncResult when it adopted (or failed to), or `null` when no
+   * existing product was found — signalling the caller to create normally.
+   * Handle + metafields are intentionally left untouched (URL stability +
+   * avoiding duplicate metafield creation on a REST product update).
+   */
+  private async adoptExistingBySku(
+    client: ShopifyClient,
+    config: ShopifyConfig,
+    inventoryItemIds: string[],
+    variantSku: string,
+    quantity: number,
+    built: {
+      title: string;
+      description: string;
+      tags: string;
+      price: number;
+      compareAt: number | null;
+      imageSource: string;
+      imageUrls: string[];
+    }
+  ): Promise<SyncResult | null> {
+    let existing: Awaited<ReturnType<ShopifyClient['findProductsBySku']>>;
+    try {
+      existing = await client.findProductsBySku(variantSku);
+    } catch (err) {
+      // A lookup failure must never block creation — fall through to create.
+      console.warn(`[ShopifySync] SKU dedup lookup failed for ${variantSku}:`, err);
+      return null;
+    }
+    if (existing.length === 0) return null;
+
+    // Prefer an already-active product; otherwise adopt the first match.
+    const target = existing.find((p) => p.status === 'ACTIVE') ?? existing[0];
+
+    try {
+      await client.updateProduct(target.productId, {
+        title: built.title,
+        body_html: built.description,
+        tags: built.tags,
+        status: 'active',
+      });
+      if (target.variantId) {
+        await client.updateVariant(target.variantId, {
+          price: formatShopifyPrice(built.price),
+          ...(built.compareAt != null
+            ? { compare_at_price: formatShopifyPrice(built.compareAt) }
+            : {}),
+          sku: variantSku,
+        });
+      }
+      if (config.location_id && target.inventoryItemId) {
+        await client.setInventoryLevel(target.inventoryItemId, config.location_id, quantity);
+      }
+
+      const now = new Date().toISOString();
+      const mappingRows = inventoryItemIds.map((iid) => ({
+        user_id: this.userId,
+        inventory_item_id: iid,
+        shopify_product_id: target.productId,
+        shopify_variant_id: target.variantId,
+        shopify_inventory_item_id: target.inventoryItemId,
+        shopify_status: 'active',
+        shopify_price: built.price,
+        shopify_compare_at_price: built.compareAt,
+        shopify_title: built.title,
+        shopify_description: built.description,
+        image_source: built.imageSource,
+        image_urls: built.imageUrls,
+        last_synced_at: now,
+        sync_status: 'synced' as const,
+      }));
+      await this.supabase
+        .from('shopify_products')
+        .upsert(mappingRows, { onConflict: 'inventory_item_id' });
+
+      return { success: true, shopifyProductId: target.productId, adopted: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `adopt-by-sku failed: ${errorMsg}` };
+    }
+  }
+
+  /**
+   * Archive untracked orphan duplicate products.
+   *
+   * Belt-and-braces partner to {@link adoptExistingBySku}: scans every live
+   * product, groups by first-variant SKU, and for any SKU with more than one
+   * product archives the redundant UNTRACKED ones — always keeping the tracked
+   * product (or, if none is tracked, the active in-stock one). It only ever
+   * archives; it never deletes, never un-archives, and never touches a product
+   * that has a `shopify_products` mapping row.
+   */
+  async dedupeBySku(): Promise<DedupeSummary> {
+    const client = await this.getClient();
+    const summary: DedupeSummary = {
+      products_scanned: 0,
+      duplicate_skus: 0,
+      archived: 0,
+      failed: 0,
+      actions: [],
+      errors: [],
+    };
+
+    const products = await client.getProducts({ fields: 'id,title,status,variants' });
+    summary.products_scanned = products.length;
+
+    // Tracked product ids — never archive these.
+    const mappings = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'shopify_product_id',
+      eq: { user_id: this.userId },
+      isNotNull: ['shopify_product_id'],
+    })) as unknown as Array<{ shopify_product_id: string | null }>;
+    const tracked = new Set<string>();
+    for (const m of mappings) if (m.shopify_product_id) tracked.add(String(m.shopify_product_id));
+
+    // Group products by first-variant SKU.
+    const bySku = new Map<string, typeof products>();
+    for (const p of products) {
+      const sku = p.variants?.[0]?.sku;
+      if (!sku) continue;
+      const arr = bySku.get(sku);
+      if (arr) arr.push(p);
+      else bySku.set(sku, [p]);
+    }
+
+    const inv = (p: (typeof products)[number]) => p.variants?.[0]?.inventory_quantity ?? 0;
+
+    for (const [sku, group] of bySku) {
+      if (group.length < 2) continue;
+      summary.duplicate_skus++;
+
+      const trackedInGroup = group.filter((p) => tracked.has(String(p.id)));
+      const keeper =
+        trackedInGroup.find((p) => p.status === 'active') ??
+        trackedInGroup[0] ??
+        group.find((p) => p.status === 'active' && inv(p) > 0) ??
+        group.find((p) => p.status === 'active') ??
+        group[0];
+
+      for (const p of group) {
+        if (String(p.id) === String(keeper.id)) continue;
+        if (tracked.has(String(p.id))) continue; // never archive a tracked product
+        if (p.status === 'archived') continue; // already hidden
+        try {
+          await client.archiveProduct(String(p.id));
+          summary.archived++;
+          summary.actions.push({
+            sku,
+            archived_product_id: String(p.id),
+            kept_product_id: String(keeper.id),
+          });
+        } catch (err) {
+          summary.failed++;
+          summary.errors.push({ sku, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+
+    return summary;
   }
 
   // ── RECONCILE QUANTITIES ──────────────────────────────────────
@@ -298,6 +473,21 @@ export class ShopifySyncService {
     });
 
     const handle = buildHandle(item, title, priceResult.price);
+    const variantSku = item.sku ?? item.id.substring(0, 8);
+
+    // Dedup guard: adopt an existing Shopify product for this SKU instead of
+    // creating a duplicate (orphaned product left behind by a deleted/re-created
+    // inventory item). Returns null when nothing exists → create normally.
+    const adopted = await this.adoptExistingBySku(client, config, [item.id], variantSku, 1, {
+      title,
+      description,
+      tags,
+      price: priceResult.price,
+      compareAt: priceResult.compare_at_price,
+      imageSource: imageResult.source,
+      imageUrls: imageResult.urls,
+    });
+    if (adopted) return adopted;
 
     // Add alt text to images
     const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
@@ -317,7 +507,7 @@ export class ShopifySyncService {
             ...(priceResult.compare_at_price
               ? { compare_at_price: formatShopifyPrice(priceResult.compare_at_price) }
               : {}),
-            sku: item.sku ?? item.id.substring(0, 8),
+            sku: variantSku,
             inventory_management: 'shopify',
             requires_shipping: true,
           },
@@ -504,6 +694,7 @@ export class ShopifySyncService {
     const tags = buildShopifyTags(item, bricksetData, ebayDesc);
     const metafields = buildMetafields(item, bricksetData);
     const handle = buildHandle(item, title, priceResult.price);
+    const variantSku = item.sku ?? item.id.substring(0, 8);
 
     // Add SEO meta description (plain text, max 160 chars)
     const seoDesc = buildSeoDescription(item, bricksetData);
@@ -513,6 +704,26 @@ export class ShopifySyncService {
       value: seoDesc,
       type: 'single_line_text_field',
     });
+
+    // Dedup guard: adopt an existing Shopify product for this SKU (set inventory
+    // to the full group size) rather than creating a duplicate.
+    const adopted = await this.adoptExistingBySku(
+      client,
+      config,
+      inventoryItemIds,
+      variantSku,
+      quantity,
+      {
+        title,
+        description,
+        tags,
+        price: priceResult.price,
+        compareAt: priceResult.compare_at_price,
+        imageSource: imageResult.source,
+        imageUrls: imageResult.urls,
+      }
+    );
+    if (adopted) return adopted;
 
     // Add alt text to images
     const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
@@ -532,7 +743,7 @@ export class ShopifySyncService {
             ...(priceResult.compare_at_price
               ? { compare_at_price: formatShopifyPrice(priceResult.compare_at_price) }
               : {}),
-            sku: item.sku ?? item.id.substring(0, 8),
+            sku: variantSku,
             inventory_management: 'shopify',
             requires_shipping: true,
           },
@@ -816,6 +1027,84 @@ export class ShopifySyncService {
    * Creates products for LISTED items not yet on Shopify,
    * archives products for items no longer LISTED.
    */
+  /**
+   * Re-activate Shopify products that are archived in our mapping but whose
+   * inventory item is LISTED again (e.g. restocked / wrongly archived). Sets the
+   * product back to active, restores quantity to the LISTED-mapped count, and
+   * marks the mapping active. Skips products that already have an active mapping.
+   */
+  private async reactivateRelistedProducts(summary: BatchSyncSummary): Promise<void> {
+    const { data: rows } = await this.supabase
+      .from('shopify_products')
+      .select('shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)')
+      .eq('user_id', this.userId)
+      .eq('shopify_status', 'archived')
+      .eq('inventory_items.status', 'LISTED');
+    if (!rows || rows.length === 0) return;
+
+    const byProduct = new Map<string, string | null>();
+    for (const r of rows as Array<{ shopify_product_id: string | null; shopify_inventory_item_id: string | null }>) {
+      if (r.shopify_product_id && !byProduct.has(r.shopify_product_id)) {
+        byProduct.set(r.shopify_product_id, r.shopify_inventory_item_id);
+      }
+    }
+
+    const client = await this.getClient();
+    const config = this.getConfig();
+
+    let processed = 0;
+    for (const [pid, invItem] of byProduct) {
+      if (processed >= 100) break; // safety cap
+      processed++;
+      // Skip if the product already has an active mapping (handled elsewhere).
+      const { count: activeCount } = await this.supabase
+        .from('shopify_products')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', this.userId)
+        .eq('shopify_product_id', pid)
+        .eq('shopify_status', 'active');
+      if ((activeCount ?? 0) > 0) continue;
+
+      // LISTED items mapped to this product (drives both qty and which mapping
+      // rows we re-activate).
+      const { data: listedRows } = await this.supabase
+        .from('shopify_products')
+        .select('inventory_item_id, inventory_items!inner(status)')
+        .eq('user_id', this.userId)
+        .eq('shopify_product_id', pid)
+        .eq('inventory_items.status', 'LISTED');
+      const listedMappingIds = (listedRows || [])
+        .map((r: { inventory_item_id: string | null }) => r.inventory_item_id)
+        .filter((id: string | null): id is string => !!id);
+      if (listedMappingIds.length === 0) continue;
+      const qty = Math.max(1, listedMappingIds.length);
+
+      try {
+        await client.updateProduct(pid, { status: 'active' });
+        if (config.location_id && invItem) {
+          await client.setInventoryLevel(invItem, config.location_id, qty);
+        }
+        // Only mark the LISTED items' mappings active — NOT sold siblings of a
+        // grouped product, which must stay archived (else the archive step and
+        // this step flip-flop on every run).
+        await this.supabase
+          .from('shopify_products')
+          .update({ shopify_status: 'active', sync_status: 'synced', last_synced_at: new Date().toISOString() })
+          .eq('user_id', this.userId)
+          .eq('shopify_product_id', pid)
+          .in('inventory_item_id', listedMappingIds);
+        summary.items_reactivated = (summary.items_reactivated ?? 0) + 1;
+        summary.items_processed += listedMappingIds.length;
+      } catch (err) {
+        summary.items_failed++;
+        summary.errors.push({
+          item_id: pid,
+          error: `Reactivate failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+  }
+
   async batchSync(limit = 50): Promise<BatchSyncSummary> {
     const startTime = Date.now();
     const summary: BatchSyncSummary = {
@@ -824,6 +1113,7 @@ export class ShopifySyncService {
       items_added_to_group: 0,
       items_updated: 0,
       items_archived: 0,
+      items_reactivated: 0,
       items_failed: 0,
       errors: [],
       duration_ms: 0,
@@ -916,6 +1206,12 @@ export class ShopifySyncService {
       }
     }
 
+    // 1b. Re-activate archived products whose item is LISTED again. The create
+    // step below skips any item that already has a mapping (active OR archived),
+    // so a re-listed item with an archived mapping would otherwise stay off
+    // Shopify forever.
+    await this.reactivateRelistedProducts(summary);
+
     // 2. Create products for LISTED items not yet on Shopify (with grouping)
     const { data: existingMappings } = await this.supabase
       .from('shopify_products')
@@ -930,24 +1226,37 @@ export class ShopifySyncService {
       set_number: string | null;
       condition: string | null;
       listing_value: number | null;
+      item_name: string | null;
+      ebay_listing_id: string | null;
     }> = [];
 
     try {
+      // Fetch all LISTED items, then include set-numbered ones PLUS minifigs with
+      // no real set number (NA/null) so collectable minifigs also reach Shopify.
+      // Non-minifig NA/null items (loose parts, bundles) remain excluded.
+      // NA/null-set minifigs are only included when they have an eBay listing, so
+      // resolveImages can pull a real photo (avoids imageless products).
       const items = (await fetchAllRecords(this.supabase, 'inventory_items', {
-        select: 'id, set_number, condition, listing_value',
+        select: 'id, set_number, condition, listing_value, item_name, ebay_listing_id',
         eq: { user_id: this.userId, status: 'LISTED' },
-        neq: { set_number: 'NA' },
-        isNotNull: ['set_number'],
         orderBy: { column: 'created_at', ascending: true },
       })) as unknown as Array<{
         id: string;
         set_number: string | null;
         condition: string | null;
         listing_value: number | null;
+        item_name: string | null;
+        ebay_listing_id: string | null;
       }>;
 
       for (const item of items) {
-        if (!existingIds.has(item.id)) {
+        if (existingIds.has(item.id)) continue;
+        const sn = (item.set_number ?? '').trim();
+        const hasRealSet = sn !== '' && sn.toUpperCase() !== 'NA';
+        if (hasRealSet) {
+          unsyncedItems.push(item);
+        } else if (isMinifigure(item) && item.ebay_listing_id) {
+          // NA/null-set minifig with an eBay listing -> has a photo source.
           unsyncedItems.push(item);
         }
       }
@@ -956,10 +1265,16 @@ export class ShopifySyncService {
       console.error('[ShopifySync] Error fetching unsynced LISTED items:', error);
     }
 
-    // Group by (set_number, condition, listing_value)
+    // Group by (set_number, condition, listing_value). Minifigs with no real set
+    // number must NOT group together — key each individually so they become
+    // separate Shopify products.
     const groups = new Map<string, typeof unsyncedItems>();
     for (const item of unsyncedItems) {
-      const key = `${item.set_number}|${(item.condition ?? 'N').toUpperCase()}|${item.listing_value ?? 0}`;
+      const sn = (item.set_number ?? '').trim();
+      const hasRealSet = sn !== '' && sn.toUpperCase() !== 'NA';
+      const key = hasRealSet
+        ? `${item.set_number}|${(item.condition ?? 'N').toUpperCase()}|${item.listing_value ?? 0}`
+        : `MF-${item.id}`;
       const group = groups.get(key);
       if (group) {
         group.push(item);
@@ -976,20 +1291,27 @@ export class ShopifySyncService {
 
       const ids = group.map((g) => g.id);
       const rep = group[0];
+      const repSet = (rep.set_number ?? '').trim();
+      const repHasRealSet = repSet !== '' && repSet.toUpperCase() !== 'NA';
 
-      // Check if any sibling with the same key is already synced
-      const { data: syncedSiblings } = await this.supabase
-        .from('shopify_products')
-        .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
-        .eq('user_id', this.userId)
-        .eq('sync_status', 'synced')
-        .neq('shopify_product_id', '')
-        .eq('inventory_items.set_number', rep.set_number!)
-        .eq('inventory_items.condition', rep.condition!)
-        .eq('inventory_items.listing_value', rep.listing_value!)
-        .limit(1);
-
-      const existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+      // Check if any sibling with the same (set, condition, value) is already
+      // synced — but ONLY for real-set items. NA/null-set minifigs must never
+      // merge (they are keyed individually as MF-<id>); a set_number='NA' sibling
+      // lookup would wrongly merge distinct minifigs into one product.
+      let existingProductId: string | undefined;
+      if (repHasRealSet) {
+        const { data: syncedSiblings } = await this.supabase
+          .from('shopify_products')
+          .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
+          .eq('user_id', this.userId)
+          .eq('sync_status', 'synced')
+          .neq('shopify_product_id', '')
+          .eq('inventory_items.set_number', rep.set_number!)
+          .eq('inventory_items.condition', rep.condition!)
+          .eq('inventory_items.listing_value', rep.listing_value!)
+          .limit(1);
+        existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+      }
 
       let result: SyncResult;
 

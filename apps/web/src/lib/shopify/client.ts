@@ -187,6 +187,78 @@ export class ShopifyClient {
     return this.request<ShopifyProductResponse>('GET', `/products/${productId}.json`);
   }
 
+  /**
+   * Find existing products by EXACT variant SKU.
+   *
+   * Used by the create-path dedup guard: if a product with this SKU already
+   * exists on Shopify even though our mapping table has no row for the item
+   * (e.g. the inventory item was deleted & re-created — minifig-sync re-pull or
+   * a set re-import — orphaning the prior mapping while the Shopify product
+   * survives), we adopt it instead of creating a duplicate. The `sku:` search
+   * is fuzzy, so results are filtered to exact SKU matches.
+   */
+  async findProductsBySku(sku: string): Promise<
+    Array<{
+      productId: string;
+      status: string;
+      variantId: string | null;
+      inventoryItemId: string | null;
+      inventoryQuantity: number;
+    }>
+  > {
+    const query = `query($q: String!) {
+      products(first: 20, query: $q) {
+        edges { node {
+          legacyResourceId
+          status
+          variants(first: 25) {
+            edges { node { legacyResourceId sku inventoryQuantity inventoryItem { legacyResourceId } } }
+          }
+        } }
+      }
+    }`;
+    const data = await this.graphql<{
+      products: {
+        edges: Array<{
+          node: {
+            legacyResourceId: string;
+            status: string;
+            variants: {
+              edges: Array<{
+                node: {
+                  legacyResourceId: string;
+                  sku: string | null;
+                  inventoryQuantity: number | null;
+                  inventoryItem: { legacyResourceId: string } | null;
+                };
+              }>;
+            };
+          };
+        }>;
+      };
+    }>(query, { q: `sku:${JSON.stringify(sku)}` });
+
+    const out: Array<{
+      productId: string;
+      status: string;
+      variantId: string | null;
+      inventoryItemId: string | null;
+      inventoryQuantity: number;
+    }> = [];
+    for (const edge of data.products?.edges ?? []) {
+      const match = edge.node.variants.edges.find((v) => v.node.sku === sku);
+      if (!match) continue; // exact-match only — `sku:` search can be fuzzy
+      out.push({
+        productId: edge.node.legacyResourceId,
+        status: edge.node.status,
+        variantId: match.node.legacyResourceId,
+        inventoryItemId: match.node.inventoryItem?.legacyResourceId ?? null,
+        inventoryQuantity: match.node.inventoryQuantity ?? 0,
+      });
+    }
+    return out;
+  }
+
   // ── Variant Operations ──────────────────────────────────────
 
   async updateVariant(

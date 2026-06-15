@@ -212,6 +212,30 @@ export async function resolveImages(
       }
       if (resolved.length > 0 && source === 'none') source = 'brickset';
     }
+
+    // eBay items still without an image (minifigs, and NA/null-set items where
+    // the Brickset/BrickLink lookups above don't apply): use the eBay listing's
+    // own photos so they aren't created imageless.
+    if (isEbay && urls.length === 0 && item.ebay_listing_id) {
+      if (ebayListing && ebayListing.images.length > 0) {
+        for (const url of ebayListing.images) {
+          urls.push(url);
+          resolved.push({ src: url });
+        }
+        source = 'ebay';
+      } else {
+        try {
+          const cached = await fetchCachedEbayImages(supabase, item.ebay_listing_id);
+          for (const url of cached) {
+            urls.push(url);
+            resolved.push({ src: url });
+          }
+          if (cached.length > 0) source = 'ebay';
+        } catch (err) {
+          console.warn(`[Images] Failed to fetch cached eBay images for ${item.id}:`, err);
+        }
+      }
+    }
   }
 
   return {

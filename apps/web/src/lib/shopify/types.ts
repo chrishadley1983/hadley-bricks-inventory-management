@@ -137,6 +137,8 @@ export interface EbayListingData {
 export interface SyncResult {
   success: boolean;
   shopifyProductId?: string;
+  /** True when an existing Shopify product was adopted instead of created. */
+  adopted?: boolean;
   error?: string;
 }
 
@@ -217,6 +219,16 @@ export interface ReconcileSummary {
   errors: Array<{ sku: string | null; error: string }>;
 }
 
+/** Dedup-by-SKU reconciliation summary. */
+export interface DedupeSummary {
+  products_scanned: number;
+  duplicate_skus: number;
+  archived: number;
+  failed: number;
+  actions: Array<{ sku: string; archived_product_id: string; kept_product_id: string }>;
+  errors: Array<{ sku: string; error: string }>;
+}
+
 /** Batch sync summary */
 export interface BatchSyncSummary {
   items_processed: number;
@@ -224,6 +236,8 @@ export interface BatchSyncSummary {
   items_added_to_group: number;
   items_updated: number;
   items_archived: number;
+  /** Archived products re-activated because their item is LISTED again. */
+  items_reactivated?: number;
   items_failed: number;
   errors: Array<{ item_id: string; error: string }>;
   duration_ms: number;

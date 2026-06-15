@@ -14,6 +14,8 @@ export const maxDuration = 300;
  *     end the matching eBay listing.
  *  2. Reconcile Shopify quantities — clamp any overstated variant (including
  *     orphan products with no mapping) down to the true LISTED count.
+ *  3. Dedupe by SKU — archive untracked orphan duplicate products (the ghost
+ *     "Sold out" cards left behind when an inventory item is re-created).
  *
  * Auth: Bearer CRON_SECRET (GCP Cloud Scheduler / Vercel cron).
  */
@@ -44,12 +46,22 @@ export async function POST(request: NextRequest) {
 
   const orderResult = await new ShopifyOrderSyncService(supabase, userId).syncOrders();
 
+  const syncService = new ShopifySyncService(supabase, userId);
+
   // Reconcile quantities after ingestion (non-fatal if it errors).
   let reconcile = null;
   try {
-    reconcile = await new ShopifySyncService(supabase, userId).reconcileInventoryQuantities();
+    reconcile = await syncService.reconcileInventoryQuantities();
   } catch (err) {
     reconcile = { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  // Archive any untracked orphan duplicate products (non-fatal if it errors).
+  let dedupe = null;
+  try {
+    dedupe = await syncService.dedupeBySku();
+  } catch (err) {
+    dedupe = { error: err instanceof Error ? err.message : String(err) };
   }
 
   return NextResponse.json({
@@ -57,5 +69,6 @@ export async function POST(request: NextRequest) {
     durationMs: Date.now() - startTime,
     orders: orderResult,
     reconcile,
+    dedupe,
   });
 }

@@ -120,6 +120,28 @@ interface InventoryItem {
   status: string;
 }
 
+/** Result of auto-linking active eBay listings to inventory. */
+export interface EbayAutoLinkResult {
+  activeListings: number;
+  alreadyLinked: number;
+  newlyLinked: number;
+  ambiguous: number;
+  noMatch: number;
+  links: Array<{ ebayItemId: string; inventoryItemId: string; sku: string | null }>;
+}
+
+/** A live eBay listing with no LISTED inventory backing it (double-sell risk). */
+export interface LiveEbayNoStock {
+  count: number;
+  samples: Array<{
+    ebayItemId: string;
+    ebaySku: string | null;
+    title: string | null;
+    price: number | null;
+    quantity: number | null;
+  }>;
+}
+
 // EbayTransaction interface removed - was unused
 
 // ============================================================================
@@ -153,6 +175,236 @@ export class EbayInventoryLinkingService {
       return ['BACKLOG', 'LISTED', 'SOLD'];
     }
     return ['BACKLOG', 'LISTED'];
+  }
+
+  // --------------------------------------------------------------------------
+  // Active-listing auto-link (eBay listing -> HB inventory)
+  // --------------------------------------------------------------------------
+
+  /** Fetch ALL active eBay platform_listings, paginated past the 1,000-row cap. */
+  private async fetchActiveEbayListings(
+    columns: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any[]> {
+    const out: unknown[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.supabase
+        .from('platform_listings')
+        .select(columns)
+        .eq('user_id', this.userId)
+        .eq('platform', 'ebay')
+        .ilike('listing_status', 'active')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error('[EbayLinking] fetchActiveEbayListings error:', error);
+        break;
+      }
+      out.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  }
+
+  /**
+   * Link active eBay listings to a single LISTED inventory item by writing
+   * `inventory_items.ebay_listing_id` (+ upserting `ebay_sku_mappings`).
+   *
+   * Only links when a listing resolves to EXACTLY ONE unlinked LISTED item —
+   * ambiguous/no-match listings are left for review (never guessed). Idempotent:
+   * already-linked listings and already-used items are skipped, so it is safe to
+   * run on every sync.
+   */
+  async autoLinkActiveListings(): Promise<EbayAutoLinkResult> {
+    const result: EbayAutoLinkResult = {
+      activeListings: 0,
+      alreadyLinked: 0,
+      newlyLinked: 0,
+      ambiguous: 0,
+      noMatch: 0,
+      links: [],
+    };
+
+    const active = (
+      await this.fetchActiveEbayListings('platform_item_id, platform_sku, title')
+    ).filter((l: { platform_item_id: string | null }) => l.platform_item_id);
+    result.activeListings = active.length;
+
+    // Listing ids already linked + items already linked (avoid double-linking one item).
+    const linkedRows = (await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'ebay_listing_id',
+      eq: { user_id: this.userId },
+      isNotNull: ['ebay_listing_id'],
+    })) as unknown as Array<{ ebay_listing_id: string }>;
+    const linkedListingIds = new Set<string>(linkedRows.map((r) => String(r.ebay_listing_id)));
+    const usedItemIds = new Set<string>();
+
+    for (const l of active) {
+      const lid = String(l.platform_item_id);
+      if (linkedListingIds.has(lid)) {
+        result.alreadyLinked++;
+        continue;
+      }
+      const candidates = (await this.resolveListingToListedItems(l.platform_sku, l.title)).filter(
+        (c) => !usedItemIds.has(c.id)
+      );
+      if (candidates.length === 1) {
+        const item = candidates[0];
+        const { data: updated, error } = await this.supabase
+          .from('inventory_items')
+          .update({ ebay_listing_id: lid })
+          .eq('id', item.id)
+          .eq('user_id', this.userId)
+          .is('ebay_listing_id', null)
+          .select('id');
+        // Only count + write the mapping when a row actually changed (guards
+        // against over-counting and stale mappings if the item was linked
+        // concurrently between read and write).
+        if (!error && updated && updated.length > 0) {
+          if (l.platform_sku) {
+            await this.supabase
+              .from('ebay_sku_mappings')
+              .upsert(
+                { user_id: this.userId, ebay_sku: l.platform_sku, inventory_item_id: item.id },
+                { onConflict: 'user_id,ebay_sku' }
+              );
+          }
+          usedItemIds.add(item.id);
+          linkedListingIds.add(lid);
+          result.newlyLinked++;
+          result.links.push({ ebayItemId: lid, inventoryItemId: item.id, sku: item.sku });
+        }
+      } else if (candidates.length > 1) {
+        result.ambiguous++;
+      } else {
+        result.noMatch++;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Resolve an eBay listing to LISTED, unlinked inventory items by priority,
+   * returning the first non-empty tier (most specific wins):
+   *   1. ebay_sku_mappings  2. exact SKU  3. SKU leading-token  4. set/char-code + condition
+   */
+  private async resolveListingToListedItems(
+    ebaySku: string | null,
+    title: string | null
+  ): Promise<InventoryItem[]> {
+    // Tier 1: explicit sku mapping
+    if (ebaySku) {
+      const { data: m } = await this.supabase
+        .from('ebay_sku_mappings')
+        .select('inventory_item_id')
+        .eq('user_id', this.userId)
+        .eq('ebay_sku', ebaySku);
+      const ids = (m || []).map((x: { inventory_item_id: string }) => x.inventory_item_id);
+      if (ids.length) {
+        const r = await this.listedUnlinked((q) => q.in('id', ids));
+        if (r.length) return r;
+      }
+    }
+    // Tier 2: exact sku
+    if (ebaySku) {
+      const r = await this.listedUnlinked((q) => q.eq('sku', ebaySku));
+      if (r.length) return r;
+    }
+    // Tier 3: sku leading-token (strip " - Garage - ..." style suffix).
+    // Require an alphanumeric token (e.g. U2218, N264) before interpolating into
+    // a PostgREST .or() filter — a comma/special char in the SKU would otherwise
+    // break or inject the filter.
+    if (ebaySku && ebaySku.includes(' - ')) {
+      const token = ebaySku.slice(0, ebaySku.indexOf(' - ')).trim();
+      if (token.length > 2 && /^[A-Za-z0-9]+$/.test(token)) {
+        const r = await this.listedUnlinked((q) => q.or(`sku.eq.${token},sku.ilike.${token} - %`));
+        if (r.length) return r;
+      }
+    }
+    // Tier 4: set/char-code from title + condition
+    const set = this.extractSetFromTitle(title);
+    if (set) {
+      const all = await this.listedUnlinked((q) => q.ilike('set_number', set));
+      if (all.length) {
+        const wantUsed = /-\s*(complete|incomplete)/i.test(title || '');
+        const condMatched = all.filter(
+          (c) => ((c.condition || '').toLowerCase().startsWith('u')) === wantUsed
+        );
+        return condMatched.length ? condMatched : all;
+      }
+    }
+    return [];
+  }
+
+  /** LISTED items with ebay_listing_id NULL, with an extra filter applied. */
+  private async listedUnlinked(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    filter: (q: any) => any
+  ): Promise<InventoryItem[]> {
+    let q = this.supabase
+      .from('inventory_items')
+      .select('id, sku, set_number, item_name, condition, storage_location, listing_value, cost, purchase_date, status')
+      .eq('user_id', this.userId)
+      .eq('status', 'LISTED')
+      .is('ebay_listing_id', null);
+    q = filter(q);
+    const { data } = await q.order('purchase_date', { ascending: true });
+    return (data || []) as InventoryItem[];
+  }
+
+  /** Extract a LEGO set number or minifig char-code from an eBay title. */
+  private extractSetFromTitle(title: string | null): string | null {
+    const t = title || '';
+    const paren = t.match(/\((\d{3,7})\)/);
+    if (paren) return paren[1];
+    const cc = t.match(/\b([a-z]{2,7}\d{2,5}[a-z]?)\b/i); // sw0505, col117, coltlbm42
+    if (cc && /[a-z]/i.test(cc[1]) && /\d/.test(cc[1])) return cc[1];
+    const bare = t.match(/\b(\d{4,7})\b/);
+    if (bare) {
+      const n = parseInt(bare[1], 10);
+      // Skip 4-digit year-like numbers (e.g. "Vintage 1999", "2015") — not set numbers.
+      if (!(bare[1].length === 4 && n >= 1900 && n <= 2099)) return bare[1];
+    }
+    return null;
+  }
+
+  /**
+   * Find active eBay listings with no LISTED inventory backing (double-sell risk):
+   * the listing is live but no LISTED item points at it via ebay_listing_id.
+   */
+  async detectLiveEbayNoStock(): Promise<LiveEbayNoStock> {
+    const listings = await this.fetchActiveEbayListings(
+      'platform_item_id, platform_sku, title, price, quantity'
+    );
+
+    const listedLinked = (await fetchAllRecords(this.supabase, 'inventory_items', {
+      select: 'ebay_listing_id',
+      eq: { user_id: this.userId, status: 'LISTED' },
+      isNotNull: ['ebay_listing_id'],
+    })) as unknown as Array<{ ebay_listing_id: string }>;
+    const backed = new Set<string>(listedLinked.map((r) => String(r.ebay_listing_id)));
+
+    // Exclude obvious non-HB side inventory by sku convention.
+    const isNonHb = (sku: string | null) =>
+      !!sku && (/^Calc-/i.test(sku) || /^Figure-/i.test(sku) || sku === 'Track_Pot' || /^U - Garage/i.test(sku));
+
+    const noStock = (listings || []).filter(
+      (l: { platform_item_id: string | null; platform_sku: string | null }) =>
+        l.platform_item_id && !backed.has(String(l.platform_item_id)) && !isNonHb(l.platform_sku)
+    );
+
+    return {
+      count: noStock.length,
+      samples: noStock
+        .slice(0, 15)
+        .map((l: { platform_item_id: string; platform_sku: string | null; title: string | null; price: number | null; quantity: number | null }) => ({
+          ebayItemId: String(l.platform_item_id),
+          ebaySku: l.platform_sku,
+          title: l.title,
+          price: l.price,
+          quantity: l.quantity,
+        })),
+    };
   }
 
   // --------------------------------------------------------------------------
