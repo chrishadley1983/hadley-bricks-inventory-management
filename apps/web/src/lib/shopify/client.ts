@@ -194,8 +194,12 @@ export class ShopifyClient {
    * exists on Shopify even though our mapping table has no row for the item
    * (e.g. the inventory item was deleted & re-created — minifig-sync re-pull or
    * a set re-import — orphaning the prior mapping while the Shopify product
-   * survives), we adopt it instead of creating a duplicate. The `sku:` search
-   * is fuzzy, so results are filtered to exact SKU matches.
+   * survives), we adopt it instead of creating a duplicate.
+   *
+   * Shopify's `sku:` search is tokenized (spaces/hyphens split tokens), so it
+   * returns a SUPERSET of near-matches — we paginate and keep only EXACT
+   * matches. Paging matters: ~21% of our SKUs contain spaces with shared tokens
+   * ("Garage", "NEW", "EBAY"), so a true match can fall outside the first page.
    */
   async findProductsBySku(sku: string): Promise<
     Array<{
@@ -206,8 +210,9 @@ export class ShopifyClient {
       inventoryQuantity: number;
     }>
   > {
-    const query = `query($q: String!) {
-      products(first: 20, query: $q) {
+    const query = `query($q: String!, $after: String) {
+      products(first: 100, query: $q, after: $after) {
+        pageInfo { hasNextPage endCursor }
         edges { node {
           legacyResourceId
           status
@@ -217,8 +222,9 @@ export class ShopifyClient {
         } }
       }
     }`;
-    const data = await this.graphql<{
+    type Conn = {
       products: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
         edges: Array<{
           node: {
             legacyResourceId: string;
@@ -236,7 +242,7 @@ export class ShopifyClient {
           };
         }>;
       };
-    }>(query, { q: `sku:${JSON.stringify(sku)}` });
+    };
 
     const out: Array<{
       productId: string;
@@ -245,16 +251,27 @@ export class ShopifyClient {
       inventoryItemId: string | null;
       inventoryQuantity: number;
     }> = [];
-    for (const edge of data.products?.edges ?? []) {
-      const match = edge.node.variants.edges.find((v) => v.node.sku === sku);
-      if (!match) continue; // exact-match only — `sku:` search can be fuzzy
-      out.push({
-        productId: edge.node.legacyResourceId,
-        status: edge.node.status,
-        variantId: match.node.legacyResourceId,
-        inventoryItemId: match.node.inventoryItem?.legacyResourceId ?? null,
-        inventoryQuantity: match.node.inventoryQuantity ?? 0,
+    let after: string | null = null;
+    const maxPages = 10; // up to 1000 products — bounds a pathologically broad token match
+    for (let page = 0; page < maxPages; page++) {
+      const data: Conn = await this.graphql<Conn>(query, {
+        q: `sku:${JSON.stringify(sku)}`,
+        after,
       });
+      const conn = data.products;
+      for (const edge of conn?.edges ?? []) {
+        const match = edge.node.variants.edges.find((v) => v.node.sku === sku);
+        if (!match) continue; // exact-match only — `sku:` search is fuzzy
+        out.push({
+          productId: edge.node.legacyResourceId,
+          status: edge.node.status,
+          variantId: match.node.legacyResourceId,
+          inventoryItemId: match.node.inventoryItem?.legacyResourceId ?? null,
+          inventoryQuantity: match.node.inventoryQuantity ?? 0,
+        });
+      }
+      if (!conn?.pageInfo?.hasNextPage) break;
+      after = conn.pageInfo.endCursor;
     }
     return out;
   }

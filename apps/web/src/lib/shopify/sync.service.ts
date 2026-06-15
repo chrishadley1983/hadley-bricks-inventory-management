@@ -112,8 +112,31 @@ export class ShopifySyncService {
     }
     if (existing.length === 0) return null;
 
-    // Prefer an already-active product; otherwise adopt the first match.
-    const target = existing.find((p) => p.status === 'ACTIVE') ?? existing[0];
+    // SKU is NOT a stable identity — distinct items can share a SKU (e.g. a real
+    // set vs an unmapped placeholder). Only ever adopt a GENUINELY ORPHANED
+    // product: drop any candidate that already has a mapping row pointing at a
+    // DIFFERENT inventory item, so we never overwrite/relink a product that
+    // belongs to someone else. If nothing orphaned remains, create our own.
+    const idSet = new Set(inventoryItemIds);
+    const { data: candidateMaps } = await this.supabase
+      .from('shopify_products')
+      .select('shopify_product_id, inventory_item_id')
+      .eq('user_id', this.userId)
+      .in(
+        'shopify_product_id',
+        existing.map((p) => p.productId)
+      );
+    const mappedElsewhere = new Set<string>();
+    for (const m of candidateMaps ?? []) {
+      if (m.shopify_product_id && m.inventory_item_id && !idSet.has(m.inventory_item_id)) {
+        mappedElsewhere.add(String(m.shopify_product_id));
+      }
+    }
+    const orphans = existing.filter((p) => !mappedElsewhere.has(p.productId));
+    if (orphans.length === 0) return null; // every match belongs to another item
+
+    // Prefer an already-active orphan; otherwise adopt the first.
+    const target = orphans.find((p) => p.status === 'ACTIVE') ?? orphans[0];
 
     try {
       await client.updateProduct(target.productId, {
@@ -125,9 +148,9 @@ export class ShopifySyncService {
       if (target.variantId) {
         await client.updateVariant(target.variantId, {
           price: formatShopifyPrice(built.price),
-          ...(built.compareAt != null
-            ? { compare_at_price: formatShopifyPrice(built.compareAt) }
-            : {}),
+          // Always send compare_at_price so a null value actively CLEARS any
+          // stale strike-through left on the adopted product (mirrors updatePrice).
+          compare_at_price: built.compareAt != null ? formatShopifyPrice(built.compareAt) : '',
           sku: variantSku,
         });
       }

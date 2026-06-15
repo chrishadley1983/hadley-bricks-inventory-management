@@ -78,3 +78,95 @@ describe('ShopifyClient.getOrders', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2); // token + 1 page
   });
 });
+
+describe('ShopifyClient.findProductsBySku', () => {
+  let fetchMock: any;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function productNode(id: string, status: string, sku: string | null) {
+    return {
+      node: {
+        legacyResourceId: id,
+        status,
+        variants: {
+          edges: [
+            {
+              node: {
+                legacyResourceId: `${id}-v`,
+                sku,
+                inventoryQuantity: 1,
+                inventoryItem: { legacyResourceId: `${id}-inv` },
+              },
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  it('paginates the tokenized search and keeps only EXACT matches across pages', async () => {
+    fetchMock.mockImplementation((url: string, init: any) => {
+      if (url.includes('/oauth/access_token')) {
+        return Promise.resolve(jsonResponse({ access_token: 'tok', expires_in: 3600 }));
+      }
+      const after = JSON.parse(init.body).variables.after;
+      if (!after) {
+        // page 1: only a NEAR match (shares tokens, different SKU) — true match is on page 2
+        return Promise.resolve(
+          jsonResponse({
+            data: {
+              products: {
+                pageInfo: { hasNextPage: true, endCursor: 'CURSOR1' },
+                edges: [productNode('NEAR', 'ACTIVE', 'Garage - EBAY NEW-99999-1')],
+              },
+            },
+          })
+        );
+      }
+      // page 2: the exact match
+      return Promise.resolve(
+        jsonResponse({
+          data: {
+            products: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              edges: [productNode('EXACT', 'ARCHIVED', 'Garage - EBAY NEW-76990-1')],
+            },
+          },
+        })
+      );
+    });
+
+    const client = new ShopifyClient(CONFIG);
+    const found = await client.findProductsBySku('Garage - EBAY NEW-76990-1');
+
+    // Only the exact SKU match is returned — the near-match on page 1 is dropped.
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ productId: 'EXACT', status: 'ARCHIVED', variantId: 'EXACT-v' });
+    // token + 2 graphql pages
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns [] when no product carries the exact SKU', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('/oauth/access_token')) {
+        return Promise.resolve(jsonResponse({ access_token: 'tok', expires_in: 3600 }));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          data: {
+            products: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              edges: [productNode('NEAR', 'ACTIVE', 'DIFFERENT-SKU')],
+            },
+          },
+        })
+      );
+    });
+    const client = new ShopifyClient(CONFIG);
+    expect(await client.findProductsBySku('TARGET-SKU')).toEqual([]);
+  });
+});
