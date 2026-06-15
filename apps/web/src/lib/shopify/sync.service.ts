@@ -15,6 +15,7 @@ import type {
   ShopifyConfig,
   ShopifyProductPayload,
   BatchSyncSummary,
+  DedupeSummary,
   ReconcileSummary,
   SyncResult,
 } from './types';
@@ -65,6 +66,180 @@ export class ShopifySyncService {
   private getConfig(): ShopifyConfig {
     if (!this.config) throw new Error('Config not loaded — call getClient() first');
     return this.config;
+  }
+
+  // ── DEDUP GUARD ───────────────────────────────────────────────
+
+  /**
+   * Adopt an existing Shopify product instead of creating a duplicate.
+   *
+   * A product for `variantSku` can already exist on Shopify even when our
+   * mapping table has no row for these items — e.g. the inventory item was
+   * deleted & re-created (minifig-sync re-pull / set re-import), cascading away
+   * the old `shopify_products` row while the Shopify product itself survived.
+   * Creating again would leave a second, orphaned product (the ghost
+   * "Sold out" card). When such a product exists we refresh + re-activate it
+   * and (re)link the mapping for every passed item.
+   *
+   * Returns a SyncResult when it adopted (or failed to), or `null` when no
+   * existing product was found — signalling the caller to create normally.
+   * Handle + metafields are intentionally left untouched (URL stability +
+   * avoiding duplicate metafield creation on a REST product update).
+   */
+  private async adoptExistingBySku(
+    client: ShopifyClient,
+    config: ShopifyConfig,
+    inventoryItemIds: string[],
+    variantSku: string,
+    quantity: number,
+    built: {
+      title: string;
+      description: string;
+      tags: string;
+      price: number;
+      compareAt: number | null;
+      imageSource: string;
+      imageUrls: string[];
+    }
+  ): Promise<SyncResult | null> {
+    let existing: Awaited<ReturnType<ShopifyClient['findProductsBySku']>>;
+    try {
+      existing = await client.findProductsBySku(variantSku);
+    } catch (err) {
+      // A lookup failure must never block creation — fall through to create.
+      console.warn(`[ShopifySync] SKU dedup lookup failed for ${variantSku}:`, err);
+      return null;
+    }
+    if (existing.length === 0) return null;
+
+    // Prefer an already-active product; otherwise adopt the first match.
+    const target = existing.find((p) => p.status === 'ACTIVE') ?? existing[0];
+
+    try {
+      await client.updateProduct(target.productId, {
+        title: built.title,
+        body_html: built.description,
+        tags: built.tags,
+        status: 'active',
+      });
+      if (target.variantId) {
+        await client.updateVariant(target.variantId, {
+          price: formatShopifyPrice(built.price),
+          ...(built.compareAt != null
+            ? { compare_at_price: formatShopifyPrice(built.compareAt) }
+            : {}),
+          sku: variantSku,
+        });
+      }
+      if (config.location_id && target.inventoryItemId) {
+        await client.setInventoryLevel(target.inventoryItemId, config.location_id, quantity);
+      }
+
+      const now = new Date().toISOString();
+      const mappingRows = inventoryItemIds.map((iid) => ({
+        user_id: this.userId,
+        inventory_item_id: iid,
+        shopify_product_id: target.productId,
+        shopify_variant_id: target.variantId,
+        shopify_inventory_item_id: target.inventoryItemId,
+        shopify_status: 'active',
+        shopify_price: built.price,
+        shopify_compare_at_price: built.compareAt,
+        shopify_title: built.title,
+        shopify_description: built.description,
+        image_source: built.imageSource,
+        image_urls: built.imageUrls,
+        last_synced_at: now,
+        sync_status: 'synced' as const,
+      }));
+      await this.supabase
+        .from('shopify_products')
+        .upsert(mappingRows, { onConflict: 'inventory_item_id' });
+
+      return { success: true, shopifyProductId: target.productId, adopted: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `adopt-by-sku failed: ${errorMsg}` };
+    }
+  }
+
+  /**
+   * Archive untracked orphan duplicate products.
+   *
+   * Belt-and-braces partner to {@link adoptExistingBySku}: scans every live
+   * product, groups by first-variant SKU, and for any SKU with more than one
+   * product archives the redundant UNTRACKED ones — always keeping the tracked
+   * product (or, if none is tracked, the active in-stock one). It only ever
+   * archives; it never deletes, never un-archives, and never touches a product
+   * that has a `shopify_products` mapping row.
+   */
+  async dedupeBySku(): Promise<DedupeSummary> {
+    const client = await this.getClient();
+    const summary: DedupeSummary = {
+      products_scanned: 0,
+      duplicate_skus: 0,
+      archived: 0,
+      failed: 0,
+      actions: [],
+      errors: [],
+    };
+
+    const products = await client.getProducts({ fields: 'id,title,status,variants' });
+    summary.products_scanned = products.length;
+
+    // Tracked product ids — never archive these.
+    const mappings = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'shopify_product_id',
+      eq: { user_id: this.userId },
+      isNotNull: ['shopify_product_id'],
+    })) as unknown as Array<{ shopify_product_id: string | null }>;
+    const tracked = new Set<string>();
+    for (const m of mappings) if (m.shopify_product_id) tracked.add(String(m.shopify_product_id));
+
+    // Group products by first-variant SKU.
+    const bySku = new Map<string, typeof products>();
+    for (const p of products) {
+      const sku = p.variants?.[0]?.sku;
+      if (!sku) continue;
+      const arr = bySku.get(sku);
+      if (arr) arr.push(p);
+      else bySku.set(sku, [p]);
+    }
+
+    const inv = (p: (typeof products)[number]) => p.variants?.[0]?.inventory_quantity ?? 0;
+
+    for (const [sku, group] of bySku) {
+      if (group.length < 2) continue;
+      summary.duplicate_skus++;
+
+      const trackedInGroup = group.filter((p) => tracked.has(String(p.id)));
+      const keeper =
+        trackedInGroup.find((p) => p.status === 'active') ??
+        trackedInGroup[0] ??
+        group.find((p) => p.status === 'active' && inv(p) > 0) ??
+        group.find((p) => p.status === 'active') ??
+        group[0];
+
+      for (const p of group) {
+        if (String(p.id) === String(keeper.id)) continue;
+        if (tracked.has(String(p.id))) continue; // never archive a tracked product
+        if (p.status === 'archived') continue; // already hidden
+        try {
+          await client.archiveProduct(String(p.id));
+          summary.archived++;
+          summary.actions.push({
+            sku,
+            archived_product_id: String(p.id),
+            kept_product_id: String(keeper.id),
+          });
+        } catch (err) {
+          summary.failed++;
+          summary.errors.push({ sku, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+
+    return summary;
   }
 
   // ── RECONCILE QUANTITIES ──────────────────────────────────────
@@ -298,6 +473,21 @@ export class ShopifySyncService {
     });
 
     const handle = buildHandle(item, title, priceResult.price);
+    const variantSku = item.sku ?? item.id.substring(0, 8);
+
+    // Dedup guard: adopt an existing Shopify product for this SKU instead of
+    // creating a duplicate (orphaned product left behind by a deleted/re-created
+    // inventory item). Returns null when nothing exists → create normally.
+    const adopted = await this.adoptExistingBySku(client, config, [item.id], variantSku, 1, {
+      title,
+      description,
+      tags,
+      price: priceResult.price,
+      compareAt: priceResult.compare_at_price,
+      imageSource: imageResult.source,
+      imageUrls: imageResult.urls,
+    });
+    if (adopted) return adopted;
 
     // Add alt text to images
     const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
@@ -317,7 +507,7 @@ export class ShopifySyncService {
             ...(priceResult.compare_at_price
               ? { compare_at_price: formatShopifyPrice(priceResult.compare_at_price) }
               : {}),
-            sku: item.sku ?? item.id.substring(0, 8),
+            sku: variantSku,
             inventory_management: 'shopify',
             requires_shipping: true,
           },
@@ -504,6 +694,7 @@ export class ShopifySyncService {
     const tags = buildShopifyTags(item, bricksetData, ebayDesc);
     const metafields = buildMetafields(item, bricksetData);
     const handle = buildHandle(item, title, priceResult.price);
+    const variantSku = item.sku ?? item.id.substring(0, 8);
 
     // Add SEO meta description (plain text, max 160 chars)
     const seoDesc = buildSeoDescription(item, bricksetData);
@@ -513,6 +704,26 @@ export class ShopifySyncService {
       value: seoDesc,
       type: 'single_line_text_field',
     });
+
+    // Dedup guard: adopt an existing Shopify product for this SKU (set inventory
+    // to the full group size) rather than creating a duplicate.
+    const adopted = await this.adoptExistingBySku(
+      client,
+      config,
+      inventoryItemIds,
+      variantSku,
+      quantity,
+      {
+        title,
+        description,
+        tags,
+        price: priceResult.price,
+        compareAt: priceResult.compare_at_price,
+        imageSource: imageResult.source,
+        imageUrls: imageResult.urls,
+      }
+    );
+    if (adopted) return adopted;
 
     // Add alt text to images
     const imagesWithAlt = addImageAltText(imageResult.images, title, item.set_number);
@@ -532,7 +743,7 @@ export class ShopifySyncService {
             ...(priceResult.compare_at_price
               ? { compare_at_price: formatShopifyPrice(priceResult.compare_at_price) }
               : {}),
-            sku: item.sku ?? item.id.substring(0, 8),
+            sku: variantSku,
             inventory_management: 'shopify',
             requires_shipping: true,
           },
