@@ -1,24 +1,24 @@
 {
-  "commit": "52c28110",
-  "branch": "feature/shopify-sale-sync-delist",
-  "prNumber": 441,
-  "mergedAt": "2026-06-14T13:25:12Z",
-  "previousCommit": "a5b89aa3",
+  "commit": "3528fdcd",
+  "branch": "feature/bl-part-out-value",
+  "prNumber": 446,
+  "mergedAt": "2026-06-16",
+  "previousCommit": "52c28110",
   "deploymentVerified": true,
-  "verifiedAt": "2026-06-14T13:38:00Z",
+  "verifiedAt": "2026-06-16",
   "testsRun": [
-    "ci-typecheck-lint-test-green-3m36s",
+    "ci-typecheck-lint-test-green-3m35s",
     "vercel-production-deploy-success",
-    "new-cron-route-deployed-GET-405",
-    "new-cron-POST-no-auth-401",
-    "new-cron-POST-wrong-secret-401",
+    "pov-get-api-401-authgated",
+    "pov-config-api-401-authgated",
+    "pov-post-api-401-authgated",
+    "set-lookup-page-200",
     "root-307-login-redirect",
-    "login-200",
-    "full-sync-route-401-no-regression",
-    "migration-history-verified-20260614120000-and-20260614130000",
-    "chk_sold_platform-and-chk_platform_orders_platform-widened-shopify",
-    "367-unit-tests-pass-incl-17-new"
+    "workflow-page-200-no-regression",
+    "migration-history-verified-20260616090152",
+    "104-pov-rows-101-multiples-uncorrupted",
+    "20-unit-tests-pass-incl-no-sales-bleed-regression"
   ],
   "testsPassed": true,
-  "notes": "Shopify inbound sale sync (PR #441): adds the missing Shopify->HB path. ShopifyOrderSyncService polls paid Shopify orders, marks matched LISTED inventory SOLD (sold_platform='shopify', discount/refund-aware, idempotent), archives/decrements the Shopify product, and ends the matching eBay listing via new EbayDelistingService (EndFixedPriceItem, idempotent on already-ended, SKU-less id-prefix fallback). ShopifySyncService.reconcileInventoryQuantities clamps overstated Shopify qty (mapped+orphan) to true LISTED count. Wired into the scheduled full-sync cron (Step 5b) + dedicated /api/cron/shopify-orders route. Two migrations applied to cloud: chk_sold_platform widened to allow shopify/brickowl, chk_platform_orders_platform widened to allow shopify (BOTH required - missing the 2nd would make the feature inert; caught in code review), shopify_config.last_order_sync_at cursor added, set 6474 backfilled sold_platform='shopify'. Pre-merge Track A: clamped 104 live overstated Shopify variants to true LISTED count (oversell exposure now 0). Historical order #1002 will be auto-ingested into platform_orders on the first production cron run. previousCommit a5b89aa3 (PR #439) for rollback."
+  "notes": "BrickLink Part Out Value (PR #446): authoritative POV (BL's own 6-month sold + current-listing averages) via one CDP page navigation - zero BL API budget. Migration 20260616090152 added bricklink_part_out_value_cache (generated partout_multiple = sold_6mo_avg_gbp / NULLIF(uk_retail_gbp,0), RLS, unique on 8-col option-variant) + bricklink_pov_config (editable defaults, set to 20s delay + 0.74 USD rate). Engine part-out-value.ts (PovScraper CDP navigation - logged-in GBP / logged-out incognito USD; typed Login/Captcha/NotFound/Empty errors; socket-close handler + per-call timeout) and part-out-value-cache.service.ts (cache + UK RRP from brickset_sets + shared getPovForSet = Vinted extension point). CLI pov-fetch.ts (cache-first) + pov-backfill.ts (newest-first, skip-fresh, conservative jittered pacing + cooldown-every-25, stop-on-anti-bot, logged-out-needs-USD-rate guard). Web: GET/POST /api/bricklink/part-out-value (+/config), OfficialPovCard atop set-lookup Partout tab (graceful cache-only when CDP unreachable off-box). Skill /bl-part-out-value. Two multi-agent review workflows: first found + fixed a MEDIUM parser section-bleed (no-sales sets), re-verify GO. POC seeded ~100 newest RRP sets (logged-in/GBP): 104 cache rows, 101 multiples (avg 1.74x, max 3.23x Ferrari SF90). IMPORTANT: bulk backfill is local-only (needs CDP Chrome on :9222) - run with the dedicated BL account (domham91) behind a VPN, logged-in. Web Fetch button live-scrapes only on the local dev server; prod is cache-read + graceful degrade. previousCommit 52c28110 (PR #441) for rollback."
 }
