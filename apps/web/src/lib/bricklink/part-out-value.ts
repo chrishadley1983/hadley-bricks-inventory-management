@@ -397,7 +397,7 @@ export class PovScraper {
     if (page.text.trim().length < 30 && !/Part Out Value/i.test(page.text)) {
       throw new EmptyResponseError(
         `Empty/blocked response for set ${opts.setNumber} (len=${page.text.trim().length}, url=${page.url}) — ` +
-          `likely an IP soft-block; logged-out scraping needs a VPN`,
+          `BL is throttling this IP (transient 403); wait a few minutes or switch VPN endpoint, then resume`,
       );
     }
     if (/captcha|unusual traffic|are you a human|verify you are/i.test(page.text)) {

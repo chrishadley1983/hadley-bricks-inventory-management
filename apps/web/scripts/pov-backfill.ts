@@ -24,6 +24,7 @@ import {
   resolvePovOptions,
   parseSetNumber,
   PovScraper,
+  DEFAULT_POV_OPTIONS,
   LoginRequiredError,
   CaptchaError,
   NotFoundError,
@@ -40,15 +41,28 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
   return acc;
 }, {});
 
+// --limit = how many NEW (not-yet-cached) sets to scrape this session.
 const LIMIT = Math.max(1, parseInt(argv['limit'] ?? '100', 10));
-const OFFSET = parseInt(argv['offset'] ?? '0', 10);
 const LOGGED_OUT = argv['logged-out'] === 'true' || argv['logged-out'] === '';
 const DRY_RUN = argv['dry-run'] === 'true' || argv['dry-run'] === '';
 const CONDITION = (argv['condition'] as PovCondition) ?? 'N';
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
 const USD_RATE = argv['usd-rate'] ? parseFloat(argv['usd-rate']) : null;
-// Require a Brickset RRP so the part-out multiple is computable (default on; relax for broad prod backfill).
-const REQUIRE_RRP = (argv['require-rrp'] ?? 'true') !== 'false';
+// --skip-rrp: don't look up / store UK RRP (Used runs — RRP is irrelevant for the whole-vs-parted call).
+const SKIP_RRP = argv['skip-rrp'] === 'true' || argv['skip-rrp'] === '';
+// Set-number digit floor: 4 (mainstream) by default; pass --min-digits=3 to include vintage (e.g. 375-1).
+const MIN_DIGITS = Math.max(3, Math.min(5, parseInt(argv['min-digits'] ?? '4', 10)));
+const NOW_YEAR = new Date().getFullYear();
+const YEAR_MIN = parseInt(argv['year-min'] ?? '0', 10);
+const YEAR_MAX = parseInt(argv['year-max'] ?? String(NOW_YEAR), 10);
+// Brickset themes that aren't part-out-able SETS (electronics, spare parts, bulk, non-LEGO merch).
+// The require-rrp filter already excludes most of these for New runs; matters for Used (no-RRP).
+const DEFAULT_EXCLUDE_THEMES = ['Gear', 'Service Packs', 'Power Functions', 'Powered Up', 'Bulk Bricks'];
+const EXCLUDE_THEMES = new Set(
+  (argv['exclude-themes'] ? argv['exclude-themes'].split(',') : DEFAULT_EXCLUDE_THEMES).map((s) => s.trim()),
+);
+// Require a Brickset RRP so the part-out multiple is computable. Off automatically when --skip-rrp.
+const REQUIRE_RRP = SKIP_RRP ? false : (argv['require-rrp'] ?? 'true') !== 'false';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -92,6 +106,7 @@ interface TargetSet {
   set_name: string | null;
   year_from: number | null;
   uk_retail_price: number | string | null;
+  theme: string | null;
 }
 
 async function main() {
@@ -103,12 +118,12 @@ async function main() {
   const jitter = (base: number) => Math.round(base * (0.75 + Math.random() * 0.75)); // 0.75×–1.5×
   const cooldownEvery = Math.max(1, config?.backfill_batch_size ?? 25);
   const cooldownMs = Math.max(60000, baseDelayMs * 4);
-  const freshnessDays = config?.freshness_days ?? undefined;
   const usdRate = USD_RATE ?? (config?.usd_to_gbp_rate ? Number(config.usd_to_gbp_rate) : null);
 
   console.log(
-    `[backfill] limit=${LIMIT} offset=${OFFSET} delay~${baseDelayMs}ms(±jitter) condition=${CONDITION} ` +
-      `mode=${LOGGED_OUT ? 'LOGGED-OUT/USD' : 'logged-in/GBP'}${DRY_RUN ? ' DRY-RUN' : ''}`,
+    `[backfill] want=${LIMIT} new sets · condition=${CONDITION} · years ${YEAR_MIN}–${YEAR_MAX} · digits≥${MIN_DIGITS} · ` +
+      `delay~${baseDelayMs}ms(±jitter) · ${SKIP_RRP ? 'no-RRP' : REQUIRE_RRP ? 'rrp-required' : 'rrp-optional'} · ` +
+      `${LOGGED_OUT ? 'LOGGED-OUT/USD' : 'logged-in'}${DRY_RUN ? ' · DRY-RUN' : ''}`,
   );
   // Logged-out scrapes return USD. Without a rate we'd write null-GBP rows marked "fresh" and never
   // re-scrape them — refuse rather than waste BL hits.
@@ -117,32 +132,68 @@ async function main() {
     process.exit(1);
   }
 
-  // Newest real LEGO sets first from the brickset_sets cache. Fetch a wide window and filter to
-  // numeric set numbers (excludes ISBN books, gear, and named placeholder entries), released this
-  // year or earlier (unreleased future sets have no POV data).
-  const currentYear = new Date().getFullYear();
-  const WINDOW = Math.min(1000, Math.max(LIMIT * 6, 300));
-  let query = supabase
-    .from('brickset_sets')
-    .select('set_number, set_name, year_from, uk_retail_price')
-    .not('year_from', 'is', null)
-    .lte('year_from', currentYear);
-  if (REQUIRE_RRP) query = query.not('uk_retail_price', 'is', null);
-  const { data, error } = await query
-    .order('year_from', { ascending: false })
-    .order('set_number', { ascending: false })
-    .range(OFFSET, OFFSET + WINDOW - 1);
-  if (error) {
-    console.error('[backfill] failed to load target sets:', error.message);
-    process.exit(1);
+  const PAGE = 1000;
+
+  // 1) Coverage: every set already cached for THIS option-variant (so we never re-scrape it).
+  //    Paginated past Supabase's 1000-row cap. Keyed by "<itemNo>:<seq>".
+  const covered = new Set<string>();
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('bricklink_part_out_value_cache')
+      .select('set_number, item_seq')
+      .eq('condition', CONDITION)
+      .eq('break_type', DEFAULT_POV_OPTIONS.breakType)
+      .eq('inc_instructions', DEFAULT_POV_OPTIONS.incInstructions)
+      .eq('inc_box', DEFAULT_POV_OPTIONS.incBox)
+      .eq('inc_extra', DEFAULT_POV_OPTIONS.incExtra)
+      .eq('inc_break', DEFAULT_POV_OPTIONS.incBreak)
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error('[backfill] failed to load cache coverage:', error.message);
+      process.exit(1);
+    }
+    if (!data || data.length === 0) break;
+    for (const r of data as Array<{ set_number: string; item_seq: number }>) covered.add(`${r.set_number}:${r.item_seq}`);
+    if (data.length < PAGE) break;
   }
-  // Mainstream retail sets are 4-5 digit numbers (e.g. 10333-1, 77075-1). 6-7 digit numbers are
-  // Blue Ocean magazine/promo gifts that don't map to BL catalog set numbers (all NotFound).
-  const NUMERIC_SET = /^\d{4,5}-\d+$/;
-  const targets = ((data ?? []) as TargetSet[]).filter((t) => NUMERIC_SET.test(t.set_number)).slice(0, LIMIT);
+
+  // 2) Walk brickset_sets newest-first, page by page, collecting the next LIMIT eligible sets that
+  //    aren't covered yet. Numeric set numbers only (excludes ISBN books / gear / promo placeholders).
+  //    This resumes automatically across sessions — no manual --offset, no 1000-row ceiling.
+  const NUMERIC_SET = new RegExp(`^\\d{${MIN_DIGITS},5}-\\d+$`);
+  const targets: TargetSet[] = [];
+  let scanned = 0;
+  for (let from = 0; targets.length < LIMIT; from += PAGE) {
+    let q = supabase
+      .from('brickset_sets')
+      .select('set_number, set_name, year_from, uk_retail_price, theme')
+      .not('year_from', 'is', null)
+      .gte('year_from', YEAR_MIN)
+      .lte('year_from', YEAR_MAX)
+      .order('year_from', { ascending: false })
+      .order('set_number', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (REQUIRE_RRP) q = q.not('uk_retail_price', 'is', null);
+    const { data, error } = await q;
+    if (error) {
+      console.error('[backfill] failed to load target sets:', error.message);
+      process.exit(1);
+    }
+    if (!data || data.length === 0) break;
+    scanned += data.length;
+    for (const row of data as TargetSet[]) {
+      if (!NUMERIC_SET.test(row.set_number)) continue;
+      if (row.theme && EXCLUDE_THEMES.has(row.theme)) continue;
+      const { itemNo, itemSeq } = parseSetNumber(row.set_number);
+      if (covered.has(`${itemNo}:${itemSeq}`)) continue;
+      targets.push(row);
+      if (targets.length >= LIMIT) break;
+    }
+    if (data.length < PAGE) break;
+  }
   console.log(
-    `[backfill] ${targets.length} real sets selected from ${data?.length ?? 0} candidates ` +
-      `(year ${targets[0]?.year_from}…${targets[targets.length - 1]?.year_from})`,
+    `[backfill] ${targets.length} new sets to scrape (already covered=${covered.size}, scanned=${scanned}` +
+      `${targets.length ? `, year ${targets[0]?.year_from}…${targets[targets.length - 1]?.year_from}` : ''})`,
   );
 
   const stats = {
@@ -168,11 +219,6 @@ async function main() {
       const { itemNo, itemSeq } = parseSetNumber(t.set_number);
       const opts = resolvePovOptions({ setNumber: itemNo, itemSeq, condition: CONDITION });
 
-      const cached = await service.getCached(opts, freshnessDays);
-      if (cached?.isFresh) {
-        stats.skippedFresh++;
-        continue;
-      }
       if (DRY_RUN) {
         console.log(`[backfill] (dry) would scrape ${t.set_number} — ${t.set_name ?? ''}`);
         continue;
@@ -180,7 +226,7 @@ async function main() {
 
       try {
         const res = await scraper.scrape(opts);
-        const retail = await service.getUkRetailGbp(itemNo, itemSeq);
+        const retail = SKIP_RRP ? null : await service.getUkRetailGbp(itemNo, itemSeq);
         const row = buildPovCacheRow(res, {
           usdToGbpRate: usdRate,
           ukRetailGbp: retail?.value ?? null,
@@ -205,7 +251,8 @@ async function main() {
         } else if (e instanceof EmptyResponseError || e instanceof CaptchaError || e instanceof LoginRequiredError) {
           stats.stoppedEarly = true;
           stats.stopReason = `${(e as Error).name}: ${(e as Error).message}`;
-          console.error(`[backfill] STOP (anti-bot/login): ${stats.stopReason}`);
+          console.error(`[backfill] STOP — ${stats.stopReason}`);
+          console.error('[backfill] BL throttled this IP. Wait ~10 min OR switch VPN endpoint, then re-run the SAME command — it resumes from where it stopped (skip-fresh).');
           break;
         } else {
           stats.errors++;

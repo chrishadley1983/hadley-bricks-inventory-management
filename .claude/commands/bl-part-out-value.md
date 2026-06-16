@@ -67,24 +67,34 @@ WHERE id = 1;
 
 ## Bulk backfill (production)
 
-**Recommended:** log the **dedicated throwaway BL account** (`domham91` / chris@hadleybricks.co.uk)
-into the CDP Chrome, run **behind a VPN**, in default **logged-in** mode. That gives GBP directly
-(no USD conversion), is reliable (logged-in isn't soft-blocked), and isolates the main business
-account. Pacing is conservative by default (≈20s + jitter, cooldown every 25 scrapes):
+**Setup:** log the **dedicated throwaway BL account** (`domham91`) into the CDP Chrome (note: it
+defaults to **USD** display → conversion via `bricklink_pov_config.usd_to_gbp_rate`, currently
+0.7407), run **behind a VPN**, logged-in. This isolates the main business account.
+
+`pov-backfill.ts` walks `brickset_sets` **newest-first** and auto-selects the next `--limit` sets
+**not already cached** (anti-join, paginated — no `--offset`, no 1000-row ceiling). It's fully
+**resumable**: re-run the same command and it continues where it left off.
 
 ```powershell
-cd apps/web; npx tsx scripts/pov-backfill.ts --limit=200            # dedicated acct logged-in, VPN up
+# New, 2010→now (RRP + part-out multiple) — chunk of 150 at ~12s pacing
+cd apps/web; npx tsx scripts/pov-backfill.ts --limit=150 --year-min=2010 --delay-ms=12000
+
+# Used, 1980→now (part-out value only, no RRP, include vintage 3-digit numbers)
+cd apps/web; npx tsx scripts/pov-backfill.ts --limit=150 --condition=U --skip-rrp --year-min=1980 --min-digits=3 --delay-ms=12000
 ```
 
-**Fallback — logged-out:** works but a residential IP gets soft-blocked after a handful of hits
-(observed), and it returns USD so a rate is required (else the run aborts):
+**Flags:** `--limit=N` (new sets to scrape this session) · `--condition=N|U` · `--skip-rrp` (Used) ·
+`--year-min`/`--year-max` · `--min-digits=3|4` (3 = include vintage) · `--exclude-themes=a,b`
+(default excludes Gear/Service Packs/Power Functions/Powered Up/Bulk Bricks — non-set junk) ·
+`--delay-ms` · `--dry-run`.
 
-```powershell
-cd apps/web; npx tsx scripts/pov-backfill.ts --limit=200 --logged-out --usd-rate=0.74   # VPN up
-```
+**Throttle handling:** BL transiently 403-throttles an IP after a sustained burst (≈150+ hits). The
+run **stops cleanly** on it — just **wait ~10 min or switch VPN endpoint and re-run the same
+command** (it resumes). Pace **~12–15s** for sustained runs; **never 5s** (burns the IP budget for
+no gain). Don't burst probes.
 
-Do **not** burst requests (e.g. rapid probes) — that's what trips the soft-block. Keep the gentle
-pacing; the bulk run is "slow but consistent" by design.
+**Scale (numeric sets):** New 2010→now ≈ 6,419 (with RRP); Used 1980→now ≈ 15,700. Build in
+VPN-rotated chunks over several sessions.
 
 ## Vinted extension point
 
