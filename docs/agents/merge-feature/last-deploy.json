@@ -1,24 +1,21 @@
 {
-  "commit": "3528fdcd",
-  "branch": "feature/bl-part-out-value",
-  "prNumber": 446,
-  "mergedAt": "2026-06-16",
-  "previousCommit": "52c28110",
+  "commit": "50207109",
+  "branch": "fix/amazon-sync-grace-and-failure-email",
+  "prNumber": 448,
+  "mergedAt": "2026-06-16T11:56:18Z",
+  "previousCommit": "3528fdcd",
   "deploymentVerified": true,
   "verifiedAt": "2026-06-16",
   "testsRun": [
-    "ci-typecheck-lint-test-green-3m35s",
+    "ci-typecheck-lint-test-green-3m43s",
     "vercel-production-deploy-success",
-    "pov-get-api-401-authgated",
-    "pov-config-api-401-authgated",
-    "pov-post-api-401-authgated",
-    "set-lookup-page-200",
+    "amazon-sync-cron-api-401-authgated",
+    "amazon-sync-page-200",
     "root-307-login-redirect",
-    "workflow-page-200-no-regression",
-    "migration-history-verified-20260616090152",
-    "104-pov-rows-101-multiples-uncorrupted",
-    "20-unit-tests-pass-incl-no-sales-bleed-regression"
+    "inventory-page-307-login-redirect-no-regression",
+    "feed-28aacdcd-step-complete-status-verified",
+    "two-phase-feeds-in-flight-0-clean-state"
   ],
   "testsPassed": true,
-  "notes": "BrickLink Part Out Value (PR #446): authoritative POV (BL's own 6-month sold + current-listing averages) via one CDP page navigation - zero BL API budget. Migration 20260616090152 added bricklink_part_out_value_cache (generated partout_multiple = sold_6mo_avg_gbp / NULLIF(uk_retail_gbp,0), RLS, unique on 8-col option-variant) + bricklink_pov_config (editable defaults, set to 20s delay + 0.74 USD rate). Engine part-out-value.ts (PovScraper CDP navigation - logged-in GBP / logged-out incognito USD; typed Login/Captcha/NotFound/Empty errors; socket-close handler + per-call timeout) and part-out-value-cache.service.ts (cache + UK RRP from brickset_sets + shared getPovForSet = Vinted extension point). CLI pov-fetch.ts (cache-first) + pov-backfill.ts (newest-first, skip-fresh, conservative jittered pacing + cooldown-every-25, stop-on-anti-bot, logged-out-needs-USD-rate guard). Web: GET/POST /api/bricklink/part-out-value (+/config), OfficialPovCard atop set-lookup Partout tab (graceful cache-only when CDP unreachable off-box). Skill /bl-part-out-value. Two multi-agent review workflows: first found + fixed a MEDIUM parser section-bleed (no-sales sets), re-verify GO. POC seeded ~100 newest RRP sets (logged-in/GBP): 104 cache rows, 101 multiples (avg 1.74x, max 3.23x Ferrari SF90). IMPORTANT: bulk backfill is local-only (needs CDP Chrome on :9222) - run with the dedicated BL account (domham91) behind a VPN, logged-in. Web Fetch button live-scrapes only on the local dev server; prod is cache-read + graceful degrade. previousCommit 52c28110 (PR #441) for rollback."
+  "notes": "fix(amazon) PR #448: two-phase Amazon sync robustness. (1) priceVerificationGracePeriod 10->30min (hard timeout stays 120min) - existing-SKU price PATCH can take ~25-50min to propagate to the live offer, so the 10-min grace window produced FALSE 'verification timeout' alerts AND excluded slow-but-correct items from the quantity feed, silently stranding a newly-added unit (HB shows LISTED, Amazon never gets the 2nd qty). (2) sendTwoPhaseFailure rewritten for accuracy: scopes 'quantity NOT updated' to the failed SKUs only, lists the items that DID sync, shows real set numbers/names + per-item prices (was 'Unknown'), HTML-escapes dynamic content, actionable 're-queue affected item(s)' step. (3) new buildItemDetailsWithNames() resolves set_number/item_name from inventory_items, wired into all 3 failure-email call sites (grace-expired, price-verify timeout, quantity-verify timeout). Triggered by a real false-alarm email on feed 28aacdcd (set 40409 Hot Rod): price PATCH to GBP 26.99 read GBP 27.25 on the live offer for ~50min (propagation lag, not a pricing rule), tripping the 10-min grace; the 2nd Hot Rod unit (N3619) was stranded and pushed manually (qty=2). Two new SKUs (40206/70841) self-activated to BUYABLE; feed reached complete. CI green (typecheck/lint/319 Amazon + 5 email tests). Diagnosis playbook saved to memory amazon-two-phase-sync-bugs. Rollback: git revert 50207109 && git push (previous live commit ab71ac74 / PR #447). previousCommit 3528fdcd (PR #446) per deploy-record convention."
 }
