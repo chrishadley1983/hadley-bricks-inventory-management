@@ -11,6 +11,7 @@ import { usePartout } from '@/hooks/usePartout';
 import { PartoutSummary } from './PartoutSummary';
 import { PartoutTable, type PartoutCondition } from './PartoutTable';
 import { PartoutProgress } from './PartoutProgress';
+import { OfficialPovCard } from './OfficialPovCard';
 
 interface PartoutTabProps {
   setNumber: string | null;
@@ -166,69 +167,81 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     return <EmptyState />;
   }
 
-  // Show streaming progress during initial load or force refresh
-  if (isStreaming && streamProgress) {
-    return (
-      <PartoutProgress
-        fetched={streamProgress.fetched}
-        total={streamProgress.total}
-        cached={streamProgress.cached}
-      />
-    );
-  }
+  // The official BL Part Out Value (one-scrape authoritative figure + multiple) always shows at
+  // the top; the computed, lot-by-lot partout renders below it through its own state machine.
+  const computed = renderComputedPartout();
 
-  // Error state from streaming
-  if (streamError) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Failed to load partout data</AlertTitle>
-        <AlertDescription className="flex items-center justify-between">
-          <span>{streamError}</span>
-          <Button variant="outline" size="sm" onClick={handleRetry}>
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Retry
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  // Loading state (React Query initial load - fallback)
-  if (isLoading) {
-    return <PartoutSkeleton />;
-  }
-
-  // Error state (React Query)
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Failed to load partout data</AlertTitle>
-        <AlertDescription className="flex items-center justify-between">
-          <span>{error instanceof Error ? error.message : 'An error occurred'}</span>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? (
-              <RefreshCw className="h-4 w-4 animate-spin mr-1" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-1" />
-            )}
-            Retry
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  // No data or empty parts
-  if (!data || data.parts.length === 0) {
-    return <NoPartsState />;
-  }
-
-  // Success - render summary and table
   return (
     <div className="space-y-6" data-testid="partout-tab">
-      {/* Refresh indicator and force refresh button */}
+      <OfficialPovCard setNumber={setNumber} enabled={enabled} />
+      {computed}
+    </div>
+  );
+
+  function renderComputedPartout() {
+    // Show streaming progress during initial load or force refresh
+    if (isStreaming && streamProgress) {
+      return (
+        <PartoutProgress
+          fetched={streamProgress.fetched}
+          total={streamProgress.total}
+          cached={streamProgress.cached}
+        />
+      );
+    }
+
+    // Error state from streaming
+    if (streamError) {
+      return (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load partout data</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>{streamError}</span>
+            <Button variant="outline" size="sm" onClick={handleRetry}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    // Loading state (React Query initial load - fallback)
+    if (isLoading) {
+      return <PartoutSkeleton />;
+    }
+
+    // Error state (React Query)
+    if (error) {
+      return (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load partout data</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error instanceof Error ? error.message : 'An error occurred'}</span>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? (
+                <RefreshCw className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    // No data or empty parts
+    if (!data || data.parts.length === 0) {
+      return <NoPartsState />;
+    }
+
+    // Success - render summary and table
+    return (
+      <div className="space-y-6">
+        {/* Refresh indicator and force refresh button */}
       <div className="flex items-center justify-between">
         {isFetching || isForceRefreshing ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -269,8 +282,9 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
         </Tabs>
       </div>
 
-      {/* Parts table */}
-      <PartoutTable parts={data.parts} condition={condition} />
-    </div>
-  );
+        {/* Parts table */}
+        <PartoutTable parts={data.parts} condition={condition} />
+      </div>
+    );
+  }
 }

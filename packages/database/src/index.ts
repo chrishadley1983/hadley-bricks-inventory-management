@@ -88,6 +88,13 @@ export type EbayMarketplaceId = 'EBAY_GB' | 'EBAY_US' | 'EBAY_DE' | 'EBAY_FR' | 
 // Bricqer stats cache
 export type BricqerStatsCache = Tables<'bricqer_stats_cache'>;
 
+// BrickLink Part Out Value (POV) cache + config
+export type BrickLinkPartOutValue = Tables<'bricklink_part_out_value_cache'>;
+export type BrickLinkPartOutValueInsert = TablesInsert<'bricklink_part_out_value_cache'>;
+export type BrickLinkPartOutValueUpdate = TablesUpdate<'bricklink_part_out_value_cache'>;
+export type BrickLinkPovConfig = Tables<'bricklink_pov_config'>;
+export type BrickLinkPovConfigUpdate = TablesUpdate<'bricklink_pov_config'>;
+
 // Aliases for backwards compatibility (singular names)
 export type PlatformCredential = PlatformCredentials;
 export type PlatformCredentialInsert = PlatformCredentialsInsert;

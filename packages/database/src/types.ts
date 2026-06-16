@@ -171,6 +171,126 @@ export type Database = {
           },
         ]
       }
+      ai_api_usage: {
+        Row: {
+          anthropic_message_id: string | null
+          billing_source: string
+          cache_creation_input_tokens: number
+          cache_read_input_tokens: number
+          cost_usd: number | null
+          created_at: string
+          error: string | null
+          feature: string
+          id: string
+          input_tokens: number
+          metadata: Json | null
+          model: string
+          output_tokens: number
+          project: string
+          request_id: string | null
+          request_ms: number | null
+          status: string
+        }
+        Insert: {
+          anthropic_message_id?: string | null
+          billing_source?: string
+          cache_creation_input_tokens?: number
+          cache_read_input_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          feature: string
+          id?: string
+          input_tokens?: number
+          metadata?: Json | null
+          model: string
+          output_tokens?: number
+          project: string
+          request_id?: string | null
+          request_ms?: number | null
+          status?: string
+        }
+        Update: {
+          anthropic_message_id?: string | null
+          billing_source?: string
+          cache_creation_input_tokens?: number
+          cache_read_input_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          feature?: string
+          id?: string
+          input_tokens?: number
+          metadata?: Json | null
+          model?: string
+          output_tokens?: number
+          project?: string
+          request_id?: string | null
+          request_ms?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
+      ai_usage_reconciliation: {
+        Row: {
+          anthropic_cache_creation_tokens: number
+          anthropic_cache_read_tokens: number
+          anthropic_cost_usd: number | null
+          anthropic_input_tokens: number
+          anthropic_output_tokens: number
+          api_key_id: string
+          computed_at: string
+          gap_input_tokens: number | null
+          gap_output_tokens: number | null
+          gap_pct: number | null
+          id: string
+          logged_cost_usd: number | null
+          logged_input_tokens: number
+          logged_output_tokens: number
+          model: string
+          note: string | null
+          usage_date: string
+        }
+        Insert: {
+          anthropic_cache_creation_tokens?: number
+          anthropic_cache_read_tokens?: number
+          anthropic_cost_usd?: number | null
+          anthropic_input_tokens?: number
+          anthropic_output_tokens?: number
+          api_key_id?: string
+          computed_at?: string
+          gap_input_tokens?: number | null
+          gap_output_tokens?: number | null
+          gap_pct?: number | null
+          id?: string
+          logged_cost_usd?: number | null
+          logged_input_tokens?: number
+          logged_output_tokens?: number
+          model: string
+          note?: string | null
+          usage_date: string
+        }
+        Update: {
+          anthropic_cache_creation_tokens?: number
+          anthropic_cache_read_tokens?: number
+          anthropic_cost_usd?: number | null
+          anthropic_input_tokens?: number
+          anthropic_output_tokens?: number
+          api_key_id?: string
+          computed_at?: string
+          gap_input_tokens?: number | null
+          gap_output_tokens?: number | null
+          gap_pct?: number | null
+          id?: string
+          logged_cost_usd?: number | null
+          logged_input_tokens?: number
+          logged_output_tokens?: number
+          model?: string
+          note?: string | null
+          usage_date?: string
+        }
+        Relationships: []
+      }
       amazon_arbitrage_pricing: {
         Row: {
           asin: string
@@ -1059,6 +1179,27 @@ export type Database = {
           },
         ]
       }
+      anthropic_api_keys: {
+        Row: {
+          api_key_id: string
+          created_at: string
+          label: string | null
+          project: string
+        }
+        Insert: {
+          api_key_id: string
+          created_at?: string
+          label?: string | null
+          project?: string
+        }
+        Update: {
+          api_key_id?: string
+          created_at?: string
+          label?: string | null
+          project?: string
+        }
+        Relationships: []
+      }
       arbitrage_purchases: {
         Row: {
           bl_order_id: string | null
@@ -1384,6 +1525,111 @@ export type Database = {
           },
         ]
       }
+      bricklink_part_out_value_cache: {
+        Row: {
+          break_type: string
+          condition: string
+          created_at: string
+          fetched_at: string
+          for_sale_avg_gbp: number | null
+          for_sale_items: number | null
+          for_sale_lots: number | null
+          for_sale_native: number | null
+          id: string
+          inc_box: boolean
+          inc_break: boolean
+          inc_extra: boolean
+          inc_instructions: boolean
+          item_seq: number
+          my_inv_items: number | null
+          my_inv_lots: number | null
+          my_inv_native: number | null
+          native_currency: string | null
+          not_included_items: number | null
+          not_included_lots: number | null
+          partout_multiple: number | null
+          retail_fetched_at: string | null
+          retail_source: string | null
+          set_name: string | null
+          set_number: string
+          sold_6mo_avg_gbp: number | null
+          sold_6mo_items: number | null
+          sold_6mo_lots: number | null
+          sold_6mo_native: number | null
+          uk_retail_gbp: number | null
+          updated_at: string
+          usd_to_gbp_rate: number | null
+        }
+        Insert: {
+          break_type?: string
+          condition?: string
+          created_at?: string
+          fetched_at?: string
+          for_sale_avg_gbp?: number | null
+          for_sale_items?: number | null
+          for_sale_lots?: number | null
+          for_sale_native?: number | null
+          id?: string
+          inc_box?: boolean
+          inc_break?: boolean
+          inc_extra?: boolean
+          inc_instructions?: boolean
+          item_seq?: number
+          my_inv_items?: number | null
+          my_inv_lots?: number | null
+          my_inv_native?: number | null
+          native_currency?: string | null
+          not_included_items?: number | null
+          not_included_lots?: number | null
+          partout_multiple?: number | null
+          retail_fetched_at?: string | null
+          retail_source?: string | null
+          set_name?: string | null
+          set_number: string
+          sold_6mo_avg_gbp?: number | null
+          sold_6mo_items?: number | null
+          sold_6mo_lots?: number | null
+          sold_6mo_native?: number | null
+          uk_retail_gbp?: number | null
+          updated_at?: string
+          usd_to_gbp_rate?: number | null
+        }
+        Update: {
+          break_type?: string
+          condition?: string
+          created_at?: string
+          fetched_at?: string
+          for_sale_avg_gbp?: number | null
+          for_sale_items?: number | null
+          for_sale_lots?: number | null
+          for_sale_native?: number | null
+          id?: string
+          inc_box?: boolean
+          inc_break?: boolean
+          inc_extra?: boolean
+          inc_instructions?: boolean
+          item_seq?: number
+          my_inv_items?: number | null
+          my_inv_lots?: number | null
+          my_inv_native?: number | null
+          native_currency?: string | null
+          not_included_items?: number | null
+          not_included_lots?: number | null
+          partout_multiple?: number | null
+          retail_fetched_at?: string | null
+          retail_source?: string | null
+          set_name?: string | null
+          set_number?: string
+          sold_6mo_avg_gbp?: number | null
+          sold_6mo_items?: number | null
+          sold_6mo_lots?: number | null
+          sold_6mo_native?: number | null
+          uk_retail_gbp?: number | null
+          updated_at?: string
+          usd_to_gbp_rate?: number | null
+        }
+        Relationships: []
+      }
       bricklink_part_price_cache: {
         Row: {
           colour_id: number
@@ -1438,6 +1684,51 @@ export type Database = {
           times_sold_new?: number | null
           times_sold_used?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      bricklink_pov_config: {
+        Row: {
+          backfill_batch_size: number
+          backfill_delay_ms: number
+          default_break_type: string
+          default_condition: string
+          default_inc_box: boolean
+          default_inc_break: boolean
+          default_inc_extra: boolean
+          default_inc_instructions: boolean
+          freshness_days: number
+          id: number
+          updated_at: string
+          usd_to_gbp_rate: number | null
+        }
+        Insert: {
+          backfill_batch_size?: number
+          backfill_delay_ms?: number
+          default_break_type?: string
+          default_condition?: string
+          default_inc_box?: boolean
+          default_inc_break?: boolean
+          default_inc_extra?: boolean
+          default_inc_instructions?: boolean
+          freshness_days?: number
+          id?: number
+          updated_at?: string
+          usd_to_gbp_rate?: number | null
+        }
+        Update: {
+          backfill_batch_size?: number
+          backfill_delay_ms?: number
+          default_break_type?: string
+          default_condition?: string
+          default_inc_box?: boolean
+          default_inc_break?: boolean
+          default_inc_extra?: boolean
+          default_inc_instructions?: boolean
+          freshness_days?: number
+          id?: number
+          updated_at?: string
+          usd_to_gbp_rate?: number | null
         }
         Relationships: []
       }
@@ -4620,10 +4911,12 @@ export type Database = {
         Row: {
           cost_pence: number
           created_at: string | null
+          dispatch_kwh: number | null
           fuel_type: string
           id: string
           is_ev_charge_day: boolean | null
           offpeak_kwh: number | null
+          offpeak_source: string | null
           peak_kwh: number | null
           standing_charge_pence: number | null
           summary_date: string
@@ -4634,10 +4927,12 @@ export type Database = {
         Insert: {
           cost_pence?: number
           created_at?: string | null
+          dispatch_kwh?: number | null
           fuel_type: string
           id?: string
           is_ev_charge_day?: boolean | null
           offpeak_kwh?: number | null
+          offpeak_source?: string | null
           peak_kwh?: number | null
           standing_charge_pence?: number | null
           summary_date: string
@@ -4648,16 +4943,48 @@ export type Database = {
         Update: {
           cost_pence?: number
           created_at?: string | null
+          dispatch_kwh?: number | null
           fuel_type?: string
           id?: string
           is_ev_charge_day?: boolean | null
           offpeak_kwh?: number | null
+          offpeak_source?: string | null
           peak_kwh?: number | null
           standing_charge_pence?: number | null
           summary_date?: string
           total_cost_pence?: number
           total_kwh?: number
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      energy_dispatches: {
+        Row: {
+          created_at: string
+          end_at: string
+          id: number
+          kwh: number | null
+          source: string | null
+          start_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_at: string
+          id?: never
+          kwh?: number | null
+          source?: string | null
+          start_at: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_at?: string
+          id?: never
+          kwh?: number | null
+          source?: string | null
+          start_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5870,6 +6197,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      habit_log: {
+        Row: {
+          created_at: string
+          day_number: number
+          log_date: string
+          result: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_number: number
+          log_date: string
+          result: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_number?: number
+          log_date?: string
+          result?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       home_costs: {
         Row: {
