@@ -616,12 +616,17 @@ export const TWO_PHASE_DEFAULTS = {
   priceVerificationInterval: 30 * 1000,
 
   /**
-   * Grace period after the first item verifies (10 minutes).
+   * Grace period after the first item verifies (30 minutes).
    * Once at least one item's price is confirmed live, remaining items get this
    * window to also verify. After it expires, verified items advance to the
    * quantity phase and unverified items are reported as failures.
+   *
+   * Set to 30 min (was 10) because an existing-SKU price PATCH can take ~25-50 min
+   * to propagate to the live Amazon offer. A 10-min window produced false
+   * "verification failed" alerts for slow-but-correct items and, worse, excluded
+   * them from the quantity feed so a newly-added unit was silently never listed.
    */
-  priceVerificationGracePeriod: 10 * 60 * 1000,
+  priceVerificationGracePeriod: 30 * 60 * 1000,
 
   /** Whether two-phase is the default mode */
   defaultSyncMode: 'single' as const,

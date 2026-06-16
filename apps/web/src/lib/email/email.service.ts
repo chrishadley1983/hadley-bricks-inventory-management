@@ -25,9 +25,14 @@ export interface TwoPhaseFailureParams {
   userEmail: string;
   feedId: string;
   failedSkus: string[];
-  submittedPrice: number;
   verificationDuration: number;
-  itemDetails: Array<{ sku: string; asin: string; setNumber: string; itemName: string }>;
+  /**
+   * Details for ALL items in the sync. The email uses `failedSkus` to split this
+   * into items whose quantity was held back vs items that synced successfully.
+   */
+  itemDetails: Array<{ sku: string; asin: string; setNumber: string; itemName: string; price?: number }>;
+  /** Total item count in the sync (defaults to itemDetails.length). */
+  totalCount?: number;
 }
 
 export interface FeedRejectionParams {
@@ -186,71 +191,84 @@ export class EmailService {
    * Send two-phase sync failure notification (price verification timeout)
    */
   async sendTwoPhaseFailure(params: TwoPhaseFailureParams): Promise<void> {
-    const { userEmail, feedId, failedSkus, submittedPrice, verificationDuration, itemDetails } =
-      params;
+    const { userEmail, feedId, failedSkus, verificationDuration, itemDetails } = params;
+    const total = params.totalCount ?? itemDetails.length;
+    const minutes = Math.round(verificationDuration / 60000);
 
-    const itemList = itemDetails
-      .map((item) => `• ${item.setNumber} - ${item.itemName} (SKU: ${item.sku})`)
-      .join('\n');
+    const failedSet = new Set(failedSkus);
+    const failed = itemDetails.filter((i) => failedSet.has(i.sku));
+    const synced = itemDetails.filter((i) => !failedSet.has(i.sku));
 
-    const priceLine = submittedPrice > 0
-      ? `<li><strong>Submitted Price:</strong> £${submittedPrice.toFixed(2)}</li>`
+    const fmtItem = (i: { sku: string; setNumber: string; itemName: string; price?: number }) =>
+      `• ${i.setNumber} - ${i.itemName} (SKU: ${i.sku})${i.price !== undefined ? ` @ £${i.price.toFixed(2)}` : ''}`;
+
+    // Fall back to raw SKUs if we couldn't map any failed SKU to its details
+    const failedList = (failed.length > 0 ? failed.map(fmtItem) : failedSkus.map((s) => `• ${s}`)).join('\n');
+    const syncedList = synced.map(fmtItem).join('\n');
+
+    const syncedHtml = synced.length
+      ? `<h3>Updated successfully (${synced.length}):</h3>\n      <pre>${escapeHtml(syncedList)}</pre>`
       : '';
+    const syncedText = synced.length ? `\nUpdated successfully (${synced.length}):\n${syncedList}\n` : '';
 
     const html = `
-      <h2>⚠️ Amazon Two-Phase Sync Failed</h2>
+      <h2>⚠️ Amazon Two-Phase Sync — Price Not Confirmed</h2>
 
-      <p><strong>Price verification timed out after ${Math.round(verificationDuration / 60000)} minutes.</strong></p>
+      <p><strong>The price could not be confirmed live on Amazon for ${failedSkus.length} of ${total} item(s)
+      within ${minutes} minutes.</strong></p>
 
-      <p>The price update was submitted but could not be verified as live on Amazon within the timeout period.
-      <strong>Quantity has NOT been updated</strong> to prevent selling at the old price.</p>
+      <p><strong>Quantity was NOT updated for the item(s) below</strong> (to prevent selling at the old price).
+      Any other items in this sync were updated normally. This is often just slow Amazon propagation —
+      the price may already be live now.</p>
 
-      <h3>Affected Items:</h3>
-      <pre>${itemList}</pre>
+      <h3>Not updated — quantity held (${failedSkus.length}):</h3>
+      <pre>${escapeHtml(failedList)}</pre>
+
+      ${syncedHtml}
 
       <h3>Details:</h3>
       <ul>
-        <li><strong>Feed ID:</strong> ${feedId}</li>
-        ${priceLine}
-        <li><strong>Failed SKUs:</strong> ${failedSkus.join(', ')}</li>
+        <li><strong>Feed ID:</strong> ${escapeHtml(feedId)}</li>
+        <li><strong>Failed SKUs:</strong> ${escapeHtml(failedSkus.join(', '))}</li>
       </ul>
 
       <h3>Required Action:</h3>
       <ol>
-        <li>Check Amazon Seller Central to verify if the price is now visible</li>
-        <li>If price is correct, manually update quantity or retry sync</li>
-        <li>If price is still old, investigate Amazon feed processing</li>
+        <li>Check Amazon Seller Central to confirm the price is now visible for the affected item(s)</li>
+        <li>If the price is correct, re-add the affected item(s) to the Amazon sync queue to push their quantity</li>
+        <li>If the price is still wrong, investigate Amazon feed processing</li>
       </ol>
 
       <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}">View Feed Details</a></p>
     `;
 
     const text = `
-Amazon Two-Phase Sync Failed
+Amazon Two-Phase Sync — Price Not Confirmed
 
-Price verification timed out after ${Math.round(verificationDuration / 60000)} minutes.
+The price could not be confirmed live on Amazon for ${failedSkus.length} of ${total} item(s) within ${minutes} minutes.
 
-The price update was submitted but could not be verified as live on Amazon.
-QUANTITY HAS NOT BEEN UPDATED to prevent selling at the old price.
+QUANTITY WAS NOT UPDATED for the item(s) below (to prevent selling at the old price).
+Any other items in this sync were updated normally. This is often just slow Amazon
+propagation — the price may already be live now.
 
-Affected Items:
-${itemList}
-
+Not updated — quantity held (${failedSkus.length}):
+${failedList}
+${syncedText}
 Details:
-- Feed ID: ${feedId}${submittedPrice > 0 ? `\n- Submitted Price: £${submittedPrice.toFixed(2)}` : ''}
+- Feed ID: ${feedId}
 - Failed SKUs: ${failedSkus.join(', ')}
 
 Required Action:
-1. Check Amazon Seller Central to verify if the price is now visible
-2. If price is correct, manually update quantity or retry sync
-3. If price is still old, investigate Amazon feed processing
+1. Check Amazon Seller Central to confirm the price is now visible for the affected item(s)
+2. If the price is correct, re-add the affected item(s) to the Amazon sync queue to push their quantity
+3. If the price is still wrong, investigate Amazon feed processing
 
 View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     `;
 
     await this.send({
       to: userEmail,
-      subject: `⚠️ Amazon Sync Failed: Price verification timeout for ${failedSkus.length} item(s)`,
+      subject: `⚠️ Amazon Sync: ${failedSkus.length} item(s) need attention (price not confirmed)`,
       html,
       text,
     });

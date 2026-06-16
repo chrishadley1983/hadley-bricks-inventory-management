@@ -45,17 +45,18 @@ describe('EmailService', () => {
       emailService = new EmailService();
     });
 
-    it('generates correct failure email content', async () => {
+    it('generates correct failure email content (failed + synced split)', async () => {
       const params = {
         userEmail: 'test@example.com',
         feedId: 'feed-123',
-        failedSkus: ['SKU-001', 'SKU-002'],
-        submittedPrice: 44.99,
+        failedSkus: ['SKU-001'],
         verificationDuration: 1800000, // 30 minutes
+        // SKU-001 failed; SKU-002 synced successfully
         itemDetails: [
-          { sku: 'SKU-001', asin: 'B0001', setNumber: '75192', itemName: 'Star Wars Set' },
-          { sku: 'SKU-002', asin: 'B0002', setNumber: '10297', itemName: 'Boutique Hotel' },
+          { sku: 'SKU-001', asin: 'B0001', setNumber: '75192', itemName: 'Star Wars Set', price: 44.99 },
+          { sku: 'SKU-002', asin: 'B0002', setNumber: '10297', itemName: 'Boutique Hotel', price: 199.99 },
         ],
+        totalCount: 2,
       };
 
       // Service should not throw
