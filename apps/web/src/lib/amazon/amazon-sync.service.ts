@@ -1196,16 +1196,17 @@ export class AmazonSyncService {
               console.error('[AmazonSyncService] Discord partial verification alert failed:', err)
             );
 
-            // Send email notification (fire-and-forget)
-            // Get per-item prices from the failed feed items for the notification
-            const failedItemPrices = (failedFeedItems ?? []).map((fi) => Number(fi.submitted_price));
+            // Send email notification (fire-and-forget). Resolve real names/prices
+            // so the email lists the failed item legibly and scopes the
+            // "quantity not updated" warning to just the failed SKUs.
+            const failureItemDetails = await this.buildItemDetailsWithNames(aggregatedItems);
             emailService.sendTwoPhaseFailure({
               userEmail,
               feedId,
               failedSkus,
-              submittedPrice: failedItemPrices.length === 1 ? failedItemPrices[0] : 0,
               verificationDuration: elapsed,
-              itemDetails: this.buildItemDetails(aggregatedItems),
+              itemDetails: failureItemDetails,
+              totalCount: aggregatedItems.length,
             }).catch((err) =>
               console.error('[AmazonSyncService] Email partial verification notification failed:', err)
             );
@@ -1533,9 +1534,9 @@ export class AmazonSyncService {
           userEmail,
           feedId,
           failedSkus,
-          submittedPrice: aggregatedItems[0]?.price ?? 0,
           verificationDuration: TWO_PHASE_DEFAULTS.priceVerificationTimeout,
-          itemDetails: this.buildItemDetails(aggregatedItems),
+          itemDetails: await this.buildItemDetailsWithNames(aggregatedItems),
+          totalCount: aggregatedItems.length,
         });
 
         await discordService.sendSyncFailure({
@@ -1799,15 +1800,15 @@ export class AmazonSyncService {
     // Reconstruct from feed items — the queue may already be cleared by this point
     const feedItems = await this.getFeedItems(feedId);
     const aggregatedItems = this.reconstructItemsFromFeedItems(feedItems);
-    const itemDetails = this.buildItemDetails(aggregatedItems);
+    const itemDetails = await this.buildItemDetailsWithNames(aggregatedItems);
 
     await emailService.sendTwoPhaseFailure({
       userEmail,
       feedId,
       failedSkus,
-      submittedPrice: aggregatedItems[0]?.price ?? 0,
       verificationDuration: TWO_PHASE_DEFAULTS.priceVerificationTimeout,
       itemDetails,
+      totalCount: aggregatedItems.length,
     });
 
     await discordService.sendSyncFailure({
@@ -2202,6 +2203,43 @@ export class AmazonSyncService {
       setNumber: item.itemNames[0]?.split(' ')[0] ?? item.asin,
       itemName: item.itemNames[0] ?? 'Unknown',
     }));
+  }
+
+  /**
+   * Build item details for notification emails, resolving set number + name from
+   * inventory_items (and including the submitted price).
+   *
+   * Items reconstructed from feed items have empty `itemNames`, so the plain
+   * `buildItemDetails` renders them as "Unknown" with the ASIN as the set number.
+   * This async variant looks up the real set number and name so failure emails are
+   * legible.
+   */
+  private async buildItemDetailsWithNames(
+    items: AggregatedQueueItem[]
+  ): Promise<Array<{ sku: string; asin: string; setNumber: string; itemName: string; price: number }>> {
+    const allIds = Array.from(new Set(items.flatMap((i) => i.inventoryItemIds))).filter(Boolean);
+
+    const byId = new Map<string, { set_number: string | null; item_name: string | null }>();
+    if (allIds.length > 0) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('id, set_number, item_name')
+        .in('id', allIds);
+      for (const row of data ?? []) {
+        byId.set(row.id, { set_number: row.set_number, item_name: row.item_name });
+      }
+    }
+
+    return items.map((item) => {
+      const match = item.inventoryItemIds.map((id) => byId.get(id)).find(Boolean);
+      return {
+        sku: item.amazonSku,
+        asin: item.asin,
+        setNumber: match?.set_number ?? item.itemNames[0]?.split(' ')[0] ?? item.asin,
+        itemName: match?.item_name ?? item.itemNames[0] ?? 'Unknown',
+        price: item.price,
+      };
+    });
   }
 
   /**
