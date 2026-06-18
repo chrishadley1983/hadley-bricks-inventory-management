@@ -1,0 +1,2 @@
+# Keep shell scripts LF so they run correctly under git-bash on Windows.
+*.sh text eol=lf

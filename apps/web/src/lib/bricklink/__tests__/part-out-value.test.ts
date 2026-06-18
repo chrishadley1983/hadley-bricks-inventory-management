@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPovUrl,
   parsePovHtml,
+  classifyPovPage,
   parseSetNumber,
   resolvePovOptions,
   isValidSetNumber,
@@ -148,6 +149,42 @@ describe('isValidSetNumber', () => {
     expect(isValidSetNumber('a_b')).toBe(false);
     expect(isValidSetNumber('')).toBe(false);
     expect(isValidSetNumber('77075; drop')).toBe(false);
+  });
+});
+
+describe('classifyPovPage', () => {
+  const POV_URL = 'https://www.bricklink.com/catalogPOV.asp?itemType=S&itemNo=77075&itemSeq=1';
+
+  it('marks a valid POV page with data as ok', () => {
+    expect(classifyPovPage(POV_URL, GBP_FIXTURE).kind).toBe('ok');
+    expect(classifyPovPage(POV_URL, USD_FIXTURE).kind).toBe('ok');
+  });
+
+  it('treats a price-guide bounce (catalogPG.asp) as notPartable — NOT a block', () => {
+    // The exact false-negative bug: BL bounces non-partable items (e.g. individual CMF figs) here.
+    expect(classifyPovPage('https://www.bricklink.com/catalogPG.asp?err=2', '<html>price guide error</html>').kind).toBe('notPartable');
+    expect(classifyPovPage('https://www.bricklink.com/catalogPG.asp?err=3', 'whatever content').kind).toBe('notPartable');
+  });
+
+  it('treats a throttle (oops.asp / err=403 / empty) as a block — NOT no-data', () => {
+    expect(classifyPovPage('https://www.bricklink.com/oops.asp?err=403', '').kind).toBe('block');
+    expect(classifyPovPage('https://www.bricklink.com/catalogPOV.asp?itemNo=1&err=403', 'blocked').kind).toBe('block');
+    expect(classifyPovPage(POV_URL, '').kind).toBe('block'); // empty body
+  });
+
+  it('detects captcha and login', () => {
+    expect(classifyPovPage(POV_URL, 'Please verify you are a human to continue').kind).toBe('captcha');
+    expect(classifyPovPage('https://www.bricklink.com/login.asp', 'Please log in — Email Address Password').kind).toBe('login');
+  });
+
+  it('returns noData for a valid POV shell with no sales (genuine no-data)', () => {
+    const noSales =
+      "Price Guide: Part Out Value 12345 Brand New Set * Average of last 6 months Sales: No sales in the past 6 months.";
+    expect(classifyPovPage(POV_URL, noSales).kind).toBe('noData');
+  });
+
+  it('returns nonPov for an unexpected page (retried by the scraper, never marked no-data)', () => {
+    expect(classifyPovPage(POV_URL, 'Some unrelated content with no part out header and no block markers').kind).toBe('nonPov');
   });
 });
 
