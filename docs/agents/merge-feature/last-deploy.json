@@ -1,21 +1,12 @@
 {
-  "commit": "50207109",
-  "branch": "fix/amazon-sync-grace-and-failure-email",
-  "prNumber": 448,
-  "mergedAt": "2026-06-16T11:56:18Z",
-  "previousCommit": "3528fdcd",
+  "commit": "422c0382",
+  "branch": "feature/review-queue-clearing",
+  "prNumber": 454,
+  "mergedAt": "2026-06-18T13:40:22Z",
+  "previousCommit": "50207109",
   "deploymentVerified": true,
-  "verifiedAt": "2026-06-16",
-  "testsRun": [
-    "ci-typecheck-lint-test-green-3m43s",
-    "vercel-production-deploy-success",
-    "amazon-sync-cron-api-401-authgated",
-    "amazon-sync-page-200",
-    "root-307-login-redirect",
-    "inventory-page-307-login-redirect-no-regression",
-    "feed-28aacdcd-step-complete-status-verified",
-    "two-phase-feeds-in-flight-0-clean-state"
-  ],
+  "verifiedAt": "2026-06-18T13:40:22Z",
+  "testsRun": ["site-health-200", "purchases-page-307-auth", "review-queue-api-401-auth", "queue-zero-supabase"],
   "testsPassed": true,
-  "notes": "fix(amazon) PR #448: two-phase Amazon sync robustness. (1) priceVerificationGracePeriod 10->30min (hard timeout stays 120min) - existing-SKU price PATCH can take ~25-50min to propagate to the live offer, so the 10-min grace window produced FALSE 'verification timeout' alerts AND excluded slow-but-correct items from the quantity feed, silently stranding a newly-added unit (HB shows LISTED, Amazon never gets the 2nd qty). (2) sendTwoPhaseFailure rewritten for accuracy: scopes 'quantity NOT updated' to the failed SKUs only, lists the items that DID sync, shows real set numbers/names + per-item prices (was 'Unknown'), HTML-escapes dynamic content, actionable 're-queue affected item(s)' step. (3) new buildItemDetailsWithNames() resolves set_number/item_name from inventory_items, wired into all 3 failure-email call sites (grace-expired, price-verify timeout, quantity-verify timeout). Triggered by a real false-alarm email on feed 28aacdcd (set 40409 Hot Rod): price PATCH to GBP 26.99 read GBP 27.25 on the live offer for ~50min (propagation lag, not a pricing rule), tripping the 10-min grace; the 2nd Hot Rod unit (N3619) was stranded and pushed manually (qty=2). Two new SKUs (40206/70841) self-activated to BUYABLE; feed reached complete. CI green (typecheck/lint/319 Amazon + 5 email tests). Diagnosis playbook saved to memory amazon-two-phase-sync-bugs. Rollback: git revert 50207109 && git push (previous live commit ab71ac74 / PR #447). previousCommit 3528fdcd (PR #446) per deploy-record convention."
+  "notes": "Tooling + skill only (scripts/ excluded from build). Business result live: review queue cleared to 0 (29 imported, 43 inventory items)."
 }
