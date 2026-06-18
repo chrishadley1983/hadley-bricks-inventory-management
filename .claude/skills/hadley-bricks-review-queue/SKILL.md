@@ -115,8 +115,18 @@ food, etc. are seller clutter — skip to the next.
   A real set name must come back and match what you see. This catches
   back-of-box misreads.
 
-**Condition rule:** title/photo says "brand new / sealed / unopened" → `New`;
-otherwise `Used` (conservative default for secondhand Vinted).
+**Condition rule — classify from evidence; never blanket-default to `Used`.**
+The approve API already defaults to **`New`** when `condition` is omitted, so an
+unjudged item becomes New (not Used). Most resold Vinted LEGO is sealed, and a
+wrong `Used` label both **misprices** the item and **mislabels the Amazon offer**.
+
+- **`New`** — box sealed / shrink-wrapped, or the title/description says "brand
+  new" / "BNIB" / "sealed" / "unopened" and the photos don't contradict it.
+- **`Used`** — *only on real evidence*: opened or resealed box, built set, opened
+  poly-bags, or "used" / "incomplete" / "missing pieces" / visible wear.
+- **Ambiguous** — prefer **`New`** (matches the API default) and add the item to
+  the **"needs condition review"** list in the report so the user can confirm.
+  Do not assume secondhand ⇒ Used.
 
 **Dismiss (don't import) when:** non-LEGO, packaging consumables, or
 cancelled/refunded (check Gmail via the "View email" link if unsure).
@@ -125,11 +135,14 @@ Write `analysis/review-queue/decisions.json` — an array, one object per queue 
 ```json
 [
   { "id": "<uuid>", "action": "import",
-    "items": [ { "set_number": "41397", "condition": "Used" } ],
-    "reason": "staceyxx2014: Friends Juice Truck" },
+    "items": [ { "set_number": "41397", "condition": "New" } ],
+    "reason": "staceyxx2014: Friends Juice Truck — sealed in photos" },
   { "id": "<uuid>", "action": "import",
-    "items": [ {"set_number":"42150","condition":"Used"}, {"set_number":"42119","condition":"Used"} ],
-    "reason": "kazscanlan: Monster Jam pair" },
+    "items": [ {"set_number":"42150"}, {"set_number":"42119"} ],
+    "reason": "kazscanlan: Monster Jam pair — condition omitted → defaults to New" },
+  { "id": "<uuid>", "action": "import",
+    "items": [ { "set_number": "10696", "condition": "Used" } ],
+    "reason": "seller3: opened box / loose bags visible → Used" },
   { "id": "<uuid>", "action": "dismiss", "skip_reason": "packaging consumable",
     "reason": "non-LEGO bubble mailers" }
 ]
