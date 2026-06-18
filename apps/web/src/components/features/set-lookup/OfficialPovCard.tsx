@@ -26,6 +26,7 @@ interface PovRow {
   for_sale_avg_gbp: number | string | null;
   uk_retail_gbp: number | string | null;
   partout_multiple: number | string | null;
+  is_aggregate_listing: boolean | null;
   fetched_at: string;
 }
 
@@ -129,6 +130,10 @@ export function OfficialPovCard({ setNumber, enabled }: OfficialPovCardProps) {
   const row = data?.found ? data.row : undefined;
   const ccy = row?.native_currency ?? 'GBP';
   const mult = n(row?.partout_multiple);
+  // CMF "Complete Series of N" / "Box of N" listings divide a multi-item sold value by a single-pack
+  // RRP, so the multiple is inflated ~Nx and not comparable to single-set multiples. Don't badge it
+  // green as a "deal", and say why.
+  const isAggregate = row?.is_aggregate_listing === true;
 
   return (
     <Card data-testid="official-pov-card">
@@ -207,12 +212,20 @@ export function OfficialPovCard({ setNumber, enabled }: OfficialPovCardProps) {
               </div>
               <div
                 className={`text-xl font-bold ${
-                  mult != null && mult >= 2 ? 'text-green-600' : mult != null && mult >= 1.5 ? 'text-amber-600' : ''
+                  isAggregate
+                    ? 'text-muted-foreground'
+                    : mult != null && mult >= 2
+                      ? 'text-green-600'
+                      : mult != null && mult >= 1.5
+                        ? 'text-amber-600'
+                        : ''
                 }`}
               >
                 {mult != null ? `${mult.toFixed(2)}×` : '—'}
               </div>
-              <div className="text-xs text-muted-foreground">sold ÷ RRP</div>
+              <div className="text-xs text-muted-foreground">
+                {isAggregate ? 'series aggregate — vs single-pack RRP, not comparable' : 'sold ÷ RRP'}
+              </div>
             </div>
           </div>
         )}
