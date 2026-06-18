@@ -61,6 +61,10 @@ const DEFAULT_EXCLUDE_THEMES = ['Gear', 'Service Packs', 'Power Functions', 'Pow
 const EXCLUDE_THEMES = new Set(
   (argv['exclude-themes'] ? argv['exclude-themes'].split(',') : DEFAULT_EXCLUDE_THEMES).map((s) => s.trim()),
 );
+// Self-healing throttle recovery: on a 403, pause ~this long (then re-open + retry the same set)
+// instead of stopping. Gives up only after MAX_BREATHERS total, or 3 throttles in a row (no progress).
+const BREATHER_MS = argv['breather-ms'] ? parseInt(argv['breather-ms'], 10) : 780000; // ~13 min
+const MAX_BREATHERS = argv['max-breathers'] ? parseInt(argv['max-breathers'], 10) : 10;
 // Require a Brickset RRP so the part-out multiple is computable. Off automatically when --skip-rrp.
 const REQUIRE_RRP = SKIP_RRP ? false : (argv['require-rrp'] ?? 'true') !== 'false';
 
@@ -209,10 +213,12 @@ async function main() {
   };
   const seededRows: Array<{ set: string; name: string | null; multiple: number | null; sold: number | null; rrp: number | null }> = [];
 
-  const scraper = new PovScraper({ cdpPort: CDP_PORT, loggedOut: LOGGED_OUT });
+  let scraper = new PovScraper({ cdpPort: CDP_PORT, loggedOut: LOGGED_OUT });
   if (!DRY_RUN) await scraper.open();
 
   let consecutiveErrors = 0;
+  let consecutiveThrottles = 0;
+  let breathers = 0;
   try {
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
@@ -235,6 +241,7 @@ async function main() {
         const stored = await service.upsert(row);
         stats.seeded++;
         consecutiveErrors = 0;
+        consecutiveThrottles = 0;
         const mult = stored?.partout_multiple != null ? Number(stored.partout_multiple) : null;
         const sold = stored?.sold_6mo_avg_gbp != null ? Number(stored.sold_6mo_avg_gbp) : null;
         const rrp = stored?.uk_retail_gbp != null ? Number(stored.uk_retail_gbp) : null;
@@ -247,13 +254,56 @@ async function main() {
       } catch (e) {
         if (e instanceof NotFoundError) {
           stats.noData++;
-          console.log(`[backfill] ${i + 1}/${targets.length} ${t.set_number} — no POV data, skip`);
+          consecutiveThrottles = 0; // BL responded (page loaded) — not throttled
+          // Mark "checked, no part-out data" so future runs don't re-scrape it (lets the loop finish).
+          const nowIso = new Date().toISOString();
+          await service.upsert({
+            set_number: itemNo,
+            item_seq: itemSeq,
+            condition: CONDITION,
+            break_type: opts.breakType,
+            inc_instructions: opts.incInstructions,
+            inc_box: opts.incBox,
+            inc_extra: opts.incExtra,
+            inc_break: opts.incBreak,
+            set_name: t.set_name,
+            native_currency: null,
+            fetched_at: nowIso,
+            updated_at: nowIso,
+          });
+          console.log(`[backfill] ${i + 1}/${targets.length} ${t.set_number} — no POV data, marked`);
         } else if (e instanceof EmptyResponseError || e instanceof CaptchaError || e instanceof LoginRequiredError) {
-          stats.stoppedEarly = true;
-          stats.stopReason = `${(e as Error).name}: ${(e as Error).message}`;
-          console.error(`[backfill] STOP — ${stats.stopReason}`);
-          console.error('[backfill] BL throttled this IP. Wait ~10 min OR switch VPN endpoint, then re-run the SAME command — it resumes from where it stopped (skip-fresh).');
-          break;
+          consecutiveThrottles++;
+          if (consecutiveThrottles >= 3 || breathers >= MAX_BREATHERS) {
+            stats.stoppedEarly = true;
+            stats.stopReason = `throttle persists after ${breathers} breathers: ${(e as Error).message}`;
+            console.error(`[backfill] STOP — ${stats.stopReason}`);
+            console.error('[backfill] Breathers not clearing it — switch VPN endpoint and re-run the SAME command (resumes, skip-fresh).');
+            break;
+          }
+          breathers++;
+          const wait = BREATHER_MS + Math.round(Math.random() * 180000); // +0–3 min jitter
+          console.error(
+            `[backfill] throttled at ${t.set_number} (403). Breather #${breathers}/${MAX_BREATHERS}: pausing ~${Math.round(wait / 60000)}m, then retrying same set…`,
+          );
+          try {
+            await scraper.close();
+          } catch {
+            /* ignore */
+          }
+          await sleep(wait);
+          try {
+            scraper = new PovScraper({ cdpPort: CDP_PORT, loggedOut: LOGGED_OUT });
+            await scraper.open();
+          } catch (reopenErr) {
+            stats.stoppedEarly = true;
+            stats.stopReason = `CDP unreachable after breather: ${(reopenErr as Error).message}`;
+            console.error(`[backfill] STOP — ${stats.stopReason} (is the CDP Chrome still up?)`);
+            break;
+          }
+          console.log(`[backfill] resumed after breather — retrying ${t.set_number}`);
+          i--; // retry the same set
+          continue;
         } else {
           stats.errors++;
           consecutiveErrors++;

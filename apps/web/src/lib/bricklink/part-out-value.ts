@@ -234,6 +234,39 @@ export function parsePovHtml(input: string): PovParseResult {
   };
 }
 
+export type PovPageKind = 'ok' | 'block' | 'captcha' | 'login' | 'notPartable' | 'noData' | 'nonPov';
+
+/**
+ * Classify a catalogPOV response from its final URL + rendered text. Pure + testable.
+ *
+ * Crucial distinction (the source of a real data-quality bug if got wrong): a THROTTLE and a
+ * genuinely NON-PARTABLE item both fail to render a POV page, but must be handled oppositely —
+ * a throttle should pause/retry, a non-partable item should be marked "no data" permanently.
+ *
+ * - `notPartable`: BL bounced the item to the price guide (`catalogPG.asp?err=N`) — e.g. an
+ *   individual collectible-minifig figure. Genuine "no part-out" → caller marks it no-data.
+ * - `block`: throttle / anti-bot (`oops.asp`, `err=403`, empty body) → caller breathers, never marks.
+ * - `captcha`: anti-bot challenge → caller breathers.
+ * - `login`: login wall.
+ * - `noData`: a valid POV page (has the header) with no sold/for-sale figures → genuine no-data.
+ * - `nonPov`: rendered something that's neither a POV page nor an obvious block → caller retries once.
+ * - `ok`: a valid POV page with data (`parsed` populated).
+ */
+export function classifyPovPage(url: string, text: string): { kind: PovPageKind; parsed: PovParseResult } {
+  const parsed = parsePovHtml(text);
+  if (/catalogPG\.asp/i.test(url)) return { kind: 'notPartable', parsed };
+  if (/oops\.asp/i.test(url) || /err=403/i.test(url) || (text.trim().length < 30 && !/Part Out Value/i.test(text))) {
+    return { kind: 'block', parsed };
+  }
+  if (/captcha|unusual traffic|are you a human|verify you are/i.test(text)) return { kind: 'captcha', parsed };
+  if (!parsed.isPovPage) {
+    if (/sign in|log in|please log in|password/i.test(text) || /login/i.test(url)) return { kind: 'login', parsed };
+    return { kind: 'nonPov', parsed };
+  }
+  if (!parsed.sold6mo && !parsed.forSale) return { kind: 'noData', parsed };
+  return { kind: 'ok', parsed };
+}
+
 // ---------------------------------------------------------------------------
 // Currency conversion
 // ---------------------------------------------------------------------------
@@ -373,7 +406,7 @@ export class PovScraper {
   }
 
   /** Scrape one POV page. Throws typed errors on login/captcha/not-found. */
-  async scrape(opts: PovOptions): Promise<PovScrapeResult> {
+  async scrape(opts: PovOptions, _attempt = 1): Promise<PovScrapeResult> {
     if (!this.ws || !this.sessionId) throw new PovError('PovScraper.open() must be called first');
     const url = buildPovUrl(opts);
 
@@ -393,25 +426,31 @@ export class PovScraper {
     );
     const page = JSON.parse(payload) as { url: string; title: string; text: string };
 
-    // Classify failure modes before parsing.
-    if (page.text.trim().length < 30 && !/Part Out Value/i.test(page.text)) {
-      throw new EmptyResponseError(
-        `Empty/blocked response for set ${opts.setNumber} (len=${page.text.trim().length}, url=${page.url}) — ` +
-          `BL is throttling this IP (transient 403); wait a few minutes or switch VPN endpoint, then resume`,
-      );
-    }
-    if (/captcha|unusual traffic|are you a human|verify you are/i.test(page.text)) {
-      throw new CaptchaError(`Captcha/anti-bot challenge for set ${opts.setNumber}`);
-    }
-    const parsed = parsePovHtml(page.text);
-    if (!parsed.isPovPage) {
-      if (/sign in|log in|please log in|password/i.test(page.text) || /login/i.test(page.url)) {
+    // Classify the response (pure, unit-tested) and map to typed errors / retry.
+    const { kind, parsed } = classifyPovPage(page.url, page.text);
+    switch (kind) {
+      case 'notPartable':
+        throw new NotFoundError(`Item not partable (bounced to price guide) for set ${opts.setNumber} (url: ${page.url})`);
+      case 'noData':
+        throw new NotFoundError(`POV page has no sold/for-sale data for set ${opts.setNumber}`);
+      case 'block':
+        throw new EmptyResponseError(
+          `Blocked/empty response for set ${opts.setNumber} (len=${page.text.trim().length}, url=${page.url}) — ` +
+            `BL is throttling this IP (transient 403); wait a few minutes or switch VPN endpoint, then resume`,
+        );
+      case 'captcha':
+        throw new CaptchaError(`Captcha/anti-bot challenge for set ${opts.setNumber}`);
+      case 'login':
         throw new LoginRequiredError(`Login wall for set ${opts.setNumber} (final url: ${page.url})`);
-      }
-      throw new NotFoundError(`No POV page for set ${opts.setNumber} (final url: ${page.url})`);
-    }
-    if (!parsed.sold6mo && !parsed.forSale) {
-      throw new NotFoundError(`POV page has no sold/for-sale data for set ${opts.setNumber}`);
+      case 'nonPov':
+        // Neither a POV page nor an obvious block — a transient partial/error. Retry once; if it's still
+        // not a POV page, treat it as a block (caller breathers) so we never permanently mark a real set
+        // as no-data (BL renders a POV shell even for unknown items, so genuine no-data has the header).
+        if (_attempt < 2) {
+          await sleep(4000);
+          return this.scrape(opts, _attempt + 1);
+        }
+        throw new EmptyResponseError(`Non-POV page after retry for set ${opts.setNumber} (likely a throttle; url: ${page.url})`);
     }
 
     return {
