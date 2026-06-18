@@ -1540,6 +1540,7 @@ export type Database = {
           inc_break: boolean
           inc_extra: boolean
           inc_instructions: boolean
+          is_aggregate_listing: boolean | null
           item_seq: number
           my_inv_items: number | null
           my_inv_lots: number | null
@@ -1574,6 +1575,7 @@ export type Database = {
           inc_break?: boolean
           inc_extra?: boolean
           inc_instructions?: boolean
+          is_aggregate_listing?: boolean | null
           item_seq?: number
           my_inv_items?: number | null
           my_inv_lots?: number | null
@@ -1608,6 +1610,7 @@ export type Database = {
           inc_break?: boolean
           inc_extra?: boolean
           inc_instructions?: boolean
+          is_aggregate_listing?: boolean | null
           item_seq?: number
           my_inv_items?: number | null
           my_inv_lots?: number | null

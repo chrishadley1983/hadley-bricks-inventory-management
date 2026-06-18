@@ -194,6 +194,14 @@ function parseSection(text: string, label: string): { currency: string; avg: Pov
 
 export interface PovParseResult {
   isPovPage: boolean;
+  /**
+   * Positive evidence that the POV data TABLE actually rendered — at least one of the
+   * "Average of last 6 months Sales" / "Current Items For Sale Average" section labels is present.
+   * BL templates the "Part Out Value" breadcrumb into the title even on a throttle/maintenance
+   * interstitial that never rendered the table, so `isPovPage` alone can be a false positive;
+   * `hasSectionScaffold` is what distinguishes a genuine empty result from a blocked page.
+   */
+  hasSectionScaffold: boolean;
   setName: string | null;
   nativeCurrency: string | null;
   sold6mo: PovAverage | null;
@@ -209,6 +217,10 @@ export interface PovParseResult {
 export function parsePovHtml(input: string): PovParseResult {
   const text = normaliseText(input);
   const isPovPage = /Part Out Value/i.test(text);
+  // The real data table always renders these section labels (even when a section is empty, e.g.
+  // "No sales in the past 6 months"). An interstitial/throttle keeps the breadcrumb but not these.
+  const hasSectionScaffold =
+    text.includes('Average of last 6 months Sales') || text.includes('Current Items For Sale Average');
 
   const nameMatch = text.match(/Part Out Value\s+(.+?)\s*\*?\s*Average of last 6 months/i);
   const setName = nameMatch ? nameMatch[1].trim() : null;
@@ -225,6 +237,7 @@ export function parsePovHtml(input: string): PovParseResult {
 
   return {
     isPovPage,
+    hasSectionScaffold,
     setName,
     nativeCurrency,
     sold6mo: sold?.avg ?? null,
@@ -248,8 +261,12 @@ export type PovPageKind = 'ok' | 'block' | 'captcha' | 'login' | 'notPartable' |
  * - `block`: throttle / anti-bot (`oops.asp`, `err=403`, empty body) → caller breathers, never marks.
  * - `captcha`: anti-bot challenge → caller breathers.
  * - `login`: login wall.
- * - `noData`: a valid POV page (has the header) with no sold/for-sale figures → genuine no-data.
- * - `nonPov`: rendered something that's neither a POV page nor an obvious block → caller retries once.
+ * - `noData`: a valid POV page whose data table rendered (section scaffold present) but has no
+ *   sold/for-sale figures → genuine no-data. Marking requires POSITIVE evidence (the scaffold),
+ *   not just the breadcrumb — a throttle/maintenance interstitial can carry BL's "Part Out Value"
+ *   title without the table, and must NOT become a permanent no-data sentinel.
+ * - `nonPov`: rendered something that's neither a fully-rendered POV page nor an obvious block
+ *   (incl. a breadcrumb-only interstitial) → caller retries once, then escalates to a block.
  * - `ok`: a valid POV page with data (`parsed` populated).
  */
 export function classifyPovPage(url: string, text: string): { kind: PovPageKind; parsed: PovParseResult } {
@@ -263,7 +280,12 @@ export function classifyPovPage(url: string, text: string): { kind: PovPageKind;
     if (/sign in|log in|please log in|password/i.test(text) || /login/i.test(url)) return { kind: 'login', parsed };
     return { kind: 'nonPov', parsed };
   }
-  if (!parsed.sold6mo && !parsed.forSale) return { kind: 'noData', parsed };
+  if (!parsed.sold6mo && !parsed.forSale) {
+    // Breadcrumb present but no figures: only mark no-data when the data table actually rendered.
+    // Without the section scaffold this is a throttle/interstitial that kept the title — retry it
+    // (→ nonPov), never permanently sentinel it. This closes the breadcrumb-only false-negative gap.
+    return parsed.hasSectionScaffold ? { kind: 'noData', parsed } : { kind: 'nonPov', parsed };
+  }
   return { kind: 'ok', parsed };
 }
 

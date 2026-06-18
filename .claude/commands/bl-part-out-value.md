@@ -52,6 +52,12 @@ RRP £23 ≈ **3.2×** — parts out for ~3× its retail. Caveats:
 - RRP is the *launch* price; retired sets trade above RRP, discounted ones below — a high multiple
   vs RRP is not guaranteed margin vs what you'd *pay*.
 - Numerator is sold avg, not the inflated current-asking figure.
+- **Exclude `is_aggregate_listing` when ranking by multiple.** CMF "Complete Series of N" / "Box of
+  N" listings divide a multi-item sold value by a single-pack RRP, so their multiple is inflated ~Nx
+  and dominates any `partout_multiple DESC` ranking (80–117× tier). The generated `is_aggregate_listing`
+  column flags them — add `WHERE NOT is_aggregate_listing` to "standout multiples" queries. Single-item
+  "Complete Random Set of 1" figs are intentionally NOT flagged (scope matches the 1-pack RRP, so the
+  multiple is genuine — e.g. a Team GB fig at ~16×).
 
 ## Change defaults (conversational)
 

@@ -180,7 +180,22 @@ describe('classifyPovPage', () => {
   it('returns noData for a valid POV shell with no sales (genuine no-data)', () => {
     const noSales =
       "Price Guide: Part Out Value 12345 Brand New Set * Average of last 6 months Sales: No sales in the past 6 months.";
-    expect(classifyPovPage(POV_URL, noSales).kind).toBe('noData');
+    const r = classifyPovPage(POV_URL, noSales);
+    expect(r.kind).toBe('noData');
+    expect(r.parsed.hasSectionScaffold).toBe(true); // positive evidence the table rendered
+  });
+
+  it('returns nonPov (NOT noData) for a breadcrumb-only interstitial that kept the title but rendered no table', () => {
+    // The exact ① false-negative class: a throttle/maintenance page that keeps BL's "Part Out Value"
+    // breadcrumb in the title but never renders the section scaffold. isPovPage is true, sold/forSale
+    // are null — the old code permanently sentinel-marked it. It MUST retry (nonPov), never noData.
+    const interstitial = 'BrickLink Price Guide: Part Out Value 77075 Peely & Sparkplug\'s Camp — please try again later.';
+    const r = classifyPovPage(POV_URL, interstitial);
+    expect(r.parsed.isPovPage).toBe(true);
+    expect(r.parsed.hasSectionScaffold).toBe(false);
+    expect(r.parsed.sold6mo).toBeNull();
+    expect(r.parsed.forSale).toBeNull();
+    expect(r.kind).toBe('nonPov');
   });
 
   it('returns nonPov for an unexpected page (retried by the scraper, never marked no-data)', () => {
