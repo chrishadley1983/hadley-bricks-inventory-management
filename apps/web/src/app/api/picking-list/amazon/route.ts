@@ -78,8 +78,13 @@ export async function GET(request: NextRequest) {
     // Check for format parameter (json or pdf)
     const format = request.nextUrl.searchParams.get('format') || 'json';
 
-    // Fetch unfulfilled Amazon orders with line items
-    // Unfulfilled = status is Unshipped, PartiallyShipped, or Pending
+    // Fetch unfulfilled Amazon orders with line items.
+    // 'status' here is our normalised internal status (see lib/amazon/adapter.ts):
+    //   Amazon "Unshipped" (paid, ready to dispatch) -> 'Paid'
+    //   Amazon "PartiallyShipped"                     -> 'Partially Shipped'
+    //   Amazon "Pending" (awaiting payment verification) -> 'Pending'  (EXCLUDED)
+    // Pending orders must NOT be picked: Amazon blocks dispatch confirmation until they
+    // move out of Pending, so picking them risks packing stock against an unpaid order.
     const { data: orders, error } = await supabase
       .from('platform_orders')
       .select(
@@ -102,7 +107,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId)
       .eq('platform', 'amazon')
       .is('fulfilled_at', null)
-      .in('status', ['Paid', 'Partially Shipped', 'Pending'])
+      .in('status', ['Paid', 'Partially Shipped'])
       .order('order_date', { ascending: true });
 
     if (error) {
@@ -164,17 +169,49 @@ export async function GET(request: NextRequest) {
       inventoryByAsin = data || [];
     }
 
-    // Get inventory IDs already linked to any order (to exclude from matching)
-    const { data: linkedItems } = await supabase
-      .from('order_items')
-      .select('inventory_item_id')
-      .not('inventory_item_id', 'is', null);
+    // Build the set of inventory items already committed to an ACTIVE order, so the FIFO
+    // matcher below won't double-allocate them. We only check our candidate inventory (the
+    // BACKLOG/LISTED items fetched above), which keeps this query well under the 1,000-row
+    // limit and is all we need. Crucially we EXCLUDE Cancelled/Refunded orders: when an
+    // order is cancelled the stock is returned to sale, but the order_items -> inventory
+    // link is left in place. An unfiltered exclusion would permanently lock that stock out
+    // of every future pick list, making live orders show as "no match / no location".
+    const candidateInventoryIds = inventoryByAsin.map((item) => item.id);
+    const alreadyLinkedInventoryIds = new Set<string>();
 
-    const alreadyLinkedInventoryIds = new Set(
-      (linkedItems ?? [])
-        .map((item: { inventory_item_id: string | null }) => item.inventory_item_id)
-        .filter((id): id is string => id !== null)
-    );
+    if (candidateInventoryIds.length > 0) {
+      // Order items that link one of our candidate inventory items
+      const { data: linkedItems } = await supabase
+        .from('order_items')
+        .select('inventory_item_id, order_id')
+        .in('inventory_item_id', candidateInventoryIds);
+
+      const linkRows = (linkedItems ?? []) as Array<{
+        inventory_item_id: string | null;
+        order_id: string;
+      }>;
+      const linkedOrderIds = Array.from(new Set(linkRows.map((r) => r.order_id)));
+
+      // Of those orders, keep only the ones still active (not cancelled) and owned by this user
+      const activeOrderIds = new Set<string>();
+      if (linkedOrderIds.length > 0) {
+        const { data: activeOrders } = await supabase
+          .from('platform_orders')
+          .select('id')
+          .in('id', linkedOrderIds)
+          .eq('user_id', userId)
+          .neq('status', 'Cancelled/Refunded');
+        for (const o of (activeOrders ?? []) as Array<{ id: string }>) {
+          activeOrderIds.add(o.id);
+        }
+      }
+
+      for (const row of linkRows) {
+        if (row.inventory_item_id && activeOrderIds.has(row.order_id)) {
+          alreadyLinkedInventoryIds.add(row.inventory_item_id);
+        }
+      }
+    }
 
     // Group inventory by ASIN (multiple items can have same ASIN)
     const inventoryByAsinMap = new Map<string, typeof inventoryByAsin>();
