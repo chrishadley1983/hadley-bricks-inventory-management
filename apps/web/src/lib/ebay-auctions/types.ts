@@ -24,6 +24,11 @@ export interface EbayAuctionConfig {
   maxSalesRank: number | null;
   joblotAnalysisEnabled: boolean;
   joblotMinTotalValueGbp: number;
+  // Part-Out-Value buy signals
+  povBuyEnabled: boolean;       // also alert when New POV >= povMultiple × total cost
+  povMultiple: number;          // good buy: POV >= N × total cost
+  povGreatMultiple: number;     // great buy: POV >= N × total cost
+  usedPovModeEnabled: boolean;  // opt-in: also scan USED auctions, judged on Used POV
   createdAt: string;
   updatedAt: string;
 }
@@ -66,12 +71,29 @@ export interface AmazonPricingData {
   ukRrp: number | null;
 }
 
+/** BrickLink Part-Out-Value for one condition (cache-only read by the cron). */
+export interface PovData {
+  condition: 'new' | 'used';
+  setName: string | null;
+  soldAvgGbp: number | null;   // authoritative 6-month BL SOLD average
+  forSaleAvgGbp: number | null;
+  rrpGbp: number | null;       // New only
+  rrpMultiple: number | null;  // New only (sold ÷ RRP)
+  lots: number | null;
+}
+
 export interface AuctionOpportunity {
   auction: EbayAuctionItem;
   setIdentification: IdentifiedSet;
-  amazonData: AmazonPricingData;
-  profitBreakdown: AuctionProfitBreakdown;
+  // Amazon resale data — null for used-POV opportunities (no Amazon leg).
+  amazonData: AmazonPricingData | null;
+  profitBreakdown: AuctionProfitBreakdown | null;
   alertTier: 'great' | 'good';
+  // Part-Out-Value
+  conditionMode: 'new' | 'used';   // which POV condition this opportunity is judged on
+  pov: PovData | null;             // the condition-matched POV (for the card)
+  povMultiple: number | null;      // pov.soldAvgGbp ÷ total cost
+  signals: string[];               // human-readable buy reasons that fired
 }
 
 export interface JoblotSetEntry {
@@ -130,6 +152,8 @@ export type EvalFilterReason =
   | 'sales_rank_too_high'
   | 'below_min_margin'
   | 'below_min_profit'
+  | 'below_pov_multiple'
+  | 'no_signal'
   | 'already_alerted'
   | 'joblot';
 
@@ -163,6 +187,11 @@ export interface AuctionEvaluation {
   profitGbp: number | null;
   marginPercent: number | null;
   roiPercent: number | null;
+
+  // Part-Out-Value (POV-aware buy signals)
+  conditionMode?: 'new' | 'used';
+  povSoldGbp?: number | null;
+  povMultiple?: number | null;
 
   // Outcome
   filterReason: EvalFilterReason;

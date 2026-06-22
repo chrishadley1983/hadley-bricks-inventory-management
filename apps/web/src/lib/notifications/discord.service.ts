@@ -46,18 +46,26 @@ export interface EbayAuctionAlertParams {
   totalCost: number;
   bidCount: number;
   minutesRemaining: number;
-  amazonPrice: number;
-  amazon90dAvg: number | null;
-  amazonAsin: string;
-  salesRank: number | null;
-  profit: number;
-  marginPercent: number;
-  roiPercent: number;
+  // Amazon resale leg — null/absent for used-POV opportunities.
+  amazonPrice?: number | null;
+  amazon90dAvg?: number | null;
+  amazonAsin?: string | null;
+  salesRank?: number | null;
+  profit?: number | null;
+  marginPercent?: number | null;
+  roiPercent?: number | null;
   alertTier: 'great' | 'good';
   ebayUrl: string;
   imageUrl: string | null;
-  ukRrp: number | null;
-  maxBid: number | null;
+  ukRrp?: number | null;
+  maxBid?: number | null;
+  // Part-Out-Value (condition-matched)
+  conditionMode?: 'new' | 'used';
+  povSoldGbp?: number | null;
+  povForSaleGbp?: number | null;
+  povMultiple?: number | null;
+  povLots?: number | null;
+  signals?: string[];
 }
 
 export interface EbayJoblotAlertParams {
@@ -423,14 +431,13 @@ export class DiscordService {
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
       ebayUrl, imageUrl, ukRrp, maxBid,
+      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [],
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
     const tierEmoji = alertTier === 'great' ? '🟢' : '🟠';
     const tierLabel = alertTier === 'great' ? 'GREAT DEAL' : 'GOOD DEAL';
-
-    const keepaUrl = `https://keepa.com/#!product/2-${amazonAsin}`;
-    const amazonUrl = `https://www.amazon.co.uk/dp/${amazonAsin}`;
+    const condEmoji = conditionMode === 'used' ? '♻️' : '🆕';
 
     const fields: DiscordEmbedField[] = [
       {
@@ -438,37 +445,60 @@ export class DiscordService {
         value: `Bid: £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
         inline: true,
       },
-      {
+    ];
+
+    // Amazon leg — only present for new-condition (amazon/hybrid) opportunities.
+    if (amazonPrice != null) {
+      const amazonUrl = amazonAsin ? `https://www.amazon.co.uk/dp/${amazonAsin}` : null;
+      const keepaUrl = amazonAsin ? `https://keepa.com/#!product/2-${amazonAsin}` : null;
+      fields.push({
         name: '🛒 Amazon',
-        value: `Buy Box: [£${amazonPrice.toFixed(2)}](${amazonUrl})\n[Keepa](${keepaUrl})`,
+        value: `Buy Box: ${amazonUrl ? `[£${amazonPrice.toFixed(2)}](${amazonUrl})` : `£${amazonPrice.toFixed(2)}`}${keepaUrl ? `\n[Keepa](${keepaUrl})` : ''}`,
         inline: true,
-      },
-      {
+      });
+      fields.push({
         name: '📊 90d Avg',
         value: amazon90dAvg ? `£${amazon90dAvg.toFixed(2)}` : '—',
         inline: true,
-      },
-      {
-        name: '💰 Profit / Margin',
-        value: `**£${profit.toFixed(2)}** · ${marginPercent.toFixed(1)}% margin · ${roiPercent.toFixed(0)}% ROI`,
+      });
+      if (profit != null && marginPercent != null) {
+        fields.push({
+          name: '💰 Amazon Profit / Margin',
+          value: `**£${profit.toFixed(2)}** · ${marginPercent.toFixed(1)}% margin${roiPercent != null ? ` · ${roiPercent.toFixed(0)}% ROI` : ''}`,
+          inline: false,
+        });
+      }
+    }
+
+    // Part-Out-Value — condition-matched (New for new auctions, Used for used scan).
+    const povLabel = conditionMode === 'used' ? 'Part-Out (Used)' : 'Part-Out (New)';
+    if (povSoldGbp != null) {
+      const meta: string[] = [];
+      if (povMultiple != null) meta.push(`**${povMultiple.toFixed(1)}× cost**`);
+      if (povLots != null) meta.push(`${povLots} lots`);
+      fields.push({
+        name: `🧩 ${povLabel}`,
+        value: `6mo sold: **£${povSoldGbp.toFixed(2)}**${povForSaleGbp != null ? ` · for-sale: £${povForSaleGbp.toFixed(2)}` : ''}${meta.length ? `\n${meta.join(' · ')}` : ''}`,
         inline: false,
-      },
-      {
-        name: `${tierEmoji} ${tierLabel}`,
-        value: `${marginPercent.toFixed(1)}% profit margin`,
-        inline: true,
-      },
-      {
-        name: '🎯 Max Bid (25%)',
-        value: maxBid != null ? `£${maxBid.toFixed(2)}` : '—',
-        inline: true,
-      },
-      {
-        name: '⏰ Time Left',
-        value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
-        inline: true,
-      },
-    ];
+      });
+    } else {
+      fields.push({ name: `🧩 ${povLabel}`, value: 'no BL part-out data', inline: false });
+    }
+
+    fields.push({
+      name: `${tierEmoji} ${tierLabel} · ${condEmoji} ${conditionMode === 'used' ? 'Used' : 'New'}`,
+      value: signals.length ? signals.join(' · ') : (marginPercent != null ? `${marginPercent.toFixed(1)}% margin` : '—'),
+      inline: false,
+    });
+
+    if (maxBid != null) {
+      fields.push({ name: '🎯 Max Bid (target)', value: `£${maxBid.toFixed(2)}`, inline: true });
+    }
+    fields.push({
+      name: '⏰ Time Left',
+      value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
+      inline: true,
+    });
 
     if (ukRrp) {
       fields.push({ name: '🏷️ UK RRP', value: `£${ukRrp.toFixed(2)}`, inline: true });
@@ -489,7 +519,7 @@ export class DiscordService {
     });
 
     const embed: DiscordEmbed = {
-      title: `🔨 ${setNumber}: ${ebayTitle.substring(0, 80)}`,
+      title: `🔨 ${condEmoji} ${setNumber}: ${ebayTitle.substring(0, 80)}`,
       url: ebayUrl,
       color,
       fields,

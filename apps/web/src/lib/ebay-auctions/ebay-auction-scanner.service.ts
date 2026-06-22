@@ -33,6 +33,7 @@ import type {
   JoblotSetEntry,
   ScanResult,
   AuctionEvaluation,
+  PovData,
 } from './types';
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
@@ -94,6 +95,9 @@ export class EbayAuctionScannerService {
       const uniqueSetNumbers = [...new Set([...allEvalSetNumbers, ...joblotSetNumbers])];
       const amazonPricing = await this.lookupAmazonPricing(uniqueSetNumbers);
 
+      // 4c. Part-Out-Value (cache-only) for the same sets — drives the hybrid buy signal.
+      const povData = await this.lookupPovBatch(uniqueSetNumbers);
+
       // 4b. Backfill Amazon data on ALL evaluations (even filtered ones) for debug visibility
       for (const ev of evaluations) {
         if (ev.setNumber && !ev.amazonPrice) {
@@ -108,8 +112,16 @@ export class EbayAuctionScannerService {
         }
       }
 
-      // 5. Calculate opportunities for single sets (updates evaluations in-place)
-      const opportunities = this.evaluateSingleOpportunities(singles, amazonPricing, config, evaluations);
+      // 5. Calculate opportunities for single sets (updates evaluations in-place).
+      //    New-condition path: Amazon margin OR (povBuyEnabled && New POV >= povMultiple).
+      const newSingleOpps = this.evaluateSingleOpportunities(singles, amazonPricing, povData, config, evaluations);
+
+      // 5b. Opt-in: scan USED auctions, judged purely on Used POV >= povMultiple × cost.
+      const usedSingleOpps = config.usedPovModeEnabled
+        ? await this.scanUsedPov(config, evaluations)
+        : [];
+
+      const opportunities = [...newSingleOpps, ...usedSingleOpps];
 
       // 6. Evaluate joblots
       const joblotOpps = config.joblotAnalysisEnabled
@@ -171,14 +183,17 @@ export class EbayAuctionScannerService {
   /**
    * Search eBay Browse API for LEGO auctions ending within the scan window.
    */
-  private async searchEndingSoonAuctions(config: EbayAuctionConfig): Promise<EbayAuctionItem[]> {
+  private async searchEndingSoonAuctions(
+    config: EbayAuctionConfig,
+    conditionFilter: 'NEW' | 'USED' = 'NEW'
+  ): Promise<EbayAuctionItem[]> {
     const client = getEbayBrowseClient();
     this.apiCallsMade++;
 
-    // Build filter for LEGO auctions ending soon, new condition, UK
+    // Build filter for LEGO auctions ending soon, UK
     const filters = [
       'buyingOptions:{AUCTION}',
-      'conditions:{NEW}',
+      `conditions:{${conditionFilter}}`,
       'itemLocationCountry:GB',
     ];
 
@@ -665,69 +680,184 @@ export class EbayAuctionScannerService {
   }
 
   /**
-   * Evaluate single-set opportunities against Amazon pricing.
+   * Batch cache-only Part-Out-Value read (the cron has no CDP, so it never scrapes).
+   * Returns Map<bareSetNumber, { new, used }>; aggregate listings are excluded and the
+   * lowest item_seq with sold data wins per condition. Chunked to stay under the 1000-row cap.
+   */
+  private async lookupPovBatch(
+    setNumbers: string[]
+  ): Promise<Map<string, { new: PovData | null; used: PovData | null }>> {
+    const map = new Map<string, { new: PovData | null; used: PovData | null }>();
+    const bare = [...new Set(setNumbers.map((s) => s.split('-')[0]).filter(Boolean))];
+    if (bare.length === 0) return map;
+
+    type Row = {
+      set_number: string;
+      set_name: string | null;
+      item_seq: number;
+      condition: string;
+      sold_6mo_avg_gbp: number | string | null;
+      for_sale_avg_gbp: number | string | null;
+      uk_retail_gbp: number | string | null;
+      partout_multiple: number | string | null;
+      sold_6mo_lots: number | null;
+    };
+
+    const rows: Row[] = [];
+    // A single set can hold multiple cached rows (item_seq × condition × break/option variants),
+    // so the row count is NOT simply 2/set. Chunk the set list to bound the IN() size AND paginate
+    // each chunk with .range() so we never silently truncate at PostgREST's 1000-row default.
+    const CHUNK = 100;
+    const PAGE = 1000;
+    for (let i = 0; i < bare.length; i += CHUNK) {
+      const slice = bare.slice(i, i + CHUNK);
+      let offset = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await this.supabase
+          .from('bricklink_part_out_value_cache')
+          .select(
+            'set_number, set_name, item_seq, condition, sold_6mo_avg_gbp, for_sale_avg_gbp, uk_retail_gbp, partout_multiple, sold_6mo_lots'
+          )
+          .in('set_number', slice)
+          .eq('is_aggregate_listing', false)
+          .order('set_number', { ascending: true })
+          .order('item_seq', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) {
+          console.error('[AuctionScanner] POV lookup failed:', error.message);
+          break;
+        }
+        const page = (data || []) as Row[];
+        rows.push(...page);
+        if (page.length < PAGE) break;
+        offset += PAGE;
+      }
+    }
+
+    const num = (v: number | string | null): number | null =>
+      v == null ? null : typeof v === 'string' ? parseFloat(v) : v;
+
+    const bySet = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (!bySet.has(r.set_number)) bySet.set(r.set_number, []);
+      bySet.get(r.set_number)!.push(r);
+    }
+
+    const pick = (group: Row[], cond: 'N' | 'U'): PovData | null => {
+      const matches = group
+        .filter((r) => r.condition === cond)
+        .sort((a, b) => a.item_seq - b.item_seq);
+      if (matches.length === 0) return null;
+      const r = matches.find((x) => x.sold_6mo_avg_gbp != null) || matches[0];
+      return {
+        condition: cond === 'N' ? 'new' : 'used',
+        setName: r.set_name,
+        soldAvgGbp: num(r.sold_6mo_avg_gbp),
+        forSaleAvgGbp: num(r.for_sale_avg_gbp),
+        rrpGbp: num(r.uk_retail_gbp),
+        rrpMultiple: num(r.partout_multiple),
+        lots: r.sold_6mo_lots ?? null,
+      };
+    };
+
+    for (const [setNum, group] of bySet) {
+      map.set(setNum, { new: pick(group, 'N'), used: pick(group, 'U') });
+    }
+    return map;
+  }
+
+  /**
+   * Evaluate single (new-condition) opportunities.
+   * Buy signal = Amazon resale margin OR (povBuyEnabled && New POV >= povMultiple × total cost).
    */
   private evaluateSingleOpportunities(
     singles: Array<{ auction: EbayAuctionItem; setNumber: string; confidence: string }>,
     amazonPricing: Map<string, AmazonPricingData>,
+    povData: Map<string, { new: PovData | null; used: PovData | null }>,
     config: EbayAuctionConfig,
     evaluations: AuctionEvaluation[]
   ): AuctionOpportunity[] {
     const opportunities: AuctionOpportunity[] = [];
+    const mult = config.povMultiple || 3;
+    const greatMult = config.povGreatMultiple || 4;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
 
     for (const { auction, setNumber, confidence } of singles) {
-      // Find the existing evaluation record for this auction
       const ev = evaluations.find((e) => e.itemId === auction.itemId);
+      const amazon = amazonPricing.get(setNumber) || null;
+      const newPov = povData.get(setNumber.split('-')[0])?.new || null;
 
-      const amazon = amazonPricing.get(setNumber);
-      if (!amazon) {
-        if (ev) ev.filterReason = 'no_amazon_price';
-        continue;
-      }
-
-      // Populate Amazon data on the evaluation
-      if (ev) {
-        ev.amazonPrice = amazon.amazonPrice;
-        ev.amazon90dAvg = amazon.was90dAvg;
-        ev.amazonAsin = amazon.asin;
-        ev.amazonSalesRank = amazon.salesRank;
-        ev.amazonSetName = amazon.setName;
-      }
-
-      // Use default postage if eBay didn't provide it
       const postage = auction.postageGbp > 0 ? auction.postageGbp : config.defaultPostageGbp;
       const totalCost = auction.currentBidGbp + postage;
 
-      // Check sales rank filter
-      if (config.maxSalesRank && amazon.salesRank && amazon.salesRank > config.maxSalesRank) {
-        if (ev) ev.filterReason = 'sales_rank_too_high';
-        continue;
+      // --- Amazon resale signal ---
+      let amazonTier: 'great' | 'good' | null = null;
+      let profit: ReturnType<typeof calculateAuctionProfit> = null;
+      if (amazon) {
+        if (ev) {
+          ev.amazonPrice = amazon.amazonPrice;
+          ev.amazon90dAvg = amazon.was90dAvg;
+          ev.amazonAsin = amazon.asin;
+          ev.amazonSalesRank = amazon.salesRank;
+          ev.amazonSetName = amazon.setName;
+        }
+        const salesRankOk = !(config.maxSalesRank && amazon.salesRank && amazon.salesRank > config.maxSalesRank);
+        profit = calculateAuctionProfit(auction.currentBidGbp, postage, amazon.amazonPrice);
+        if (profit && ev) {
+          ev.profitGbp = profit.totalProfit;
+          ev.marginPercent = profit.profitMarginPercent;
+          ev.roiPercent = profit.roiPercent;
+        }
+        if (
+          salesRankOk &&
+          profit &&
+          profit.profitMarginPercent >= config.minMarginPercent &&
+          profit.totalProfit >= config.minProfitGbp
+        ) {
+          amazonTier = profit.profitMarginPercent >= config.greatMarginPercent ? 'great' : 'good';
+        }
       }
 
-      const profit = calculateAuctionProfit(auction.currentBidGbp, postage, amazon.amazonPrice);
-      if (!profit) continue;
-
-      // Populate profit data on the evaluation
+      // --- New POV signal ---
+      const povMultiple = newPov?.soldAvgGbp && totalCost > 0 ? newPov.soldAvgGbp / totalCost : null;
+      const povTier: 'great' | 'good' | null =
+        config.povBuyEnabled && povMultiple != null
+          ? povMultiple >= greatMult
+            ? 'great'
+            : povMultiple >= mult
+              ? 'good'
+              : null
+          : null;
       if (ev) {
-        ev.profitGbp = profit.totalProfit;
-        ev.marginPercent = profit.profitMarginPercent;
-        ev.roiPercent = profit.roiPercent;
+        ev.conditionMode = 'new';
+        ev.povSoldGbp = newPov?.soldAvgGbp ?? null;
+        ev.povMultiple = povMultiple != null ? round2(povMultiple) : null;
       }
 
-      // Check thresholds
-      if (profit.profitMarginPercent < config.minMarginPercent) {
-        if (ev) ev.filterReason = 'below_min_margin';
+      const signals: string[] = [];
+      if (amazonTier && profit) signals.push(`Amazon ${profit.profitMarginPercent.toFixed(1)}%`);
+      if (povTier && povMultiple != null) signals.push(`New POV ${povMultiple.toFixed(1)}× cost`);
+
+      const alertTier: 'great' | 'good' | null =
+        amazonTier === 'great' || povTier === 'great'
+          ? 'great'
+          : amazonTier || povTier
+            ? 'good'
+            : null;
+
+      if (!alertTier) {
+        if (ev) {
+          ev.filterReason = !amazon
+            ? 'no_amazon_price'
+            : povMultiple != null
+              ? 'below_pov_multiple'
+              : 'below_min_margin';
+          ev.alertTier = null;
+        }
         continue;
       }
-      if (profit.totalProfit < config.minProfitGbp) {
-        if (ev) ev.filterReason = 'below_min_profit';
-        continue;
-      }
 
-      const alertTier =
-        profit.profitMarginPercent >= config.greatMarginPercent ? 'great' : 'good';
-
-      // Mark as passed with tier
       if (ev) {
         ev.filterReason = 'passed';
         ev.alertTier = alertTier;
@@ -743,11 +873,127 @@ export class EbayAuctionScannerService {
         amazonData: amazon,
         profitBreakdown: profit,
         alertTier,
+        conditionMode: 'new',
+        pov: newPov,
+        povMultiple: povMultiple != null ? round2(povMultiple) : null,
+        signals,
       });
     }
 
-    // Sort by margin descending
-    opportunities.sort((a, b) => b.profitBreakdown.profitMarginPercent - a.profitBreakdown.profitMarginPercent);
+    // Sort: greats first, then by the stronger of Amazon margin / POV multiple.
+    const score = (o: AuctionOpportunity) =>
+      Math.max(o.profitBreakdown?.profitMarginPercent ?? 0, (o.povMultiple ?? 0) * 10);
+    opportunities.sort((a, b) => score(b) - score(a));
+
+    return opportunities;
+  }
+
+  /**
+   * Opt-in USED-auction scan (config.usedPovModeEnabled). Judged purely on
+   * Used POV >= povMultiple × total cost — no Amazon leg, no new-sealed gate.
+   */
+  private async scanUsedPov(
+    config: EbayAuctionConfig,
+    evaluations: AuctionEvaluation[]
+  ): Promise<AuctionOpportunity[]> {
+    // Gated solely by usedPovModeEnabled (checked by the caller). povBuyEnabled governs the
+    // separate New-POV hybrid signal and must NOT also gate the used scan.
+    const mult = config.povMultiple || 3;
+    const greatMult = config.povGreatMultiple || 4;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const excludedSets = new Set(config.excludedSets);
+
+    const items = await this.searchEndingSoonAuctions(config, 'USED');
+    if (items.length === 0) return [];
+
+    const candidates: Array<{ auction: EbayAuctionItem; setNumber: string; confidence: string }> = [];
+    for (const auction of items) {
+      const isFP = isFalsePositive(auction.title);
+      const isJL = isJoblot(auction.title);
+      const identified = extractSetNumbers(auction.title);
+      const best = identified.length > 0 ? identified[0] : null;
+
+      const ev: AuctionEvaluation = {
+        itemId: auction.itemId,
+        title: auction.title,
+        currentBidGbp: auction.currentBidGbp,
+        postageGbp: auction.postageGbp,
+        totalCostGbp: auction.totalCostGbp,
+        bidCount: auction.bidCount,
+        minutesRemaining: auction.minutesRemaining,
+        itemUrl: auction.itemUrl,
+        imageUrl: auction.imageUrl,
+        condition: auction.condition,
+        setNumber: best?.setNumber || null,
+        setConfidence: best?.confidence || null,
+        isJoblot: isJL,
+        isFalsePositive: isFP,
+        isNewSealed: false,
+        amazonPrice: null,
+        amazon90dAvg: null,
+        amazonAsin: null,
+        amazonSalesRank: null,
+        amazonSetName: null,
+        profitGbp: null,
+        marginPercent: null,
+        roiPercent: null,
+        conditionMode: 'used',
+        povSoldGbp: null,
+        povMultiple: null,
+        filterReason: 'passed',
+        alertTier: null,
+      };
+
+      if (isFP) { ev.filterReason = 'false_positive'; evaluations.push(ev); continue; }
+      if (auction.bidCount < config.minBids) { ev.filterReason = 'below_min_bids'; evaluations.push(ev); continue; }
+      if (isJL) { ev.filterReason = 'joblot'; evaluations.push(ev); continue; }
+      if (!best) { ev.filterReason = 'no_set_identified'; evaluations.push(ev); continue; }
+      if (excludedSets.has(best.setNumber)) { ev.filterReason = 'excluded_set'; evaluations.push(ev); continue; }
+
+      evaluations.push(ev);
+      candidates.push({ auction, setNumber: best.setNumber, confidence: best.confidence });
+    }
+
+    if (candidates.length === 0) return [];
+
+    const povData = await this.lookupPovBatch(candidates.map((c) => c.setNumber));
+    const opportunities: AuctionOpportunity[] = [];
+
+    for (const { auction, setNumber, confidence } of candidates) {
+      const ev = evaluations.find((e) => e.itemId === auction.itemId);
+      const usedPov = povData.get(setNumber.split('-')[0])?.used || null;
+      const postage = auction.postageGbp > 0 ? auction.postageGbp : config.defaultPostageGbp;
+      const totalCost = auction.currentBidGbp + postage;
+      const povMultiple = usedPov?.soldAvgGbp && totalCost > 0 ? usedPov.soldAvgGbp / totalCost : null;
+      if (ev) {
+        ev.povSoldGbp = usedPov?.soldAvgGbp ?? null;
+        ev.povMultiple = povMultiple != null ? round2(povMultiple) : null;
+      }
+
+      const tier: 'great' | 'good' | null =
+        povMultiple == null ? null : povMultiple >= greatMult ? 'great' : povMultiple >= mult ? 'good' : null;
+      if (!tier) {
+        if (ev) ev.filterReason = povMultiple != null ? 'below_pov_multiple' : 'no_signal';
+        continue;
+      }
+      if (ev) { ev.filterReason = 'passed'; ev.alertTier = tier; }
+
+      opportunities.push({
+        auction: { ...auction, postageGbp: postage, totalCostGbp: totalCost },
+        setIdentification: {
+          setNumber,
+          confidence: confidence as 'high' | 'medium' | 'low',
+          method: 'regex_title',
+        },
+        amazonData: null,
+        profitBreakdown: null,
+        alertTier: tier,
+        conditionMode: 'used',
+        pov: usedPov,
+        povMultiple: povMultiple != null ? round2(povMultiple) : null,
+        signals: [`Used POV ${povMultiple!.toFixed(1)}× cost`],
+      });
+    }
 
     return opportunities;
   }
@@ -850,7 +1096,7 @@ export class EbayAuctionScannerService {
     opportunity: AuctionOpportunity,
     discordSent: boolean
   ): Promise<void> {
-    const { auction, setIdentification, amazonData, profitBreakdown, alertTier } = opportunity;
+    const { auction, setIdentification, amazonData, profitBreakdown, alertTier, pov, povMultiple, conditionMode, signals } = opportunity;
 
     await this.supabase.from('ebay_auction_alerts').upsert(
       {
@@ -860,20 +1106,24 @@ export class EbayAuctionScannerService {
         ebay_url: auction.itemUrl,
         ebay_image_url: auction.imageUrl,
         set_number: setIdentification.setNumber,
-        set_name: amazonData.setName,
+        set_name: amazonData?.setName ?? pov?.setName ?? null,
         current_bid_gbp: auction.currentBidGbp,
         postage_gbp: auction.postageGbp,
         total_cost_gbp: auction.totalCostGbp,
         bid_count: auction.bidCount,
-        amazon_price_gbp: amazonData.amazonPrice,
-        amazon_90d_avg_gbp: amazonData.was90dAvg,
-        amazon_asin: amazonData.asin,
-        amazon_sales_rank: amazonData.salesRank,
-        profit_gbp: profitBreakdown.totalProfit,
-        margin_percent: profitBreakdown.profitMarginPercent,
-        roi_percent: profitBreakdown.roiPercent,
+        amazon_price_gbp: amazonData?.amazonPrice ?? null,
+        amazon_90d_avg_gbp: amazonData?.was90dAvg ?? null,
+        amazon_asin: amazonData?.asin ?? null,
+        amazon_sales_rank: amazonData?.salesRank ?? null,
+        profit_gbp: profitBreakdown?.totalProfit ?? null,
+        margin_percent: profitBreakdown?.profitMarginPercent ?? null,
+        roi_percent: profitBreakdown?.roiPercent ?? null,
         alert_tier: alertTier,
         is_joblot: false,
+        pov_condition: conditionMode,
+        pov_sold_gbp: pov?.soldAvgGbp ?? null,
+        pov_multiple: povMultiple ?? null,
+        buy_signal: signals.join(' + ') || null,
         auction_end_time: auction.auctionEndTime,
         discord_sent: discordSent,
         discord_sent_at: discordSent ? new Date().toISOString() : null,
@@ -967,6 +1217,10 @@ export class EbayAuctionScannerService {
       maxSalesRank: data.max_sales_rank,
       joblotAnalysisEnabled: data.joblot_analysis_enabled,
       joblotMinTotalValueGbp: Number(data.joblot_min_total_value_gbp),
+      povBuyEnabled: data.pov_buy_enabled ?? true,
+      povMultiple: data.pov_multiple != null ? Number(data.pov_multiple) : 3,
+      povGreatMultiple: data.pov_great_multiple != null ? Number(data.pov_great_multiple) : 4,
+      usedPovModeEnabled: data.used_pov_mode_enabled ?? false,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

@@ -24,6 +24,10 @@ const configUpdateSchema = z.object({
   maxSalesRank: z.number().int().min(0).nullable().optional(),
   joblotAnalysisEnabled: z.boolean().optional(),
   joblotMinTotalValueGbp: z.number().min(0).optional(),
+  povBuyEnabled: z.boolean().optional(),
+  povMultiple: z.number().min(1).max(20).optional(),
+  povGreatMultiple: z.number().min(1).max(30).optional(),
+  usedPovModeEnabled: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -84,6 +88,10 @@ export async function PUT(request: NextRequest) {
       maxSalesRank: 'max_sales_rank',
       joblotAnalysisEnabled: 'joblot_analysis_enabled',
       joblotMinTotalValueGbp: 'joblot_min_total_value_gbp',
+      povBuyEnabled: 'pov_buy_enabled',
+      povMultiple: 'pov_multiple',
+      povGreatMultiple: 'pov_great_multiple',
+      usedPovModeEnabled: 'used_pov_mode_enabled',
     };
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
