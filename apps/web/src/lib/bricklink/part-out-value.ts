@@ -80,8 +80,22 @@ export class PovError extends Error {
 export class LoginRequiredError extends PovError {}
 /** BL served a captcha / "unusual traffic" challenge — back off entirely. */
 export class CaptchaError extends PovError {}
-/** Page loaded but there is no valid POV result for this item (bad set number, no data). */
-export class NotFoundError extends PovError {}
+/**
+ * Page loaded but there is no valid POV result for this item. The `reason` distinguishes the two
+ * structurally-different no-data cases so callers can pick the right recheck cadence:
+ *  - 'not_partable' : BL bounced the item to the price guide (catalogPG) — structurally never
+ *                     partable (e.g. an individual collectible minifig). Recheck rarely (~yearly).
+ *  - 'no_data'      : a valid POV page rendered but has no sold/for-sale figures yet (empty shell).
+ *                     Keep the normal age-tier cadence — sales may appear later.
+ */
+export type NoDataReason = 'not_partable' | 'no_data';
+export class NotFoundError extends PovError {
+  readonly reason: NoDataReason;
+  constructor(message: string, reason: NoDataReason) {
+    super(message);
+    this.reason = reason;
+  }
+}
 /** Empty/near-empty body — BL anti-bot soft-block (common for logged-out scraping without a VPN). */
 export class EmptyResponseError extends PovError {}
 
@@ -452,9 +466,12 @@ export class PovScraper {
     const { kind, parsed } = classifyPovPage(page.url, page.text);
     switch (kind) {
       case 'notPartable':
-        throw new NotFoundError(`Item not partable (bounced to price guide) for set ${opts.setNumber} (url: ${page.url})`);
+        throw new NotFoundError(
+          `Item not partable (bounced to price guide) for set ${opts.setNumber} (url: ${page.url})`,
+          'not_partable',
+        );
       case 'noData':
-        throw new NotFoundError(`POV page has no sold/for-sale data for set ${opts.setNumber}`);
+        throw new NotFoundError(`POV page has no sold/for-sale data for set ${opts.setNumber}`, 'no_data');
       case 'block':
         throw new EmptyResponseError(
           `Blocked/empty response for set ${opts.setNumber} (len=${page.text.trim().length}, url=${page.url}) — ` +

@@ -95,6 +95,12 @@ export type BrickLinkPartOutValueUpdate = TablesUpdate<'bricklink_part_out_value
 export type BrickLinkPovConfig = Tables<'bricklink_pov_config'>;
 export type BrickLinkPovConfigUpdate = TablesUpdate<'bricklink_pov_config'>;
 
+// POV freshness / refresh mechanism
+export type PovRefreshStatus = Tables<'bricklink_pov_refresh_status'>;
+export type PovRefreshRun = Tables<'pov_refresh_runs'>;
+export type PovRefreshRunInsert = TablesInsert<'pov_refresh_runs'>;
+export type PovRefreshRunUpdate = TablesUpdate<'pov_refresh_runs'>;
+
 // Aliases for backwards compatibility (singular names)
 export type PlatformCredential = PlatformCredentials;
 export type PlatformCredentialInsert = PlatformCredentialsInsert;

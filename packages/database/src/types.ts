@@ -1529,6 +1529,7 @@ export type Database = {
         Row: {
           break_type: string
           condition: string
+          consecutive_empty_count: number
           created_at: string
           fetched_at: string
           for_sale_avg_gbp: number | null
@@ -1542,10 +1543,12 @@ export type Database = {
           inc_instructions: boolean
           is_aggregate_listing: boolean | null
           item_seq: number
+          last_changed_at: string | null
           my_inv_items: number | null
           my_inv_lots: number | null
           my_inv_native: number | null
           native_currency: string | null
+          no_data_reason: string | null
           not_included_items: number | null
           not_included_lots: number | null
           partout_multiple: number | null
@@ -1564,6 +1567,7 @@ export type Database = {
         Insert: {
           break_type?: string
           condition?: string
+          consecutive_empty_count?: number
           created_at?: string
           fetched_at?: string
           for_sale_avg_gbp?: number | null
@@ -1577,10 +1581,12 @@ export type Database = {
           inc_instructions?: boolean
           is_aggregate_listing?: boolean | null
           item_seq?: number
+          last_changed_at?: string | null
           my_inv_items?: number | null
           my_inv_lots?: number | null
           my_inv_native?: number | null
           native_currency?: string | null
+          no_data_reason?: string | null
           not_included_items?: number | null
           not_included_lots?: number | null
           partout_multiple?: number | null
@@ -1599,6 +1605,7 @@ export type Database = {
         Update: {
           break_type?: string
           condition?: string
+          consecutive_empty_count?: number
           created_at?: string
           fetched_at?: string
           for_sale_avg_gbp?: number | null
@@ -1612,10 +1619,12 @@ export type Database = {
           inc_instructions?: boolean
           is_aggregate_listing?: boolean | null
           item_seq?: number
+          last_changed_at?: string | null
           my_inv_items?: number | null
           my_inv_lots?: number | null
           my_inv_native?: number | null
           native_currency?: string | null
+          no_data_reason?: string | null
           not_included_items?: number | null
           not_included_lots?: number | null
           partout_multiple?: number | null
@@ -1694,6 +1703,8 @@ export type Database = {
         Row: {
           backfill_batch_size: number
           backfill_delay_ms: number
+          backoff_after: number
+          backoff_cap: number
           default_break_type: string
           default_condition: string
           default_inc_box: boolean
@@ -1702,12 +1713,19 @@ export type Database = {
           default_inc_instructions: boolean
           freshness_days: number
           id: number
+          not_partable_recheck_days: number
+          refresh_daily_budget: number
+          tier1_days: number
+          tier2_days: number
+          tier3_days: number
           updated_at: string
           usd_to_gbp_rate: number | null
         }
         Insert: {
           backfill_batch_size?: number
           backfill_delay_ms?: number
+          backoff_after?: number
+          backoff_cap?: number
           default_break_type?: string
           default_condition?: string
           default_inc_box?: boolean
@@ -1716,12 +1734,19 @@ export type Database = {
           default_inc_instructions?: boolean
           freshness_days?: number
           id?: number
+          not_partable_recheck_days?: number
+          refresh_daily_budget?: number
+          tier1_days?: number
+          tier2_days?: number
+          tier3_days?: number
           updated_at?: string
           usd_to_gbp_rate?: number | null
         }
         Update: {
           backfill_batch_size?: number
           backfill_delay_ms?: number
+          backoff_after?: number
+          backoff_cap?: number
           default_break_type?: string
           default_condition?: string
           default_inc_box?: boolean
@@ -1730,6 +1755,11 @@ export type Database = {
           default_inc_instructions?: boolean
           freshness_days?: number
           id?: number
+          not_partable_recheck_days?: number
+          refresh_daily_budget?: number
+          tier1_days?: number
+          tier2_days?: number
+          tier3_days?: number
           updated_at?: string
           usd_to_gbp_rate?: number | null
         }
@@ -5378,11 +5408,13 @@ export type Database = {
           daily_calorie_target: number
           daily_protein_g: number
           daily_steps_target: number
+          deficit_kcal: number
           duration_weeks: number
           end_date: string
           id: string
           name: string
           notes: string | null
+          protein_g_per_kg: number
           split: string
           start_date: string
           start_weight_kg: number
@@ -5398,11 +5430,13 @@ export type Database = {
           daily_calorie_target: number
           daily_protein_g: number
           daily_steps_target?: number
+          deficit_kcal?: number
           duration_weeks?: number
           end_date: string
           id?: string
           name: string
           notes?: string | null
+          protein_g_per_kg?: number
           split?: string
           start_date: string
           start_weight_kg: number
@@ -5418,11 +5452,13 @@ export type Database = {
           daily_calorie_target?: number
           daily_protein_g?: number
           daily_steps_target?: number
+          deficit_kcal?: number
           duration_weeks?: number
           end_date?: string
           id?: string
           name?: string
           notes?: string | null
+          protein_g_per_kg?: number
           split?: string
           start_date?: string
           start_weight_kg?: number
@@ -6099,23 +6135,29 @@ export type Database = {
       }
       group_results: {
         Row: {
+          eliminated: boolean
           final_position: number
           group_id: string
           id: string
+          position_certain: boolean
           qualified: boolean | null
           team_id: string
         }
         Insert: {
+          eliminated?: boolean
           final_position: number
           group_id: string
           id?: string
+          position_certain?: boolean
           qualified?: boolean | null
           team_id: string
         }
         Update: {
+          eliminated?: boolean
           final_position?: number
           group_id?: string
           id?: string
+          position_certain?: boolean
           qualified?: boolean | null
           team_id?: string
         }
@@ -10670,6 +10712,69 @@ export type Database = {
           },
         ]
       }
+      pov_refresh_runs: {
+        Row: {
+          attempted: number
+          backlog_after: number | null
+          backlog_before: number | null
+          breathers: number
+          budget: number
+          candidates: number
+          created_at: string
+          duration_ms: number | null
+          errors: number
+          finished_at: string | null
+          id: string
+          newly_empty: number
+          no_data: number
+          recoveries: number
+          refreshed: number
+          started_at: string
+          stop_reason: string | null
+          stopped_early: boolean
+        }
+        Insert: {
+          attempted?: number
+          backlog_after?: number | null
+          backlog_before?: number | null
+          breathers?: number
+          budget: number
+          candidates?: number
+          created_at?: string
+          duration_ms?: number | null
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          newly_empty?: number
+          no_data?: number
+          recoveries?: number
+          refreshed?: number
+          started_at?: string
+          stop_reason?: string | null
+          stopped_early?: boolean
+        }
+        Update: {
+          attempted?: number
+          backlog_after?: number | null
+          backlog_before?: number | null
+          breathers?: number
+          budget?: number
+          candidates?: number
+          created_at?: string
+          duration_ms?: number | null
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          newly_empty?: number
+          no_data?: number
+          recoveries?: number
+          refreshed?: number
+          started_at?: string
+          stop_reason?: string | null
+          stopped_early?: boolean
+        }
+        Relationships: []
+      }
       price_snapshots: {
         Row: {
           buy_box_winner: string | null
@@ -13920,6 +14025,8 @@ export type Database = {
           group_stage_rank: number | null
           id: string
           knockout_points: number | null
+          knockout_tiebreaker_diff: number | null
+          knockout_tiebreaker_goals: number | null
           overall_rank: number | null
           payment_status: string | null
           player_id: string
@@ -13934,6 +14041,8 @@ export type Database = {
           group_stage_rank?: number | null
           id?: string
           knockout_points?: number | null
+          knockout_tiebreaker_diff?: number | null
+          knockout_tiebreaker_goals?: number | null
           overall_rank?: number | null
           payment_status?: string | null
           player_id: string
@@ -13948,6 +14057,8 @@ export type Database = {
           group_stage_rank?: number | null
           id?: string
           knockout_points?: number | null
+          knockout_tiebreaker_diff?: number | null
+          knockout_tiebreaker_goals?: number | null
           overall_rank?: number | null
           payment_status?: string | null
           player_id?: string
@@ -13984,16 +14095,19 @@ export type Database = {
         Row: {
           id: string
           total_group_stage_goals: number | null
+          total_knockout_goals: number | null
           tournament_id: string | null
         }
         Insert: {
           id?: string
           total_group_stage_goals?: number | null
+          total_knockout_goals?: number | null
           tournament_id?: string | null
         }
         Update: {
           id?: string
           total_group_stage_goals?: number | null
+          total_knockout_goals?: number | null
           tournament_id?: string | null
         }
         Relationships: [
@@ -15369,6 +15483,33 @@ export type Database = {
           },
         ]
       }
+      bricklink_pov_refresh_status: {
+        Row: {
+          age_tier: number | null
+          backoff_mult: number | null
+          base_cadence_days: number | null
+          condition: string | null
+          consecutive_empty_count: number | null
+          due_at: string | null
+          due_date: string | null
+          effective_cadence_days: number | null
+          fetched_at: string | null
+          for_sale_avg_gbp: number | null
+          id: string | null
+          is_no_data: boolean | null
+          is_stale: boolean | null
+          item_seq: number | null
+          jitter_days: number | null
+          last_changed_at: string | null
+          no_data_reason: string | null
+          overdue_ratio: number | null
+          set_name: string | null
+          set_number: string | null
+          sold_6mo_avg_gbp: number | null
+          year_from: number | null
+        }
+        Relationships: []
+      }
       daily_platform_activity: {
         Row: {
           activity_date: string | null
@@ -15697,6 +15838,8 @@ export type Database = {
           group_stage_points: number | null
           group_stage_rank: number | null
           knockout_points: number | null
+          knockout_tiebreaker_diff: number | null
+          knockout_tiebreaker_goals: number | null
           nickname: string | null
           overall_rank: number | null
           player_id: string | null
@@ -16727,6 +16870,7 @@ export type Database = {
       }
       get_player_id: { Args: never; Returns: string }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
+      get_pov_freshness_report: { Args: never; Returns: Json }
       get_profit_per_sale: {
         Args: { from_date?: string }
         Returns: {
