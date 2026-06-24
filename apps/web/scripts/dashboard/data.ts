@@ -130,7 +130,7 @@ async function searchConsole(jwt: ReturnType<typeof googleJwt>) {
   const topQueries = (q.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ query: r.keys![0], clicks: r.clicks || 0, impressions: r.impressions || 0, position: Math.round((r.position || 0) * 10) / 10 }));
 
   const p = await sc.searchanalytics.query({ siteUrl: SC_SITE, requestBody: { startDate: start, endDate: end, dimensions: ['page'], rowLimit: 8 } });
-  const topPages = (p.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ page: r.keys![0].replace('https://hadleybricks.co.uk', ''), clicks: r.clicks || 0, impressions: r.impressions || 0, position: Math.round((r.position || 0) * 10) / 10 }));
+  const topPages = (p.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ page: r.keys![0].replace('https://hadleybricks.co.uk', '').split('?')[0] || '/', clicks: r.clicks || 0, impressions: r.impressions || 0, position: Math.round((r.position || 0) * 10) / 10 }));
 
   // daily clicks + avg-position series for the ranking trend
   const ser = await sc.searchanalytics.query({ siteUrl: SC_SITE, requestBody: { startDate: start, endDate: end, dimensions: ['date'] } });
