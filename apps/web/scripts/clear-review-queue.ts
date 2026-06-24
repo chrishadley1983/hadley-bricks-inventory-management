@@ -12,8 +12,16 @@
  *
  * Subcommands:
  *   status                       Print live queue counts by status/source.
+ *   check                        Verify the Vinted session (exit 0 in / 2 out).
  *   fetch  [--limit N]           CDP→Vinted /api/v2/inbox→download photos + write manifest.json.
+ *                                Also reads each buy's transaction (order.items[].status) so the
+ *                                manifest carries the REAL condition + per-item price, and flags
+ *                                cancelled/refunded orders (cancelled=true) — do not guess from titles.
  *   apply  [--dry-run]           Read decisions.json → approve (import) / dismiss each item.
+ *                                Force-dismisses any manifest-flagged cancelled order.
+ *   finalize [--dry-run]         For NEW imported items: Keepa-validate the ASIN + set
+ *                                listing_platform=amazon and listing_value from the buy box
+ *                                (rounded down to .99/.49). Idempotent.
  *
  * Prereqs: CDP Chrome on :9222 logged into the Hadley Bricks Vinted buying account,
  * a local dev server on :3000 (apply uses its /review-queue/[id]/approve), and
@@ -31,6 +39,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 import WebSocket from 'ws';
 import { createClient } from '@supabase/supabase-js';
+import { KeepaClient } from '@/lib/keepa/keepa-client';
 
 // ---------- config ----------
 const CDP_PORT = 9222;
@@ -67,6 +76,18 @@ interface QueueItem {
   order_reference: string;
 }
 
+/** One line item from a Vinted transaction's order, carrying its real condition. */
+interface VintedItemMeta {
+  vinted_id: number;
+  title: string;
+  /** Vinted's own condition string, e.g. "New with tags" / "Very good". */
+  status: string | null;
+  /** Mapped to our two-value condition (status contains "New" → New, else Used). */
+  condition: 'New' | 'Used' | null;
+  /** Per-item price the buyer paid (better than proportional allocation). */
+  price: number | null;
+}
+
 interface ManifestEntry extends QueueItem {
   conversation_id: number | null;
   conversation_description: string | null;
@@ -74,6 +95,30 @@ interface ManifestEntry extends QueueItem {
   photo_files: string[];
   photo_count: number;
   note: string;
+  /** Vinted transaction status_title, e.g. "Completed" / "Cancelled". */
+  vinted_status_title?: string | null;
+  /** True when the buy was cancelled/refunded on Vinted → DISMISS, do not import. */
+  cancelled?: boolean;
+  /** Per-line-item condition + price from Vinted's own order data (authoritative). */
+  vinted_items?: VintedItemMeta[];
+}
+
+/** Map a Vinted condition string to our two-value condition. */
+function toCondition(status: string | null | undefined): 'New' | 'Used' | null {
+  if (!status) return null;
+  return /new/i.test(status) ? 'New' : 'Used';
+}
+
+/** Round a price DOWN to the nearest .99 / .49 boundary (52.40→51.99, 52.60→52.49). */
+function priceFloor(p: number | null | undefined): number | null {
+  if (p == null || !(p > 0)) return null;
+  const pounds = Math.floor(p + 1e-9);
+  const frac = p - pounds;
+  let r: number;
+  if (frac >= 0.99 - 1e-9) r = pounds + 0.99;
+  else if (frac >= 0.49 - 1e-9) r = pounds + 0.49;
+  else r = pounds - 1 + 0.99;
+  return Math.max(0.49, Math.round(r * 100) / 100);
 }
 
 interface Decision {
@@ -299,6 +344,44 @@ async function scrapeListingPhotos(
   }
 }
 
+/**
+ * Read the buyer's transaction (order_reference == Vinted transaction id) to get the
+ * AUTHORITATIVE per-item condition + price, and whether the order was cancelled.
+ * The sold-item endpoint `/api/v2/items/<id>` 404s, but the transaction retains a
+ * snapshot under `order.items[]`. Best-effort: returns null on any failure so fetch
+ * never breaks just because this metadata is unavailable.
+ */
+async function fetchTransactionMeta(
+  cdp: CDP,
+  orderReference: string
+): Promise<{ cancelled: boolean; status_title: string | null; items: VintedItemMeta[] } | null> {
+  try {
+    const t = await cdp.eval<any>(
+      `(async () => {
+        try {
+          const r = await fetch('/api/v2/transactions/${orderReference}', { credentials:'include', headers:{'Accept':'application/json'} });
+          if (!r.ok) return { __error: r.status };
+          return await r.json();
+        } catch (e) { return { __error: 0 }; }
+      })()`
+    );
+    if (!t || t.__error) return null;
+    const tx = t.transaction ?? t;
+    const status_title: string | null = tx.status_title ?? null;
+    const cancelled = /cancel|refund/i.test(status_title ?? '') || !!tx.removed_item_title;
+    const items: VintedItemMeta[] = (tx.order?.items ?? []).map((i: any) => ({
+      vinted_id: i.id,
+      title: i.title,
+      status: i.status ?? null,
+      condition: toCondition(i.status),
+      price: i.price?.amount != null ? Number(i.price.amount) : null,
+    }));
+    return { cancelled, status_title, items };
+  } catch {
+    return null;
+  }
+}
+
 async function downloadPhoto(url: string, dest: string): Promise<boolean> {
   try {
     const res = await fetch(url);
@@ -399,8 +482,15 @@ async function cmdFetch() {
       if (photoFiles.length === 0) note = 'conversation found but no photos downloaded';
     }
 
+    // Authoritative condition + cancelled flag from Vinted's own order data.
+    const txMeta = await fetchTransactionMeta(cdp, item.order_reference);
+    const condSummary = txMeta?.items.length
+      ? txMeta.items.map((vi) => `${vi.condition ?? '?'}${vi.price != null ? ` £${vi.price}` : ''}`).join(', ')
+      : '—';
+
     console.log(
-      `  ${item.order_reference}  ${item.seller_username ?? '?'}  "${item.item_name}"  → ${photoFiles.length} photos${note ? ' — ' + note : ''}`
+      `  ${item.order_reference}  ${item.seller_username ?? '?'}  "${item.item_name}"  → ${photoFiles.length} photos` +
+        `${note ? ' — ' + note : ''}  [cond: ${condSummary}${txMeta?.cancelled ? ' ⚠CANCELLED' : ''}]`
     );
     manifest.push({
       ...item,
@@ -410,14 +500,20 @@ async function cmdFetch() {
       photo_files: photoFiles,
       photo_count: photoFiles.length,
       note,
+      vinted_status_title: txMeta?.status_title ?? null,
+      cancelled: txMeta?.cancelled ?? false,
+      vinted_items: txMeta?.items ?? [],
     });
   }
   await cdp.close();
 
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
   const withPhotos = manifest.filter((m) => m.photo_count > 0).length;
+  const cancelledN = manifest.filter((m) => m.cancelled).length;
   console.log(`\nManifest → ${MANIFEST_PATH}`);
   console.log(`${withPhotos}/${manifest.length} items have photos. ${manifest.length - withPhotos} need a fallback (web search / listing visit).`);
+  if (cancelledN) console.log(`⚠ ${cancelledN} order(s) flagged CANCELLED on Vinted — DISMISS these, do not import.`);
+  console.log(`Condition + per-item price are in manifest.json (vinted_items[]). Use those — do NOT guess from titles.`);
 }
 
 async function approveItem(d: Decision): Promise<{ ok: boolean; info: string }> {
@@ -455,6 +551,18 @@ async function cmdApply() {
   const decisions: Decision[] = JSON.parse(fs.readFileSync(DECISIONS_PATH, 'utf8'));
   console.log(`${decisions.length} decisions loaded${DRY_RUN ? ' (DRY RUN)' : ''}.`);
 
+  // Safety net: an order Vinted marked cancelled/refunded must never be imported,
+  // even if decisions.json says import. Pull the cancelled set from the manifest.
+  const cancelledIds = new Set<string>();
+  if (fs.existsSync(MANIFEST_PATH)) {
+    try {
+      const manifest: ManifestEntry[] = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+      for (const m of manifest) if (m.cancelled) cancelledIds.add(m.id);
+    } catch {
+      /* manifest optional */
+    }
+  }
+
   // Validate against live queue so we never act on an already-resolved id.
   const live = new Set((await pullQueueItems()).map((i) => i.id));
   let imports = 0,
@@ -462,11 +570,16 @@ async function cmdApply() {
     skipped = 0,
     failures = 0;
 
-  for (const d of decisions) {
+  for (let d of decisions) {
     if (!live.has(d.id)) {
       console.log(`  ~ ${d.id.slice(0, 8)} not in live queue — skipping`);
       skipped++;
       continue;
+    }
+    // Force-dismiss anything Vinted cancelled, regardless of the decision.
+    if (d.action === 'import' && cancelledIds.has(d.id)) {
+      console.log(`  ⚠ ${d.id.slice(0, 8)} flagged CANCELLED on Vinted — dismissing instead of importing`);
+      d = { ...d, action: 'dismiss', skip_reason: 'cancelled/refunded on Vinted' };
     }
     const label =
       d.action === 'import'
@@ -488,6 +601,140 @@ async function cmdApply() {
   if (failures > 0) process.exitCode = 1;
 }
 
+/**
+ * For the NEW items imported in this batch (scope = manifest order_references), via Keepa:
+ *   1) validate amazon_asin is present AND correct — Keepa product's eanList/upcList must
+ *      contain the set's Brickset EAN/UPC (strong), else title contains the set number
+ *      (weak); if absent/garbage (e.g. the literal "amazon"), re-resolve via searchByCode.
+ *   2) set listing_platform='amazon' and listing_value from the Keepa BUY BOX
+ *      (current → 90d avg → lowest New), rounded DOWN to .99/.49.
+ * Writes go through InventoryService.update (Google Sheet mirror). Idempotent; --dry-run.
+ */
+async function cmdFinalize() {
+  if (!fs.existsSync(MANIFEST_PATH)) {
+    console.error(`No manifest at ${MANIFEST_PATH} — run fetch first.`);
+    process.exit(1);
+  }
+  const manifest: ManifestEntry[] = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  const lots = [...new Set(manifest.map((m) => m.order_reference))];
+  const userId = process.env.SERVICE_USER_ID;
+  const serviceKey = process.env.SERVICE_API_KEY ?? '';
+  if (!userId) {
+    console.error('SERVICE_USER_ID required for finalize');
+    process.exit(1);
+  }
+  const keepa = new KeepaClient();
+  if (!keepa.isConfigured()) {
+    console.error('Keepa not configured (KEEPA_API_KEY)');
+    process.exit(1);
+  }
+  // Import the service directly (not the barrel) to avoid unrelated module side-effects.
+  const { InventoryService } = await import('@/lib/services/inventory.service');
+  const inventory = new InventoryService(supabase, userId);
+
+  const { data: rows, error } = await supabase
+    .from('inventory_items')
+    .select('id, set_number, sku, item_name, condition, amazon_asin, listing_value, listing_platform, linked_lot, user_id')
+    .in('linked_lot', lots)
+    .eq('condition', 'New');
+  if (error) throw new Error(error.message);
+  const items = (rows ?? []).filter((r: any) => r.user_id === userId);
+  console.log(`\n${DRY_RUN ? '[DRY RUN] ' : ''}Finalizing ${items.length} New items (Keepa ASIN validate + buy-box price).`);
+  if (items.length === 0) return;
+
+  const baseSet = (s: string | null) => (s ?? '').replace(/-.*$/, '');
+  const validFmt = (a: string | null) => !!a && /^[A-Z0-9]{10}$/.test(a);
+
+  // Brickset EAN/UPC per set (authoritative codes for ASIN validation/resolution).
+  const codes: Record<string, { ean?: string; upc?: string }> = {};
+  for (const set of [...new Set(items.map((i: any) => baseSet(i.set_number)))] as string[]) {
+    const r = await fetch(`${LOCAL_APP}/api/service/brickset/lookup?setNumber=${set}`, {
+      headers: { 'x-api-key': serviceKey },
+    })
+      .then((x) => x.json())
+      .catch(() => null);
+    codes[set] = { ean: r?.data?.ean ?? undefined, upc: r?.data?.upc ?? undefined };
+  }
+
+  type Plan = { row: any; set: string; asin: string | null; note: string; valid: boolean; price: number | null; src: string };
+  const plans: Plan[] = [];
+  for (const row of items) {
+    const set = baseSet(row.set_number);
+    let asin: string | null = row.amazon_asin ?? null;
+    let note = validFmt(asin) ? 'existing' : asin ? `invalid("${asin}")` : 'MISSING';
+    if (!validFmt(asin)) {
+      const orig = asin;
+      asin = null;
+      const cs = [codes[set]?.ean, codes[set]?.upc].filter(Boolean) as string[];
+      if (cs.length) {
+        try {
+          const f = await keepa.searchByCode(cs);
+          if (f[0]?.asin) { asin = f[0].asin; note = `resolved via code ${cs[0]}${orig ? ` (was "${orig}")` : ''}`; }
+          else note = `unresolved (no Amazon match for ${cs[0]}${orig ? `, was "${orig}"` : ''})`;
+        } catch { note = 'searchByCode failed'; }
+      } else note = `MISSING (no EAN/UPC${orig ? `, was "${orig}"` : ''})`;
+    }
+    plans.push({ row, set, asin, note, valid: false, price: null, src: '' });
+  }
+
+  // Batch-fetch Keepa products (title, eanList, stats/buybox) for all resolved ASINs.
+  const allAsins = [...new Set(plans.map((p) => p.asin).filter(Boolean))] as string[];
+  const prod: Record<string, any> = {};
+  for (let i = 0; i < allAsins.length; i += 10) {
+    for (const pr of await keepa.fetchProducts(allAsins.slice(i, i + 10))) prod[pr.asin] = pr;
+  }
+
+  for (const p of plans) {
+    if (!p.asin) continue;
+    let pr = prod[p.asin];
+    const bs = [codes[p.set]?.ean, codes[p.set]?.upc].filter(Boolean) as string[];
+    const codeMatch = pr ? (pr.eanList ?? []).concat(pr.upcList ?? []).some((c: string) => bs.includes(c)) : false;
+    const titleMatch = pr?.title ? new RegExp(`(^|\\D)${p.set}(\\D|$)`).test(pr.title) : false;
+    p.valid = codeMatch || titleMatch;
+    if (!p.valid && bs.length) {
+      try {
+        const f = await keepa.searchByCode(bs);
+        if (f[0]?.asin && f[0].asin !== p.asin) {
+          p.asin = f[0].asin;
+          p.note = `CORRECTED via code ${bs[0]} (was ${p.row.amazon_asin})`;
+          const re = await keepa.fetchProducts([p.asin]);
+          if (re[0]) prod[p.asin] = re[0];
+          p.valid = true;
+        }
+      } catch { /* leave suspect */ }
+    }
+    pr = prod[p.asin];
+    if (pr) {
+      const pricing = keepa.extractCurrentPricing(pr);
+      const bb = pricing.buyBoxPrice ?? pricing.was90dAvg ?? pricing.lowestNewPrice ?? null;
+      p.src = pricing.buyBoxPrice != null ? 'buybox' : pricing.was90dAvg != null ? '90d-avg' : pricing.lowestNewPrice != null ? 'lowest-new' : 'none';
+      p.price = priceFloor(bb);
+    }
+  }
+
+  let updated = 0;
+  const problems: string[] = [];
+  for (const p of plans) {
+    const tag = `${p.set} (${p.row.sku})`;
+    console.log(
+      `  • ${tag} ASIN ${p.asin ?? '—'} [${p.note}] valid=${p.valid ? '✓' : '✗SUSPECT'}  -> LV £${p.price != null ? p.price.toFixed(2) : '—'} (${p.src || 'none'}, was ${p.row.listing_value ?? '—'})`
+    );
+    if (!p.asin) problems.push(`${tag}: no ASIN resolved`);
+    else if (!p.valid) problems.push(`${tag}: ASIN ${p.asin} could not be validated`);
+    if (p.asin && p.price == null) problems.push(`${tag}: no Keepa buy-box price`);
+    if (!DRY_RUN && p.asin) {
+      const patch: Record<string, unknown> = { listing_platform: 'amazon' };
+      if (p.asin !== p.row.amazon_asin) patch.amazon_asin = p.asin;
+      if (p.price != null) patch.listing_value = p.price;
+      await inventory.update(p.row.id, patch);
+      updated++;
+    }
+  }
+  console.log(`\n${DRY_RUN ? '[DRY RUN] would update' : 'Updated'} ${DRY_RUN ? plans.filter((p) => p.asin).length : updated}/${plans.length}.`);
+  if (problems.length) { console.log(`Flags (${problems.length}):`); for (const x of problems) console.log(`  - ${x}`); }
+  if (!DRY_RUN) { console.log('Waiting 15s for fire-and-forget Sheet writes...'); await new Promise((r) => setTimeout(r, 15000)); }
+}
+
 (async () => {
   try {
     if (cmd === 'status') await cmdStatus();
@@ -499,8 +746,9 @@ async function cmdApply() {
       process.exit(login.loggedIn ? 0 : 2);
     } else if (cmd === 'fetch') await cmdFetch();
     else if (cmd === 'apply') await cmdApply();
+    else if (cmd === 'finalize') await cmdFinalize();
     else {
-      console.log('Usage: clear-review-queue.ts <status|check|fetch|apply> [--limit N] [--dry-run]');
+      console.log('Usage: clear-review-queue.ts <status|check|fetch|apply|finalize> [--limit N] [--dry-run]');
       process.exit(1);
     }
   } catch (e) {
