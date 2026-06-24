@@ -23,20 +23,19 @@ const PBKDF2_ITERS = 150_000;
 
 // ── local-AI summary (jobs-channel; Max-sub, zero API cost) ────────────
 async function aiSummary(data: Awaited<ReturnType<typeof buildDashboardData>>): Promise<{ headline: string; position: string; nextSteps: string[]; watch: string[] }> {
-  const t: any = data.traffic, s: any = data.sales, se: any = data.seo, f: any = data.feed, inv: any = data.inventory;
+  const sh: any = data.shopify, se: any = data.search, f: any = data.feed, st: any = data.store;
   const facts = {
-    sales_7d: s?.error ? null : { revenue: Math.round(s.last7.revenue), net: s.last7.net, marginPct: s.last7.margin, units: s.last7.units, aov: Math.round(s.last7.aov), byPlatform: s.last7.byPlatform, deltaRevenuePct: s.delta.revenue, directSharePct: s.directShare, weeklyTarget: s.weeklyTarget, pacePct: s.pacePct, scope: s.scopeNote, topSets: s.topSets?.slice(0, 4) },
-    traffic_28d: t?.error ? null : { sessions7d: t.last7.sessions, deltaSessionsPct: t.delta.sessions, aiSessions28: t.aiSessions28, sessions28: t.sessions28, channels: t.channels },
-    search_28d: se?.error ? null : { clicks: se.curr.clicks, impressions: se.curr.impressions, position: Math.round(se.curr.position * 10) / 10, deltaClicksPct: se.delta.clicks, topQueries: se.topQueries?.slice(0, 5)?.map((q: any) => q.query) },
-    feed: f?.error ? null : { approved: f.approved, disapproved: f.disapproved },
-    inventory: inv?.error ? null : inv,
+    search_28d: se?.error ? null : { clicks: se.curr.clicks, impressions: se.curr.impressions, ctrPct: Math.round(se.curr.ctr * 1000) / 10, avgPosition: Math.round(se.curr.position * 10) / 10, positionChange: se.delta.position, clicksDeltaPct: se.delta.clicks, topQueries: se.topQueries?.slice(0, 6)?.map((q: any) => `${q.query} (pos ${q.position}, ${q.clicks}c/${q.impressions}i)`), topPages: se.topPages?.slice(0, 4)?.map((p: any) => p.page) },
+    shopify_site: sh?.error ? null : { sessions7d: sh.last7.sessions, sessionsDeltaPct: sh.delta.sessions, aiSessions28: sh.aiSessions28, sessions28: sh.sessions28, organicShopping28: sh.organicShopping28, channels: sh.channels, conversions7d: sh.last7.conversions, conversionRatePct: sh.cvr, directRevenue7d: Math.round(sh.last7.revenue * 100) / 100 },
+    google_shopping_feed: f?.error ? null : { approvedFreeListings: f.approved, total: f.total, disapproved: f.disapproved, topIssues: f.topIssues },
+    listings: st?.error ? null : st,
   };
   const prompt =
-    'You are a senior e-commerce analyst for Hadley Bricks, a UK LEGO resale business selling across Amazon, eBay, BrickLink, Brick Owl and its own Shopify store (hadleybricks.co.uk). The strategic goal is growing DIRECT (Shopify) sales and AI-search visibility, which carry better margins than the marketplaces. ' +
+    'You are a senior SEO / e-commerce-growth analyst for Hadley Bricks, a UK LEGO resale business. THIS DASHBOARD IS ABOUT THE WEBSITE ONLY — hadleybricks.co.uk (Shopify) — NOT the Amazon/eBay/BrickLink/Brick Owl marketplaces. The goal is growing the website via organic search ranking, Google Shopping, AI-search (GEO) visibility, and on-site conversion to direct sales. ' +
     'Using the weekly data below, reply with STRICT JSON only (no markdown, no text outside the JSON), keys: ' +
-    '"headline" (one punchy sentence, <=14 words, on the week\'s position), ' +
-    '"position" (2-3 sentences, specific with the numbers: sales across channels, traffic/SEO momentum, direct-vs-marketplace, AI-assistant visibility), ' +
-    '"nextSteps" (array of 3-4 short imperative highest-leverage actions, each <14 words), ' +
+    '"headline" (one punchy sentence, <=14 words, on the website/SEO position this week), ' +
+    '"position" (2-3 sentences, specific with the numbers: organic ranking/clicks/avg-position momentum, Google Shopping feed + Shopping traffic, AI-assistant visibility, Shopify sessions + conversion + direct sales), ' +
+    '"nextSteps" (array of 3-4 short imperative highest-leverage SEO/Shopping/Shopify actions, each <14 words), ' +
     '"watch" (array of 1-2 short risks to monitor, each <14 words). ' +
     'Be honest and concrete; small numbers are fine to call small. Call the reply tool with ONLY the JSON object.\n\nDATA:\n' +
     JSON.stringify(facts);
@@ -62,15 +61,17 @@ async function aiSummary(data: Awaited<ReturnType<typeof buildDashboardData>>): 
     console.warn('[dashboard] AI channel unavailable — using fallback:', e instanceof Error ? e.message : e);
   }
   // deterministic fallback
-  const rev = s?.error ? 0 : Math.round(s.last7.revenue);
-  const direct = s?.error ? 0 : s.directShare;
-  const ai = t?.error ? 0 : t.aiSessions28;
   const clicks = se?.error ? 0 : se.curr.clicks;
+  const pos = se?.error ? 0 : se.curr.position;
+  const ai = sh?.error ? 0 : sh.aiSessions28;
+  const sess = sh?.error ? 0 : sh.last7.sessions;
+  const appr = f?.error ? 0 : f.approved;
+  const tot = f?.error ? 0 : f.total;
   return {
-    headline: `£${rev.toLocaleString()} in sales this week across all channels`,
-    position: `Total sales were £${rev.toLocaleString()} over the last 7 days, with direct (Shopify) at ${direct}% of revenue. Organic search brought ${clicks} clicks in 28 days and AI assistants drove ${ai} sessions — the direct-and-AI flywheel the strategy is built on, still early.`,
-    nextSteps: ['Publish a restoration/retired-set blog post and deep-link products', 'Add compare-at pricing to show the direct saving', 'Clear the remaining Merchant feed disapprovals', 'Capture emails to convert marketplace buyers to direct'],
-    watch: ['Direct share still low — push the content engine', 'AI-referral trend week over week'],
+    headline: `${clicks} organic clicks in 28 days, avg position ${(pos || 0).toFixed(1)}`,
+    position: `Organic search brought ${clicks} clicks in 28 days at avg position ${(pos || 0).toFixed(1)}; the Shopify site saw ${sess} sessions in 7 days with ${ai} from AI assistants. The Google Merchant feed has ${appr}/${tot} products approved for free listings. The website-and-AI flywheel is early but building.`,
+    nextSteps: ['Publish a retired-set/restoration blog post and deep-link products', 'Clear the remaining Merchant feed disapprovals', 'Add GTIN/MPN to lift Google Shopping impressions', 'Sharpen titles/meta on near-page-1 queries to win clicks'],
+    watch: ['Avg position still page 2 — impressions not converting to clicks', 'AI-referral + organic-shopping trend week over week'],
   };
 }
 

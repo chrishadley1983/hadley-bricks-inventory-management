@@ -47,7 +47,6 @@ function pctDelta(curr: number, prev: number, floor = 0): number | null {
   if (!prev || prev < floor) return null; // base-effect guard: a tiny prior period isn't decision-grade
   return Math.round(((curr - prev) / prev) * 1000) / 10;
 }
-const WEEKLY_REVENUE_TARGET = Math.round(80000 / 52); // £80k/yr FY plan ≈ £1,538/wk
 
 // ── GA4 ────────────────────────────────────────────────────────────────
 async function ga4(jwt: ReturnType<typeof googleJwt>) {
@@ -101,10 +100,13 @@ async function ga4(jwt: ReturnType<typeof googleJwt>) {
 
   return {
     last7, prev7,
-    delta: { sessions: pctDelta(last7.sessions, prev7.sessions, 20), revenue: pctDelta(last7.revenue, prev7.revenue) },
+    delta: { sessions: pctDelta(last7.sessions, prev7.sessions, 20), revenue: pctDelta(last7.revenue, prev7.revenue), conversions: pctDelta(last7.conversions, prev7.conversions) },
     channels, aiSources, topPages, daily,
     aiSessions28: aiSources.reduce((s, x) => s + x.sessions, 0),
     sessions28: channels.reduce((s, x) => s + x.sessions, 0),
+    organicShopping28: channels.find((c) => /organic shopping/i.test(c.name))?.sessions ?? 0,
+    cvr: last7.sessions ? Math.round((last7.conversions / last7.sessions) * 1000) / 10 : 0,
+    aov: last7.conversions ? last7.revenue / last7.conversions : 0,
   };
 }
 
@@ -128,97 +130,16 @@ async function searchConsole(jwt: ReturnType<typeof googleJwt>) {
   const topQueries = (q.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ query: r.keys![0], clicks: r.clicks || 0, impressions: r.impressions || 0, position: Math.round((r.position || 0) * 10) / 10 }));
 
   const p = await sc.searchanalytics.query({ siteUrl: SC_SITE, requestBody: { startDate: start, endDate: end, dimensions: ['page'], rowLimit: 8 } });
-  const topPages = (p.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ page: r.keys![0].replace('https://hadleybricks.co.uk', ''), clicks: r.clicks || 0, impressions: r.impressions || 0 }));
+  const topPages = (p.data.rows || []).sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((r) => ({ page: r.keys![0].replace('https://hadleybricks.co.uk', '').split('?')[0] || '/', clicks: r.clicks || 0, impressions: r.impressions || 0, position: Math.round((r.position || 0) * 10) / 10 }));
 
-  return { curr, prev, delta: { clicks: pctDelta(curr.clicks, prev.clicks), impressions: pctDelta(curr.impressions, prev.impressions) }, topQueries, topPages };
-}
-
-// ── Sales (Supabase inventory_items sold rows) ─────────────────────────
-const PLATFORM_LABEL: Record<string, string> = { amazon: 'Amazon', ebay: 'eBay', bricklink: 'BrickLink', brickowl: 'Brick Owl', shopify: 'Shopify' };
-function platformKey(p: string | null): string {
-  const x = (p || 'unknown').toLowerCase();
-  if (x.includes('amazon')) return 'amazon';
-  if (x.includes('ebay')) return 'ebay';
-  if (x.includes('brickowl') || x === 'bo') return 'brickowl';
-  if (x.includes('bricklink') || x === 'bl') return 'bricklink';
-  if (x.includes('shopify')) return 'shopify';
-  return x;
-}
-async function sales() {
-  const supabase = sb();
-  // pull sold rows for the last 12 weeks
-  const since = ymd(daysAgo(84));
-  const rows: Array<{ sold_date: string | null; sold_platform: string | null; sold_net_amount: number | null; sold_gross_amount: number | null; sold_price: number | null; cost: number | null; set_number: string | null; item_name: string | null }> = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase
-      .from('inventory_items')
-      .select('sold_date, sold_platform, sold_net_amount, sold_gross_amount, sold_price, cost, set_number, item_name')
-      .eq('status', 'SOLD')
-      .gte('sold_date', since)
-      .range(from, from + 999);
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) break;
-    rows.push(...(data as never[]));
-    if (data.length < 1000) break;
-  }
-  const amount = (r: (typeof rows)[number]) => Number(r.sold_gross_amount ?? r.sold_price ?? 0);
-
-  function windowAgg(startDays: number, endDays: number) {
-    const s = ymd(daysAgo(startDays));
-    const e = ymd(daysAgo(endDays));
-    const win = rows.filter((r) => r.sold_date && r.sold_date >= s && r.sold_date < e);
-    const byPlatform: Record<string, { revenue: number; units: number }> = {};
-    let revenue = 0, units = 0, net = 0, cog = 0, netCovered = 0, cogCovered = 0;
-    for (const r of win) {
-      const k = platformKey(r.sold_platform);
-      byPlatform[k] = byPlatform[k] || { revenue: 0, units: 0 };
-      byPlatform[k].revenue += amount(r);
-      byPlatform[k].units += 1;
-      revenue += amount(r);
-      units += 1;
-      if (r.sold_net_amount != null) { net += Number(r.sold_net_amount); netCovered++; }
-      if (r.cost != null) { cog += Number(r.cost); cogCovered++; }
-    }
-    // only surface profit when net + cost are present for ~all units in the window
-    const haveProfit = units > 0 && netCovered / units >= 0.9 && cogCovered / units >= 0.9;
-    const grossProfit = haveProfit ? net - cog : null;
-    const margin = haveProfit && revenue ? Math.round(((grossProfit as number) / revenue) * 1000) / 10 : null;
-    return { revenue, units, aov: units ? revenue / units : 0, byPlatform, net: haveProfit ? Math.round(net) : null, grossProfit: grossProfit != null ? Math.round(grossProfit) : null, margin };
-  }
-  const last7 = windowAgg(7, 0);
-  const prev7 = windowAgg(14, 7);
-
-  // weekly series (12 weeks)
-  const weekly: Array<{ label: string; revenue: number; units: number }> = [];
-  for (let w = 11; w >= 0; w--) {
-    const a = windowAgg((w + 1) * 7, w * 7);
-    weekly.push({ label: `-${w}w`, revenue: Math.round(a.revenue), units: a.units });
-  }
-
-  // top sets (last 28d by revenue)
-  const since28 = ymd(daysAgo(28));
-  const setAgg: Record<string, { name: string; revenue: number; units: number }> = {};
-  for (const r of rows.filter((x) => x.sold_date && x.sold_date >= since28)) {
-    const k = r.set_number || r.item_name || '?';
-    setAgg[k] = setAgg[k] || { name: r.item_name || k, revenue: 0, units: 0 };
-    setAgg[k].revenue += amount(r);
-    setAgg[k].units += 1;
-  }
-  const topSets = Object.entries(setAgg).map(([set, v]) => ({ set, ...v })).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-
-  const directRev = last7.byPlatform.shopify?.revenue || 0;
-  const directShare = last7.revenue ? Math.round((directRev / last7.revenue) * 1000) / 10 : 0;
+  // daily clicks + avg-position series for the ranking trend
+  const ser = await sc.searchanalytics.query({ siteUrl: SC_SITE, requestBody: { startDate: start, endDate: end, dimensions: ['date'] } });
+  const daily = (ser.data.rows || []).map((r) => ({ date: r.keys![0].slice(5).replace('-', '/'), clicks: r.clicks || 0, position: Math.round((r.position || 0) * 10) / 10 }));
 
   return {
-    last7, prev7,
-    delta: { revenue: pctDelta(last7.revenue, prev7.revenue), units: pctDelta(last7.units, prev7.units) },
-    weekly, topSets,
-    directShare,
-    weeklyTarget: WEEKLY_REVENUE_TARGET,
-    pacePct: WEEKLY_REVENUE_TARGET ? Math.round((last7.revenue / WEEKLY_REVENUE_TARGET) * 100) : null,
-    platformLabels: PLATFORM_LABEL,
-    // BrickLink & Brick Owl sales flow through Bricqer and aren't in inventory_items yet.
-    scopeNote: 'Amazon · eBay · Shopify (BrickLink & Brick Owl run via Bricqer — not captured yet)',
+    curr, prev,
+    delta: { clicks: pctDelta(curr.clicks, prev.clicks), impressions: pctDelta(curr.impressions, prev.impressions), position: prev.position ? Math.round((curr.position - prev.position) * 10) / 10 : null },
+    topQueries, topPages, daily,
   };
 }
 
@@ -288,21 +209,15 @@ async function safe<T>(label: string, fn: () => Promise<T>): Promise<T | { error
 
 export async function buildDashboardData(generatedAtIso: string) {
   const jwt = googleJwt();
-  const [traffic, seo, sale, feed, inv] = await Promise.all([
+  const [shopify, search, feed, store] = await Promise.all([
     safe('ga4', () => ga4(jwt)),
     safe('searchConsole', () => searchConsole(jwt)),
-    safe('sales', () => sales()),
     safe('feedHealth', () => feedHealth(jwt)),
     safe('inventory', () => inventory()),
   ]);
-  return {
-    generatedAt: generatedAtIso,
-    traffic,
-    seo,
-    sales: sale,
-    feed,
-    inventory: inv,
-  };
+  // Website / Shopify / SEO focus: shopify=GA4 site analytics, search=Search Console
+  // ranking, feed=Google Merchant/Shopping, store=live listings.
+  return { generatedAt: generatedAtIso, search, shopify, feed, store };
 }
 
 export type DashboardData = Awaited<ReturnType<typeof buildDashboardData>>;
