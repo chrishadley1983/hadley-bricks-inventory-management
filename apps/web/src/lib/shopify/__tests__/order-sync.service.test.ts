@@ -36,7 +36,11 @@ function selfThenable(result: any) {
 }
 
 function createSupabase(cfg: Record<string, any>) {
-  const captured: { updates: any[]; upserts: any[] } = { updates: [], upserts: [] };
+  const captured: { updates: any[]; upserts: any[]; inserts: any[] } = {
+    updates: [],
+    upserts: [],
+    inserts: [],
+  };
   const sb: any = {
     from: (table: string) => ({
       select: () => selfThenable(cfg[`${table}:select`] ?? { data: [], error: null }),
@@ -48,7 +52,10 @@ function createSupabase(cfg: Record<string, any>) {
         captured.upserts.push({ table, payload, opts });
         return selfThenable(cfg[`${table}:upsert`] ?? { error: null });
       },
-      insert: () => selfThenable(cfg[`${table}:insert`] ?? { error: null }),
+      insert: (payload: any) => {
+        captured.inserts.push({ table, payload });
+        return selfThenable(cfg[`${table}:insert`] ?? { error: null });
+      },
       delete: () => selfThenable(cfg[`${table}:delete`] ?? { error: null }),
     }),
   };
@@ -259,5 +266,74 @@ describe('ShopifyOrderSyncService.syncOrders', () => {
     expect(res.itemsMarkedSold).toBe(2);
     expect(res.shopifyProductsArchived).toBe(0); // no mapping for either
     expect(mocks.archiveShopifyOnSold).toHaveBeenCalledTimes(2);
+  });
+
+  it('queues Bricqer + eBay removals when a minifig-sync item sells on Shopify', async () => {
+    mocks.getOrders.mockResolvedValue([
+      makeOrder({
+        id: 8261381292298,
+        name: '#1003',
+        total_shipping_price_set: { shop_money: { amount: '3.99' } },
+        line_items: [
+          { id: 1, sku: 'HB-MF-24893-U-309-1', quantity: 1, price: '4.49', title: 'LEGO Superman sh0300' },
+        ],
+      }),
+    ]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv-mf', sku: 'HB-MF-24893-U-309-1', created_at: '2026-01-01', storage_location: 'U-309-1' }],
+        error: null,
+      },
+      'shopify_products:select': { data: null, error: null },
+      // It IS a minifig-sync item, with a Bricqer presence + an eBay offer.
+      'minifig_sync_items:select': {
+        data: { id: 'sync1', bricqer_item_id: '24893', ebay_offer_id: '994958325016', ebay_listing_id: '177913124242' },
+        error: null,
+      },
+      // No removal already queued for this sale.
+      'minifig_removal_queue:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    expect(res.itemsMarkedSold).toBe(1);
+    expect(res.minifigRemovalsQueued).toBe(2);
+
+    const queued = supabase._captured.inserts.filter((i: any) => i.table === 'minifig_removal_queue');
+    expect(queued).toHaveLength(2);
+    expect(queued.every((q: any) => q.payload.sold_on === 'SHOPIFY')).toBe(true);
+    expect(queued.every((q: any) => q.payload.status === 'PENDING')).toBe(true);
+    expect(queued.every((q: any) => q.payload.minifig_sync_id === 'sync1')).toBe(true);
+    expect(queued.every((q: any) => q.payload.order_id === '8261381292298')).toBe(true);
+    expect(new Set(queued.map((q: any) => q.payload.remove_from))).toEqual(new Set(['BRICQER', 'EBAY']));
+
+    // sync row marked sold so it isn't re-counted as live before the cron runs
+    const syncUpdate = supabase._captured.updates.find(
+      (uu: any) => uu.table === 'minifig_sync_items' && uu.payload.listing_status === 'SOLD_SHOPIFY'
+    );
+    expect(syncUpdate).toBeTruthy();
+  });
+
+  it('does not queue minifig removals for a normal (non-minifig) set sale', async () => {
+    mocks.getOrders.mockResolvedValue([makeOrder()]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv1', sku: 'N1', created_at: '2026-01-01', storage_location: 'Garage - A' }],
+        error: null,
+      },
+      'shopify_products:select': { data: { id: 'map1' }, error: null },
+      // No minifig_sync_items row matches the SKU.
+      'minifig_sync_items:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    expect(res.itemsMarkedSold).toBe(1);
+    expect(res.minifigRemovalsQueued).toBe(0);
+    expect(supabase._captured.inserts.filter((i: any) => i.table === 'minifig_removal_queue')).toHaveLength(0);
   });
 });

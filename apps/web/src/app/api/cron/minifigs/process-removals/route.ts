@@ -128,7 +128,12 @@ export async function POST(request: NextRequest) {
 
         // Update sync item final status
         if (syncItem) {
-          const finalStatus = removal.sold_on === 'EBAY' ? 'SOLD_EBAY' : 'SOLD_BRICQER';
+          const finalStatus =
+            removal.sold_on === 'EBAY'
+              ? 'SOLD_EBAY'
+              : removal.sold_on === 'SHOPIFY'
+                ? 'SOLD_SHOPIFY'
+                : 'SOLD_BRICQER';
           await supabase
             .from('minifig_sync_items')
             .update({ listing_status: finalStatus, updated_at: now })
