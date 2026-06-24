@@ -155,17 +155,17 @@ function render(app){
   // header
   app.appendChild(el(`<header class="top">
     <div class="wordmark"><div class="brick"><i style="background:#F2B705"></i><i style="background:#DC5B2A"></i><i style="background:#2E9E5B"></i></div>
-      <div><b class="serif">Hadley Bricks</b><span>Business Dashboard</span></div></div>
-    <div class="meta"><b>Week to ${new Date(d.generatedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</b>Auto-refreshes weekly · all channels</div>
+      <div><b class="serif">Hadley Bricks</b><span>Website &amp; SEO</span></div></div>
+    <div class="meta"><b>Week to ${new Date(d.generatedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</b>Auto-refreshes weekly · hadleybricks.co.uk</div>
   </header>`));
 
   renderPosition(app,d);
-  renderSales(app,d.sales);
-  renderTraffic(app,d.traffic);
-  renderSearch(app,d.seo);
-  renderFeedInv(app,d.feed,d.inventory);
+  renderRanking(app,d.search);
+  renderShopping(app,d.feed,d.shopify);
+  renderShopify(app,d.shopify);
+  renderStore(app,d.store);
 
-  app.appendChild(el(`<footer><span>Hadley Bricks · generated ${new Date(d.generatedAt).toLocaleString("en-GB")}</span><span>Sources: GA4 · Search Console · Google Merchant · Supabase</span></footer>`));
+  app.appendChild(el(`<footer><span>Hadley Bricks · generated ${new Date(d.generatedAt).toLocaleString("en-GB")}</span><span>Sources: Search Console · Google Merchant · GA4</span></footer>`));
   setTimeout(initCharts,30);
 }
 
@@ -173,8 +173,7 @@ function kpi(l,v,d){ return `<div class="kpi"><div class="l">${l}</div><div><spa
 
 function renderPosition(app,d){
   const s=d.summary||{};
-  const sa=d.sales&&!d.sales.error?d.sales:null, tr=d.traffic&&!d.traffic.error?d.traffic:null, se=d.seo&&!d.seo.error?d.seo:null;
-  const conv = (sa&&tr&&tr.last7.sessions)? Math.round((sa.last7.units/tr.last7.sessions)*1000)/10 : null;
+  const sh=d.shopify&&!d.shopify.error?d.shopify:null, se=d.search&&!d.search.error?d.search:null, fe=d.feed&&!d.feed.error?d.feed:null;
   let steps = (s.nextSteps||[]).map(x=>`<li>${x}</li>`).join("");
   let watch = (s.watch||[]).map(x=>`<li>${x}</li>`).join("");
   const sec=el(`<section><div class="eyebrow">Position &amp; Next Steps</div>
@@ -187,61 +186,56 @@ function renderPosition(app,d){
         <div class="ai-flag">✦ Written by a local Claude session</div>
       </div>
       <div class="kpi-stack">
-        ${kpi("Revenue (7d, all)", sa?money(sa.last7.revenue):"—", sa?sa.delta.revenue:undefined)}
-        ${kpi("Direct share", sa?sa.directShare+"%":"—")}
-        ${kpi("Sessions (7d)", tr?intf(tr.last7.sessions):"—", tr?tr.delta.sessions:undefined)}
-        ${kpi("AI-assistant (28d)", tr?intf(tr.aiSessions28):"—")}
-        ${kpi("Search clicks (28d)", se?intf(se.curr.clicks):"—", se?se.delta.clicks:undefined)}
+        ${kpi("Organic clicks (28d)", se?intf(se.curr.clicks):"—", se?se.delta.clicks:undefined)}
+        ${kpi("Avg position", se?se.curr.position.toFixed(1):"—")}
+        ${kpi("AI assistants (28d)", sh?intf(sh.aiSessions28):"—")}
+        ${kpi("Shopify sessions (7d)", sh?intf(sh.last7.sessions):"—", sh?sh.delta.sessions:undefined)}
+        ${kpi("Feed approved", fe?fe.approved+"/"+fe.total:"—")}
       </div>
     </div></section>`);
   app.appendChild(sec);
 }
 
-function renderSales(app,sa){
-  const sec=el(`<section><div class="eyebrow">Sales</div></section>`);
-  if(!sa||sa.error){ sec.appendChild(el(`<div class="card na">Sales data unavailable.</div>`)); app.appendChild(sec); return; }
-  const plats=Object.entries(sa.last7.byPlatform).sort((a,b)=>b[1].revenue-a[1].revenue);
-  const maxR=Math.max(...plats.map(p=>p[1].revenue),1);
-  const lbl=sa.platformLabels||{};
-  const pace=sa.pacePct, paceCls=pace>=90?'up':pace>=60?'flat':'down';
-  const net=sa.last7.net, margin=sa.last7.margin;
+function renderRanking(app,se){
+  const sec=el(`<section><div class="eyebrow">Search Ranking — organic · hadleybricks.co.uk</div></section>`);
+  if(!se||se.error){ sec.appendChild(el(`<div class="card na">Search Console data unavailable.</div>`)); app.appendChild(sec); return; }
+  const pd=se.delta.position; // negative = improved (lower position number)
+  const posCls=pd==null?'flat':pd<0?'up':pd>0?'down':'flat';
+  const posTxt=pd==null?'—':(pd<0?'▲ '+Math.abs(pd):pd>0?'▼ '+pd:'flat');
   sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
-    <div class="card tile"><div class="l">Revenue · 7d</div><div class="v">${money(sa.last7.revenue)}</div><div class="sub">${deltaSpan(sa.delta.revenue)} WoW · <span class="${paceCls}">${pace}% of £${intf(sa.weeklyTarget)} pace</span></div></div>
-    <div class="card tile"><div class="l">Net · 7d</div><div class="v">${net!=null?money(net):'—'}</div><div class="sub">${margin!=null?'<b>'+margin+'%</b> margin · after fees+cost':'net unavailable'}</div></div>
-    <div class="card tile"><div class="l">Units · 7d</div><div class="v">${intf(sa.last7.units)}</div><div class="sub">${deltaSpan(sa.delta.units)} vs prior</div></div>
-    <div class="card tile"><div class="l">Avg order</div><div class="v">${money(sa.last7.aov)}</div><div class="sub">per sale</div></div>
+    <div class="card tile"><div class="l">Clicks · 28d</div><div class="v">${intf(se.curr.clicks)}</div><div class="sub">${deltaSpan(se.delta.clicks)} vs prior</div></div>
+    <div class="card tile"><div class="l">Impressions · 28d</div><div class="v">${intf(se.curr.impressions)}</div><div class="sub">${deltaSpan(se.delta.impressions)} vs prior</div></div>
+    <div class="card tile"><div class="l">CTR</div><div class="v">${(se.curr.ctr*100).toFixed(1)}%</div><div class="sub">click-through</div></div>
+    <div class="card tile"><div class="l">Avg position</div><div class="v">${se.curr.position.toFixed(1)}</div><div class="sub"><span class="${posCls}">${posTxt}</span> · lower is better</div></div>
   </div>`));
+  sec.appendChild(el(`<div class="card" style="margin-bottom:14px"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Clicks &amp; avg position · 28d</div><div class="chart-wrap"><canvas id="cRank"></canvas></div></div>`));
   sec.appendChild(el(`<div class="grid g2">
-    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">12-week revenue trend</div><div class="chart-wrap"><canvas id="cSalesTrend"></canvas></div></div>
-    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">By platform · 7d</div>
-      ${plats.map((p,i)=>`<div class="bar-row"><div class="name">${lbl[p[0]]||p[0]}</div><div class="track"><div class="fill" style="width:${Math.max(0.8,p[1].revenue/maxR*100)}%;background:${PAL[i%PAL.length]}"></div></div><div class="val">${money(p[1].revenue)}</div></div>`).join("")||'<div class="na">No sales in window</div>'}
-      ${sa.scopeNote?`<div style="font-size:11px;color:var(--muted);margin-top:11px;line-height:1.4">${sa.scopeNote}</div>`:""}
-    </div></div>`));
-  if(sa.topSets&&sa.topSets.length){
-    sec.appendChild(el(`<div class="card" style="margin-top:14px"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top sets · 28d</div>
-      <table><thead><tr><th>Set</th><th>Item</th><th class="r">Units</th><th class="r">Revenue</th></tr></thead><tbody>
-      ${sa.topSets.map(s=>`<tr><td><b>${s.set}</b></td><td style="color:var(--ink2)">${(s.name||"").slice(0,42)}</td><td class="r">${s.units}</td><td class="r">${money(s.revenue)}</td></tr>`).join("")}
-      </tbody></table></div>`));
-  }
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top queries · 28d</div>
+      <table><thead><tr><th>Query</th><th class="r">Clicks</th><th class="r">Impr</th><th class="r">Pos</th></tr></thead><tbody>
+      ${se.topQueries.map(q=>`<tr><td>${q.query}</td><td class="r">${q.clicks}</td><td class="r">${intf(q.impressions)}</td><td class="r">${q.position}</td></tr>`).join("")}</tbody></table></div>
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top pages · 28d</div>
+      <table><thead><tr><th>Page</th><th class="r">Clicks</th><th class="r">Pos</th></tr></thead><tbody>
+      ${se.topPages.map(p=>`<tr><td>${p.page||"/"}</td><td class="r">${p.clicks}</td><td class="r">${p.position}</td></tr>`).join("")}</tbody></table></div>
+  </div>`));
   app.appendChild(sec);
-  window._charts=window._charts||[]; window._charts.push(["cSalesTrend",()=>({type:"line",data:{labels:sa.weekly.map(w=>w.label),datasets:[
-    {data:sa.weekly.map(w=>w.revenue),borderColor:"#DC5B2A",backgroundColor:"rgba(220,91,42,.12)",fill:true,tension:.15,pointRadius:2,borderWidth:2.5},
-    {data:sa.weekly.map(()=>sa.weeklyTarget),borderColor:"rgba(19,36,59,.4)",borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false,label:"target"}
-  ]},options:lineOpts("£")})]);
+  window._charts=window._charts||[]; window._charts.push(["cRank",()=>({type:"line",data:{labels:se.daily.map(x=>x.date),datasets:[
+    {label:"Clicks",data:se.daily.map(x=>x.clicks),borderColor:"#13243B",backgroundColor:"rgba(19,36,59,.10)",fill:true,tension:.12,pointRadius:0,borderWidth:2.5,yAxisID:"y"},
+    {label:"Avg position",data:se.daily.map(x=>x.position),borderColor:"#DC5B2A",tension:.12,pointRadius:0,borderWidth:1.8,fill:false,yAxisID:"yp"}
+  ]},options:rankOpts()})]);
 }
 
-function renderTraffic(app,tr){
-  const sec=el(`<section><div class="eyebrow">Traffic &amp; AI Visibility</div></section>`);
-  if(!tr||tr.error){ sec.appendChild(el(`<div class="card na">Traffic data unavailable.</div>`)); app.appendChild(sec); return; }
+function renderShopify(app,tr){
+  const sec=el(`<section><div class="eyebrow">Shopify website &amp; AI visibility</div></section>`);
+  if(!tr||tr.error){ sec.appendChild(el(`<div class="card na">Site analytics unavailable.</div>`)); app.appendChild(sec); return; }
   const maxC=Math.max(...tr.channels.map(c=>c.sessions),1);
   sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
     <div class="card tile"><div class="l">Sessions · 7d</div><div class="v">${intf(tr.last7.sessions)}</div><div class="sub">${deltaSpan(tr.delta.sessions)} vs prior</div></div>
-    <div class="card tile"><div class="l">Users · 7d</div><div class="v">${intf(tr.last7.users)}</div><div class="sub">unique visitors</div></div>
     <div class="card tile"><div class="l">AI assistants · 28d</div><div class="v" style="color:var(--orange)">${intf(tr.aiSessions28)}</div><div class="sub">${tr.sessions28?Math.round(tr.aiSessions28/tr.sessions28*100):0}% of sessions · GEO</div></div>
-    <div class="card tile"><div class="l">Conversions · 7d</div><div class="v">${intf(tr.last7.conversions)}</div><div class="sub">${tr.last7.sessions?(tr.last7.conversions/tr.last7.sessions*100).toFixed(1):0}% on-site conv</div></div>
+    <div class="card tile"><div class="l">Direct sales · 7d</div><div class="v">${money1(tr.last7.revenue)}</div><div class="sub">${intf(tr.last7.conversions)} orders · ${tr.cvr}% conv</div></div>
+    <div class="card tile"><div class="l">Avg order</div><div class="v">${tr.last7.conversions?money(tr.aov):'—'}</div><div class="sub">Shopify direct</div></div>
   </div>`));
   sec.appendChild(el(`<div class="grid g2">
-    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Daily sessions</div><div class="chart-wrap"><canvas id="cSessions"></canvas></div></div>
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Daily sessions · 6w</div><div class="chart-wrap"><canvas id="cSessions"></canvas></div></div>
     <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Channel mix · 28d</div>
       ${tr.channels.map((c,i)=>`<div class="bar-row"><div class="name">${CHLBL[c.name]||c.name}</div><div class="track"><div class="fill" style="width:${Math.max(0.8,c.sessions/maxC*100)}%;background:${c.name.includes('AI')?'#DC5B2A':BARPAL[i%BARPAL.length]}"></div></div><div class="val">${c.sessions}</div></div>`).join("")}
     </div></div>`));
@@ -251,53 +245,46 @@ function renderTraffic(app,tr){
       ${tr.topPages.map(p=>`<tr><td>${p.page||"/"}</td><td class="r">${p.sessions}</td></tr>`).join("")}</tbody></table></div>`));
   }
   app.appendChild(sec);
-  window._charts.push(["cSessions",()=>({type:"line",data:{labels:tr.daily.map(x=>x.date),datasets:[{data:tr.daily.map(x=>x.sessions),borderColor:"#13243B",backgroundColor:"rgba(19,36,59,.10)",fill:true,tension:.12,pointRadius:2,borderWidth:2.5}]},options:lineOpts("")})]);
+  window._charts=window._charts||[]; window._charts.push(["cSessions",()=>({type:"line",data:{labels:tr.daily.map(x=>x.date),datasets:[{data:tr.daily.map(x=>x.sessions),borderColor:"#13243B",backgroundColor:"rgba(19,36,59,.10)",fill:true,tension:.12,pointRadius:2,borderWidth:2.5}]},options:lineOpts("")})]);
 }
 
-function renderSearch(app,se){
-  const sec=el(`<section><div class="eyebrow">Search Console — organic</div></section>`);
-  if(!se||se.error){ sec.appendChild(el(`<div class="card na">Search Console data unavailable.</div>`)); app.appendChild(sec); return; }
-  sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
-    <div class="card tile"><div class="l">Clicks · 28d</div><div class="v">${intf(se.curr.clicks)}</div><div class="sub">${deltaSpan(se.delta.clicks)} vs prior</div></div>
-    <div class="card tile"><div class="l">Impressions · 28d</div><div class="v">${intf(se.curr.impressions)}</div><div class="sub">${deltaSpan(se.delta.impressions)} vs prior</div></div>
-    <div class="card tile"><div class="l">CTR</div><div class="v">${(se.curr.ctr*100).toFixed(1)}%</div><div class="sub">click-through</div></div>
-    <div class="card tile"><div class="l">Avg position</div><div class="v">${se.curr.position.toFixed(1)}</div><div class="sub">lower is better</div></div>
-  </div>`));
-  sec.appendChild(el(`<div class="grid g2">
-    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top queries · 28d</div>
-      <table><thead><tr><th>Query</th><th class="r">Clicks</th><th class="r">Pos</th></tr></thead><tbody>
-      ${se.topQueries.map(q=>`<tr><td>${q.query}</td><td class="r">${q.clicks}</td><td class="r">${q.position}</td></tr>`).join("")}</tbody></table></div>
-    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top pages · 28d</div>
-      <table><thead><tr><th>Page</th><th class="r">Clicks</th><th class="r">Impr</th></tr></thead><tbody>
-      ${se.topPages.map(p=>`<tr><td>${p.page||"/"}</td><td class="r">${p.clicks}</td><td class="r">${intf(p.impressions)}</td></tr>`).join("")}</tbody></table></div>
-  </div>`));
-  app.appendChild(sec);
-}
-
-function renderFeedInv(app,feed,inv){
-  const sec=el(`<section><div class="eyebrow">Google Shopping feed &amp; inventory</div></section>`);
+function renderShopping(app,feed,sh){
+  const sec=el(`<section><div class="eyebrow">Google Shopping</div></section>`);
   const grid=el(`<div class="grid g2" style="align-items:start"></div>`);
-  // feed
   if(feed&&!feed.error){
     const rate=feed.total?Math.round(feed.approved/feed.total*100):0;
     const chip=feed.disapproved>20?"bad":feed.disapproved>0?"warn":"ok";
-    grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Merchant feed health</div>
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span class="v serif" style="font-size:32px;font-weight:600">${feed.approved}</span><span style="color:var(--muted)">/ ${feed.total} approved (${rate}%)</span></div>
+    grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Merchant feed — free listings</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span class="v serif" style="font-size:32px;font-weight:600;font-variant-numeric:tabular-nums">${feed.approved}</span><span style="color:var(--muted)">/ ${feed.total} approved (${rate}%)</span></div>
       <div style="margin:10px 0"><span class="chip ${chip}">${feed.disapproved} disapproved</span></div>
       ${feed.topIssues&&feed.topIssues.length?`<table style="margin-top:6px"><tbody>${feed.topIssues.map(i=>`<tr><td>${i.desc}</td><td class="r">${i.count}</td></tr>`).join("")}</tbody></table>`:'<div class="na">No product disapprovals 🎉</div>'}
     </div>`));
   } else grid.appendChild(el(`<div class="card na">Feed data unavailable.</div>`));
-  // inventory
-  if(inv&&!inv.error){
-    grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Live inventory</div>
-      <div class="grid g2" style="gap:12px">
-        <div><div class="tile" style="padding:0"><div class="l">Listed items</div><div class="v">${intf(inv.listed)}</div></div></div>
-        <div><div class="tile" style="padding:0"><div class="l">Listing value</div><div class="v">${money(inv.listingValue)}</div><div class="sub">≈ ${inv.listed?money(inv.listingValue/inv.listed):'—'} / item</div></div></div>
-      </div></div>`));
-  } else grid.appendChild(el(`<div class="card na">Inventory data unavailable.</div>`));
+  const os=sh&&!sh.error?sh.organicShopping28:null;
+  grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Shopping traffic &amp; next</div>
+    <div class="tile" style="padding:0;margin-bottom:14px"><div class="l">Organic Shopping sessions · 28d</div><div class="v">${os!=null?intf(os):'—'}</div><div class="sub">free Google Shopping surface</div></div>
+    <div style="font-size:13px;color:var(--ink2);line-height:1.55">Feed is live on free listings. Shopping <b>ads</b> need a Google Ads link; adding GTIN/MPN coverage and clearing the disapprovals lifts Shopping impressions.</div>
+  </div>`));
   sec.appendChild(grid); app.appendChild(sec);
 }
 
+function renderStore(app,store){
+  const sec=el(`<section><div class="eyebrow">Store</div></section>`);
+  if(!store||store.error){ sec.appendChild(el(`<div class="card na">Inventory unavailable.</div>`)); app.appendChild(sec); return; }
+  sec.appendChild(el(`<div class="card"><div class="grid g3" style="gap:14px">
+    <div class="tile" style="padding:0"><div class="l">Listed items</div><div class="v">${intf(store.listed)}</div></div>
+    <div class="tile" style="padding:0"><div class="l">Listing value</div><div class="v">${money(store.listingValue)}</div></div>
+    <div class="tile" style="padding:0"><div class="l">Avg / item</div><div class="v">${store.listed?money(store.listingValue/store.listed):'—'}</div></div>
+  </div></div>`));
+  app.appendChild(sec);
+}
+
+function rankOpts(){
+  return {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{boxWidth:10,font:{size:11},color:"#6b6457"}}},
+    scales:{x:{grid:{display:false},ticks:{color:"#6b6457",font:{size:11},maxRotation:0,autoSkip:true,maxTicksLimit:8}},
+      y:{beginAtZero:true,position:"left",grid:{color:"#EDE3CE"},ticks:{color:"#6b6457",font:{size:11}},title:{display:true,text:"Clicks",color:"#6b6457",font:{size:10}}},
+      yp:{reverse:true,position:"right",grid:{display:false},ticks:{color:"#DC5B2A",font:{size:11}},title:{display:true,text:"Avg position",color:"#DC5B2A",font:{size:10}}}}};
+}
 function lineOpts(prefix){
   return {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>prefix+(prefix==="£"?Math.round(c.parsed.y).toLocaleString():c.parsed.y)}}},
     scales:{x:{grid:{display:false},ticks:{color:"#6b6457",font:{size:11},maxRotation:0,autoSkip:true,maxTicksLimit:8}},
