@@ -58,7 +58,9 @@ export async function POST(request: NextRequest) {
     // Initialise platform adapters
     let ebayAdapter: EbayApiAdapter | null = null;
     let bricqerClient: BricqerClient | null = null;
-    const needsEbay = removals.some((r) => r.remove_from === 'EBAY');
+    // Shopify-origin rows (remove_from='BRICQER') also need eBay torn down as a
+    // safety net for the Shopify sync's inline end, so they require the adapter too.
+    const needsEbay = removals.some((r) => r.remove_from === 'EBAY' || r.sold_on === 'SHOPIFY');
     const needsBricqer = removals.some((r) => r.remove_from === 'BRICQER');
 
     if (needsEbay) {
@@ -116,6 +118,25 @@ export async function POST(request: NextRequest) {
             await bricqerClient.reduceInventoryQuantity(Number(syncItem.bricqer_item_id), 1);
           } catch {
             // Already removed or sold through
+          }
+        }
+
+        // Shopify-origin minifig sales need the eBay listing ended too (it isn't
+        // in platform_listings, so no other reconcile covers it). The Shopify
+        // order sync ends it inline at sale time; repeat it here as a retried
+        // safety net in case that single inline attempt failed. Idempotent.
+        if (removal.sold_on === 'SHOPIFY' && syncItem?.ebay_offer_id && ebayAdapter) {
+          try {
+            await ebayAdapter.withdrawOffer(syncItem.ebay_offer_id as string);
+          } catch {
+            // Already withdrawn / ended
+          }
+          if (syncItem.ebay_sku) {
+            try {
+              await ebayAdapter.deleteInventoryItem(syncItem.ebay_sku as string);
+            } catch {
+              // Already deleted
+            }
           }
         }
 
