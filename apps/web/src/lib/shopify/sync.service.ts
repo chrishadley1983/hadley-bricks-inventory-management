@@ -1143,6 +1143,124 @@ export class ShopifySyncService {
   }
 
   /**
+   * Reconcile IMAGES for eBay-listed products stuck on generic art.
+   *
+   * resolveImages() runs once at create. An item that became eBay-listed AFTER
+   * its Shopify product was created — or whose eBay photo fetch transiently
+   * failed at create — gets frozen on Brickset box art instead of the real eBay
+   * item photos (the same create-only gap as prices). For a used-goods store
+   * that's a trust/conversion problem: a buyer must see the ACTUAL item, not
+   * stock box art. This sweep re-resolves eBay-listed products currently on a
+   * non-eBay image source and, when fresh eBay photos are available, replaces
+   * the product gallery (REST product PUT with `images` swaps the whole set).
+   *
+   * Minifigures are intentionally skipped — resolveImages routes eBay minifigs
+   * to BrickLink catalog art by design (a clean catalog image beats a phone
+   * snap), so re-resolving them would only churn back to the same source.
+   * Never downgrades: only acts when it genuinely obtains eBay photos.
+   */
+  async reconcileImages(limit = 200): Promise<{
+    checked: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    errors: Array<{ item_id: string; error: string }>;
+  }> {
+    const client = await this.getClient();
+    const out = {
+      checked: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as Array<{ item_id: string; error: string }>,
+    };
+
+    // Gather all candidates first (read-only) — the update mutates image_source,
+    // which is part of the filter, so offset paging while writing would skip rows.
+    type Cand = {
+      shopify_product_id: string | null;
+      shopify_title: string | null;
+      inventory_items: {
+        id: string;
+        set_number: string | null;
+        item_name: string | null;
+        ebay_listing_id: string | null;
+        listing_platform: string | null;
+      };
+    };
+    const candidates: Cand[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: rows, error } = await this.supabase
+        .from('shopify_products')
+        .select(
+          'shopify_product_id, shopify_title, image_source, inventory_items!inner(id, set_number, item_name, ebay_listing_id, listing_platform, status)'
+        )
+        .eq('user_id', this.userId)
+        .eq('shopify_status', 'active')
+        .eq('inventory_items.status', 'LISTED')
+        .eq('inventory_items.listing_platform', 'ebay')
+        .neq('image_source', 'ebay')
+        .not('inventory_items.ebay_listing_id', 'is', null)
+        .range(from, from + 999);
+      if (error || !rows || rows.length === 0) break;
+      candidates.push(...(rows as unknown as Cand[]));
+      if (rows.length < 1000) break;
+    }
+
+    for (const row of candidates) {
+      const inv = row.inventory_items;
+      if (!inv?.ebay_listing_id || !row.shopify_product_id) continue;
+      // Minifigs are routed to BrickLink catalog art by design — skip.
+      if (isMinifigure(inv)) continue;
+      out.checked++;
+      if (out.updated >= limit) break;
+
+      // Fetch fresh eBay photos and re-resolve.
+      const ebayListing = await fetchEbayListing(inv.ebay_listing_id);
+      const imageResult = await resolveImages(
+        this.supabase,
+        {
+          id: inv.id,
+          set_number: inv.set_number,
+          item_name: inv.item_name,
+          ebay_listing_id: inv.ebay_listing_id,
+          listing_platform: inv.listing_platform,
+        },
+        ebayListing
+      );
+
+      // Only act when we genuinely obtained eBay photos — never downgrade to box art.
+      if (imageResult.source !== 'ebay' || imageResult.urls.length === 0) {
+        out.skipped++;
+        continue;
+      }
+
+      try {
+        const imagesWithAlt = addImageAltText(
+          imageResult.images,
+          row.shopify_title ?? inv.item_name ?? 'LEGO',
+          inv.set_number
+        );
+        await client.updateProduct(String(row.shopify_product_id), { images: imagesWithAlt });
+        await this.supabase
+          .from('shopify_products')
+          .update({
+            image_source: imageResult.source,
+            image_urls: imageResult.urls,
+            last_synced_at: new Date().toISOString(),
+            sync_status: 'synced',
+          })
+          .eq('inventory_item_id', inv.id);
+        out.updated++;
+      } catch (err) {
+        out.failed++;
+        out.errors.push({ item_id: inv.id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Reconcile ARCHIVE drift: products whose every backing inventory item is non-LISTED
    * (all sold/removed) but are STILL ACTIVE on live Shopify — re-archive them and alert.
    *
@@ -1602,6 +1720,20 @@ export class ShopifySyncService {
     } catch (err) {
       summary.errors.push({
         item_id: 'reconcilePrices',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // Backfill real eBay photos onto eBay-listed products stuck on generic box
+    // art (same create-only gap as prices — images are resolved once at create).
+    try {
+      const reimaged = await this.reconcileImages();
+      summary.items_updated += reimaged.updated;
+      summary.items_failed += reimaged.failed;
+      for (const e of reimaged.errors) summary.errors.push(e);
+    } catch (err) {
+      summary.errors.push({
+        item_id: 'reconcileImages',
         error: err instanceof Error ? err.message : String(err),
       });
     }
