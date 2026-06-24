@@ -199,6 +199,8 @@ export interface ShopifyOrderSyncResult {
   itemsMarkedSold: number;
   ebayListingsEnded: number;
   shopifyProductsArchived: number;
+  /** Cross-channel removals queued for Bricqer-managed (minifig-sync) items. */
+  minifigRemovalsQueued: number;
   unmatchedLineItems: number;
   /** Lines where fewer LISTED units existed than were ordered (oversell). */
   oversoldLineItems: number;

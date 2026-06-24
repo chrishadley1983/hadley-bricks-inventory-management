@@ -87,6 +87,7 @@ export class ShopifyOrderSyncService {
       itemsMarkedSold: 0,
       ebayListingsEnded: 0,
       shopifyProductsArchived: 0,
+      minifigRemovalsQueued: 0,
       unmatchedLineItems: 0,
       oversoldLineItems: 0,
       errors: [],
@@ -159,11 +160,16 @@ export class ShopifyOrderSyncService {
     result.success = result.errors.length === 0;
     result.completedAt = new Date().toISOString();
 
-    if (result.itemsMarkedSold > 0 || result.ebayListingsEnded > 0 || result.oversoldLineItems > 0) {
+    if (
+      result.itemsMarkedSold > 0 ||
+      result.ebayListingsEnded > 0 ||
+      result.minifigRemovalsQueued > 0 ||
+      result.oversoldLineItems > 0
+    ) {
       discordService
         .sendSyncStatus({
           title: result.oversoldLineItems > 0 ? '⚠️ Shopify Sales Synced (oversell!)' : '🛒 Shopify Sales Synced',
-          message: `${result.itemsMarkedSold} item(s) marked sold on Shopify; ${result.ebayListingsEnded} eBay listing(s) ended; ${result.shopifyProductsArchived} Shopify product(s) archived.${result.unmatchedLineItems ? ` ${result.unmatchedLineItems} line item(s) unmatched.` : ''}${result.oversoldLineItems ? ` ${result.oversoldLineItems} OVERSELL line(s) — ordered more than LISTED.` : ''}`,
+          message: `${result.itemsMarkedSold} item(s) marked sold on Shopify; ${result.ebayListingsEnded} eBay listing(s) ended; ${result.shopifyProductsArchived} Shopify product(s) archived.${result.minifigRemovalsQueued ? ` ${result.minifigRemovalsQueued} Bricqer/eBay minifig removal(s) queued.` : ''}${result.unmatchedLineItems ? ` ${result.unmatchedLineItems} line item(s) unmatched.` : ''}${result.oversoldLineItems ? ` ${result.oversoldLineItems} OVERSELL line(s) — ordered more than LISTED.` : ''}`,
           success: result.success,
         })
         .catch(() => {});
@@ -270,8 +276,103 @@ export class ShopifyOrderSyncService {
             error: err instanceof Error ? err.message : String(err),
           });
         }
+
+        // Bricqer-managed (minifig-sync) items don't live in `platform_listings`
+        // — their eBay listing is on `inventory_items.ebay_listing_id` only, and
+        // Bricqer still lists them on BrickLink + BrickOwl. The eBay de-list above
+        // can't see them and nothing touches Bricqer, so a Shopify sale would
+        // leave the same physical minifig buyable on BL/BO/eBay. Queue the
+        // cross-channel teardown for the minifig process-removals executor.
+        try {
+          const queued = await this.enqueueMinifigRemoval(item, lineItem, order);
+          result.minifigRemovalsQueued += queued;
+        } catch (err) {
+          result.errors.push({
+            context: `minifig removal ${item.sku ?? item.id}`,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
+  }
+
+  /**
+   * If the sold item is a "Minifig Sync" item (eBay listing held on
+   * `inventory_items.ebay_listing_id` / `minifig_sync_items`, plus a live Bricqer
+   * presence on BrickLink + BrickOwl), queue EBAY + BRICQER removals for the
+   * `/api/cron/minifigs/process-removals` executor — the same tested path used
+   * for eBay- and Bricqer-origin minifig sales. The executor withdraws the eBay
+   * offer and reduces Bricqer quantity (Bricqer then de-lists BL+BO).
+   *
+   * Returns the number of removal rows queued (0 for non-minifig items).
+   *
+   * Idempotent: the per-item loop only reaches here while the item is LISTED
+   * (`markItemSold` flips it to SOLD under a LISTED guard), so each sale enqueues
+   * once; a belt-and-braces existence check also skips rows already queued for
+   * this (sync item, order, channel).
+   */
+  private async enqueueMinifigRemoval(
+    item: ListedItem,
+    lineItem: ShopifyOrderLineItem,
+    order: ShopifyOrder
+  ): Promise<number> {
+    if (!item.sku) return 0;
+
+    // The Shopify variant SKU of a minifig-sync item equals its `ebay_sku`.
+    const { data: sync } = await this.supabase
+      .from('minifig_sync_items')
+      .select('id, bricqer_item_id, ebay_offer_id, ebay_listing_id')
+      .eq('user_id', this.userId)
+      .eq('ebay_sku', item.sku)
+      .maybeSingle();
+    if (!sync?.id) return 0; // not a minifig-sync item — nothing extra to do
+
+    const targets: Array<'BRICQER' | 'EBAY'> = [];
+    if (sync.bricqer_item_id) targets.push('BRICQER');
+    if (sync.ebay_offer_id || sync.ebay_listing_id) targets.push('EBAY');
+
+    const salePrice = parseFloat(lineItem.price);
+    let queued = 0;
+    for (const remove_from of targets) {
+      // Skip if already queued for this sale + channel (idempotency safety net).
+      const { data: existing } = await this.supabase
+        .from('minifig_removal_queue')
+        .select('id')
+        .eq('user_id', this.userId)
+        .eq('minifig_sync_id', sync.id)
+        .eq('order_id', String(order.id))
+        .eq('remove_from', remove_from)
+        .limit(1)
+        .maybeSingle();
+      if (existing) continue;
+
+      const { error } = await this.supabase.from('minifig_removal_queue').insert({
+        user_id: this.userId,
+        minifig_sync_id: sync.id,
+        sold_on: 'SHOPIFY',
+        sale_price: Number.isFinite(salePrice) ? salePrice : null,
+        sale_date: order.created_at,
+        order_id: String(order.id),
+        remove_from,
+        status: 'PENDING',
+      });
+      if (error) {
+        throw new Error(`queue ${remove_from} removal: ${error.message}`);
+      }
+      queued++;
+    }
+
+    // Mark the sync row sold immediately so any interim reconcile doesn't treat
+    // it as live; the executor will re-affirm this when it runs.
+    if (queued > 0) {
+      await this.supabase
+        .from('minifig_sync_items')
+        .update({ listing_status: 'SOLD_SHOPIFY', updated_at: new Date().toISOString() })
+        .eq('id', sync.id)
+        .eq('user_id', this.userId);
+    }
+
+    return queued;
   }
 
   /**
