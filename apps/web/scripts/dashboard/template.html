@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Hadley Bricks — Business Dashboard</title>
+<title>Hadley Bricks — Website &amp; SEO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -54,6 +54,7 @@
     .summary-grid{grid-template-columns:1fr!important}
     /* vitals first (2x2), above the narrative card, so the glance read is in the first viewport */
     .kpi-stack{order:-1;grid-template-columns:1fr 1fr;grid-template-rows:auto}
+    .kpi-stack .kpi:last-child:nth-child(odd){grid-column:1/-1} /* no orphaned 5th tile */
     /* label-on-top, full-width track so bars stay visible on narrow screens */
     .bar-row{flex-wrap:wrap}.bar-row .name{width:100%;margin-bottom:1px}.bar-row .track{flex:1 1 auto}
   }
@@ -68,10 +69,10 @@
   .position .steps li{list-style:none;display:flex;gap:10px;margin-bottom:9px;font-size:13.5px;color:#DCE5F0}
   .position .steps li::before{content:"→";color:var(--yellow);font-weight:700}
   .position .watch li::before{content:"!";color:var(--orange);font-weight:800}
-  .kpi-stack{display:grid;gap:12px;grid-template-rows:repeat(5,1fr)}
+  .kpi-stack{display:grid;gap:12px;align-content:start}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between}
   .kpi .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-  .kpi .v{font-family:Fraunces;font-weight:600;font-size:21px}
+  .kpi .v{font-family:Fraunces;font-weight:600;font-size:24px}
   .kpi .d{font-size:12px;font-weight:600;margin-left:8px}
   .up{color:#1F7A44}.down{color:var(--red)}.flat{color:var(--muted)}
   /* metric tiles */
@@ -107,7 +108,7 @@
     <div class="box">
       <div class="brick"><i style="background:#F2B705"></i><i style="background:#DC5B2A"></i><i style="background:#2E9E5B"></i></div>
       <h1 class="serif">Hadley Bricks</h1>
-      <p>Business Dashboard — enter passcode to view</p>
+      <p>Website &amp; SEO — enter passcode to view</p>
       <input id="pc" type="password" autocomplete="off" placeholder="Passcode" />
       <button id="go">Unlock</button>
       <div class="err" id="err"></div>
@@ -145,7 +146,7 @@ const intf=n=>Math.round(n||0).toLocaleString("en-GB");
 const PAL=["#13243B","#DC5B2A","#F2B705","#2E9E5B","#3C4A5E","#b08a3f","#9b8b63"];
 const BARPAL=["#13243B","#F2B705","#2E9E5B","#3C4A5E","#b08a3f","#9b8b63"]; // channel-mix — no orange (reserved for the AI/GEO north-star)
 const CHLBL={"Organic Shopping":"Shopping"};
-function deltaSpan(d){ if(d==null) return '<span class="d flat">—</span>'; const c=d>0?"up":d<0?"down":"flat"; const s=d>0?"+":""; return `<span class="d ${c}">${s}${d}%</span>`; }
+function deltaSpan(d){ if(d==null) return '<span class="d flat" title="building baseline — short history">new</span>'; const c=d>0?"up":d<0?"down":"flat"; const s=d>0?"+":""; return `<span class="d ${c}">${s}${d}%</span>`; }
 function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstChild; }
 
 function render(app){
