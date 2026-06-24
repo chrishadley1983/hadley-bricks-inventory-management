@@ -401,6 +401,17 @@ export class ShopifySyncService {
       return { success: false, error: 'Item already has a Shopify product' };
     }
 
+    // Don't publish a £0 product — hold until it has a real listing_value. Both
+    // discounted sets and no-discount minifigs derive their price from listing_value,
+    // so a null/0 value would otherwise create a free, purchasable Shopify product.
+    if (!item.listing_value || item.listing_value <= 0) {
+      return {
+        success: false,
+        skipped: true,
+        error: 'Held: item has no listing_value (would publish £0)',
+      };
+    }
+
     // Get Brickset data for rich descriptions
     let bricksetData = null;
     if (item.set_number && item.set_number !== 'NA') {
@@ -622,6 +633,15 @@ export class ShopifySyncService {
 
     if (itemError || !item) {
       return { success: false, error: `Item not found: ${representativeId}` };
+    }
+
+    // Don't publish a £0 product — hold until priced (see createProduct).
+    if (!item.listing_value || item.listing_value <= 0) {
+      return {
+        success: false,
+        skipped: true,
+        error: 'Held: representative item has no listing_value (would publish £0)',
+      };
     }
 
     // Check none already synced (only count non-error entries with a real product ID)
@@ -1001,17 +1021,24 @@ export class ShopifySyncService {
     if (newPrice === undefined) {
       const { data: item } = await this.supabase
         .from('inventory_items')
-        .select('listing_value')
+        .select('listing_value, set_number, item_name')
         .eq('id', inventoryItemId)
         .single();
 
-      if (item?.listing_value) {
-        const priceResult = calculateShopifyPrice(
-          item.listing_value,
-          config.default_discount_pct ?? 10
-        );
-        newPrice = priceResult.price;
-        newCompareAt = priceResult.compare_at_price;
+      if (item?.listing_value && item.listing_value > 0) {
+        // Minifigures use the exact listing value (no direct-sale discount), matching
+        // createProduct — otherwise the recompute would wrongly discount them.
+        if (isMinifigure(item)) {
+          newPrice = item.listing_value;
+          newCompareAt = null;
+        } else {
+          const priceResult = calculateShopifyPrice(
+            item.listing_value,
+            config.default_discount_pct ?? 10
+          );
+          newPrice = priceResult.price;
+          newCompareAt = priceResult.compare_at_price;
+        }
       }
     }
 
@@ -1041,6 +1068,77 @@ export class ShopifySyncService {
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  /**
+   * Propagate listing_value changes (markdowns, corrections) to Shopify. The create
+   * flow is one-shot, so without this Shopify prices freeze at creation while the
+   * markdown engine keeps moving listing_value. Reprices any active product whose live
+   * Shopify price has drifted from the price its current listing_value implies. Never
+   * reprices toward £0 — price-less items are handled by the create-time hold.
+   */
+  async reconcilePrices(limit = 250): Promise<{
+    checked: number;
+    updated: number;
+    failed: number;
+    errors: Array<{ item_id: string; error: string }>;
+  }> {
+    const config = this.getConfig();
+    const discount = config.default_discount_pct ?? 10;
+    const out = {
+      checked: 0,
+      updated: 0,
+      failed: 0,
+      errors: [] as Array<{ item_id: string; error: string }>,
+    };
+
+    let from = 0;
+    const page = 1000;
+    for (;;) {
+      const { data: rows, error } = await this.supabase
+        .from('shopify_products')
+        .select(
+          'inventory_item_id, shopify_price, inventory_items!inner(listing_value, set_number, item_name, status)'
+        )
+        .eq('user_id', this.userId)
+        .eq('shopify_status', 'active')
+        .eq('inventory_items.status', 'LISTED')
+        .range(from, from + page - 1);
+
+      if (error || !rows || rows.length === 0) break;
+
+      for (const row of rows) {
+        // inventory_items is a to-one relation (object), but generated types widen it.
+        const inv = (row as unknown as {
+          inventory_items: { listing_value: number | null; set_number: string | null; item_name: string | null };
+        }).inventory_items;
+        const lv = inv?.listing_value ?? 0;
+        if (lv <= 0) continue; // never reprice toward £0
+
+        out.checked++;
+        const expected = isMinifigure(inv)
+          ? lv
+          : calculateShopifyPrice(lv, discount).price;
+        const current = Number(row.shopify_price) || 0;
+        if (Math.abs(expected - current) < 0.01) continue;
+
+        if (out.updated >= limit) return out;
+        const res = await this.updatePrice(row.inventory_item_id as string);
+        if (res.success) {
+          out.updated++;
+        } else {
+          out.failed++;
+          out.errors.push({
+            item_id: row.inventory_item_id as string,
+            error: res.error || 'updatePrice failed',
+          });
+        }
+      }
+
+      if (rows.length < page) break;
+      from += page;
+    }
+    return out;
   }
 
   // ── BATCH SYNC ────────────────────────────────────────────────
@@ -1360,13 +1458,30 @@ export class ShopifySyncService {
 
       summary.items_processed += ids.length;
 
-      if (!result.success) {
+      if (!result.success && !result.skipped) {
         summary.items_failed += ids.length;
         summary.errors.push({
           item_id: ids[0],
           error: result.error || `Failed to sync group ${key}`,
         });
       }
+      // result.skipped (e.g. no price yet) is an intentional hold, not a failure —
+      // the item stays unsynced and will be picked up once it has a listing_value.
+    }
+
+    // Propagate listing_value changes (markdowns, corrections) to existing active
+    // products. Without this the create flow is one-shot and Shopify prices freeze
+    // at creation while the markdown engine keeps moving the underlying price.
+    try {
+      const repriced = await this.reconcilePrices();
+      summary.items_updated += repriced.updated;
+      summary.items_failed += repriced.failed;
+      for (const e of repriced.errors) summary.errors.push(e);
+    } catch (err) {
+      summary.errors.push({
+        item_id: 'reconcilePrices',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     summary.duration_ms = Date.now() - startTime;
