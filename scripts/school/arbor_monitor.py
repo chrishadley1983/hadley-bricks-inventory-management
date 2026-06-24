@@ -24,7 +24,11 @@ from config import (
 
 def parse_arbor_email_with_claude(subject: str, body: str, sender: str) -> dict:
     """Use Claude to classify and extract data from an Arbor notification email."""
+    import time
+
     import anthropic
+
+    from ai_usage_audit import log_ai_usage
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -45,10 +49,29 @@ Return JSON with:
 
 Return ONLY JSON."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
+    started = time.time()
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as exc:
+        log_ai_usage(
+            feature="school_arbor",
+            model="claude-sonnet-4-6",
+            status="error",
+            error=str(exc),
+            request_ms=int((time.time() - started) * 1000),
+        )
+        raise
+
+    log_ai_usage(
+        feature="school_arbor",
+        model=response.model,
+        usage=response.usage,
+        request_ms=int((time.time() - started) * 1000),
+        anthropic_message_id=response.id,
     )
 
     text = response.content[0].text.strip()

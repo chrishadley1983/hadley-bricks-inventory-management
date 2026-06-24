@@ -48,6 +48,46 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
+// ---------- AI usage audit (fire-and-forget) ----------
+// This is a standalone tsx script, so it can't use the Next.js `@/lib/ai/ai-usage-audit`
+// helper (that pulls in `next/headers` via the server Supabase client). We log
+// to the same shared `public.ai_api_usage` table via the service-role client
+// the script already holds. Never awaited, never throws.
+interface AiUsageRow {
+  feature?: string;
+  model?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  request_ms?: number;
+  status?: 'success' | 'error';
+  error?: string;
+  anthropic_message_id?: string;
+}
+
+function logAiUsage(row: AiUsageRow): void {
+  try {
+    const fullRow: Record<string, unknown> = {
+      project: 'hadley-bricks',
+      billing_source: 'api_key',
+      status: 'success',
+      ...row,
+    };
+    for (const key of Object.keys(fullRow)) {
+      if (fullRow[key] === null || fullRow[key] === undefined) delete fullRow[key];
+    }
+    void supabase
+      .from('ai_api_usage')
+      .insert(fullRow)
+      .then(undefined, () => {
+        /* swallow */
+      });
+  } catch {
+    /* swallow — audit logging must never affect the run */
+  }
+}
+
 // ---------- Types ----------
 interface QueueItem {
   id: string;
@@ -431,6 +471,7 @@ Return STRICT JSON with one of these shapes:
 {"kind":"not_lego","what_is_it":"toddler bath duck"}
 Confidence 0..1. Only claim 'lego' if you can see clear evidence (set number on box, distinctive build, or unambiguous box art).`;
   const user = `Vinted listing title: "${itemTitle}"\n${candidatesBlurb}\n\nWhat LEGO set is this? Photos attached.`;
+  const startedAt = Date.now();
   try {
     // Direct SDK call — Opus 4.7 doesn't accept `temperature`, so we omit it.
     const response = await anthropic.messages.create({
@@ -450,12 +491,31 @@ Confidence 0..1. Only claim 'lego' if you can see clear evidence (set number on 
         },
       ],
     });
+    // Fire-and-forget audit log of the raw Anthropic call.
+    logAiUsage({
+      feature: 'auto_fix_review_queue',
+      model: response.model,
+      status: 'success',
+      anthropic_message_id: response.id,
+      request_ms: Date.now() - startedAt,
+      input_tokens: response.usage?.input_tokens,
+      output_tokens: response.usage?.output_tokens,
+      cache_creation_input_tokens: response.usage?.cache_creation_input_tokens ?? undefined,
+      cache_read_input_tokens: response.usage?.cache_read_input_tokens ?? undefined,
+    });
     const textBlock = response.content.find((b) => b.type === 'text');
     if (!textBlock || textBlock.type !== 'text') return null;
     const raw = textBlock.text;
     const jsonStr = raw.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1]?.trim() ?? raw;
     return JSON.parse(jsonStr) as VisionMatch;
   } catch (e) {
+    logAiUsage({
+      feature: 'auto_fix_review_queue',
+      model: VISION_MODEL,
+      status: 'error',
+      request_ms: Date.now() - startedAt,
+      error: e instanceof Error ? e.message : String(e),
+    });
     console.warn(`  vision call failed:`, e instanceof Error ? e.message : e);
     return null;
   }

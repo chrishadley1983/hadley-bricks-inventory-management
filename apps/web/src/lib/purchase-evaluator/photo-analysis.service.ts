@@ -247,6 +247,7 @@ async function analyzeWithOpus(
         model: 'claude-opus-4-20250514', // Use Opus for best reasoning
         maxTokens: 4096,
         temperature: 0.2, // Low temperature for consistent structured output
+        feature: 'purchase_evaluator_photo',
       }
     );
 
@@ -336,6 +337,7 @@ Read each digit carefully:
         model: 'claude-opus-4-20250514', // Use Opus for best verification accuracy
         maxTokens: 1024,
         temperature: 0.1,
+        feature: 'purchase_evaluator_photo',
       }
     );
 
@@ -400,6 +402,7 @@ async function runVerificationPass(
         model: 'claude-opus-4-20250514', // Use Opus for best verification accuracy
         maxTokens: 2048,
         temperature: 0.1,
+        feature: 'purchase_evaluator_photo',
       }
     );
 
