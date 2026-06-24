@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hadley Bricks — Business Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper:#FBF6EC; --paper2:#F4ECDB; --ink:#13243B; --ink2:#3C4A5E; --muted:#6F6A5C;
+    --yellow:#F2B705; --orange:#DC5B2A; --green:#2E9E5B; --red:#C2412D; --navy:#13243B;
+    --line:#E4D9C2; --card:#FFFDF8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{line-height:1.5}
+  .serif{font-family:Fraunces,Georgia,serif}
+  /* ── Gate ── */
+  #gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 120% at 50% 0%, #1b3252 0%, #0f1c2e 70%);z-index:50;padding:24px}
+  #gate .box{width:100%;max-width:380px;text-align:center;color:#F4ECDB}
+  #gate .brick{display:inline-flex;gap:4px;margin-bottom:22px}
+  #gate .brick i{width:16px;height:16px;border-radius:3px;display:block}
+  #gate h1{font-weight:900;font-size:30px;letter-spacing:-.02em;color:#FBF6EC}
+  #gate p{color:#9DB0C7;font-size:13px;margin:6px 0 26px}
+  #gate input{width:100%;padding:14px 16px;border-radius:11px;border:1px solid #34507a;background:#0e1c2e;color:#FBF6EC;font-size:15px;text-align:center;letter-spacing:.04em}
+  #gate input:focus{outline:none;border-color:var(--yellow)}
+  #gate button{width:100%;margin-top:12px;padding:13px;border:none;border-radius:11px;background:var(--yellow);color:#13243B;font-weight:700;font-size:15px;cursor:pointer;font-family:Inter}
+  #gate button:hover{background:#ffc62a}
+  #gate .err{color:#ff9b8a;font-size:13px;min-height:18px;margin-top:12px}
+  #gate .fresh{color:#6f86a3;font-size:11px;margin-top:22px;letter-spacing:.06em;text-transform:uppercase}
+  /* ── App ── */
+  #app{display:none;max-width:1140px;margin:0 auto;padding:28px 22px 80px}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:14px;border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:26px}
+  .wordmark{display:flex;align-items:center;gap:11px}
+  .wordmark .brick{display:flex;gap:3px}
+  .wordmark .brick i{width:13px;height:13px;border-radius:2px;display:block}
+  .wordmark b{font-family:Fraunces;font-weight:900;font-size:26px;letter-spacing:-.02em;line-height:1}
+  .wordmark span{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+  header.top .meta{text-align:right;font-size:12px;color:var(--muted);letter-spacing:.02em}
+  header.top .meta b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+  /* sections */
+  section{margin-bottom:34px}
+  .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--orange);font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:9px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:20px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:760px){
+    .g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}
+    .summary-grid{grid-template-columns:1fr!important}
+    /* vitals first (2x2), above the narrative card, so the glance read is in the first viewport */
+    .kpi-stack{order:-1;grid-template-columns:1fr 1fr;grid-template-rows:auto}
+    /* label-on-top, full-width track so bars stay visible on narrow screens */
+    .bar-row{flex-wrap:wrap}.bar-row .name{width:100%;margin-bottom:1px}.bar-row .track{flex:1 1 auto}
+  }
+  @media(max-width:480px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  /* position / summary */
+  .summary-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  .position{background:linear-gradient(160deg,#13243B,#1d3858);color:#F4ECDB;border-radius:16px;padding:26px}
+  .position .hl{font-family:Fraunces;font-weight:600;font-size:23px;line-height:1.3;letter-spacing:-.01em;color:#fff;margin-bottom:13px}
+  .position p{color:#C6D2E2;font-size:14.5px;line-height:1.6}
+  .position .steps{margin-top:18px;border-top:1px solid #314c6f;padding-top:16px}
+  .position .steps h4{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:10px}
+  .position .steps li{list-style:none;display:flex;gap:10px;margin-bottom:9px;font-size:13.5px;color:#DCE5F0}
+  .position .steps li::before{content:"→";color:var(--yellow);font-weight:700}
+  .position .watch li::before{content:"!";color:var(--orange);font-weight:800}
+  .kpi-stack{display:grid;gap:12px;grid-template-rows:repeat(5,1fr)}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between}
+  .kpi .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .kpi .v{font-family:Fraunces;font-weight:600;font-size:21px}
+  .kpi .d{font-size:12px;font-weight:600;margin-left:8px}
+  .up{color:#1F7A44}.down{color:var(--red)}.flat{color:var(--muted)}
+  /* metric tiles */
+  .tile{padding:16px 18px}
+  .tile .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px}
+  .tile .v{font-family:Fraunces;font-weight:600;font-size:30px;line-height:1;letter-spacing:-.01em}
+  .tile .sub{font-size:12px;color:var(--ink2);margin-top:7px}
+  /* bars */
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px}
+  .bar-row .name{width:96px;color:var(--ink2);flex-shrink:0}
+  .bar-row .track{flex:1;height:10px;background:var(--paper2);border-radius:6px;overflow:hidden}
+  .bar-row .fill{height:100%;border-radius:6px}
+  .bar-row .val{width:74px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:0 0 9px;border-bottom:1px solid var(--line)}
+  td{padding:9px 0;border-bottom:1px solid var(--paper2);font-variant-numeric:tabular-nums}
+  td:not(:last-child),th:not(:last-child){padding-right:16px}
+  td:first-child{white-space:nowrap}
+  td.r,th.r{text-align:right}
+  .tile .v,.kpi .v{font-variant-numeric:tabular-nums}
+  .chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .chip.ok{background:#E4F3E9;color:#1f7a44}.chip.warn{background:#FBEAD9;color:#9c4a17}.chip.bad{background:#F7E1DC;color:#9c2a1c}
+  canvas{max-width:100%}
+  .chart-wrap{position:relative;height:185px;width:100%}
+  .chart-wrap canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+  .ai-flag{display:inline-flex;align-items:center;gap:7px;background:#13243B;color:#F2B705;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;margin-top:6px}
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .na{color:var(--muted);font-size:13px;font-style:italic}
+</style>
+</head>
+<body>
+  <div id="gate">
+    <div class="box">
+      <div class="brick"><i style="background:#F2B705"></i><i style="background:#DC5B2A"></i><i style="background:#2E9E5B"></i></div>
+      <h1 class="serif">Hadley Bricks</h1>
+      <p>Business Dashboard — enter passcode to view</p>
+      <input id="pc" type="password" autocomplete="off" placeholder="Passcode" />
+      <button id="go">Unlock</button>
+      <div class="err" id="err"></div>
+      <div class="fresh">Updated __GENERATED_AT__</div>
+    </div>
+  </div>
+
+  <div id="app"></div>
+
+<script>
+const ENC = { payload:"__PAYLOAD__", salt:"__SALT__", iv:"__IV__", iters:__ITERS__ };
+let DATA = null;
+const b64=s=>{const x=atob(s),a=new Uint8Array(x.length);for(let i=0;i<x.length;i++)a[i]=x.charCodeAt(i);return a;};
+async function decrypt(pass){
+  const enc=new TextEncoder();
+  const km=await crypto.subtle.importKey("raw",enc.encode(pass),{name:"PBKDF2"},false,["deriveKey"]);
+  const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(ENC.salt),iterations:ENC.iters,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(ENC.iv)},key,b64(ENC.payload));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function unlock(pass){
+  try{ DATA=await decrypt(pass.trim()); sessionStorage.setItem("hb_pc",pass.trim());
+    document.getElementById("gate").style.display="none";
+    const app=document.getElementById("app"); app.style.display="block"; render(app);
+  }catch(_){ document.getElementById("err").textContent="Incorrect passcode"; }
+}
+document.getElementById("go").onclick=()=>unlock(document.getElementById("pc").value);
+document.getElementById("pc").addEventListener("keydown",e=>{if(e.key==="Enter")unlock(e.target.value);});
+const cached=sessionStorage.getItem("hb_pc"); if(cached) unlock(cached);
+
+// ── formatting ──
+const money=n=>"£"+Math.round(n||0).toLocaleString("en-GB");
+const money1=n=>"£"+(n||0).toLocaleString("en-GB",{minimumFractionDigits:0,maximumFractionDigits:2});
+const intf=n=>Math.round(n||0).toLocaleString("en-GB");
+const PAL=["#13243B","#DC5B2A","#F2B705","#2E9E5B","#3C4A5E","#b08a3f","#9b8b63"];
+const BARPAL=["#13243B","#F2B705","#2E9E5B","#3C4A5E","#b08a3f","#9b8b63"]; // channel-mix — no orange (reserved for the AI/GEO north-star)
+const CHLBL={"Organic Shopping":"Shopping"};
+function deltaSpan(d){ if(d==null) return '<span class="d flat">—</span>'; const c=d>0?"up":d<0?"down":"flat"; const s=d>0?"+":""; return `<span class="d ${c}">${s}${d}%</span>`; }
+function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstChild; }
+
+function render(app){
+  const d=DATA;
+  app.innerHTML="";
+  // header
+  app.appendChild(el(`<header class="top">
+    <div class="wordmark"><div class="brick"><i style="background:#F2B705"></i><i style="background:#DC5B2A"></i><i style="background:#2E9E5B"></i></div>
+      <div><b class="serif">Hadley Bricks</b><span>Business Dashboard</span></div></div>
+    <div class="meta"><b>Week to ${new Date(d.generatedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</b>Auto-refreshes weekly · all channels</div>
+  </header>`));
+
+  renderPosition(app,d);
+  renderSales(app,d.sales);
+  renderTraffic(app,d.traffic);
+  renderSearch(app,d.seo);
+  renderFeedInv(app,d.feed,d.inventory);
+
+  app.appendChild(el(`<footer><span>Hadley Bricks · generated ${new Date(d.generatedAt).toLocaleString("en-GB")}</span><span>Sources: GA4 · Search Console · Google Merchant · Supabase</span></footer>`));
+  setTimeout(initCharts,30);
+}
+
+function kpi(l,v,d){ return `<div class="kpi"><div class="l">${l}</div><div><span class="v">${v}</span>${d!==undefined?deltaSpan(d):""}</div></div>`; }
+
+function renderPosition(app,d){
+  const s=d.summary||{};
+  const sa=d.sales&&!d.sales.error?d.sales:null, tr=d.traffic&&!d.traffic.error?d.traffic:null, se=d.seo&&!d.seo.error?d.seo:null;
+  const conv = (sa&&tr&&tr.last7.sessions)? Math.round((sa.last7.units/tr.last7.sessions)*1000)/10 : null;
+  let steps = (s.nextSteps||[]).map(x=>`<li>${x}</li>`).join("");
+  let watch = (s.watch||[]).map(x=>`<li>${x}</li>`).join("");
+  const sec=el(`<section><div class="eyebrow">Position &amp; Next Steps</div>
+    <div class="summary-grid">
+      <div class="position">
+        <div class="hl">${s.headline||"This week at a glance"}</div>
+        <p>${s.position||"Summary unavailable."}</p>
+        ${steps?`<div class="steps"><h4>Do next</h4><ul>${steps}</ul></div>`:""}
+        ${watch?`<div class="steps watch"><h4>Watch</h4><ul>${watch}</ul></div>`:""}
+        <div class="ai-flag">✦ Written by a local Claude session</div>
+      </div>
+      <div class="kpi-stack">
+        ${kpi("Revenue (7d, all)", sa?money(sa.last7.revenue):"—", sa?sa.delta.revenue:undefined)}
+        ${kpi("Direct share", sa?sa.directShare+"%":"—")}
+        ${kpi("Sessions (7d)", tr?intf(tr.last7.sessions):"—", tr?tr.delta.sessions:undefined)}
+        ${kpi("AI-assistant (28d)", tr?intf(tr.aiSessions28):"—")}
+        ${kpi("Search clicks (28d)", se?intf(se.curr.clicks):"—", se?se.delta.clicks:undefined)}
+      </div>
+    </div></section>`);
+  app.appendChild(sec);
+}
+
+function renderSales(app,sa){
+  const sec=el(`<section><div class="eyebrow">Sales</div></section>`);
+  if(!sa||sa.error){ sec.appendChild(el(`<div class="card na">Sales data unavailable.</div>`)); app.appendChild(sec); return; }
+  const plats=Object.entries(sa.last7.byPlatform).sort((a,b)=>b[1].revenue-a[1].revenue);
+  const maxR=Math.max(...plats.map(p=>p[1].revenue),1);
+  const lbl=sa.platformLabels||{};
+  const pace=sa.pacePct, paceCls=pace>=90?'up':pace>=60?'flat':'down';
+  const net=sa.last7.net, margin=sa.last7.margin;
+  sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
+    <div class="card tile"><div class="l">Revenue · 7d</div><div class="v">${money(sa.last7.revenue)}</div><div class="sub">${deltaSpan(sa.delta.revenue)} WoW · <span class="${paceCls}">${pace}% of £${intf(sa.weeklyTarget)} pace</span></div></div>
+    <div class="card tile"><div class="l">Net · 7d</div><div class="v">${net!=null?money(net):'—'}</div><div class="sub">${margin!=null?'<b>'+margin+'%</b> margin · after fees+cost':'net unavailable'}</div></div>
+    <div class="card tile"><div class="l">Units · 7d</div><div class="v">${intf(sa.last7.units)}</div><div class="sub">${deltaSpan(sa.delta.units)} vs prior</div></div>
+    <div class="card tile"><div class="l">Avg order</div><div class="v">${money(sa.last7.aov)}</div><div class="sub">per sale</div></div>
+  </div>`));
+  sec.appendChild(el(`<div class="grid g2">
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">12-week revenue trend</div><div class="chart-wrap"><canvas id="cSalesTrend"></canvas></div></div>
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">By platform · 7d</div>
+      ${plats.map((p,i)=>`<div class="bar-row"><div class="name">${lbl[p[0]]||p[0]}</div><div class="track"><div class="fill" style="width:${Math.max(0.8,p[1].revenue/maxR*100)}%;background:${PAL[i%PAL.length]}"></div></div><div class="val">${money(p[1].revenue)}</div></div>`).join("")||'<div class="na">No sales in window</div>'}
+      ${sa.scopeNote?`<div style="font-size:11px;color:var(--muted);margin-top:11px;line-height:1.4">${sa.scopeNote}</div>`:""}
+    </div></div>`));
+  if(sa.topSets&&sa.topSets.length){
+    sec.appendChild(el(`<div class="card" style="margin-top:14px"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top sets · 28d</div>
+      <table><thead><tr><th>Set</th><th>Item</th><th class="r">Units</th><th class="r">Revenue</th></tr></thead><tbody>
+      ${sa.topSets.map(s=>`<tr><td><b>${s.set}</b></td><td style="color:var(--ink2)">${(s.name||"").slice(0,42)}</td><td class="r">${s.units}</td><td class="r">${money(s.revenue)}</td></tr>`).join("")}
+      </tbody></table></div>`));
+  }
+  app.appendChild(sec);
+  window._charts=window._charts||[]; window._charts.push(["cSalesTrend",()=>({type:"line",data:{labels:sa.weekly.map(w=>w.label),datasets:[
+    {data:sa.weekly.map(w=>w.revenue),borderColor:"#DC5B2A",backgroundColor:"rgba(220,91,42,.12)",fill:true,tension:.15,pointRadius:2,borderWidth:2.5},
+    {data:sa.weekly.map(()=>sa.weeklyTarget),borderColor:"rgba(19,36,59,.4)",borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false,label:"target"}
+  ]},options:lineOpts("£")})]);
+}
+
+function renderTraffic(app,tr){
+  const sec=el(`<section><div class="eyebrow">Traffic &amp; AI Visibility</div></section>`);
+  if(!tr||tr.error){ sec.appendChild(el(`<div class="card na">Traffic data unavailable.</div>`)); app.appendChild(sec); return; }
+  const maxC=Math.max(...tr.channels.map(c=>c.sessions),1);
+  sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
+    <div class="card tile"><div class="l">Sessions · 7d</div><div class="v">${intf(tr.last7.sessions)}</div><div class="sub">${deltaSpan(tr.delta.sessions)} vs prior</div></div>
+    <div class="card tile"><div class="l">Users · 7d</div><div class="v">${intf(tr.last7.users)}</div><div class="sub">unique visitors</div></div>
+    <div class="card tile"><div class="l">AI assistants · 28d</div><div class="v" style="color:var(--orange)">${intf(tr.aiSessions28)}</div><div class="sub">${tr.sessions28?Math.round(tr.aiSessions28/tr.sessions28*100):0}% of sessions · GEO</div></div>
+    <div class="card tile"><div class="l">Conversions · 7d</div><div class="v">${intf(tr.last7.conversions)}</div><div class="sub">${tr.last7.sessions?(tr.last7.conversions/tr.last7.sessions*100).toFixed(1):0}% on-site conv</div></div>
+  </div>`));
+  sec.appendChild(el(`<div class="grid g2">
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Daily sessions</div><div class="chart-wrap"><canvas id="cSessions"></canvas></div></div>
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px">Channel mix · 28d</div>
+      ${tr.channels.map((c,i)=>`<div class="bar-row"><div class="name">${CHLBL[c.name]||c.name}</div><div class="track"><div class="fill" style="width:${Math.max(0.8,c.sessions/maxC*100)}%;background:${c.name.includes('AI')?'#DC5B2A':BARPAL[i%BARPAL.length]}"></div></div><div class="val">${c.sessions}</div></div>`).join("")}
+    </div></div>`));
+  if(tr.topPages&&tr.topPages.length){
+    sec.appendChild(el(`<div class="card" style="margin-top:14px"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top landing pages · 28d</div>
+      <table><thead><tr><th>Page</th><th class="r">Sessions</th></tr></thead><tbody>
+      ${tr.topPages.map(p=>`<tr><td>${p.page||"/"}</td><td class="r">${p.sessions}</td></tr>`).join("")}</tbody></table></div>`));
+  }
+  app.appendChild(sec);
+  window._charts.push(["cSessions",()=>({type:"line",data:{labels:tr.daily.map(x=>x.date),datasets:[{data:tr.daily.map(x=>x.sessions),borderColor:"#13243B",backgroundColor:"rgba(19,36,59,.10)",fill:true,tension:.12,pointRadius:2,borderWidth:2.5}]},options:lineOpts("")})]);
+}
+
+function renderSearch(app,se){
+  const sec=el(`<section><div class="eyebrow">Search Console — organic</div></section>`);
+  if(!se||se.error){ sec.appendChild(el(`<div class="card na">Search Console data unavailable.</div>`)); app.appendChild(sec); return; }
+  sec.appendChild(el(`<div class="grid g4" style="margin-bottom:14px">
+    <div class="card tile"><div class="l">Clicks · 28d</div><div class="v">${intf(se.curr.clicks)}</div><div class="sub">${deltaSpan(se.delta.clicks)} vs prior</div></div>
+    <div class="card tile"><div class="l">Impressions · 28d</div><div class="v">${intf(se.curr.impressions)}</div><div class="sub">${deltaSpan(se.delta.impressions)} vs prior</div></div>
+    <div class="card tile"><div class="l">CTR</div><div class="v">${(se.curr.ctr*100).toFixed(1)}%</div><div class="sub">click-through</div></div>
+    <div class="card tile"><div class="l">Avg position</div><div class="v">${se.curr.position.toFixed(1)}</div><div class="sub">lower is better</div></div>
+  </div>`));
+  sec.appendChild(el(`<div class="grid g2">
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top queries · 28d</div>
+      <table><thead><tr><th>Query</th><th class="r">Clicks</th><th class="r">Pos</th></tr></thead><tbody>
+      ${se.topQueries.map(q=>`<tr><td>${q.query}</td><td class="r">${q.clicks}</td><td class="r">${q.position}</td></tr>`).join("")}</tbody></table></div>
+    <div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top pages · 28d</div>
+      <table><thead><tr><th>Page</th><th class="r">Clicks</th><th class="r">Impr</th></tr></thead><tbody>
+      ${se.topPages.map(p=>`<tr><td>${p.page||"/"}</td><td class="r">${p.clicks}</td><td class="r">${intf(p.impressions)}</td></tr>`).join("")}</tbody></table></div>
+  </div>`));
+  app.appendChild(sec);
+}
+
+function renderFeedInv(app,feed,inv){
+  const sec=el(`<section><div class="eyebrow">Google Shopping feed &amp; inventory</div></section>`);
+  const grid=el(`<div class="grid g2" style="align-items:start"></div>`);
+  // feed
+  if(feed&&!feed.error){
+    const rate=feed.total?Math.round(feed.approved/feed.total*100):0;
+    const chip=feed.disapproved>20?"bad":feed.disapproved>0?"warn":"ok";
+    grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Merchant feed health</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span class="v serif" style="font-size:32px;font-weight:600">${feed.approved}</span><span style="color:var(--muted)">/ ${feed.total} approved (${rate}%)</span></div>
+      <div style="margin:10px 0"><span class="chip ${chip}">${feed.disapproved} disapproved</span></div>
+      ${feed.topIssues&&feed.topIssues.length?`<table style="margin-top:6px"><tbody>${feed.topIssues.map(i=>`<tr><td>${i.desc}</td><td class="r">${i.count}</td></tr>`).join("")}</tbody></table>`:'<div class="na">No product disapprovals 🎉</div>'}
+    </div>`));
+  } else grid.appendChild(el(`<div class="card na">Feed data unavailable.</div>`));
+  // inventory
+  if(inv&&!inv.error){
+    grid.appendChild(el(`<div class="card"><div class="l" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Live inventory</div>
+      <div class="grid g2" style="gap:12px">
+        <div><div class="tile" style="padding:0"><div class="l">Listed items</div><div class="v">${intf(inv.listed)}</div></div></div>
+        <div><div class="tile" style="padding:0"><div class="l">Listing value</div><div class="v">${money(inv.listingValue)}</div><div class="sub">≈ ${inv.listed?money(inv.listingValue/inv.listed):'—'} / item</div></div></div>
+      </div></div>`));
+  } else grid.appendChild(el(`<div class="card na">Inventory data unavailable.</div>`));
+  sec.appendChild(grid); app.appendChild(sec);
+}
+
+function lineOpts(prefix){
+  return {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>prefix+(prefix==="£"?Math.round(c.parsed.y).toLocaleString():c.parsed.y)}}},
+    scales:{x:{grid:{display:false},ticks:{color:"#6b6457",font:{size:11},maxRotation:0,autoSkip:true,maxTicksLimit:8}},
+            y:{beginAtZero:true,grid:{color:"#EDE3CE"},ticks:{color:"#6b6457",font:{size:11},callback:v=>prefix+(v>=1000?(v/1000)+"k":v)}}}};
+}
+function initCharts(){ (window._charts||[]).forEach(([id,cfg])=>{const c=document.getElementById(id);if(c)new Chart(c,cfg());}); window._charts=[]; }
+</script>
+</body>
+</html>
