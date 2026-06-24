@@ -6,6 +6,11 @@ vi.mock('@/lib/supabase/pagination', () => ({
   fetchAllRecords: vi.fn(),
 }));
 
+// reconcileArchiveDrift sends a Discord alert on drift — mock the notifier.
+vi.mock('@/lib/notifications', () => ({
+  discordService: { sendSyncStatus: vi.fn().mockResolvedValue({}) },
+}));
+
 import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { ShopifySyncService } from '../sync.service';
 
@@ -240,5 +245,57 @@ describe('ShopifySyncService.reconcilePrices', () => {
     expect(updateSpy).not.toHaveBeenCalledWith('A');
     expect(updateSpy).not.toHaveBeenCalledWith('C');
     expect(out).toMatchObject({ checked: 3, updated: 2, failed: 0 });
+  });
+});
+
+describe('ShopifySyncService.reconcileArchiveDrift', () => {
+  function archiveDriftSupabase(mappings: any[], invRows: any[]) {
+    let rangeCalls = 0;
+    const from = vi.fn((table: string) => {
+      const b: any = {};
+      for (const m of ['select', 'eq', 'update']) b[m] = vi.fn(() => b);
+      if (table === 'shopify_products') {
+        b.range = vi.fn(() => Promise.resolve({ data: ++rangeCalls === 1 ? mappings : [], error: null }));
+      } else if (table === 'inventory_items') {
+        b.in = vi.fn(() => Promise.resolve({ data: invRows, error: null }));
+      }
+      return b;
+    });
+    return { from } as any;
+  }
+
+  it('re-archives a sold product still ACTIVE live, skips LISTED-backed and already-archived', async () => {
+    // P1: only backing sold + live ACTIVE -> drift. P2: has a LISTED sibling -> not a candidate.
+    // P3: backing sold but live ARCHIVED -> no drift.
+    const mappings = [
+      { shopify_product_id: 'P1', inventory_item_id: 'A' },
+      { shopify_product_id: 'P2', inventory_item_id: 'B' },
+      { shopify_product_id: 'P2', inventory_item_id: 'C' },
+      { shopify_product_id: 'P3', inventory_item_id: 'D' },
+    ];
+    const invRows = [
+      { id: 'A', status: 'SOLD', set_number: '40587', item_name: 'Easter Basket' },
+      { id: 'B', status: 'SOLD', set_number: '111', item_name: 'X' },
+      { id: 'C', status: 'LISTED', set_number: '111', item_name: 'X' },
+      { id: 'D', status: 'SOLD', set_number: '222', item_name: 'Y' },
+    ];
+    const svc = new ShopifySyncService(archiveDriftSupabase(mappings, invRows), USER_ID);
+    const client: any = {
+      graphql: vi.fn().mockResolvedValue({
+        nodes: [
+          { id: 'gid://shopify/Product/P1', status: 'ACTIVE' },
+          { id: 'gid://shopify/Product/P3', status: 'ARCHIVED' },
+        ],
+      }),
+      archiveProduct: vi.fn().mockResolvedValue({}),
+    };
+    (svc as any).client = client;
+    (svc as any).config = { default_discount_pct: 10 };
+
+    const out = await svc.reconcileArchiveDrift();
+
+    expect(client.archiveProduct).toHaveBeenCalledTimes(1);
+    expect(client.archiveProduct).toHaveBeenCalledWith('P1');
+    expect(out).toMatchObject({ checked: 2, drifted: 1, archived: 1, failed: 0 });
   });
 });
