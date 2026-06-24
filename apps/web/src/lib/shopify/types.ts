@@ -139,6 +139,8 @@ export interface SyncResult {
   shopifyProductId?: string;
   /** True when an existing Shopify product was adopted instead of created. */
   adopted?: boolean;
+  /** True when the item was intentionally held back (e.g. no price) rather than failing. */
+  skipped?: boolean;
   error?: string;
 }
 

@@ -173,3 +173,72 @@ describe('ShopifySyncService.dedupeBySku', () => {
     expect(client.archiveProduct).not.toHaveBeenCalled();
   });
 });
+
+/** Table-routed Supabase mock: per-table terminal results for single()/range(). */
+function routerSupabase(byTable: Record<string, { single?: any; range?: any }>) {
+  const from = vi.fn((table: string) => {
+    const t = byTable[table] ?? {};
+    const builder: any = {};
+    for (const m of ['select', 'eq', 'neq', 'in', 'gt', 'limit', 'order', 'update', 'insert', 'upsert']) {
+      builder[m] = vi.fn(() => builder);
+    }
+    builder.single = vi.fn(() => Promise.resolve({ data: t.single ?? null, error: null }));
+    builder.range = vi.fn(() => Promise.resolve({ data: t.range ?? [], error: null }));
+    return builder;
+  });
+  return { from } as any;
+}
+
+function svcWith(supabase: any) {
+  const svc = new ShopifySyncService(supabase, USER_ID);
+  (svc as any).client = {}; // getClient() returns the cached client, skips config load
+  (svc as any).config = { default_discount_pct: 10 };
+  return svc;
+}
+
+describe('ShopifySyncService.createProduct — £0 hold', () => {
+  it('holds (skipped, not failed) an item with no listing_value instead of publishing £0', async () => {
+    const supabase = routerSupabase({
+      inventory_items: { single: { id: 'I1', listing_value: 0, set_number: '75301', item_name: 'Set', condition: 'Used' } },
+      shopify_products: { single: null }, // not already synced
+    });
+    const result = await svcWith(supabase).createProduct('I1');
+    expect(result).toMatchObject({ success: false, skipped: true });
+  });
+
+  it('also holds when listing_value is null', async () => {
+    const supabase = routerSupabase({
+      inventory_items: { single: { id: 'I2', listing_value: null, set_number: '75301', item_name: 'Set' } },
+      shopify_products: { single: null },
+    });
+    const result = await svcWith(supabase).createProduct('I2');
+    expect(result.skipped).toBe(true);
+  });
+});
+
+describe('ShopifySyncService.reconcilePrices', () => {
+  it('reprices only drifted items, skips matched + £0, and prices minifigs without the discount', async () => {
+    const rows = [
+      // matched: 23.99 * 0.9 = 21.59 -> 20.99 == shopify_price -> no update
+      { inventory_item_id: 'A', shopify_price: 20.99, inventory_items: { listing_value: 23.99, set_number: '75301', item_name: 'Set', status: 'LISTED' } },
+      // drifted set: 24.99 * 0.9 = 22.49 -> 21.99 != 30.99 -> update
+      { inventory_item_id: 'B', shopify_price: 30.99, inventory_items: { listing_value: 24.99, set_number: '75302', item_name: 'Set', status: 'LISTED' } },
+      // no price -> never reprice toward £0
+      { inventory_item_id: 'C', shopify_price: 0, inventory_items: { listing_value: 0, set_number: '75303', item_name: 'Set', status: 'LISTED' } },
+      // minifig: exact listing value (no discount) 5.00 != 3.99 -> update
+      { inventory_item_id: 'D', shopify_price: 3.99, inventory_items: { listing_value: 5.0, set_number: 'sw0810', item_name: 'Qui-Gon', status: 'LISTED' } },
+    ];
+    const svc = svcWith(routerSupabase({ shopify_products: { range: rows } }));
+    const updateSpy = vi.fn().mockResolvedValue({ success: true });
+    (svc as any).updatePrice = updateSpy;
+
+    const out = await svc.reconcilePrices();
+
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateSpy).toHaveBeenCalledWith('B');
+    expect(updateSpy).toHaveBeenCalledWith('D');
+    expect(updateSpy).not.toHaveBeenCalledWith('A');
+    expect(updateSpy).not.toHaveBeenCalledWith('C');
+    expect(out).toMatchObject({ checked: 3, updated: 2, failed: 0 });
+  });
+});
