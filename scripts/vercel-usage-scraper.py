@@ -195,8 +195,56 @@ def _scan_and_merge(body_text: str, seen: dict) -> None:
             break
 
 
-def scrape_vercel_usage() -> dict[str, float]:
-    """Scrape the Vercel usage dashboard via Chrome CDP."""
+def relaunch_chrome_vinted(port: int = 9222) -> bool:
+    """Kill a wedged CDP Chrome-Vinted and relaunch it headless. Returns readiness.
+
+    The Chrome-Vinted instance is shared (flight scraper, Vinted automation, this
+    scraper). When it wedges — leaked tabs degrade it until connect_over_cdp
+    hangs (2026-06-22) — every CDP scraper on :9222 fails at once. ensure-style
+    checks see the port answering and won't relaunch, so recovery needs an
+    explicit kill. Cookies live on disk so the Vercel/Vinted sessions survive.
+    """
+    import socket
+    import subprocess
+    ps = (
+        "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+        f"Where-Object {{ $_.CommandLine -match 'remote-debugging-port={port}' }} | "
+        "ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }"
+    )
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                       capture_output=True, text=True, timeout=30)
+    except Exception as e:
+        log.warning("relaunch kill step failed: %s", e)
+    time.sleep(2)
+    subprocess.Popen([
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        f"--remote-debugging-port={port}",
+        r"--user-data-dir=C:\Users\Chris Hadley\AppData\Local\Google\Chrome-Vinted",
+        "--headless=new", "--disable-gpu", "--no-first-run",
+        "--no-default-browser-check", "about:blank",
+    ])
+    for _ in range(30):
+        time.sleep(1)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def scrape_vercel_usage() -> tuple[dict[str, float], str]:
+    """Scrape the Vercel usage dashboard via Chrome CDP.
+
+    Returns (metrics, status). status is one of:
+      ok            — metrics scraped
+      login_required— dashboard redirected to a Vercel login/SSO page (re-login)
+      cdp_failed    — couldn't connect to / launch the CDP Chrome (likely wedged)
+      no_data       — connected & on the dashboard but 0 metrics parsed
+    Distinguishing these stops the scraper crying "session expired" (the old
+    behaviour) when the real cause is a wedged Chrome — which a relaunch fixes.
+    """
     from playwright.sync_api import sync_playwright
     import socket
 
@@ -225,7 +273,7 @@ def scrape_vercel_usage() -> dict[str, float]:
                 continue
         else:
             log.error("Chrome CDP not available on port 9222 after launch attempt")
-            return {}
+            return {}, "cdp_failed"
 
     results = {}
 
@@ -235,7 +283,7 @@ def scrape_vercel_usage() -> dict[str, float]:
             log.info("Connected to Chrome via CDP")
         except Exception as e:
             log.error("CDP connection failed: %s", e)
-            return {}
+            return {}, "cdp_failed"
 
         context = browser.contexts[0] if browser.contexts else browser.new_context()
         page = context.new_page()
@@ -248,6 +296,16 @@ def scrape_vercel_usage() -> dict[str, float]:
             # all metrics we see. Stop once we've seen all 15 METRIC_MAP entries
             # OR 45s elapses.
             page.goto(VERCEL_USAGE_URL, wait_until="networkidle", timeout=45000)
+
+            # If the profile's Vercel session has genuinely expired, the
+            # dashboard redirects to a login/SSO page. Detect that explicitly so
+            # we only report "re-login needed" when it's true — a wedged CDP
+            # Chrome also yields 0 metrics but is fixed by a relaunch, not a
+            # login (the misdiagnosis behind the 2026-06-22 false alert).
+            cur_url = (page.url or "").lower()
+            if "/login" in cur_url or "/sso" in cur_url or "/auth" in cur_url:
+                log.error("Vercel dashboard redirected to login (%s) — session expired", page.url)
+                return {}, "login_required"
 
             # Poll the DOM in a loop, merging metric snapshots across attempts.
             # Each scan adds any newly-resolved metrics to `seen`; once a metric
@@ -290,7 +348,7 @@ def scrape_vercel_usage() -> dict[str, float]:
                 pass
             browser.close()
 
-    return results
+    return results, ("ok" if results else "no_data")
 
 
 def upsert_metrics(metrics: dict[str, float]) -> None:
@@ -359,38 +417,59 @@ def _hadley_auth_key() -> str:
     return ""
 
 
+def _alert(message: str) -> None:
+    """Throttled #alerts post via Hadley API (best-effort)."""
+    try:
+        req = urllib.request.Request(
+            "http://localhost:8100/alert",
+            data=json.dumps({
+                "message": message,
+                "source": "vercel-scraper",
+                "throttle_minutes": 720,
+            }).encode(),
+            headers={"Content-Type": "application/json",
+                     "x-api-key": _hadley_auth_key()},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        log.warning("alert post failed: %s", e)
+
+
 def main():
     log.info("=== Vercel Usage Scraper Starting ===")
 
-    metrics = scrape_vercel_usage()
+    metrics, status = scrape_vercel_usage()
+
+    # Self-heal the most common failure: a wedged shared Chrome-Vinted (cdp_failed
+    # / no_data while still logged in). Relaunch a fresh Chrome and retry ONCE
+    # before alerting — this is what actually broke on 2026-06-22, and it does
+    # NOT need a human. Only a real login redirect needs Chris.
+    if not metrics and status in ("cdp_failed", "no_data"):
+        log.warning("No metrics (status=%s) — relaunching Chrome-Vinted and retrying once", status)
+        if relaunch_chrome_vinted():
+            metrics, status = scrape_vercel_usage()
 
     if metrics:
         upsert_metrics(metrics)
-    else:
-        # Fail LOUDLY: a warning + exit 0 hid an expired Vercel session for
-        # 3 weeks (22 May - 12 Jun 2026) while the usage report ran on stale
-        # data. Alert #alerts (throttled) and give Task Scheduler a real
-        # failure code.
-        log.error("No metrics scraped — Vercel login likely expired (run scripts/login_vercel.py)")
-        try:
-            req = urllib.request.Request(
-                "http://localhost:8100/alert",
-                data=json.dumps({
-                    "message": "Vercel usage scraper got no metrics — Vercel session "
-                               "likely expired. Run scripts/login_vercel.py in the HB repo.",
-                    "source": "vercel-scraper",
-                    "throttle_minutes": 720,
-                }).encode(),
-                headers={"Content-Type": "application/json",
-                         "x-api-key": _hadley_auth_key()},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=10)
-        except Exception as e:
-            log.warning("alert post failed: %s", e)
-        sys.exit(1)
+        log.info("=== Vercel Usage Scraper Complete ===")
+        return
 
-    log.info("=== Vercel Usage Scraper Complete ===")
+    # Still no metrics after self-heal. Fail LOUDLY (a warning + exit 0 once hid
+    # an expired session for 3 weeks) but report the ACCURATE cause so the alert
+    # doesn't cry "re-login" when a relaunch is what's needed.
+    if status == "login_required":
+        log.error("Vercel session expired — run scripts/login_vercel.py")
+        _alert("Vercel usage scraper: the dashboard redirected to login — the "
+               "session has genuinely expired. Run `python scripts/login_vercel.py` "
+               "in the HB repo to re-authenticate.")
+    else:
+        log.error("No metrics scraped (status=%s) after Chrome relaunch — "
+                  "CDP/selector issue, NOT necessarily a login expiry", status)
+        _alert(f"Vercel usage scraper got no metrics (status={status}) even after "
+               "relaunching Chrome — likely a wedged CDP Chrome or dashboard "
+               "selector drift, not a login expiry. Check Chrome-Vinted on :9222.")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
