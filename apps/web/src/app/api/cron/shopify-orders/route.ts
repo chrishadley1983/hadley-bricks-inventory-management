@@ -64,11 +64,21 @@ export async function POST(request: NextRequest) {
     dedupe = { error: err instanceof Error ? err.message : String(err) };
   }
 
+  // Re-archive any sold product still live on Shopify (cache-vs-live archive drift),
+  // and Discord-alert on the mismatch (non-fatal if it errors).
+  let archiveDrift = null;
+  try {
+    archiveDrift = await syncService.reconcileArchiveDrift();
+  } catch (err) {
+    archiveDrift = { error: err instanceof Error ? err.message : String(err) };
+  }
+
   return NextResponse.json({
     success: orderResult.success,
     durationMs: Date.now() - startTime,
     orders: orderResult,
     reconcile,
     dedupe,
+    archiveDrift,
   });
 }

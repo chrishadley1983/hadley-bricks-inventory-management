@@ -11,6 +11,7 @@ import {
   getOrGenerateAIDescription,
 } from './descriptions';
 import { resolveImages, fetchEbayListing } from './images';
+import { discordService } from '@/lib/notifications';
 import type {
   ShopifyConfig,
   ShopifyProductPayload,
@@ -1138,6 +1139,127 @@ export class ShopifySyncService {
       if (rows.length < page) break;
       from += page;
     }
+    return out;
+  }
+
+  /**
+   * Reconcile ARCHIVE drift: products whose every backing inventory item is non-LISTED
+   * (all sold/removed) but are STILL ACTIVE on live Shopify — re-archive them and alert.
+   *
+   * Closes the gap behind the rare "sold item still buyable" case: archiveShopifyOnSold
+   * and the batchSync safety-net both trust the cached shopify_products.shopify_status,
+   * so when a live Shopify archive silently fails (its errors are swallowed), the row is
+   * marked 'archived' while the storefront product stays active — and no notification
+   * fires (the existing Discord alert only fires on a SUCCESSFUL archive). This sweep
+   * re-derives the truth from LIVE Shopify and surfaces the mismatch.
+   */
+  async reconcileArchiveDrift(): Promise<{
+    checked: number;
+    drifted: number;
+    archived: number;
+    failed: number;
+    errors: Array<{ productId: string; error: string }>;
+  }> {
+    const client = await this.getClient();
+    const out = {
+      checked: 0,
+      drifted: 0,
+      archived: 0,
+      failed: 0,
+      errors: [] as Array<{ productId: string; error: string }>,
+    };
+
+    // 1. All mappings for this user (paginate >1000).
+    const maps: Array<{ shopify_product_id: string | null; inventory_item_id: string | null }> = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await this.supabase
+        .from('shopify_products')
+        .select('shopify_product_id, inventory_item_id')
+        .eq('user_id', this.userId)
+        .range(from, from + 999);
+      if (!data || data.length === 0) break;
+      maps.push(...data);
+      if (data.length < 1000) break;
+    }
+
+    // 2. Inventory status/name for every mapped item.
+    const invIds = [...new Set(maps.map((m) => m.inventory_item_id).filter(Boolean))] as string[];
+    const inv = new Map<string, { status: string | null; set_number: string | null; item_name: string | null }>();
+    for (let i = 0; i < invIds.length; i += 300) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('id, status, set_number, item_name')
+        .in('id', invIds.slice(i, i + 300));
+      for (const r of data ?? []) inv.set(r.id, r);
+    }
+
+    // 3. Candidate products = no backing item is LISTED (every unit sold/removed).
+    const byProduct = new Map<string, { anyListed: boolean; sample: { set_number: string | null; item_name: string | null } | null }>();
+    for (const m of maps) {
+      if (!m.shopify_product_id) continue;
+      const r = m.inventory_item_id ? inv.get(m.inventory_item_id) : undefined;
+      const g = byProduct.get(m.shopify_product_id) ?? { anyListed: false, sample: null };
+      if (r) {
+        if ((r.status ?? '') === 'LISTED') g.anyListed = true;
+        if (!g.sample) g.sample = { set_number: r.set_number, item_name: r.item_name };
+      }
+      byProduct.set(m.shopify_product_id, g);
+    }
+    const candidates = [...byProduct.entries()].filter(([, g]) => !g.anyListed).map(([pid, g]) => ({ pid, sample: g.sample }));
+
+    // 4. Live-check candidates in batches; status=ACTIVE means it drifted (table says gone).
+    const drifted: Array<{ pid: string; sample: { set_number: string | null; item_name: string | null } | null }> = [];
+    for (let i = 0; i < candidates.length; i += 40) {
+      const batch = candidates.slice(i, i + 40);
+      const gids = batch.map((c) => `"gid://shopify/Product/${c.pid}"`).join(',');
+      let nodes: Array<{ id: string; status: string } | null> = [];
+      try {
+        const d = await client.graphql<{ nodes: Array<{ id: string; status: string } | null> }>(
+          `query{ nodes(ids:[${gids}]){ ... on Product{ id status } } }`
+        );
+        nodes = d.nodes ?? [];
+      } catch {
+        continue; // skip this batch on read error; next sweep retries
+      }
+      const liveStatus = new Map<string, string>();
+      for (const n of nodes) if (n) liveStatus.set(n.id.split('/').pop() as string, n.status);
+      for (const c of batch) {
+        out.checked++;
+        if (liveStatus.get(c.pid) === 'ACTIVE') drifted.push(c);
+      }
+    }
+    out.drifted = drifted.length;
+
+    // 5. Re-archive each drifted product.
+    for (const c of drifted) {
+      try {
+        await client.archiveProduct(c.pid);
+        await this.supabase
+          .from('shopify_products')
+          .update({ shopify_status: 'archived', sync_status: 'synced', last_synced_at: new Date().toISOString() })
+          .eq('shopify_product_id', c.pid);
+        out.archived++;
+      } catch (err) {
+        out.failed++;
+        out.errors.push({ productId: c.pid, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    // 6. Alert on drift — the notification archiveShopifyOnSold never sent on silent failure.
+    if (out.drifted > 0) {
+      const names = drifted
+        .slice(0, 5)
+        .map((c) => `${c.sample?.item_name ?? '?'} (${c.sample?.set_number ?? '?'})`)
+        .join(', ');
+      discordService
+        .sendSyncStatus({
+          title: '⚠️ Shopify archive drift reconciled',
+          message: `${out.drifted} sold product(s) were still ACTIVE on Shopify despite being cached as archived. Re-archived ${out.archived}${out.failed ? `, ${out.failed} failed` : ''}. e.g. ${names}.`,
+          success: out.failed === 0,
+        })
+        .catch(() => {});
+    }
+
     return out;
   }
 
