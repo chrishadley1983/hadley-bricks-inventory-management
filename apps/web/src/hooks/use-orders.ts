@@ -171,7 +171,8 @@ export function useBrickLinkSyncStatus() {
   return useQuery({
     queryKey: ['bricklink', 'sync-status'],
     queryFn: fetchBrickLinkSyncStatus,
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 120000, // Refresh every 2 minutes
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

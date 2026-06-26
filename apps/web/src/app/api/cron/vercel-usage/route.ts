@@ -252,8 +252,19 @@ async function sendDiscordSummary(report: VercelUsageReport): Promise<void> {
         } else {
           line += `\n   → falling ~${formatSlope(slopePerDay, m.unit)}/day`;
         }
+      } else if (slopePerDay > 1e-9) {
+        // Honest framing: a rolling-30d aggregate only starts falling once the
+        // new daily burn drops below the day rolling off the back of the window.
+        // A still-RISING number means daily burn has NOT dropped — say so
+        // plainly instead of implying a fix is about to surface.
+        const overLimit = m.current - m.limit;
+        const posture =
+          overLimit > 0
+            ? `${formatSlope(overLimit, m.unit)} over limit and still climbing`
+            : 'still climbing toward the limit';
+        line += `\n   → RISING ~${formatSlope(slopePerDay, m.unit)}/day — daily burn has not dropped (${posture})`;
       } else {
-        line += `\n   → not yet falling — migration effect surfaces as pre-change days roll off (~5d)`;
+        line += `\n   → flat over the last ${dStr} — no change yet`;
       }
       trends.push(line);
     }

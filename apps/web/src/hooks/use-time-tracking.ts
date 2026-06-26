@@ -99,7 +99,10 @@ export function useCurrentTimeEntry() {
       }
       return response.json();
     },
-    refetchInterval: 1000, // Refetch every second for timer updates
+    // The TimeTrackingPanel runs a local setInterval for the live stopwatch —
+    // the server poll only needs to re-sync state occasionally.
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
     staleTime: 0, // Always consider stale for real-time updates
   });
 }
@@ -118,7 +121,8 @@ export function useTimeSummary() {
       return response.json();
     },
     staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every minute
+    refetchInterval: 5 * 60 * 1000, // Summary is informational — every 5 minutes
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 
