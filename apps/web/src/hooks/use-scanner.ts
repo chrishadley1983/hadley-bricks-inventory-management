@@ -142,6 +142,7 @@ export function useActiveSession() {
     queryFn: fetchActiveSession,
     staleTime: 10 * 1000,
     refetchInterval: 10 * 1000,
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

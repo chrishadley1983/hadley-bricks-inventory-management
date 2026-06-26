@@ -142,7 +142,8 @@ export function useBrickLinkUploadSyncStatus(options?: { enabled?: boolean }) {
     queryKey: uploadKeys.sync(),
     queryFn: () => getBatchSyncStatus(),
     enabled: options?.enabled ?? true,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 90000, // Refetch every 90 seconds
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

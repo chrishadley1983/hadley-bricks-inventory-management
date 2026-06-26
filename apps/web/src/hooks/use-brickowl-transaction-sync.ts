@@ -59,7 +59,8 @@ export function useBrickOwlTransactionSync(
       return response.json();
     },
     staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // 1 minute
+    refetchInterval: 120 * 1000, // 2 minutes
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
     enabled,
   });
 
