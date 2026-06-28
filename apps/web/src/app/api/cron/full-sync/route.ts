@@ -923,6 +923,26 @@ export async function POST(request: NextRequest) {
         // Non-fatal - don't block the rest of the sync
       }
 
+      // Step 4b-2: Amazon phantom-stock reconcile — surface units still shown as
+      // available that actually sold (order shipped, sale never linked). Sends its
+      // own Discord alert on candidates. Non-fatal.
+      try {
+        const phantom = await withTimeout(
+          new AmazonInventoryLinkingService(supabase, userId).reconcilePhantomStock(),
+          SYNC_TIMEOUT,
+          'Amazon Phantom Reconcile'
+        );
+        console.log(
+          `[Cron FullSync] Phantom reconcile: ${phantom.phantoms.length} candidate(s) across ${phantom.checkedOrders} order(s), ${phantom.uncoveredUnits} uncovered unit(s)`
+        );
+      } catch (error) {
+        console.error(
+          '[Cron FullSync] Phantom reconcile failed:',
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+        // Non-fatal
+      }
+
       // Step 4c: Run eBay Inventory Linking (match orders to inventory, mark SOLD, archive Shopify)
       console.log('[Cron FullSync] Running eBay Inventory Linking...');
       try {

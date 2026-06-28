@@ -19,6 +19,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
 import { fetchAllRecords } from '@/lib/supabase/pagination';
+import { discordService } from '@/lib/notifications';
 
 // ============================================================================
 // Types
@@ -133,6 +134,85 @@ interface InventoryItem {
   created_at: string;
   status: string;
   amazon_order_item_id: string | null;
+}
+
+// ============================================================================
+// Phantom-stock reconciliation (the Amazon analogue of Shopify archive-drift)
+// ============================================================================
+
+/** A unit still shown as available that may actually have sold. */
+export interface PhantomInStockUnit {
+  id: string;
+  sku: string | null;
+  set_number: string | null;
+  item_name: string | null;
+  amazon_asin: string | null;
+  listing_date: string | null; // YYYY-MM-DD
+  listing_value: number | null;
+}
+
+/** A shipped order line that has fewer linked units than it sold. */
+export interface PhantomUncoveredOrder {
+  platformOrderId: string;
+  orderDate: string; // ISO timestamp
+  short: number; // units shipped but not linked to any inventory unit
+  perUnit: number | null; // estimated per-unit sale value
+}
+
+export interface PhantomCandidate {
+  unit: PhantomInStockUnit;
+  order: PhantomUncoveredOrder;
+}
+
+/**
+ * Assign uncovered shipped units to in-stock units that are genuine phantoms.
+ *
+ * Pure (no DB) so it can be unit-tested. Rules, per ASIN:
+ *  - Only a unit whose `listing_date` is on/before the sale date can be the unit
+ *    that sold (chronology guard — a unit listed after the sale is real stock).
+ *  - FIFO: oldest-listed units fill oldest uncovered orders first.
+ *  - Cap matches per ASIN at the number of uncovered "slots" so we never flag
+ *    more units than actually went missing (avoids over-flagging when an ASIN
+ *    has many in-stock units and one stray uncovered sale).
+ */
+export function assignPhantomCandidates(
+  inStockByAsin: Map<string, PhantomInStockUnit[]>,
+  uncoveredByAsin: Map<string, PhantomUncoveredOrder[]>
+): PhantomCandidate[] {
+  const out: PhantomCandidate[] = [];
+
+  for (const [asin, orders] of uncoveredByAsin) {
+    const units = (inStockByAsin.get(asin) ?? [])
+      .slice()
+      .sort((a, b) => (a.listing_date ?? '9999').localeCompare(b.listing_date ?? '9999'));
+    if (units.length === 0) continue;
+
+    // One slot per missing unit, oldest order first.
+    const slots = orders
+      .slice()
+      .sort((a, b) => a.orderDate.localeCompare(b.orderDate))
+      .flatMap((o) => Array.from({ length: Math.max(0, o.short) }, () => o));
+
+    const used = new Set<string>();
+    for (const slot of slots) {
+      const saleDay = slot.orderDate.slice(0, 10);
+      const unit = units.find(
+        (u) => !used.has(u.id) && (u.listing_date ?? '9999') <= saleDay
+      );
+      if (!unit) continue; // no plausible (early-enough) unit left → historical
+      used.add(unit.id);
+      out.push({ unit, order: slot });
+    }
+  }
+
+  return out;
+}
+
+export interface PhantomReconcileResult {
+  checkedOrders: number;
+  uncoveredUnits: number;
+  phantoms: PhantomCandidate[];
+  alerted: boolean;
 }
 
 // ============================================================================
@@ -377,12 +457,18 @@ export class AmazonInventoryLinkingService {
       // Verify the linked inventory item is valid
       const { data: inventory } = await this.supabase
         .from('inventory_items')
-        .select('id, amazon_asin, set_number, status')
+        .select('id, amazon_asin, set_number, status, sold_order_id')
         .eq('id', orderItem.inventory_item_id)
         .eq('user_id', this.userId)
         .single();
 
-      if (inventory) {
+      // Guard against the double-link bug: the fulfillment/picklist workflow can
+      // point two orders at the SAME unit, or re-use a unit that already sold to a
+      // different order. Only auto-accept the pre-link when the unit is still
+      // claimable BY THIS order; otherwise fall through to ASIN matching, which
+      // claims a fresh unit (or queues for resolution if none remain). This stops
+      // one physical unit from being marked sold against two orders.
+      if (inventory && (await this.isUnitClaimableBy(inventory, orderItem, order))) {
         // Check if ASIN matches (optional validation)
         if (inventory.amazon_asin && inventory.amazon_asin !== asin) {
           // ASIN mismatch - might be wrong item linked
@@ -473,6 +559,40 @@ export class AmazonInventoryLinkingService {
       inventoryIds: selectedItems.map((i) => i.id),
       confidence: 1.0,
     };
+  }
+
+  /**
+   * Is `unit` still claimable as the sold item for THIS order?
+   *
+   * Returns false when the unit is already consumed by a *different* order —
+   * either it's SOLD against another order, or another order_item already links
+   * to it. This is the guard that prevents the linker from marking one physical
+   * unit sold against two orders (the historical double-link bug). A unit that is
+   * SOLD against *this* same order stays claimable, so re-processing is idempotent.
+   *
+   * `sold_order_id` may hold either the Amazon order string or the internal
+   * platform_orders UUID, so both forms are accepted.
+   */
+  private async isUnitClaimableBy(
+    unit: { id: string; status: string; sold_order_id?: string | null },
+    orderItem: OrderItem,
+    order: PlatformOrder
+  ): Promise<boolean> {
+    if (unit.status === 'SOLD') {
+      const soldTo = unit.sold_order_id ?? null;
+      const thisOrder = soldTo === order.platform_order_id || soldTo === order.id;
+      if (!thisOrder) return false; // sold to a different (or unknown) order
+    }
+
+    // Linked to another order's line item?
+    const { data: otherLinks } = await this.supabase
+      .from('order_items')
+      .select('id')
+      .eq('inventory_item_id', unit.id)
+      .neq('order_id', orderItem.order_id)
+      .limit(1);
+
+    return !otherLinks || otherLinks.length === 0;
   }
 
   // --------------------------------------------------------------------------
@@ -1332,6 +1452,188 @@ export class AmazonInventoryLinkingService {
 
     console.log(`[AutoCompleteOldOrders] Complete: ${result.completed} orders marked as Completed`);
     return result;
+  }
+
+  // --------------------------------------------------------------------------
+  // Phantom-stock reconciliation
+  // --------------------------------------------------------------------------
+
+  /**
+   * Detect "phantom stock" — inventory units still shown as LISTED/BACKLOG that
+   * actually sold on Amazon (the order shipped but its sale was never linked to a
+   * unit, e.g. the double-link bug). The Amazon analogue of the Shopify
+   * archive-drift reconciler.
+   *
+   * Detection (corrected for the two blind spots that caused false orphans):
+   *  - An order is "covered" when a SOLD unit references it by EITHER the Amazon
+   *    order string OR the internal platform_orders UUID (both forms occur).
+   *  - Coverage is quantity-aware (a qty-2 order needs 2 linked units).
+   *  - A current LISTED/BACKLOG unit is only a phantom if it was listed ON OR
+   *    BEFORE the uncovered sale (chronology guard) — otherwise it's real stock.
+   *
+   * Alert-only: surfaces candidates to Discord for review rather than
+   * auto-marking sold, because marking sold is a financial mutation and the
+   * matching, while strong, can have edge cases (multi-qty, price). Returns the
+   * candidate list so callers/validators can act.
+   */
+  async reconcilePhantomStock(opts?: { alert?: boolean }): Promise<PhantomReconcileResult> {
+    const shouldAlert = opts?.alert ?? true;
+
+    // 1. In-stock Amazon units (LISTED/BACKLOG) that have an ASIN + listing date.
+    const inStock: PhantomInStockUnit[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('id, sku, set_number, item_name, amazon_asin, listing_date, listing_value')
+        .eq('user_id', this.userId)
+        .in('status', ['LISTED', 'BACKLOG'])
+        .not('amazon_asin', 'is', null)
+        .not('listing_date', 'is', null)
+        .range(from, from + 999);
+      if (!data || data.length === 0) break;
+      inStock.push(...(data as unknown as PhantomInStockUnit[]));
+      if (data.length < 1000) break;
+    }
+    if (inStock.length === 0) {
+      return { checkedOrders: 0, uncoveredUnits: 0, phantoms: [], alerted: false };
+    }
+    const inStockByAsin = new Map<string, PhantomInStockUnit[]>();
+    for (const u of inStock) {
+      if (!u.amazon_asin) continue;
+      const k = u.amazon_asin.trim();
+      const arr = inStockByAsin.get(k);
+      if (arr) arr.push(u);
+      else inStockByAsin.set(k, [u]);
+    }
+    const asinsWithStock = [...inStockByAsin.keys()];
+
+    // 2. Coverage frequency: how many SOLD Amazon units reference each order id
+    //    (keyed by both the Amazon string and the platform_orders UUID forms).
+    const soldFreq = new Map<string, number>();
+    for (let from = 0; ; from += 1000) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('sold_order_id')
+        .eq('user_id', this.userId)
+        .eq('sold_platform', 'amazon')
+        .not('sold_order_id', 'is', null)
+        .range(from, from + 999);
+      if (!data || data.length === 0) break;
+      for (const r of data as Array<{ sold_order_id: string }>) {
+        soldFreq.set(r.sold_order_id, (soldFreq.get(r.sold_order_id) ?? 0) + 1);
+      }
+      if (data.length < 1000) break;
+    }
+
+    // 3. Shipped, non-cancelled Amazon order lines for the in-stock ASINs.
+    //    Aggregate per order: total shipped qty + estimated per-unit value.
+    interface OrderAgg {
+      poId: string;
+      platformOrderId: string;
+      orderDate: string;
+      asin: string;
+      qty: number;
+      total: number;
+    }
+    const orderAgg = new Map<string, OrderAgg>();
+    for (let i = 0; i < asinsWithStock.length; i += 100) {
+      const chunk = asinsWithStock.slice(i, i + 100);
+      for (let from = 0; ; from += 1000) {
+        const { data } = await this.supabase
+          .from('order_items')
+          .select(
+            'quantity, item_number, platform_orders!inner(id, platform_order_id, order_date, total, platform, internal_status, user_id)'
+          )
+          .in('item_number', chunk)
+          .gt('quantity', 0)
+          .eq('platform_orders.platform', 'amazon')
+          .eq('platform_orders.user_id', this.userId)
+          .range(from, from + 999);
+        if (!data || data.length === 0) break;
+        for (const row of data as unknown as Array<{
+          quantity: number;
+          item_number: string | null;
+          platform_orders: {
+            id: string;
+            platform_order_id: string;
+            order_date: string | null;
+            total: number | null;
+            internal_status: string | null;
+          } | null;
+        }>) {
+          const po = row.platform_orders;
+          if (!po || !po.order_date) continue;
+          if ((po.internal_status ?? '') === 'Cancelled') continue;
+          const existing = orderAgg.get(po.id);
+          if (existing) {
+            existing.qty += row.quantity;
+          } else {
+            orderAgg.set(po.id, {
+              poId: po.id,
+              platformOrderId: po.platform_order_id,
+              orderDate: po.order_date,
+              asin: (row.item_number ?? '').trim(),
+              qty: row.quantity,
+              total: Number(po.total) || 0,
+            });
+          }
+        }
+        if (data.length < 1000) break;
+      }
+    }
+
+    // 4. Uncovered orders: linked (by either id form) < shipped qty.
+    const uncoveredByAsin = new Map<string, PhantomUncoveredOrder[]>();
+    let uncoveredUnits = 0;
+    for (const agg of orderAgg.values()) {
+      const linked =
+        (soldFreq.get(agg.platformOrderId) ?? 0) + (soldFreq.get(agg.poId) ?? 0);
+      const short = agg.qty - linked;
+      if (short <= 0) continue;
+      const perUnit = agg.qty > 0 && agg.total > 0 ? agg.total / agg.qty : null;
+      const list = uncoveredByAsin.get(agg.asin) ?? [];
+      list.push({
+        platformOrderId: agg.platformOrderId,
+        orderDate: agg.orderDate,
+        short,
+        perUnit,
+      });
+      uncoveredByAsin.set(agg.asin, list);
+      uncoveredUnits += short;
+    }
+
+    // 5. FIFO-assign uncovered units to chronologically-plausible in-stock units.
+    const phantoms = assignPhantomCandidates(inStockByAsin, uncoveredByAsin);
+
+    // 6. Alert on candidates (no auto-mutation).
+    let alerted = false;
+    if (shouldAlert && phantoms.length > 0) {
+      const examples = phantoms
+        .slice(0, 6)
+        .map(
+          (p) =>
+            `• ${p.unit.set_number ?? '?'} ${p.unit.item_name ?? ''} (${p.unit.sku ?? 'no-sku'}) — sold ${p.order.orderDate.slice(0, 10)} via ${p.order.platformOrderId}`
+        )
+        .join('\n');
+      await discordService
+        .sendSyncStatus({
+          title: '⚠️ Amazon phantom stock detected',
+          message:
+            `${phantoms.length} unit(s) are still shown as available but appear to have sold on Amazon ` +
+            `(order shipped, sale never linked).\n${examples}` +
+            (phantoms.length > 6 ? `\n…and ${phantoms.length - 6} more.` : '') +
+            `\nReview & mark sold — these won't sell again and may oversell on cross-listed channels.`,
+          success: false,
+        })
+        .catch(() => {});
+      alerted = true;
+    }
+
+    console.log(
+      `[PhantomReconcile] checked ${orderAgg.size} orders, ${uncoveredUnits} uncovered units, ${phantoms.length} phantom candidate(s)`
+    );
+
+    return { checkedOrders: orderAgg.size, uncoveredUnits, phantoms, alerted };
   }
 }
 
