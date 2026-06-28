@@ -1486,6 +1486,40 @@ export class AmazonInventoryLinkingService {
   async reconcilePhantomStock(opts?: { alert?: boolean }): Promise<PhantomReconcileResult> {
     const shouldAlert = opts?.alert ?? true;
 
+    // Refunded orders (Amazon returns): a refunded sale is reversed — the unit
+    // legitimately comes back into stock and gets re-listed, so neither the
+    // coverage math nor the self-covering check should treat it as a phantom.
+    // Collect both id forms (Amazon string + platform_orders UUID).
+    const refundedKeys = new Set<string>();
+    {
+      const refundedStrings = new Set<string>();
+      for (let from = 0; ; from += 1000) {
+        const { data } = await this.supabase
+          .from('amazon_transactions')
+          .select('amazon_order_id')
+          .eq('user_id', this.userId)
+          .ilike('transaction_type', '%refund%')
+          .not('amazon_order_id', 'is', null)
+          .range(from, from + 999);
+        if (!data || data.length === 0) break;
+        for (const r of data as Array<{ amazon_order_id: string }>) {
+          if (r.amazon_order_id) {
+            refundedStrings.add(r.amazon_order_id);
+            refundedKeys.add(r.amazon_order_id);
+          }
+        }
+        if (data.length < 1000) break;
+      }
+      const arr = [...refundedStrings];
+      for (let i = 0; i < arr.length; i += 100) {
+        const { data } = await this.supabase
+          .from('platform_orders')
+          .select('id, platform_order_id')
+          .in('platform_order_id', arr.slice(i, i + 100));
+        for (const o of (data ?? []) as Array<{ id: string }>) refundedKeys.add(o.id);
+      }
+    }
+
     // 0. Self-covering phantoms: units that are LISTED/BACKLOG yet still carry
     //    their OWN amazon sold_order_id (sold then wrongly re-listed). Invisible
     //    to the per-ASIN coverage math (a unit "covers" its own order), so detect
@@ -1538,6 +1572,7 @@ export class AmazonInventoryLinkingService {
         }
         for (const c of candidates) {
           if (cancelled.has(c.sold_order_id)) continue;
+          if (refundedKeys.has(c.sold_order_id)) continue; // refunded → legitimate re-list
           selfCovering.push({
             id: c.id,
             sku: c.sku,
@@ -1662,6 +1697,7 @@ export class AmazonInventoryLinkingService {
     const uncoveredByAsin = new Map<string, PhantomUncoveredOrder[]>();
     let uncoveredUnits = 0;
     for (const agg of orderAgg.values()) {
+      if (refundedKeys.has(agg.platformOrderId) || refundedKeys.has(agg.poId)) continue; // refunded sale
       const linked =
         (soldFreq.get(agg.platformOrderId) ?? 0) + (soldFreq.get(agg.poId) ?? 0);
       const short = agg.qty - linked;
