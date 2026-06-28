@@ -7,6 +7,8 @@ import {
 } from '../amazon-inventory-linking.service';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
+const { sendSyncStatus } = vi.hoisted(() => ({ sendSyncStatus: vi.fn() }));
+vi.mock('@/lib/notifications', () => ({ discordService: { sendSyncStatus } }));
 vi.spyOn(console, 'log').mockImplementation(() => {});
 vi.spyOn(console, 'warn').mockImplementation(() => {});
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -174,5 +176,65 @@ describe('matchOrderItemToInventory picklist claimability guard', () => {
     const result = await service.matchOrderItemToInventory(orderItem, order, 'picklist');
     expect(result.status).toBe('matched');
     expect(result.method).toBe('auto_picklist');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reconcilePhantomStock — self-covering detection (LISTED + own sold_order_id)
+// ---------------------------------------------------------------------------
+
+describe('reconcilePhantomStock self-covering detection', () => {
+  // A queue-based supabase mock: each awaited query shifts the next response.
+  function queueSupabase(responses: Array<{ data: unknown; error: unknown }>) {
+    let i = 0;
+    const next = () => responses[i++] ?? { data: [], error: null };
+    const builder = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const b: Record<string, any> = {};
+      for (const fn of ['select', 'eq', 'neq', 'is', 'not', 'in', 'ilike', 'order', 'limit', 'range', 'gt']) {
+        b[fn] = () => b;
+      }
+      b.single = () => Promise.resolve(next());
+      b.then = (res: (v: unknown) => void) => {
+        const v = next();
+        res(v);
+        return Promise.resolve(v);
+      };
+      return b;
+    };
+    return { from: () => builder() };
+  }
+
+  beforeEach(() => {
+    sendSyncStatus.mockReset();
+    sendSyncStatus.mockResolvedValue({ ok: true });
+  });
+
+  it('flags a LISTED unit that still carries its own sold_order_id, and alerts', async () => {
+    const supabase = queueSupabase([
+      { data: [{ id: 'u1', sku: 'N3248', set_number: '76068', item_name: 'X', amazon_asin: 'B01', listing_date: '2026-02-22', listing_value: 37.49, sold_order_id: '203-5271308-6319545' }], error: null }, // self-covering candidates
+      { data: [], error: null }, // platform_orders cancelled-check (none cancelled)
+      { data: [], error: null }, // in-stock fetch (empty) -> early return
+    ]);
+    const service = new AmazonInventoryLinkingService(supabase as never, 'u');
+    const result = await service.reconcilePhantomStock();
+    expect(result.selfCovering).toHaveLength(1);
+    expect(result.selfCovering[0].sku).toBe('N3248');
+    expect(result.phantoms).toHaveLength(0);
+    expect(result.alerted).toBe(true);
+    expect(sendSyncStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT flag a self-covering unit whose order was Cancelled', async () => {
+    const supabase = queueSupabase([
+      { data: [{ id: 'u1', sku: 'N9', set_number: '1', item_name: 'X', amazon_asin: 'B01', listing_date: '2026-02-22', listing_value: 9.99, sold_order_id: '111-2222222-3333333' }], error: null },
+      { data: [{ platform_order_id: '111-2222222-3333333', internal_status: 'Cancelled' }], error: null }, // order cancelled
+      { data: [], error: null }, // in-stock empty
+    ]);
+    const service = new AmazonInventoryLinkingService(supabase as never, 'u');
+    const result = await service.reconcilePhantomStock();
+    expect(result.selfCovering).toHaveLength(0);
+    expect(result.alerted).toBe(false);
+    expect(sendSyncStatus).not.toHaveBeenCalled();
   });
 });

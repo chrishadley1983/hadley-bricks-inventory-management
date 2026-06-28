@@ -26,7 +26,14 @@ export async function POST(request: NextRequest) {
       checkedOrders: result.checkedOrders,
       uncoveredUnits: result.uncoveredUnits,
       phantomCount: result.phantoms.length,
+      selfCoveringCount: result.selfCovering.length,
       alerted: result.alerted,
+      selfCovering: result.selfCovering.map((u) => ({
+        sku: u.sku,
+        setNumber: u.set_number,
+        itemName: u.item_name,
+        asin: u.amazon_asin,
+      })),
       phantoms: result.phantoms.map((p) => ({
         sku: p.unit.sku,
         setNumber: p.unit.set_number,

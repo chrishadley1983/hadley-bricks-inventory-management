@@ -212,6 +212,13 @@ export interface PhantomReconcileResult {
   checkedOrders: number;
   uncoveredUnits: number;
   phantoms: PhantomCandidate[];
+  /**
+   * "Self-covering" phantoms: units that are LISTED/BACKLOG yet still carry their
+   * OWN sold_order_id (they sold but were wrongly re-listed). These are invisible
+   * to the per-ASIN coverage math (a unit covers its own order), so they need a
+   * dedicated check. High-confidence — the unit already holds the sale record.
+   */
+  selfCovering: PhantomInStockUnit[];
   alerted: boolean;
 }
 
@@ -1479,6 +1486,71 @@ export class AmazonInventoryLinkingService {
   async reconcilePhantomStock(opts?: { alert?: boolean }): Promise<PhantomReconcileResult> {
     const shouldAlert = opts?.alert ?? true;
 
+    // 0. Self-covering phantoms: units that are LISTED/BACKLOG yet still carry
+    //    their OWN amazon sold_order_id (sold then wrongly re-listed). Invisible
+    //    to the per-ASIN coverage math (a unit "covers" its own order), so detect
+    //    them directly. Exclude returns (returned_from_item_id) — those legitimately
+    //    re-list — and cancelled orders.
+    const selfCovering: PhantomInStockUnit[] = [];
+    {
+      const candidates: Array<PhantomInStockUnit & { sold_order_id: string }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data } = await this.supabase
+          .from('inventory_items')
+          .select(
+            'id, sku, set_number, item_name, amazon_asin, listing_date, listing_value, sold_order_id'
+          )
+          .eq('user_id', this.userId)
+          .in('status', ['LISTED', 'BACKLOG'])
+          .eq('sold_platform', 'amazon')
+          .not('sold_order_id', 'is', null)
+          .is('returned_from_item_id', null)
+          .range(from, from + 999);
+        if (!data || data.length === 0) break;
+        candidates.push(
+          ...(data as unknown as Array<PhantomInStockUnit & { sold_order_id: string }>)
+        );
+        if (data.length < 1000) break;
+      }
+      if (candidates.length > 0) {
+        // Drop any whose order was Cancelled (sold_order_id may be the Amazon
+        // string or the platform_orders UUID — check both).
+        const ids = [...new Set(candidates.map((c) => c.sold_order_id))];
+        const uuids = ids.filter((s) => /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(s));
+        const cancelled = new Set<string>();
+        for (let i = 0; i < ids.length; i += 100) {
+          const { data: byStr } = await this.supabase
+            .from('platform_orders')
+            .select('platform_order_id, internal_status')
+            .in('platform_order_id', ids.slice(i, i + 100));
+          for (const o of (byStr ?? []) as Array<{ platform_order_id: string; internal_status: string | null }>) {
+            if ((o.internal_status ?? '') === 'Cancelled') cancelled.add(o.platform_order_id);
+          }
+        }
+        for (let i = 0; i < uuids.length; i += 100) {
+          const { data: byId } = await this.supabase
+            .from('platform_orders')
+            .select('id, internal_status')
+            .in('id', uuids.slice(i, i + 100));
+          for (const o of (byId ?? []) as Array<{ id: string; internal_status: string | null }>) {
+            if ((o.internal_status ?? '') === 'Cancelled') cancelled.add(o.id);
+          }
+        }
+        for (const c of candidates) {
+          if (cancelled.has(c.sold_order_id)) continue;
+          selfCovering.push({
+            id: c.id,
+            sku: c.sku,
+            set_number: c.set_number,
+            item_name: c.item_name,
+            amazon_asin: c.amazon_asin,
+            listing_date: c.listing_date,
+            listing_value: c.listing_value,
+          });
+        }
+      }
+    }
+
     // 1. In-stock Amazon units (LISTED/BACKLOG) that have an ASIN + listing date.
     const inStock: PhantomInStockUnit[] = [];
     for (let from = 0; ; from += 1000) {
@@ -1495,7 +1567,11 @@ export class AmazonInventoryLinkingService {
       if (data.length < 1000) break;
     }
     if (inStock.length === 0) {
-      return { checkedOrders: 0, uncoveredUnits: 0, phantoms: [], alerted: false };
+      const alerted =
+        shouldAlert && selfCovering.length > 0
+          ? await this.sendPhantomAlert([], selfCovering)
+          : false;
+      return { checkedOrders: 0, uncoveredUnits: 0, phantoms: [], selfCovering, alerted };
     }
     const inStockByAsin = new Map<string, PhantomInStockUnit[]>();
     for (const u of inStock) {
@@ -1606,34 +1682,57 @@ export class AmazonInventoryLinkingService {
     const phantoms = assignPhantomCandidates(inStockByAsin, uncoveredByAsin);
 
     // 6. Alert on candidates (no auto-mutation).
-    let alerted = false;
-    if (shouldAlert && phantoms.length > 0) {
-      const examples = phantoms
+    const alerted =
+      shouldAlert && (phantoms.length > 0 || selfCovering.length > 0)
+        ? await this.sendPhantomAlert(phantoms, selfCovering)
+        : false;
+
+    console.log(
+      `[PhantomReconcile] checked ${orderAgg.size} orders, ${uncoveredUnits} uncovered, ${phantoms.length} phantom candidate(s), ${selfCovering.length} self-covering`
+    );
+
+    return { checkedOrders: orderAgg.size, uncoveredUnits, phantoms, selfCovering, alerted };
+  }
+
+  /** Build + post the phantom-stock Discord summary. Returns true (alerted). */
+  private async sendPhantomAlert(
+    phantoms: PhantomCandidate[],
+    selfCovering: PhantomInStockUnit[]
+  ): Promise<boolean> {
+    const sections: string[] = [];
+    if (selfCovering.length > 0) {
+      const ex = selfCovering
+        .slice(0, 6)
+        .map((u) => `• ${u.set_number ?? '?'} ${u.item_name ?? ''} (${u.sku ?? 'no-sku'})`)
+        .join('\n');
+      sections.push(
+        `**${selfCovering.length} already-sold unit(s) wrongly re-listed** — they still carry their own sold_order_id; re-mark SOLD:\n${ex}` +
+          (selfCovering.length > 6 ? `\n…and ${selfCovering.length - 6} more.` : '')
+      );
+    }
+    if (phantoms.length > 0) {
+      const ex = phantoms
         .slice(0, 6)
         .map(
           (p) =>
             `• ${p.unit.set_number ?? '?'} ${p.unit.item_name ?? ''} (${p.unit.sku ?? 'no-sku'}) — sold ${p.order.orderDate.slice(0, 10)} via ${p.order.platformOrderId}`
         )
         .join('\n');
-      await discordService
-        .sendSyncStatus({
-          title: '⚠️ Amazon phantom stock detected',
-          message:
-            `${phantoms.length} unit(s) are still shown as available but appear to have sold on Amazon ` +
-            `(order shipped, sale never linked).\n${examples}` +
-            (phantoms.length > 6 ? `\n…and ${phantoms.length - 6} more.` : '') +
-            `\nReview & mark sold — these won't sell again and may oversell on cross-listed channels.`,
-          success: false,
-        })
-        .catch(() => {});
-      alerted = true;
+      sections.push(
+        `**${phantoms.length} unit(s) shown as available but appear sold** (order shipped, sale never linked):\n${ex}` +
+          (phantoms.length > 6 ? `\n…and ${phantoms.length - 6} more.` : '')
+      );
     }
-
-    console.log(
-      `[PhantomReconcile] checked ${orderAgg.size} orders, ${uncoveredUnits} uncovered units, ${phantoms.length} phantom candidate(s)`
-    );
-
-    return { checkedOrders: orderAgg.size, uncoveredUnits, phantoms, alerted };
+    await discordService
+      .sendSyncStatus({
+        title: '⚠️ Amazon phantom stock detected',
+        message:
+          sections.join('\n\n') +
+          `\n\nReview & mark sold — these won't sell again and may oversell on cross-listed channels.`,
+        success: false,
+      })
+      .catch(() => {});
+    return true;
   }
 }
 
