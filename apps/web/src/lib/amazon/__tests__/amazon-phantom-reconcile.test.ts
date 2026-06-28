@@ -212,6 +212,7 @@ describe('reconcilePhantomStock self-covering detection', () => {
 
   it('flags a LISTED unit that still carries its own sold_order_id, and alerts', async () => {
     const supabase = queueSupabase([
+      { data: [], error: null }, // refunded-orders fetch (none)
       { data: [{ id: 'u1', sku: 'N3248', set_number: '76068', item_name: 'X', amazon_asin: 'B01', listing_date: '2026-02-22', listing_value: 37.49, sold_order_id: '203-5271308-6319545' }], error: null }, // self-covering candidates
       { data: [], error: null }, // platform_orders cancelled-check (none cancelled)
       { data: [], error: null }, // in-stock fetch (empty) -> early return
@@ -227,6 +228,7 @@ describe('reconcilePhantomStock self-covering detection', () => {
 
   it('does NOT flag a self-covering unit whose order was Cancelled', async () => {
     const supabase = queueSupabase([
+      { data: [], error: null }, // refunded-orders fetch (none)
       { data: [{ id: 'u1', sku: 'N9', set_number: '1', item_name: 'X', amazon_asin: 'B01', listing_date: '2026-02-22', listing_value: 9.99, sold_order_id: '111-2222222-3333333' }], error: null },
       { data: [{ platform_order_id: '111-2222222-3333333', internal_status: 'Cancelled' }], error: null }, // order cancelled
       { data: [], error: null }, // in-stock empty
@@ -234,6 +236,21 @@ describe('reconcilePhantomStock self-covering detection', () => {
     const service = new AmazonInventoryLinkingService(supabase as never, 'u');
     const result = await service.reconcilePhantomStock();
     expect(result.selfCovering).toHaveLength(0);
+    expect(result.alerted).toBe(false);
+    expect(sendSyncStatus).not.toHaveBeenCalled();
+  });
+
+  it('does NOT flag a self-covering unit whose order was Refunded (a return)', async () => {
+    const supabase = queueSupabase([
+      { data: [{ amazon_order_id: '203-5271308-6319545' }], error: null }, // refunded-orders fetch
+      { data: [], error: null }, // platform_orders UUID-map for refunded order (none)
+      { data: [{ id: 'u1', sku: 'N3248', set_number: '76068', item_name: 'X', amazon_asin: 'B01', listing_date: '2026-02-22', listing_value: 37.49, sold_order_id: '203-5271308-6319545' }], error: null }, // self-covering candidate — but refunded
+      { data: [], error: null }, // cancelled-check
+      { data: [], error: null }, // in-stock empty
+    ]);
+    const service = new AmazonInventoryLinkingService(supabase as never, 'u');
+    const result = await service.reconcilePhantomStock();
+    expect(result.selfCovering).toHaveLength(0); // refunded order -> legitimate re-list, not a phantom
     expect(result.alerted).toBe(false);
     expect(sendSyncStatus).not.toHaveBeenCalled();
   });
