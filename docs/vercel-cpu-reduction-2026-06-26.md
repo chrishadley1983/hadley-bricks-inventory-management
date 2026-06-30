@@ -58,3 +58,36 @@ ratio to Active CPU projects the rolling-30d to **~3.5h /30d**, clearing the 4h
 limit with ~11% margin even under a pessimistic CPU:wall ratio — before counting
 the client-polling savings. The rolling-30d figure lags ~2–3 weeks as pre-change
 days roll off the window; the daily `vercel-usage` report now shows the true slope.
+
+## Follow-up — 30 Jun 2026: `ebay-pricing` moved off Vercel to the local bot
+
+**Verified 30 Jun** (via `job_execution_history`): the 26 Jun cuts landed exactly as
+designed — `amazon-pricing` 48→8 runs/day (~1,135→~201 wall-s/day), total
+Vercel-executing cron wall **2,005→909 s/day (−55%)**, rolling-30d Fluid CPU peaked
+28,980s on 26 Jun and began declining. Steady-state projects ~3.6h/30d — clears 4h
+but with only ~9% margin.
+
+To widen the margin, the **largest remaining untouched Vercel pricing job** was
+migrated. `ebay-pricing` (like `amazon-pricing`/`bricklink-pricing`) runs **on
+Vercel** because `gcp/functions/pricing-sync-driver` loops calling the
+`…vercel.app/api/cron/ebay-pricing` route. It is a once-daily cursor-resumable batch
+(02:00 UTC, ~1,000 watchlist items in 100-item chunks, ~207 wall-s/day, ~100 CPU-s/day).
+A once-daily batch is ideal for the local bot.
+
+**Change (same pattern as the 12 Jun local migration of full-sync/ebay-fp-cleanup/etc.):**
+- New `scripts/run-ebay-pricing.ps1` — loops POSTing `http://localhost:3000/api/cron/ebay-pricing`
+  (local NSSM Next.js server) until `{ complete: true }`, mirroring the driver loop.
+  Reads `CRON_SECRET` from `apps/web/.env.local`.
+- New `scripts/register-ebay-pricing-task.ps1` — registers Windows Task
+  `HadleyBricks-Ebay-Pricing-Local`, daily 03:00 local.
+- GCP `ebay-pricing-sync` Cloud Scheduler job **PAUSED** (was `0 2 * * *`) so the work
+  no longer executes on Vercel. No route code changed → no local rebuild needed.
+
+**Rollback:**
+```
+gcloud scheduler jobs resume ebay-pricing-sync --location=europe-west2 --project=gen-lang-client-0823893317
+Unregister-ScheduledTask -TaskName "HadleyBricks-Ebay-Pricing-Local" -Confirm:$false
+```
+
+**Projected effect:** removes ~209 s/day Vercel wall (~100 CPU-s/day) → steady-state
+rolling-30d Fluid CPU ~3.6h → **~2.8h/30d**, lifting headroom from ~9% to ~30%.
