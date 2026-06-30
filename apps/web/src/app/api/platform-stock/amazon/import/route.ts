@@ -8,17 +8,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api/require-user';
 import { AmazonStockService } from '@/lib/platform-stock';
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const { user, supabase, unauthorized } = await requireUser();
     if (unauthorized) return unauthorized;
 
     const service = new AmazonStockService(supabase, user.id);
 
-    console.log(`[POST /api/platform-stock/amazon/import] User ${user.id} triggering import`);
+    // `?force=true` bypasses the recent-import cooldown for a deliberate refresh.
+    const force = new URL(request.url).searchParams.get('force') === 'true';
+
+    console.log(
+      `[POST /api/platform-stock/amazon/import] User ${user.id} triggering import (force=${force})`
+    );
 
     // Trigger the import (this can take several minutes)
-    const importResult = await service.triggerImport();
+    const importResult = await service.triggerImport({ force });
 
     return NextResponse.json(
       {

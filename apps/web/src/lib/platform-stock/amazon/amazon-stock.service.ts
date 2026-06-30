@@ -24,6 +24,22 @@ import type {
 // Use Supabase generated types for database operations
 type PlatformListingInsert = Database['public']['Tables']['platform_listings']['Insert'];
 
+/**
+ * Default throttle window: if a completed import ran within this window, a new
+ * trigger returns the recent import instead of requesting another report. This
+ * prevents over-pulling GET_MERCHANT_LISTINGS_ALL_DATA in quick succession,
+ * which causes Amazon to queue/throttle report generation (→ timeouts).
+ */
+const DEFAULT_IMPORT_COOLDOWN_MS = 10 * 60 * 1000;
+
+/** Options for triggering an import */
+export interface TriggerImportOptions {
+  /** Bypass the cooldown and force a fresh report request */
+  force?: boolean;
+  /** Override the cooldown window in ms (0 disables throttling) */
+  cooldownMs?: number;
+}
+
 // ============================================================================
 // AMAZON STOCK SERVICE
 // ============================================================================
@@ -60,13 +76,34 @@ export class AmazonStockService extends PlatformStockService {
    * 5. Download and parse report
    * 6. Store listings in database
    */
-  async triggerImport(): Promise<ListingImport> {
+  async triggerImport(options?: TriggerImportOptions): Promise<ListingImport> {
     console.log('[AmazonStockService] Starting listings import...');
 
     // 1. Get Amazon credentials
     const credentials = await this.getAmazonCredentials();
     if (!credentials) {
       throw new Error('Amazon credentials not configured. Please set up Amazon integration first.');
+    }
+
+    // 1b. Throttle: skip if a completed import ran very recently (avoids
+    // over-pulling the report, which makes Amazon queue/throttle generation).
+    // A recent FAILED import does NOT throttle — retries after a failure proceed.
+    const cooldownMs = options?.cooldownMs ?? DEFAULT_IMPORT_COOLDOWN_MS;
+    if (!options?.force && cooldownMs > 0) {
+      const recent = await this.getRecentCompletedImport();
+      if (recent?.completedAt) {
+        const ageMs = Date.now() - new Date(recent.completedAt).getTime();
+        if (ageMs < cooldownMs) {
+          console.log(
+            `[AmazonStockService] Skipping import — a completed import ran ${Math.round(
+              ageMs / 1000
+            )}s ago (within ${Math.round(
+              cooldownMs / 1000
+            )}s cooldown). Returning it. Pass { force: true } to override.`
+          );
+          return recent;
+        }
+      }
     }
 
     // 2. Create import record
@@ -496,6 +533,28 @@ export class AmazonStockService extends PlatformStockService {
     }
 
     return deduplicated;
+  }
+
+  /**
+   * Get the most recent *completed* import (used for the cooldown throttle).
+   * Ignores failed/processing imports so a retry after a failure is never blocked.
+   */
+  private async getRecentCompletedImport(): Promise<ListingImport | null> {
+    const { data, error } = await this.supabase
+      .from('platform_listing_imports')
+      .select('*')
+      .eq('user_id', this.userId)
+      .eq('platform', 'amazon')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return this.mapImportRow(data);
   }
 
   /**

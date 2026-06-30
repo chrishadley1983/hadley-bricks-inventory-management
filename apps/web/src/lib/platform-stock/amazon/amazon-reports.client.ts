@@ -36,6 +36,16 @@ const DEFAULT_POLL_INTERVAL_MS = 10000;
 /** Maximum time to wait for report generation (5 minutes) */
 const DEFAULT_MAX_WAIT_MS = 5 * 60 * 1000;
 
+/**
+ * Default number of attempts to generate a report. Amazon's report queue is
+ * occasionally slow and a single report can sit IN_QUEUE past the poll window;
+ * a fresh report request almost always completes quickly, so we retry once.
+ */
+const DEFAULT_FETCH_MAX_ATTEMPTS = 2;
+
+/** Backoff before retrying report generation after a timeout (30 seconds) */
+const DEFAULT_RETRY_BACKOFF_MS = 30 * 1000;
+
 /** Delay between API calls for rate limiting */
 const API_DELAY_MS = 200;
 
@@ -98,6 +108,19 @@ export interface AmazonApiError {
 interface TokenData {
   accessToken: string;
   expiresAt: Date;
+}
+
+/**
+ * Thrown when a report does not reach DONE within the poll window.
+ * This is a transient condition (Amazon's report queue is slow) and is safe to
+ * retry with a fresh report — distinct from CANCELLED/FATAL which are genuine
+ * failures that should not be retried.
+ */
+export class ReportTimeoutError extends Error {
+  constructor(public readonly waitedMs: number) {
+    super(`Report generation timed out after ${Math.round(waitedMs / 1000)} seconds`);
+    this.name = 'ReportTimeoutError';
+  }
 }
 
 // ============================================================================
@@ -194,7 +217,7 @@ export class AmazonReportsClient {
       await sleep(pollIntervalMs);
     }
 
-    throw new Error(`Report generation timed out after ${maxWaitMs / 1000} seconds`);
+    throw new ReportTimeoutError(maxWaitMs);
   }
 
   /**
@@ -238,18 +261,55 @@ export class AmazonReportsClient {
   /**
    * Complete workflow: request report → wait → download
    *
+   * Retries on timeout: if a report does not complete within the poll window,
+   * Amazon's report queue is transiently slow — a fresh report request almost
+   * always completes quickly, so we abandon the stuck report and request a new
+   * one (up to `maxAttempts` total). CANCELLED/FATAL and other errors are NOT
+   * retried (they are genuine failures).
+   *
    * @param reportType - Type of report to fetch
    * @param marketplaceIds - Optional marketplace IDs
+   * @param options - Retry/poll tuning (defaults applied per-constant)
    * @returns Raw report content
    */
-  async fetchReport(reportType: AmazonReportType, marketplaceIds?: string[]): Promise<string> {
-    // 1. Request report
-    const reportId = await this.createReport(reportType, marketplaceIds);
+  async fetchReport(
+    reportType: AmazonReportType,
+    marketplaceIds?: string[],
+    options?: {
+      maxAttempts?: number;
+      retryBackoffMs?: number;
+      maxWaitMs?: number;
+      pollIntervalMs?: number;
+    }
+  ): Promise<string> {
+    const maxAttempts = options?.maxAttempts ?? DEFAULT_FETCH_MAX_ATTEMPTS;
+    const retryBackoffMs = options?.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
 
-    // 2. Wait for completion
-    const status = await this.waitForReport(reportId);
+    let status: ReportStatusResponse | null = null;
 
-    if (!status.reportDocumentId) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // 1. Request report (a fresh report on each attempt)
+      const reportId = await this.createReport(reportType, marketplaceIds);
+
+      // 2. Wait for completion
+      try {
+        status = await this.waitForReport(reportId, options?.maxWaitMs, options?.pollIntervalMs);
+        break;
+      } catch (error) {
+        // Only timeouts are retryable, and only if attempts remain.
+        if (error instanceof ReportTimeoutError && attempt < maxAttempts) {
+          console.warn(
+            `[AmazonReportsClient] Report ${reportId} timed out (attempt ${attempt}/${maxAttempts}). ` +
+              `Amazon's report queue is slow; requesting a fresh report in ${retryBackoffMs / 1000}s...`
+          );
+          await sleep(retryBackoffMs);
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!status?.reportDocumentId) {
       throw new Error('Report completed but no document ID returned');
     }
 
@@ -273,10 +333,19 @@ export class AmazonReportsClient {
    * Convenience method for the most common use case.
    *
    * @param marketplaceIds - Optional marketplace IDs
+   * @param options - Retry/poll tuning forwarded to fetchReport
    * @returns Raw TSV report content
    */
-  async fetchMerchantListingsReport(marketplaceIds?: string[]): Promise<string> {
-    return this.fetchReport('GET_MERCHANT_LISTINGS_ALL_DATA', marketplaceIds);
+  async fetchMerchantListingsReport(
+    marketplaceIds?: string[],
+    options?: {
+      maxAttempts?: number;
+      retryBackoffMs?: number;
+      maxWaitMs?: number;
+      pollIntervalMs?: number;
+    }
+  ): Promise<string> {
+    return this.fetchReport('GET_MERCHANT_LISTINGS_ALL_DATA', marketplaceIds, options);
   }
 
   /**

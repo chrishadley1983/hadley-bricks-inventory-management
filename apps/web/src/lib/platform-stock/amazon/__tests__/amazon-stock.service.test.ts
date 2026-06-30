@@ -224,6 +224,52 @@ describe('AmazonStockService', () => {
       await expect(service.triggerImport()).rejects.toThrow('Amazon credentials not configured');
     });
 
+    it('throttles: returns the recent import without requesting a report when within cooldown', async () => {
+      mockGetCredentials.mockResolvedValue(createMockCredentials());
+
+      const nowIso = new Date().toISOString();
+      const recentRow = {
+        id: 'recent-import-1',
+        user_id: userId,
+        platform: 'amazon',
+        import_type: 'full',
+        status: 'completed',
+        total_rows: 10,
+        processed_rows: 10,
+        error_count: 0,
+        amazon_report_id: null,
+        amazon_report_document_id: null,
+        amazon_report_type: 'GET_MERCHANT_LISTINGS_ALL_DATA',
+        started_at: nowIso,
+        completed_at: nowIso, // just completed → inside the cooldown
+        error_message: null,
+        error_details: null,
+        created_at: nowIso,
+      };
+
+      // Chainable builder whose maybeSingle returns the recent completed import.
+      const builder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: recentRow, error: null }),
+      };
+      mockSupabase.from = vi.fn(
+        () => builder as unknown as ReturnType<typeof mockSupabase.from>
+      );
+
+      const { AmazonStockService } = await import('../amazon-stock.service');
+      const service = new AmazonStockService(mockSupabase, userId);
+
+      const result = await service.triggerImport();
+
+      expect(result.id).toBe('recent-import-1');
+      expect(result.status).toBe('completed');
+      // The whole point: no report was requested from Amazon.
+      expect(mockFetchMerchantListingsReport).not.toHaveBeenCalled();
+    });
+
     it('should create import record and process report successfully', async () => {
       const credentials = createMockCredentials();
       mockGetCredentials.mockResolvedValue(credentials);
@@ -296,7 +342,7 @@ describe('AmazonStockService', () => {
       const { AmazonStockService } = await import('../amazon-stock.service');
       const service = new AmazonStockService(mockSupabase, userId);
 
-      const result = await service.triggerImport();
+      const result = await service.triggerImport({ force: true });
 
       expect(mockFetchMerchantListingsReport).toHaveBeenCalledWith(credentials.marketplaceIds);
       expect(result.status).toBe('completed');
@@ -332,7 +378,7 @@ describe('AmazonStockService', () => {
       const { AmazonStockService } = await import('../amazon-stock.service');
       const service = new AmazonStockService(mockSupabase, userId);
 
-      await expect(service.triggerImport()).rejects.toThrow('API error');
+      await expect(service.triggerImport({ force: true })).rejects.toThrow('API error');
     });
 
     it('should handle parse errors gracefully', async () => {
@@ -403,7 +449,7 @@ describe('AmazonStockService', () => {
       const { AmazonStockService } = await import('../amazon-stock.service');
       const service = new AmazonStockService(mockSupabase, userId);
 
-      const result = await service.triggerImport();
+      const result = await service.triggerImport({ force: true });
 
       expect(result.status).toBe('completed');
     });
