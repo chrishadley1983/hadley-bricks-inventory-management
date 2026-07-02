@@ -11,11 +11,13 @@ const ExportSchema = z.object({
   startMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
   endMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
   action: z.enum(['csv', 'quickfile']),
+  basis: z.enum(['accrual', 'cash']).default('accrual'),
 });
 
 const PreviewSchema = z.object({
   startMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
   endMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  basis: z.enum(['accrual', 'cash']).default('accrual'),
 });
 
 function formatPeriodLabel(startMonth: string, endMonth: string): string {
@@ -43,8 +45,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const startMonth = searchParams.get('startMonth');
     const endMonth = searchParams.get('endMonth');
+    const basis = searchParams.get('basis') ?? undefined;
 
-    const parsed = PreviewSchema.safeParse({ startMonth, endMonth });
+    const parsed = PreviewSchema.safeParse({ startMonth, endMonth, basis });
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
@@ -56,7 +59,8 @@ export async function GET(request: NextRequest) {
     const preview = await mtdService.generateExportPreview(
       user.id,
       parsed.data.startMonth,
-      parsed.data.endMonth
+      parsed.data.endMonth,
+      parsed.data.basis
     );
 
     return NextResponse.json(preview);
@@ -85,11 +89,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { startMonth, endMonth, action } = parsed.data;
+    const { startMonth, endMonth, action, basis } = parsed.data;
     const mtdService = new MtdExportService(supabase);
 
-    // Generate CSV data for the period
-    const csvData = await mtdService.generateCsvData(user.id, startMonth, endMonth);
+    // Generate CSV data for the period on the requested basis
+    const csvData = await mtdService.generateCsvData(user.id, startMonth, endMonth, basis);
 
     // Check for empty data
     if (csvData.sales.length === 0 && csvData.expenses.length === 0) {
@@ -105,12 +109,14 @@ export async function POST(request: NextRequest) {
       const salesCsv = mtdService.generateSalesCsv(csvData);
       const expensesCsv = mtdService.generateExpensesCsv(csvData);
 
-      // Create ZIP with both files
+      // Create ZIP with both files; cash-basis files are explicitly suffixed so
+      // the two bases can never be confused after download
       const zip = new JSZip();
+      const basisSuffix = basis === 'cash' ? '-cash' : '';
       const filePrefix =
         startMonth === endMonth
-          ? `quickfile-${startMonth}`
-          : `quickfile-${startMonth}-to-${endMonth}`;
+          ? `quickfile-${startMonth}${basisSuffix}`
+          : `quickfile-${startMonth}-to-${endMonth}${basisSuffix}`;
 
       zip.file(`${filePrefix}-sales.csv`, salesCsv);
       zip.file(`${filePrefix}-expenses.csv`, expensesCsv);
@@ -119,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       // Log the export
       const entriesCount = csvData.sales.length + csvData.expenses.length;
-      await mtdService.logExport(user.id, startMonth, 'csv', entriesCount, { endMonth });
+      await mtdService.logExport(user.id, startMonth, 'csv', entriesCount, { endMonth }, basis);
 
       // Return ZIP file
       return new NextResponse(zipBlob, {
@@ -175,11 +181,18 @@ export async function POST(request: NextRequest) {
 
         // Log successful export
         const entriesCount = result.invoicesCreated + result.purchasesCreated;
-        await mtdService.logExport(user.id, startMonth, 'quickfile', entriesCount, {
-          endMonth,
-          invoicesCreated: result.invoicesCreated,
-          purchasesCreated: result.purchasesCreated,
-        });
+        await mtdService.logExport(
+          user.id,
+          startMonth,
+          'quickfile',
+          entriesCount,
+          {
+            endMonth,
+            invoicesCreated: result.invoicesCreated,
+            purchasesCreated: result.purchasesCreated,
+          },
+          basis
+        );
 
         return NextResponse.json({
           success: true,

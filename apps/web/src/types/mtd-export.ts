@@ -6,11 +6,20 @@
  */
 
 /**
- * QuickFile credentials stored in platform_credentials
+ * Reporting basis for MTD exports. Both bases run on the same underlying data:
+ * 'accrual' recognises income at sale/order date, 'cash' at receipt date.
+ */
+export type MtdBasis = 'accrual' | 'cash';
+
+/**
+ * QuickFile credentials stored in platform_credentials.
+ * applicationId is the App ID GUID of the QuickFile app (Account Settings →
+ * My Apps); older stored credentials may lack it.
  */
 export interface QuickFileCredentials {
   accountNumber: string;
   apiKey: string;
+  applicationId?: string;
 }
 
 /**
@@ -48,6 +57,7 @@ export interface MtdCsvData {
   expenses: MtdExpenseRow[];
   month: string; // YYYY-MM
   lastDayOfMonth: string; // YYYY-MM-DD
+  basis: MtdBasis;
 }
 
 /**
@@ -77,6 +87,7 @@ export interface MtdExportHistoryEntry {
   userId: string;
   month: string;
   exportType: 'csv' | 'quickfile';
+  basis: MtdBasis; // legacy rows without a stored basis read as 'accrual'
   entriesCount: number;
   quickfileResponse?: Record<string, unknown>;
   createdAt?: string;
@@ -88,6 +99,7 @@ export interface MtdExportHistoryEntry {
 export interface MtdExportPreview {
   month: string;
   monthLabel: string; // "January 2026"
+  basis: MtdBasis;
   salesCount: number;
   salesTotal: number;
   expensesCount: number;

@@ -690,6 +690,92 @@ describe('PayPalTransactionSyncService', () => {
       expect(result.transactionsCreated).toBe(1); // Only one with fee
     });
 
+    it('should keep zero-fee T1107 payment refunds (needed by cash-basis MTD export)', async () => {
+      const { createClient } = await import('@/lib/supabase/server');
+      const { paypalAuthService } = await import('../paypal-auth.service');
+
+      const mockFrom = vi.fn();
+
+      // Check for running sync - none found
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn(() => Promise.resolve({ data: null, error: { code: 'PGRST116' } })),
+      });
+
+      // Create sync log
+      mockFrom.mockReturnValueOnce({
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn(() => Promise.resolve({ data: { id: 'sync-log-1' }, error: null })),
+      });
+
+      // Get existing transactions
+      mockFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      });
+
+      // Upsert transactions
+      mockFrom.mockReturnValueOnce({
+        upsert: vi.fn(() => Promise.resolve({ error: null })),
+      });
+
+      // Fallback for all remaining supabase calls
+      mockFrom.mockReturnValue({
+        upsert: vi.fn(() => Promise.resolve({ error: null })),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn(() => Promise.resolve({ error: null })),
+        }),
+        eq: vi.fn(() => Promise.resolve({ error: null })),
+        select: vi.fn().mockReturnThis(),
+        in: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      });
+
+      vi.mocked(createClient).mockResolvedValue({
+        from: mockFrom,
+      } as unknown as Awaited<ReturnType<typeof createClient>>);
+
+      vi.mocked(paypalAuthService.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(paypalAuthService.getCredentials).mockResolvedValue({
+        sandbox: false,
+      } as unknown as import('../types').PayPalCredentialsRow);
+
+      const mockGetAll = vi.fn().mockResolvedValue([
+        // Zero-fee refund issued to a buyer — MUST be kept (T1107)
+        {
+          transaction_info: {
+            transaction_id: 'TX-REFUND',
+            transaction_event_code: 'T1107',
+            transaction_initiation_date: '2024-06-16T10:00:00Z',
+            transaction_amount: { value: '-7.50', currency_code: 'GBP' },
+            fee_amount: { value: '0.00', currency_code: 'GBP' },
+          },
+          payer_info: {},
+        },
+        // Zero-fee NON-refund — still skipped
+        {
+          transaction_info: {
+            transaction_id: 'TX-WITHDRAWAL',
+            transaction_event_code: 'T0403',
+            transaction_initiation_date: '2024-06-16T11:00:00Z',
+            transaction_amount: { value: '-550.00', currency_code: 'GBP' },
+            fee_amount: { value: '0.00', currency_code: 'GBP' },
+          },
+          payer_info: {},
+        },
+      ]);
+      setPayPalApiAdapterMock(mockGetAll);
+
+      const result = await service.syncTransactions('user-123', { fullSync: true });
+
+      expect(result.success).toBe(true);
+      expect(result.transactionsProcessed).toBe(2);
+      expect(result.transactionsCreated).toBe(1); // the T1107 refund
+      expect(result.transactionsSkipped).toBe(1); // the zero-fee withdrawal
+    });
+
     it('should use incremental sync cursor when available', async () => {
       const { createClient } = await import('@/lib/supabase/server');
       const { paypalAuthService } = await import('../paypal-auth.service');
