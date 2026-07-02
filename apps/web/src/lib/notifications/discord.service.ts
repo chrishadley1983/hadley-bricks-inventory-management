@@ -543,9 +543,16 @@ export class DiscordService {
       const meta: string[] = [];
       if (povMultiple != null) meta.push(`**${povMultiple.toFixed(1)}× cost**${!povFired ? ' (below the part-out bar)' : ''}`);
       if (povLots != null) meta.push(`${povLots} lots`);
+      const povValueLines = [
+        `6mo sold: **£${povSoldGbp.toFixed(2)}**${povForSaleGbp != null ? ` · for-sale: £${povForSaleGbp.toFixed(2)}` : ''}${meta.length ? `\n${meta.join(' · ')}` : ''}`,
+      ];
+      // Thin used history — show the deep NEW figure as the sanity anchor.
+      if (conditionMode === 'used' && altNewPovSoldGbp != null && flags.some((f) => f.includes('thin used-parts history'))) {
+        povValueLines.push(`New part-out (deeper data): £${altNewPovSoldGbp.toFixed(2)} · ${(altNewPovSoldGbp / totalCost).toFixed(1)}× cost`);
+      }
       fields.push({
         name: `${povFired ? '→ ' : ''}🧩 ${povLabel}`,
-        value: `6mo sold: **£${povSoldGbp.toFixed(2)}**${povForSaleGbp != null ? ` · for-sale: £${povForSaleGbp.toFixed(2)}` : ''}${meta.length ? `\n${meta.join(' · ')}` : ''}`,
+        value: povValueLines.join('\n'),
         inline: false,
       });
     } else {
