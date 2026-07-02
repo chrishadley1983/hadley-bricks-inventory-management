@@ -1,22 +1,27 @@
 /**
- * eBay BIN Part-Out Scanner
+ * eBay BIN Watcher — used PART-OUT scan + sealed RESALE scan
  *
- * Watches newly-listed USED fixed-price eBay listings for sets on the
- * part-out hit list (ebay_bin_hitlist: used part-out value, capped at New,
- * a high multiple of RRP). The edge is the 21k-row BrickLink POV cache —
- * a private pricing layer nobody else runs against the whole UK used market.
+ * Watches newly-listed FIXED-PRICE eBay listings in two condition passes:
  *
- * Discovery-driven design (2026-07-02 Ninjago test):
- * - One broad Browse search per cycle (`lego`, USED, FIXED_PRICE, UK,
- *   newlyListed) with a creation-time cursor — the hit list filters locally,
- *   so API spend stays ~150-250 calls/day regardless of universe size.
- * - Parts/fig listings masquerade as sets (sword blade @ "70x multiple") —
- *   rejected-by-flag, never suppressed: price-floor vs POV, title patterns,
- *   Type aspect, piece-count lie detector, LEGO Character aspect, new-seller.
- * - eBay's OWN AI auto-fills aspects + descriptions from the catalog, so
- *   structured data alone can lie (the 70736 minifig-in-disguise) — flags
- *   stack, human sifts, nothing auto-buys.
- * - Zero BrickLink API calls at scan time.
+ *  USED — sets on the part-out hit list (ebay_bin_hitlist: BrickLink used
+ *  part-out value capped at New, ALL 12k+ sets with used data). Alert when
+ *  all-in price is under usedPOV/3 (good) or /4 (great). The edge is the
+ *  21k-row POV cache — a private pricing layer nobody else runs against the
+ *  whole UK used market.
+ *
+ *  NEW — sealed listings judged on TWO exits: Amazon resale margin (local
+ *  seeded_asin_pricing Buy Box; no Keepa in the loop) OR New part-out value
+ *  >= multiple x cost. Covers the primary buying channel that neither the
+ *  auction sniper (auctions only) nor Vinted (Vinted only) sees.
+ *
+ * Discovery-driven guards (2026-07-02 Ninjago test + adversarial probes):
+ * - Parts/fig listings masquerade as sets (a £2.76 sword blade at "70x", a
+ *   £10.80 minifig with an eBay-AI catalog description and auto-filled
+ *   aspects) — flags STACK and never suppress; the human sifts.
+ * - eBay's own AI auto-fills aspects + descriptions from the catalog, so no
+ *   single structured field is trustworthy.
+ * - Zero BrickLink API calls at scan time; ~2 searches + a few getItem per
+ *   cycle (~150-300 eBay calls/day vs the 5k cap).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -24,6 +29,8 @@ import { getEbayBrowseClient, type EbayItemSummary } from '@/lib/ebay/ebay-brows
 import { extractSetNumbers } from './set-identifier';
 
 const DEFAULT_POSTAGE_GBP = 3.99;
+const AMAZON_FEE_RATE = 0.1836; // matches the Vinted sniper's margin model
+const MAX_SEARCH_PAGES = 3; // saturation guard: keep fetching while a full page is entirely new
 
 export interface BinPartoutConfig {
   id: string;
@@ -39,6 +46,10 @@ export interface BinPartoutConfig {
   quietHoursEnd: number;
   hitlistMaxAgeHours: number;
   lastScanCursor: string | null;
+  newScanEnabled: boolean;
+  amazonMinMarginPct: number;
+  amazonGreatMarginPct: number;
+  lastScanCursorNew: string | null;
 }
 
 export interface HitlistEntry {
@@ -50,20 +61,32 @@ export interface HitlistEntry {
   rrpGbp: number | null;
   usedPovGbp: number;
   newPovGbp: number | null;
-  ratio: number;
+  ratio: number | null;
   figSharePct: number | null;
   ebayFloorGbp: number | null;
+}
+
+export interface AmazonSeedPrice {
+  amazonPriceGbp: number;
+  was90dGbp: number | null;
+  asin: string | null;
+  setName: string | null;
 }
 
 export interface BinCandidate {
   itemId: string;
   title: string;
+  conditionMode: 'used' | 'new';
   sets: HitlistEntry[];       // one entry normally; several for multi-set titles
-  povTotal: number;           // summed capped used POV
+  povTotal: number;           // summed POV for the pass condition (capped used / new)
   priceGbp: number;
   postageGbp: number;
   totalCostGbp: number;
-  multiple: number;
+  multiple: number | null;    // povTotal / totalCost (null when no POV data)
+  amazon: AmazonSeedPrice | null;   // NEW pass only
+  amazonProfitGbp: number | null;
+  amazonMarginPct: number | null;
+  signals: string[];          // which buy signals fired
   tier: 'great' | 'good';
   bestOfferEnabled: boolean;
   offerSuggestionGbp: number | null;
@@ -85,6 +108,7 @@ export interface BinScanResult {
   apiCallsMade: number;
   hitlistRefreshed: boolean;
   hitlistSize: number;
+  saturatedPages: number;     // extra pages fetched because a full page was entirely new
   durationMs: number;
   opportunities: BinCandidate[];
   error?: string;
@@ -97,9 +121,13 @@ interface BinItemSummary extends EbayItemSummary {
 
 // ── Pure helpers (unit-tested) ─────────────────────────────────────────
 
-/** Title patterns that indicate a partial/part/fig listing rather than a set. */
+/**
+ * Title patterns that indicate a partial/part/fig listing rather than a set.
+ * The percentage branch ("99% complete") sits OUTSIDE the \b...\b group —
+ * '%' is a non-word char so a trailing \b there can never match.
+ */
 const TITLE_CAVEAT_RE =
-  /\b(incomplete|not complete|missing|no (mini)?fig(ure)?s?|no minis|build(s)? only|built only|spares?|parts? only|job ?lot|bundle|from set|instructions? only|manual only|box only|sticker(s)? only|empty box|\d+\s?%)\b/i;
+  /\b(incomplete|not complete|missing|no (mini)?fig(ure)?s?|no minis|build(s)? only|built only|spares?|parts? only|job ?lot|bundle|from set|instructions? only|manual only|box only|sticker(s)? only|empty box|open box|resealed|damaged box|box damage)\b|\d+\s?%/i;
 
 /** Hard part-language: quantities/part-numbers that scream "single piece". */
 const PART_LANGUAGE_RE =
@@ -119,7 +147,45 @@ export function looksLikePartListing(title: string): boolean {
   return PART_LANGUAGE_RE.test(title);
 }
 
+/** Amazon resale economics — same model as the Vinted sniper card. */
+export function amazonResaleMargin(
+  amazonPriceGbp: number,
+  totalCostGbp: number
+): { profitGbp: number; marginPct: number } {
+  const fees = amazonPriceGbp * AMAZON_FEE_RATE;
+  const shipping = amazonPriceGbp < 20 ? 3 : 4;
+  const profitGbp = amazonPriceGbp - fees - shipping - totalCostGbp;
+  return { profitGbp, marginPct: (profitGbp / amazonPriceGbp) * 100 };
+}
+
+/** Best-offer price that hits the target POV multiple: pov/multiple - postage. */
+export function offerForMultiple(
+  povTotal: number,
+  targetMultiple: number,
+  postageGbp: number,
+  askPriceGbp: number
+): number | null {
+  const offer = povTotal / targetMultiple - postageGbp;
+  if (!Number.isFinite(offer) || offer <= 0) return null;
+  return offer < askPriceGbp ? Math.floor(offer * 100) / 100 : null;
+}
+
+/** Best-offer price that hits the target Amazon margin. */
+export function offerForMargin(
+  amazonPriceGbp: number,
+  targetMarginPct: number,
+  postageGbp: number,
+  askPriceGbp: number
+): number | null {
+  const shipping = amazonPriceGbp < 20 ? 3 : 4;
+  const offer =
+    amazonPriceGbp * (1 - AMAZON_FEE_RATE - targetMarginPct / 100) - shipping - postageGbp;
+  if (!Number.isFinite(offer) || offer <= 0) return null;
+  return offer < askPriceGbp ? Math.floor(offer * 100) / 100 : null;
+}
+
 export interface FlagInput {
+  conditionMode: 'used' | 'new';
   typeAspect: string | null;         // eBay "Type" item specific
   piecesAspect: number | null;       // eBay "Number of Pieces"
   characterAspect: string | null;    // eBay "LEGO Character"
@@ -130,6 +196,8 @@ export interface FlagInput {
   priceFloorPct: number;
   sellerScore: number | null;
   descriptionText: string | null;    // plain-text description (AI boilerplate possible)
+  sets: Array<{ setNumber: string; yearFrom: number | null }>;
+  currentYear: number;
 }
 
 /**
@@ -174,20 +242,17 @@ export function assembleFlags(input: FlagInput): string[] {
     flags.push(`new seller (${input.sellerScore})`);
   }
 
-  return flags;
-}
+  // Young sets carry the thin-used-history caution — their USED averages can
+  // rest on 0-1 sales. New-condition data is deep even for young sets.
+  if (input.conditionMode === 'used') {
+    for (const s of input.sets) {
+      if (s.yearFrom != null && s.yearFrom >= input.currentYear - 2) {
+        flags.push(`⚠️ ${s.setNumber} is a ${s.yearFrom} set — thin used-parts history`);
+      }
+    }
+  }
 
-/** Best-offer price that hits the target multiple: pov/multiple - postage. */
-export function offerForMultiple(
-  povTotal: number,
-  targetMultiple: number,
-  postageGbp: number,
-  askPriceGbp: number
-): number | null {
-  const offer = povTotal / targetMultiple - postageGbp;
-  if (!Number.isFinite(offer) || offer <= 0) return null;
-  // Only meaningful if it undercuts the ask.
-  return offer < askPriceGbp ? Math.floor(offer * 100) / 100 : null;
+  return flags;
 }
 
 // ── Scanner ────────────────────────────────────────────────────────────
@@ -195,6 +260,7 @@ export function offerForMultiple(
 export class EbayBinPartoutScannerService {
   private supabase: SupabaseClient;
   private apiCallsMade = 0;
+  private saturatedPages = 0;
 
   constructor(supabase: SupabaseClient) {
     this.supabase = supabase;
@@ -213,14 +279,18 @@ export class EbayBinPartoutScannerService {
       enabled: data.enabled,
       minMultiple: Number(data.min_multiple ?? 3),
       greatMultiple: Number(data.great_multiple ?? 4),
-      minRatio: Number(data.min_ratio ?? 2),
-      minUsedPovGbp: Number(data.min_used_pov_gbp ?? 40),
+      minRatio: Number(data.min_ratio ?? 0),
+      minUsedPovGbp: Number(data.min_used_pov_gbp ?? 0),
       priceFloorPct: Number(data.price_floor_pct ?? 15),
       maxPriceGbp: Number(data.max_price_gbp ?? 250),
       quietHoursStart: data.quiet_hours_start ?? 23,
       quietHoursEnd: data.quiet_hours_end ?? 7,
       hitlistMaxAgeHours: data.hitlist_max_age_hours ?? 24,
       lastScanCursor: data.last_scan_cursor,
+      newScanEnabled: data.new_scan_enabled ?? true,
+      amazonMinMarginPct: Number(data.amazon_min_margin_pct ?? 15),
+      amazonGreatMarginPct: Number(data.amazon_great_margin_pct ?? 25),
+      lastScanCursorNew: data.last_scan_cursor_new,
     };
   }
 
@@ -251,7 +321,6 @@ export class EbayBinPartoutScannerService {
 
   private async loadHitlist(): Promise<Map<string, HitlistEntry>> {
     const map = new Map<string, HitlistEntry>();
-    // Hit list is ~200 rows — well under the PostgREST 1000 cap, but paginate anyway.
     let offset = 0;
     const PAGE = 1000;
     // eslint-disable-next-line no-constant-condition
@@ -272,7 +341,7 @@ export class EbayBinPartoutScannerService {
           rrpGbp: r.rrp_gbp != null ? Number(r.rrp_gbp) : null,
           usedPovGbp: Number(r.used_pov_gbp),
           newPovGbp: r.new_pov_gbp != null ? Number(r.new_pov_gbp) : null,
-          ratio: Number(r.ratio),
+          ratio: r.ratio != null ? Number(r.ratio) : null,
           figSharePct: r.fig_share_pct != null ? Number(r.fig_share_pct) : null,
           ebayFloorGbp: r.ebay_floor_gbp != null ? Number(r.ebay_floor_gbp) : null,
         });
@@ -283,9 +352,73 @@ export class EbayBinPartoutScannerService {
     return map;
   }
 
+  /**
+   * Fetch newly-listed items for one condition, saturation-aware: when a full
+   * page is entirely newer than the cursor, keep paging (bounded) so a burst
+   * of listings between cycles is not silently truncated.
+   */
+  private async searchNewlyListed(
+    condition: 'USED' | 'NEW',
+    maxPriceGbp: number,
+    cursorMs: number
+  ): Promise<BinItemSummary[]> {
+    const client = getEbayBrowseClient();
+    const all: BinItemSummary[] = [];
+    for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+      this.apiCallsMade++;
+      const res = await client.searchItems('lego', {
+        categoryId: '19006',
+        filter: `conditions:{${condition}},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB,price:[..${maxPriceGbp}],priceCurrency:GBP`,
+        sort: 'newlyListed',
+        limit: 200,
+        offset: page * 200,
+      });
+      const items = (res.itemSummaries ?? []) as BinItemSummary[];
+      all.push(...items);
+      const fullPage = items.length === 200;
+      const allNew =
+        cursorMs > 0 &&
+        items.length > 0 &&
+        items.every((i) => {
+          const t = i.itemCreationDate ? new Date(i.itemCreationDate).getTime() : 0;
+          return t > cursorMs;
+        });
+      if (!(fullPage && allNew)) break;
+      this.saturatedPages++;
+      console.warn(`[BinPartout] ${condition} page ${page} saturated — fetching next page`);
+    }
+    return all;
+  }
+
+  /** Batch Amazon Buy Box lookup from the local seeded table ("NNNNN-1" keys). */
+  private async lookupAmazonPrices(setNumbers: string[]): Promise<Map<string, AmazonSeedPrice>> {
+    const map = new Map<string, AmazonSeedPrice>();
+    const bare = [...new Set(setNumbers.map((s) => s.split('-')[0]).filter(Boolean))];
+    if (bare.length === 0) return map;
+    const variants = bare.flatMap((s) => [s, `${s}-1`]);
+    const { data } = await this.supabase
+      .from('seeded_asin_pricing')
+      .select('set_number, set_name, amazon_price, was_price_90d, asin')
+      .in('set_number', variants)
+      .gt('amazon_price', 0);
+    for (const r of data ?? []) {
+      const key = String(r.set_number).split('-')[0];
+      if (!map.has(key)) {
+        map.set(key, {
+          amazonPriceGbp: Number(r.amazon_price),
+          was90dGbp: r.was_price_90d != null ? Number(r.was_price_90d) : null,
+          asin: r.asin ?? null,
+          setName: r.set_name ?? null,
+        });
+      }
+    }
+    return map;
+  }
+
   async scan(config: BinPartoutConfig): Promise<BinScanResult> {
     const startTime = Date.now();
     this.apiCallsMade = 0;
+    this.saturatedPages = 0;
     const base: Omit<BinScanResult, 'durationMs'> = {
       itemsSeen: 0,
       newItems: 0,
@@ -295,6 +428,7 @@ export class EbayBinPartoutScannerService {
       apiCallsMade: 0,
       hitlistRefreshed: false,
       hitlistSize: 0,
+      saturatedPages: 0,
       opportunities: [],
     };
 
@@ -310,175 +444,263 @@ export class EbayBinPartoutScannerService {
       const hitlist = await this.loadHitlist();
       base.hitlistSize = hitlist.size;
 
-      // One broad search: every new used FIXED_PRICE LEGO listing in the UK.
-      const client = getEbayBrowseClient();
-      this.apiCallsMade++;
-      const res = await client.searchItems('lego', {
-        categoryId: '19006',
-        filter: `conditions:{USED},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB,price:[..${config.maxPriceGbp}],priceCurrency:GBP`,
-        sort: 'newlyListed',
-        limit: 200,
-      });
-      const items = (res.itemSummaries ?? []) as BinItemSummary[];
-      base.itemsSeen = items.length;
+      const cursorUpdates: Record<string, string> = {};
 
-      const cursor = config.lastScanCursor ? new Date(config.lastScanCursor).getTime() : 0;
-      let newestCreation = cursor;
-
-      const rawCandidates: Array<{ item: BinItemSummary; sets: HitlistEntry[] }> = [];
-      for (const item of items) {
-        const created = item.itemCreationDate ? new Date(item.itemCreationDate).getTime() : null;
-        // Items without a creation date are processed only on bootstrap (no cursor).
-        if (created != null && created > newestCreation) newestCreation = created;
-        if (cursor > 0 && created != null && created <= cursor) continue;
-        base.newItems++;
-
-        const identified = extractSetNumbers(item.title || '');
-        const matched: HitlistEntry[] = [];
-        const seen = new Set<string>();
-        for (const id of identified) {
-          const bare = id.setNumber.split('-')[0];
-          const entry = hitlist.get(bare);
-          if (entry && !seen.has(bare) && titleHasSetToken(item.title || '', bare)) {
-            matched.push(entry);
-            seen.add(bare);
-          }
-        }
-        if (matched.length === 0) continue;
-        base.hitlistMatches++;
-        rawCandidates.push({ item, sets: matched });
+      // Pass 1: USED part-out.
+      await this.scanPass('USED', config, hitlist, base, cursorUpdates);
+      // Pass 2: NEW sealed (Amazon resale OR New POV).
+      if (config.newScanEnabled) {
+        await this.scanPass('NEW', config, hitlist, base, cursorUpdates);
       }
 
-      // Evaluate the raw candidates against the buy bar.
-      const overBar: Array<{ item: BinItemSummary; sets: HitlistEntry[]; povTotal: number; totalCost: number; price: number; postage: number }> = [];
-      for (const rc of rawCandidates) {
-        const price = parseFloat(rc.item.price?.value ?? '');
-        if (!Number.isFinite(price) || price <= 0) continue;
-        const postageRaw = parseFloat(rc.item.shippingOptions?.[0]?.shippingCost?.value ?? '');
-        const postage = Number.isFinite(postageRaw) ? postageRaw : DEFAULT_POSTAGE_GBP;
-        const totalCost = price + postage;
-        const povTotal = rc.sets.reduce((a, s) => a + s.usedPovGbp, 0);
-
-        // eBay-floor learning: plausible complete single-set listings teach us
-        // the going used market ask (no extra API calls).
-        if (
-          rc.sets.length === 1 &&
-          !titleCaveat(rc.item.title || '') &&
-          !looksLikePartListing(rc.item.title || '') &&
-          totalCost >= 0.25 * povTotal
-        ) {
-          await this.updateEbayFloor(rc.sets[0].setNumber, totalCost);
-        }
-
-        if (povTotal / totalCost >= config.minMultiple) {
-          overBar.push({ item: rc.item, sets: rc.sets, povTotal, totalCost, price, postage });
-        }
-      }
-
-      // Dedupe / price-drop re-alert check.
-      const itemIds = overBar.map((c) => c.item.itemId);
-      const prior = await this.getPriorAlerts(config.userId, itemIds);
-
-      for (const c of overBar) {
-        const priorCost = prior.get(c.item.itemId);
-        if (priorCost != null && c.totalCost > priorCost * 0.85) continue; // already alerted, no meaningful drop
-
-        // Confidence pull: one getItem for aspects + description.
-        let typeAspect: string | null = null;
-        let piecesAspect: number | null = null;
-        let characterAspect: string | null = null;
-        let descriptionText: string | null = null;
-        try {
-          this.apiCallsMade++;
-          const detail = (await client.getItem(
-            c.item.itemId.startsWith('v1|') ? c.item.itemId : `v1|${c.item.itemId}|0`
-          )) as {
-            localizedAspects?: Array<{ name: string; value: string }>;
-            description?: string;
-            shortDescription?: string;
-          };
-          const aspects = new Map((detail.localizedAspects ?? []).map((a) => [a.name.toLowerCase(), a.value]));
-          typeAspect = aspects.get('type') ?? null;
-          const piecesRaw = aspects.get('number of pieces');
-          piecesAspect = piecesRaw != null ? parseInt(piecesRaw, 10) || null : null;
-          characterAspect = aspects.get('lego character') ?? null;
-          descriptionText = String(detail.description ?? detail.shortDescription ?? '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .slice(0, 2000) || null;
-        } catch (e) {
-          console.error(`[BinPartout] getItem failed for ${c.item.itemId}:`, (e as Error).message);
-        }
-
-        const catalogPieces = c.sets.length === 1 ? c.sets[0].pieces : null;
-        const flags = assembleFlags({
-          typeAspect,
-          piecesAspect,
-          characterAspect,
-          catalogPieces,
-          title: c.item.title || '',
-          totalCostGbp: c.totalCost,
-          povTotal: c.povTotal,
-          priceFloorPct: config.priceFloorPct,
-          sellerScore: c.item.seller?.feedbackScore ?? null,
-          descriptionText,
-        });
-        if (c.sets.length > 1) flags.unshift(`multi-set title (${c.sets.map((s) => s.setNumber).join('+')})`);
-        if (priorCost != null) flags.push(`price drop: was £${priorCost.toFixed(2)}`);
-        // Young sets stay IN the (now-unfiltered) hit list but carry the
-        // thin-used-history caution — their used averages can rest on 0-1 sales.
-        const thinYear = new Date().getFullYear() - 2;
-        for (const s of c.sets) {
-          if (s.yearFrom != null && s.yearFrom >= thinYear) {
-            flags.push(`⚠️ ${s.setNumber} is a ${s.yearFrom} set — thin used-parts history`);
-          }
-        }
-
-        const multiple = c.povTotal / c.totalCost;
-        const bestOfferEnabled = (c.item.buyingOptions ?? []).includes('BEST_OFFER');
-        const offer = bestOfferEnabled
-          ? offerForMultiple(c.povTotal, config.minMultiple, c.postage, c.price)
-          : null;
-
-        base.opportunities.push({
-          itemId: c.item.itemId,
-          title: c.item.title || '',
-          sets: c.sets,
-          povTotal: c.povTotal,
-          priceGbp: c.price,
-          postageGbp: c.postage,
-          totalCostGbp: c.totalCost,
-          multiple,
-          tier: multiple >= config.greatMultiple ? 'great' : 'good',
-          bestOfferEnabled,
-          offerSuggestionGbp: offer,
-          flags,
-          sellerScore: c.item.seller?.feedbackScore ?? null,
-          sellerUsername: c.item.seller?.username ?? null,
-          itemUrl: c.item.itemWebUrl,
-          imageUrl: c.item.image?.imageUrl,
-          condition: c.item.condition,
-        });
-      }
-      base.candidates = base.opportunities.length;
-
-      // Advance the cursor.
-      if (newestCreation > cursor) {
+      if (Object.keys(cursorUpdates).length > 0) {
         await this.supabase
           .from('ebay_bin_config')
-          .update({ last_scan_cursor: new Date(newestCreation).toISOString(), updated_at: new Date().toISOString() })
+          .update({ ...cursorUpdates, updated_at: new Date().toISOString() })
           .eq('id', config.id);
       }
 
+      base.candidates = base.opportunities.length;
       base.apiCallsMade = this.apiCallsMade;
+      base.saturatedPages = this.saturatedPages;
       return { ...base, durationMs: Date.now() - startTime };
     } catch (error) {
       base.apiCallsMade = this.apiCallsMade;
+      base.saturatedPages = this.saturatedPages;
       return {
         ...base,
         durationMs: Date.now() - startTime,
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  private async scanPass(
+    condition: 'USED' | 'NEW',
+    config: BinPartoutConfig,
+    hitlist: Map<string, HitlistEntry>,
+    base: Omit<BinScanResult, 'durationMs'>,
+    cursorUpdates: Record<string, string>
+  ): Promise<void> {
+    const mode: 'used' | 'new' = condition === 'USED' ? 'used' : 'new';
+    const cursorIso = condition === 'USED' ? config.lastScanCursor : config.lastScanCursorNew;
+    const cursorCol = condition === 'USED' ? 'last_scan_cursor' : 'last_scan_cursor_new';
+    const cursor = cursorIso ? new Date(cursorIso).getTime() : 0;
+    let newestCreation = cursor;
+
+    const items = await this.searchNewlyListed(condition, config.maxPriceGbp, cursor);
+    base.itemsSeen += items.length;
+
+    const rawCandidates: Array<{ item: BinItemSummary; sets: HitlistEntry[] }> = [];
+    for (const item of items) {
+      const created = item.itemCreationDate ? new Date(item.itemCreationDate).getTime() : null;
+      if (created != null && created > newestCreation) newestCreation = created;
+      // Undated items are processed only on bootstrap (no cursor) — with a
+      // cursor there is no way to tell them apart from already-seen stock.
+      if (cursor > 0 && (created == null || created <= cursor)) continue;
+      base.newItems++;
+
+      const identified = extractSetNumbers(item.title || '');
+      const matched: HitlistEntry[] = [];
+      const seen = new Set<string>();
+      for (const id of identified) {
+        const bare = id.setNumber.split('-')[0];
+        const entry = hitlist.get(bare);
+        if (entry && !seen.has(bare) && titleHasSetToken(item.title || '', bare)) {
+          matched.push(entry);
+          seen.add(bare);
+        }
+      }
+      if (matched.length === 0) continue;
+      base.hitlistMatches++;
+      rawCandidates.push({ item, sets: matched });
+    }
+
+    // Amazon prices for the NEW pass (one batch query, local table).
+    const amazonPrices =
+      mode === 'new'
+        ? await this.lookupAmazonPrices(rawCandidates.flatMap((rc) => rc.sets.map((s) => s.setNumber)))
+        : new Map<string, AmazonSeedPrice>();
+
+    type OverBar = {
+      item: BinItemSummary;
+      sets: HitlistEntry[];
+      povTotal: number;
+      totalCost: number;
+      price: number;
+      postage: number;
+      amazon: AmazonSeedPrice | null;
+      amazonProfit: number | null;
+      amazonMargin: number | null;
+      signals: string[];
+      tier: 'great' | 'good';
+    };
+    const overBar: OverBar[] = [];
+
+    for (const rc of rawCandidates) {
+      const price = parseFloat(rc.item.price?.value ?? '');
+      if (!Number.isFinite(price) || price <= 0) continue;
+      const postageRaw = parseFloat(rc.item.shippingOptions?.[0]?.shippingCost?.value ?? '');
+      const postage = Number.isFinite(postageRaw) ? postageRaw : DEFAULT_POSTAGE_GBP;
+      const totalCost = price + postage;
+
+      const povTotal =
+        mode === 'used'
+          ? rc.sets.reduce((a, s) => a + s.usedPovGbp, 0)
+          : rc.sets.reduce((a, s) => a + (s.newPovGbp ?? 0), 0);
+      const povMultiple = povTotal > 0 ? povTotal / totalCost : null;
+
+      // eBay-floor learning (USED pass only): plausible complete single-set
+      // listings teach us the going used market ask, no extra API calls.
+      if (
+        mode === 'used' &&
+        rc.sets.length === 1 &&
+        !titleCaveat(rc.item.title || '') &&
+        !looksLikePartListing(rc.item.title || '') &&
+        povTotal > 0 &&
+        totalCost >= 0.25 * povTotal
+      ) {
+        await this.updateEbayFloor(rc.sets[0].setNumber, totalCost);
+      }
+
+      const signals: string[] = [];
+      let tier: 'great' | 'good' | null = null;
+
+      const povFired = povMultiple != null && povMultiple >= config.minMultiple;
+      if (povFired) {
+        signals.push(
+          `${mode === 'used' ? 'Used' : 'New'} part-out ${povMultiple!.toFixed(1)}× cost`
+        );
+        tier = povMultiple! >= config.greatMultiple ? 'great' : 'good';
+      }
+
+      let amazon: AmazonSeedPrice | null = null;
+      let amazonProfit: number | null = null;
+      let amazonMargin: number | null = null;
+      if (mode === 'new' && rc.sets.length === 1) {
+        amazon = amazonPrices.get(rc.sets[0].setNumber) ?? null;
+        if (amazon) {
+          const { profitGbp, marginPct } = amazonResaleMargin(amazon.amazonPriceGbp, totalCost);
+          amazonProfit = profitGbp;
+          amazonMargin = marginPct;
+          if (marginPct >= config.amazonMinMarginPct && profitGbp > 0) {
+            signals.push(`Amazon ${marginPct.toFixed(1)}% margin`);
+            const amazonTier: 'great' | 'good' =
+              marginPct >= config.amazonGreatMarginPct ? 'great' : 'good';
+            tier = tier === 'great' || amazonTier === 'great' ? 'great' : 'good';
+          }
+        }
+      }
+
+      if (!tier) continue;
+      overBar.push({
+        item: rc.item,
+        sets: rc.sets,
+        povTotal,
+        totalCost,
+        price,
+        postage,
+        amazon,
+        amazonProfit,
+        amazonMargin,
+        signals,
+        tier,
+      });
+    }
+
+    // Dedupe / price-drop re-alert check.
+    const itemIds = overBar.map((c) => c.item.itemId);
+    const prior = await this.getPriorAlerts(config.userId, itemIds);
+    const client = getEbayBrowseClient();
+
+    for (const c of overBar) {
+      const priorCost = prior.get(c.item.itemId);
+      if (priorCost != null && c.totalCost > priorCost * 0.85) continue;
+
+      // Confidence pull: one getItem for aspects + description.
+      let typeAspect: string | null = null;
+      let piecesAspect: number | null = null;
+      let characterAspect: string | null = null;
+      let descriptionText: string | null = null;
+      try {
+        this.apiCallsMade++;
+        const detail = (await client.getItem(
+          c.item.itemId.startsWith('v1|') ? c.item.itemId : `v1|${c.item.itemId}|0`
+        )) as {
+          localizedAspects?: Array<{ name: string; value: string }>;
+          description?: string;
+          shortDescription?: string;
+        };
+        const aspects = new Map((detail.localizedAspects ?? []).map((a) => [a.name.toLowerCase(), a.value]));
+        typeAspect = aspects.get('type') ?? null;
+        const piecesRaw = aspects.get('number of pieces');
+        piecesAspect = piecesRaw != null ? parseInt(piecesRaw, 10) || null : null;
+        characterAspect = aspects.get('lego character') ?? null;
+        descriptionText = String(detail.description ?? detail.shortDescription ?? '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .slice(0, 2000) || null;
+      } catch (e) {
+        console.error(`[BinPartout] getItem failed for ${c.item.itemId}:`, (e as Error).message);
+      }
+
+      const catalogPieces = c.sets.length === 1 ? c.sets[0].pieces : null;
+      const flags = assembleFlags({
+        conditionMode: mode,
+        typeAspect,
+        piecesAspect,
+        characterAspect,
+        catalogPieces,
+        title: c.item.title || '',
+        totalCostGbp: c.totalCost,
+        povTotal: c.povTotal,
+        priceFloorPct: config.priceFloorPct,
+        sellerScore: c.item.seller?.feedbackScore ?? null,
+        descriptionText,
+        sets: c.sets.map((s) => ({ setNumber: s.setNumber, yearFrom: s.yearFrom })),
+        currentYear: new Date().getFullYear(),
+      });
+      if (c.sets.length > 1) flags.unshift(`multi-set title (${c.sets.map((s) => s.setNumber).join('+')})`);
+      if (priorCost != null) flags.push(`price drop: was £${priorCost.toFixed(2)}`);
+
+      const bestOfferEnabled = (c.item.buyingOptions ?? []).includes('BEST_OFFER');
+      let offer: number | null = null;
+      if (bestOfferEnabled) {
+        offer =
+          c.povTotal > 0 ? offerForMultiple(c.povTotal, config.minMultiple, c.postage, c.price) : null;
+        if (offer == null && c.amazon) {
+          offer = offerForMargin(c.amazon.amazonPriceGbp, config.amazonMinMarginPct, c.postage, c.price);
+        }
+      }
+
+      base.opportunities.push({
+        itemId: c.item.itemId,
+        title: c.item.title || '',
+        conditionMode: mode,
+        sets: c.sets,
+        povTotal: c.povTotal,
+        priceGbp: c.price,
+        postageGbp: c.postage,
+        totalCostGbp: c.totalCost,
+        multiple: c.povTotal > 0 ? c.povTotal / c.totalCost : null,
+        amazon: c.amazon,
+        amazonProfitGbp: c.amazonProfit,
+        amazonMarginPct: c.amazonMargin,
+        signals: c.signals,
+        tier: c.tier,
+        bestOfferEnabled,
+        offerSuggestionGbp: offer,
+        flags,
+        sellerScore: c.item.seller?.feedbackScore ?? null,
+        sellerUsername: c.item.seller?.username ?? null,
+        itemUrl: c.item.itemWebUrl,
+        imageUrl: c.item.image?.imageUrl,
+        condition: c.item.condition,
+      });
+    }
+
+    if (newestCreation > cursor) {
+      cursorUpdates[cursorCol] = new Date(newestCreation).toISOString();
     }
   }
 
@@ -505,7 +727,7 @@ export class EbayBinPartoutScannerService {
     }
   }
 
-  /** Map of itemId -> total_cost_gbp for previously alerted BIN items. */
+  /** Map of itemId -> total_cost_gbp for previously alerted items. */
   private async getPriorAlerts(userId: string, itemIds: string[]): Promise<Map<string, number>> {
     const map = new Map<string, number>();
     if (itemIds.length === 0) return map;
@@ -530,21 +752,29 @@ export class EbayBinPartoutScannerService {
         ebay_url: opp.itemUrl,
         ebay_image_url: opp.imageUrl,
         set_number: opp.sets.map((s) => s.setNumber).join('+'),
-        set_name: primary.setName,
+        set_name: primary.setName ?? opp.amazon?.setName ?? null,
         current_bid_gbp: opp.priceGbp,
         postage_gbp: opp.postageGbp,
         total_cost_gbp: opp.totalCostGbp,
         bid_count: 0,
+        amazon_price_gbp: opp.amazon?.amazonPriceGbp ?? null,
+        amazon_90d_avg_gbp: opp.amazon?.was90dGbp ?? null,
+        amazon_asin: opp.amazon?.asin ?? null,
+        profit_gbp: opp.amazonProfitGbp,
+        margin_percent: opp.amazonMarginPct != null ? Math.round(opp.amazonMarginPct * 100) / 100 : null,
         alert_tier: opp.tier,
         is_joblot: opp.sets.length > 1,
         listing_type: 'bin',
         flags: opp.flags.join(' | ') || null,
         offer_suggestion_gbp: opp.offerSuggestionGbp,
-        ratio_to_rrp: primary.rrpGbp ? Math.round((primary.usedPovGbp / primary.rrpGbp) * 100) / 100 : null,
-        pov_condition: 'used',
-        pov_sold_gbp: opp.povTotal,
-        pov_multiple: Math.round(opp.multiple * 100) / 100,
-        buy_signal: `Used part-out ${opp.multiple.toFixed(1)}× (BIN)`,
+        ratio_to_rrp:
+          primary.rrpGbp && opp.conditionMode === 'used'
+            ? Math.round((primary.usedPovGbp / primary.rrpGbp) * 100) / 100
+            : null,
+        pov_condition: opp.conditionMode,
+        pov_sold_gbp: opp.povTotal > 0 ? opp.povTotal : null,
+        pov_multiple: opp.multiple != null ? Math.round(opp.multiple * 100) / 100 : null,
+        buy_signal: opp.signals.join(' + ') || null,
         auction_end_time: null,
         discord_sent: discordSent,
         discord_sent_at: discordSent ? new Date().toISOString() : null,

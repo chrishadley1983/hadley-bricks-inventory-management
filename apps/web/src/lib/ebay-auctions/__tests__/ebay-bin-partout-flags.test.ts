@@ -5,9 +5,12 @@ import {
   titleCaveat,
   looksLikePartListing,
   offerForMultiple,
+  offerForMargin,
+  amazonResaleMargin,
 } from '../ebay-bin-partout-scanner.service';
 
 const baseInput = {
+  conditionMode: 'used' as const,
   typeAspect: 'Complete Set',
   piecesAspect: null as number | null,
   characterAspect: null as string | null,
@@ -18,6 +21,8 @@ const baseInput = {
   priceFloorPct: 15,
   sellerScore: 500 as number | null,
   descriptionText: null as string | null,
+  sets: [{ setNumber: '70728', yearFrom: 2014 }],
+  currentYear: 2026,
 };
 
 describe('titleHasSetToken', () => {
@@ -36,6 +41,15 @@ describe('titleCaveat / looksLikePartListing (discovery false-positive class)', 
     expect(titleCaveat('LEGO Ninjago 70736 Attack of the Morro Parts Only & Manual')).toBeTruthy();
     expect(titleCaveat('Lego Ninjago Airjitzu Battle Grounds 70590 BUILDS ONLY')).toBeTruthy();
     expect(titleCaveat('LEGO Possession MINI TEMPLE (from set 70736)')).toBeTruthy(); // "from set"
+  });
+  it('catches percentage-complete admissions (E2E fix: dead regex branch)', () => {
+    expect(titleCaveat('LEGO 10188 Death Star 99% complete')).toBeTruthy();
+    expect(titleCaveat('LEGO 75192 approx 95 % complete with instructions')).toBeTruthy();
+  });
+  it('catches sealed-condition caveats for the NEW scan', () => {
+    expect(titleCaveat('LEGO 75192 Millennium Falcon open box never built')).toBeTruthy();
+    expect(titleCaveat('LEGO 10307 Eiffel Tower resealed')).toBeTruthy();
+    expect(titleCaveat('LEGO 42083 new but damaged box')).toBeTruthy();
   });
   it('flags part-language listings (sword blade, headgear, spinner ring)', () => {
     expect(looksLikePartListing('LEGO Propeller Sword Blade 10L Bar in Gold x 2 / PN 98137 Set 70721')).toBe(true);
@@ -96,11 +110,42 @@ describe('assembleFlags', () => {
     });
     expect(flags.some((f) => f.startsWith('description:'))).toBe(true);
   });
+
+  it('flags young sets on the USED pass (thin used history — the 77254 lesson)', () => {
+    const flags = assembleFlags({
+      ...baseInput,
+      sets: [{ setNumber: '77254', yearFrom: 2025 }],
+      currentYear: 2026,
+    });
+    expect(flags.some((f) => f.includes('77254') && f.includes('thin used-parts history'))).toBe(true);
+  });
+
+  it('does NOT flag young sets on the NEW pass (new-sale data is deep)', () => {
+    const flags = assembleFlags({
+      ...baseInput,
+      conditionMode: 'new',
+      sets: [{ setNumber: '77254', yearFrom: 2025 }],
+      currentYear: 2026,
+    });
+    expect(flags.some((f) => f.includes('thin used-parts history'))).toBe(false);
+  });
+});
+
+describe('amazonResaleMargin', () => {
+  it('matches the Vinted sniper economics (18.36% fees + banded shipping)', () => {
+    // £50 Buy Box, £30 all-in: fees £9.18, ship £4 -> profit £6.82, margin 13.64%
+    const r = amazonResaleMargin(50, 30);
+    expect(r.profitGbp).toBeCloseTo(6.82, 2);
+    expect(r.marginPct).toBeCloseTo(13.64, 1);
+  });
+  it('uses £3 shipping under £20', () => {
+    const r = amazonResaleMargin(15, 5);
+    expect(r.profitGbp).toBeCloseTo(15 - 15 * 0.1836 - 3 - 5, 2);
+  });
 });
 
 describe('offerForMultiple', () => {
   it('suggests the price that hits the target multiple', () => {
-    // POV £150, want 3x, postage £4 -> offer = 150/3 - 4 = £46
     expect(offerForMultiple(150, 3, 4, 60)).toBe(46);
   });
   it('returns null when the ask is already at/below the target price', () => {
@@ -108,5 +153,15 @@ describe('offerForMultiple', () => {
   });
   it('returns null for degenerate values', () => {
     expect(offerForMultiple(0, 3, 4, 60)).toBeNull();
+  });
+});
+
+describe('offerForMargin', () => {
+  it('suggests the price that hits the target Amazon margin', () => {
+    // £100 Buy Box, 15% target: 100*(1-0.1836-0.15) - 4 ship - 3 post = £59.64
+    expect(offerForMargin(100, 15, 3, 80)).toBeCloseTo(59.64, 2);
+  });
+  it('returns null when the ask already beats the target price', () => {
+    expect(offerForMargin(100, 15, 3, 50)).toBeNull();
   });
 });
