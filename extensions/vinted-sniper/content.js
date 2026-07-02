@@ -1422,18 +1422,38 @@
       catalogEntry = null,
     } = opts || {};
 
-    // A: seller's title is the embed title; canonical set name moves to a field.
-    const sellerTitle = (listing.title || '(untitled)').replace(/\0/g, '').substring(0, 200);
-    const tierEmoji = dealTier === 'green' ? '🟢' : '🟠';
-    const warnPrefix = softWarn ? '⚠️ ' : '';
-    const embedTitle = `${tierEmoji} ${MODE_EMOJI[mode]} ${warnPrefix}${sellerTitle}`.substring(0, 256);
-
-    const fields = [];
-
-    // Which signals fired -> arrows on the corresponding money fields.
+    // Which signals fired -> title verdict + arrows on the money fields.
     const amazonFired = reasons.some(r => r.startsWith('Amazon'));
     const usedFired = reasons.some(r => r.startsWith('used POV'));
     const newPovFired = reasons.some(r => r.startsWith('new POV'));
+
+    // Title: "{tier} {mode} {short title} - {condition} - Price: £X - {metric}, {PLAY}"
+    // Vinted slug titles carry ", brand: … condition: … £…" junk — keep only the lead.
+    const shortTitle = (listing.title || '(untitled)').replace(/\0/g, '').split(/,\s*brand\s*:/i)[0].trim().substring(0, 90);
+    const tierEmoji = dealTier === 'green' ? '🟢' : '🟠';
+    const warnPrefix = softWarn ? '⚠️ ' : '';
+    const conditionShort = listing.condition
+      ? listing.condition.replace(/^[A-Z0-9]+\s*[·•]\s*/, '').replace(/\s*[·•]\s*/g, ' ').trim().substring(0, 30)
+      : null;
+    const priceShort = listing.priceWithFees || listing.price || null;
+    let titleMetric = null;
+    if (amazonFired && lookup?.price) {
+      const fees = lookup.price * 0.1836;
+      const ship = lookup.price < 20 ? 3 : 4;
+      const m = ((lookup.price - fees - ship - cog) / lookup.price) * 100;
+      titleMetric = `Profit %: ${m.toFixed(1)}, AMAZON SELL${newPovFired ? ' + PART OUT' : ''}`;
+    } else if (usedFired && pov.usedMultiple != null) {
+      titleMetric = `COG: ${pov.usedMultiple.toFixed(1)}X, USED PART OUT`;
+    } else if (newPovFired && pov.newMultiple != null) {
+      titleMetric = `COG: ${pov.newMultiple.toFixed(1)}X, NEW PART OUT`;
+    }
+    const titleBits = [shortTitle];
+    if (conditionShort) titleBits.push(conditionShort);
+    if (priceShort) titleBits.push(`Price: ${priceShort}`);
+    if (titleMetric) titleBits.push(titleMetric);
+    const embedTitle = `${tierEmoji} ${MODE_EMOJI[mode]} ${warnPrefix}${titleBits.join(' - ')}`.substring(0, 256);
+
+    const fields = [];
 
     // Vinted COG
     if (listing.price) {
