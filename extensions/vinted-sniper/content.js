@@ -1416,6 +1416,36 @@
 
     const fields = [];
 
+    // ▶️ THE PLAY — one glance: what this is, where the value is, what to do.
+    // Vinted is first-come-first-served, so this must read in ~2 seconds.
+    {
+      const setLabel = catalogEntry?.name ? `${setNums[0]} ${catalogEntry.name}` : `set ${setNums[0]}`;
+      const playLines = [];
+      const amazonFired = reasons.some(r => r.startsWith('Amazon'));
+      const usedFired = reasons.some(r => r.startsWith('used POV'));
+      const newPovFired = reasons.some(r => r.startsWith('new POV'));
+      if (usedFired && pov.used?.soldAvg != null) {
+        playLines.push(`**Buy used ${setLabel} → break it for parts on BrickLink.**`);
+        playLines.push(`Parts sold **£${pov.used.soldAvg.toFixed(2)}** over 6mo vs **£${cog.toFixed(2)}** COG = **${pov.usedMultiple != null ? pov.usedMultiple.toFixed(1) : '?'}× cost**.`);
+      }
+      if (amazonFired && lookup?.price) {
+        const fees = lookup.price * 0.1836;
+        const ship = lookup.price < 20 ? 3 : 4;
+        const profit = lookup.price - fees - ship - cog;
+        playLines.push(`**Buy ${setLabel} → resell${condClass === 'new' ? ' sealed' : ''} on Amazon** at £${lookup.price.toFixed(2)} → **£${profit.toFixed(2)} profit (${((profit / lookup.price) * 100).toFixed(1)}%)** after fees.`);
+      }
+      if (newPovFired && pov.new?.soldAvg != null) {
+        playLines.push(`${amazonFired ? 'Second exit — part out' : '**Buy to part out on BrickLink**'}: New parts sold **£${pov.new.soldAvg.toFixed(2)}** over 6mo = **${pov.newMultiple != null ? pov.newMultiple.toFixed(1) : '?'}× COG**.`);
+      }
+      if (playLines.length === 0) playLines.push(`**${setLabel}** flagged by ${MODE_LABELS[mode]} mode.`);
+      fields.push({ name: '▶️ The play', value: playLines.join('\n'), inline: false });
+      fields.push({
+        name: '👉 Do',
+        value: `⚡ **Vinted is first-come — buy now** if the photos match${condClass === 'unknown' ? ' (condition unstated — check!)' : ''}.${povNote ? `\n⚠️ ${povNote}` : ''}`,
+        inline: false,
+      });
+    }
+
     // Vinted COG
     if (listing.price) {
       let priceText = listing.price;
