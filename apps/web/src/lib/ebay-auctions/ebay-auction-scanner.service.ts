@@ -80,7 +80,9 @@ export class EbayAuctionScannerService {
       // 2. Search eBay for auctions ending soon
       const auctionItems = await this.searchEndingSoonAuctions(config);
 
-      if (auctionItems.length === 0) {
+      // An empty NEW search must not skip the opt-in USED scan (step 5b) —
+      // all downstream steps are safe on an empty item list.
+      if (auctionItems.length === 0 && !config.usedPovModeEnabled) {
         return this.createResult(startTime, { auctionsFound: 0, evaluations: [] });
       }
 
