@@ -127,7 +127,7 @@ interface BinItemSummary extends EbayItemSummary {
  * '%' is a non-word char so a trailing \b there can never match.
  */
 const TITLE_CAVEAT_RE =
-  /\b(incomplete|not complete|missing|no (mini)?fig(ure)?s?|no minis|build(s)? only|built only|spares?|parts? only|job ?lot|bundle|from set|instructions? only|manual only|box only|sticker(s)? only|empty box|open box|resealed|damaged box|box damage)\b|\d+\s?%/i;
+  /\b(incomplete|not complete|missing|no\s+mini\s*fig(ure)?s?|no minis|no\s+box|unboxed|build(s)? only|built only|spares?|parts? only|job ?lot|bundle|from set|instructions? only|manual only|box only|sticker(s)? only|empty box|open box|resealed|damaged box|box damage|read description)\b|\d+\s?%/i;
 
 /** Hard part-language: quantities/part-numbers that scream "single piece". */
 const PART_LANGUAGE_RE =
@@ -288,7 +288,7 @@ export class EbayBinPartoutScannerService {
       hitlistMaxAgeHours: data.hitlist_max_age_hours ?? 24,
       lastScanCursor: data.last_scan_cursor,
       newScanEnabled: data.new_scan_enabled ?? true,
-      amazonMinMarginPct: Number(data.amazon_min_margin_pct ?? 15),
+      amazonMinMarginPct: Number(data.amazon_min_margin_pct ?? 20),
       amazonGreatMarginPct: Number(data.amazon_great_margin_pct ?? 25),
       lastScanCursorNew: data.last_scan_cursor_new,
     };
