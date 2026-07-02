@@ -1422,43 +1422,38 @@
       catalogEntry = null,
     } = opts || {};
 
-    // A: seller's title is the embed title; canonical set name moves to a field.
-    const sellerTitle = (listing.title || '(untitled)').replace(/\0/g, '').substring(0, 200);
+    // Which signals fired -> title verdict + arrows on the money fields.
+    const amazonFired = reasons.some(r => r.startsWith('Amazon'));
+    const usedFired = reasons.some(r => r.startsWith('used POV'));
+    const newPovFired = reasons.some(r => r.startsWith('new POV'));
+
+    // Title: "{tier} {mode} {short title} - {condition} - Price: £X - {metric}, {PLAY}"
+    // Vinted slug titles carry ", brand: … condition: … £…" junk — keep only the lead.
+    const shortTitle = (listing.title || '(untitled)').replace(/\0/g, '').split(/,\s*brand\s*:/i)[0].trim().substring(0, 90);
     const tierEmoji = dealTier === 'green' ? '🟢' : '🟠';
     const warnPrefix = softWarn ? '⚠️ ' : '';
-    const embedTitle = `${tierEmoji} ${MODE_EMOJI[mode]} ${warnPrefix}${sellerTitle}`.substring(0, 256);
+    const conditionShort = listing.condition
+      ? listing.condition.replace(/^[A-Z0-9]+\s*[·•]\s*/, '').replace(/\s*[·•]\s*/g, ' ').trim().substring(0, 30)
+      : null;
+    const priceShort = listing.priceWithFees || listing.price || null;
+    let titleMetric = null;
+    if (amazonFired && lookup?.price) {
+      const fees = lookup.price * 0.1836;
+      const ship = lookup.price < 20 ? 3 : 4;
+      const m = ((lookup.price - fees - ship - cog) / lookup.price) * 100;
+      titleMetric = `Profit %: ${m.toFixed(1)}, AMAZON SELL${newPovFired ? ' + PART OUT' : ''}`;
+    } else if (usedFired && pov.usedMultiple != null) {
+      titleMetric = `COG: ${pov.usedMultiple.toFixed(1)}X, USED PART OUT`;
+    } else if (newPovFired && pov.newMultiple != null) {
+      titleMetric = `COG: ${pov.newMultiple.toFixed(1)}X, NEW PART OUT`;
+    }
+    const titleBits = [shortTitle];
+    if (conditionShort) titleBits.push(conditionShort);
+    if (priceShort) titleBits.push(`Price: ${priceShort}`);
+    if (titleMetric) titleBits.push(titleMetric);
+    const embedTitle = `${tierEmoji} ${MODE_EMOJI[mode]} ${warnPrefix}${titleBits.join(' - ')}`.substring(0, 256);
 
     const fields = [];
-
-    // ▶️ THE PLAY — one glance: what this is, where the value is, what to do.
-    // Vinted is first-come-first-served, so this must read in ~2 seconds.
-    {
-      const setLabel = catalogEntry?.name ? `${setNums[0]} ${catalogEntry.name}` : `set ${setNums[0]}`;
-      const playLines = [];
-      const amazonFired = reasons.some(r => r.startsWith('Amazon'));
-      const usedFired = reasons.some(r => r.startsWith('used POV'));
-      const newPovFired = reasons.some(r => r.startsWith('new POV'));
-      if (usedFired && pov.used?.soldAvg != null) {
-        playLines.push(`→ **Buy used ${setLabel} → break it for parts on BrickLink.**`);
-        playLines.push(`Parts sold **£${pov.used.soldAvg.toFixed(2)}** over 6mo vs **£${cog.toFixed(2)}** COG = **${pov.usedMultiple != null ? pov.usedMultiple.toFixed(1) : '?'}× cost**.`);
-      }
-      if (amazonFired && lookup?.price) {
-        const fees = lookup.price * 0.1836;
-        const ship = lookup.price < 20 ? 3 : 4;
-        const profit = lookup.price - fees - ship - cog;
-        playLines.push(`→ **Buy ${setLabel} → resell${condClass === 'new' ? ' sealed' : ''} on Amazon** at £${lookup.price.toFixed(2)} → **£${profit.toFixed(2)} profit (${((profit / lookup.price) * 100).toFixed(1)}%)** after fees.`);
-      }
-      if (newPovFired && pov.new?.soldAvg != null) {
-        playLines.push(`${amazonFired ? 'Second exit — part out' : '→ **Buy to part out on BrickLink**'}: New parts sold **£${pov.new.soldAvg.toFixed(2)}** over 6mo = **${pov.newMultiple != null ? pov.newMultiple.toFixed(1) : '?'}× COG**.`);
-      }
-      if (playLines.length === 0) playLines.push(`**${setLabel}** flagged by ${MODE_LABELS[mode]} mode.`);
-      fields.push({ name: '▶️ The play', value: playLines.join('\n'), inline: false });
-      fields.push({
-        name: '👉 Do',
-        value: `⚡ **Vinted is first-come — buy now** if the photos match${condClass === 'unknown' ? ' (condition unstated — check!)' : ''}.${povNote ? `\n⚠️ ${povNote}` : ''}`,
-        inline: false,
-      });
-    }
 
     // Vinted COG
     if (listing.price) {
@@ -1473,7 +1468,7 @@
     if (lookup?.price) {
       let amazonText = `£${lookup.price.toFixed(2)}`;
       if (lookup.asin) amazonText += `\n[Keepa](https://keepa.com/#!product/2-${lookup.asin})`;
-      fields.push({ name: '🛒 Amazon', value: amazonText, inline: true });
+      fields.push({ name: '🛒 Amazon BB', value: amazonText, inline: true });
       if (lookup.rrp) fields.push({ name: '🏷️ UK RRP', value: `£${lookup.rrp.toFixed(2)}`, inline: true });
       if (lookup.wasPrice90d) fields.push({ name: '📊 90d Avg', value: `£${lookup.wasPrice90d.toFixed(2)}`, inline: true });
       if (lookup.salesRank) fields.push({ name: '📈 BSR', value: lookup.salesRank.toLocaleString(), inline: true });
@@ -1486,7 +1481,7 @@
       const cogPctOfSale = ((cog / salePrice) * 100).toFixed(1);
       const profitEmoji = profit >= 0 ? '💰' : '🔻';
       fields.push({
-        name: `${profitEmoji} Amazon Profit / Margin`,
+        name: `${amazonFired ? '→ ' : ''}${profitEmoji} Amazon Profit / Margin`,
         value: `Profit: **£${profit.toFixed(2)}** (${marginPct}%)\nCOG: ${cogPctOfSale}% | Fees: £${fees.toFixed(2)} | Ship: £${shipping}`,
         inline: false,
       });
@@ -1496,6 +1491,8 @@
     const displayCond = condClass === 'new' ? 'new' : 'used';
     const dispPov = displayCond === 'new' ? pov.new : pov.used;
     const dispMultiple = displayCond === 'new' ? pov.newMultiple : pov.usedMultiple;
+    const povFiredForDisplay = displayCond === 'new' ? newPovFired : usedFired;
+    const povArrow = povFiredForDisplay ? '→ ' : '';
     const povLabel = displayCond === 'new' ? 'Part-Out (New)' : (condClass === 'used' ? 'Part-Out (Used)' : 'Part-Out (Used?)');
     if (dispPov?.soldAvg != null) {
       const lines = [`6mo sold: **£${dispPov.soldAvg.toFixed(2)}**${dispPov.forSaleAvg != null ? ` · for-sale: £${dispPov.forSaleAvg.toFixed(2)}` : ''}`];
@@ -1504,10 +1501,10 @@
       if (dispPov.lots != null) meta.push(`${dispPov.lots} lots`);
       if (displayCond === 'new' && dispPov.multiple != null) meta.push(`${dispPov.multiple.toFixed(2)}× RRP`);
       if (meta.length) lines.push(meta.join(' · '));
-      if (displayCond === 'used' && povNote) lines.push(povNote);
+      if (povNote) lines.push(`⚠️ ${povNote}`);
       fields.push({ name: `🧩 ${povLabel}`, value: lines.join('\n'), inline: false });
     } else {
-      fields.push({ name: `🧩 ${povLabel}`, value: dispPov?.noData ? `no part-out data (${dispPov.noData})` : 'no BL part-out data', inline: false });
+      fields.push({ name: `${povArrow}🧩 ${povLabel}`, value: dispPov?.noData ? `no part-out data (${dispPov.noData})` : 'no BL part-out data', inline: false });
     }
 
     // Set numbers
