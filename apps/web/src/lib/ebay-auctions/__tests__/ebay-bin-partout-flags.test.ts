@@ -46,6 +46,16 @@ describe('titleCaveat / looksLikePartListing (discovery false-positive class)', 
     expect(titleCaveat('LEGO 10188 Death Star 99% complete')).toBeTruthy();
     expect(titleCaveat('LEGO 75192 approx 95 % complete with instructions')).toBeTruthy();
   });
+  it('catches the E2E-confirmed live misses (exact shipped titles)', () => {
+    // Live alert 76314 shipped flags=null: spaced "NO MINI FIGURES"
+    expect(titleCaveat('LEGO Avengers Tower 76314 NO MINI FIGURES included')).toBeTruthy();
+    // Live alert 31128: boxless kills the Amazon-New exit
+    expect(titleCaveat('LEGO Creator 31128 Dolphin and Turtle no box')).toBeTruthy();
+    expect(titleCaveat('LEGO 10307 unboxed complete')).toBeTruthy();
+    // Live alert 7066: classic undisclosed-defect signal
+    expect(titleCaveat('LEGO 7066 Earth Defence HQ - Read Description')).toBeTruthy();
+  });
+
   it('catches sealed-condition caveats for the NEW scan', () => {
     expect(titleCaveat('LEGO 75192 Millennium Falcon open box never built')).toBeTruthy();
     expect(titleCaveat('LEGO 10307 Eiffel Tower resealed')).toBeTruthy();
