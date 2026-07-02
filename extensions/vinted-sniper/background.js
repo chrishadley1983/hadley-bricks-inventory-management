@@ -254,7 +254,7 @@ function sleep(ms) {
  */
 async function getCatalog(force = false) {
   const cached = await new Promise(r =>
-    chrome.storage.local.get('legoCatalogV1', d => r(d.legoCatalogV1 || null))
+    chrome.storage.local.get('legoCatalogV2', d => r(d.legoCatalogV2 || null))
   );
 
   const fresh = cached && cached.fetched_at && (Date.now() - cached.fetched_at) < CATALOG_TTL_MS;
@@ -265,7 +265,7 @@ async function getCatalog(force = false) {
   try {
     const sets = await fetchCatalogPaginated();
     const payload = { sets, fetched_at: Date.now() };
-    await new Promise(r => chrome.storage.local.set({ legoCatalogV1: payload }, r));
+    await new Promise(r => chrome.storage.local.set({ legoCatalogV2: payload }, r));
     const elapsed = Date.now() - start;
     console.log(`[Vinted Sniper] Catalog: ${Object.keys(sets).length} sets in ${elapsed}ms`);
     return payload;
@@ -307,14 +307,14 @@ function ingestCatalogRows(sets, rows) {
     const key = m[1];
     // First-seen wins for the digit-only key (variant -1 is the canonical set).
     if (!sets[key]) {
-      sets[key] = { theme: r.theme || null, name: r.set_name || null };
+      sets[key] = { theme: r.theme || null, name: r.set_name || null, year: r.year_from || null };
     }
   }
 }
 
 async function fetchCatalogPage(offset, limit, withCount) {
   const qs = new URLSearchParams({
-    select: 'set_number,theme,set_name',
+    select: 'set_number,theme,set_name,year_from',
     order: 'set_number.asc',
     limit: String(limit),
     offset: String(offset),
