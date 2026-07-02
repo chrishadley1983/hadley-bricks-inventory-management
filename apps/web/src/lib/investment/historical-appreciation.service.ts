@@ -6,6 +6,16 @@
  *
  * Populates the investment_historical table with results.
  *
+ * Label computation (median_window_v2):
+ * - A window price is the MEDIAN of valid snapshots in the window, never a
+ *   single closest point — one bad snapshot cannot become the label.
+ * - Snapshots are junk-filtered against RRP (0.05x–15x band) before use.
+ * - A window needs at least MIN_CORROBORATING_SNAPSHOTS valid points or its
+ *   label is null.
+ * - retired_date_estimated is set when the retirement date fell back to
+ *   expected_retirement_date (frequently a Dec-31 placeholder) instead of a
+ *   real Brickset exit_date.
+ *
  * Uses batch-fetching to avoid N+1 query patterns - all price snapshots for
  * retired sets are loaded upfront and processed in memory.
  */
@@ -25,14 +35,70 @@ interface RetiredSet {
   set_number: string;
   uk_retail_price: number | null;
   retired_date: string | null; // COALESCE(exit_date, expected_retirement_date)
+  retired_date_estimated: boolean; // true when exit_date was missing
   has_amazon_listing: boolean | null;
 }
 
-interface PriceSnapshot {
+export interface PriceSnapshot {
   set_num: string;
   date: string;
   price_gbp: number | null;
   sales_rank: number | null;
+}
+
+export interface WindowPrice {
+  price: number | null;
+  snapshots: number;
+}
+
+export const LABEL_METHOD = 'median_window_v2';
+
+/** Minimum valid snapshots in a window before its median becomes a label. */
+export const MIN_CORROBORATING_SNAPSHOTS = 3;
+
+/** Junk filter: plausible price band relative to RRP. */
+export const MAX_PRICE_RRP_MULTIPLE = 15;
+export const MIN_PRICE_RRP_MULTIPLE = 0.05;
+
+/** Window half-widths in days — wider further out, where prices drift slowly. */
+const WINDOW_DAYS_AT_RETIREMENT = 30;
+const WINDOW_DAYS_1YR = 45;
+const WINDOW_DAYS_3YR = 60;
+
+/**
+ * Median price of valid snapshots within +/- windowDays of the target date.
+ * Snapshots outside the plausible price band relative to RRP are junk and
+ * excluded. Returns null price unless MIN_CORROBORATING_SNAPSHOTS valid
+ * points corroborate the window.
+ */
+export function computeWindowMedianPrice(
+  snapshots: PriceSnapshot[],
+  targetDate: string,
+  windowDays: number,
+  rrp: number
+): WindowPrice {
+  const windowMs = windowDays * 24 * 60 * 60 * 1000;
+  const targetTime = new Date(targetDate).getTime();
+  const minPrice = rrp * MIN_PRICE_RRP_MULTIPLE;
+  const maxPrice = rrp * MAX_PRICE_RRP_MULTIPLE;
+
+  const prices: number[] = [];
+  for (const s of snapshots) {
+    if (s.price_gbp == null || s.price_gbp <= 0) continue;
+    if (s.price_gbp < minPrice || s.price_gbp > maxPrice) continue;
+    const diff = Math.abs(new Date(s.date).getTime() - targetTime);
+    if (diff <= windowMs) prices.push(s.price_gbp);
+  }
+
+  if (prices.length < MIN_CORROBORATING_SNAPSHOTS) {
+    return { price: null, snapshots: prices.length };
+  }
+
+  prices.sort((a, b) => a - b);
+  const mid = Math.floor(prices.length / 2);
+  const median = prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
+
+  return { price: Math.round(median * 100) / 100, snapshots: prices.length };
 }
 
 export class HistoricalAppreciationService {
@@ -72,9 +138,7 @@ export class HistoricalAppreciationService {
     for (const set of retiredSets) {
       try {
         const snapshots = snapshotsBySet.get(set.set_number) ?? [];
-        const success = this.calculateForSet(set, snapshots);
-        // Upsert result
-        await this.upsertResult(set, snapshots);
+        const success = await this.upsertResult(set, snapshots);
         if (success) {
           calculated++;
         } else {
@@ -125,12 +189,13 @@ export class HistoricalAppreciationService {
 
     for (const record of rows) {
       // Prefer exit_date (backfilled from Brickset CSV + us_date_removed), fall back to expected_retirement_date
-      const retiredDate =
-        (record.exit_date as string | null) ?? (record.expected_retirement_date as string | null);
+      const exitDate = record.exit_date as string | null;
+      const retiredDate = exitDate ?? (record.expected_retirement_date as string | null);
       sets.push({
         set_number: record.set_number as string,
         uk_retail_price: record.uk_retail_price as number | null,
         retired_date: retiredDate,
+        retired_date_estimated: exitDate == null,
         has_amazon_listing: record.has_amazon_listing as boolean | null,
       });
     }
@@ -181,60 +246,64 @@ export class HistoricalAppreciationService {
   }
 
   /**
-   * Calculate appreciation for a single retired set using pre-fetched snapshots.
-   * Returns true if calculated successfully, false if insufficient data.
-   */
-  private calculateForSet(set: RetiredSet, snapshots: PriceSnapshot[]): boolean {
-    const rrp = set.uk_retail_price;
-    if (!rrp || rrp <= 0) return false;
-
-    const retiredDate = set.retired_date;
-    if (!retiredDate) return false;
-
-    const priceAtRetirement = this.findPriceNearDate(snapshots, retiredDate);
-    const oneYearPost = this.findPriceNearDate(snapshots, this.addYears(retiredDate, 1));
-    const threeYearPost = this.findPriceNearDate(snapshots, this.addYears(retiredDate, 3));
-
-    const hasAnyPrice = priceAtRetirement != null || oneYearPost != null || threeYearPost != null;
-    return hasAnyPrice;
-  }
-
-  /**
    * Upsert the historical result for a set.
+   * Returns true when at least one window produced a corroborated price.
    */
-  private async upsertResult(set: RetiredSet, snapshots: PriceSnapshot[]): Promise<void> {
+  private async upsertResult(set: RetiredSet, snapshots: PriceSnapshot[]): Promise<boolean> {
     const rrp = set.uk_retail_price;
     const retiredDate = set.retired_date;
 
-    if (!rrp || rrp <= 0) {
+    if (!rrp || rrp <= 0 || !retiredDate) {
       await this.upsertHistorical(set.set_number, {
         retired_date: retiredDate,
+        retired_date_estimated: set.retired_date_estimated,
         rrp_gbp: rrp,
+        price_at_retirement: null,
+        price_1yr_post: null,
+        price_3yr_post: null,
+        actual_1yr_appreciation: null,
+        actual_3yr_appreciation: null,
+        snapshots_at_retirement: null,
+        snapshots_1yr: null,
+        snapshots_3yr: null,
+        label_method: LABEL_METHOD,
         data_quality: 'insufficient',
         had_amazon_listing: set.has_amazon_listing ?? false,
       });
-      return;
+      return false;
     }
 
-    const priceAtRetirement = retiredDate ? this.findPriceNearDate(snapshots, retiredDate) : null;
+    const atRetirement = computeWindowMedianPrice(
+      snapshots,
+      retiredDate,
+      WINDOW_DAYS_AT_RETIREMENT,
+      rrp
+    );
+    const oneYearPost = computeWindowMedianPrice(
+      snapshots,
+      this.addYears(retiredDate, 1),
+      WINDOW_DAYS_1YR,
+      rrp
+    );
+    const threeYearPost = computeWindowMedianPrice(
+      snapshots,
+      this.addYears(retiredDate, 3),
+      WINDOW_DAYS_3YR,
+      rrp
+    );
 
-    const oneYearPost = retiredDate
-      ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 1))
-      : null;
-
-    const threeYearPost = retiredDate
-      ? this.findPriceNearDate(snapshots, this.addYears(retiredDate, 3))
-      : null;
-
-    const avgSalesRank = retiredDate ? this.getAvgSalesRankPost(snapshots, retiredDate) : null;
+    const avgSalesRank = this.getAvgSalesRankPost(snapshots, retiredDate);
 
     // Calculate appreciation percentages
-    const appreciation1yr = oneYearPost != null ? ((oneYearPost - rrp) / rrp) * 100 : null;
+    const appreciation1yr =
+      oneYearPost.price != null ? ((oneYearPost.price - rrp) / rrp) * 100 : null;
 
-    const appreciation3yr = threeYearPost != null ? ((threeYearPost - rrp) / rrp) * 100 : null;
+    const appreciation3yr =
+      threeYearPost.price != null ? ((threeYearPost.price - rrp) / rrp) * 100 : null;
 
     // Determine data quality
-    const hasAnyPrice = priceAtRetirement != null || oneYearPost != null || threeYearPost != null;
+    const hasAnyPrice =
+      atRetirement.price != null || oneYearPost.price != null || threeYearPost.price != null;
     const dataQuality = !hasAnyPrice
       ? 'insufficient'
       : appreciation1yr != null && appreciation3yr != null
@@ -243,41 +312,25 @@ export class HistoricalAppreciationService {
 
     await this.upsertHistorical(set.set_number, {
       retired_date: retiredDate,
+      retired_date_estimated: set.retired_date_estimated,
       rrp_gbp: rrp,
-      price_at_retirement: priceAtRetirement,
-      price_1yr_post: oneYearPost,
-      price_3yr_post: threeYearPost,
+      price_at_retirement: atRetirement.price,
+      price_1yr_post: oneYearPost.price,
+      price_3yr_post: threeYearPost.price,
       actual_1yr_appreciation:
         appreciation1yr != null ? Math.round(appreciation1yr * 100) / 100 : null,
       actual_3yr_appreciation:
         appreciation3yr != null ? Math.round(appreciation3yr * 100) / 100 : null,
+      snapshots_at_retirement: atRetirement.snapshots,
+      snapshots_1yr: oneYearPost.snapshots,
+      snapshots_3yr: threeYearPost.snapshots,
+      label_method: LABEL_METHOD,
       had_amazon_listing: set.has_amazon_listing ?? false,
       avg_sales_rank_post: avgSalesRank,
       data_quality: dataQuality,
     });
-  }
 
-  /**
-   * Find the closest price snapshot to a target date from pre-fetched data.
-   * Looks within a 30-day window around the target date.
-   */
-  private findPriceNearDate(snapshots: PriceSnapshot[], targetDate: string): number | null {
-    const windowMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-    const targetTime = new Date(targetDate).getTime();
-
-    let closest: PriceSnapshot | null = null;
-    let minDiff = Infinity;
-
-    for (const s of snapshots) {
-      if (s.price_gbp == null) continue;
-      const diff = Math.abs(new Date(s.date).getTime() - targetTime);
-      if (diff <= windowMs && diff < minDiff) {
-        minDiff = diff;
-        closest = s;
-      }
-    }
-
-    return closest?.price_gbp ?? null;
+    return hasAnyPrice;
   }
 
   /**
