@@ -40,11 +40,17 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
 
+# S4U: run whether the user is logged on or not (no stored password; the task
+# only needs localhost HTTP + local file writes). Default interactive-only
+# logon would silently stop the sniper on a logged-out machine.
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
+    -Principal $principal `
     -Description "eBay auction sniper run LOCALLY every 5 min (off Vercel). POSTs /api/cron/ebay-auctions on localhost:3000 (NEW + opt-in USED POV scans). Replaces the paused GCP ebay-auction-sniper Cloud Scheduler job."
 
 Write-Host ""

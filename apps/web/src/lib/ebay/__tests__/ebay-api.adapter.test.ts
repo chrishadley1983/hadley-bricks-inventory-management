@@ -1354,8 +1354,10 @@ describe('EbayApiAdapter', () => {
 
       const elapsed = Date.now() - startTime;
 
-      // Should have at least 100ms delay between requests
-      expect(elapsed).toBeGreaterThanOrEqual(100);
+      // Should have ~100ms delay between requests. Assert against 95ms, not
+      // 100ms exactly: setTimeout can fire ~1ms early (timer granularity),
+      // which made this flake in CI ("expected 99 to be >= 100").
+      expect(elapsed).toBeGreaterThanOrEqual(95);
     });
   });
 

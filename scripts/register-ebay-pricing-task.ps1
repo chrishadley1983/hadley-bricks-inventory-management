@@ -33,11 +33,16 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 
+# S4U: run whether the user is logged on or not (no stored password; the task
+# only needs localhost HTTP + local file writes).
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
+    -Principal $principal `
     -Description "Daily eBay arbitrage pricing sync run LOCALLY (off Vercel). Loops /api/cron/ebay-pricing on localhost:3000 until complete. Replaces the paused GCP ebay-pricing-sync Cloud Scheduler job."
 
 Write-Host ""

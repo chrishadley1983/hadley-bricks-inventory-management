@@ -25,12 +25,28 @@ $logFile = Join-Path $PSScriptRoot "..\logs\ebay-auctions-local.log"
 function Write-RunLog([string]$line) {
     $stamped = "{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $line
     Write-Host $stamped
+    # Retry the append: a reader holding the file (tail, editor) makes
+    # Add-Content throw, and a swallowed failure silently drops run lines
+    # (observed 2026-07-02: three runs completed but never logged).
+    $written = $false
+    foreach ($attempt in 1..4) {
+        try {
+            $logDir = Split-Path $logFile -Parent
+            if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+            Add-Content -Path $logFile -Value $stamped -ErrorAction Stop
+            $written = $true
+            break
+        } catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if (-not $written) {
+        # Last resort: sidecar file (different name -> no contention from log readers)
+        try { Add-Content -Path "$logFile.dropped" -Value $stamped -ErrorAction Stop } catch {}
+    }
     try {
-        $logDir = Split-Path $logFile -Parent
-        if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
-        Add-Content -Path $logFile -Value $stamped
         # Trim: keep the file bounded (~288 runs/day at 5-min cadence)
-        if ((Get-Item $logFile).Length -gt 2MB) {
+        if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 2MB) {
             Get-Content $logFile -Tail 2000 | Set-Content "$logFile.tmp"
             Move-Item "$logFile.tmp" $logFile -Force
         }
@@ -49,7 +65,10 @@ $uri = "http://localhost:3000/api/cron/ebay-auctions"
 $headers = @{ "Authorization" = "Bearer $cronSecret" }
 
 try {
-    $r = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -TimeoutSec 240
+    # 180s: comfortably under the task's 4-min ExecutionTimeLimit so a hung
+    # request still reaches the catch and logs an ERROR line before the
+    # scheduler would kill the run.
+    $r = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -TimeoutSec 180
 } catch {
     $detail = $_.Exception.Message
     if ($_.Exception.Response) {
