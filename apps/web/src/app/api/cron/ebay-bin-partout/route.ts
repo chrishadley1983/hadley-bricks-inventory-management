@@ -57,7 +57,12 @@ export async function POST(request: NextRequest) {
     let alertsSent = 0;
     for (const opp of result.opportunities) {
       try {
+        // Durability: persist the opportunity BEFORE attempting Discord — the
+        // scan cursor has already advanced, so a throw after this point must
+        // not lose the row (it would be permanently behind the cursor).
+        await scanner.saveAlert(DEFAULT_USER_ID, opp, false);
         const discordResult = await discordService.sendEbayBinPartoutAlert({
+          conditionMode: opp.conditionMode,
           sets: opp.sets.map((s) => ({
             setNumber: s.setNumber,
             setName: s.setName,
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
             yearFrom: s.yearFrom,
             rrpGbp: s.rrpGbp,
             usedPovGbp: s.usedPovGbp,
+            newPovGbp: s.newPovGbp,
             figSharePct: s.figSharePct,
             ebayFloorGbp: s.ebayFloorGbp,
           })),
@@ -74,6 +80,11 @@ export async function POST(request: NextRequest) {
           totalCostGbp: opp.totalCostGbp,
           povTotal: opp.povTotal,
           multiple: opp.multiple,
+          amazonPriceGbp: opp.amazon?.amazonPriceGbp ?? null,
+          amazonProfitGbp: opp.amazonProfitGbp,
+          amazonMarginPct: opp.amazonMarginPct,
+          asin: opp.amazon?.asin ?? null,
+          signals: opp.signals,
           tier: opp.tier,
           bestOfferEnabled: opp.bestOfferEnabled,
           offerSuggestionGbp: opp.offerSuggestionGbp,
@@ -84,8 +95,10 @@ export async function POST(request: NextRequest) {
           imageUrl: opp.imageUrl,
           condition: opp.condition,
         });
-        await scanner.saveAlert(DEFAULT_USER_ID, opp, discordResult.success);
-        if (discordResult.success) alertsSent++;
+        if (discordResult.success) {
+          await scanner.saveAlert(DEFAULT_USER_ID, opp, true);
+          alertsSent++;
+        }
       } catch (e) {
         console.error('[ebay-bin-partout] alert failed:', (e as Error).message);
       }
