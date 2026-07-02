@@ -77,6 +77,7 @@ export async function POST() {
           povMultiple: opp.povMultiple,
           povLots: opp.pov?.lots ?? null,
           signals: opp.signals,
+          flags: opp.flags,
         });
 
         await scanner.saveAlert(user.id, opp, discordResult.success);

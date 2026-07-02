@@ -66,6 +66,7 @@ export interface EbayAuctionAlertParams {
   povMultiple?: number | null;
   povLots?: number | null;
   signals?: string[];
+  flags?: string[];
 }
 
 export interface EbayBinPartoutAlertParams {
@@ -466,7 +467,7 @@ export class DiscordService {
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
       ebayUrl, imageUrl, ukRrp, maxBid,
-      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [],
+      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [], flags = [],
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
@@ -514,6 +515,14 @@ export class DiscordService {
       { name: '▶️ The play', value: playLines.join('\n'), inline: false },
       { name: '👉 Do', value: actionLine, inline: false },
     ];
+
+    if (flags.length > 0) {
+      fields.push({
+        name: '⚠️ Check before bidding',
+        value: flags.map((f) => `• ${f}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
 
     // Amazon leg — only present for new-condition (amazon/hybrid) opportunities.
     if (amazonPrice != null) {
