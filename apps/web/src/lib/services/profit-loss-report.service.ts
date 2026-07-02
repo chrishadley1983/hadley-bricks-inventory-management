@@ -116,6 +116,18 @@ function getMonthStartDate(month: string): string {
 }
 
 /**
+ * Last in-range month (YYYY-MM) given the EXCLUSIVE end-date bound used by all
+ * range queries. endDateExclusive is the 1st of the month AFTER the range, so
+ * naive substring(0,7) on it names a month outside the range.
+ */
+function getLastMonthFromExclusiveEnd(endDateExclusive: string): string {
+  const [year, monthNum] = endDateExclusive.split('-').map(Number);
+  const prevYear = monthNum === 1 ? year - 1 : year;
+  const prevMonth = monthNum === 1 ? 12 : monthNum - 1;
+  return `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+}
+
+/**
  * Get the EXCLUSIVE upper bound for a month range: the first day of the month
  * after `month`. All range queries use `column < bound` — an inclusive bound
  * of 'YYYY-MM-<lastday>' reads as midnight on timestamp columns and silently
@@ -619,13 +631,14 @@ async function queryMonzoByCategory(
 ): Promise<MonthlyAggregation[]> {
   // For COGS categories (netRefunds) we sum ALL amounts so refunds/sales
   // (positive) net off the spending (negative). Other categories stay
-  // spending-only (lt amount 0).
+  // spending-only (amount < 0). Both `lt` conditions live in ONE object —
+  // a spread with a second `lt:` key silently overwrites the date bound
+  // (that bug unbounded six expense rows; caught by the E2E validation).
   const allData = await fetchAllRecords(supabase, 'monzo_transactions', {
     select: 'created, amount',
     eq: { user_id: userId, local_category: localCategory },
     gte: { created: startDate },
-    lt: { created: endDate },
-    ...(netRefunds ? {} : { lt: { amount: 0 } }),
+    lt: netRefunds ? { created: endDate } : { created: endDate, amount: 0 },
   });
 
   // Debug logging for Postage
@@ -1049,7 +1062,7 @@ async function queryHomeCostsUseOfHome(
     return [];
   }
 
-  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
+  const months = generateMonthRange(startDate.substring(0, 7), getLastMonthFromExclusiveEnd(endDate));
 
   const monthMap = new Map<string, number>();
 
@@ -1094,7 +1107,7 @@ async function queryHomeCostsPhoneBroadband(
     return [];
   }
 
-  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
+  const months = generateMonthRange(startDate.substring(0, 7), getLastMonthFromExclusiveEnd(endDate));
 
   const monthMap = new Map<string, number>();
 
@@ -1139,7 +1152,7 @@ async function queryHomeCostsInsurance(
     return [];
   }
 
-  const months = generateMonthRange(startDate.substring(0, 7), endDate.substring(0, 7));
+  const months = generateMonthRange(startDate.substring(0, 7), getLastMonthFromExclusiveEnd(endDate));
 
   const monthMap = new Map<string, number>();
 
