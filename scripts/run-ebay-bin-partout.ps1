@@ -1,7 +1,7 @@
 # Local eBay BIN Part-Out Watcher Runner
 #
 # Drives one BIN part-out scan against the LOCAL Next.js server
-# (http://localhost:3000) — zero Vercel cost. The /api/cron/ebay-bin-partout
+# (http://localhost:3000) - zero Vercel cost. The /api/cron/ebay-bin-partout
 # route watches newly-listed USED fixed-price LEGO listings for hit-list sets
 # whose BrickLink used part-out value is a high multiple of the asking price.
 # Quiet hours are enforced inside the route; the hit list self-refreshes from

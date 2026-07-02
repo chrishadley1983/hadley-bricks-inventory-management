@@ -1,4 +1,4 @@
-# eBay Pricing (Local) — Windows Task Scheduler Registration
+# eBay Pricing (Local) - Windows Task Scheduler Registration
 #
 # Run once as Administrator. Schedules run-ebay-pricing.ps1 daily at 03:00
 # local time so the eBay arbitrage pricing sync runs on the local NSSM

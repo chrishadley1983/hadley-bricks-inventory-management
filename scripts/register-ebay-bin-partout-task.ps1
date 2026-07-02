@@ -1,4 +1,4 @@
-# eBay BIN Part-Out Watcher (Local) — Windows Task Scheduler Registration
+# eBay BIN Part-Out Watcher (Local) - Windows Task Scheduler Registration
 #
 # Run once (from an ELEVATED shell for S4U / run-while-logged-out; unelevated
 # falls back to interactive-only). Schedules run-ebay-bin-partout.ps1 every
@@ -24,7 +24,7 @@ $action = New-ScheduledTaskAction `
     -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" `
     -WorkingDirectory $workingDir
 
-# Repeat every 15 minutes indefinitely (10-year duration — Task Scheduler
+# Repeat every 15 minutes indefinitely (10-year duration - Task Scheduler
 # rejects [TimeSpan]::MaxValue as an out-of-range XML duration).
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 15) `
@@ -37,7 +37,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
 
-$description = "eBay BIN part-out watcher run LOCALLY every 15 min. POSTs /api/cron/ebay-bin-partout on localhost:3000 — newly-listed USED fixed-price LEGO vs the BrickLink part-out hit list."
+$description = "eBay BIN part-out watcher run LOCALLY every 15 min. POSTs /api/cron/ebay-bin-partout on localhost:3000 - newly-listed USED fixed-price LEGO vs the BrickLink part-out hit list."
 
 # Prefer S4U (runs whether the user is logged on or not; no stored password).
 # S4U registration requires an ELEVATED shell; unelevated it throws "Access is
