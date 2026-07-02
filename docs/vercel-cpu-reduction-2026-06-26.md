@@ -91,3 +91,40 @@ Unregister-ScheduledTask -TaskName "HadleyBricks-Ebay-Pricing-Local" -Confirm:$f
 
 **Projected effect:** removes ~209 s/day Vercel wall (~100 CPU-s/day) → steady-state
 rolling-30d Fluid CPU ~3.6h → **~2.8h/30d**, lifting headroom from ~9% to ~30%.
+
+## Follow-up — 02 Jul 2026: `ebay-auction-sniper` moved off Vercel to the local bot (and sped up to 5 min)
+
+The 26 Jun cut halved the sniper cadence (`*/15` → `*/30`) while the scan window
+stayed 15 min — leaving **half of ending auctions never scanned** (worse once the
+window was tightened to 10 min on 2 Jul: two-thirds missed). Auctions are
+latency-sensitive after all: the alert has to land minutes before the hammer.
+Instead of restoring cadence on Vercel (which would claw back the CPU win), the
+sniper moved to the local bot at a **5-minute cadence with a 5-minute scan
+window** — contiguous coverage of ending auctions at zero Vercel cost. This also
+carries the new POV buy signals (PR #477: New-POV hybrid + opt-in USED scan,
+PR #480 fix: used scan runs even when the NEW search is empty).
+
+**Change (same pattern as the ebay-pricing local migration):**
+- New `scripts/run-ebay-auctions.ps1` — single POST per run to
+  `http://localhost:3000/api/cron/ebay-auctions`, `CRON_SECRET` from
+  `apps/web/.env.local`; appends a one-line summary per run to
+  `logs\ebay-auctions-local.log` (gitignored, self-trimming). Quiet hours
+  (23:00–07:00) are enforced inside the route (`skipped: quiet_hours`).
+- New `scripts/register-ebay-auctions-task.ps1` — registers Windows Task
+  `HadleyBricks-Ebay-Auctions-Local`, repeating every 5 minutes
+  (`MultipleInstances IgnoreNew`, 4-min execution limit).
+- `ebay_auction_config.scan_window_minutes` set **10 → 5** to match the cadence.
+- GCP `ebay-auction-sniper` Cloud Scheduler job **PAUSED** (was `*/30 * * * *`).
+  No route code changed by the migration itself.
+
+**Rollback:**
+```
+gcloud scheduler jobs resume ebay-auction-sniper --location=europe-west2 --project=gen-lang-client-0823893317
+Unregister-ScheduledTask -TaskName "HadleyBricks-Ebay-Auctions-Local" -Confirm:$false
+-- and restore ebay_auction_config.scan_window_minutes (15 pre-2-Jul, 5 post-migration)
+```
+
+**Projected effect:** removes the sniper's 48 Vercel invocations/day (~2–15 s wall
+each, ~100–300 wall-s/day) on top of the ebay-pricing win, while the 6× cadence
+increase (288 runs/day) costs Vercel nothing. E2E validation workflow:
+`.claude/workflows/validate-ebay-auctions-local.js`.
