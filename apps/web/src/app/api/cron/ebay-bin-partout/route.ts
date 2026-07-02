@@ -20,7 +20,9 @@ import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.se
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Burst cycles (backlog drains) can send 20+ throttled alerts; runs locally
+// where this is moot, but keep Vercel headroom for manual triggers.
+export const maxDuration = 300;
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
@@ -102,7 +104,14 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         console.error('[ebay-bin-partout] alert failed:', (e as Error).message);
       }
+      // Discord webhooks rate-limit rapid sequential posts (observed: 6 of 28
+      // burst sends failed). Space them out — the run budget easily allows it.
+      await new Promise((r) => setTimeout(r, 600));
     }
+
+    // Retry sweep: pre-saved alerts whose Discord send failed (rate limit,
+    // transient network) would otherwise be stuck forever behind the dedupe.
+    alertsSent += await retryUnsentBinAlerts(supabase);
 
     const body = { success: true, ...summary(result), alertsSent, durationMs: Date.now() - startTime };
     await execution.complete(body, 200);
@@ -112,6 +121,92 @@ export async function POST(request: NextRequest) {
     await execution.complete({ error: errorMsg }, 500);
     return NextResponse.json({ error: errorMsg, durationMs: Date.now() - startTime }, { status: 500 });
   }
+}
+
+/**
+ * Re-send BIN alerts whose Discord delivery failed (pre-saved with
+ * discord_sent=false). Without this they are stuck forever: the dedupe sees
+ * the saved row and skips them on every future cycle. Card params are
+ * rebuilt from the alert row + hit-list metadata. Bounded and throttled.
+ */
+async function retryUnsentBinAlerts(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<number> {
+  const { data: stuck } = await supabase
+    .from('ebay_auction_alerts')
+    .select('*')
+    .eq('user_id', DEFAULT_USER_ID)
+    .eq('listing_type', 'bin')
+    .eq('discord_sent', false)
+    .gte('created_at', new Date(Date.now() - 24 * 3_600_000).toISOString())
+    .order('created_at', { ascending: true })
+    .limit(10);
+  if (!stuck || stuck.length === 0) return 0;
+
+  const setNumbers = [...new Set(stuck.flatMap((r) => String(r.set_number).split('+')))];
+  const { data: hitRows } = await supabase
+    .from('ebay_bin_hitlist')
+    .select('*')
+    .in('set_number', setNumbers);
+  const hits = new Map((hitRows ?? []).map((h) => [h.set_number, h]));
+
+  let resent = 0;
+  for (const row of stuck) {
+    try {
+      const sets = String(row.set_number)
+        .split('+')
+        .map((sn) => {
+          const h = hits.get(sn);
+          return {
+            setNumber: sn,
+            setName: (h?.set_name as string | null) ?? row.set_name ?? null,
+            theme: (h?.theme as string | null) ?? null,
+            yearFrom: (h?.year_from as number | null) ?? null,
+            rrpGbp: h?.rrp_gbp != null ? Number(h.rrp_gbp) : null,
+            usedPovGbp: h?.used_pov_gbp != null ? Number(h.used_pov_gbp) : 0,
+            newPovGbp: h?.new_pov_gbp != null ? Number(h.new_pov_gbp) : null,
+            figSharePct: h?.fig_share_pct != null ? Number(h.fig_share_pct) : null,
+            ebayFloorGbp: h?.ebay_floor_gbp != null ? Number(h.ebay_floor_gbp) : null,
+          };
+        });
+      const result = await discordService.sendEbayBinPartoutAlert({
+        conditionMode: (row.pov_condition as 'used' | 'new') ?? 'used',
+        sets,
+        title: `${row.ebay_title} (delayed alert — Discord retry)`,
+        priceGbp: Number(row.current_bid_gbp),
+        postageGbp: Number(row.postage_gbp ?? 0),
+        totalCostGbp: Number(row.total_cost_gbp),
+        povTotal: row.pov_sold_gbp != null ? Number(row.pov_sold_gbp) : 0,
+        multiple: row.pov_multiple != null ? Number(row.pov_multiple) : null,
+        amazonPriceGbp: row.amazon_price_gbp != null ? Number(row.amazon_price_gbp) : null,
+        amazonProfitGbp: row.profit_gbp != null ? Number(row.profit_gbp) : null,
+        amazonMarginPct: row.margin_percent != null ? Number(row.margin_percent) : null,
+        asin: row.amazon_asin ?? null,
+        signals: row.buy_signal ? String(row.buy_signal).split(' + ') : [],
+        tier: (row.alert_tier as 'great' | 'good') ?? 'good',
+        bestOfferEnabled: row.offer_suggestion_gbp != null,
+        offerSuggestionGbp: row.offer_suggestion_gbp != null ? Number(row.offer_suggestion_gbp) : null,
+        flags: row.flags ? String(row.flags).split(' | ') : [],
+        sellerUsername: null,
+        sellerScore: null,
+        itemUrl: row.ebay_url ?? undefined,
+        imageUrl: row.ebay_image_url ?? undefined,
+        condition: undefined,
+      });
+      if (result.success) {
+        await supabase
+          .from('ebay_auction_alerts')
+          .update({ discord_sent: true, discord_sent_at: new Date().toISOString() })
+          .eq('id', row.id);
+        resent++;
+      }
+    } catch (e) {
+      console.error('[ebay-bin-partout] retry send failed:', (e as Error).message);
+    }
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  if (resent > 0) console.log(`[ebay-bin-partout] re-sent ${resent} previously unsent alert(s)`);
+  return resent;
 }
 
 function summary(r: {
