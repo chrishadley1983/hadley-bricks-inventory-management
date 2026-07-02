@@ -1,4 +1,4 @@
-# eBay Auction Sniper (Local) — Windows Task Scheduler Registration
+# eBay Auction Sniper (Local) - Windows Task Scheduler Registration
 #
 # Run once (elevated if registration is denied). Schedules run-ebay-auctions.ps1
 # every 5 minutes so the auction sniper runs on the local NSSM Next.js server
@@ -27,7 +27,7 @@ $action = New-ScheduledTaskAction `
     -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" `
     -WorkingDirectory $workingDir
 
-# Repeat every 5 minutes indefinitely (10-year duration — Task Scheduler
+# Repeat every 5 minutes indefinitely (10-year duration - Task Scheduler
 # rejects [TimeSpan]::MaxValue as an out-of-range XML duration).
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 5) `
@@ -42,7 +42,7 @@ $settings = New-ScheduledTaskSettingsSet `
 
 $description = "eBay auction sniper run LOCALLY every 5 min (off Vercel). POSTs /api/cron/ebay-auctions on localhost:3000 (NEW + opt-in USED POV scans). Replaces the paused GCP ebay-auction-sniper Cloud Scheduler job."
 
-# Prefer S4U (runs whether the user is logged on or not; no stored password —
+# Prefer S4U (runs whether the user is logged on or not; no stored password -
 # the task only needs localhost HTTP + local file writes). S4U registration
 # requires an ELEVATED shell; unelevated it throws "Access is denied", so fall
 # back to interactive-only registration rather than leaving NO task behind
