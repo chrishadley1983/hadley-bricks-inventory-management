@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
           povLots: opp.pov?.lots ?? null,
           signals: opp.signals,
           flags: opp.flags,
+          altNewPovSoldGbp: opp.altNewPov?.soldAvgGbp ?? null,
         });
 
         await scanner.saveAlert(DEFAULT_USER_ID, opp, discordResult.success);
