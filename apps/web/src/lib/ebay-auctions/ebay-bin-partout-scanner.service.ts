@@ -71,6 +71,7 @@ export interface AmazonSeedPrice {
   was90dGbp: number | null;
   asin: string | null;
   setName: string | null;
+  salesRank: number | null;
 }
 
 export interface BinCandidate {
@@ -409,7 +410,22 @@ export class EbayBinPartoutScannerService {
           was90dGbp: r.was_price_90d != null ? Number(r.was_price_90d) : null,
           asin: r.asin ?? null,
           setName: r.set_name ?? null,
+          salesRank: null,
         });
+      }
+    }
+
+    // BSR (sales rank) lives in amazon_arbitrage_pricing, keyed by ASIN.
+    const asins = [...new Set([...map.values()].map((v) => v.asin).filter(Boolean))] as string[];
+    if (asins.length > 0) {
+      const { data: ranks } = await this.supabase
+        .from('amazon_arbitrage_pricing')
+        .select('asin, sales_rank')
+        .in('asin', asins)
+        .not('sales_rank', 'is', null);
+      const rankByAsin = new Map((ranks ?? []).map((r) => [r.asin as string, Number(r.sales_rank)]));
+      for (const v of map.values()) {
+        if (v.asin && rankByAsin.has(v.asin)) v.salesRank = rankByAsin.get(v.asin)!;
       }
     }
     return map;
