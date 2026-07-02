@@ -770,6 +770,30 @@ export class EbayAuctionScannerService {
   }
 
   /**
+   * Release year per bare set number from brickset_sets (both "NNNNN" and
+   * "NNNNN-1" formats). Drives the thin-used-history caution on used-POV
+   * alerts — recently released sets have almost no used-parts sale history.
+   */
+  private async lookupSetYears(setNumbers: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const bare = [...new Set(setNumbers.map((s) => s.split('-')[0]).filter(Boolean))];
+    if (bare.length === 0) return map;
+    const variants = bare.flatMap((s) => [s, `${s}-1`]);
+    const { data, error } = await this.supabase
+      .from('brickset_sets')
+      .select('set_number, year_from')
+      .in('set_number', variants);
+    if (error) {
+      console.error('[AuctionScanner] set-year lookup failed:', error.message);
+      return map;
+    }
+    for (const r of (data || []) as Array<{ set_number: string; year_from: number | null }>) {
+      if (r.year_from != null) map.set(r.set_number.split('-')[0], r.year_from);
+    }
+    return map;
+  }
+
+  /**
    * Evaluate single (new-condition) opportunities.
    * Buy signal = Amazon resale margin OR (povBuyEnabled && New POV >= povMultiple × total cost).
    */
@@ -959,16 +983,33 @@ export class EbayAuctionScannerService {
     if (candidates.length === 0) return [];
 
     const povData = await this.lookupPovBatch(candidates.map((c) => c.setNumber));
+    const setYears = await this.lookupSetYears(candidates.map((c) => c.setNumber));
+    const thinHistoryFloorYear = new Date().getFullYear() - 2;
     const opportunities: AuctionOpportunity[] = [];
 
     for (const { auction, setNumber, confidence } of candidates) {
       const ev = evaluations.find((e) => e.itemId === auction.itemId);
-      const usedPov = povData.get(setNumber.split('-')[0])?.used || null;
+      const bareSet = setNumber.split('-')[0];
+      const povEntry = povData.get(bareSet);
+      const usedPov = povEntry?.used || null;
+      const newPov = povEntry?.new || null;
       const postage = auction.postageGbp > 0 ? auction.postageGbp : config.defaultPostageGbp;
       const totalCost = auction.currentBidGbp + postage;
-      const povMultiple = usedPov?.soldAvgGbp && totalCost > 0 ? usedPov.soldAvgGbp / totalCost : null;
+
+      // Guard (2026-07-02, 77254 post-mortem): a used part-out above the same
+      // set's NEW part-out is single-sale noise — cap used at new.
+      let usedSoldEff = usedPov?.soldAvgGbp ?? null;
+      let usedCapped = false;
+      if (usedSoldEff != null && newPov?.soldAvgGbp != null && usedSoldEff > newPov.soldAvgGbp) {
+        usedSoldEff = newPov.soldAvgGbp;
+        usedCapped = true;
+      }
+      const setYear = setYears.get(bareSet) ?? null;
+      const thinUsedHistory = setYear != null && setYear >= thinHistoryFloorYear;
+
+      const povMultiple = usedSoldEff && totalCost > 0 ? usedSoldEff / totalCost : null;
       if (ev) {
-        ev.povSoldGbp = usedPov?.soldAvgGbp ?? null;
+        ev.povSoldGbp = usedSoldEff;
         ev.povMultiple = povMultiple != null ? round2(povMultiple) : null;
       }
 
@@ -979,6 +1020,9 @@ export class EbayAuctionScannerService {
         continue;
       }
       if (ev) { ev.filterReason = 'passed'; ev.alertTier = tier; }
+
+      const signals = [`Used POV ${povMultiple!.toFixed(1)}× cost${usedCapped ? ' (capped to New)' : ''}`];
+      if (thinUsedHistory) signals.push(`⚠️ ${setYear} set — thin used-parts history`);
 
       opportunities.push({
         auction: { ...auction, postageGbp: postage, totalCostGbp: totalCost },
@@ -991,9 +1035,10 @@ export class EbayAuctionScannerService {
         profitBreakdown: null,
         alertTier: tier,
         conditionMode: 'used',
-        pov: usedPov,
+        // Card shows the effective (capped) sold average so price and multiple agree.
+        pov: usedPov ? { ...usedPov, soldAvgGbp: usedSoldEff } : null,
         povMultiple: povMultiple != null ? round2(povMultiple) : null,
-        signals: [`Used POV ${povMultiple!.toFixed(1)}× cost`],
+        signals,
       });
     }
 

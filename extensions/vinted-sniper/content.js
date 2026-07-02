@@ -919,6 +919,20 @@
     ctx.pov_new_sold_gbp = newPov?.soldAvg ?? null;
     ctx.pov_used_sold_gbp = usedPov?.soldAvg ?? null;
 
+    // Used-POV guards (2026-07-02, from the 77254 post-mortem):
+    //  - Cap: a used part-out above the same set's NEW part-out is single-sale
+    //    noise (new moulds barely trade used), so cap used at new.
+    //  - Thin history: sets released in the last ~2 years have next to no
+    //    used-parts sale history — the used average can rest on 0-1 fluke sales.
+    let usedPovCapped = false;
+    let usedSoldEff = usedPov?.soldAvg ?? null;
+    if (usedSoldEff != null && newPov?.soldAvg != null && usedSoldEff > newPov.soldAvg) {
+      usedSoldEff = newPov.soldAvg;
+      usedPovCapped = true;
+    }
+    const setYear = catalogEntry?.year ?? null;
+    const thinUsedHistory = setYear != null && setYear >= new Date().getFullYear() - 2;
+
     // 9. COG (Vinted price incl. buyer protection where shown + postage)
     const basePrice = listing.priceInclNum || listing.priceNum;
     const cog = basePrice ? basePrice + VINTED_POSTAGE : null;
@@ -933,7 +947,7 @@
     const mult = config.povMultiple || POV_MULTIPLE_DEFAULT;
     const greatMult = config.povGreatMultiple || POV_GREAT_MULTIPLE_DEFAULT;
     const newPovMultiple = newPov?.soldAvg ? newPov.soldAvg / cog : null;
-    const usedPovMultiple = usedPov?.soldAvg ? usedPov.soldAvg / cog : null;
+    const usedPovMultiple = usedSoldEff ? usedSoldEff / cog : null;
     ctx.pov_multiple_new = newPovMultiple != null ? +newPovMultiple.toFixed(2) : null;
     ctx.pov_multiple_used = usedPovMultiple != null ? +usedPovMultiple.toFixed(2) : null;
 
@@ -973,7 +987,11 @@
 
     if (currentMode === 'used') {
       console.log(`  ♻️ Used POV ${usedPovMultiple != null ? usedPovMultiple.toFixed(1) + '×' : 'n/a'} (need ${mult}×) | COG £${cog.toFixed(2)}`);
-      if (usedPovSignal) { reasons.push(`used POV ${usedPovMultiple.toFixed(1)}× COG`); dealTier = povTier(usedPovMultiple, mult, greatMult); }
+      if (usedPovSignal) {
+        reasons.push(`used POV ${usedPovMultiple.toFixed(1)}× COG${usedPovCapped ? ' (capped to New)' : ''}`);
+        if (thinUsedHistory) reasons.push(`⚠️ ${setYear} set — thin used-parts history`);
+        dealTier = povTier(usedPovMultiple, mult, greatMult);
+      }
     } else if (currentMode === 'hybrid') {
       console.log(`  🔀 Hybrid — Amazon ${amazonSignal ? marginPct.toFixed(1) + '%' : 'n/a'} | new POV ${newPovMultiple != null ? newPovMultiple.toFixed(1) + '×' : 'n/a'} (need ${mult}×)`);
       if (amazonSignal) reasons.push(`Amazon ${marginPct.toFixed(1)}%`);
@@ -1024,6 +1042,10 @@
       lookup,
       marginPct,
       pov: { new: newPov, used: usedPov, newMultiple: newPovMultiple, usedMultiple: usedPovMultiple },
+      povNote: [
+        usedPovCapped ? 'used avg capped to New part-out' : null,
+        thinUsedHistory ? `⚠️ ${setYear} release — used averages may rest on 0-1 sales` : null,
+      ].filter(Boolean).join(' · ') || null,
       softWarn,
       source,
       matchReason: nm.reason,
@@ -1377,6 +1399,7 @@
       reasons = [],
       lookup = null,
       pov = { new: null, used: null, newMultiple: null, usedMultiple: null },
+      povNote = null,
       softWarn = false,
       source = 'unknown',
       matchReason = null,
@@ -1436,6 +1459,7 @@
       if (dispPov.lots != null) meta.push(`${dispPov.lots} lots`);
       if (displayCond === 'new' && dispPov.multiple != null) meta.push(`${dispPov.multiple.toFixed(2)}× RRP`);
       if (meta.length) lines.push(meta.join(' · '));
+      if (displayCond === 'used' && povNote) lines.push(povNote);
       fields.push({ name: `🧩 ${povLabel}`, value: lines.join('\n'), inline: false });
     } else {
       fields.push({ name: `🧩 ${povLabel}`, value: dispPov?.noData ? `no part-out data (${dispPov.noData})` : 'no BL part-out data', inline: false });
