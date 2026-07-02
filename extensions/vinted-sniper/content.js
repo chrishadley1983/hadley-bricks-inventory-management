@@ -94,7 +94,7 @@
 
   chrome.storage.local.get(
     ['webhookUrl', 'keepaKey', 'minDiscount', 'interval', 'maxPosts', 'refreshMinSecs', 'refreshMaxSecs',
-     'quietStart', 'quietEnd', 'vintedSeenIds', 'visionCacheV2', 'priceCacheV2', 'keepaPausedUntil',
+     'quietStart', 'quietEnd', 'vintedSeenIds', 'visionCacheV2', 'priceCacheV3', 'keepaPausedUntil',
      'defaultMode', 'povMultiple', 'povGreatMultiple', 'povCacheV2'],
     async data => {
       config.webhookUrl = data.webhookUrl || DEFAULT_WEBHOOK;
@@ -112,7 +112,7 @@
 
       if (data.vintedSeenIds) data.vintedSeenIds.forEach(h => sentHashes.add(h));
       hydrateVisionCache(data.visionCacheV2 || {});
-      hydratePriceCache(data.priceCacheV2 || {});
+      hydratePriceCache(data.priceCacheV3 || {});
       hydratePovCache(data.povCacheV2 || {});
       currentMode = getStoredMode();
       keepaPausedUntil = data.keepaPausedUntil || 0;
@@ -289,7 +289,7 @@
         visionCacheDirty = false;
       }
       if (priceCacheDirty) {
-        payload.priceCacheV2 = trimPriceCache();
+        payload.priceCacheV3 = trimPriceCache();
         priceCacheDirty = false;
       }
       if (povCacheDirty) {
@@ -1097,9 +1097,16 @@
     }
 
     try {
-      const url = `${SUPABASE_URL}/rest/v1/seeded_asin_pricing?set_number=eq.${dbSetNum}&select=set_number,set_name,amazon_price,was_price_90d,uk_retail_price,asin&limit=1`;
-      const res = await fetch(url, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      // Anon-safe RPC: Buy Box + 90d + BSR in one call (sales_rank lives in a
+      // user-scoped table the anon key cannot read directly).
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_amazon_pricing_public`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ p_set_number: dbSetNum }),
       });
 
       if (res.ok) {
@@ -1111,6 +1118,7 @@
             rrp: data[0].uk_retail_price,
             wasPrice90d: data[0].was_price_90d || null,
             asin: data[0].asin || null,
+            salesRank: data[0].sales_rank || null,
             source: 'supabase',
             fetched: Date.now(),
           };
@@ -1425,17 +1433,17 @@
       const usedFired = reasons.some(r => r.startsWith('used POV'));
       const newPovFired = reasons.some(r => r.startsWith('new POV'));
       if (usedFired && pov.used?.soldAvg != null) {
-        playLines.push(`**Buy used ${setLabel} → break it for parts on BrickLink.**`);
+        playLines.push(`→ **Buy used ${setLabel} → break it for parts on BrickLink.**`);
         playLines.push(`Parts sold **£${pov.used.soldAvg.toFixed(2)}** over 6mo vs **£${cog.toFixed(2)}** COG = **${pov.usedMultiple != null ? pov.usedMultiple.toFixed(1) : '?'}× cost**.`);
       }
       if (amazonFired && lookup?.price) {
         const fees = lookup.price * 0.1836;
         const ship = lookup.price < 20 ? 3 : 4;
         const profit = lookup.price - fees - ship - cog;
-        playLines.push(`**Buy ${setLabel} → resell${condClass === 'new' ? ' sealed' : ''} on Amazon** at £${lookup.price.toFixed(2)} → **£${profit.toFixed(2)} profit (${((profit / lookup.price) * 100).toFixed(1)}%)** after fees.`);
+        playLines.push(`→ **Buy ${setLabel} → resell${condClass === 'new' ? ' sealed' : ''} on Amazon** at £${lookup.price.toFixed(2)} → **£${profit.toFixed(2)} profit (${((profit / lookup.price) * 100).toFixed(1)}%)** after fees.`);
       }
       if (newPovFired && pov.new?.soldAvg != null) {
-        playLines.push(`${amazonFired ? 'Second exit — part out' : '**Buy to part out on BrickLink**'}: New parts sold **£${pov.new.soldAvg.toFixed(2)}** over 6mo = **${pov.newMultiple != null ? pov.newMultiple.toFixed(1) : '?'}× COG**.`);
+        playLines.push(`${amazonFired ? 'Second exit — part out' : '→ **Buy to part out on BrickLink**'}: New parts sold **£${pov.new.soldAvg.toFixed(2)}** over 6mo = **${pov.newMultiple != null ? pov.newMultiple.toFixed(1) : '?'}× COG**.`);
       }
       if (playLines.length === 0) playLines.push(`**${setLabel}** flagged by ${MODE_LABELS[mode]} mode.`);
       fields.push({ name: '▶️ The play', value: playLines.join('\n'), inline: false });
@@ -1462,6 +1470,7 @@
       fields.push({ name: '🛒 Amazon', value: amazonText, inline: true });
       if (lookup.rrp) fields.push({ name: '🏷️ UK RRP', value: `£${lookup.rrp.toFixed(2)}`, inline: true });
       if (lookup.wasPrice90d) fields.push({ name: '📊 90d Avg', value: `£${lookup.wasPrice90d.toFixed(2)}`, inline: true });
+      if (lookup.salesRank) fields.push({ name: '📈 BSR', value: lookup.salesRank.toLocaleString(), inline: true });
 
       const salePrice = lookup.price;
       const fees = salePrice * 0.1836;
@@ -1495,14 +1504,6 @@
       fields.push({ name: `🧩 ${povLabel}`, value: dispPov?.noData ? `no part-out data (${dispPov.noData})` : 'no BL part-out data', inline: false });
     }
 
-    // Deal / signal — what fired and in which mode.
-    const tierLabel = dealTier === 'green' ? 'GREAT DEAL' : 'GOOD DEAL';
-    fields.push({
-      name: `${tierEmoji} ${tierLabel} · ${MODE_EMOJI[mode]} ${MODE_LABELS[mode]} mode`,
-      value: reasons.length ? reasons.join(' · ') : '—',
-      inline: false,
-    });
-
     // Set numbers
     if (setNums.length > 0) {
       const links = setNums.map(n => `[${n}](https://brickset.com/sets/${n})`);
@@ -1518,15 +1519,6 @@
     if (catalogEntry?.theme) {
       fields.push({ name: '🎭 Theme', value: String(catalogEntry.theme).substring(0, 1024), inline: true });
     }
-
-    // ID source + match reason + (if vision) features — useful when reviewing
-    const idBits = [`source: **${source}${visionConfidence ? ` (${visionConfidence})` : ''}**`];
-    if (matchReason) idBits.push(`match: ${matchReason}`);
-    if (source === 'vision' && visionFeatures.length) {
-      idBits.push(`vision saw: ${visionFeatures.slice(0, 4).join(', ')}`);
-    }
-    if (softWarn) idBits.push('⚠️ low-evidence match');
-    fields.push({ name: '🔎 ID', value: idBits.join(' · ').substring(0, 1024), inline: false });
 
     if (listing.condition) {
       // Vinted now ships size info inside the same string ("S · New with tags").
