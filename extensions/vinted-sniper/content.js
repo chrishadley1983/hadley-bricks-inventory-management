@@ -288,6 +288,17 @@
   }
 
   function saveState(callback) {
+    // Reloading the unpacked extension orphans content scripts in open tabs —
+    // their chrome.* context dies ("Extension context invalidated"). Detect it,
+    // go quiet, and tell the user to refresh instead of spamming errors.
+    if (!chrome.runtime?.id) {
+      console.log('[Vinted Sniper] Extension was updated — refresh this tab to resume.');
+      try { stopPolling(); } catch (e) { /* already dead */ }
+      try { if (refreshTimer) clearTimeout(refreshTimer); } catch (e) { /* already dead */ }
+      try { showBanner('🔁 Vinted Sniper updated — refresh this tab to resume scanning.', 'warn'); } catch (e) { /* DOM may be gone */ }
+      if (callback) callback();
+      return;
+    }
     if (chrome.storage?.local) {
       const payload = { vintedSeenIds: [...sentHashes].slice(-500) };
       if (visionCacheDirty) {
