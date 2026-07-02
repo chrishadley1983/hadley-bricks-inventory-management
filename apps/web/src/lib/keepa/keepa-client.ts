@@ -135,6 +135,31 @@ export function parseKeepaCSV(csv: number[] | null): { date: string; value: numb
   return points;
 }
 
+/**
+ * Parse Keepa BUY_BOX CSV data, which uses triples [timestamp, price, shipping]
+ * rather than the standard [timestamp, value] pairs. Returns the landed
+ * buy-box price (price + shipping), matching stats.current semantics.
+ *
+ * A shipping value of -1 means unknown/none and is treated as 0.
+ */
+export function parseKeepaBuyBoxCSV(csv: number[] | null): { date: string; value: number }[] {
+  if (!csv || csv.length < 3) return [];
+
+  const points: { date: string; value: number }[] = [];
+  for (let i = 0; i + 2 < csv.length; i += 3) {
+    const timestamp = csv[i];
+    const price = csv[i + 1];
+    const shipping = csv[i + 2];
+    if (price >= 0) {
+      points.push({
+        date: keepaTimestampToDate(timestamp),
+        value: price + Math.max(shipping, 0),
+      });
+    }
+  }
+  return points;
+}
+
 export class KeepaClient {
   private apiKey: string;
   private baseUrl = 'https://api.keepa.com';
@@ -233,7 +258,9 @@ export class KeepaClient {
     sales_rank: number | null;
     new_offer_count: number | null;
   }[] {
-    const buyBoxPrices = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null);
+    // BUY_BOX history is triple-encoded [timestamp, price, shipping] — using the
+    // pair parser here corrupts both dates and prices (see parseKeepaBuyBoxCSV).
+    const buyBoxPrices = parseKeepaBuyBoxCSV(product.csv?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null);
     const amazonPrices = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.AMAZON] ?? null);
     const salesRanks = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.SALES_RANK] ?? null);
     const newOfferCounts = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.COUNT_NEW] ?? null);
@@ -274,11 +301,23 @@ export class KeepaClient {
       }
     }
 
-    // Fill in sales ranks
+    // Fill in sales ranks. Recent rank-only dates get their own entry (price
+    // null) so demand data stays fresh even when the price hasn't moved;
+    // older rank-only dates are dropped to keep row volume bounded.
+    const rankOnlyCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
     for (const point of salesRanks) {
       const existing = dateMap.get(point.date);
       if (existing) {
         existing.sales_rank = point.value;
+      } else if (point.date >= rankOnlyCutoff) {
+        dateMap.set(point.date, {
+          buy_box_price: null,
+          amazon_price: null,
+          sales_rank: point.value,
+          new_offer_count: null,
+        });
       }
     }
 
