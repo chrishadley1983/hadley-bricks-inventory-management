@@ -181,11 +181,16 @@ export class MonzoSheetsSyncService {
         ])
       );
 
-      // Transform and filter transactions
+      // Transform and filter transactions.
+      // A row is skipped only if it is BOTH already in the DB AND older than the
+      // incremental cursor. The Monzo→Sheets export can stall and write rows late;
+      // those rows are time-stamped before the cursor, so filtering on transaction
+      // date alone drops them forever (55 rows lost across Mar–Jul 2026).
       const transactionsToProcess = sheetData
         .filter((row) => row['Transaction ID']) // Skip rows without ID
         .filter((row) => {
           if (!lastSyncDate) return true;
+          if (!existingMap.has(row['Transaction ID'])) return true;
           const txDate = this.parseSheetDate(row.Date, row.Time);
           return txDate && txDate > lastSyncDate;
         })
