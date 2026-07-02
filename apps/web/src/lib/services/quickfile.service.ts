@@ -44,17 +44,20 @@ interface QuickFileApiResponse {
       PurchaseID?: number;
     };
   };
-  System_Authenticate?: {
+  Client_Search?: {
     Header: {
       MessageType: string;
     };
     Body?: {
-      IsValid?: boolean;
+      RecordsetCount?: number;
     };
   };
   Error?: {
     Code: string;
     Message: string;
+  };
+  Errors?: {
+    Error: string[];
   };
 }
 
@@ -63,11 +66,15 @@ interface QuickFileApiResponse {
  */
 export class QuickFileService {
   private baseUrl = 'https://api.quickfile.co.uk/1_2';
-  private applicationId = 'hadley-bricks-mtd';
+  private applicationId: string;
   private credentials: QuickFileCredentials;
 
   constructor(credentials: QuickFileCredentials) {
     this.credentials = credentials;
+    // QuickFile requires the App ID GUID of a registered app (Account Settings
+    // → My Apps). The legacy literal is kept only as a fallback for stored
+    // credentials that predate the applicationId field.
+    this.applicationId = credentials.applicationId || 'hadley-bricks-mtd';
   }
 
   /**
@@ -129,28 +136,36 @@ export class QuickFileService {
 
     const data = await response.json();
 
-    // Check for QuickFile error response
+    // Check for QuickFile error responses (both shapes the API uses)
     if (data.Error) {
       throw new Error(`QuickFile error: ${data.Error.Message}`);
+    }
+    if (data.Errors?.Error?.length) {
+      throw new Error(`QuickFile error: ${data.Errors.Error.join('; ')}`);
     }
 
     return data as T;
   }
 
   /**
-   * Test connection with credentials
+   * Test connection with credentials.
+   * Uses a 1-row client/search — the cheapest authenticated read-only call the
+   * API offers (there is no dedicated authenticate endpoint; the previous
+   * system/authenticate path 404s).
    */
   async testConnection(): Promise<boolean> {
     try {
-      const response = await this.makeRequest<QuickFileApiResponse>('system/authenticate', {});
+      const response = await this.makeRequest<QuickFileApiResponse>('client/search', {
+        SearchParameters: {
+          ReturnCount: '1',
+          Offset: '0',
+          OrderResultsBy: 'CompanyName',
+          OrderDirection: 'ASC',
+        },
+      });
 
-      // Check if response indicates valid authentication
-      if (response.System_Authenticate?.Body?.IsValid === true) {
-        return true;
-      }
-
-      // Also consider successful API call as valid (no error thrown)
-      return true;
+      // Any well-formed Client_Search response means authentication succeeded
+      return response.Client_Search?.Header?.MessageType === 'Response';
     } catch (error) {
       console.error('[QuickFileService] Connection test failed:', error);
       return false;

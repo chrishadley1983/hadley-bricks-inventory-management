@@ -8,6 +8,10 @@ import type { QuickFileCredentials } from '@/types/mtd-export';
 const CredentialsSchema = z.object({
   accountNumber: z.string().min(1, 'Account Number is required'),
   apiKey: z.string().min(1, 'API Key is required'),
+  // App ID GUID of the QuickFile app (Account Settings → My Apps). Optional at
+  // the schema level so pre-existing stored credentials keep validating, but
+  // the UI requires it for new saves.
+  applicationId: z.string().min(1).optional(),
 });
 
 /**

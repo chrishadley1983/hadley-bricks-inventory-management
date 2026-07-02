@@ -29,13 +29,14 @@ export function QuickFileCredentialsModal({
 }: QuickFileCredentialsModalProps) {
   const [accountNumber, setAccountNumber] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [applicationId, setApplicationId] = useState('');
 
   const saveCredentials = useSaveQuickFileCredentials();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!accountNumber.trim() || !apiKey.trim()) {
+    if (!accountNumber.trim() || !apiKey.trim() || !applicationId.trim()) {
       toast.error('Please fill in all fields');
       return;
     }
@@ -44,6 +45,7 @@ export function QuickFileCredentialsModal({
       await saveCredentials.mutateAsync({
         accountNumber: accountNumber.trim(),
         apiKey: apiKey.trim(),
+        applicationId: applicationId.trim(),
       });
 
       toast.success('QuickFile credentials saved and verified');
@@ -51,6 +53,7 @@ export function QuickFileCredentialsModal({
       // Clear form
       setAccountNumber('');
       setApiKey('');
+      setApplicationId('');
 
       // Close modal and trigger success callback
       onOpenChange(false);
@@ -67,8 +70,9 @@ export function QuickFileCredentialsModal({
         <DialogHeader>
           <DialogTitle>Connect to QuickFile</DialogTitle>
           <DialogDescription>
-            Enter your QuickFile API credentials to enable direct export. You can find these in
-            QuickFile under Account Settings &gt; 3rd Party Integration &gt; API.
+            Enter your QuickFile API credentials to enable direct export. The account number is
+            under Account Settings &gt; Company Settings; the API key and App ID are under Account
+            Settings &gt; My Apps (create an app if you don&apos;t have one).
           </DialogDescription>
         </DialogHeader>
 
@@ -93,6 +97,17 @@ export function QuickFileCredentialsModal({
                 placeholder="Your QuickFile API key"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                disabled={saveCredentials.isPending}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="applicationId">App ID</Label>
+              <Input
+                id="applicationId"
+                placeholder="e.g., 6e0bb58b-f8a3-4200-a00b-e7f4e3ccffc1"
+                value={applicationId}
+                onChange={(e) => setApplicationId(e.target.value)}
                 disabled={saveCredentials.isPending}
               />
             </div>

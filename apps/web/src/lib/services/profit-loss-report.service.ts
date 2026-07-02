@@ -56,7 +56,23 @@ export interface ProfitLossReportOptions {
   startMonth?: string; // 'YYYY-MM', defaults to earliest data
   endMonth?: string; // 'YYYY-MM', defaults to current month
   includeZeroRows?: boolean; // Include rows with all zero values
+  basis?: ReportBasis; // 'accrual' (default) or 'cash' — see getRowDefinitions
 }
+
+/**
+ * Reporting basis.
+ *
+ * 'accrual' — income recognised at sale/order date (the default P&L view).
+ * 'cash'    — income recognised when the money is received, under the
+ *             agent-receipt principle (a marketplace collecting from the buyer
+ *             on our behalf counts as receipt by us):
+ *               • Amazon: financial event released to seller balance
+ *               • BrickLink / Brick Owl: buyer payment lands in PayPal
+ *               • eBay: buyer pays eBay at sale (identical dates to accrual)
+ *             Expense rows are identical in both bases — they are already
+ *             recognised on payment dates (Monzo/fee-event dates).
+ */
+export type ReportBasis = 'accrual' | 'cash';
 
 /**
  * Internal type for monthly aggregation query results
@@ -100,12 +116,16 @@ function getMonthStartDate(month: string): string {
 }
 
 /**
- * Get last day of month from YYYY-MM string
+ * Get the EXCLUSIVE upper bound for a month range: the first day of the month
+ * after `month`. All range queries use `column < bound` — an inclusive bound
+ * of 'YYYY-MM-<lastday>' reads as midnight on timestamp columns and silently
+ * drops everything later that day (the bug this replaced).
  */
-function getMonthEndDate(month: string): string {
+function getMonthEndExclusive(month: string): string {
   const [year, monthNum] = month.split('-').map(Number);
-  const lastDay = new Date(year, monthNum, 0).getDate();
-  return `${month}-${String(lastDay).padStart(2, '0')}`;
+  const nextYear = monthNum === 12 ? year + 1 : year;
+  const nextMonth = monthNum === 12 ? 1 : monthNum + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 }
 
 /**
@@ -175,7 +195,7 @@ async function queryEbayGrossSales(
     select: 'transaction_date, gross_transaction_amount, ebay_order_id',
     eq: { user_id: userId, transaction_type: 'SALE' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   // Filter out sales for fully refunded orders and aggregate by month
@@ -216,7 +236,7 @@ async function queryEbayRefunds(
     select: 'transaction_date, amount',
     eq: { user_id: userId, transaction_type: 'REFUND', booking_entry: 'DEBIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -251,7 +271,7 @@ async function queryBrickLinkGrossSales(
     eq: { user_id: userId },
     notIn: { order_status: excludedStatuses },
     gte: { order_date: startDate },
-    lte: { order_date: endDate },
+    lt: { order_date: endDate },
   });
 
   console.log(`[P&L] BrickLink Gross Sales: found ${allData.length} orders`);
@@ -292,7 +312,7 @@ async function queryBrickOwlGrossSales(
     eq: { user_id: userId },
     notIn: { order_status: excludedStatuses },
     gte: { order_date: startDate },
-    lte: { order_date: endDate },
+    lt: { order_date: endDate },
   });
 
   console.log(`[P&L] BrickOwl Gross Sales: found ${allData.length} orders`);
@@ -330,7 +350,7 @@ async function queryAmazonSales(
     eq: { user_id: userId, platform: 'amazon' },
     in: { status: ['Shipped', 'Paid'] },
     gte: { order_date: startDate },
-    lte: { order_date: endDate },
+    lt: { order_date: endDate },
   });
 
   console.log(`[P&L] Amazon Sales: found ${allData.length} orders`);
@@ -367,7 +387,7 @@ async function queryAmazonRefunds(
     eq: { user_id: userId },
     in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
     gte: { posted_date: startDate },
-    lte: { posted_date: endDate },
+    lt: { posted_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -399,7 +419,7 @@ async function queryPayPalFees(
     select: 'transaction_date, fee_amount',
     eq: { user_id: userId },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -413,6 +433,177 @@ async function queryPayPalFees(
     month,
     total,
   }));
+}
+
+// =============================================================================
+// CASH-BASIS INCOME QUERY FUNCTIONS
+//
+// Cash basis recognises income when the money is received (agent-receipt
+// principle). These functions are only used when the report is generated with
+// basis: 'cash'; the accrual functions above remain the default.
+// =============================================================================
+
+/**
+ * Cash: Amazon sales = Shipment financial events with status RELEASED, by
+ * posted_date (the date Amazon credited the funds to the seller balance).
+ *
+ * IMPORTANT status semantics (verified against live data 2026-07-02):
+ * - DEFERRED rows are funds Amazon has NOT yet released — excluded until the
+ *   release event arrives.
+ * - When a deferred transaction releases, the sync inserts a NEW row with
+ *   status RELEASED and posted_date = the release date; the older DEFERRED /
+ *   DEFERRED_RELEASED rows for the same order remain. Every DEFERRED_RELEASED
+ *   row has a RELEASED sibling, so summing RELEASED-only is both complete and
+ *   double-count-free.
+ */
+async function queryAmazonSalesCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, gross_sales_amount',
+    eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
+    gte: { posted_date: startDate },
+    lt: { posted_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.posted_date) continue;
+    const month = row.posted_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_sales_amount || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Cash: Amazon refunds = Refund/GuaranteeClaimRefund events with status
+ * RELEASED, by posted_date. RELEASED-only for the same dedup reason as sales.
+ */
+async function queryAmazonRefundsCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, total_amount',
+    eq: { user_id: userId, transaction_status: 'RELEASED' },
+    in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
+    gte: { posted_date: startDate },
+    lt: { posted_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.posted_date) continue;
+    const month = row.posted_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.total_amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Brick Owl order receipts are labelled by PayPal ("Brick Owl Order #123");
+ * BrickLink buyers pay through PayPal without a marketplace label.
+ */
+function isBrickOwlPayPalReceipt(transactionType: string | null): boolean {
+  return /^brick ?owl order/i.test(transactionType ?? '');
+}
+
+/**
+ * Fetch PayPal customer payment receipts (event code T0006, money in).
+ * These are the BrickLink + Brick Owl order payments landing in the PayPal
+ * balance — the cash receipt event for both platforms. The PayPal sync stores
+ * every fee-bearing transaction, which customer payments always are.
+ */
+async function fetchPayPalCustomerReceipts(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  return fetchAllRecords(supabase, 'paypal_transactions', {
+    select: 'transaction_date, gross_amount, transaction_type',
+    eq: { user_id: userId, transaction_event_code: 'T0006' },
+    gt: { gross_amount: 0 },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+}
+
+/**
+ * Cash: BrickLink sales = unlabelled PayPal customer receipts by date received.
+ */
+async function queryBrickLinkSalesCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchPayPalCustomerReceipts(supabase, userId, startDate, endDate);
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date || isBrickOwlPayPalReceipt(row.transaction_type)) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_amount || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Cash: Brick Owl sales = "Brick Owl Order" PayPal receipts by date received.
+ */
+async function queryBrickOwlSalesCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchPayPalCustomerReceipts(supabase, userId, startDate, endDate);
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date || !isBrickOwlPayPalReceipt(row.transaction_type)) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_amount || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Cash: refunds we issue to BrickLink/Brick Owl buyers leave the PayPal
+ * balance as T1107 payment-refund events. Requires the PayPal sync to store
+ * refund events (it stores fee-bearing rows plus T1107 refunds).
+ */
+async function queryPayPalRefundsIssuedCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'paypal_transactions', {
+    select: 'transaction_date, gross_amount',
+    eq: { user_id: userId, transaction_event_code: 'T1107' },
+    gte: { transaction_date: startDate },
+    lt: { gross_amount: 0, transaction_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.gross_amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
 }
 
 /**
@@ -433,7 +624,7 @@ async function queryMonzoByCategory(
     select: 'created, amount',
     eq: { user_id: userId, local_category: localCategory },
     gte: { created: startDate },
-    lte: { created: endDate },
+    lt: { created: endDate },
     ...(netRefunds ? {} : { lt: { amount: 0 } }),
   });
 
@@ -492,7 +683,7 @@ async function queryAmazonFees(
     select: 'posted_date, total_fees',
     eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
     gte: { posted_date: startDate },
-    lte: { posted_date: endDate },
+    lt: { posted_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -522,7 +713,7 @@ async function queryEbayFeesByType(
     select: 'transaction_date, amount, raw_response',
     eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -554,7 +745,7 @@ async function queryEbaySaleFeesByType(
     select: 'transaction_date, raw_response',
     eq: { user_id: userId, transaction_type: 'SALE', booking_entry: 'CREDIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -637,7 +828,7 @@ async function queryEbayAdFeesStandard(
     select: 'transaction_date, amount, raw_response',
     eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   // Get fee refunds (CREDIT entries)
@@ -645,7 +836,7 @@ async function queryEbayAdFeesStandard(
     select: 'transaction_date, amount',
     eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'CREDIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -703,7 +894,7 @@ async function queryEbayShopFee(
     select: 'transaction_date, amount, raw_response',
     eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
     gte: { transaction_date: startDate },
-    lte: { transaction_date: endDate },
+    lt: { transaction_date: endDate },
   });
 
   // Date range pattern: YYYY-MM-DD - YYYY-MM-DD
@@ -769,7 +960,7 @@ async function queryAmazonSubscription(
     select: 'posted_date, total_amount',
     eq: { user_id: userId, transaction_type: 'ServiceFee' },
     gte: { posted_date: startDate },
-    lte: { posted_date: endDate },
+    lt: { posted_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -797,7 +988,7 @@ async function queryMileage(
     select: 'tracking_date, amount_claimed',
     eq: { user_id: userId },
     gte: { tracking_date: startDate },
-    lte: { tracking_date: endDate },
+    lt: { tracking_date: endDate },
   });
 
   const monthMap = new Map<string, number>();
@@ -985,11 +1176,64 @@ async function queryHomeCostsInsurance(
 // =============================================================================
 
 /**
- * All row definitions for the P&L report
+ * Income row definitions per basis. Expense rows are shared — they are already
+ * recognised on payment dates in both bases.
+ *
+ * Cash-basis notes:
+ * - eBay reuses the accrual queries: buyers pay eBay (our collecting agent) at
+ *   the moment of sale, so receipt dates equal sale dates by construction.
+ * - The BL/BO refunds row only exists on cash basis; on accrual, cancelled
+ *   orders are excluded from gross sales instead.
  */
-function getRowDefinitions(): RowDefinition[] {
+function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
+  if (basis === 'cash') {
+    return [
+      {
+        category: 'Income',
+        transactionType: 'eBay Gross Sales',
+        queryFn: queryEbayGrossSales,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'eBay Refunds',
+        queryFn: queryEbayRefunds,
+        signMultiplier: -1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'BrickLink Sales (cash received)',
+        queryFn: queryBrickLinkSalesCash,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'Brick Owl Sales (cash received)',
+        queryFn: queryBrickOwlSalesCash,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'BrickLink / Brick Owl Refunds (cash)',
+        queryFn: queryPayPalRefundsIssuedCash,
+        signMultiplier: -1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'Amazon Sales (funds released)',
+        queryFn: queryAmazonSalesCash,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'Amazon Refunds (funds released)',
+        queryFn: queryAmazonRefundsCash,
+        signMultiplier: -1,
+      },
+    ];
+  }
+
   return [
-    // INCOME
     {
       category: 'Income',
       transactionType: 'eBay Gross Sales',
@@ -1026,6 +1270,15 @@ function getRowDefinitions(): RowDefinition[] {
       queryFn: queryAmazonRefunds,
       signMultiplier: -1,
     },
+  ];
+}
+
+/**
+ * All row definitions for the P&L report
+ */
+function getRowDefinitions(basis: ReportBasis = 'accrual'): RowDefinition[] {
+  return [
+    ...getIncomeRowDefinitions(basis),
 
     // SELLING FEES
     {
@@ -1290,15 +1543,18 @@ export class ProfitLossReportService {
     const startMonth = options.startMonth || (await this.findEarliestDate(userId));
 
     const startDate = getMonthStartDate(startMonth);
-    const endDate = getMonthEndDate(endMonth);
+    // Exclusive upper bound (first day of the following month) — see
+    // getMonthEndExclusive for why the inclusive last-day bound was wrong.
+    const endDate = getMonthEndExclusive(endMonth);
     const months = generateMonthRange(startMonth, endMonth);
 
-    console.log(`[P&L] Generating report for user ${userId}`);
+    const basis = options.basis ?? 'accrual';
+    console.log(`[P&L] Generating report for user ${userId} (basis: ${basis})`);
     console.log(`[P&L] Date range: ${startMonth} to ${endMonth} (${startDate} to ${endDate})`);
     console.log(`[P&L] Months to include: ${months.length}`);
 
     // Get all row definitions
-    const rowDefinitions = getRowDefinitions();
+    const rowDefinitions = getRowDefinitions(basis);
 
     // Execute all queries in parallel
     const queryPromises = rowDefinitions.map(async (def) => {

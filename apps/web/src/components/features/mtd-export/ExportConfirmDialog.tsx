@@ -14,12 +14,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useMtdExportPreview } from '@/hooks/use-mtd-export';
+import type { MtdBasis } from '@/types/mtd-export';
 
 interface ExportConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   startMonth: string;
   endMonth: string;
+  basis?: MtdBasis;
   onConfirm: () => Promise<void>;
   isExporting?: boolean;
 }
@@ -52,12 +54,14 @@ export function ExportConfirmDialog({
   onOpenChange,
   startMonth,
   endMonth,
+  basis = 'accrual',
   onConfirm,
   isExporting = false,
 }: ExportConfirmDialogProps) {
   const { data: preview, isLoading } = useMtdExportPreview(
     open ? startMonth : undefined,
-    open ? endMonth : undefined
+    open ? endMonth : undefined,
+    basis
   );
 
   const handleConfirm = async () => {
@@ -80,7 +84,8 @@ export function ExportConfirmDialog({
               ) : preview ? (
                 <>
                   <p>
-                    Export <strong>{periodLabel}</strong> to QuickFile?
+                    Export <strong>{periodLabel}</strong> to QuickFile on{' '}
+                    <strong>{basis === 'cash' ? 'cash' : 'accrual'} basis</strong>?
                   </p>
 
                   <div className="rounded-md border p-3 space-y-2 text-sm">
@@ -104,7 +109,7 @@ export function ExportConfirmDialog({
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
-                        This period was already exported to QuickFile on{' '}
+                        This period was already exported to QuickFile ({basis} basis) on{' '}
                         {formatDate(preview.previousExport.exportedAt)}. Export again?
                       </AlertDescription>
                     </Alert>
