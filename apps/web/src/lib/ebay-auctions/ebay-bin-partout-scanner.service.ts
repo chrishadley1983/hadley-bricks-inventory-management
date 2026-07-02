@@ -425,6 +425,14 @@ export class EbayBinPartoutScannerService {
         });
         if (c.sets.length > 1) flags.unshift(`multi-set title (${c.sets.map((s) => s.setNumber).join('+')})`);
         if (priorCost != null) flags.push(`price drop: was £${priorCost.toFixed(2)}`);
+        // Young sets stay IN the (now-unfiltered) hit list but carry the
+        // thin-used-history caution — their used averages can rest on 0-1 sales.
+        const thinYear = new Date().getFullYear() - 2;
+        for (const s of c.sets) {
+          if (s.yearFrom != null && s.yearFrom >= thinYear) {
+            flags.push(`⚠️ ${s.setNumber} is a ${s.yearFrom} set — thin used-parts history`);
+          }
+        }
 
         const multiple = c.povTotal / c.totalCost;
         const bestOfferEnabled = (c.item.buyingOptions ?? []).includes('BEST_OFFER');
