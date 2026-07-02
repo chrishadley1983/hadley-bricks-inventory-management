@@ -59,6 +59,18 @@ updating in place:
   states (eBay FUNDS_PROCESSING → PAYOUT, Amazon deferral releases) have
   settled into their terminal rows.
 
+## Policy notes (from E2E validation, 2026-07-03)
+
+- **Amazon deferral at FY cutoffs:** in-flight orders are recognised on the
+  RELEASED row's `posted_date` (settlement basis). An order inside Amazon's
+  ~7-day deferral window at a year-end books in the release period. Verified
+  on live data: RELEASED amounts equal their deferred siblings for all 1,526
+  paired orders; the only DEFERRED-only orders are 0–6 days old.
+- **Paid-then-cancelled orders:** PayPal gross receipts include occasional
+  paid-then-cancelled orders (£18.94 across Apr–Jun 2026, 0.2%); these are
+  exactly netted by their paired T1107 refunds, so income is correct as long
+  as the refunds row is present (it is, in the cash basis).
+
 ## Storage / audit
 
 - `mtd_export_history.quickfile_response.basis` records the basis of every

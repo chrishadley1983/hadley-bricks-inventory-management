@@ -378,6 +378,69 @@ describe('P&L cash basis', () => {
     });
   });
 
+  describe('date-bound regressions (E2E validation findings, 2026-07-03)', () => {
+    it('spending-only Monzo categories respect the end-date bound (duplicate-lt-key bug)', async () => {
+      const supabase = createFilterAwareSupabaseMock({
+        monzo_transactions: [
+          {
+            user_id: USER,
+            local_category: 'Postage',
+            created: '2026-06-10T10:00:00+00:00',
+            amount: -10000,
+          },
+          // AFTER the report window — the duplicate `lt:` key bug dropped the
+          // date bound for netRefunds=false categories and pulled this in
+          {
+            user_id: USER,
+            local_category: 'Postage',
+            created: '2026-07-15T10:00:00+00:00',
+            amount: -99900,
+          },
+        ],
+      });
+      const service = new ProfitLossReportService(supabase as never);
+
+      const result = await service.generateReport(USER, {
+        startMonth: '2026-06',
+        endMonth: '2026-06',
+      });
+
+      const postage = getRow(result, 'Postage');
+      expect(postage!.monthlyValues['2026-06']).toBe(-100);
+      expect(postage!.monthlyValues['2026-07']).toBeUndefined();
+      const total = Object.values(postage!.monthlyValues).reduce((a, b) => a + b, 0);
+      expect(total).toBe(-100);
+    });
+
+    it('home-cost rows do not bucket a month beyond endMonth (exclusive-end substring bug)', async () => {
+      const supabase = createFilterAwareSupabaseMock({
+        home_costs: [
+          {
+            user_id: USER,
+            cost_type: 'insurance',
+            start_date: '2025-01-01',
+            end_date: null,
+            annual_premium: 1200,
+            business_stock_value: 5000,
+            total_contents_value: 10000,
+          },
+        ],
+      });
+      const service = new ProfitLossReportService(supabase as never);
+
+      const result = await service.generateReport(USER, {
+        startMonth: '2026-05',
+        endMonth: '2026-06',
+      });
+
+      const insurance = result.rows.find((r) => r.transactionType.toLowerCase().includes('insurance'));
+      expect(insurance).toBeDefined();
+      const monthsInRow = Object.keys(insurance!.monthlyValues).sort();
+      // Must be confined to the requested range — no 2026-07 leakage
+      expect(monthsInRow).toEqual(['2026-05', '2026-06']);
+    });
+  });
+
   describe('basis selection', () => {
     const mixedData = {
       amazon_transactions: [
