@@ -27,10 +27,11 @@ $action = New-ScheduledTaskAction `
     -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" `
     -WorkingDirectory $workingDir
 
-# Repeat every 5 minutes indefinitely, starting shortly after registration.
+# Repeat every 5 minutes indefinitely (10-year duration — Task Scheduler
+# rejects [TimeSpan]::MaxValue as an out-of-range XML duration).
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 5) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
