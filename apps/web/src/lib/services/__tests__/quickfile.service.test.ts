@@ -105,18 +105,33 @@ describe('QuickFileService', () => {
     expect(ok).toBe(false);
   });
 
-  it('createSalesInvoice posts to invoice/create with nominal code and issue date', async () => {
-    fetchMock.mockResolvedValue(
-      okResponse({
-        Invoice_Create: { Header: { MessageType: 'Response' }, Body: { InvoiceID: 42 } },
-      })
-    );
+  const clientSearchFound = okResponse({
+    Client_Search: {
+      Header: { MessageType: 'Response' },
+      Body: { RecordsetCount: 1, Record: [{ ClientID: 111 }] },
+    },
+  });
+  const supplierSearchFound = okResponse({
+    Supplier_Search: {
+      Header: { MessageType: 'Response' },
+      Body: { RecordsetCount: 1, Record: [{ SupplierID: 222 }] },
+    },
+  });
+
+  it('createSalesInvoice uses the ledger client and the v1_2 ItemLines nesting', async () => {
+    fetchMock
+      .mockResolvedValueOnce(clientSearchFound) // ensureLedgerClient search
+      .mockResolvedValueOnce(
+        okResponse({
+          Invoice_Create: { Header: { MessageType: 'Response' }, Body: { InvoiceID: 42 } },
+        })
+      );
 
     const service = new QuickFileService(credentials);
     const result = await service.createSalesInvoice({
       date: '2026-06-30',
       reference: 'AMAZON-202606',
-      description: 'Amazon Sales - June 2026',
+      description: 'Amazon Sales - June 2026 (cash basis receipts)',
       netAmount: 1927.82,
       vat: 0,
       grossAmount: 1927.82,
@@ -124,22 +139,87 @@ describe('QuickFileService', () => {
     });
 
     expect(result).toEqual({ success: true, invoiceId: 42 });
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[1];
     expect(url).toBe('https://api.quickfile.co.uk/1_2/invoice/create');
     const body = JSON.parse((init as { body: string }).body).payload.Body;
-    expect(body.InvoiceData.InvoiceLines[0].ItemNominalCode).toBe('4000');
-    expect(body.InvoiceData.InvoiceLines[0].UnitCost).toBe(1927.82);
+    expect(body.InvoiceData.ClientID).toBe(111);
+    // Schema limits: InvoiceDescription max 35, ItemName max 25
+    expect(body.InvoiceData.InvoiceDescription.length).toBeLessThanOrEqual(35);
+    const line = body.InvoiceData.InvoiceLines.ItemLines.ItemLine[0];
+    expect(line.ItemNominalCode).toBe('4000');
+    expect(line.UnitCost).toBe(1927.82);
+    expect(line.ItemName.length).toBeLessThanOrEqual(25);
+    expect(line.Tax1ID).toBeUndefined();
     expect(body.InvoiceData.Scheduling.SingleInvoiceData.IssueDate).toBe('2026-06-30');
+  });
+
+  it('createPurchase uses the ledger supplier with SubTotal/VatRate lines and ReceiptDate', async () => {
+    fetchMock
+      .mockResolvedValueOnce(supplierSearchFound) // ensureLedgerSupplier search
+      .mockResolvedValueOnce(
+        okResponse({
+          Purchase_Create: { Header: { MessageType: 'Response' }, Body: { PurchaseID: 7 } },
+        })
+      );
+
+    const service = new QuickFileService(credentials);
+    const result = await service.createPurchase({
+      date: '2026-06-30',
+      reference: 'FEES-202606',
+      supplier: 'Various',
+      description: 'Selling Fees - June 2026',
+      netAmount: 804.24,
+      vat: 0,
+      grossAmount: 804.24,
+      nominalCode: '7502',
+    });
+
+    expect(result).toEqual({ success: true, purchaseId: 7 });
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://api.quickfile.co.uk/1_2/purchase/create');
+    const body = JSON.parse((init as { body: string }).body).payload.Body;
+    expect(body.PurchaseData.SupplierID).toBe(222);
+    expect(body.PurchaseData.ReceiptDate).toBe('2026-06-30');
+    const line = body.PurchaseData.InvoiceLines.ItemLine[0];
+    expect(line.ItemNominalCode).toBe('7502');
+    expect(line.SubTotal).toBe(804.24);
+    expect(line.VatRate).toBe(0);
+  });
+
+  it('ensureLedgerClient creates the client when missing and caches the ID', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        okResponse({
+          Client_Search: {
+            Header: { MessageType: 'Response' },
+            Body: { RecordsetCount: 0, Record: [] },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        okResponse({ Client_Create: { Header: { MessageType: 'Response' }, Body: { ClientID: 999 } } })
+      );
+
+    const service = new QuickFileService(credentials);
+    expect(await service.ensureLedgerClient()).toBe(999);
+    expect(await service.ensureLedgerClient()).toBe(999); // cached — no extra fetch
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const createBody = JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body).payload.Body;
+    expect(createBody.ClientDetails.CompanyName).toBe('Marketplace Sales');
+    expect(createBody.ClientContacts.DefaultContact.TelephoneNumbers).toEqual({});
   });
 
   it('pushMtdData reports per-row errors without aborting the batch', async () => {
     fetchMock
+      .mockResolvedValueOnce(clientSearchFound) // ensure client (first invoice)
       .mockResolvedValueOnce(
         okResponse({
           Invoice_Create: { Header: { MessageType: 'Response' }, Body: { InvoiceID: 1 } },
         })
       )
       .mockResolvedValueOnce(okResponse({ Errors: { Error: ['Nominal code invalid'] } }))
+      .mockResolvedValueOnce(supplierSearchFound) // ensure supplier (first purchase)
       .mockResolvedValueOnce(
         okResponse({
           Purchase_Create: { Header: { MessageType: 'Response' }, Body: { PurchaseID: 7 } },
