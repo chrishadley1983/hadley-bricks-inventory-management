@@ -473,7 +473,9 @@ export class DiscordService {
     const tierEmoji = alertTier === 'great' ? '🟢' : '🟠';
     const tierLabel = alertTier === 'great' ? 'GREAT DEAL' : 'GOOD DEAL';
     const condEmoji = conditionMode === 'used' ? '♻️' : '🆕';
-    const setLabel = `${setNumber}${setName ? ` ${setName}` : ''}`;
+    // BL-cache-sourced set names embed the set number — strip to avoid "75137 75137 …".
+    const cleanSetName = setName ? setName.replace(new RegExp(`^${setNumber}\\s*`), '') : null;
+    const setLabel = `${setNumber}${cleanSetName ? ` ${cleanSetName}` : ''}`;
 
     // ▶️ THE PLAY — one glance: what this is, where the value is, what to do.
     const playLines: string[] = [];
@@ -571,7 +573,7 @@ export class DiscordService {
 
     fields.push({
       name: '🧱 Set',
-      value: `${setNumber}${setName ? `: ${setName}` : ''}`,
+      value: `${setNumber}${cleanSetName ? `: ${cleanSetName}` : ''}`,
       inline: false,
     });
 
@@ -607,9 +609,14 @@ export class DiscordService {
     const color = tier === 'great' ? 0x2ecc71 : 0xf1c40f;
     const tierEmoji = tier === 'great' ? '🟢' : '🟠';
     const primary = sets[0];
+    // BL cache set names usually embed the set number ("75137 Carbon-Freezing
+    // Chamber") — strip it so the label doesn't read "75137 75137 …".
+    const primaryName = primary.setName
+      ? primary.setName.replace(new RegExp(`^${primary.setNumber}\\s*`), '')
+      : null;
     const setLabel =
       sets.length === 1
-        ? `${primary.setNumber}${primary.setName ? ` ${primary.setName}` : ''}`
+        ? `${primary.setNumber}${primaryName ? ` ${primaryName}` : ''}`
         : sets.map((s) => s.setNumber).join(' + ');
 
     const amazonFired = amazonMarginPct != null && signals.some((s) => s.startsWith('Amazon'));
@@ -630,6 +637,9 @@ export class DiscordService {
         );
         if (povFired) {
           playLines.push(`Second exit — part out: New parts sold **£${povTotal.toFixed(2)}** over 6mo = **${multiple!.toFixed(1)}× cost**.`);
+        } else if (povTotal > 0 && multiple != null) {
+          // Context, not a signal: the parts floor under the resale play.
+          playLines.push(`Parts floor: New parts sold £${povTotal.toFixed(2)} over 6mo (${multiple.toFixed(1)}× — below the part-out bar).`);
         }
       } else {
         playLines.push(
