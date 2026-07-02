@@ -68,6 +68,34 @@ export interface EbayAuctionAlertParams {
   signals?: string[];
 }
 
+export interface EbayBinPartoutAlertParams {
+  sets: Array<{
+    setNumber: string;
+    setName: string | null;
+    theme: string | null;
+    yearFrom: number | null;
+    rrpGbp: number | null;
+    usedPovGbp: number;
+    figSharePct: number | null;
+    ebayFloorGbp: number | null;
+  }>;
+  title: string;
+  priceGbp: number;
+  postageGbp: number;
+  totalCostGbp: number;
+  povTotal: number;
+  multiple: number;
+  tier: 'great' | 'good';
+  bestOfferEnabled: boolean;
+  offerSuggestionGbp: number | null;
+  flags: string[];
+  sellerUsername: string | null;
+  sellerScore: number | null;
+  itemUrl: string | undefined;
+  imageUrl: string | undefined;
+  condition: string | undefined;
+}
+
 export interface EbayJoblotAlertParams {
   ebayTitle: string;
   currentBid: number;
@@ -438,13 +466,44 @@ export class DiscordService {
     const tierEmoji = alertTier === 'great' ? '🟢' : '🟠';
     const tierLabel = alertTier === 'great' ? 'GREAT DEAL' : 'GOOD DEAL';
     const condEmoji = conditionMode === 'used' ? '♻️' : '🆕';
+    const setLabel = `${setNumber}${setName ? ` ${setName}` : ''}`;
+
+    // ▶️ THE PLAY — one glance: what this is, where the value is, what to do.
+    const playLines: string[] = [];
+    if (conditionMode === 'used') {
+      playLines.push(
+        `**Buy used ${setLabel} at auction → break it for parts on BrickLink.**`,
+        povSoldGbp != null
+          ? `Its used parts sold **£${povSoldGbp.toFixed(2)}** over 6mo vs **£${totalCost.toFixed(2)}** all-in here = **${povMultiple != null ? povMultiple.toFixed(1) : '?'}× cost**.`
+          : 'Part-out value drives this alert.'
+      );
+    } else {
+      if (profit != null && marginPercent != null && amazonPrice != null) {
+        playLines.push(
+          `**Buy sealed ${setLabel} at auction → resell on Amazon.**`,
+          `Buy Box £${amazonPrice.toFixed(2)} → **£${profit.toFixed(2)} profit (${marginPercent.toFixed(1)}% margin)** after fees at £${totalCost.toFixed(2)} all-in.`
+        );
+      } else {
+        playLines.push(`**Buy sealed ${setLabel} at auction.**`);
+      }
+      if (povSoldGbp != null && povMultiple != null && povMultiple >= 2) {
+        playLines.push(`Second exit: parting out — parts sold £${povSoldGbp.toFixed(2)} over 6mo (**${povMultiple.toFixed(1)}× cost**).`);
+      }
+    }
+
+    // 👉 The action — auctions are time-critical.
+    const usedMaxBid =
+      conditionMode === 'used' && maxBid == null && povSoldGbp != null
+        ? Math.max(0, povSoldGbp / 3 - postage)
+        : null;
+    const actionBid = maxBid ?? usedMaxBid;
+    const actionLine =
+      `${actionBid != null ? `Bid up to **£${actionBid.toFixed(2)}**` : 'Set your own ceiling'} · ` +
+      `ends in **${minutesRemaining} min** · ${bidCount} bid${bidCount !== 1 ? 's' : ''} · currently £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post`;
 
     const fields: DiscordEmbedField[] = [
-      {
-        name: '🏷️ eBay (COG)',
-        value: `Bid: £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
-        inline: true,
-      },
+      { name: '▶️ The play', value: playLines.join('\n'), inline: false },
+      { name: '👉 Do', value: actionLine, inline: false },
     ];
 
     // Amazon leg — only present for new-condition (amazon/hybrid) opportunities.
@@ -491,15 +550,6 @@ export class DiscordService {
       inline: false,
     });
 
-    if (maxBid != null) {
-      fields.push({ name: '🎯 Max Bid (target)', value: `£${maxBid.toFixed(2)}`, inline: true });
-    }
-    fields.push({
-      name: '⏰ Time Left',
-      value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
-      inline: true,
-    });
-
     if (ukRrp) {
       fields.push({ name: '🏷️ UK RRP', value: `£${ukRrp.toFixed(2)}`, inline: true });
     }
@@ -519,12 +569,87 @@ export class DiscordService {
     });
 
     const embed: DiscordEmbed = {
-      title: `🔨 ${condEmoji} ${setNumber}: ${ebayTitle.substring(0, 80)}`,
+      title: `🔨 ${tierEmoji} AUCTION ends ${minutesRemaining}m · ${condEmoji} ${conditionMode === 'used' ? 'PART-OUT' : 'RESALE'} — ${setNumber}: ${ebayTitle.substring(0, 60)}`,
       url: ebayUrl,
       color,
       fields,
     };
 
+    if (imageUrl) {
+      (embed as Record<string, unknown>).thumbnail = { url: imageUrl };
+    }
+
+    return this.send('opportunities', embed);
+  }
+
+  /**
+   * Send an eBay BIN part-out opportunity alert.
+   *
+   * Card contract (explicitness): every card answers WHAT is the play,
+   * WHERE is the value, and WHAT to do — before any supporting detail.
+   */
+  async sendEbayBinPartoutAlert(params: EbayBinPartoutAlertParams): Promise<DiscordSendResult> {
+    const {
+      sets, title, priceGbp, postageGbp, totalCostGbp, povTotal, multiple, tier,
+      bestOfferEnabled, offerSuggestionGbp, flags, sellerUsername, sellerScore,
+      itemUrl, imageUrl, condition,
+    } = params;
+
+    const color = tier === 'great' ? 0x2ecc71 : 0xf1c40f;
+    const tierEmoji = tier === 'great' ? '🟢' : '🟠';
+    const primary = sets[0];
+    const setLabel =
+      sets.length === 1
+        ? `${primary.setNumber}${primary.setName ? ` ${primary.setName}` : ''}`
+        : sets.map((s) => s.setNumber).join(' + ');
+
+    const playLines = [
+      `**Buy this used fixed-price listing → break it for parts on BrickLink.**`,
+      `${setLabel}'s used parts sold **£${povTotal.toFixed(2)}** over 6mo vs **£${totalCostGbp.toFixed(2)}** all-in = **${multiple.toFixed(1)}× cost**.`,
+    ];
+    if (sets.length === 1) {
+      const extras: string[] = [];
+      if (primary.rrpGbp) extras.push(`parts out at ${(primary.usedPovGbp / primary.rrpGbp).toFixed(1)}× its £${primary.rrpGbp.toFixed(2)} RRP`);
+      if (primary.figSharePct != null) extras.push(`figs ≈ ${primary.figSharePct.toFixed(0)}% of that value`);
+      if (primary.ebayFloorGbp != null) extras.push(`typical eBay used ask seen: £${primary.ebayFloorGbp.toFixed(2)}`);
+      if (extras.length) playLines.push(extras.join(' · '));
+    }
+
+    const doLines = [`**Buy now: £${priceGbp.toFixed(2)}** + £${postageGbp.toFixed(2)} post`];
+    if (bestOfferEnabled && offerSuggestionGbp != null) {
+      doLines.push(`or **offer £${offerSuggestionGbp.toFixed(2)}** → 3.0× (Best Offer enabled)`);
+    } else if (bestOfferEnabled) {
+      doLines.push('Best Offer enabled — already over the bar at asking');
+    }
+    doLines.push('No deadline, but well-priced BINs go in hours.');
+
+    const fields: DiscordEmbedField[] = [
+      { name: '▶️ The play', value: playLines.join('\n'), inline: false },
+      { name: '👉 Do', value: doLines.join('\n'), inline: false },
+    ];
+
+    if (flags.length > 0) {
+      fields.push({
+        name: '⚠️ Check before buying',
+        value: flags.map((f) => `• ${f}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+
+    fields.push({
+      name: '🧱 Listing',
+      value:
+        `${title.slice(0, 150)}\n` +
+        `Condition: ${condition ?? 'Used'} · Seller: ${sellerUsername ?? '?'}${sellerScore != null ? ` (${sellerScore})` : ''}`,
+      inline: false,
+    });
+
+    const embed: DiscordEmbed = {
+      title: `🧩 ${tierEmoji} BIN PART-OUT ${multiple.toFixed(1)}× — ${setLabel.substring(0, 80)}`,
+      url: itemUrl,
+      color,
+      fields,
+    };
     if (imageUrl) {
       (embed as Record<string, unknown>).thumbnail = { url: imageUrl };
     }
