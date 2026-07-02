@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 
 chrome.storage.local.get(
   ['geminiKey', 'keepaKey', 'webhookUrl', 'minDiscount', 'interval', 'maxPosts', 'refreshMinSecs', 'refreshMaxSecs', 'quietStart', 'quietEnd',
-   'defaultMode', 'povMultiple', 'povGreatMultiple'],
+   'defaultMode', 'povMultiple', 'povGreatMultiple', 'amazonMinMargin', 'amazonGreatMargin'],
   data => {
     $('geminiKey').value = data.geminiKey || '';
     $('keepaKey').value = data.keepaKey || '';
@@ -17,6 +17,8 @@ chrome.storage.local.get(
     if (['amazon', 'hybrid', 'used'].includes(data.defaultMode)) $('defaultMode').value = data.defaultMode;
     if (data.povMultiple) $('povMultiple').value = data.povMultiple;
     if (data.povGreatMultiple) $('povGreatMultiple').value = data.povGreatMultiple;
+    if (data.amazonMinMargin) $('amazonMinMargin').value = data.amazonMinMargin;
+    if (data.amazonGreatMargin) $('amazonGreatMargin').value = data.amazonGreatMargin;
   }
 );
 
@@ -65,7 +67,9 @@ $('saveBtn').addEventListener('click', () => {
     quietEnd,
     defaultMode: $('defaultMode').value,
     povMultiple,
-    povGreatMultiple
+    povGreatMultiple,
+    amazonMinMargin: parseFloat($('amazonMinMargin').value) || 20,
+    amazonGreatMargin: parseFloat($('amazonGreatMargin').value) || 25
   }, () => showStatus('Settings saved ✓', 'success'));
 });
 

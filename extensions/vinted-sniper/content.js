@@ -44,6 +44,8 @@
   const POV_CACHE_MAX = 5000;
   const POV_MULTIPLE_DEFAULT = 3;       // good buy: POV >= 3× COG
   const POV_GREAT_MULTIPLE_DEFAULT = 4; // great buy: POV >= 4× COG
+  const AMAZON_MIN_MARGIN_DEFAULT = 20;   // amber: matches the BIN watcher bar
+  const AMAZON_GREAT_MARGIN_DEFAULT = 25; // green
 
   // Per-tab buy mode (persisted in sessionStorage so it survives the
   // auto-refresh, which is a same-tab reload):
@@ -65,6 +67,8 @@
     defaultMode: 'amazon',
     povMultiple: POV_MULTIPLE_DEFAULT,
     povGreatMultiple: POV_GREAT_MULTIPLE_DEFAULT,
+    amazonMinMargin: AMAZON_MIN_MARGIN_DEFAULT,
+    amazonGreatMargin: AMAZON_GREAT_MARGIN_DEFAULT,
   };
   let isRunning = false;
   let pollTimer = null;
@@ -95,7 +99,7 @@
   chrome.storage.local.get(
     ['webhookUrl', 'keepaKey', 'minDiscount', 'interval', 'maxPosts', 'refreshMinSecs', 'refreshMaxSecs',
      'quietStart', 'quietEnd', 'vintedSeenIds', 'visionCacheV2', 'priceCacheV3', 'keepaPausedUntil',
-     'defaultMode', 'povMultiple', 'povGreatMultiple', 'povCacheV2'],
+     'defaultMode', 'povMultiple', 'povGreatMultiple', 'amazonMinMargin', 'amazonGreatMargin', 'povCacheV2'],
     async data => {
       config.webhookUrl = data.webhookUrl || DEFAULT_WEBHOOK;
       config.keepaKey = data.keepaKey || '';
@@ -109,6 +113,8 @@
       config.defaultMode = MODES.includes(data.defaultMode) ? data.defaultMode : 'amazon';
       config.povMultiple = data.povMultiple || POV_MULTIPLE_DEFAULT;
       config.povGreatMultiple = data.povGreatMultiple || POV_GREAT_MULTIPLE_DEFAULT;
+      config.amazonMinMargin = data.amazonMinMargin || AMAZON_MIN_MARGIN_DEFAULT;
+      config.amazonGreatMargin = data.amazonGreatMargin || AMAZON_GREAT_MARGIN_DEFAULT;
 
       if (data.vintedSeenIds) data.vintedSeenIds.forEach(h => sentHashes.add(h));
       hydrateVisionCache(data.visionCacheV2 || {});
@@ -972,8 +978,8 @@
         marginPct = (profit / lookup.price) * 100;
         ctx.margin_pct = +marginPct.toFixed(2);
         ctx.profit = +profit.toFixed(2);
-        if (marginPct >= 25) amazonTier = 'green';
-        else if (marginPct >= 15) amazonTier = 'amber';
+        if (marginPct >= (config.amazonGreatMargin || AMAZON_GREAT_MARGIN_DEFAULT)) amazonTier = 'green';
+        else if (marginPct >= (config.amazonMinMargin || AMAZON_MIN_MARGIN_DEFAULT)) amazonTier = 'amber';
         console.log(`  💰 COG £${cog.toFixed(2)} | Amazon £${lookup.price.toFixed(2)} | Margin ${marginPct.toFixed(1)}%`);
       }
     }
@@ -1020,7 +1026,7 @@
         reason = `Amazon ${lookup?.price ? marginPct.toFixed(1) + '%' : 'n/a'} & new POV ${newPovMultiple != null ? newPovMultiple.toFixed(2) + '×' : 'n/a'} below bar (need ${mult}×)`;
       } else {
         decision = lookup?.price ? 'skipped_low_margin' : 'skipped_no_amazon_price';
-        reason = lookup?.price ? `margin ${marginPct.toFixed(1)}% < 15%` : 'no amazon price';
+        reason = lookup?.price ? `margin ${marginPct.toFixed(1)}% < ${config.amazonMinMargin}%` : 'no amazon price';
       }
       console.log(`  → ❌ SKIP — ${reason}`);
       logDecision({ ...ctx, decision, decision_reason: `[${currentMode}] ${reason}` });
