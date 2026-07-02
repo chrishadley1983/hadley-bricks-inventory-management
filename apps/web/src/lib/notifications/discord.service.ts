@@ -516,6 +516,14 @@ export class DiscordService {
       { name: '👉 Do', value: actionLine, inline: false },
     ];
 
+    if (flags.length > 0) {
+      fields.push({
+        name: '⚠️ Check before bidding',
+        value: flags.map((f) => `• ${f}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+
     // Amazon leg — only present for new-condition (amazon/hybrid) opportunities.
     if (amazonPrice != null) {
       const amazonUrl = amazonAsin ? `https://www.amazon.co.uk/dp/${amazonAsin}` : null;
