@@ -431,14 +431,13 @@ export class EbayAuctionScannerService {
         .order('snapshot_date', { ascending: false });
 
       if (arbData) {
-        // Take the most recent snapshot for each ASIN
+        // Rows are newest-first. Ranks are not captured on every snapshot, so
+        // take the most recent NON-NULL value per field (a null latest snapshot
+        // must not blank out a rank captured the day before).
         for (const row of arbData) {
-          if (!arbitragePricing[row.asin]) {
-            arbitragePricing[row.asin] = {
-              salesRank: row.sales_rank,
-              was90d: row.was_price_90d,
-            };
-          }
+          const entry = (arbitragePricing[row.asin] ??= { salesRank: null, was90d: null });
+          if (entry.salesRank == null && row.sales_rank != null) entry.salesRank = row.sales_rank;
+          if (entry.was90d == null && row.was_price_90d != null) entry.was90d = row.was_price_90d;
         }
       }
     }

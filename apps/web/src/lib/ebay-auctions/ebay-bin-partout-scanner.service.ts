@@ -422,8 +422,13 @@ export class EbayBinPartoutScannerService {
         .from('amazon_arbitrage_pricing')
         .select('asin, sales_rank')
         .in('asin', asins)
-        .not('sales_rank', 'is', null);
-      const rankByAsin = new Map((ranks ?? []).map((r) => [r.asin as string, Number(r.sales_rank)]));
+        .not('sales_rank', 'is', null)
+        .order('snapshot_date', { ascending: false });
+      // Newest-first; keep the first (latest) rank per ASIN.
+      const rankByAsin = new Map<string, number>();
+      for (const r of ranks ?? []) {
+        if (!rankByAsin.has(r.asin as string)) rankByAsin.set(r.asin as string, Number(r.sales_rank));
+      }
       for (const v of map.values()) {
         if (v.asin && rankByAsin.has(v.asin)) v.salesRank = rankByAsin.get(v.asin)!;
       }
