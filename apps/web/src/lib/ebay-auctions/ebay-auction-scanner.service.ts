@@ -968,6 +968,7 @@ export class EbayAuctionScannerService {
         povMultiple: povMultiple != null ? round2(povMultiple) : null,
         signals,
         flags: [],
+        altNewPov: null,
       });
     }
 
@@ -1102,6 +1103,7 @@ export class EbayAuctionScannerService {
         povMultiple: povMultiple != null ? round2(povMultiple) : null,
         signals,
         flags: [],
+        altNewPov: newPov,
       });
     }
 

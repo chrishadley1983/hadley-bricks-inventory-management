@@ -1513,6 +1513,10 @@
       if (displayCond === 'new' && dispPov.multiple != null) meta.push(`${dispPov.multiple.toFixed(2)}× RRP`);
       if (meta.length) lines.push(meta.join(' · '));
       if (povNote) lines.push(`⚠️ ${povNote}`);
+      // Thin used history -> the deep NEW figure is the sanity anchor; show both.
+      if (displayCond === 'used' && povNote && /thin|0-1 sales/i.test(povNote) && pov.new?.soldAvg != null) {
+        lines.push(`New part-out (deeper data): £${pov.new.soldAvg.toFixed(2)}${pov.newMultiple != null ? ` · ${pov.newMultiple.toFixed(1)}× COG` : ''}`);
+      }
       fields.push({ name: `🧩 ${povLabel}`, value: lines.join('\n'), inline: false });
     } else {
       fields.push({ name: `${povArrow}🧩 ${povLabel}`, value: dispPov?.noData ? `no part-out data (${dispPov.noData})` : 'no BL part-out data', inline: false });

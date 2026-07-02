@@ -95,6 +95,7 @@ export interface AuctionOpportunity {
   povMultiple: number | null;      // pov.soldAvgGbp ÷ total cost
   signals: string[];               // human-readable buy reasons that fired
   flags: string[];                 // caution flags (flag-don't-suppress; from the BIN watcher's stack)
+  altNewPov: PovData | null;       // NEW-condition POV alongside a thin-history used alert
 }
 
 export interface JoblotSetEntry {

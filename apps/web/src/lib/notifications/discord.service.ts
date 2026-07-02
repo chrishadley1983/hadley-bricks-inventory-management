@@ -67,6 +67,7 @@ export interface EbayAuctionAlertParams {
   povLots?: number | null;
   signals?: string[];
   flags?: string[];
+  altNewPovSoldGbp?: number | null;
 }
 
 export interface EbayBinPartoutAlertParams {
@@ -469,7 +470,7 @@ export class DiscordService {
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
       ebayUrl, imageUrl, ukRrp, maxBid,
-      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [], flags = [],
+      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [], flags = [], altNewPovSoldGbp,
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
@@ -661,6 +662,14 @@ export class DiscordService {
         if (conditionMode === 'used' && primary.ebayFloorGbp != null) ctx.push(`typical eBay used ask: £${primary.ebayFloorGbp.toFixed(2)}`);
       }
       if (ctx.length) povLines.push(ctx.join(' · '));
+      // Thin used history -> the deep NEW figure is the sanity anchor; show both.
+      const thinFlagged = flags.some((f) => f.includes('thin used-parts history'));
+      if (conditionMode === 'used' && thinFlagged) {
+        const newTotal = sets.reduce((a, st) => a + (st.newPovGbp ?? 0), 0);
+        if (newTotal > 0) {
+          povLines.push(`New part-out (deeper data): £${newTotal.toFixed(2)} · ${(newTotal / totalCostGbp).toFixed(1)}× cost`);
+        }
+      }
       fields.push({
         name: `${povFired ? '→ ' : ''}🧩 Part-Out (${conditionMode === 'new' ? 'New' : 'Used'})`,
         value: povLines.join('\n'),
