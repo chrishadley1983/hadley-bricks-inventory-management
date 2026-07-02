@@ -17,6 +17,7 @@ import { BricksetApiClient } from '@/lib/brickset/brickset-api';
 import { BricksetCredentialsService } from '@/lib/services/brickset-credentials.service';
 import { apiSetToInternal, internalToDbInsert } from '@/lib/brickset/types';
 import { calculateAuctionProfit } from './auction-profit-calculator';
+import { assembleFlags } from './ebay-bin-partout-scanner.service';
 import {
   extractSetNumbers,
   isFalsePositive,
@@ -150,6 +151,10 @@ export class EbayAuctionScannerService {
       });
 
       const newJoblots = joblotOpps.filter((j) => !alreadyAlertedIds.has(j.auction.itemId));
+
+      // Confidence flags for the alerts that will actually fire (one getItem
+      // each — the BIN watcher's flag stack, ported per the 75149 miss).
+      await this.enrichWithFlags(newOpportunities);
 
       return {
         auctionsFound: auctionItems.length,
@@ -774,23 +779,83 @@ export class EbayAuctionScannerService {
    * "NNNNN-1" formats). Drives the thin-used-history caution on used-POV
    * alerts — recently released sets have almost no used-parts sale history.
    */
-  private async lookupSetYears(setNumbers: string[]): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
+  private async lookupSetMeta(
+    setNumbers: string[]
+  ): Promise<Map<string, { yearFrom: number | null; pieces: number | null }>> {
+    const map = new Map<string, { yearFrom: number | null; pieces: number | null }>();
     const bare = [...new Set(setNumbers.map((s) => s.split('-')[0]).filter(Boolean))];
     if (bare.length === 0) return map;
     const variants = bare.flatMap((s) => [s, `${s}-1`]);
     const { data, error } = await this.supabase
       .from('brickset_sets')
-      .select('set_number, year_from')
+      .select('set_number, year_from, pieces')
       .in('set_number', variants);
     if (error) {
-      console.error('[AuctionScanner] set-year lookup failed:', error.message);
+      console.error('[AuctionScanner] set-meta lookup failed:', error.message);
       return map;
     }
-    for (const r of (data || []) as Array<{ set_number: string; year_from: number | null }>) {
-      if (r.year_from != null) map.set(r.set_number.split('-')[0], r.year_from);
+    for (const r of (data || []) as Array<{ set_number: string; year_from: number | null; pieces: number | null }>) {
+      map.set(r.set_number.split('-')[0], { yearFrom: r.year_from, pieces: r.pieces });
     }
     return map;
+  }
+
+  /**
+   * Confidence enrichment for opportunities that will alert (post-dedupe):
+   * one getItem each for aspects + description, then the BIN watcher's
+   * flag-don't-suppress stack. Adds ~1s per alert — trivial against the
+   * 5-minute cadence, and only the 2-5 daily alerts pay it.
+   */
+  private async enrichWithFlags(opportunities: AuctionOpportunity[]): Promise<void> {
+    if (opportunities.length === 0) return;
+    const client = getEbayBrowseClient();
+    const meta = await this.lookupSetMeta(opportunities.map((o) => o.setIdentification.setNumber));
+
+    for (const opp of opportunities) {
+      let typeAspect: string | null = null;
+      let piecesAspect: number | null = null;
+      let characterAspect: string | null = null;
+      let descriptionText: string | null = null;
+      try {
+        this.apiCallsMade++;
+        const detail = (await client.getItem(
+          opp.auction.itemId.startsWith('v1|') ? opp.auction.itemId : `v1|${opp.auction.itemId}|0`
+        )) as {
+          localizedAspects?: Array<{ name: string; value: string }>;
+          description?: string;
+          shortDescription?: string;
+        };
+        const aspects = new Map((detail.localizedAspects ?? []).map((a) => [a.name.toLowerCase(), a.value]));
+        typeAspect = aspects.get('type') ?? null;
+        const piecesRaw = aspects.get('number of pieces');
+        piecesAspect = piecesRaw != null ? parseInt(piecesRaw, 10) || null : null;
+        characterAspect = aspects.get('lego character') ?? null;
+        descriptionText = String(detail.description ?? detail.shortDescription ?? '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .slice(0, 2000) || null;
+      } catch (e) {
+        console.error(`[AuctionScanner] getItem failed for ${opp.auction.itemId}:`, (e as Error).message);
+      }
+
+      const bare = opp.setIdentification.setNumber.split('-')[0];
+      const setMeta = meta.get(bare);
+      opp.flags = assembleFlags({
+        conditionMode: opp.conditionMode,
+        typeAspect,
+        piecesAspect,
+        characterAspect,
+        catalogPieces: setMeta?.pieces ?? null,
+        title: opp.auction.title || '',
+        totalCostGbp: opp.auction.totalCostGbp,
+        povTotal: opp.pov?.soldAvgGbp ?? 0,
+        priceFloorPct: 15, // matches the BIN watcher default
+        sellerScore: null, // auction summaries don't reliably carry seller scores here
+        descriptionText,
+        sets: [{ setNumber: bare, yearFrom: setMeta?.yearFrom ?? null }],
+        currentYear: new Date().getFullYear(),
+      });
+    }
   }
 
   /**
@@ -903,6 +968,7 @@ export class EbayAuctionScannerService {
         pov: newPov,
         povMultiple: povMultiple != null ? round2(povMultiple) : null,
         signals,
+        flags: [],
       });
     }
 
@@ -983,8 +1049,6 @@ export class EbayAuctionScannerService {
     if (candidates.length === 0) return [];
 
     const povData = await this.lookupPovBatch(candidates.map((c) => c.setNumber));
-    const setYears = await this.lookupSetYears(candidates.map((c) => c.setNumber));
-    const thinHistoryFloorYear = new Date().getFullYear() - 2;
     const opportunities: AuctionOpportunity[] = [];
 
     for (const { auction, setNumber, confidence } of candidates) {
@@ -1004,8 +1068,6 @@ export class EbayAuctionScannerService {
         usedSoldEff = newPov.soldAvgGbp;
         usedCapped = true;
       }
-      const setYear = setYears.get(bareSet) ?? null;
-      const thinUsedHistory = setYear != null && setYear >= thinHistoryFloorYear;
 
       const povMultiple = usedSoldEff && totalCost > 0 ? usedSoldEff / totalCost : null;
       if (ev) {
@@ -1021,8 +1083,9 @@ export class EbayAuctionScannerService {
       }
       if (ev) { ev.filterReason = 'passed'; ev.alertTier = tier; }
 
+      // Buy reasons only — the thin-history caution now arrives via the
+      // enrichment flag stack (assembleFlags), not the signals line.
       const signals = [`Used POV ${povMultiple!.toFixed(1)}× cost${usedCapped ? ' (capped to New)' : ''}`];
-      if (thinUsedHistory) signals.push(`⚠️ ${setYear} set — thin used-parts history`);
 
       opportunities.push({
         auction: { ...auction, postageGbp: postage, totalCostGbp: totalCost },
@@ -1039,6 +1102,7 @@ export class EbayAuctionScannerService {
         pov: usedPov ? { ...usedPov, soldAvgGbp: usedSoldEff } : null,
         povMultiple: povMultiple != null ? round2(povMultiple) : null,
         signals,
+        flags: [],
       });
     }
 
@@ -1167,6 +1231,7 @@ export class EbayAuctionScannerService {
         roi_percent: profitBreakdown?.roiPercent ?? null,
         alert_tier: alertTier,
         is_joblot: false,
+        flags: opportunity.flags.join(' | ') || null,
         pov_condition: conditionMode,
         pov_sold_gbp: pov?.soldAvgGbp ?? null,
         pov_multiple: povMultiple ?? null,

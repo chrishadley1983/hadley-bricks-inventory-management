@@ -66,6 +66,7 @@ export interface EbayAuctionAlertParams {
   povMultiple?: number | null;
   povLots?: number | null;
   signals?: string[];
+  flags?: string[];
 }
 
 export interface EbayBinPartoutAlertParams {
@@ -466,7 +467,7 @@ export class DiscordService {
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
       ebayUrl, imageUrl, ukRrp, maxBid,
-      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [],
+      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [], flags = [],
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
