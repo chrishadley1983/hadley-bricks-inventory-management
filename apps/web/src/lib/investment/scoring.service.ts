@@ -244,7 +244,8 @@ export class InvestmentScoringService {
     if (
       pred1yr >= APPRECIATION_CEIL_PCT - 0.5 ||
       pred1yr <= APPRECIATION_FLOOR_PCT + 0.5 ||
-      (pred3yr != null && pred3yr >= APPRECIATION_CEIL_PCT - 0.5)
+      (pred3yr != null &&
+        (pred3yr >= APPRECIATION_CEIL_PCT - 0.5 || pred3yr <= APPRECIATION_FLOOR_PCT + 0.5))
     ) {
       riskFactors.push('prediction_at_model_bound');
     }
