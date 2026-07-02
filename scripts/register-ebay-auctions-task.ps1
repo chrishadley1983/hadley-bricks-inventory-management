@@ -40,21 +40,34 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
 
-# S4U: run whether the user is logged on or not (no stored password; the task
-# only needs localhost HTTP + local file writes). Default interactive-only
-# logon would silently stop the sniper on a logged-out machine.
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+$description = "eBay auction sniper run LOCALLY every 5 min (off Vercel). POSTs /api/cron/ebay-auctions on localhost:3000 (NEW + opt-in USED POV scans). Replaces the paused GCP ebay-auction-sniper Cloud Scheduler job."
 
-Register-ScheduledTask `
-    -TaskName $taskName `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $principal `
-    -Description "eBay auction sniper run LOCALLY every 5 min (off Vercel). POSTs /api/cron/ebay-auctions on localhost:3000 (NEW + opt-in USED POV scans). Replaces the paused GCP ebay-auction-sniper Cloud Scheduler job."
+# Prefer S4U (runs whether the user is logged on or not; no stored password —
+# the task only needs localhost HTTP + local file writes). S4U registration
+# requires an ELEVATED shell; unelevated it throws "Access is denied", so fall
+# back to interactive-only registration rather than leaving NO task behind
+# (2026-07-02: a silent S4U failure after the Unregister left the sniper
+# unscheduled).
+$mode = "S4U (runs while logged out)"
+try {
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+        -Settings $settings -Principal $principal -Description $description -ErrorAction Stop | Out-Null
+} catch {
+    Write-Host "S4U registration failed ($($_.Exception.Message.Trim())) - falling back to interactive-only." -ForegroundColor Yellow
+    Write-Host "Re-run this script from an ELEVATED PowerShell to get run-while-logged-out." -ForegroundColor Yellow
+    $mode = "Interactive-only (task pauses while logged out; re-run elevated for S4U)"
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+        -Settings $settings -Description $description -ErrorAction Stop | Out-Null
+}
+
+if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+    Write-Host "FAILED: task '$taskName' does not exist after registration." -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
-Write-Host "Task '$taskName' registered successfully." -ForegroundColor Green
+Write-Host "Task '$taskName' registered successfully. Logon mode: $mode" -ForegroundColor Green
 Write-Host "Schedule: every 5 minutes (starts ~1 min from now)"
 Write-Host "Run log:  logs\ebay-auctions-local.log"
 Write-Host ""

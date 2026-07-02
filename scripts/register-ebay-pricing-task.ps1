@@ -33,20 +33,31 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 
-# S4U: run whether the user is logged on or not (no stored password; the task
-# only needs localhost HTTP + local file writes).
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+$description = "Daily eBay arbitrage pricing sync run LOCALLY (off Vercel). Loops /api/cron/ebay-pricing on localhost:3000 until complete. Replaces the paused GCP ebay-pricing-sync Cloud Scheduler job."
 
-Register-ScheduledTask `
-    -TaskName $taskName `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $principal `
-    -Description "Daily eBay arbitrage pricing sync run LOCALLY (off Vercel). Loops /api/cron/ebay-pricing on localhost:3000 until complete. Replaces the paused GCP ebay-pricing-sync Cloud Scheduler job."
+# Prefer S4U (runs whether the user is logged on or not; no stored password).
+# S4U registration requires an ELEVATED shell; unelevated it throws "Access is
+# denied", so fall back to interactive-only rather than leaving NO task behind.
+$mode = "S4U (runs while logged out)"
+try {
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Limited
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+        -Settings $settings -Principal $principal -Description $description -ErrorAction Stop | Out-Null
+} catch {
+    Write-Host "S4U registration failed ($($_.Exception.Message.Trim())) - falling back to interactive-only." -ForegroundColor Yellow
+    Write-Host "Re-run this script from an ELEVATED PowerShell to get run-while-logged-out." -ForegroundColor Yellow
+    $mode = "Interactive-only (task pauses while logged out; re-run elevated for S4U)"
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+        -Settings $settings -Description $description -ErrorAction Stop | Out-Null
+}
+
+if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+    Write-Host "FAILED: task '$taskName' does not exist after registration." -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
-Write-Host "Task '$taskName' registered successfully." -ForegroundColor Green
+Write-Host "Task '$taskName' registered successfully. Logon mode: $mode" -ForegroundColor Green
 Write-Host "Schedule: Daily at 03:00"
 Write-Host ""
 Write-Host "To test: schtasks /run /tn '$taskName'" -ForegroundColor Cyan
