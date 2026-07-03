@@ -468,12 +468,17 @@ export class InvestmentScoringService {
   private async fetchDemandData(): Promise<Map<string, { salesRank: number; offerCount: number }>> {
     const demandMap = new Map<string, { salesRank: number; offerCount: number }>();
 
-    // Fetch price snapshots ordered by date desc, keeping most recent per set
+    // Fetch recent price snapshots ordered by date desc, keeping the most
+    // recent per set. Restricted to a 120-day window: the full-history table
+    // is millions of rows post-re-import and an unbounded ordered scan hits
+    // the Postgres statement timeout; older ranks are stale for demand anyway.
+    const sinceDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     let rows: Record<string, unknown>[] = [];
     try {
       rows = (await fetchAllRecords(this.supabase, 'price_snapshots', {
         select: 'set_num, sales_rank, seller_count, date',
         in: { source: ['keepa_amazon_buybox', 'amazon_buybox'] },
+        gte: { date: sinceDate },
         isNotNull: ['sales_rank'],
         orderBy: { column: 'date', ascending: false },
       })) as unknown as Record<string, unknown>[];
