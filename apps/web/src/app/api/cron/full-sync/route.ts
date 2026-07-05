@@ -71,6 +71,13 @@ interface FullSyncResults {
   ebayLinking: { autoLinked: number; queuedForResolution: number } | null;
   shopifyArchiveSync: SyncResult | null;
   shopifyOrderSync: SyncResult | null;
+  shopifyJanitors: {
+    dedupeDuplicateSkus: number;
+    dedupeArchived: number;
+    driftFound: number;
+    driftArchived: number;
+    errors: string[];
+  } | null;
   shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
   stuckJobsReset: number;
@@ -711,6 +718,7 @@ export async function POST(request: NextRequest) {
       ebayLinking: null,
       shopifyArchiveSync: null,
       shopifyOrderSync: null,
+      shopifyJanitors: null,
       shopifyAlignment: null,
       stuckJobs: [],
       stuckJobsReset: 0,
@@ -1037,11 +1045,42 @@ export async function POST(request: NextRequest) {
           'Shopify Order Sync'
         );
         // Reconcile quantities (orphans + drift) after ingestion.
+        const syncSvc = new ShopifySyncSvc(supabase, userId);
         const reconcile = await withTimeout(
-          new ShopifySyncSvc(supabase, userId).reconcileInventoryQuantities(),
+          syncSvc.reconcileInventoryQuantities(),
           180000,
           'Shopify Reconcile'
         ).catch((e) => ({ reduced: 0, errors: [{ sku: null, error: String(e) }] }));
+
+        // Janitors that previously lived only in the unscheduled /api/cron/shopify-orders
+        // route (so they never ran): archive untracked orphan duplicates, then re-archive
+        // sold products still ACTIVE on live Shopify (cache-vs-live archive drift, which
+        // otherwise leaves sold items buyable indefinitely). Both non-fatal.
+        const janitorErrors: string[] = [];
+        const dedupe = await withTimeout(syncSvc.dedupeBySku(), 120000, 'Shopify Dedupe').catch(
+          (e) => {
+            janitorErrors.push(`dedupe: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+          }
+        );
+        const drift = await withTimeout(
+          syncSvc.reconcileArchiveDrift(),
+          120000,
+          'Shopify Archive Drift'
+        ).catch((e) => {
+          janitorErrors.push(`archiveDrift: ${e instanceof Error ? e.message : String(e)}`);
+          return null;
+        });
+        results.shopifyJanitors = {
+          dedupeDuplicateSkus: dedupe?.duplicate_skus ?? 0,
+          dedupeArchived: dedupe?.archived ?? 0,
+          driftFound: drift?.drifted ?? 0,
+          driftArchived: drift?.archived ?? 0,
+          errors: janitorErrors,
+        };
+        console.log(
+          `[Cron FullSync] Shopify janitors: ${dedupe?.archived ?? 0} dupes archived, ${drift?.archived ?? 0}/${drift?.drifted ?? 0} drifted re-archived${janitorErrors.length ? `, errors: ${janitorErrors.join('; ')}` : ''}`
+        );
 
         results.shopifyOrderSync = {
           platform: 'Shopify Order Sync',
