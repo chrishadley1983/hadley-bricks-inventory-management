@@ -7087,13 +7087,18 @@ export type Database = {
           data_quality: string
           had_amazon_listing: boolean | null
           id: string
+          label_method: string | null
           price_1yr_post: number | null
           price_3yr_post: number | null
           price_at_retirement: number | null
           raw_data: Json | null
           retired_date: string | null
+          retired_date_estimated: boolean
           rrp_gbp: number | null
           set_num: string
+          snapshots_1yr: number | null
+          snapshots_3yr: number | null
+          snapshots_at_retirement: number | null
           updated_at: string
         }
         Insert: {
@@ -7104,13 +7109,18 @@ export type Database = {
           data_quality?: string
           had_amazon_listing?: boolean | null
           id?: string
+          label_method?: string | null
           price_1yr_post?: number | null
           price_3yr_post?: number | null
           price_at_retirement?: number | null
           raw_data?: Json | null
           retired_date?: string | null
+          retired_date_estimated?: boolean
           rrp_gbp?: number | null
           set_num: string
+          snapshots_1yr?: number | null
+          snapshots_3yr?: number | null
+          snapshots_at_retirement?: number | null
           updated_at?: string
         }
         Update: {
@@ -7121,13 +7131,18 @@ export type Database = {
           data_quality?: string
           had_amazon_listing?: boolean | null
           id?: string
+          label_method?: string | null
           price_1yr_post?: number | null
           price_3yr_post?: number | null
           price_at_retirement?: number | null
           raw_data?: Json | null
           retired_date?: string | null
+          retired_date_estimated?: boolean
           rrp_gbp?: number | null
           set_num?: string
+          snapshots_1yr?: number | null
+          snapshots_3yr?: number | null
+          snapshots_at_retirement?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -7370,6 +7385,13 @@ export type Database = {
             columns: ["set_num"]
             isOneToOne: false
             referencedRelation: "brickset_sets"
+            referencedColumns: ["set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "keepa_refresh_candidates"
             referencedColumns: ["set_number"]
           },
           {
@@ -10967,6 +10989,45 @@ export type Database = {
         }
         Relationships: []
       }
+      price_snapshots_keepa_backup_20260702: {
+        Row: {
+          buy_box_winner: string | null
+          created_at: string | null
+          date: string | null
+          id: string | null
+          price_gbp: number | null
+          raw_data: Json | null
+          sales_rank: number | null
+          seller_count: number | null
+          set_num: string | null
+          source: string | null
+        }
+        Insert: {
+          buy_box_winner?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string | null
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num?: string | null
+          source?: string | null
+        }
+        Update: {
+          buy_box_winner?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string | null
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       processed_purchase_emails: {
         Row: {
           cost: number | null
@@ -12967,10 +13028,12 @@ export type Database = {
           duration_ms: number | null
           errors: Json | null
           id: string
+          items_added_to_group: number
           items_archived: number | null
           items_created: number | null
           items_failed: number | null
           items_processed: number | null
+          items_reactivated: number
           items_updated: number | null
           started_at: string
           sync_type: string
@@ -12981,10 +13044,12 @@ export type Database = {
           duration_ms?: number | null
           errors?: Json | null
           id?: string
+          items_added_to_group?: number
           items_archived?: number | null
           items_created?: number | null
           items_failed?: number | null
           items_processed?: number | null
+          items_reactivated?: number
           items_updated?: number | null
           started_at?: string
           sync_type: string
@@ -12995,10 +13060,12 @@ export type Database = {
           duration_ms?: number | null
           errors?: Json | null
           id?: string
+          items_added_to_group?: number
           items_archived?: number | null
           items_created?: number | null
           items_failed?: number | null
           items_processed?: number | null
+          items_reactivated?: number
           items_updated?: number | null
           started_at?: string
           sync_type?: string
@@ -15842,6 +15909,15 @@ export type Database = {
           },
         ]
       }
+      keepa_refresh_candidates: {
+        Row: {
+          amazon_asin: string | null
+          last_keepa_date: string | null
+          retirement_status: string | null
+          set_number: string | null
+        }
+        Relationships: []
+      }
       monthly_platform_summary: {
         Row: {
           items_listed: number | null
@@ -16791,6 +16867,18 @@ export type Database = {
           adjusted_max_price: number
           adjusted_min_price: number
           adjusted_total_listings: number
+        }[]
+      }
+      get_amazon_pricing_public: {
+        Args: { p_set_number: string }
+        Returns: {
+          amazon_price: number
+          asin: string
+          sales_rank: number
+          set_name: string
+          set_number: string
+          uk_retail_price: number
+          was_price_90d: number
         }[]
       }
       get_arbitrage_adjusted_count: {

@@ -1395,13 +1395,18 @@ export class ShopifySyncService {
    * marks the mapping active. Skips products that already have an active mapping.
    */
   private async reactivateRelistedProducts(summary: BatchSyncSummary): Promise<void> {
-    const { data: rows } = await this.supabase
-      .from('shopify_products')
-      .select('shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)')
-      .eq('user_id', this.userId)
-      .eq('shopify_status', 'archived')
-      .eq('inventory_items.status', 'LISTED');
-    if (!rows || rows.length === 0) return;
+    const rows = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)',
+      eq: {
+        user_id: this.userId,
+        shopify_status: 'archived',
+        'inventory_items.status': 'LISTED',
+      },
+    })) as unknown as Array<{
+      shopify_product_id: string | null;
+      shopify_inventory_item_id: string | null;
+    }>;
+    if (rows.length === 0) return;
 
     const byProduct = new Map<string, string | null>();
     for (const r of rows as Array<{ shopify_product_id: string | null; shopify_inventory_item_id: string | null }>) {
@@ -1482,15 +1487,20 @@ export class ShopifySyncService {
 
     await this.getClient();
 
-    // 1. Archive/decrement products for items no longer LISTED
-    const { data: toArchive } = await this.supabase
-      .from('shopify_products')
-      .select(
-        'inventory_item_id, shopify_product_id, shopify_status, shopify_inventory_item_id, inventory_items!inner(status)'
-      )
-      .eq('user_id', this.userId)
-      .neq('shopify_status', 'archived')
-      .neq('inventory_items.status', 'LISTED');
+    // 1. Archive/decrement products for items no longer LISTED (paginate >1000 —
+    // this is the sold→archive safety net; a truncated read would strand sold
+    // items live on the storefront)
+    const toArchive = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select:
+        'inventory_item_id, shopify_product_id, shopify_status, shopify_inventory_item_id, inventory_items!inner(status)',
+      eq: { user_id: this.userId },
+      neq: { shopify_status: 'archived', 'inventory_items.status': 'LISTED' },
+    })) as unknown as Array<{
+      inventory_item_id: string;
+      shopify_product_id: string;
+      shopify_status: string | null;
+      shopify_inventory_item_id: string | null;
+    }>;
 
     if (toArchive) {
       for (const item of toArchive) {
@@ -1573,13 +1583,16 @@ export class ShopifySyncService {
     // Shopify forever.
     await this.reactivateRelistedProducts(summary);
 
-    // 2. Create products for LISTED items not yet on Shopify (with grouping)
-    const { data: existingMappings } = await this.supabase
-      .from('shopify_products')
-      .select('inventory_item_id')
-      .eq('user_id', this.userId);
+    // 2. Create products for LISTED items not yet on Shopify (with grouping).
+    // MUST paginate: an unpaginated read capped at 1,000 rows made already-synced
+    // items look unsynced once the table grew past 1,000 — every batch run then
+    // re-processed them (duplicate-create failures + inflated group quantities).
+    const existingMappings = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'inventory_item_id',
+      eq: { user_id: this.userId },
+    })) as unknown as Array<{ inventory_item_id: string | null }>;
 
-    const existingIds = new Set(existingMappings?.map((m) => m.inventory_item_id) || []);
+    const existingIds = new Set(existingMappings.map((m) => m.inventory_item_id));
 
     // Fetch unsynced LISTED items with grouping fields (paginate for >1000)
     const unsyncedItems: Array<{
@@ -1661,17 +1674,26 @@ export class ShopifySyncService {
       // lookup would wrongly merge distinct minifigs into one product.
       let existingProductId: string | undefined;
       if (repHasRealSet) {
-        const { data: syncedSiblings } = await this.supabase
+        // .eq(col, null) matches nothing in PostgREST — a null condition or
+        // listing_value needs IS NULL, else the item falls through to create and
+        // hits the duplicate guard on every run.
+        let siblingQuery = this.supabase
           .from('shopify_products')
           .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
           .eq('user_id', this.userId)
           .eq('sync_status', 'synced')
           .neq('shopify_product_id', '')
-          .eq('inventory_items.set_number', rep.set_number!)
-          .eq('inventory_items.condition', rep.condition!)
-          .eq('inventory_items.listing_value', rep.listing_value!)
-          .limit(1);
-        existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+          .eq('inventory_items.set_number', rep.set_number!);
+        siblingQuery =
+          rep.condition == null
+            ? siblingQuery.is('inventory_items.condition', null)
+            : siblingQuery.eq('inventory_items.condition', rep.condition);
+        siblingQuery =
+          rep.listing_value == null
+            ? siblingQuery.is('inventory_items.listing_value', null)
+            : siblingQuery.eq('inventory_items.listing_value', rep.listing_value);
+        const { data: syncedSiblings } = await siblingQuery.limit(1);
+        existingProductId = syncedSiblings?.[0]?.shopify_product_id ?? undefined;
       }
 
       let result: SyncResult;
@@ -1746,6 +1768,8 @@ export class ShopifySyncService {
       sync_type: 'batch',
       items_processed: summary.items_processed,
       items_created: summary.items_created,
+      items_added_to_group: summary.items_added_to_group,
+      items_reactivated: summary.items_reactivated ?? 0,
       items_updated: summary.items_updated,
       items_archived: summary.items_archived,
       items_failed: summary.items_failed,
@@ -1775,6 +1799,16 @@ export class ShopifySyncService {
       duration_ms: 0,
     };
 
+    // Requeue jobs stranded in 'processing' by a crashed run. scheduled_for is
+    // touched when a job is picked up, so processing + scheduled_for older than
+    // 30 min means the run died mid-job (functions time out long before that).
+    await this.supabase
+      .from('shopify_sync_queue')
+      .update({ status: 'pending' })
+      .eq('user_id', this.userId)
+      .eq('status', 'processing')
+      .lt('scheduled_for', new Date(Date.now() - 30 * 60_000).toISOString());
+
     // Fetch pending jobs ordered by priority (1 = highest)
     const { data: jobs } = await this.supabase
       .from('shopify_sync_queue')
@@ -1792,10 +1826,15 @@ export class ShopifySyncService {
     }
 
     for (const job of jobs) {
-      // Mark as processing
+      // Mark as processing — touch scheduled_for so the stale-job requeue above
+      // can tell a live run from a crashed one.
       await this.supabase
         .from('shopify_sync_queue')
-        .update({ status: 'processing', attempts: job.attempts + 1 })
+        .update({
+          status: 'processing',
+          attempts: job.attempts + 1,
+          scheduled_for: new Date().toISOString(),
+        })
         .eq('id', job.id);
 
       summary.items_processed++;
@@ -1870,7 +1909,7 @@ export class ShopifySyncService {
    * Call this when an item status changes (e.g. markItemAsSold).
    */
   async enqueueJob(
-    action: 'create' | 'archive' | 'update_price' | 'delete',
+    action: 'create' | 'archive' | 'update_price',
     inventoryItemId: string,
     priority = 5,
     payload?: Record<string, unknown>
@@ -1895,14 +1934,24 @@ export class ShopifySyncService {
     pending_queue: number;
     last_sync: string | null;
   }> {
-    const [products, queue, lastLog] = await Promise.all([
-      this.supabase
+    // Count server-side — fetching rows and counting client-side truncates at the
+    // Supabase 1,000-row cap (the dashboard showed exactly 1000 at 1,225 rows).
+    const countMappings = (filter?: { column: string; value: string }) => {
+      let q = this.supabase
         .from('shopify_products')
-        .select('shopify_status, sync_status', { count: 'exact' })
-        .eq('user_id', this.userId),
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', this.userId);
+      if (filter) q = q.eq(filter.column, filter.value);
+      return q;
+    };
+    const [total, active, archived, errors, queue, lastLog] = await Promise.all([
+      countMappings(),
+      countMappings({ column: 'shopify_status', value: 'active' }),
+      countMappings({ column: 'shopify_status', value: 'archived' }),
+      countMappings({ column: 'sync_status', value: 'error' }),
       this.supabase
         .from('shopify_sync_queue')
-        .select('id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', this.userId)
         .eq('status', 'pending'),
       this.supabase
@@ -1911,16 +1960,15 @@ export class ShopifySyncService {
         .eq('user_id', this.userId)
         .order('completed_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
     ]);
 
-    const items = products.data || [];
     return {
-      total: items.length,
-      active: items.filter((i) => i.shopify_status === 'active').length,
-      archived: items.filter((i) => i.shopify_status === 'archived').length,
-      errors: items.filter((i) => i.sync_status === 'error').length,
-      pending_queue: queue.count || 0,
+      total: total.count ?? 0,
+      active: active.count ?? 0,
+      archived: archived.count ?? 0,
+      errors: errors.count ?? 0,
+      pending_queue: queue.count ?? 0,
       last_sync: lastLog.data?.completed_at || null,
     };
   }
