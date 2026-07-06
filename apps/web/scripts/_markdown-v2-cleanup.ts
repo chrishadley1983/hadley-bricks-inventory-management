@@ -9,8 +9,9 @@
  *     never called by the sweep) → systematic COLD bias + auction spam.
  *
  * This script:
- *   1) REJECTs ALL PENDING proposals (both platforms, incl. auction recs)
- *      with a rejection note explaining why.
+ *   1) REJECTs ALL PENDING proposals (both platforms, incl. auction recs).
+ *      (No note column exists on markdown_proposals — this script + the PR
+ *      are the audit trail; the batch is identifiable by updated_at.)
  *   2) Resets next_markdown_eval_at = today on the affected inventory items
  *      so the new engine re-evaluates them promptly instead of in 30 days.
  *   3) Sets markdown_config.amazon_step1_days = 30 (agreed design: Amazon

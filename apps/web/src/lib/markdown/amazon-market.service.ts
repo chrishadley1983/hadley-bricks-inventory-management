@@ -84,7 +84,13 @@ export async function buildAmazonMarketContexts(
       eq: { user_id: userId },
       in: { asin: batch },
       gte: { snapshot_date: cutoffISO },
-      orderBy: { column: 'snapshot_date', ascending: true },
+      // (asin, snapshot_date) is unique — composite order gives the total
+      // ordering range pagination needs (single-column order can skip or
+      // duplicate boundary rows and corrupt the median / latest position).
+      orderBy: [
+        { column: 'asin', ascending: true },
+        { column: 'snapshot_date', ascending: true },
+      ],
     })) as unknown as SnapshotRow[];
 
     for (const row of rows) {
@@ -144,6 +150,13 @@ export async function buildAmazonMarketContexts(
 }
 
 /**
+ * Pre-v2 proposals also used markdown_step=1 but matched a spot price against
+ * a different reference — they must not seed tier-2 escalation. Only matches
+ * applied after the v2 deploy count.
+ */
+const V2_EPOCH = '2026-07-06';
+
+/**
  * Most recent APPLIED tier-1 match proposal per inventory item — feeds the
  * tier-2 escalation ("we matched, waited, still not the box").
  */
@@ -165,6 +178,7 @@ export async function getLastAppliedMatches(
       .eq('markdown_step', 1)
       .in('status', ['APPROVED', 'AUTO_APPLIED'])
       .not('applied_at', 'is', null)
+      .gte('applied_at', V2_EPOCH)
       .not('proposed_price', 'is', null)
       .in('inventory_item_id', batch)
       .order('applied_at', { ascending: false });

@@ -71,15 +71,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, skipped: 'No markdown config' });
     }
 
-    // 2. Existing pending proposals (avoid duplicates)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingProposals } = await (supabase as any)
-      .from('markdown_proposals')
-      .select('inventory_item_id')
-      .eq('user_id', DEFAULT_USER_ID)
-      .eq('status', 'PENDING');
+    // 2. Existing pending proposals (avoid duplicates) — paginated; a review
+    // backlog over 1,000 PENDING rows must not silently create duplicates.
+    const existingProposals = await fetchAllRecords(supabase, 'markdown_proposals', {
+      select: 'inventory_item_id',
+      eq: { user_id: DEFAULT_USER_ID, status: 'PENDING' },
+      orderBy: { column: 'id', ascending: true },
+    });
     const existingItemIds = new Set(
-      (existingProposals || []).map((p: { inventory_item_id: string }) => p.inventory_item_id)
+      (existingProposals as unknown as { inventory_item_id: string }[]).map(
+        (p) => p.inventory_item_id
+      )
     );
 
     // 3. Fetch LISTED items DUE for evaluation (next_markdown_eval_at <= today or null)
@@ -133,7 +135,11 @@ export async function POST(request: NextRequest) {
         // Only pay the Analytics API cost for listings actually due this run.
         const dueListingIds = new Set(ebayDue.map((i) => String(i.ebay_listing_id)));
         const dueEligible = eligible.filter((l) => dueListingIds.has(String(l.itemId)));
-        const withViews = await refreshSvc.enrichListingsWithViews(dueEligible);
+        // throwOnError: an Analytics failure must NOT silently leave views
+        // null — that would re-create the blind-COLD judgement v2 removes.
+        const withViews = await refreshSvc.enrichListingsWithViews(dueEligible, undefined, {
+          throwOnError: true,
+        });
         for (const l of withViews) {
           engagementMap.set(String(l.itemId), { views: l.views, watchers: l.watchers });
         }
@@ -178,7 +184,16 @@ export async function POST(request: NextRequest) {
         | 'amazon'
         | 'ebay';
 
-      // Engagement data unavailable → don't judge eBay listings blind as COLD.
+      // No eBay listing id → engagement data can never arrive; hold and roll
+      // the clock rather than re-surfacing (and skipping) every single day.
+      if (platform === 'ebay' && !item.ebay_listing_id) {
+        held++;
+        idsToRoll.push(item.id);
+        continue;
+      }
+
+      // Engagement fetch failed this run → don't judge eBay listings blind as
+      // COLD; leave the clock untouched so they retry next run.
       if (platform === 'ebay' && !engagementOk) {
         skipped++;
         continue;

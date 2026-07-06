@@ -340,7 +340,10 @@ function computeAmazonCompetitorHoldsBox(
   }
 
   // Persistence gate: the box must have sat below us for most of the recent window.
-  if (mkt.persistenceSampleSize < MIN_PERSISTENCE_SAMPLES || mkt.persistenceBelowPct === null) {
+  // Sample requirement never exceeds the configured window (a 5-day window can
+  // legitimately only ever produce 5 snapshots).
+  const minSamples = Math.min(MIN_PERSISTENCE_SAMPLES, config.amazon_persistence_window_days);
+  if (mkt.persistenceSampleSize < minSamples || mkt.persistenceBelowPct === null) {
     return hold(floor, `Only ${mkt.persistenceSampleSize} recent snapshots — not enough to judge persistence`);
   }
   const persistencePct = mkt.persistenceBelowPct * 100;

@@ -160,7 +160,14 @@ export async function fetchAllRecords<T extends TableName>(
     or?: string;
     isNull?: string[];
     isNotNull?: string[];
-    orderBy?: { column: string; ascending?: boolean };
+    /**
+     * Single order or composite order (applied in sequence). Range pagination
+     * needs a TOTAL order — if the first column is non-unique, add a unique
+     * tiebreaker or page boundaries can skip/duplicate rows.
+     */
+    orderBy?:
+      | { column: string; ascending?: boolean }
+      | { column: string; ascending?: boolean }[];
     pageSize?: number;
   }
 ): Promise<Database['public']['Tables'][T]['Row'][]> {
@@ -243,9 +250,10 @@ export async function fetchAllRecords<T extends TableName>(
     }
 
     if (options?.orderBy) {
-      query = query.order(options.orderBy.column, {
-        ascending: options.orderBy.ascending ?? true,
-      });
+      const orders = Array.isArray(options.orderBy) ? options.orderBy : [options.orderBy];
+      for (const order of orders) {
+        query = query.order(order.column, { ascending: order.ascending ?? true });
+      }
     }
 
     const { data, error } = await query;
