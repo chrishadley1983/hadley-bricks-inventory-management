@@ -76,6 +76,12 @@ Only flag issues with:
 - Correct condition ID mapping: 0-10 points
 - Appropriate condition description: 0-5 points
 
+Valid eBay condition IDs for LEGO categories: 1000 (New), 1500 (New: Other — sets only, not
+minifigures), 3000 (Used). ALL used grades (excellent, very good, good, acceptable, incomplete)
+map to 3000 with the grade expressed in the condition description — do NOT flag 3000 as a
+mismatch for a graded used item. DO flag any other condition ID (4000, 5000, 6000, 7000) as
+invalid: eBay rejects them in LEGO categories.
+
 ### SEO Optimization (15 points)
 - Keyword usage in description: 0-8 points
 - Category selection accuracy: 0-7 points

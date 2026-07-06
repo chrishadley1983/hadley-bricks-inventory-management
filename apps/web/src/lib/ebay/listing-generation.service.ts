@@ -196,38 +196,10 @@ export class ListingGenerationService {
       return 1500; // NEW_OTHER
     }
 
-    // Used conditions
-    if (normalizedCondition.includes('excellent')) {
-      return 3000; // USED_EXCELLENT
-    }
-
-    if (normalizedCondition.includes('very good')) {
-      return 4000; // USED_VERY_GOOD
-    }
-
-    if (normalizedCondition.includes('good')) {
-      return 5000; // USED_GOOD
-    }
-
-    if (normalizedCondition.includes('acceptable')) {
-      return 6000; // USED_ACCEPTABLE
-    }
-
-    // Parts/incomplete
-    if (
-      normalizedCondition.includes('parts') ||
-      normalizedCondition.includes('incomplete') ||
-      normalizedCondition.includes('not working')
-    ) {
-      return 7000; // FOR_PARTS_OR_NOT_WORKING
-    }
-
-    // Default to used for anything else
-    if (normalizedCondition === 'used') {
-      return 3000; // USED_EXCELLENT (default for generic "used")
-    }
-
-    // Fallback
+    // All used grades → USED (3000). eBay's LEGO categories (19006, 263012)
+    // only accept condition IDs 1000/1500/3000 — the graded used IDs
+    // (4000/5000/6000/7000) are rejected. The grade (very good, good,
+    // acceptable, incomplete) is conveyed via conditionDescription instead.
     return 3000;
   }
 
