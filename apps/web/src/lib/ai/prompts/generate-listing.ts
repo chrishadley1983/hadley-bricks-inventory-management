@@ -62,14 +62,13 @@ You understand eBay's Cassini search algorithm and optimize for:
    - Do NOT include shipping/payment/return info (handled by eBay policies)
    - Do NOT include contact information or external links
 
-4. **CONDITION MAPPING:**
+4. **CONDITION MAPPING (eBay LEGO categories accept ONLY condition IDs 1000, 1500 and 3000):**
    - Factory Sealed / Sealed → NEW (1000)
    - Open Box - Complete → NEW_OTHER (1500)
-   - Used - Excellent → USED_EXCELLENT (3000)
-   - Used - Very Good → USED_VERY_GOOD (4000)
-   - Used - Good → USED_GOOD (5000)
-   - Used - Acceptable → USED_ACCEPTABLE (6000)
-   - Parts Only / Incomplete → FOR_PARTS_OR_NOT_WORKING (7000)
+   - ANY used grade (Excellent, Very Good, Good, Acceptable, Parts Only, Incomplete) → USED (3000)
+   - NEVER return graded used IDs (4000, 5000, 6000, 7000) — eBay rejects them in LEGO categories
+   - Category 263012 (Minifigures) accepts only 1000 and 3000 — use 3000 for any opened/used minifigure
+   - For used items, ALWAYS convey the grade, wear and completeness in conditionDescription (e.g. "Very good condition — complete with instructions, light box wear")
 
 ## CATEGORY SELECTION (CRITICAL)
 

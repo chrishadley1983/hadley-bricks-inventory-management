@@ -10,12 +10,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// eBay Inventory API condition values for minifigures
+// eBay Inventory API condition values for minifigures.
+// Category 263012 (LEGO Minifigures) only accepts condition IDs 1000 (New) and
+// 3000 (Used) — graded used enums (USED_VERY_GOOD etc.) are rejected by eBay.
+// Grade detail goes in the condition description instead.
 const CONDITION_OPTIONS = [
   { value: 'NEW', label: 'New' },
-  { value: 'USED_EXCELLENT', label: 'Used - Excellent' },
-  { value: 'USED_VERY_GOOD', label: 'Used - Very Good' },
-  { value: 'USED_GOOD', label: 'Used - Good' },
+  { value: 'USED_EXCELLENT', label: 'Used' },
 ];
 
 interface EbayFieldsSectionProps {
