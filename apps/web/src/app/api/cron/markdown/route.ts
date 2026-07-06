@@ -194,6 +194,15 @@ export async function POST(request: NextRequest) {
       }
       const engagement = item.ebay_listing_id ? engagementMap.get(item.ebay_listing_id) : undefined;
 
+      // No engagement data for this listing (unlinked, multi-qty, or not yet
+      // aged into the eligible set) → hold rather than judge blind as COLD.
+      // Young listings would HOLD in the engine anyway; the rest need a human.
+      if (platform === 'ebay' && !engagement) {
+        held++;
+        idsToRoll.push(item.id);
+        continue;
+      }
+
       try {
         const out = computeTarget({
           platform,
