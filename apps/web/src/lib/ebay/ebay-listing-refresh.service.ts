@@ -190,7 +190,8 @@ export class EbayListingRefreshService {
    */
   async enrichListingsWithViews(
     listings: EligibleListing[],
-    onProgress?: ViewsEnrichmentCallback
+    onProgress?: ViewsEnrichmentCallback,
+    options?: { throwOnError?: boolean }
   ): Promise<EligibleListing[]> {
     if (listings.length === 0) return listings;
 
@@ -283,6 +284,9 @@ export class EbayListingRefreshService {
       }
     } catch (error) {
       console.error('[EbayListingRefreshService] Analytics API error:', error);
+      // Callers that must not judge listings blind (the markdown sweep) opt in
+      // to propagation; default keeps the historical swallow-and-continue.
+      if (options?.throwOnError) throw error;
       // On error, return listings as-is (views will remain null)
       // The error will be visible in the console but we don't fail the entire operation
     }

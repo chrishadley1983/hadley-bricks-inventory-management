@@ -308,9 +308,11 @@ export type Database = {
           price_is_lowest_offer: boolean | null
           sales_rank: number | null
           sales_rank_category: string | null
+          sales_rank_drops_90d: number | null
           snapshot_date: string
           total_offer_count: number | null
           user_id: string
+          was_price_180d: number | null
           was_price_90d: number | null
           your_price: number | null
           your_qty: number | null
@@ -331,9 +333,11 @@ export type Database = {
           price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
+          sales_rank_drops_90d?: number | null
           snapshot_date: string
           total_offer_count?: number | null
           user_id: string
+          was_price_180d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -354,9 +358,11 @@ export type Database = {
           price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
+          sales_rank_drops_90d?: number | null
           snapshot_date?: string
           total_offer_count?: number | null
           user_id?: string
+          was_price_180d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -8451,7 +8457,18 @@ export type Database = {
       }
       markdown_config: {
         Row: {
+          amazon_decay_floor_pct: number
+          amazon_decay_interval_days: number
+          amazon_decay_start_days: number
+          amazon_decay_step_pct: number
+          amazon_exit_days: number
           amazon_fee_rate: number
+          amazon_healthy_drops_90d: number
+          amazon_min_drops_90d: number
+          amazon_persistence_min_pct: number
+          amazon_persistence_window_days: number
+          amazon_postage_cost: number
+          amazon_reference_window_days: number
           amazon_step1_days: number
           amazon_step2_days: number
           amazon_step2_undercut_pct: number
@@ -8463,6 +8480,7 @@ export type Database = {
           auction_max_per_day: number
           created_at: string
           ebay_fee_rate: number
+          ebay_postage_cost: number
           ebay_step1_days: number
           ebay_step1_reduction_pct: number
           ebay_step2_days: number
@@ -8481,7 +8499,18 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          amazon_decay_floor_pct?: number
+          amazon_decay_interval_days?: number
+          amazon_decay_start_days?: number
+          amazon_decay_step_pct?: number
+          amazon_exit_days?: number
           amazon_fee_rate?: number
+          amazon_healthy_drops_90d?: number
+          amazon_min_drops_90d?: number
+          amazon_persistence_min_pct?: number
+          amazon_persistence_window_days?: number
+          amazon_postage_cost?: number
+          amazon_reference_window_days?: number
           amazon_step1_days?: number
           amazon_step2_days?: number
           amazon_step2_undercut_pct?: number
@@ -8493,6 +8522,7 @@ export type Database = {
           auction_max_per_day?: number
           created_at?: string
           ebay_fee_rate?: number
+          ebay_postage_cost?: number
           ebay_step1_days?: number
           ebay_step1_reduction_pct?: number
           ebay_step2_days?: number
@@ -8511,7 +8541,18 @@ export type Database = {
           user_id: string
         }
         Update: {
+          amazon_decay_floor_pct?: number
+          amazon_decay_interval_days?: number
+          amazon_decay_start_days?: number
+          amazon_decay_step_pct?: number
+          amazon_exit_days?: number
           amazon_fee_rate?: number
+          amazon_healthy_drops_90d?: number
+          amazon_min_drops_90d?: number
+          amazon_persistence_min_pct?: number
+          amazon_persistence_window_days?: number
+          amazon_postage_cost?: number
+          amazon_reference_window_days?: number
           amazon_step1_days?: number
           amazon_step2_days?: number
           amazon_step2_undercut_pct?: number
@@ -8523,6 +8564,7 @@ export type Database = {
           auction_max_per_day?: number
           created_at?: string
           ebay_fee_rate?: number
+          ebay_postage_cost?: number
           ebay_step1_days?: number
           ebay_step1_reduction_pct?: number
           ebay_step2_days?: number

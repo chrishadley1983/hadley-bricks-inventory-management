@@ -33,6 +33,12 @@ export interface KeepaStats {
   avg90?: (number | null)[];
   /** Average over 180 days for each CSV type */
   avg180?: (number | null)[];
+  /** Sales rank drop count over 30 days (sales-velocity proxy) */
+  salesRankDrops30?: number;
+  /** Sales rank drop count over 90 days (sales-velocity proxy) */
+  salesRankDrops90?: number;
+  /** Sales rank drop count over 180 days (sales-velocity proxy) */
+  salesRankDrops180?: number;
 }
 
 export interface KeepaProduct {
@@ -217,7 +223,7 @@ export class KeepaClient {
       key: this.apiKey,
       domain: '2', // Amazon UK
       asin: validAsins.join(','),
-      stats: '90', // Include 90-day stats (for was_price_90d)
+      stats: '180', // Include stats (avg30/90/180 + salesRankDrops for was_price_90d/180d)
       buybox: '1', // Include buy box history
       history: '1', // Include full price history
     });
@@ -346,6 +352,8 @@ export class KeepaClient {
     buyBoxPrice: number | null;
     salesRank: number | null;
     was90dAvg: number | null;
+    was180dAvg: number | null;
+    salesRankDrops90: number | null;
     offerCount: number | null;
     lowestNewPrice: number | null;
   } {
@@ -375,13 +383,17 @@ export class KeepaClient {
     const offerCountRaw =
       getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
 
-    // 90-day average buy box from stats
+    // 90/180-day average buy box + rank-drop velocity from stats
     const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const was180dRaw = product.stats?.avg180?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const drops90 = product.stats?.salesRankDrops90;
 
     return {
       buyBoxPrice: buyBoxRaw !== null ? keepaPriceToGBP(buyBoxRaw) : null,
       salesRank: salesRankRaw,
       was90dAvg: was90dRaw !== null && was90dRaw >= 0 ? keepaPriceToGBP(was90dRaw) : null,
+      was180dAvg: was180dRaw !== null && was180dRaw >= 0 ? keepaPriceToGBP(was180dRaw) : null,
+      salesRankDrops90: typeof drops90 === 'number' && drops90 >= 0 ? drops90 : null,
       offerCount: offerCountRaw,
       lowestNewPrice: lowestNewRaw !== null ? keepaPriceToGBP(lowestNewRaw) : null,
     };

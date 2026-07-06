@@ -103,7 +103,9 @@ interface EngineOutput {
 
 ### 4.1 Floor & fee rates (decision #5 — canonical, documented values)
 
-Floor = `roundToNearestCharm(breakeven)`, never priced below.
+Floor = `ceilToCharm(breakeven)`, never priced below. **v2 (2026-07): breakeven includes
+outbound postage** — `amazon_postage_cost` (£2.80) / `ebay_postage_cost` (£1.55) added to
+cost before grossing up for fees; previously the "floor" lost money after postage.
 
 - **Amazon effective fee = 18.36%** — from `lib/arbitrage/calculations.ts:10-32`:
   `15% referral × 1.02 (DST 2%) × 1.20 (VAT 20%) = 0.1836`. (Already the `markdown_config` default — keep it.)
@@ -118,14 +120,45 @@ Engine reads both rates from `markdown_config` (`amazon_fee_rate`, `ebay_fee_rat
 - `roundToNearestCharm` everywhere (retire `roundUpToNearest99`).
 - **Never increase** price — a suggestion can only HOLD or lower.
 
-### 4.3 Amazon pricing (market-driven, unchanged)
-Step curve by `ageDays`: step1 match Keepa market → step2 undercut `amazon_step2_undercut_pct` → step3 undercut `amazon_step3_undercut_pct` → step4 floor. OVERPRICED when listing > market by `overpriced_threshold_pct`.
+### 4.3 Amazon pricing (markdown v2, 2026-07 — POSITION-FIRST, replaces the age-step curve)
+
+> The original age-step curve (match → −5% → −10% → floor at 150d) priced 258 items at
+> breakeven regardless of market (median 53% of market, some at-market items cut −83%).
+> Replaced by position-first logic; the sweep is a **stale-stock detector, not a repricer**.
+
+**Stable reference, never spot prices.** All market comparisons use the *median daily
+buy-box price* over the trailing `amazon_reference_window_days` (180) from
+`amazon_arbitrage_pricing` snapshots (built by `lib/markdown/amazon-market.service.ts`,
+properly paginated), cross-checked against Keepa's `was_price_180d` (>25% divergence →
+HOLD + manual-review flag). A proposal additionally requires **persistence**: the box below
+our price on ≥`amazon_persistence_min_pct` (75%) of the last
+`amazon_persistence_window_days` (14) snapshots. One-day competitor dips never trigger cuts.
+
+**Position classification per eval (eligible from `amazon_step1_days` = 30):**
+1. **≥ `amazon_exit_days` (365)** → EXIT recommendation (eBay auction / part-out) — never a price action.
+2. **We hold the box, or sole offer** (`buy_box_is_yours` / `total_offer_count ≤ 1`) —
+   price cuts can't win anything; gate on velocity (`sales_rank_drops_90d` from Keepa):
+   - drops < `amazon_min_drops_90d` (1): HOLD (nobody buys this ASIN at any price; wait for exit).
+   - drops ≥ `amazon_healthy_drops_90d` (10): HOLD (it will sell).
+   - in between: demand-test decay — −`amazon_decay_step_pct` (5%) of the anchor (max
+     historical `your_price`) per `amazon_decay_interval_days` (60) from
+     `amazon_decay_start_days` (90), bounded by max(floor, `amazon_decay_floor_pct` (60%) of anchor).
+3. **Competitor holds the box** — tier 1: propose the largest .49/.99 at/below
+   max(stable median, today's box) (matching today's box when the market is rising; never
+   chasing a dip below the median). Tier 2 (−10% off stable) **only** after an APPLIED match
+   ran ≥20 days and we still don't hold the box. If the stable box is below our floor:
+   HOLD + EXIT flag (never chase unprofitable competition).
 
 ### 4.4 eBay pricing (as currently done — decision #3)
 **No new market-data source.** Keep the current signals exactly:
 - **Engagement tier** (HOT/WARM/COOL/COLD from views·watchers·age, per today's `refresh-pricing.ts`) sets how deeply to cut.
 - **Aging-step reductions** off current price (`ebay_step{1,2}_reduction_pct`) per today's `markdown-engine.service.ts`.
 - Diagnosis remains age/engagement-driven (eBay has no market comp; the current "0% vs market" display is cosmetic and retained as-is).
+- **v2 (2026-07):** the 30-day sweep now fetches REAL views via `enrichListingsWithViews`
+  (Analytics API) — previously it used the always-empty `hitCount`, so every listing scored
+  0 views → blanket COLD. Views-per-day is computed over `min(ageDays, 89)` (the analytics
+  window), not full listing age. If the engagement fetch fails, eBay items are skipped that
+  run — never judged blind as COLD.
 - Deep age (≥`ebay_step4_days`) or LOW_DEMAND → **AUCTION** *recommendation* (see §4.6).
 
 > **Noted, not auto-changed:** today's engagement engine still applies the Used `+5%` cut to HOT items (proven on set 6251 → £39.99→£37.99). Because the 90-day relist is now **auto**, this cut would auto-apply. Kept "as currently done" per decision #3, but flagged for Chris to confirm or fix in a follow-up — it is the one behaviour that changes risk profile under auto-relist.

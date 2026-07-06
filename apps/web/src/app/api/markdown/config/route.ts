@@ -25,6 +25,18 @@ const configUpdateSchema = z.object({
   relist_age_days: z.number().int().min(1).max(365).optional(),
   min_change_pct: z.number().min(0).max(50).optional(),
   report_email: z.string().email().nullable().optional(),
+  amazon_postage_cost: z.number().min(0).max(20).optional(),
+  ebay_postage_cost: z.number().min(0).max(20).optional(),
+  amazon_persistence_window_days: z.number().int().min(3).max(60).optional(),
+  amazon_persistence_min_pct: z.number().min(50).max(100).optional(),
+  amazon_reference_window_days: z.number().int().min(30).max(365).optional(),
+  amazon_decay_start_days: z.number().int().min(30).max(365).optional(),
+  amazon_decay_interval_days: z.number().int().min(14).max(180).optional(),
+  amazon_decay_step_pct: z.number().min(1).max(25).optional(),
+  amazon_decay_floor_pct: z.number().min(30).max(95).optional(),
+  amazon_exit_days: z.number().int().min(90).max(1000).optional(),
+  amazon_min_drops_90d: z.number().int().min(0).max(100).optional(),
+  amazon_healthy_drops_90d: z.number().int().min(1).max(1000).optional(),
 });
 
 export async function GET() {
@@ -35,7 +47,7 @@ export async function GET() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
     const { data, error } = await (supabase as any)
       .from('markdown_config')
-      .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, suggest_interval_days, relist_age_days, min_change_pct, report_email, created_at, updated_at')
+      .select('id, user_id, mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, suggest_interval_days, relist_age_days, min_change_pct, report_email, amazon_postage_cost, ebay_postage_cost, amazon_persistence_window_days, amazon_persistence_min_pct, amazon_reference_window_days, amazon_decay_start_days, amazon_decay_interval_days, amazon_decay_step_pct, amazon_decay_floor_pct, amazon_exit_days, amazon_min_drops_90d, amazon_healthy_drops_90d, created_at, updated_at')
       .eq('user_id', user.id)
       .single();
 

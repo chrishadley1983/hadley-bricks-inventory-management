@@ -1,4 +1,4 @@
-export type Diagnosis = 'OVERPRICED' | 'LOW_DEMAND' | 'HOLDING';
+export type Diagnosis = 'OVERPRICED' | 'LOW_DEMAND' | 'HOLDING' | 'EXIT';
 export type ProposedAction = 'MARKDOWN' | 'AUCTION';
 export type ProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'AUTO_APPLIED' | 'FAILED' | 'EXPIRED';
 export type MarkdownMode = 'review' | 'auto';
@@ -35,6 +35,19 @@ export interface MarkdownConfig {
   relist_age_days: number;
   min_change_pct: number;
   report_email: string | null;
+  // Position-first Amazon pricing (markdown v2)
+  amazon_postage_cost: number;
+  ebay_postage_cost: number;
+  amazon_persistence_window_days: number;
+  amazon_persistence_min_pct: number;
+  amazon_reference_window_days: number;
+  amazon_decay_start_days: number;
+  amazon_decay_interval_days: number;
+  amazon_decay_step_pct: number;
+  amazon_decay_floor_pct: number;
+  amazon_exit_days: number;
+  amazon_min_drops_90d: number;
+  amazon_healthy_drops_90d: number;
 }
 
 export interface InventoryItemForMarkdown {
@@ -55,13 +68,6 @@ export interface InventoryItemForMarkdown {
   ebay_listing_id: string | null;
   sales_rank: number | null;
   next_markdown_eval_at: string | null;
-}
-
-export interface PricingData {
-  marketPrice: number | null;       // Keepa 90d avg (Amazon) or eBay avg sold
-  buyBoxPrice: number | null;       // Amazon buy box
-  salesRank: number | null;
-  was_price_90d: number | null;
 }
 
 export interface MarkdownProposal {

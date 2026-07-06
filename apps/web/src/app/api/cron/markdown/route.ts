@@ -6,6 +6,12 @@
  * single pricing engine, rolls each evaluated item's next eval date forward by
  * suggest_interval_days, and emails a digest of suggested changes + auction recs.
  *
+ * Amazon is position-first (markdown v2): market context comes from the daily
+ * amazon_arbitrage_pricing snapshots via buildAmazonMarketContexts (stable
+ * median reference + persistence gate + velocity), not a single spot price.
+ * eBay engagement uses REAL Analytics API views (enrichListingsWithViews) —
+ * if that fetch fails, eBay items are skipped rather than judged blind as COLD.
+ *
  * Nothing is auto-applied here — approvals push live via the proposals routes.
  * The 90-day eBay relist (auto) is a separate cron.
  *
@@ -19,9 +25,14 @@ import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { discordService } from '@/lib/notifications/discord.service';
 import { jobExecutionService, noopHandle } from '@/lib/services/job-execution.service';
 import type { ExecutionHandle } from '@/lib/services/job-execution.service';
-import { computeTarget } from '@/lib/pricing/engine';
+import { computeTarget, type AmazonMarketContext } from '@/lib/pricing/engine';
 import { calculateAgingDays } from '@/lib/markdown/diagnosis.service';
 import { scheduleAuctions } from '@/lib/markdown/auction-scheduler.service';
+import { loadMarkdownConfig } from '@/lib/markdown/config';
+import {
+  buildAmazonMarketContexts,
+  getLastAppliedMatches,
+} from '@/lib/markdown/amazon-market.service';
 import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.service';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { emailService } from '@/lib/email/email.service';
@@ -29,21 +40,13 @@ import type {
   MarkdownDigestSuggestion,
   MarkdownDigestAuction,
 } from '@/lib/email/email.service';
-import type {
-  MarkdownConfig,
-  InventoryItemForMarkdown,
-  PricingData,
-  MarkdownProposal,
-} from '@/lib/markdown/types';
+import type { InventoryItemForMarkdown, MarkdownProposal } from '@/lib/markdown/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const DEFAULT_USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const PAGE_SIZE = 500;
-
-const CONFIG_COLUMNS =
-  'mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, suggest_interval_days, relist_age_days, min_change_pct, report_email';
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
@@ -61,55 +64,24 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient();
     const today = todayISO();
 
-    // 1. Load config
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase deep type inference workaround
-    const { data: configRow, error: configError } = await (supabase as any)
-      .from('markdown_config')
-      .select(CONFIG_COLUMNS)
-      .eq('user_id', DEFAULT_USER_ID)
-      .single();
-
-    if (configError || !configRow) {
+    // 1. Load config (shared loader — same knobs as the 90-day relist)
+    const { found: configFound, config } = await loadMarkdownConfig(supabase, DEFAULT_USER_ID);
+    if (!configFound) {
       await execution.complete({ skipped: 'No config found' }, 200);
       return NextResponse.json({ success: true, skipped: 'No markdown config' });
     }
 
-    const config: MarkdownConfig = {
-      mode: configRow.mode,
-      amazon_step1_days: configRow.amazon_step1_days,
-      amazon_step2_days: configRow.amazon_step2_days,
-      amazon_step3_days: configRow.amazon_step3_days,
-      amazon_step4_days: configRow.amazon_step4_days,
-      amazon_step2_undercut_pct: Number(configRow.amazon_step2_undercut_pct),
-      amazon_step3_undercut_pct: Number(configRow.amazon_step3_undercut_pct),
-      ebay_step1_days: configRow.ebay_step1_days,
-      ebay_step2_days: configRow.ebay_step2_days,
-      ebay_step3_days: configRow.ebay_step3_days,
-      ebay_step4_days: configRow.ebay_step4_days,
-      ebay_step1_reduction_pct: Number(configRow.ebay_step1_reduction_pct),
-      ebay_step2_reduction_pct: Number(configRow.ebay_step2_reduction_pct),
-      amazon_fee_rate: Number(configRow.amazon_fee_rate),
-      ebay_fee_rate: Number(configRow.ebay_fee_rate),
-      overpriced_threshold_pct: Number(configRow.overpriced_threshold_pct),
-      low_demand_sales_rank: configRow.low_demand_sales_rank,
-      auction_default_duration_days: configRow.auction_default_duration_days,
-      auction_max_per_day: configRow.auction_max_per_day,
-      auction_enabled: configRow.auction_enabled,
-      suggest_interval_days: configRow.suggest_interval_days,
-      relist_age_days: configRow.relist_age_days,
-      min_change_pct: Number(configRow.min_change_pct),
-      report_email: configRow.report_email,
-    };
-
-    // 2. Existing pending proposals (avoid duplicates)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingProposals } = await (supabase as any)
-      .from('markdown_proposals')
-      .select('inventory_item_id')
-      .eq('user_id', DEFAULT_USER_ID)
-      .eq('status', 'PENDING');
+    // 2. Existing pending proposals (avoid duplicates) — paginated; a review
+    // backlog over 1,000 PENDING rows must not silently create duplicates.
+    const existingProposals = await fetchAllRecords(supabase, 'markdown_proposals', {
+      select: 'inventory_item_id',
+      eq: { user_id: DEFAULT_USER_ID, status: 'PENDING' },
+      orderBy: { column: 'id', ascending: true },
+    });
     const existingItemIds = new Set(
-      (existingProposals || []).map((p: { inventory_item_id: string }) => p.inventory_item_id)
+      (existingProposals as unknown as { inventory_item_id: string }[]).map(
+        (p) => p.inventory_item_id
+      )
     );
 
     // 3. Fetch LISTED items DUE for evaluation (next_markdown_eval_at <= today or null)
@@ -125,34 +97,34 @@ export async function POST(request: NextRequest) {
       (item) => ({ ...item, sales_rank: null }) as unknown as InventoryItemForMarkdown
     );
 
-    // 4. Amazon pricing (Keepa) for due Amazon items
-    const amazonAsins = dueItems
-      .filter((i) => i.amazon_asin && i.listing_platform?.toLowerCase() === 'amazon')
-      .map((i) => i.amazon_asin!);
-    const pricingMap = new Map<string, PricingData>();
-    if (amazonAsins.length > 0) {
-      for (let i = 0; i < amazonAsins.length; i += 100) {
-        const batch = amazonAsins.slice(i, i + 100);
-        const { data: pricingData } = await supabase
-          .from('amazon_arbitrage_pricing')
-          .select('asin, buy_box_price, was_price_90d, sales_rank')
-          .in('asin', batch);
-        for (const p of pricingData || []) {
-          pricingMap.set(p.asin, {
-            marketPrice: p.was_price_90d ? Number(p.was_price_90d) : null,
-            buyBoxPrice: p.buy_box_price ? Number(p.buy_box_price) : null,
-            salesRank: p.sales_rank,
-            was_price_90d: p.was_price_90d ? Number(p.was_price_90d) : null,
-          });
-        }
-      }
+    // 4. Amazon market context from daily snapshots (stable reference + persistence)
+    const amazonDue = dueItems.filter(
+      (i) => i.amazon_asin && i.listing_platform?.toLowerCase() === 'amazon'
+    );
+    const currentPriceByAsin = new Map<string, number>();
+    for (const item of amazonDue) {
+      if (item.listing_value) currentPriceByAsin.set(item.amazon_asin!, Number(item.listing_value));
     }
+    const marketMap = await buildAmazonMarketContexts(
+      supabase,
+      DEFAULT_USER_ID,
+      Array.from(new Set(amazonDue.map((i) => i.amazon_asin!))),
+      config,
+      currentPriceByAsin
+    );
+    const lastMatchMap = await getLastAppliedMatches(
+      supabase,
+      DEFAULT_USER_ID,
+      amazonDue.map((i) => i.id)
+    );
 
-    // 5. eBay engagement (watchers + views) for due eBay items
+    // 5. eBay engagement (REAL Analytics views + watchers) for due eBay items.
+    // On failure, eBay items are SKIPPED this run — never evaluated blind as COLD.
     const ebayDue = dueItems.filter(
       (i) => i.listing_platform?.toLowerCase() === 'ebay' && i.ebay_listing_id
     );
     const engagementMap = new Map<string, { views: number | null; watchers: number }>();
+    let engagementOk = false;
     if (ebayDue.length > 0) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,20 +132,30 @@ export async function POST(request: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const refreshSvc = new EbayListingRefreshService(supabase as any, DEFAULT_USER_ID, authService);
         const eligible = await refreshSvc.getEligibleListings({ minAge: config.ebay_step1_days });
-        for (const l of eligible) {
+        // Only pay the Analytics API cost for listings actually due this run.
+        const dueListingIds = new Set(ebayDue.map((i) => String(i.ebay_listing_id)));
+        const dueEligible = eligible.filter((l) => dueListingIds.has(String(l.itemId)));
+        // throwOnError: an Analytics failure must NOT silently leave views
+        // null — that would re-create the blind-COLD judgement v2 removes.
+        const withViews = await refreshSvc.enrichListingsWithViews(dueEligible, undefined, {
+          throwOnError: true,
+        });
+        for (const l of withViews) {
           engagementMap.set(String(l.itemId), { views: l.views, watchers: l.watchers });
         }
+        engagementOk = true;
       } catch (err) {
-        console.error('[Markdown] eBay engagement fetch failed (non-blocking):', err);
+        console.error('[Markdown] eBay engagement fetch failed — skipping eBay items this run:', err);
       }
     }
 
     // 6. Evaluate each due item
     const newProposals: MarkdownProposal[] = [];
+    const needsReview: { setNumber: string | null; name: string | null; reason: string }[] = [];
     // Only roll the eval clock for items that reached a genuine decision this run.
     // NOT rolled: items skipped due to an existing pending proposal (so they're
-    // re-surfaced promptly if that proposal is later rejected) and items that
-    // errored (so a transient failure retries next run).
+    // re-surfaced promptly if that proposal is later rejected), items that
+    // errored, and eBay items when the engagement fetch failed (retry next run).
     const idsToRoll: string[] = [];
     let held = 0;
     let skipped = 0;
@@ -201,9 +183,40 @@ export async function POST(request: NextRequest) {
       const platform = (item.listing_platform?.toLowerCase() === 'amazon' ? 'amazon' : 'ebay') as
         | 'amazon'
         | 'ebay';
+
+      // No eBay listing id → engagement data can never arrive; hold and roll
+      // the clock rather than re-surfacing (and skipping) every single day.
+      if (platform === 'ebay' && !item.ebay_listing_id) {
+        held++;
+        idsToRoll.push(item.id);
+        continue;
+      }
+
+      // Engagement fetch failed this run → don't judge eBay listings blind as
+      // COLD; leave the clock untouched so they retry next run.
+      if (platform === 'ebay' && !engagementOk) {
+        skipped++;
+        continue;
+      }
+
       const ageDays = calculateAgingDays(item);
-      const pricing = item.amazon_asin ? pricingMap.get(item.amazon_asin) : undefined;
+      let amazonMarket: AmazonMarketContext | null = null;
+      if (platform === 'amazon' && item.amazon_asin) {
+        const base = marketMap.get(item.amazon_asin);
+        if (base) {
+          amazonMarket = { ...base, lastAppliedMatch: lastMatchMap.get(item.id) ?? null };
+        }
+      }
       const engagement = item.ebay_listing_id ? engagementMap.get(item.ebay_listing_id) : undefined;
+
+      // No engagement data for this listing (unlinked, multi-qty, or not yet
+      // aged into the eligible set) → hold rather than judge blind as COLD.
+      // Young listings would HOLD in the engine anyway; the rest need a human.
+      if (platform === 'ebay' && !engagement) {
+        held++;
+        idsToRoll.push(item.id);
+        continue;
+      }
 
       try {
         const out = computeTarget({
@@ -212,12 +225,15 @@ export async function POST(request: NextRequest) {
           cost: Number(item.cost),
           condition: item.condition,
           ageDays,
-          marketPrice: pricing?.marketPrice ?? null,
-          salesRank: pricing?.salesRank ?? null,
+          amazonMarket,
           views: engagement?.views ?? null,
           watchers: engagement?.watchers ?? null,
           config,
         });
+
+        if (out.needsReview) {
+          needsReview.push({ setNumber: item.set_number, name: item.item_name, reason: out.reason });
+        }
 
         if (out.action === 'HOLD') {
           held++;
@@ -240,7 +256,7 @@ export async function POST(request: NextRequest) {
           current_price: Number(item.listing_value),
           proposed_price: out.targetPrice,
           price_floor: out.floor,
-          market_price: pricing?.marketPrice ?? null,
+          market_price: amazonMarket?.stableBuyBox ?? null,
           proposed_action: out.action === 'AUCTION' ? 'AUCTION' : 'MARKDOWN',
           markdown_step: out.markdownStep,
           aging_days: ageDays,
@@ -249,7 +265,7 @@ export async function POST(request: NextRequest) {
           status: 'PENDING',
           set_number: item.set_number ?? null,
           item_name: item.item_name ?? null,
-          sales_rank: pricing?.salesRank ?? null,
+          sales_rank: amazonMarket?.salesRank ?? null,
         });
       } catch (err) {
         console.error(`[Markdown] Error processing item ${item.id}:`, err);
@@ -257,8 +273,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. Schedule auction end dates
-    const auctionProposals = newProposals.filter((p) => p.proposed_action === 'AUCTION');
+    // 7. Schedule auction end dates (eBay auction recs only — Amazon EXIT recs
+    // are a "move to eBay" suggestion, not a scheduled auction)
+    const auctionProposals = newProposals.filter(
+      (p) => p.proposed_action === 'AUCTION' && p.platform === 'ebay'
+    );
     if (auctionProposals.length > 0) {
       await scheduleAuctions(supabase, DEFAULT_USER_ID, auctionProposals, config.auction_max_per_day);
     }
@@ -324,25 +343,37 @@ export async function POST(request: NextRequest) {
       itemsRolled: idsToRoll.length,
       proposalsCreated: newProposals.length,
       markdownProposals: newProposals.filter((p) => p.proposed_action === 'MARKDOWN').length,
-      auctionProposals: auctionProposals.length,
+      auctionProposals: newProposals.filter((p) => p.proposed_action === 'AUCTION').length,
+      needsReview: needsReview.length,
       held,
       skipped,
       errors,
+      ebayEngagementOk: engagementOk || ebayDue.length === 0,
       emailSent: newProposals.length > 0 && !!config.report_email,
     };
 
     const duration = Date.now() - startTime;
     try {
+      const reviewLines =
+        needsReview.length > 0
+          ? '\n**Needs manual review:**\n' +
+            needsReview
+              .slice(0, 10)
+              .map((r) => `• ${r.setNumber ?? '?'} ${r.name ?? ''} — ${r.reason}`)
+              .join('\n') +
+            (needsReview.length > 10 ? `\n…and ${needsReview.length - 10} more` : '')
+          : '';
       await discordService.sendSyncStatus({
         title: '📉 Markdown Suggestions (30-day)',
         message: [
           `**Evaluated:** ${result.itemsEvaluated} due items`,
-          `**Suggestions:** ${result.markdownProposals} markdowns, ${result.auctionProposals} auctions`,
+          `**Suggestions:** ${result.markdownProposals} markdowns, ${result.auctionProposals} auctions/exits`,
           `**Held:** ${result.held} | Skipped: ${result.skipped} | Errors: ${result.errors}`,
+          `**eBay engagement data:** ${result.ebayEngagementOk ? 'ok' : 'FAILED — eBay items deferred'}`,
           `**Email:** ${result.emailSent ? 'sent' : 'none'}`,
           `**Duration:** ${(duration / 1000).toFixed(1)}s`,
-        ].join('\n'),
-        success: result.errors === 0,
+        ].join('\n') + reviewLines,
+        success: result.errors === 0 && result.ebayEngagementOk,
       });
     } catch {
       console.error('[Markdown] Discord summary failed');
