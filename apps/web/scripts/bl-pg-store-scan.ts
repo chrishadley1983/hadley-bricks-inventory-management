@@ -63,6 +63,7 @@ import {
   toPgCacheRow,
 } from '../src/lib/bricklink/price-guide-cache.service';
 import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
+import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -186,6 +187,7 @@ interface StoreLot {
   qty: number;
   ask: number;
   description: string | null;
+  invComplete: string | null;
 }
 
 class StoreCdp {
@@ -317,6 +319,7 @@ async function scrapeInventory(cdp: StoreCdp, storeId: number): Promise<StoreLot
           qty: Number((it as { invQty: unknown }).invQty),
           ask: nativePrice > 0 ? nativePrice : (Number.isFinite(rawConv) ? rawConv : 0),
           description: (it as { invDescription?: string }).invDescription ?? null,
+          invComplete: (it as { invComplete?: string }).invComplete ?? null,
         });
         added++;
       }
@@ -351,6 +354,7 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
   for (const l of lots) {
     if (l.ask < MIN_ASK) continue;
     if (hasDamageNote(l.description)) continue;
+    if (l.itemType === 'S' && isIncompleteSetListing(l.invComplete, l.description)) continue;
     const ref: PgItemRef = { itemType: l.itemType, itemNo: l.itemNo, colourId: l.itemType === 'P' ? l.colourId : 0 };
     tupleMap.set(pgCacheKey(ref), ref);
   }
@@ -478,6 +482,7 @@ function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>): ScoredLot[]
   for (const lot of lots) {
     if (lot.ask < MIN_ASK) continue;
     if (hasDamageNote(lot.description)) { damageFiltered++; continue; }
+    if (lot.itemType === 'S' && isIncompleteSetListing(lot.invComplete, lot.description)) continue;
     const ref: PgItemRef = { itemType: lot.itemType, itemNo: lot.itemNo, colourId: lot.itemType === 'P' ? lot.colourId : 0 };
     const row = rows.get(pgCacheKey(ref));
     const soldAvg = row ? (lot.cond === 'N' ? row.uk_sold_avg_new : row.uk_sold_avg_used) : null;
