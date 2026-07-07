@@ -38,7 +38,7 @@ describe('toPgCacheRow', () => {
     expect(row.uk_sold_lots_used).toBe(2);
     expect(row.uk_sold_qty_used).toBe(6);
     expect(row.uk_sold_avg_used).toBeCloseTo(0.45, 4);
-    expect(row.uk_sold_median_used).toBeCloseTo(0.5, 4);
+    expect(row.uk_sold_median_used).toBeCloseTo(0.45, 4); // true median of [0.4, 0.5]
   });
 
   it('computes last-2-months recency from month buckets', () => {
