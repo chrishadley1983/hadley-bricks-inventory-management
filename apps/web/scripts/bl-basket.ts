@@ -54,6 +54,7 @@ import { stdin as input, stdout as output } from 'process';
 import WebSocket from 'ws';
 import { BrickLinkClient, BrickLinkApiError } from '../src/lib/bricklink/client';
 import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
+import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
 import type { BrickLinkItemType, BrickLinkPriceGuide } from '../src/lib/bricklink/types';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -763,6 +764,9 @@ function scoreAll(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: numbe
   const filtered = items.filter((it) => {
     if (it.unitPriceGBP < inputs.minAsk) return false;
     if (hasDamageNote(it.description).flag) return false;
+    // Incomplete sets must not be benchmarked against complete-set sold prices
+    // (Gibbo0o lesson, 2026-07-07: "no figure or box" lots carried phantom profit).
+    if (it.itemType === 'S' && isIncompleteSetListing(it.invComplete, it.description)) return false;
     return true;
   });
   // Total list value for allocation of postage
