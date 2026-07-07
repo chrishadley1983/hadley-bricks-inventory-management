@@ -411,6 +411,14 @@ function deferExitToMarket(
   const stable = mkt.stableBuyBox;
   if (!stable || stable <= 0) return null;
 
+  // Same reference cross-check as the competitor path: if the snapshot median
+  // and Keepa disagree, the deferral target is untrustworthy — exit proceeds.
+  const keepaRef = mkt.keepaAvg180 ?? mkt.keepaAvg90;
+  if (keepaRef && keepaRef > 0) {
+    const divergence = (Math.abs(stable - keepaRef) / keepaRef) * 100;
+    if (divergence > REFERENCE_DIVERGENCE_PCT) return null;
+  }
+
   const target = floorToCharm(Math.max(stable, mkt.currentBuyBox ?? 0));
   if (target < floor || currentPrice <= target + 0.01) return null;
 

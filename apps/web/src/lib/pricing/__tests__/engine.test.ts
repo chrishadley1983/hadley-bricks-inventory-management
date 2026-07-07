@@ -202,6 +202,18 @@ describe('Amazon 365d exit', () => {
     expect(out.diagnosis).toBe('EXIT');
   });
 
+  it('does NOT defer when the stable reference diverges >25% from Keepa — exit proceeds', () => {
+    // stable 24 vs keepa 40 → 40% divergence: deferral target untrustworthy.
+    const out = computeTarget(
+      amazon({
+        ageDays: 400,
+        amazonMarket: competitorMarket({ keepaAvg180: 40, keepaAvg90: null }),
+      })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
   it('defers exit to HOLD when we hold the box with healthy demand', () => {
     const out = computeTarget(amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket() }));
     expect(out.action).toBe('HOLD');

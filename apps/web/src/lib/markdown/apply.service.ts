@@ -14,8 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
-import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
-import { UK_MARKETPLACE_ID } from '@/lib/amazon/amazon-sync.types';
+import { queueAmazonRepriceByAsin } from '@/lib/amazon/reprice-queue';
 
 export interface ApplyProposalInput {
   id: string;
@@ -85,64 +84,22 @@ export async function applyProposalLive(
       if (!item.amazon_asin) {
         return { success: false, pushed: false, error: 'No ASIN on item' };
       }
-      // Resolve an active SKU for this ASIN.
-      const { data: listing } = await supabase
-        .from('platform_listings')
-        .select('platform_sku')
-        .eq('user_id', userId)
-        .eq('platform', 'amazon')
-        .eq('platform_item_id', item.amazon_asin)
-        .not('platform_sku', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (!listing?.platform_sku) {
-        return { success: false, pushed: false, error: 'No Amazon SKU found for ASIN' };
-      }
 
       // Queue the price change so it follows the standard two-phase sync
       // (feed submit → price verify → quantity) instead of a direct push.
-      const syncService = new AmazonSyncService(supabase, userId);
-      const productType = await syncService.getProductTypeForAsin(
+      // An Amazon price is per-SKU, so this reprices and queues EVERY in-play
+      // unit of the ASIN — queueing just this unit would make the sync's
+      // quantity step clamp the live stock to 1 (see reprice-queue.ts).
+      const result = await queueAmazonRepriceByAsin(
+        supabase,
+        userId,
         item.amazon_asin,
-        UK_MARKETPLACE_ID
+        newPrice
       );
 
-      // Align the local price first — the sync feed pushes local_price and the
-      // conflict checks compare against inventory_items.listing_value.
-      await supabase
-        .from('inventory_items')
-        .update({ listing_value: newPrice, updated_at: new Date().toISOString() })
-        .eq('id', proposal.inventory_item_id);
-
-      const { error: insertError } = await supabase.from('amazon_sync_queue').insert({
-        user_id: userId,
-        inventory_item_id: proposal.inventory_item_id,
-        sku: item.sku || item.amazon_asin,
-        asin: item.amazon_asin,
-        local_price: newPrice,
-        local_quantity: 1,
-        amazon_sku: listing.platform_sku,
-        amazon_price: null,
-        amazon_quantity: null,
-        product_type: productType,
-        is_new_sku: false,
-      });
-
-      if (insertError) {
-        if (insertError.code === '23505') {
-          // Already queued — update the price on the existing queue row.
-          const { error: updateQueueError } = await supabase
-            .from('amazon_sync_queue')
-            .update({ local_price: newPrice })
-            .eq('inventory_item_id', proposal.inventory_item_id)
-            .eq('user_id', userId);
-          if (updateQueueError) {
-            return { success: false, pushed: false, error: updateQueueError.message };
-          }
-        } else {
-          return { success: false, pushed: false, error: insertError.message };
-        }
+      if (!result.success) {
+        const detail = result.error || result.errors.join('; ') || 'Failed to queue reprice';
+        return { success: false, pushed: false, error: detail };
       }
 
       return { success: true, pushed: false, queued: true };
