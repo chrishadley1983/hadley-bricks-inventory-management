@@ -25,6 +25,7 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { BrickLinkApiError } from '../src/lib/bricklink/client';
+import { bricqerMultiplier } from '../src/lib/bricklink/bricqer-pricing';
 import type { BrickLinkItemType } from '../src/lib/bricklink/types';
 import { createScriptBlContext } from './_bl-client';
 
@@ -105,14 +106,7 @@ function writeJson(p: string, data: unknown) {
   fs.writeFileSync(p, JSON.stringify(data, null, 2));
 }
 
-function bricqerMultiplier(condition: 'N' | 'U', sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// bricqerMultiplier now imported from src/lib/bricklink/bricqer-pricing (canonical v3).
 
 function escapeHtml(s: string | null | undefined): string {
   if (!s) return '';
