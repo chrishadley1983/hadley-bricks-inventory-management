@@ -6,9 +6,33 @@ import {
   computeSideStats,
   recentMonthsQty,
   classifyPgPage,
+  parseItemNameFromTitle,
+  PG_EXTRACT_JS,
   type PgRawRow,
   type PgPageProbe,
 } from '../price-guide-page';
+
+describe('parseItemNameFromTitle', () => {
+  it('extracts the descriptor from live BL titles (hyphen and en-dash)', () => {
+    expect(parseItemNameFromTitle('BrickLink Price Guide - Part 3001 in Black Color')).toBe(
+      'Part 3001 in Black Color',
+    );
+    expect(parseItemNameFromTitle('BrickLink Price Guide – Set 71841-1')).toBe('Set 71841-1');
+  });
+
+  it('returns null for non-PG titles and empty input', () => {
+    expect(parseItemNameFromTitle('BrickLink Page Not Found')).toBeNull();
+    expect(parseItemNameFromTitle('')).toBeNull();
+    expect(parseItemNameFromTitle(null)).toBeNull();
+  });
+
+  it('title parsing stays Node-side — not inside PG_EXTRACT_JS where escapes cook away', () => {
+    // The PR #515 item_name regex lived in the template literal, where source "\s"
+    // cooks to a literal "s" ("Price Guides*" — matched nothing). Guard the pattern.
+    expect(PG_EXTRACT_JS).not.toContain('Price Guide');
+    expect(PG_EXTRACT_JS).not.toContain('itemName');
+  });
+});
 
 describe('normaliseSetNo / buildPgUrl', () => {
   it('appends -1 to bare set numbers (bare sets 404 on catalogPG)', () => {

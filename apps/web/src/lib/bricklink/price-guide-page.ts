@@ -270,12 +270,6 @@ export const PG_EXTRACT_JS = `(function(){
       return tr.children.length === 4 && Array.from(tr.children).every(function(c){ return /Each/.test(c.textContent||''); });
     }) || null;
   }
-  // Item name: the legacy page has no reliable name element (font[size=4] matches the
-  // quadrant header — validation-workflow finding). Derive from the document title,
-  // e.g. "BrickLink Price Guide - Part 3001 in Black Color" -> "Part 3001 in Black Color".
-  var itemName = null;
-  var tm = (document.title || '').match(/Price Guide\s*[-–]\s*(.+)$/i);
-  if (tm && tm[1]) itemName = tm[1].trim().slice(0, 200) || null;
   var foreignNative = false;
   function parseCell(cell) {
     var out = [];
@@ -308,10 +302,24 @@ export const PG_EXTRACT_JS = `(function(){
     textSample: (document.body && document.body.innerText ? document.body.innerText.slice(0, 2000) : ''),
     hasQuadrants: !!quads,
     foreignNativeSeen: foreignNative,
-    itemName: itemName,
     quads: quads
   });
 })()`;
+
+/**
+ * Derive the item descriptor from the page title, Node-side — regexes inside the
+ * PG_EXTRACT_JS template literal lose their backslashes when the string is cooked
+ * (the "\s became s" bug the re-validation workflow caught), so title parsing must
+ * NOT live in the in-page JS. "BrickLink Price Guide - Part 3001 in Black Color"
+ * → "Part 3001 in Black Color".
+ */
+export function parseItemNameFromTitle(title: string | null | undefined): string | null {
+  if (!title) return null;
+  const m = title.match(/Price Guide\s*[-–]\s*(.+)$/i);
+  if (!m || !m[1]) return null;
+  const name = m[1].trim().slice(0, 200);
+  return name || null;
+}
 
 // ---------------------------------------------------------------------------
 // CDP scraper — open once, scrape many, close once
@@ -421,7 +429,7 @@ export class PgScraper {
     await sleep(this.settleMs);
 
     const raw = await this.evaluate<string>(PG_EXTRACT_JS);
-    const page = JSON.parse(raw) as PgPageProbe & { itemName: string | null; quads: PgRawQuadrants | null };
+    const page = JSON.parse(raw) as PgPageProbe & { quads: PgRawQuadrants | null };
 
     const kind = classifyPgPage(page);
     const label = `${item.itemType} ${item.itemNo}${item.itemType === 'P' ? ` c${item.colourId}` : ''}`;
@@ -451,7 +459,7 @@ export class PgScraper {
     const quads = page.quads!;
     return {
       item,
-      itemName: page.itemName,
+      itemName: parseItemNameFromTitle(page.title),
       uk: computeSideStats(quads, true),
       world: computeSideStats(quads, false),
       finalUrl: page.url,
