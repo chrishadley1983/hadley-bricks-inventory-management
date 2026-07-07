@@ -160,11 +160,60 @@ describe('age gating', () => {
 // ============================================================================
 
 describe('Amazon 365d exit', () => {
-  it('recommends eBay auction exit at >= amazon_exit_days regardless of position', () => {
-    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket() }));
+  it('recommends eBay auction exit at >= amazon_exit_days with no market data', () => {
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: null }));
     expect(out.action).toBe('AUCTION');
     expect(out.diagnosis).toBe('EXIT');
     expect(out.targetPrice).toBeNull();
+  });
+
+  it('exits when demand is thin even if a competitor market exists', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 400, amazonMarket: competitorMarket({ salesRankDrops90: 3 }) })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('defers exit: overpriced all along + healthy demand + market clears floor → reprice to market', () => {
+    // current 30 vs stable 24 / current box 24.5 → target floorToCharm(24.5) = 24.49,
+    // floor 15.99, drops 12 >= healthy 10 → the item never had a fair run at market.
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: competitorMarket() }));
+    expect(out.action).toBe('REPRICE');
+    expect(out.diagnosis).toBe('OVERPRICED');
+    expect(out.targetPrice).toBe(24.49);
+    expect(out.reason).toContain('exit deferred');
+  });
+
+  it('does NOT defer when already priced at/below the market — exit proceeds', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 400, currentPrice: 23.99, amazonMarket: competitorMarket() })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('does NOT defer when the stable market sits below our floor — exit proceeds', () => {
+    // cost 25 → floor 34.49 > market target 24.49: cannot compete profitably.
+    const out = computeTarget(
+      amazon({ ageDays: 400, currentPrice: 40, cost: 25, amazonMarket: competitorMarket() })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('defers exit to HOLD when we hold the box with healthy demand', () => {
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket() }));
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('exit deferred');
+  });
+
+  it('exits when we hold the box but demand is thin', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket({ salesRankDrops90: 2 }) })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
   });
 });
 

@@ -204,8 +204,13 @@ export function computeTarget(input: EngineInput): EngineOutput {
 function computeAmazon(input: EngineInput, floor: number): EngineOutput {
   const { currentPrice, ageDays, config, amazonMarket: mkt } = input;
 
-  // 365d exit: stop cutting, get it off Amazon.
+  // 365d exit: stop cutting, get it off Amazon — but only once the item has
+  // had a fair run at the market price. An item that sat overpriced the whole
+  // year, on an ASIN with healthy demand at a price that clears our floor,
+  // gets repriced to market instead (exit deferred).
   if (ageDays >= config.amazon_exit_days) {
+    const deferred = deferExitToMarket(currentPrice, ageDays, config, mkt, floor);
+    if (deferred) return deferred;
     return {
       action: 'AUCTION',
       targetPrice: null,
@@ -370,6 +375,54 @@ function computeAmazonCompetitorHoldsBox(
     : `£${currentPrice.toFixed(2)} vs stable market £${stable.toFixed(2)} (box below us ${persistencePct.toFixed(0)}% of last ${mkt.persistenceSampleSize} snapshots, ${ageDays}d listed)`;
 
   return finalize(raw, currentPrice, floor, 'OVERPRICED', reason, null, escalate ? 2 : 1);
+}
+
+/**
+ * Exit deferral: past amazon_exit_days, don't recommend auction while the ASIN
+ * still sells at a price we can profitably charge — the aging is then a symptom
+ * of mispricing, not dead demand.
+ *  - Competitor holds the box, demand healthy, stable market clears our floor,
+ *    and we're still priced above it → reprice to market (the item never had a
+ *    fair run at the market price).
+ *  - We hold the box (or are the sole offer) with healthy demand → hold; the
+ *    item is competitively priced and will sell.
+ * Returns null when the exit should proceed.
+ */
+function deferExitToMarket(
+  currentPrice: number,
+  ageDays: number,
+  config: MarkdownConfig,
+  mkt: AmazonMarketContext | null,
+  floor: number
+): EngineOutput | null {
+  if (!mkt) return null;
+  const drops = mkt.salesRankDrops90;
+  if (drops === null || drops < config.amazon_healthy_drops_90d) return null;
+
+  const weAreTheMarket =
+    mkt.buyBoxIsYours === true || (mkt.totalOfferCount !== null && mkt.totalOfferCount <= 1);
+  if (weAreTheMarket) {
+    return hold(
+      floor,
+      `Listed ${ageDays}d but demand healthy (${drops} drops/90d) and we hold the box — exit deferred, holding`
+    );
+  }
+
+  const stable = mkt.stableBuyBox;
+  if (!stable || stable <= 0) return null;
+
+  const target = floorToCharm(Math.max(stable, mkt.currentBuyBox ?? 0));
+  if (target < floor || currentPrice <= target + 0.01) return null;
+
+  return finalize(
+    target,
+    currentPrice,
+    floor,
+    'OVERPRICED',
+    `Listed ${ageDays}d but never tested at market — exit deferred: demand healthy (${drops} drops/90d), stable market £${stable.toFixed(2)} clears floor £${floor.toFixed(2)}`,
+    null,
+    4
+  );
 }
 
 /** Escalation: an applied match ran ≥20d, our price still sits at/below it, and we still don't own the box. */

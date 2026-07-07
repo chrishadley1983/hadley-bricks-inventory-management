@@ -37,32 +37,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Also get summary counts
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: summaryData } = await (supabase as any)
-      .from('markdown_proposals')
-      .select('status, proposed_action')
-      .eq('user_id', user.id);
-
-    const summary = {
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-      autoApplied: 0,
-      failed: 0,
-      markdowns: 0,
-      auctions: 0,
+    // Summary counts via head-count queries — a row-select here silently caps
+    // at Supabase's 1,000-row limit and undercounts once the table grows.
+    const countWhere = async (column: string, value: string): Promise<number> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { count: n } = await (supabase as any)
+        .from('markdown_proposals')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq(column, value);
+      return n || 0;
     };
 
-    for (const row of summaryData || []) {
-      if (row.status === 'PENDING') summary.pending++;
-      else if (row.status === 'APPROVED') summary.approved++;
-      else if (row.status === 'REJECTED') summary.rejected++;
-      else if (row.status === 'AUTO_APPLIED') summary.autoApplied++;
-      else if (row.status === 'FAILED') summary.failed++;
-      if (row.proposed_action === 'AUCTION') summary.auctions++;
-      else summary.markdowns++;
-    }
+    const [pending, approved, rejected, autoApplied, failed, auctions, markdowns] =
+      await Promise.all([
+        countWhere('status', 'PENDING'),
+        countWhere('status', 'APPROVED'),
+        countWhere('status', 'REJECTED'),
+        countWhere('status', 'AUTO_APPLIED'),
+        countWhere('status', 'FAILED'),
+        countWhere('proposed_action', 'AUCTION'),
+        countWhere('proposed_action', 'MARKDOWN'),
+      ]);
+
+    const summary = { pending, approved, rejected, autoApplied, failed, markdowns, auctions };
 
     return NextResponse.json({
       data,

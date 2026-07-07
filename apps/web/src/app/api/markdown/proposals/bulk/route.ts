@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient();
-    const results = { approved: 0, rejected: 0, failed: 0, errors: [] as string[] };
+    const results = { approved: 0, rejected: 0, failed: 0, queued: 0, errors: [] as string[] };
 
     for (const { id, action } of parsed.data.actions) {
       try {
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', id);
           results.approved++;
+          if (applyResult.queued) results.queued++;
         } else {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase as any)

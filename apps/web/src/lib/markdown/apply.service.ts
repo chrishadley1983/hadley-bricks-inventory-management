@@ -1,18 +1,21 @@
 /**
  * Markdown Apply Service
  *
- * Applies an approved markdown proposal by pushing the new price LIVE to the
- * platform (eBay ReviseFixedPriceItem / Amazon SP-API), then aligning the DB.
+ * Applies an approved markdown proposal:
+ * - eBay: pushes the new price LIVE via ReviseFixedPriceItem, then aligns the DB.
+ * - Amazon: queues the price change in amazon_sync_queue so it follows the
+ *   standard two-phase sync process (feed submit → price verify → quantity),
+ *   with its verification grace and failure emails — no direct SP-API push.
  *
- * This fixes the previous DB-only behaviour where approving an eBay markdown
- * never reached the live listing. See docs/features/unified-markdown/design.md §10.
+ * See docs/features/unified-markdown/design.md §10.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
-import { RepricingService } from '@/lib/repricing/repricing.service';
+import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
+import { UK_MARKETPLACE_ID } from '@/lib/amazon/amazon-sync.types';
 
 export interface ApplyProposalInput {
   id: string;
@@ -24,7 +27,10 @@ export interface ApplyProposalInput {
 
 export interface ApplyResult {
   success: boolean;
+  /** Price is live on the platform (eBay revise succeeded). */
   pushed: boolean;
+  /** Price change queued in amazon_sync_queue awaiting the two-phase sync. */
+  queued?: boolean;
   error?: string;
 }
 
@@ -45,7 +51,7 @@ export async function applyProposalLive(
   // Look up platform identifiers for the inventory item.
   const { data: item, error: itemErr } = await supabase
     .from('inventory_items')
-    .select('id, ebay_listing_id, amazon_asin, listing_platform')
+    .select('id, sku, ebay_listing_id, amazon_asin, listing_platform')
     .eq('id', proposal.inventory_item_id)
     .single();
 
@@ -93,11 +99,53 @@ export async function applyProposalLive(
       if (!listing?.platform_sku) {
         return { success: false, pushed: false, error: 'No Amazon SKU found for ASIN' };
       }
-      const repricing = new RepricingService(supabase, userId);
-      const pushResult = await repricing.pushPrice(listing.platform_sku, newPrice);
-      if (!pushResult.success) {
-        return { success: false, pushed: false, error: pushResult.message };
+
+      // Queue the price change so it follows the standard two-phase sync
+      // (feed submit → price verify → quantity) instead of a direct push.
+      const syncService = new AmazonSyncService(supabase, userId);
+      const productType = await syncService.getProductTypeForAsin(
+        item.amazon_asin,
+        UK_MARKETPLACE_ID
+      );
+
+      // Align the local price first — the sync feed pushes local_price and the
+      // conflict checks compare against inventory_items.listing_value.
+      await supabase
+        .from('inventory_items')
+        .update({ listing_value: newPrice, updated_at: new Date().toISOString() })
+        .eq('id', proposal.inventory_item_id);
+
+      const { error: insertError } = await supabase.from('amazon_sync_queue').insert({
+        user_id: userId,
+        inventory_item_id: proposal.inventory_item_id,
+        sku: item.sku || item.amazon_asin,
+        asin: item.amazon_asin,
+        local_price: newPrice,
+        local_quantity: 1,
+        amazon_sku: listing.platform_sku,
+        amazon_price: null,
+        amazon_quantity: null,
+        product_type: productType,
+        is_new_sku: false,
+      });
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          // Already queued — update the price on the existing queue row.
+          const { error: updateQueueError } = await supabase
+            .from('amazon_sync_queue')
+            .update({ local_price: newPrice })
+            .eq('inventory_item_id', proposal.inventory_item_id)
+            .eq('user_id', userId);
+          if (updateQueueError) {
+            return { success: false, pushed: false, error: updateQueueError.message };
+          }
+        } else {
+          return { success: false, pushed: false, error: insertError.message };
+        }
       }
+
+      return { success: true, pushed: false, queued: true };
     } else {
       return { success: false, pushed: false, error: `Unsupported platform: ${platform}` };
     }

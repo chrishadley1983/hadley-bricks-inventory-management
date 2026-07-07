@@ -146,9 +146,14 @@ function useApproveProposal() {
       if (!res.ok) throw new Error('Failed to approve');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['markdown'] });
-      toast({ title: 'Proposal approved', description: 'Price updated successfully' });
+      toast({
+        title: 'Proposal approved',
+        description: data.queuedForSync
+          ? 'Price change queued — push it live from the Amazon Sync page'
+          : 'Price updated successfully',
+      });
     },
     onError: (err) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -192,7 +197,7 @@ function useBulkAction() {
       queryClient.invalidateQueries({ queryKey: ['markdown'] });
       toast({
         title: 'Bulk action complete',
-        description: `Approved: ${data.approved}, Rejected: ${data.rejected}${data.failed ? `, Failed: ${data.failed}` : ''}`,
+        description: `Approved: ${data.approved}, Rejected: ${data.rejected}${data.failed ? `, Failed: ${data.failed}` : ''}${data.queued ? ` — ${data.queued} queued for Amazon sync` : ''}`,
       });
     },
     onError: (err) => {
@@ -291,6 +296,17 @@ function PlatformBadge({ platform }: { platform: string }) {
   );
 }
 
+const DIAGNOSIS_EXPLANATIONS: Record<string, string> = {
+  OVERPRICED:
+    'The market has been selling below our price persistently. The proposed price moves us to the stable market level (median of recent buy-box / sold prices) while staying above our cost floor.',
+  LOW_DEMAND:
+    'Demand for this item is thin. The price is stepped down gradually from its anchor to test whether a lower price finds a buyer — never below the cost floor.',
+  EXIT:
+    'This listing has aged past the exit threshold, or the market has moved below our cost floor, so further price cuts are unlikely to help. The recommendation is to exit via eBay auction and recycle the capital.',
+  HOLDING:
+    'No price change is recommended — the price is competitive, demand is healthy, or a cut would not improve the chance of a sale.',
+};
+
 // ---- Main Page ----
 
 export default function MarkdownPage() {
@@ -303,6 +319,7 @@ export default function MarkdownPage() {
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
 
   const { data: proposalData, isLoading } = useProposals(page, filters);
   const { data: config } = useConfig();
@@ -443,7 +460,7 @@ export default function MarkdownPage() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -452,16 +469,18 @@ export default function MarkdownPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{summary.pending}</div>
+              <p className="text-xs text-muted-foreground mt-1">Awaiting your decision</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Auto-Applied
+                Auto-Relisted
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{summary.autoApplied}</div>
+              <p className="text-xs text-muted-foreground mt-1">eBay 90-day relists (all time)</p>
             </CardContent>
           </Card>
           <Card>
@@ -472,6 +491,7 @@ export default function MarkdownPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{summary.approved}</div>
+              <p className="text-xs text-muted-foreground mt-1">Approved by you (all time)</p>
             </CardContent>
           </Card>
           <Card>
@@ -482,6 +502,20 @@ export default function MarkdownPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-600">{summary.rejected}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Incl. stale proposals superseded by scans
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Failed
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{summary.failed}</div>
+              <p className="text-xs text-muted-foreground mt-1">Push errors — retry or reject</p>
             </CardContent>
           </Card>
         </div>
@@ -649,8 +683,12 @@ export default function MarkdownPage() {
                     : null;
 
                   return (
-                    <TableRow key={p.id}>
-                      <TableCell>
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer"
+                      onClick={() => setDetailProposal(p)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {p.status === 'PENDING' && (
                           <Checkbox
                             checked={selected.has(p.id)}
@@ -706,7 +744,7 @@ export default function MarkdownPage() {
                       <TableCell>
                         <StatusBadge status={p.status} />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         {p.status === 'PENDING' && (
                           <div className="flex gap-1 justify-end">
                             <Button
@@ -770,6 +808,161 @@ export default function MarkdownPage() {
           </div>
         </div>
       )}
+
+      {/* Proposal Detail Dialog */}
+      <Dialog
+        open={detailProposal !== null}
+        onOpenChange={(open: boolean) => {
+          if (!open) setDetailProposal(null);
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          {detailProposal && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {detailProposal.set_number && (
+                    <span className="text-muted-foreground mr-2">{detailProposal.set_number}</span>
+                  )}
+                  {detailProposal.item_name || 'Unknown item'}
+                </DialogTitle>
+                <DialogDescription asChild>
+                  <div className="flex items-center gap-2 pt-1">
+                    <PlatformBadge platform={detailProposal.platform} />
+                    <DiagnosisBadge diagnosis={detailProposal.diagnosis} />
+                    <ActionBadge action={detailProposal.proposed_action} />
+                    <StatusBadge status={detailProposal.status} />
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 pt-2">
+                {/* Engine rationale — full, untruncated */}
+                <div>
+                  <Label className="text-sm font-medium">Why this was proposed</Label>
+                  <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                    {detailProposal.diagnosis_reason}
+                  </p>
+                  {DIAGNOSIS_EXPLANATIONS[detailProposal.diagnosis] && (
+                    <p className="text-xs text-muted-foreground mt-2 border-l-2 pl-2">
+                      {DIAGNOSIS_EXPLANATIONS[detailProposal.diagnosis]}
+                    </p>
+                  )}
+                </div>
+
+                {/* Prices */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Current price</span>
+                    <p className="font-mono font-medium">£{detailProposal.current_price.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Proposed</span>
+                    <p className="font-mono font-medium">
+                      {detailProposal.proposed_price != null ? (
+                        <span className="text-green-700">
+                          £{detailProposal.proposed_price.toFixed(2)}{' '}
+                          <span className="text-red-600 text-xs">
+                            (−£{(detailProposal.current_price - detailProposal.proposed_price).toFixed(2)},{' '}
+                            {(
+                              ((detailProposal.current_price - detailProposal.proposed_price) /
+                                detailProposal.current_price) *
+                              100
+                            ).toFixed(0)}
+                            %)
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-purple-700">eBay auction exit</span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Cost floor</span>
+                    <p className="font-mono font-medium">£{detailProposal.price_floor.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Market reference</span>
+                    <p className="font-mono font-medium">
+                      {detailProposal.market_price != null
+                        ? `£${detailProposal.market_price.toFixed(2)}`
+                        : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Days listed</span>
+                    <p className="font-medium">{detailProposal.aging_days}d</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Sales rank</span>
+                    <p className="font-medium">
+                      {detailProposal.sales_rank != null
+                        ? detailProposal.sales_rank.toLocaleString()
+                        : '—'}
+                    </p>
+                  </div>
+                  {detailProposal.proposed_action === 'AUCTION' && detailProposal.auction_end_date && (
+                    <div>
+                      <span className="text-muted-foreground">Auction ends</span>
+                      <p className="font-medium">
+                        {new Date(detailProposal.auction_end_date).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Proposed on</span>
+                    <p className="font-medium">
+                      {new Date(detailProposal.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                {detailProposal.status === 'FAILED' && detailProposal.error_message && (
+                  <div className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">
+                    <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />
+                    {detailProposal.error_message}
+                  </div>
+                )}
+
+                {detailProposal.status === 'PENDING' && (
+                  <div className="flex gap-2 justify-end pt-2">
+                    <Button
+                      variant="outline"
+                      className="text-red-700"
+                      onClick={() => {
+                        rejectMutation.mutate(detailProposal.id);
+                        setDetailProposal(null);
+                      }}
+                      disabled={rejectMutation.isPending}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                    <Button
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => {
+                        approveMutation.mutate(detailProposal.id);
+                        setDetailProposal(null);
+                      }}
+                      disabled={approveMutation.isPending}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
