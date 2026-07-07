@@ -59,6 +59,21 @@ describe('computeQuadrantStats', () => {
     expect(uk.median).toBe(0.3); // sorted [0.1, 0.3, 0.5] → middle
   });
 
+  it('averages the two middles on even counts (upper-middle biased 2-lot quadrants to max)', () => {
+    const two: PgRawRow[] = [
+      ['July 2026', 1, 1.0, false],
+      ['July 2026', 1, 100.0, false],
+    ];
+    expect(computeQuadrantStats(two, true).median).toBeCloseTo(50.5, 4);
+    const four: PgRawRow[] = [
+      [null, 1, 0.1, false],
+      [null, 1, 0.2, false],
+      [null, 1, 0.3, false],
+      [null, 1, 0.4, false],
+    ];
+    expect(computeQuadrantStats(four, true).median).toBeCloseTo(0.25, 4);
+  });
+
   it('buckets by month with per-month lots/qty/avg', () => {
     const uk = computeQuadrantStats(rows, true);
     expect(uk.byMonth['July 2026']).toEqual({ lots: 1, qty: 2, avg: 0.1 });
@@ -132,6 +147,23 @@ describe('classifyPgPage', () => {
 
   it('noData for a rendered PG shell with no transaction tables (old set, never sold)', () => {
     expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 1970 })).toBe('noData');
+  });
+
+  it('transient (not noData) for an undersized quadrantless page — slow load must retry, never sentinel', () => {
+    expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 500 })).toBe('transient');
+  });
+
+  it('captcha outranks the small-body block heuristic', () => {
+    expect(
+      classifyPgPage({
+        ...base,
+        url: 'https://www.bricklink.com/somepage',
+        title: 'Access Denied',
+        textLen: 120,
+        hasQuadrants: false,
+        textSample: 'Please verify you are a human.',
+      }),
+    ).toBe('captcha');
   });
 
   it('block for oops.asp / err=403 / near-empty non-PG body', () => {

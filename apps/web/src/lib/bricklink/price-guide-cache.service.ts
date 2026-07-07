@@ -51,7 +51,8 @@ export interface PgCacheRow {
   fetched_at: string;
 }
 
-export const PG_PARSE_VERSION = 1;
+// v2 (2026-07-07): true median on even counts; item_name from title; noData size guard.
+export const PG_PARSE_VERSION = 2;
 
 export function pgCacheKey(item: { itemType: PgItemType; itemNo: string; colourId: number }): string {
   return `${item.itemType}:${item.itemNo}:${item.colourId}`;

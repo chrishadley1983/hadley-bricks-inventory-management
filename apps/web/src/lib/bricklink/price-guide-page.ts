@@ -163,7 +163,10 @@ export function computeQuadrantStats(rows: PgRawRow[], ukOnly: boolean): PgQuadr
     }
   }
   prices.sort((a, b) => a - b);
-  const median = prices[Math.floor(prices.length / 2)];
+  // True median: average the two middles on even counts (upper-middle alone biases
+  // 2-lot quadrants to their max — caught by the post-merge validation workflow).
+  const mid = Math.floor(prices.length / 2);
+  const median = prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
   const round4 = (n: number) => +n.toFixed(4);
   const months: Record<string, PgMonthBucket> = {};
   for (const [m, b] of Object.entries(byMonth)) {
@@ -225,14 +228,18 @@ export interface PgPageProbe {
 
 export function classifyPgPage(p: PgPageProbe): PgPageKind {
   if (/notFound\.asp|catalogPG\.asp\?err=N/i.test(p.url)) return 'notFound';
-  if (/oops\.asp|err=403/i.test(p.url) || (p.textLen < 200 && !/Price Guide/i.test(p.title))) return 'block';
+  // Captcha must outrank the small-body block heuristic — a challenge page is small but
+  // demands a full stop, not a batch pause (validation-workflow finding).
   if (/captcha|unusual traffic|are you a human|verify you are/i.test(p.textSample)) return 'captcha';
+  if (/oops\.asp|err=403/i.test(p.url) || (p.textLen < 200 && !/Price Guide/i.test(p.title))) return 'block';
   if (/sign in|log in to|please log in/i.test(p.textSample) && /login|identity\.lego/i.test(p.url)) return 'login';
   if (!/Price Guide/i.test(p.title)) return 'transient';
   if (p.foreignNativeSeen) return 'wrongCurrency';
   // A rendered Price Guide page with no transaction tables = item never sold/listed
   // anywhere (small shell page, ~2KB). Genuine no-data, NOT a block (learned on old sets).
-  if (!p.hasQuadrants) return 'noData';
+  // Guard against partially-rendered pages: a real PG shell carries the full BL header/footer
+  // (~1.7KB+ innerText); anything smaller is a slow load — retry, never a permanent no-data.
+  if (!p.hasQuadrants) return p.textLen >= 800 ? 'noData' : 'transient';
   return 'ok';
 }
 
@@ -263,9 +270,12 @@ export const PG_EXTRACT_JS = `(function(){
       return tr.children.length === 4 && Array.from(tr.children).every(function(c){ return /Each/.test(c.textContent||''); });
     }) || null;
   }
+  // Item name: the legacy page has no reliable name element (font[size=4] matches the
+  // quadrant header — validation-workflow finding). Derive from the document title,
+  // e.g. "BrickLink Price Guide - Part 3001 in Black Color" -> "Part 3001 in Black Color".
   var itemName = null;
-  var h = document.querySelector('h1, .catalog-item__name, font[size="4"]');
-  if (h) itemName = (h.textContent||'').trim().slice(0, 200) || null;
+  var tm = (document.title || '').match(/Price Guide\s*[-–]\s*(.+)$/i);
+  if (tm && tm[1]) itemName = tm[1].trim().slice(0, 200) || null;
   var foreignNative = false;
   function parseCell(cell) {
     var out = [];
