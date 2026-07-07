@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { BrickLinkClient } from '../src/lib/bricklink/client';
+import { bricqerMultiplier } from '../src/lib/bricklink/bricqer-pricing';
 import type { BrickLinkPriceGuide, BrickLinkItemType } from '../src/lib/bricklink/types';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -80,14 +81,7 @@ interface ScrapedItem {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// bricqerMultiplier now imported from src/lib/bricklink/bricqer-pricing (canonical v3).
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;

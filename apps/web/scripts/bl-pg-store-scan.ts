@@ -62,6 +62,7 @@ import {
   type PgCacheRow,
   toPgCacheRow,
 } from '../src/lib/bricklink/price-guide-cache.service';
+import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -167,15 +168,8 @@ function hasDamageNote(desc: string | null | undefined): boolean {
   return false;
 }
 
-// Bricqer auto-pricing multipliers (2026-05-11 values — see bl-basket / memory).
-function bricqerMultiplier(condition: 'N' | 'U', sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.10 : 0.85;
-  if (sellThru >= 1) return 1.40;
-  if (sellThru >= 0.75) return 1.25;
-  if (sellThru >= 0.5) return 1.15;
-  if (sellThru >= 0.25) return 0.93;
-  return 0.90;
-}
+// Bricqer auto-pricing — canonical implementation imported from
+// src/lib/bricklink/bricqer-pricing.ts (v3, 2026-07-07: U STR>=1.5 → 1.80 + £0.0699 floor).
 
 // ---------------------------------------------------------------------------
 // Store inventory scrape (paced AJAX via CDP, mirrors bl-basket phase 2)
@@ -490,7 +484,7 @@ function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>): ScoredLot[]
     const soldQty = row ? (lot.cond === 'N' ? row.uk_sold_qty_new : row.uk_sold_qty_used) : 0;
     const stockQty = row ? (lot.cond === 'N' ? row.uk_stock_qty_new : row.uk_stock_qty_used) : 0;
     const str = stockQty > 0 ? soldQty / stockQty : 0;
-    const list = soldAvg != null ? soldAvg * bricqerMultiplier(lot.cond, str) : 0;
+    const list = bricqerListPrice(soldAvg, lot.cond, str) ?? 0;
     pre.push({ lot, row, list, str });
   }
   void damageFiltered;
