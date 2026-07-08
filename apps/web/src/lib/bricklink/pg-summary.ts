@@ -106,11 +106,16 @@ function price(s: string): number | null {
 
 /**
  * Parse a `priceGuideSummary.asp?ajView=Y` HTML snippet into the four quadrants
- * (Past 6 Months Sales × New/Used, Current Items × New/Used). Returns `null` when
- * the snippet doesn't contain a recognisable 4-quadrant structure (unexpected
- * markup / block page / etc.) — callers should treat that as a parse failure, not
- * a genuine "no data" result (a genuine empty item still yields 4 zeroed quads via
- * the "unavailable" branch below).
+ * (Past 6 Months Sales × New/Used, Current Items × New/Used).
+ *
+ * BL OMITS a condition's row entirely when it has no activity — a set that only
+ * sold New in 6 months renders no "Used:" row under the sold section at all
+ * (discovered 2026-07-08: the POC's demand-exactly-4-rows version misread every
+ * such page as a block/challenge, which cost a night of false "Cloudflare" theory).
+ * So rows are assigned by (section, condition) and missing rows default to the
+ * empty quad. Returns `null` only when NEITHER section marker is present — a
+ * genuinely unrecognisable page (block page, unexpected markup), which callers
+ * should treat as a fetch failure rather than "no data".
  */
 export function parsePgSummarySnippet(html: string): PgSummaryQuads | null {
   if (!html) return null;
@@ -121,35 +126,44 @@ export function parsePgSummarySnippet(html: string): PgSummaryQuads | null {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const quads: PgSummaryQuad[] = [];
-  let section = 0;
-  for (let i = 0; i < cells.length && quads.length < 4; i++) {
+  const found: Partial<PgSummaryQuads> = {};
+  let section: 'sold' | 'stock' | null = null;
+  let sawSectionMarker = false;
+  for (let i = 0; i < cells.length; i++) {
     if (/Past 6 Months Sales/i.test(cells[i])) {
-      section = 1;
+      section = 'sold';
+      sawSectionMarker = true;
       continue;
     }
     if (/Current Items/i.test(cells[i])) {
-      section = 2;
+      section = 'stock';
+      sawSectionMarker = true;
       continue;
     }
-    if (section > 0 && /^(New|Used):?$/i.test(cells[i])) {
+    if (section && /^(New|Used):?$/i.test(cells[i])) {
+      const key: keyof PgSummaryQuads = `${section === 'sold' ? 'sold' : 'stock'}${/^New/i.test(cells[i]) ? 'N' : 'U'}` as keyof PgSummaryQuads;
       const j = i + 1;
       if (j >= cells.length || /unavailable/i.test(cells[j]) || isNaN(num(cells[j]))) {
-        quads.push({ ...EMPTY_PG_SUMMARY_QUAD });
+        found[key] = { ...EMPTY_PG_SUMMARY_QUAD };
         continue;
       }
-      quads.push({
+      found[key] = {
         lots: num(cells[j]),
         qty: num(cells[j + 1]),
         min: price(cells[j + 2]),
         avg: price(cells[j + 3]),
         qavg: price(cells[j + 4]),
         max: price(cells[j + 5]),
-      });
+      };
     }
   }
-  if (quads.length !== 4) return null;
-  return { soldN: quads[0], soldU: quads[1], stockN: quads[2], stockU: quads[3] };
+  if (!sawSectionMarker) return null;
+  return {
+    soldN: found.soldN ?? { ...EMPTY_PG_SUMMARY_QUAD },
+    soldU: found.soldU ?? { ...EMPTY_PG_SUMMARY_QUAD },
+    stockN: found.stockN ?? { ...EMPTY_PG_SUMMARY_QUAD },
+    stockU: found.stockU ?? { ...EMPTY_PG_SUMMARY_QUAD },
+  };
 }
 
 // ---------------------------------------------------------------------------

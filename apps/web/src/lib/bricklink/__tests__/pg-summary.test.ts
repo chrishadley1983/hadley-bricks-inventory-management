@@ -54,6 +54,41 @@ describe('parsePgSummarySnippet', () => {
     });
   });
 
+  it('handles OMITTED condition rows — BL renders no row at all for a condition with no activity (real 71486-1 shape, 2026-07-08)', () => {
+    // Derived from the live response that the POC parser misread as a challenge:
+    // sold section has ONLY a New row; stock section has both.
+    const html = `
+      <TABLE><TR><TD>Total Lots:</TD><TD>Total Qty:</TD><TD>Lowest:</TD><TD>Avg:</TD><TD>By Qty Avg:</TD><TD>Highest:</TD></TR>
+      <TR><TD>Past 6 Months Sales</TD></TR>
+      <TR><TD>New:</TD><TD>5</TD><TD>5</TD><TD>GBP 105.75</TD><TD>GBP 122.79</TD><TD>GBP 122.79</TD><TD>GBP 137.25</TD></TR>
+      <TR><TD>Current Items for Sale</TD></TR>
+      <TR><TD>New:</TD><TD>37</TD><TD>77</TD><TD>GBP 109.38</TD><TD>GBP 153.91</TD><TD>GBP 151.25</TD><TD>GBP 304.66</TD></TR>
+      <TR><TD>Used:</TD><TD>1</TD><TD>1</TD><TD>GBP 149.23</TD><TD>GBP 149.23</TD><TD>GBP 149.23</TD><TD>GBP 149.23</TD></TR>
+      </TABLE>
+    `;
+    const quads = parsePgSummarySnippet(html);
+    expect(quads).not.toBeNull();
+    expect(quads!.soldN).toEqual({ lots: 5, qty: 5, min: 105.75, avg: 122.79, qavg: 122.79, max: 137.25 });
+    expect(quads!.soldU).toEqual({ lots: 0, qty: 0, min: null, avg: null, qavg: null, max: null });
+    expect(quads!.stockN.lots).toBe(37);
+    expect(quads!.stockU).toEqual({ lots: 1, qty: 1, min: 149.23, avg: 149.23, qavg: 149.23, max: 149.23 });
+  });
+
+  it('handles a section rendered with no rows at all (item with sales but zero current stock)', () => {
+    const html = `
+      <table>
+        <tr><td>Past 6 Months Sales</td></tr>
+        <tr><td>New:</td><td>4</td><td>8</td><td>0.10</td><td>0.12</td><td>0.12</td><td>0.15</td></tr>
+        <tr><td>Current Items For Sale</td></tr>
+      </table>
+    `;
+    const quads = parsePgSummarySnippet(html);
+    expect(quads).not.toBeNull();
+    expect(quads!.soldN.lots).toBe(4);
+    expect(quads!.stockN.lots).toBe(0);
+    expect(quads!.stockU.lots).toBe(0);
+  });
+
   it('mixes available and unavailable quadrants on the same item', () => {
     const html = `
       <table>
@@ -77,14 +112,23 @@ describe('parsePgSummarySnippet', () => {
     expect(parsePgSummarySnippet('<html><body>not a price guide</body></html>')).toBeNull();
   });
 
-  it('returns null when fewer than 4 quadrant rows are present (block/challenge page)', () => {
+  it('parses a snippet with a single condition row — fewer than 4 rows is a VALID page shape, not a block (2026-07-08 fix)', () => {
     const html = `
       <table>
         <tr><td>Past 6 Months Sales</td></tr>
         <tr><td>New:</td><td>1</td><td>1</td><td>0.10</td><td>0.10</td><td>0.10</td><td>0.10</td></tr>
       </table>
     `;
-    expect(parsePgSummarySnippet(html)).toBeNull();
+    const quads = parsePgSummarySnippet(html);
+    expect(quads).not.toBeNull();
+    expect(quads!.soldN.lots).toBe(1);
+    expect(quads!.soldU.lots).toBe(0);
+    expect(quads!.stockN.lots).toBe(0);
+  });
+
+  it('returns null when neither section marker is present (block/challenge/unexpected page)', () => {
+    expect(parsePgSummarySnippet('<html><body>Access denied — please verify you are human</body></html>')).toBeNull();
+    expect(parsePgSummarySnippet('<table><tr><td>Something else entirely</td></tr></table>')).toBeNull();
   });
 
   it('strips &nbsp; and thousands separators from numeric cells', () => {
