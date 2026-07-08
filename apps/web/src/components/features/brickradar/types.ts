@@ -57,6 +57,12 @@ export interface ScreenRow {
   months_of_stock: number | null;
   /** fig radar only. */
   new_used_spread?: number | null;
+  /**
+   * Batch-resolved from `bl_catalog_names` by the page (one `.in()` query per
+   * screen, never per-row) — null/undefined when not yet cached. Names fill in
+   * over time as tuple drill-downs cache them (see resolveItemName).
+   */
+  item_name?: string | null;
 }
 
 export interface TrendMoverRow {
@@ -259,4 +265,32 @@ export function itemTypeLabel(itemType: string): string {
   if (itemType === 'S') return 'Set';
   if (itemType === 'M') return 'Minifig';
   return itemType;
+}
+
+/**
+ * BrickLink's own catalogue page for an exact (item type, item number, colour)
+ * tuple — opened in a new tab as the "view on BrickLink" affordance, distinct
+ * from our own drill-down route (`/brickradar/tuple/...`).
+ *
+ * Pattern verified against the pg-* scripts' own BL-link builders (e.g.
+ * apps/web/scripts/apply-bricqer-pricing.ts, scan-bl-store.ts) which use
+ * `idColor`, not the older `C` param seen in a couple of pre-pg components —
+ * `idColor` is the one that reliably resolves the colour-specific page.
+ * Sets/minifigs have no colour dimension, so `idColor` is only ever added for
+ * parts. Set item numbers are passed through as-is — callers already decide
+ * whether to include the "-N" catalog sequence suffix.
+ */
+export function bricklinkCatalogUrl(itemType: string, itemNo: string, colourId: number): string {
+  const params = new URLSearchParams();
+  if (itemType === 'P') {
+    params.set('P', itemNo);
+    if (colourId > 0) params.set('idColor', String(colourId));
+  } else if (itemType === 'M') {
+    params.set('M', itemNo);
+  } else if (itemType === 'S') {
+    params.set('S', itemNo);
+  } else {
+    params.set(itemType, itemNo);
+  }
+  return `https://www.bricklink.com/v2/catalog/catalogitem.page?${params.toString()}`;
 }

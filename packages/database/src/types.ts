@@ -1448,6 +1448,30 @@ export type Database = {
           },
         ]
       }
+      bl_catalog_names: {
+        Row: {
+          fetched_at: string
+          item_no: string
+          item_type: string
+          name: string
+          source: string
+        }
+        Insert: {
+          fetched_at?: string
+          item_no: string
+          item_type: string
+          name: string
+          source?: string
+        }
+        Update: {
+          fetched_at?: string
+          item_no?: string
+          item_type?: string
+          name?: string
+          source?: string
+        }
+        Relationships: []
+      }
       bl_pg_lane_telemetry: {
         Row: {
           ended_at: string | null

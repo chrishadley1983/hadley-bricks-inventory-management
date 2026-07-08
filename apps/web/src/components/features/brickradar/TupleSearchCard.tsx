@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { InfoTip } from './InfoTip';
 
 /** Section 7 — per-tuple drill-down search, routing to /brickradar/tuple/[type]/[no]/[colour]. */
 export function TupleSearchCard() {
@@ -31,6 +32,7 @@ export function TupleSearchCard() {
         <CardTitle className="flex items-center gap-2">
           <Search className="h-4 w-4" />
           Tuple lookup
+          <InfoTip text="A tuple is one (item type, item number, colour) identity — e.g. Part 3001 in Black. This jumps straight to its drill-down." />
         </CardTitle>
         <CardDescription>
           Look up any (item type, item number, colour) tuple — joins the L1 worldwide summary, L3 UK price-guide

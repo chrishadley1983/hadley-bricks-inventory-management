@@ -3,14 +3,16 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowUpDown, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { formatCurrency } from '@/lib/utils';
 import { STATUS_TEXT } from './chart-colors';
-import type { ScreenRow } from './types';
+import { ColourSwatch } from './ColourSwatch';
+import { InfoTip } from './InfoTip';
+import { bricklinkCatalogUrl, type ScreenRow } from './types';
 
 function sortHeader(label: string) {
   return function Header({ column }: { column: { toggleSorting: (asc: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' } }) {
@@ -30,10 +32,6 @@ function str(n: number | null): string {
 function soldCell(qty: number | null, avg: number | null): string {
   if (!qty) return '—';
   return `${qty} @ ${formatCurrency(avg)}`;
-}
-
-function colourCell(colourId: number): string {
-  return colourId > 0 ? `#${colourId}` : '—';
 }
 
 function maxStr(r: ScreenRow): number {
@@ -69,22 +67,43 @@ function buildColumns(showSpread: boolean): ColumnDef<ScreenRow>[] {
   const cols: ColumnDef<ScreenRow>[] = [
     {
       id: 'item',
-      accessorFn: (r) => `${r.item_type} ${r.item_no}`,
+      accessorFn: (r) => `${r.item_type} ${r.item_no} ${r.item_name ?? ''}`,
       header: sortHeader('Item'),
       cell: ({ row }) => (
-        <Link
-          href={`/brickradar/tuple/${row.original.item_type}/${encodeURIComponent(row.original.item_no)}/${row.original.colour_id}`}
-          className="font-mono text-xs font-medium hover:underline whitespace-nowrap"
-        >
-          {row.original.item_type} {row.original.item_no}
-        </Link>
+        <div className="flex max-w-[220px] flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            {/* Our own drill-down — distinct affordance from the external BrickLink link below. */}
+            <Link
+              href={`/brickradar/tuple/${row.original.item_type}/${encodeURIComponent(row.original.item_no)}/${row.original.colour_id}`}
+              className="font-mono text-xs font-medium hover:underline whitespace-nowrap"
+            >
+              {row.original.item_type} {row.original.item_no}
+            </Link>
+            {/* External — BrickLink's own catalogue page for this exact item+colour, new tab. */}
+            <a
+              href={bricklinkCatalogUrl(row.original.item_type, row.original.item_no, row.original.colour_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View on BrickLink"
+              aria-label="View on BrickLink"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          {row.original.item_name && (
+            <span className="truncate text-[11px] text-muted-foreground" title={row.original.item_name}>
+              {row.original.item_name}
+            </span>
+          )}
+        </div>
       ),
     },
     {
       id: 'colour',
       accessorFn: (r) => r.colour_id,
       header: 'Colour',
-      cell: ({ row }) => <span className="text-xs text-muted-foreground">{colourCell(row.original.colour_id)}</span>,
+      cell: ({ row }) => <ColourSwatch colourId={row.original.colour_id} />,
     },
     {
       id: 'str',
@@ -155,11 +174,14 @@ function buildColumns(showSpread: boolean): ColumnDef<ScreenRow>[] {
 export function ScreenTable({
   title,
   description,
+  infoTip,
   rows,
   showSpread = false,
 }: {
   title: string;
   description: string;
+  /** Deeper one-line explanation shown in the header rollover, in addition to `description`. */
+  infoTip?: string;
   rows: ScreenRow[];
   showSpread?: boolean;
 }) {
@@ -169,7 +191,10 @@ export function ScreenTable({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
-          <span>{title}</span>
+          <span className="flex items-center gap-1.5">
+            {title}
+            {infoTip && <InfoTip text={infoTip} />}
+          </span>
           <span className="text-xs font-normal text-muted-foreground">{rows.length.toLocaleString()} rows</span>
         </CardTitle>
         <CardDescription>{description}</CardDescription>

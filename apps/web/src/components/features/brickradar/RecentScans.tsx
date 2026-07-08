@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { MiniMarkdown } from './markdown';
+import { InfoTip } from './InfoTip';
 import type { ScanReportRow } from './types';
 
 function verdictClassName(verdict: string | null): string {
@@ -120,7 +121,10 @@ export function RecentScans({ scans }: { scans: ScanReportRow[] }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
-          <span>Recent store scans</span>
+          <span className="flex items-center gap-1.5">
+            Recent store scans
+            <InfoTip text="Results from bl-pg-store-scan.ts runs against BrickLink seller stores — the buy/skip verdict and lot economics for that scan." />
+          </span>
           <span className="text-xs font-normal text-muted-foreground">{scans.length.toLocaleString()} of latest 15</span>
         </CardTitle>
         <CardDescription>Latest bl-pg-store-scan.ts runs. Click a store to open the full report.</CardDescription>
