@@ -57,6 +57,7 @@ import type { PgItemType } from '../../src/lib/bricklink/price-guide-page';
 import { createScriptBlContext, type ScriptBlContext } from '../_bl-client';
 import { RateLimitError } from '../../src/lib/bricklink/client';
 import type { BrickLinkItemType, BrickLinkPriceGuide } from '../../src/lib/bricklink/types';
+import { parseResidualFillConfig } from '../../src/lib/bricklink/pg-residual-fill-config';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const UA =
@@ -73,21 +74,13 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
 }, {});
 
 const INVENTORY_FILE = argv['inventory-file'] ? path.resolve(process.cwd(), argv['inventory-file']) : null;
-const DUE_MODE = argv['due'] === 'true';
-// Cap raised 40 → 400 (2026-07-08): the old clamp was a relic of the disproven
-// "challenged at ~43 requests" theory (that was a parser gap, PR #521 — lane C has
-// never actually been blocked). 400 mirrors lane D's observed per-session order of
-// magnitude. RAMP PROCEDURE: raise --session-max stepwise (40 → 80 → 160 → 320)
-// across successive nights, watching bl_pg_lane_telemetry.first_block_at_request
-// for lane='anon_curl' — any block signal, halve and hold. Default stays 40.
-const SESSION_MAX = Math.max(1, Math.min(400, parseInt(argv['session-max'] ?? '40', 10)));
-const BREATHER_MINS = Math.max(1, parseFloat(argv['breather-mins'] ?? '15'));
-// Default 8: a Jabbz-class residual set (~250 tuples) fits one default run
-// (8 x 40 = 320) — 6 x 40 = 240 fell 4 short of the 244 acceptance case.
-const MAX_SESSIONS = Math.max(1, parseInt(argv['max-sessions'] ?? '8', 10));
-const POOL_SIZE = Math.max(SESSION_MAX, parseInt(argv['pool-size'] ?? '5000', 10));
-const API_ROTATE = argv['no-api-rotate'] !== 'true';
-const API_ROTATE_MAX = Math.max(0, parseInt(argv['api-rotate-max'] ?? '50', 10));
+// Clamping/defaulting logic lives in a pure, unit-tested module (2026-07-08 E2E
+// finding: lane D's equivalent, pg-session-planner.ts, was tested; lane C's wasn't).
+// RAMP PROCEDURE (documented there too): raise --session-max stepwise
+// (40 → 80 → 160 → 320) across successive nights, watching
+// bl_pg_lane_telemetry.first_block_at_request for lane='anon_curl' — any block
+// signal, halve and hold.
+const { sessionMax: SESSION_MAX, breatherMins: BREATHER_MINS, maxSessions: MAX_SESSIONS, poolSize: POOL_SIZE, apiRotate: API_ROTATE, apiRotateMax: API_ROTATE_MAX, dueMode: DUE_MODE } = parseResidualFillConfig(argv);
 const RUN_ID = `pg-residual-fill-${Date.now()}`;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
