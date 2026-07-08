@@ -196,7 +196,15 @@ function hasDamageNote(desc: string | null | undefined): boolean {
 interface StoreLot {
   invID: number;
   itemType: PgItemType;
+  /** For type='S', already folded to the recovered "<base>-<seq>" catalog identity when
+   * itemSeq>1 (variant-ID recovery, Chris 2026-07-08) — see scrapeInventory. Bare for the
+   * base set (seq=1, matches normaliseSetNo's default) and for P/M (seq is 0, irrelevant —
+   * their itemNo from BL's AJAX is already fully specific, e.g. "col139"). */
   itemNo: string;
+  /** Raw BL AJAX itemSeq. 0 for P/M. For S: 1 = base/main set, >1 = the catalog "-<seq>"
+   * variant BL actually assigned this lot (advent-day build, gift-with-purchase, etc.) —
+   * already folded into itemNo above; kept here for diagnostics/report counts. */
+  itemSeq: number;
   colourId: number;
   colourName: string | null;
   itemName: string;
@@ -325,10 +333,28 @@ async function scrapeInventory(cdp: StoreCdp, storeId: number): Promise<StoreLot
         seen.add(invID);
         const nativePrice = Number((it as { nativePrice: unknown }).nativePrice);
         const rawConv = Number((it as { rawConvertedPrice: unknown }).rawConvertedPrice);
+        const baseItemNo = String((it as { itemNo: unknown }).itemNo);
+        const itemSeq = Number((it as { itemSeq?: unknown }).itemSeq ?? 0);
+        // Variant-ID recovery (Tier 2, Chris 2026-07-08 follow-up to Gate 1): BL's own
+        // AJAX payload carries itemSeq — verified live against Jabbz (2026-07-08): it's
+        // the catalog "-<seq>" suffix for type='S' (1 = base set, matching
+        // normaliseSetNo's own "-1" default; >1 = the real variant, e.g. advent-day
+        // builds "75366-13" or gift-with-purchase sub-items — confirmed the day-number
+        // in an advent set's itemName is always itemSeq-1, e.g. "(Day 10)" -> seq 11).
+        // itemSeq is always 0 for P/M — their itemNo is already fully specific there
+        // (e.g. "col139"), so this only ever folds for sets. Folding it into itemNo here
+        // means every downstream lookup (cache key, POV base-strip, benchmark, Gate 1)
+        // resolves against the TRUE catalog item instead of silently inheriting the base
+        // set's full sold history. bricklink_pg_summary_cache (L1) was seeded with bare
+        // base numbers only, so a recovered variant with no dedicated L1/L3 row correctly
+        // falls through to priceSource='none' and the gap-fill queue — not a bug, that's
+        // the honest state until pg-residual-fill.ts backfills the variant's own page.
+        const recoveredItemNo = type === 'S' && itemSeq > 1 ? `${baseItemNo}-${itemSeq}` : baseItemNo;
         all.push({
           invID,
           itemType: type,
-          itemNo: String((it as { itemNo: unknown }).itemNo),
+          itemNo: recoveredItemNo,
+          itemSeq,
           colourId: Number((it as { colorID?: unknown }).colorID ?? 0),
           colourName: ((it as { colorName?: string }).colorName) ?? null,
           itemName: String((it as { itemName: unknown }).itemName),
@@ -699,18 +725,20 @@ function getUkMaxSold(row: PgCacheRow | undefined, cond: 'N' | 'U'): number | nu
 /**
  * Gate 1 — identity-ambiguity guard (Chris 2026-07-08, Jabbz retrospective).
  *
- * BL's store search-items AJAX has no item-level identity for advent-day builds, colXX
- * series minifigs, gift-with-purchase variants, etc. — they scrape under the BASE set's
- * itemNo (an S-tuple's colourId is always 0, so the tuple key collapses to itemNo alone),
- * and would silently inherit the base set's FULL benchmark (e.g. an advent-calendar
- * day-24 minifig build scraping as 75184 and inheriting 91 lots / £2.3k of Star Wars
- * Advent Calendar sold history it never earned).
+ * BL's store search-items AJAX groups advent-day builds, gift-with-purchase variants,
+ * etc. under the BASE set's itemNo, and — without the itemSeq recovery now applied in
+ * scrapeInventory (Tier 2, same date) — would silently inherit the base set's FULL
+ * benchmark (e.g. an advent-calendar day-24 minifig build scraping as 75184 and
+ * inheriting 91 lots / £2.3k of Star Wars Advent Calendar sold history it never earned).
  *
- * The only signal available without a live item-level lookup: 2+ store lots sharing one
- * S tuple but carrying DIFFERENT item names means BL's search is aliasing more than one
- * real catalog item onto that itemNo. We can't tell which name (if any) is the "real"
- * base set, so every lot in the group is flagged — recovering the true variant ID is a
- * separate follow-up, not attempted here.
+ * Tier 2 now folds itemSeq into itemNo at scrape time (e.g. "75366-13"), so this gate
+ * should rarely fire anymore — its remaining job is the safety net for lots where
+ * itemSeq is 0/missing/1-but-still-aliased (stale cached inventory predating the fix,
+ * an unexpected BL data-quality gap, or a genuine same-seq collision). The signal is
+ * unchanged: 2+ store lots sharing one S tuple but carrying DIFFERENT item names means
+ * BL's search is aliasing more than one real catalog item onto that itemNo, and we
+ * can't tell which name (if any) is the "real" one, so every lot in the group is
+ * flagged rather than guessed at.
  */
 function findIdentityAmbiguousSetNos(lots: StoreLot[]): Set<string> {
   const namesByItemNo = new Map<string, Set<string>>();
@@ -861,6 +889,9 @@ interface ScanMeta {
   enrich: EnrichOutcome;
   /** Uncovered (priceSource 'none') tuples queued to bl_pg_refresh_queue this run. */
   gapFillCount: number;
+  /** Set lots whose itemNo was folded to a recovered "<base>-<seq>" variant identity
+   * (itemSeq>1) — see scrapeInventory's Tier 2 recovery. */
+  variantRecoveredCount: number;
 }
 
 function median(nums: number[]): number | null {
@@ -1027,8 +1058,11 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   L.push('');
   L.push(`- Inventory: ${meta.totalLots} lots (P=${meta.byType['P'] ?? 0}, S=${meta.byType['S'] ?? 0}, M=${meta.byType['M'] ?? 0}).`);
   L.push(`- Enrichment: ${meta.enrich.cacheHits} cache hits + ${meta.enrich.pagesScraped} pages scraped; ${meta.enrich.noData} no-data items; ${meta.enrich.notFound} not in catalog.`);
+  if (meta.variantRecoveredCount > 0) {
+    L.push(`- Variant-ID recovery: **${meta.variantRecoveredCount}** set lot(s) resolved to their true catalog "-<seq>" identity (advent-day builds / gift-with-purchase variants, via BL's itemSeq field) instead of the base set number — see Gate 1's doc comment.`);
+  }
   if (identityAmbiguous.length > 0) {
-    L.push(`- Identity-ambiguous (variant subsets): **${identityAmbiguous.length}** lot(s) excluded from buy/watch — a base set number is shared by 2+ distinct item names (advent-day builds / colXX series figs scrape as the base set and would otherwise inherit its full benchmark); needs item-level lookup, not attempted here.`);
+    L.push(`- Identity-ambiguous (variant subsets): **${identityAmbiguous.length}** lot(s) excluded from buy/watch — a base set number is still shared by 2+ distinct item names after Tier 2 recovery (stale cached inventory, or a genuine same-seq collision); needs item-level lookup, not attempted here.`);
   }
   if (floorUnviableLots.length > 0) {
     L.push(`- Floor-unviable: **${floorUnviableLots.length}** lot(s) excluded from the buy list — list price is floor-clamped (£${BRICQER_PRICE_FLOOR.toFixed(4)}) but the UK 6mo max sold price is below it (nobody has ever paid our price); £${floorUnviableNaiveNet.toFixed(2)} naive net excluded.`);
@@ -1134,8 +1168,18 @@ async function main() {
   console.log('\n[5/5] Writing report...');
   const byType: Record<string, number> = {};
   for (const l of lots) byType[l.itemType] = (byType[l.itemType] ?? 0) + 1;
+  const variantRecoveredCount = lots.filter((l) => l.itemType === 'S' && l.itemSeq > 1).length;
   const report = buildReport(
-    { storeName: storeMeta.storeName, storeId: storeMeta.storeId, totalLots: lots.length, byType, boiler, enrich: enrichOutcome, gapFillCount },
+    {
+      storeName: storeMeta.storeName,
+      storeId: storeMeta.storeId,
+      totalLots: lots.length,
+      byType,
+      boiler,
+      enrich: enrichOutcome,
+      gapFillCount,
+      variantRecoveredCount,
+    },
     scored,
   );
   fs.writeFileSync(REPORT_FILE, report);
