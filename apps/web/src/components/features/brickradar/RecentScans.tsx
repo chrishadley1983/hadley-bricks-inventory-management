@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { ArrowUpDown, HelpCircle, ShieldAlert, Repeat } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,77 +15,124 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { MiniMarkdown } from './markdown';
 import type { ScanReportRow } from './types';
 
-function verdictVariant(verdict: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (verdict === 'BUY') return 'default';
-  if (verdict === 'REVIEW') return 'secondary';
-  return 'outline';
+function verdictClassName(verdict: string | null): string {
+  if (verdict === 'BUY') return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-900';
+  if (verdict === 'REVIEW') return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900';
+  if (verdict === 'SKIP') return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800';
+  return '';
 }
 
-function verdictClassName(verdict: string | null): string {
-  if (verdict === 'BUY') return 'bg-green-100 text-green-800 border-green-200';
-  if (verdict === 'REVIEW') return 'bg-amber-100 text-amber-800 border-amber-200';
-  if (verdict === 'SKIP') return 'bg-slate-100 text-slate-600 border-slate-200';
-  return '';
+function sortHeader(label: string) {
+  return function Header({ column }: { column: { toggleSorting: (asc: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' } }) {
+    return (
+      <Button variant="ghost" size="sm" className="-ml-3 h-7" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+        {label}
+        <ArrowUpDown className="ml-1.5 h-3 w-3" />
+      </Button>
+    );
+  };
+}
+
+function FlagCount({ icon: Icon, value, title }: { icon: React.ElementType; value: number | null; title: string }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" title={title}>
+      <Icon className="h-3 w-3" />
+      {value}
+    </span>
+  );
+}
+
+function buildColumns(onSelect: (row: ScanReportRow) => void): ColumnDef<ScanReportRow>[] {
+  return [
+    {
+      accessorKey: 'store_slug',
+      header: sortHeader('Store'),
+      cell: ({ row }) => (
+        <button className="font-medium hover:underline" onClick={() => onSelect(row.original)}>
+          {row.original.store_slug}
+        </button>
+      ),
+    },
+    {
+      accessorKey: 'scanned_at',
+      header: sortHeader('Date'),
+      cell: ({ row }) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.original.scanned_at)}</span>,
+    },
+    {
+      accessorKey: 'verdict',
+      header: 'Verdict',
+      cell: ({ row }) => <Badge variant="outline" className={verdictClassName(row.original.verdict)}>{row.original.verdict ?? '—'}</Badge>,
+    },
+    {
+      id: 'lotsPassing',
+      accessorFn: (r) => r.lots_passing ?? 0,
+      header: sortHeader('Lots passing'),
+      cell: ({ row }) => (
+        <span className="block text-right font-mono tabular-nums">
+          {row.original.lots_passing ?? '—'} / {row.original.lots_total ?? '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'outlay',
+      accessorFn: (r) => r.outlay_gbp ?? 0,
+      header: sortHeader('Outlay'),
+      cell: ({ row }) => <span className="block text-right font-mono tabular-nums">{formatCurrency(row.original.outlay_gbp)}</span>,
+    },
+    {
+      id: 'rawNet',
+      accessorFn: (r) => r.raw_net_gbp ?? 0,
+      header: sortHeader('Raw net'),
+      cell: ({ row }) => <span className="block text-right font-mono tabular-nums">{formatCurrency(row.original.raw_net_gbp)}</span>,
+    },
+    {
+      id: 'realisableNet',
+      accessorFn: (r) => r.realisable_net_gbp ?? 0,
+      header: sortHeader('Realisable net'),
+      cell: ({ row }) => (
+        <span className="block text-right font-mono font-medium tabular-nums">{formatCurrency(row.original.realisable_net_gbp)}</span>
+      ),
+    },
+    {
+      id: 'flags',
+      header: 'Flags',
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-3">
+          <FlagCount icon={HelpCircle} value={row.original.identity_ambiguous} title="Identity ambiguous" />
+          <FlagCount icon={ShieldAlert} value={row.original.floor_unviable} title="Floor-unviable (below the 7p Bricqer floor)" />
+          <FlagCount icon={Repeat} value={row.original.variant_recovered} title="Variant recovered" />
+        </div>
+      ),
+      enableSorting: false,
+    },
+  ];
 }
 
 export function RecentScans({ scans }: { scans: ScanReportRow[] }) {
   const [selected, setSelected] = useState<ScanReportRow | null>(null);
+  const columns = useMemo(() => buildColumns(setSelected), []);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent store scans</CardTitle>
-        <CardDescription>Latest 10 bl-pg-store-scan.ts runs. Click a row for the full report.</CardDescription>
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span>Recent store scans</span>
+          <span className="text-xs font-normal text-muted-foreground">{scans.length.toLocaleString()} of latest 15</span>
+        </CardTitle>
+        <CardDescription>Latest bl-pg-store-scan.ts runs. Click a store to open the full report.</CardDescription>
       </CardHeader>
       <CardContent>
         {scans.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No store scans recorded yet — run{' '}
-            <code className="text-xs">npx tsx scripts/bl-pg-store-scan.ts --store-slug=&lt;name&gt;</code>.
+            <code className="text-xs">npx tsx scripts/pg/bl-pg-store-scan.ts --store-slug=&lt;name&gt;</code>.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Store</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Verdict</TableHead>
-                <TableHead className="text-right">Lots passing</TableHead>
-                <TableHead className="text-right">Outlay</TableHead>
-                <TableHead className="text-right">Raw net</TableHead>
-                <TableHead className="text-right">Realisable net</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {scans.map((s) => (
-                <TableRow
-                  key={s.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelected(s)}
-                >
-                  <TableCell className="font-medium">{s.store_slug}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDate(s.scanned_at)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={verdictVariant(s.verdict)} className={verdictClassName(s.verdict)}>
-                      {s.verdict ?? '—'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {s.lots_passing ?? '—'} / {s.lots_total ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(s.outlay_gbp)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(s.raw_net_gbp)}</TableCell>
-                  <TableCell className="text-right font-mono font-medium">
-                    {formatCurrency(s.realisable_net_gbp)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <DataTable columns={columns} data={scans} getRowId={(s) => String(s.id)} />
         )}
       </CardContent>
 
@@ -93,16 +142,12 @@ export function RecentScans({ scans }: { scans: ScanReportRow[] }) {
             <DialogTitle>
               {selected?.store_slug} — {selected ? formatDate(selected.scanned_at) : ''}
             </DialogTitle>
-            <DialogDescription>Full markdown report, as written by bl-pg-store-scan.ts.</DialogDescription>
+            <DialogDescription>
+              {selected?.verdict} · {selected?.lots_passing ?? 0}/{selected?.lots_total ?? 0} lots passing · realisable net{' '}
+              {formatCurrency(selected?.realisable_net_gbp)}
+            </DialogDescription>
           </DialogHeader>
-          <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-4 text-xs font-mono">
-            {selected?.report_md}
-          </pre>
-          <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
-              Close
-            </Button>
-          </div>
+          {selected && <MiniMarkdown markdown={selected.report_md} />}
         </DialogContent>
       </Dialog>
     </Card>

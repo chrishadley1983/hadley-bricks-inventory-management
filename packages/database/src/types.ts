@@ -1544,6 +1544,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bl_pg_reports: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: number
+          kind: string
+          report_md: string
+          subject: string | null
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id?: never
+          kind: string
+          report_md: string
+          subject?: string | null
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: never
+          kind?: string
+          report_md?: string
+          subject?: string | null
+          summary?: Json
+        }
+        Relationships: []
+      }
       bl_pg_scan_reports: {
         Row: {
           created_at: string

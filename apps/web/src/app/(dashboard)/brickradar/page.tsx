@@ -4,14 +4,21 @@ import { createClient } from '@/lib/supabase/server';
 import {
   HealthCards,
   LaneTelemetryTable,
+  QueueFreshness,
   ScreenTable,
   TrendMovers,
   RecentScans,
+  ReportsSection,
+  TupleSearchCard,
+  CHART_VARS_CLASSNAME,
   type HealthSummary,
   type LaneTelemetryDayRow,
   type ScreenRow,
   type TrendMoverRow,
   type ScanReportRow,
+  type ReportRow,
+  type QueueTierSummary,
+  type NextDueBucket,
 } from '@/components/features/brickradar';
 
 // Server-rendered on every request — health/telemetry/screens are all read live off
@@ -19,7 +26,8 @@ import {
 // docs/features/pg-market-intelligence/spec.md §5, P2 "coverage dividend" screens).
 export const dynamic = 'force-dynamic';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FOURTEEN_DAYS_MS = 14 * DAY_MS;
 
 interface RawTelemetryRow {
   lane: string;
@@ -54,6 +62,30 @@ function aggregateTelemetry(rows: RawTelemetryRow[]): LaneTelemetryDayRow[] {
   );
 }
 
+/** catalogpg-only daily series, oldest-first, last N days — powers the health strip. */
+function catalogpgDailySeries(rows: RawTelemetryRow[], days: number): HealthSummary['last7dTelemetry'] {
+  const byDate = new Map<string, { requests: number; ok: number; failed: number }>();
+  for (const r of rows) {
+    if (r.lane !== 'catalogpg') continue;
+    const cur = byDate.get(r.run_date) ?? { requests: 0, ok: 0, failed: 0 };
+    cur.requests += r.requests ?? 0;
+    cur.ok += r.ok ?? 0;
+    cur.failed += r.failed ?? 0;
+    byDate.set(r.run_date, cur);
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-days)
+    .map(([runDate, v]) => ({ runDate, ...v }));
+}
+
+interface NextDueBucketDef {
+  label: string;
+  fromMs: number | null;
+  toMs: number | null;
+  overdue?: boolean;
+}
+
 export default async function BrickRadarPage() {
   const supabase = await createClient();
 
@@ -62,12 +94,26 @@ export default async function BrickRadarPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS).toISOString().slice(0, 10);
+  const now = new Date();
+  const fourteenDaysAgo = new Date(now.getTime() - FOURTEEN_DAYS_MS).toISOString().slice(0, 10);
+
+  const bucketDefs: NextDueBucketDef[] = [
+    { label: 'Past due', fromMs: null, toMs: 0, overdue: true },
+    { label: '0–7d', fromMs: 0, toMs: 7 * DAY_MS },
+    { label: '8–14d', fromMs: 7 * DAY_MS, toMs: 14 * DAY_MS },
+    { label: '15–21d', fromMs: 14 * DAY_MS, toMs: 21 * DAY_MS },
+    { label: '22–28d', fromMs: 21 * DAY_MS, toMs: 28 * DAY_MS },
+    { label: '29d+', fromMs: 28 * DAY_MS, toMs: null },
+  ];
 
   const [
     l1TotalRes,
     activeTotalRes,
     activePastDueRes,
+    tailTotalRes,
+    graceActiveRes,
+    floorActiveRes,
+    rankActiveRes,
     snapshotsTotalRes,
     telemetryRes,
     highStrRes,
@@ -75,6 +121,9 @@ export default async function BrickRadarPage() {
     trendRisersRes,
     trendFallersRes,
     recentScansRes,
+    ownStoreAuditRes,
+    digestRes,
+    ...bucketRes
   ] = await Promise.all([
     supabase.from('bricklink_pg_summary_cache').select('*', { count: 'exact', head: true }),
     supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).eq('tier', 'active'),
@@ -82,42 +131,75 @@ export default async function BrickRadarPage() {
       .from('bl_pg_refresh_queue')
       .select('*', { count: 'exact', head: true })
       .eq('tier', 'active')
-      .lt('next_due_at', new Date().toISOString()),
+      .lt('next_due_at', now.toISOString()),
+    supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).eq('tier', 'tail'),
+    supabase
+      .from('bl_pg_refresh_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('tier', 'active')
+      .not('grace_until', 'is', null)
+      .gt('grace_until', now.toISOString()),
+    supabase
+      .from('bl_pg_refresh_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('tier', 'active')
+      .not('rank_floor', 'is', null),
+    supabase
+      .from('bl_pg_refresh_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('tier', 'active')
+      .is('rank_floor', null)
+      .or(`grace_until.is.null,grace_until.lte.${now.toISOString()}`),
     supabase.from('bricklink_pg_snapshots').select('*', { count: 'exact', head: true }),
     supabase
       .from('bl_pg_lane_telemetry')
       .select('lane, run_date, requests, ok, failed, first_block_at_request')
-      .gte('run_date', sevenDaysAgo)
+      .gte('run_date', fourteenDaysAgo)
       .order('run_date', { ascending: false }),
-    supabase.from('pg_screen_high_str').select('*').order('sold_value_gbp', { ascending: false }).limit(50),
-    supabase.from('pg_screen_fig_radar').select('*').order('sold_value_gbp', { ascending: false }).limit(50),
+    supabase.from('pg_screen_high_str').select('*').order('sold_value_gbp', { ascending: false }).limit(200),
+    supabase.from('pg_screen_fig_radar').select('*').order('sold_value_gbp', { ascending: false }).limit(200),
     supabase
       .from('pg_screen_trend_movers')
       .select('*')
       .order('used_qty_delta', { ascending: false, nullsFirst: false })
-      .limit(15),
+      .limit(20),
     supabase
       .from('pg_screen_trend_movers')
       .select('*')
       .order('used_qty_delta', { ascending: true, nullsFirst: false })
-      .limit(15),
-    // bl_pg_scan_reports: added in supabase/migrations/20260708200000_pg_scan_reports.sql,
-    // not yet in the generated Database types (migration pushed separately) — cast, same
-    // convention as apps/web/scripts/store-quality.ts.
+      .limit(20),
+    // bl_pg_scan_reports / bl_pg_reports: added in migrations pushed separately —
+    // not yet in the generated Database types. any-cast, same convention as
+    // apps/web/scripts/store-quality.ts. Both degrade to an empty result
+    // (non-fatal) if the table 404s — supabase-js resolves {error} rather than
+    // throwing, so a missing relation just yields an empty section below.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not yet in generated Database types
+    (supabase as any).from('bl_pg_scan_reports').select('*').order('scanned_at', { ascending: false }).limit(15),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not yet in generated Database types
     (supabase as any)
-      .from('bl_pg_scan_reports')
+      .from('bl_pg_reports')
       .select('*')
-      .order('scanned_at', { ascending: false })
-      .limit(10),
+      .eq('kind', 'own_store_audit')
+      .order('generated_at', { ascending: false })
+      .limit(1),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not yet in generated Database types
+    (supabase as any).from('bl_pg_reports').select('*').eq('kind', 'digest').order('generated_at', { ascending: false }).limit(1),
+    ...bucketDefs.map((b) => {
+      let q = supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).eq('tier', 'active');
+      if (b.fromMs != null) q = q.gte('next_due_at', new Date(now.getTime() + b.fromMs).toISOString());
+      if (b.toMs != null) q = q.lt('next_due_at', new Date(now.getTime() + b.toMs).toISOString());
+      return q;
+    }),
   ]);
 
   const telemetryRows = (telemetryRes.data ?? []) as RawTelemetryRow[];
   const laneTelemetry = aggregateTelemetry(telemetryRows);
+  const last7dTelemetry = catalogpgDailySeries(telemetryRows, 7);
 
-  const runDatesDesc = [...new Set(telemetryRows.map((r) => r.run_date))].sort().reverse();
+  const catalogpgRows = telemetryRows.filter((r) => r.lane === 'catalogpg');
+  const runDatesDesc = [...new Set(catalogpgRows.map((r) => r.run_date))].sort().reverse();
   const lastTelemetryRunDate = runDatesDesc[0] ?? null;
-  const lastNightRows = telemetryRows.filter((r) => r.run_date === lastTelemetryRunDate);
+  const lastNightRows = catalogpgRows.filter((r) => r.run_date === lastTelemetryRunDate);
 
   const activeTierTotal = activeTotalRes.count ?? 0;
   const activePastDueCount = activePastDueRes.count ?? 0;
@@ -131,7 +213,23 @@ export default async function BrickRadarPage() {
     lastTelemetryRunDate,
     lastTelemetryOk: lastNightRows.reduce((s, r) => s + (r.ok ?? 0), 0),
     lastTelemetryFailed: lastNightRows.reduce((s, r) => s + (r.failed ?? 0), 0),
+    last7dTelemetry,
   };
+
+  const queueTiers: QueueTierSummary = {
+    activeTotal: activeTierTotal,
+    activeByRank: rankActiveRes.count ?? 0,
+    activeByGrace: graceActiveRes.count ?? 0,
+    activeByFloor: floorActiveRes.count ?? 0,
+    tailTotal: tailTotalRes.count ?? 0,
+    pastDueCount: activePastDueCount,
+  };
+
+  const nextDueBuckets: NextDueBucket[] = bucketDefs.map((b, i) => ({
+    label: b.label,
+    count: bucketRes[i]?.count ?? 0,
+    overdue: b.overdue,
+  }));
 
   const highStrRows = (highStrRes.data ?? []) as ScreenRow[];
   const figRadarRows = (figRadarRes.data ?? []) as ScreenRow[];
@@ -140,10 +238,12 @@ export default async function BrickRadarPage() {
   // flat (delta=0) tail when there's little real movement yet.
   const trendRisers = ((trendRisersRes.data ?? []) as TrendMoverRow[]).filter((r) => (r.used_qty_delta ?? 0) > 0);
   const trendFallers = ((trendFallersRes.data ?? []) as TrendMoverRow[]).filter((r) => (r.used_qty_delta ?? 0) < 0);
-  const recentScans = (recentScansRes.data ?? []) as ScanReportRow[];
+  const recentScans = (recentScansRes.error ? [] : (recentScansRes.data ?? [])) as ScanReportRow[];
+  const ownStoreAudit = (ownStoreAuditRes.error ? [] : (ownStoreAuditRes.data ?? []))[0] as ReportRow | undefined;
+  const digest = (digestRes.error ? [] : (digestRes.data ?? []))[0] as ReportRow | undefined;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className={`space-y-6 p-6 ${CHART_VARS_CLASSNAME}`}>
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Radar className="h-6 w-6 text-primary" />
@@ -157,7 +257,9 @@ export default async function BrickRadarPage() {
 
       <HealthCards health={health} />
 
-      <LaneTelemetryTable rows={laneTelemetry} />
+      <QueueFreshness tiers={queueTiers} buckets={nextDueBuckets} telemetry14d={laneTelemetry} />
+
+      <LaneTelemetryTable rows={laneTelemetry.slice(0, 100)} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ScreenTable
@@ -175,7 +277,11 @@ export default async function BrickRadarPage() {
 
       <TrendMovers risers={trendRisers} fallers={trendFallers} />
 
+      <ReportsSection ownStoreAudit={ownStoreAudit ?? null} digest={digest ?? null} />
+
       <RecentScans scans={recentScans} />
+
+      <TupleSearchCard />
     </div>
   );
 }

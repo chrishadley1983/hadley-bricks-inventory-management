@@ -352,7 +352,48 @@ async function main(): Promise<void> {
     console.log('[pg-digest] --no-discord — skipping Discord send');
   }
 
+  await persistReport(REPORT_DATE, {
+    risersCount: risers.length,
+    fallersCount: fallers.length,
+    figMoversCount: figMovers.length,
+    l1Total: coverage.l1Total,
+    activeTierCount: coverage.activeTierCount,
+    activeWithin28dPct: coverage.activeWithin28dPct,
+    pastDueCount: coverage.pastDueCount,
+  }, md.join('\n'));
+
   console.log('[pg-digest] done');
+}
+
+// ---------------------------------------------------------------------------
+// BrickRadar UI persistence (spec §5.1): mirror bl-pg-store-scan.ts's
+// persistScanReport — non-fatal (runs whether or not the Discord send
+// succeeded), so a Supabase hiccup never fails the digest run.
+// ---------------------------------------------------------------------------
+
+interface DigestSummary {
+  risersCount: number;
+  fallersCount: number;
+  figMoversCount: number;
+  l1Total: number;
+  activeTierCount: number;
+  activeWithin28dPct: number;
+  pastDueCount: number;
+}
+
+async function persistReport(subject: string, summary: DigestSummary, md: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('bl_pg_reports').insert({
+      kind: 'digest',
+      subject,
+      summary,
+      report_md: md,
+    });
+    if (error) console.warn(`  ⚠ bl_pg_reports insert failed: ${error.message}`);
+  } catch (err) {
+    console.warn(`  ⚠ bl_pg_reports insert failed: ${(err as Error).message}`);
+  }
 }
 
 main().catch((e) => {
