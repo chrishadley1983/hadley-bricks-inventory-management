@@ -33,6 +33,10 @@ export interface KeepaStats {
   avg90?: (number | null)[];
   /** Average over 180 days for each CSV type */
   avg180?: (number | null)[];
+  /** Average over 365 days for each CSV type (yearly norm — seasonal reference) */
+  avg365?: (number | null)[];
+  /** Maximum over the stats interval per CSV type; each entry is [timestamp, value] */
+  max?: ((number | null)[] | null)[];
   /** Sales rank drop count over 30 days (sales-velocity proxy) */
   salesRankDrops30?: number;
   /** Sales rank drop count over 90 days (sales-velocity proxy) */
@@ -223,7 +227,7 @@ export class KeepaClient {
       key: this.apiKey,
       domain: '2', // Amazon UK
       asin: validAsins.join(','),
-      stats: '180', // Include stats (avg30/90/180 + salesRankDrops for was_price_90d/180d)
+      stats: '365', // Include stats (avg30/90/180/365 + min/max + salesRankDrops); 365 gives the yearly avg + seasonal high
       buybox: '1', // Include buy box history
       history: '1', // Include full price history
     });
@@ -353,6 +357,8 @@ export class KeepaClient {
     salesRank: number | null;
     was90dAvg: number | null;
     was180dAvg: number | null;
+    was365dAvg: number | null;
+    high365d: number | null;
     salesRankDrops90: number | null;
     offerCount: number | null;
     lowestNewPrice: number | null;
@@ -383,9 +389,16 @@ export class KeepaClient {
     const offerCountRaw =
       getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
 
-    // 90/180-day average buy box + rank-drop velocity from stats
+    // 90/180/365-day average buy box + rank-drop velocity from stats
     const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
     const was180dRaw = product.stats?.avg180?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const was365dRaw = product.stats?.avg365?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    // stats.max entries are [timestamp, value] pairs; take the value. With
+    // stats=365 this is the 365-day maximum buy box (seasonal high).
+    const maxEntry = product.stats?.max?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const high365Raw = Array.isArray(maxEntry)
+      ? (maxEntry[1] ?? null)
+      : (typeof maxEntry === 'number' ? maxEntry : null);
     const drops90 = product.stats?.salesRankDrops90;
 
     return {
@@ -393,6 +406,8 @@ export class KeepaClient {
       salesRank: salesRankRaw,
       was90dAvg: was90dRaw !== null && was90dRaw >= 0 ? keepaPriceToGBP(was90dRaw) : null,
       was180dAvg: was180dRaw !== null && was180dRaw >= 0 ? keepaPriceToGBP(was180dRaw) : null,
+      was365dAvg: was365dRaw !== null && was365dRaw >= 0 ? keepaPriceToGBP(was365dRaw) : null,
+      high365d: high365Raw !== null && high365Raw >= 0 ? keepaPriceToGBP(high365Raw) : null,
       salesRankDrops90: typeof drops90 === 'number' && drops90 >= 0 ? drops90 : null,
       offerCount: offerCountRaw,
       lowestNewPrice: lowestNewRaw !== null ? keepaPriceToGBP(lowestNewRaw) : null,

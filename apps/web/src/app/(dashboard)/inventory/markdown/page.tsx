@@ -66,6 +66,7 @@ interface Proposal {
   set_number: string | null;
   item_name: string | null;
   sales_rank: number | null;
+  units?: number;
   created_at: string;
 }
 
@@ -702,6 +703,11 @@ export default function MarkdownPage() {
                             <span className="text-muted-foreground mr-1">{p.set_number}</span>
                           )}
                           {p.item_name || 'Unknown'}
+                          {(p.units ?? 1) > 1 && (
+                            <span className="ml-1.5 inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-xs font-semibold text-blue-800">
+                              ×{p.units} units
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 max-w-[250px] truncate" title={p.diagnosis_reason}>
                           {p.diagnosis_reason}
@@ -891,7 +897,10 @@ export default function MarkdownPage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Days listed</span>
-                    <p className="font-medium">{detailProposal.aging_days}d</p>
+                    <p className="font-medium">
+                      {detailProposal.aging_days}d
+                      {(detailProposal.units ?? 1) > 1 && ` (oldest of ${detailProposal.units} units)`}
+                    </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Sales rank</span>

@@ -29,6 +29,8 @@ interface SnapshotRow {
   sales_rank_drops_90d: number | null;
   was_price_90d: number | null;
   was_price_180d: number | null;
+  was_price_365d: number | null;
+  high_365d: number | null;
   your_price: number | null;
 }
 
@@ -80,7 +82,7 @@ export async function buildAmazonMarketContexts(
     const batch = asins.slice(i, i + ASIN_BATCH);
     const rows = (await fetchAllRecords(supabase, 'amazon_arbitrage_pricing', {
       select:
-        'asin, snapshot_date, buy_box_price, buy_box_is_yours, total_offer_count, offer_count, sales_rank, sales_rank_drops_90d, was_price_90d, was_price_180d, your_price',
+        'asin, snapshot_date, buy_box_price, buy_box_is_yours, total_offer_count, offer_count, sales_rank, sales_rank_drops_90d, was_price_90d, was_price_180d, was_price_365d, high_365d, your_price',
       eq: { user_id: userId },
       in: { asin: batch },
       gte: { snapshot_date: cutoffISO },
@@ -133,6 +135,8 @@ export async function buildAmazonMarketContexts(
       currentBuyBox: latestBox,
       keepaAvg180: latestNonNull(rows, (r) => (r.was_price_180d !== null ? Number(r.was_price_180d) : null)),
       keepaAvg90: latestNonNull(rows, (r) => (r.was_price_90d !== null ? Number(r.was_price_90d) : null)),
+      keepaAvg365: latestNonNull(rows, (r) => (r.was_price_365d !== null ? Number(r.was_price_365d) : null)),
+      seasonalHigh365: latestNonNull(rows, (r) => (r.high_365d !== null ? Number(r.high_365d) : null)),
       persistenceBelowPct: compared > 0 ? belowCount / compared : null,
       persistenceSampleSize: compared,
       buyBoxIsYours: latestNonNull(rows, (r) => r.buy_box_is_yours),

@@ -45,6 +45,10 @@ export interface AmazonMarketContext {
   keepaAvg180: number | null;
   /** Keepa 90d avg buy box — fallback cross-check. */
   keepaAvg90: number | null;
+  /** Keepa 365d avg buy box — yearly norm, the season-aware reference. */
+  keepaAvg365: number | null;
+  /** Keepa 365d max buy box — the seasonal high; detects off-season troughs. */
+  seasonalHigh365: number | null;
   /** Fraction (0–1) of snapshots in the persistence window where box < our price. */
   persistenceBelowPct: number | null;
   /** Number of snapshots in the persistence window (confidence). */
@@ -129,6 +133,33 @@ const MATCH_ESCALATION_MIN_DAYS = 20;
 
 /** Tier-2 escalation undercut vs the stable reference. */
 const ESCALATION_UNDERCUT_PCT = 10;
+
+/**
+ * Season-aware reference (2026-07). A seasonal set (Christmas / Valentine /
+ * Halloween / CNY / Easter) evaluated in its off-season has a trailing window
+ * that sits in the annual trough, while its 365-day buy-box HIGH is well above.
+ * Matching that trough would sell at the annual low right before the pre-season
+ * ramp. We treat the ASIN as a seasonal trough when the yearly high is markedly
+ * above the recent window AND the yearly average is also above it (so a single
+ * outlier spike alone can't trip it), and HOLD rather than cut.
+ */
+const SEASONAL_HIGH_MARGIN_PCT = 25;
+const SEASONAL_AVG_MARGIN_PCT = 5;
+
+/**
+ * True when the recent stable window looks like a seasonal off-season trough:
+ * the 365d high sits >= SEASONAL_HIGH_MARGIN_PCT above it and the 365d average
+ * sits >= SEASONAL_AVG_MARGIN_PCT above it (guards against a lone price spike).
+ */
+function isSeasonalTrough(stable: number, mkt: AmazonMarketContext): boolean {
+  const high = mkt.seasonalHigh365;
+  const avg = mkt.keepaAvg365;
+  if (!high || !avg || stable <= 0) return false;
+  return (
+    high >= stable * (1 + SEASONAL_HIGH_MARGIN_PCT / 100) &&
+    avg >= stable * (1 + SEASONAL_AVG_MARGIN_PCT / 100)
+  );
+}
 
 // ============================================================================
 // Floor
@@ -356,6 +387,17 @@ function computeAmazonCompetitorHoldsBox(
     return hold(
       floor,
       `Buy box below us on only ${persistencePct.toFixed(0)}% of last ${mkt.persistenceSampleSize} snapshots — likely a blip, holding`
+    );
+  }
+
+  // Season-aware reference: if the recent window is an off-season trough (yearly
+  // high well above it) and we're still priced within reach of that yearly high,
+  // matching the trough would lock in the annual low right before the pre-season
+  // ramp. Hold for seasonal recovery instead of chasing the off-season market.
+  if (isSeasonalTrough(stable, mkt) && mkt.seasonalHigh365 && currentPrice <= mkt.seasonalHigh365) {
+    return hold(
+      floor,
+      `Seasonal trough: current £${currentPrice.toFixed(2)} within 365d high £${mkt.seasonalHigh365.toFixed(2)} (recent window £${stable.toFixed(2)}, yearly avg £${(mkt.keepaAvg365 ?? 0).toFixed(2)}) — holding for seasonal recovery, not matching the off-season market`
     );
   }
 

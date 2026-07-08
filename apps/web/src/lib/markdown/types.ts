@@ -89,6 +89,12 @@ export interface MarkdownProposal {
   set_number: string | null;
   item_name: string | null;
   sales_rank: number | null;
+  /**
+   * Number of in-play units this proposal covers. Amazon proposals are generated
+   * once per (asin, condition) group (an Amazon price is per-ASIN and approval
+   * reprices the whole ASIN), so units = the group size. eBay is per-listing → 1.
+   */
+  units: number;
 }
 
 export interface CronResult {

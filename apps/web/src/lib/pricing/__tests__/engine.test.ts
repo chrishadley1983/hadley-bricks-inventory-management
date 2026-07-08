@@ -56,6 +56,8 @@ function competitorMarket(overrides: Partial<AmazonMarketContext> = {}): AmazonM
     currentBuyBox: 24.5,
     keepaAvg180: 24.5,
     keepaAvg90: 24,
+    keepaAvg365: 24.5,
+    seasonalHigh365: 25,
     persistenceBelowPct: 0.9,
     persistenceSampleSize: 14,
     buyBoxIsYours: false,
@@ -370,6 +372,62 @@ describe('Amazon — competitor holds the buy box (stable match)', () => {
   it('holds when already at/below the reference (never increases)', () => {
     const out = computeTarget(amazon({ currentPrice: 23.99, amazonMarket: competitorMarket() }));
     expect(out.action).toBe('HOLD');
+  });
+
+  it('seasonal trough: yearly high well above the off-season window → HOLD for recovery', () => {
+    // Recent window 37 (off-season trough), 365d avg 45, 365d high 52. We're at
+    // 44.99, still within reach of the yearly high → hold, do not match the trough.
+    const out = computeTarget(
+      amazon({
+        currentPrice: 44.99,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 45,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('Seasonal trough');
+  });
+
+  it('seasonal but priced above the yearly high → still cuts (genuinely overpriced)', () => {
+    const out = computeTarget(
+      amazon({
+        currentPrice: 60,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 45,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('REPRICE');
+  });
+
+  it('lone price spike does not fake a season: 365d avg near the window → normal match', () => {
+    // High 52 looks seasonal, but the yearly AVG (37.5) sits barely above the
+    // window (37) — a single spike, not a season. The guard must not trip.
+    const out = computeTarget(
+      amazon({
+        currentPrice: 44.99,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 37.5,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('REPRICE');
   });
 
   it('tier-2 escalation: applied match ran 20d+, box not won → undercut stable by 10%', () => {

@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Evaluate each due item
+    // 6. Evaluate — eBay per listing; Amazon per (asin, condition) group.
     const newProposals: MarkdownProposal[] = [];
     const needsReview: { setNumber: string | null; name: string | null; reason: string }[] = [];
     // Only roll the eval clock for items that reached a genuine decision this run.
@@ -161,7 +161,46 @@ export async function POST(request: NextRequest) {
     let skipped = 0;
     let errors = 0;
 
+    // Shared proposal shape (carries the units this decision covers).
+    const makeProposal = (
+      item: InventoryItemForMarkdown,
+      platform: 'amazon' | 'ebay',
+      out: ReturnType<typeof computeTarget>,
+      ageDays: number,
+      amazonMarket: AmazonMarketContext | null,
+      units: number,
+      currentPrice: number
+    ): MarkdownProposal => ({
+      user_id: item.user_id,
+      inventory_item_id: item.id,
+      platform,
+      diagnosis: out.diagnosis === 'HOLDING' ? 'OVERPRICED' : out.diagnosis,
+      diagnosis_reason: out.reason,
+      current_price: currentPrice,
+      proposed_price: out.targetPrice,
+      price_floor: out.floor,
+      market_price: amazonMarket?.stableBuyBox ?? null,
+      proposed_action: out.action === 'AUCTION' ? 'AUCTION' : 'MARKDOWN',
+      markdown_step: out.markdownStep,
+      aging_days: ageDays,
+      auction_end_date: null,
+      auction_duration_days: out.action === 'AUCTION' ? config.auction_default_duration_days : null,
+      status: 'PENDING',
+      set_number: item.set_number ?? null,
+      item_name: item.item_name ?? null,
+      sales_rank: amazonMarket?.salesRank ?? null,
+      units,
+    });
+
+    // ---- eBay + Amazon-without-ASIN: one decision per listing ----
     for (const item of dueItems) {
+      const platform = (item.listing_platform?.toLowerCase() === 'amazon' ? 'amazon' : 'ebay') as
+        | 'amazon'
+        | 'ebay';
+
+      // ASIN'd Amazon items are decided once per ASIN in the group pass below.
+      if (platform === 'amazon' && item.amazon_asin) continue;
+
       // Existing pending proposal already covers this item — leave clock untouched.
       if (existingItemIds.has(item.id)) {
         skipped++;
@@ -180,10 +219,6 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const platform = (item.listing_platform?.toLowerCase() === 'amazon' ? 'amazon' : 'ebay') as
-        | 'amazon'
-        | 'ebay';
-
       // No eBay listing id → engagement data can never arrive; hold and roll
       // the clock rather than re-surfacing (and skipping) every single day.
       if (platform === 'ebay' && !item.ebay_listing_id) {
@@ -200,18 +235,10 @@ export async function POST(request: NextRequest) {
       }
 
       const ageDays = calculateAgingDays(item);
-      let amazonMarket: AmazonMarketContext | null = null;
-      if (platform === 'amazon' && item.amazon_asin) {
-        const base = marketMap.get(item.amazon_asin);
-        if (base) {
-          amazonMarket = { ...base, lastAppliedMatch: lastMatchMap.get(item.id) ?? null };
-        }
-      }
       const engagement = item.ebay_listing_id ? engagementMap.get(item.ebay_listing_id) : undefined;
 
       // No engagement data for this listing (unlinked, multi-qty, or not yet
       // aged into the eligible set) → hold rather than judge blind as COLD.
-      // Young listings would HOLD in the engine anyway; the rest need a human.
       if (platform === 'ebay' && !engagement) {
         held++;
         idsToRoll.push(item.id);
@@ -225,7 +252,7 @@ export async function POST(request: NextRequest) {
           cost: Number(item.cost),
           condition: item.condition,
           ageDays,
-          amazonMarket,
+          amazonMarket: null,
           views: engagement?.views ?? null,
           watchers: engagement?.watchers ?? null,
           config,
@@ -247,28 +274,96 @@ export async function POST(request: NextRequest) {
         }
 
         idsToRoll.push(item.id);
-        newProposals.push({
-          user_id: item.user_id,
-          inventory_item_id: item.id,
-          platform,
-          diagnosis: out.diagnosis === 'HOLDING' ? 'OVERPRICED' : out.diagnosis,
-          diagnosis_reason: out.reason,
-          current_price: Number(item.listing_value),
-          proposed_price: out.targetPrice,
-          price_floor: out.floor,
-          market_price: amazonMarket?.stableBuyBox ?? null,
-          proposed_action: out.action === 'AUCTION' ? 'AUCTION' : 'MARKDOWN',
-          markdown_step: out.markdownStep,
-          aging_days: ageDays,
-          auction_end_date: null,
-          auction_duration_days: out.action === 'AUCTION' ? config.auction_default_duration_days : null,
-          status: 'PENDING',
-          set_number: item.set_number ?? null,
-          item_name: item.item_name ?? null,
-          sales_rank: amazonMarket?.salesRank ?? null,
-        });
+        newProposals.push(makeProposal(item, platform, out, ageDays, null, 1, Number(item.listing_value)));
       } catch (err) {
         console.error(`[Markdown] Error processing item ${item.id}:`, err);
+        errors++;
+      }
+    }
+
+    // ---- Amazon: one decision per (asin, condition) group ----
+    // An Amazon price is per-ASIN and approving a proposal reprices EVERY in-play
+    // unit of the ASIN. Generating one proposal per unit is therefore redundant
+    // and can contradict itself (some units markdown, an older unit exits). Decide
+    // ONCE per (asin, condition), driven by the oldest unit, priced to clear the
+    // highest-cost unit's floor; the proposal carries the unit count.
+    const amazonGroups = new Map<string, InventoryItemForMarkdown[]>();
+    for (const item of dueItems) {
+      if (item.listing_platform?.toLowerCase() !== 'amazon' || !item.amazon_asin) continue;
+      const key = `${item.amazon_asin}||${(item.condition ?? '').toLowerCase()}`;
+      const list = amazonGroups.get(key);
+      if (list) list.push(item);
+      else amazonGroups.set(key, [item]);
+    }
+
+    for (const members of amazonGroups.values()) {
+      // Any unit of this ASIN already has a pending proposal → whole group is
+      // covered; leave clocks untouched (re-surfaces if that proposal is rejected).
+      if (members.some((m) => existingItemIds.has(m.id))) {
+        skipped += members.length;
+        continue;
+      }
+
+      // markdown_hold units are a deliberate decision — roll them and drop them
+      // from the pricing set.
+      const holdMembers = members.filter((m) => m.markdown_hold);
+      holdMembers.forEach((m) => idsToRoll.push(m.id));
+      skipped += holdMembers.length;
+
+      // Only units with both a price and a cost can be priced.
+      const priceable = members.filter((m) => !m.markdown_hold && m.listing_value && m.cost);
+      const unpriceable = members.filter((m) => !m.markdown_hold && !(m.listing_value && m.cost));
+      unpriceable.forEach((m) => {
+        held++;
+        idsToRoll.push(m.id);
+      });
+      if (priceable.length === 0) continue;
+
+      // Representative = oldest unit (drives the aging/exit decision). Price to
+      // clear the HIGHEST-cost unit's floor so no unit is pushed below breakeven.
+      const rep = priceable.reduce((a, b) => (calculateAgingDays(b) > calculateAgingDays(a) ? b : a));
+      const repAge = calculateAgingDays(rep);
+      const repPrice = Number(rep.listing_value);
+      const maxCost = Math.max(...priceable.map((m) => Number(m.cost)));
+      const base = marketMap.get(rep.amazon_asin!);
+      const amazonMarket: AmazonMarketContext | null = base
+        ? { ...base, lastAppliedMatch: lastMatchMap.get(rep.id) ?? null }
+        : null;
+
+      try {
+        const out = computeTarget({
+          platform: 'amazon',
+          currentPrice: repPrice,
+          cost: maxCost,
+          condition: rep.condition,
+          ageDays: repAge,
+          amazonMarket,
+          views: null,
+          watchers: null,
+          config,
+        });
+
+        if (out.needsReview) {
+          needsReview.push({ setNumber: rep.set_number, name: rep.item_name, reason: out.reason });
+        }
+
+        // All priceable units advance together with the group decision.
+        priceable.forEach((m) => idsToRoll.push(m.id));
+
+        if (out.action === 'HOLD') {
+          held += priceable.length;
+          continue;
+        }
+        if (out.action === 'REPRICE' && out.reductionPct < config.min_change_pct) {
+          held += priceable.length;
+          continue;
+        }
+
+        newProposals.push(
+          makeProposal(rep, 'amazon', out, repAge, amazonMarket, priceable.length, repPrice)
+        );
+      } catch (err) {
+        console.error(`[Markdown] Error processing ASIN group ${rep.amazon_asin}:`, err);
         errors++;
       }
     }
@@ -316,6 +411,7 @@ export async function POST(request: NextRequest) {
           diagnosisReason: p.diagnosis_reason,
           ageDays: p.aging_days,
           floor: p.price_floor,
+          units: p.units,
         }));
       const auctions: MarkdownDigestAuction[] = newProposals
         .filter((p) => p.proposed_action === 'AUCTION')
@@ -326,6 +422,7 @@ export async function POST(request: NextRequest) {
           ageDays: p.aging_days,
           suggestedEndDate: p.auction_end_date,
           reason: p.diagnosis_reason,
+          units: p.units,
         }));
 
       if (config.report_email) {

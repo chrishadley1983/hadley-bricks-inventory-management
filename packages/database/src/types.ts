@@ -298,6 +298,7 @@ export type Database = {
           buy_box_price: number | null
           competitive_price: number | null
           created_at: string
+          high_365d: number | null
           id: string
           lowest_offer_is_fba: boolean | null
           lowest_offer_is_prime: boolean | null
@@ -313,6 +314,7 @@ export type Database = {
           total_offer_count: number | null
           user_id: string
           was_price_180d: number | null
+          was_price_365d: number | null
           was_price_90d: number | null
           your_price: number | null
           your_qty: number | null
@@ -323,6 +325,7 @@ export type Database = {
           buy_box_price?: number | null
           competitive_price?: number | null
           created_at?: string
+          high_365d?: number | null
           id?: string
           lowest_offer_is_fba?: boolean | null
           lowest_offer_is_prime?: boolean | null
@@ -338,6 +341,7 @@ export type Database = {
           total_offer_count?: number | null
           user_id: string
           was_price_180d?: number | null
+          was_price_365d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -348,6 +352,7 @@ export type Database = {
           buy_box_price?: number | null
           competitive_price?: number | null
           created_at?: string
+          high_365d?: number | null
           id?: string
           lowest_offer_is_fba?: boolean | null
           lowest_offer_is_prime?: boolean | null
@@ -363,6 +368,7 @@ export type Database = {
           total_offer_count?: number | null
           user_id?: string
           was_price_180d?: number | null
+          was_price_365d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -9121,6 +9127,7 @@ export type Database = {
           sales_rank: number | null
           set_number: string | null
           status: string
+          units: number
           updated_at: string
           user_id: string
         }
@@ -9147,6 +9154,7 @@ export type Database = {
           sales_rank?: number | null
           set_number?: string | null
           status?: string
+          units?: number
           updated_at?: string
           user_id: string
         }
@@ -9173,6 +9181,7 @@ export type Database = {
           sales_rank?: number | null
           set_number?: string | null
           status?: string
+          units?: number
           updated_at?: string
           user_id?: string
         }
