@@ -534,7 +534,44 @@ async function main(): Promise<void> {
   console.log(`[pg-own-store-audit] report written: ${REPORT_FILE}`);
 
   console.log(`\n[pg-own-store-audit] summary: overpriced=${overpriced.length} underpriced=${underpriced.length} dead-stock=${deadStock.length} missing-restock=${missingRestock.length}`);
+
+  await persistReport(STORE_SLUG ?? path.basename(INVENTORY_FILE!, '.json'), {
+    overpricedCount: overpriced.length,
+    underpricedCount: underpriced.length,
+    deadStockCount: deadStock.length,
+    missingRestockCount: missingRestock.length,
+    lotsAudited: raw.length,
+  }, report);
+
   console.log('[pg-own-store-audit] done');
+}
+
+// ---------------------------------------------------------------------------
+// BrickRadar UI persistence (spec §5.1): mirror bl-pg-store-scan.ts's
+// persistScanReport — non-fatal, so a Supabase hiccup never fails the run.
+// ---------------------------------------------------------------------------
+
+interface OwnStoreAuditSummary {
+  overpricedCount: number;
+  underpricedCount: number;
+  deadStockCount: number;
+  missingRestockCount: number;
+  lotsAudited: number;
+}
+
+async function persistReport(subject: string, summary: OwnStoreAuditSummary, md: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('bl_pg_reports').insert({
+      kind: 'own_store_audit',
+      subject,
+      summary,
+      report_md: md,
+    });
+    if (error) console.warn(`  ⚠ bl_pg_reports insert failed: ${error.message}`);
+  } catch (err) {
+    console.warn(`  ⚠ bl_pg_reports insert failed: ${(err as Error).message}`);
+  }
 }
 
 main().catch((e) => {
