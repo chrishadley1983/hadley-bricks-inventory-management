@@ -20,7 +20,14 @@
  *   --store-slug=<name>      REQUIRED — BL store URL slug
  *   --cdp-port=<n>           Chrome CDP port (default 9222)
  *   --shipping=<gbp>         Inbound postage estimate for allocation (default 3.00)
- *   --min-ask=<gbp>          Ignore lots asking below this (default 0.10)
+ *   --min-ask=<gbp>          Economy dial, NOT a visibility filter (default 0). List price is
+ *                            bricqerListPrice(soldAvg, cond, str) — the £0.0699 floor already
+ *                            backstops it, and a cheap ask can be profitable when its UK 6MA
+ *                            supports a higher list. Raise this only to skip scrape/cache/score
+ *                            work on sub-threshold asks, never to hide otherwise-profitable lots.
+ *   --enrich-min-ask=<gbp>   BROWSER-SCRAPE gate (default 0.10): a tuple only gets a live PgScraper
+ *                            navigation if ≥1 of its lots asks at/above this. Cache reads (getFresh)
+ *                            are unaffected — cache hits stay free for every tuple regardless of ask.
  *   --min-margin=<pct>       Buy-list gate on net/list margin (default 0.20)
  *   --min-str=<ratio>        Buy-list gate on UK sell-through (default 0)
  *   --cache-ttl-days=<n>     PG cache freshness (default 7)
@@ -86,7 +93,8 @@ if (!STORE_SLUG) {
 }
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
 const SHIPPING = parseFloat(argv['shipping'] ?? '3.00');
-const MIN_ASK = parseFloat(argv['min-ask'] ?? '0.10');
+const MIN_ASK = parseFloat(argv['min-ask'] ?? '0');
+const ENRICH_MIN_ASK = parseFloat(argv['enrich-min-ask'] ?? '0.10');
 const MIN_MARGIN = parseFloat(argv['min-margin'] ?? '0.20');
 const MIN_STR = parseFloat(argv['min-str'] ?? '0');
 const CACHE_TTL_DAYS = parseFloat(argv['cache-ttl-days'] ?? '7');
@@ -344,6 +352,7 @@ async function scrapeInventory(cdp: StoreCdp, storeId: number): Promise<StoreLot
 
 interface EnrichOutcome {
   rows: Map<string, PgCacheRow>;
+  tuples: PgItemRef[];
   pagesScraped: number;
   cacheHits: number;
   noData: number;
@@ -353,13 +362,19 @@ interface EnrichOutcome {
 
 async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
   // The scrape unit is one PG page per (type, itemNo[, colour]) — covers both conditions.
+  // MIN_ASK here is only the economy dial (§header doc): it decides which tuples we
+  // want price data for at all. It does NOT gate the live browser scrape — that's
+  // ENRICH_MIN_ASK below, applied only to the cache-miss subset.
   const tupleMap = new Map<string, PgItemRef>();
+  const tupleMaxAsk = new Map<string, number>();
   for (const l of lots) {
     if (l.ask < MIN_ASK) continue;
     if (hasDamageNote(l.description)) continue;
     if (l.itemType === 'S' && isIncompleteSetListing(l.invComplete, l.description)) continue;
     const ref: PgItemRef = { itemType: l.itemType, itemNo: l.itemNo, colourId: l.itemType === 'P' ? l.colourId : 0 };
-    tupleMap.set(pgCacheKey(ref), ref);
+    const key = pgCacheKey(ref);
+    tupleMap.set(key, ref);
+    tupleMaxAsk.set(key, Math.max(tupleMaxAsk.get(key) ?? 0, l.ask));
   }
   const tuples = [...tupleMap.values()];
   console.log(`\n[3/5] Enriching ${tuples.length} unique (item, colour) tuples (PG cache TTL ${CACHE_TTL_DAYS}d)...`);
@@ -367,7 +382,12 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
   const rows = await cacheService.getFresh(tuples, CACHE_TTL_DAYS);
   const cacheHits = rows.size;
   let needed = tuples.filter((t) => !rows.has(pgCacheKey(t)));
-  console.log(`  cache hits: ${cacheHits}   to scrape: ${needed.length}`);
+  const belowEnrichAsk = needed.filter((t) => (tupleMaxAsk.get(pgCacheKey(t)) ?? 0) < ENRICH_MIN_ASK).length;
+  needed = needed.filter((t) => (tupleMaxAsk.get(pgCacheKey(t)) ?? 0) >= ENRICH_MIN_ASK);
+  console.log(
+    `  cache hits: ${cacheHits}   to scrape: ${needed.length}` +
+      (belowEnrichAsk > 0 ? `   (${belowEnrichAsk} skipped — below --enrich-min-ask=${money(ENRICH_MIN_ASK)})` : ''),
+  );
   if (LIMIT_TUPLES > 0 && needed.length > LIMIT_TUPLES) {
     console.log(`  --limit-tuples=${LIMIT_TUPLES}: scraping first ${LIMIT_TUPLES} this run (cache resumes the rest)`);
     needed = needed.slice(0, LIMIT_TUPLES);
@@ -447,7 +467,7 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
     }
   }
   console.log(`  enrichment done: ${pagesScraped} pages scraped, ${cacheHits} cache hits, ${noData} no-data, ${notFound} not-found${aborted ? ' — ABORTED EARLY' : ''}`);
-  return { rows, pagesScraped, cacheHits, noData, notFound, aborted };
+  return { rows, tuples, pagesScraped, cacheHits, noData, notFound, aborted };
 }
 
 // ---------------------------------------------------------------------------
@@ -482,10 +502,94 @@ async function fetchPovMap(lots: StoreLot[]): Promise<Map<string, PovSummary>> {
 }
 
 // ---------------------------------------------------------------------------
+// L1 fallback (worldwide summary cache — screening basis when L3 UK detail is
+// missing or shows no sales for a lot's condition; spec §2.1 "L1 screens, L3
+// prices"). Same chunk/page shape as pg-own-store-audit.ts's fetchL1.
+// ---------------------------------------------------------------------------
+
+interface L1SummaryRow {
+  item_type: PgItemType;
+  item_no: string;
+  colour_id: number;
+  currency: string | null;
+  fx_rate: number | null;
+  sold6m_new_avg: number | null;
+  sold6m_new_qavg: number | null;
+  sold6m_new_qty: number | null;
+  sold6m_new_lots: number | null;
+  sold6m_used_avg: number | null;
+  sold6m_used_qavg: number | null;
+  sold6m_used_qty: number | null;
+  sold6m_used_lots: number | null;
+  str_new: number | null;
+  str_used: number | null;
+  no_data: boolean;
+}
+
+interface L1Benchmark {
+  soldAvgNew: number | null;
+  soldAvgUsed: number | null;
+  soldQtyNew: number;
+  soldQtyUsed: number;
+  soldLotsNew: number;
+  soldLotsUsed: number;
+  strNew: number | null;
+  strUsed: number | null;
+}
+
+/** Reads bricklink_pg_summary_cache for the given tuples, GBP-converting via fx_rate
+ * only when currency !== 'GBP' (GBP-native rows are already correct regardless of any
+ * stamped rate). no_data rows and non-GBP rows missing a stamped rate are skipped —
+ * never guessed. Chunked .in() of 300 item_nos + .range() pagination (1,000-row cap). */
+async function fetchL1Map(tuples: PgItemRef[]): Promise<Map<string, L1Benchmark>> {
+  const out = new Map<string, L1Benchmark>();
+  if (tuples.length === 0) return out;
+  const itemNos = [...new Set(tuples.map((t) => t.itemNo))];
+  const CHUNK = 300;
+  const PAGE = 1000;
+  for (let i = 0; i < itemNos.length; i += CHUNK) {
+    const chunk = itemNos.slice(i, i + CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('bricklink_pg_summary_cache')
+        .select(
+          'item_type,item_no,colour_id,currency,fx_rate,sold6m_new_avg,sold6m_new_qavg,sold6m_new_qty,sold6m_new_lots,sold6m_used_avg,sold6m_used_qavg,sold6m_used_qty,sold6m_used_lots,str_new,str_used,no_data',
+        )
+        .in('item_no', chunk)
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(`L1 read failed: ${error.message}`);
+      const rows = (data ?? []) as L1SummaryRow[];
+      for (const r of rows) {
+        if (r.no_data) continue;
+        const fx = r.currency && r.currency !== 'GBP' ? r.fx_rate : 1;
+        if (fx == null) continue; // non-GBP row with no stamped rate — don't guess
+        const newAvgRaw = r.sold6m_new_qavg ?? r.sold6m_new_avg;
+        const usedAvgRaw = r.sold6m_used_qavg ?? r.sold6m_used_avg;
+        out.set(pgCacheKey({ itemType: r.item_type, itemNo: r.item_no, colourId: r.colour_id }), {
+          soldAvgNew: newAvgRaw != null ? newAvgRaw * fx : null,
+          soldAvgUsed: usedAvgRaw != null ? usedAvgRaw * fx : null,
+          soldQtyNew: r.sold6m_new_qty ?? 0,
+          soldQtyUsed: r.sold6m_used_qty ?? 0,
+          soldLotsNew: r.sold6m_new_lots ?? 0,
+          soldLotsUsed: r.sold6m_used_lots ?? 0,
+          strNew: r.str_new,
+          strUsed: r.str_used,
+        });
+      }
+      if (rows.length < PAGE) break;
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------
 
 type Confidence = 'solid' | 'thin' | 'single-sale' | 'none';
+/** 'uk' = L3 page-scrape detail (bricklink_price_guide_cache); 'world' = L1 worldwide
+ * summary fallback (bricklink_pg_summary_cache); 'none' = no benchmark on either layer. */
+type PriceSource = 'uk' | 'world' | 'none';
 
 interface ScoredLot extends StoreLot {
   ukSoldAvg: number | null;
@@ -513,35 +617,82 @@ interface ScoredLot extends StoreLot {
   povMultiple: number | null;
   /** ask < 0.5 × POV sold avg — a part-out arbitrage signal, distinct from the STR-based buy gates. */
   povArbitrageFlag: boolean;
+  /** Which layer this lot's benchmark came from — see PriceSource. */
+  priceSource: PriceSource;
 }
 
-function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>, povMap: Map<string, PovSummary>): ScoredLot[] {
-  const pre: Array<{ lot: StoreLot; row: PgCacheRow | undefined; list: number; str: number }> = [];
+interface Benchmark {
+  source: PriceSource;
+  soldAvg: number | null;
+  soldMedian: number | null;
+  soldLots: number;
+  soldQty: number;
+  last2mo: number;
+  str: number;
+}
+
+/** L3 wins when it has sales for the lot's condition; otherwise falls back to the L1
+ * worldwide summary (spec §2.1 "L1 screens, L3 prices" — screening may run on any
+ * layer, but every report labels its source). Absent from both = 'none'. */
+function resolveBenchmark(lot: StoreLot, row: PgCacheRow | undefined, l1: L1Benchmark | undefined): Benchmark {
+  const isNew = lot.cond === 'N';
+  const l3SoldAvg = row ? (isNew ? row.uk_sold_avg_new : row.uk_sold_avg_used) : null;
+  const l3SoldQty = row ? (isNew ? row.uk_sold_qty_new : row.uk_sold_qty_used) : 0;
+  if (row && l3SoldAvg != null && l3SoldQty > 0) {
+    const stockQty = isNew ? row.uk_stock_qty_new : row.uk_stock_qty_used;
+    return {
+      source: 'uk',
+      soldAvg: l3SoldAvg,
+      soldMedian: isNew ? row.uk_sold_median_new : row.uk_sold_median_used,
+      soldLots: isNew ? row.uk_sold_lots_new : row.uk_sold_lots_used,
+      soldQty: l3SoldQty,
+      last2mo: isNew ? row.uk_sold_last2mo_qty_new : row.uk_sold_last2mo_qty_used,
+      str: stockQty > 0 ? l3SoldQty / stockQty : 0,
+    };
+  }
+  const l1SoldAvg = l1 ? (isNew ? l1.soldAvgNew : l1.soldAvgUsed) : null;
+  const l1SoldQty = l1 ? (isNew ? l1.soldQtyNew : l1.soldQtyUsed) : 0;
+  if (l1 && l1SoldAvg != null && l1SoldQty > 0) {
+    return {
+      source: 'world',
+      soldAvg: l1SoldAvg,
+      soldMedian: null, // L1 has no median — skew detection just won't fire for world-sourced lots
+      soldLots: isNew ? l1.soldLotsNew : l1.soldLotsUsed,
+      soldQty: l1SoldQty,
+      last2mo: 0, // L1 has no monthly buckets
+      str: (isNew ? l1.strNew : l1.strUsed) ?? 0,
+    };
+  }
+  return { source: 'none', soldAvg: null, soldMedian: null, soldLots: 0, soldQty: 0, last2mo: 0, str: 0 };
+}
+
+function scoreLots(
+  lots: StoreLot[],
+  rows: Map<string, PgCacheRow>,
+  l1Map: Map<string, L1Benchmark>,
+  povMap: Map<string, PovSummary>,
+): ScoredLot[] {
+  const pre: Array<{ lot: StoreLot; row: PgCacheRow | undefined; l1: L1Benchmark | undefined; bench: Benchmark; list: number }> = [];
   let damageFiltered = 0;
   for (const lot of lots) {
     if (lot.ask < MIN_ASK) continue;
     if (hasDamageNote(lot.description)) { damageFiltered++; continue; }
     if (lot.itemType === 'S' && isIncompleteSetListing(lot.invComplete, lot.description)) continue;
     const ref: PgItemRef = { itemType: lot.itemType, itemNo: lot.itemNo, colourId: lot.itemType === 'P' ? lot.colourId : 0 };
-    const row = rows.get(pgCacheKey(ref));
-    const soldAvg = row ? (lot.cond === 'N' ? row.uk_sold_avg_new : row.uk_sold_avg_used) : null;
-    const soldQty = row ? (lot.cond === 'N' ? row.uk_sold_qty_new : row.uk_sold_qty_used) : 0;
-    const stockQty = row ? (lot.cond === 'N' ? row.uk_stock_qty_new : row.uk_stock_qty_used) : 0;
-    const str = stockQty > 0 ? soldQty / stockQty : 0;
-    const list = bricqerListPrice(soldAvg, lot.cond, str) ?? 0;
-    pre.push({ lot, row, list, str });
+    const key = pgCacheKey(ref);
+    const row = rows.get(key);
+    const l1 = l1Map.get(key);
+    const bench = resolveBenchmark(lot, row, l1);
+    const list = bricqerListPrice(bench.soldAvg, lot.cond, bench.str) ?? 0;
+    pre.push({ lot, row, l1, bench, list });
   }
   void damageFiltered;
   const totalListForAlloc = pre.reduce((s, p) => s + p.list * p.lot.qty, 0);
   const withList = pre.filter((p) => p.list > 0);
-  const avgStr = withList.length > 0 ? withList.reduce((s, p) => s + p.str, 0) / withList.length : 0;
+  const avgStr = withList.length > 0 ? withList.reduce((s, p) => s + p.bench.str, 0) / withList.length : 0;
 
-  return pre.map(({ lot, row, list, str }) => {
-    const soldAvg = row ? (lot.cond === 'N' ? row.uk_sold_avg_new : row.uk_sold_avg_used) : null;
-    const soldMedian = row ? (lot.cond === 'N' ? row.uk_sold_median_new : row.uk_sold_median_used) : null;
-    const soldLots = row ? (lot.cond === 'N' ? row.uk_sold_lots_new : row.uk_sold_lots_used) : 0;
-    const soldQty = row ? (lot.cond === 'N' ? row.uk_sold_qty_new : row.uk_sold_qty_used) : 0;
-    const last2mo = row ? (lot.cond === 'N' ? row.uk_sold_last2mo_qty_new : row.uk_sold_last2mo_qty_used) : 0;
+  return pre.map(({ lot, row, l1, bench, list }) => {
+    const { soldAvg, soldMedian, soldLots, soldQty, last2mo, str, source: priceSource } = bench;
     const stockQty = row ? (lot.cond === 'N' ? row.uk_stock_qty_new : row.uk_stock_qty_used) : 0;
     const confidence: Confidence = soldLots >= 5 ? 'solid' : soldLots >= 2 ? 'thin' : soldLots === 1 ? 'single-sale' : 'none';
     const skewFlag = soldAvg != null && soldMedian != null && soldMedian > 0 && soldAvg > soldMedian * 1.3;
@@ -558,9 +709,10 @@ function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>, povMap: Map<
       askVsUk: soldAvg != null && soldAvg > 0 ? +(lot.ask / soldAvg).toFixed(3) : null,
       confidence, skewFlag, rejectReason: null, passed: false, watch: false,
       povSoldAvgGbp: pov?.soldAvgGbp ?? null, povMultiple: pov?.multiple ?? null, povArbitrageFlag,
+      priceSource,
     };
     if (!soldAvg || list <= 0) {
-      base.rejectReason = row ? 'no UK sales in 6mo' : 'not enriched (partial run)';
+      base.rejectReason = row || l1 ? 'no UK/world sales in 6mo' : 'not enriched (partial run)';
       return base;
     }
     const lotList = list * lot.qty;
@@ -600,6 +752,8 @@ interface ScanMeta {
   byType: Record<string, number>;
   boiler: { boilerplateCount: number; itemsCovered: number };
   enrich: EnrichOutcome;
+  /** Uncovered (priceSource 'none') tuples queued to bl_pg_refresh_queue this run. */
+  gapFillCount: number;
 }
 
 function median(nums: number[]): number | null {
@@ -617,8 +771,11 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   const passed = scored.filter((s) => s.passed).sort((a, b) => (b.lotProfit ?? 0) - (a.lotProfit ?? 0));
   const watch = scored.filter((s) => !s.passed && s.watch).sort((a, b) => (b.marginPct ?? 0) - (a.marginPct ?? 0));
   const benchmarked = scored.filter((s) => s.askVsUk != null);
-  const noUkSales = scored.filter((s) => s.rejectReason === 'no UK sales in 6mo');
+  const noSales = scored.filter((s) => s.rejectReason === 'no UK/world sales in 6mo');
   const unenriched = scored.filter((s) => s.rejectReason === 'not enriched (partial run)');
+  const srcCounts = { uk: 0, world: 0, none: 0 } as Record<PriceSource, number>;
+  for (const s of scored) srcCounts[s.priceSource]++;
+  const worldBuys = passed.filter((p) => p.priceSource === 'world');
 
   const outlay = passed.reduce((s, o) => s + o.ask * o.qty, 0);
   const listTotal = passed.reduce((s, o) => s + (o.listPrice ?? 0) * o.qty, 0);
@@ -684,10 +841,14 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
 
   L.push('## Store pricing profile');
   L.push('');
-  L.push(`- Benchmarked lots: **${benchmarked.length}** of ${scored.length} scanned (${noUkSales.length} with no UK sales in 6 months${unenriched.length > 0 ? `; ${unenriched.length} not yet enriched — partial run` : ''}).`);
+  L.push(`- Benchmarked lots: **${benchmarked.length}** of ${scored.length} scanned (${noSales.length} with no UK/world sales in 6 months${unenriched.length > 0 ? `; ${unenriched.length} not yet enriched — partial run` : ''}).`);
+  L.push(`- Price source: **${srcCounts.uk} UK** (L3 page-scrape) · **${srcCounts.world} worldwide** (L1 fallback) · **${srcCounts.none} uncovered** (no benchmark on either layer) — of ${scored.length} scanned lots.`);
   if (medianRatio != null) {
     L.push(`- Median ask ÷ UK 6MA: **${medianRatio.toFixed(2)}** — ${medianRatio >= 1 ? 'priced at/above market (active repricer; bargains are exceptions, not policy)' : medianRatio >= 0.85 ? 'slightly under market' : 'meaningfully under market (stale-priced seller — worth mining)'}.`);
     L.push(`- ${below80} lots ask <80% of UK 6MA · ${above100} lots ask ≥100%.`);
+  }
+  if (worldBuys.length > 0) {
+    L.push(`- ⚠ **${worldBuys.length} of ${passed.length} buy candidates are worldwide-priced (L1)** — live-check on BL before purchase (UK/world gap ~11% median, worse on new licensed printed parts).`);
   }
   L.push('');
 
@@ -698,10 +859,11 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   };
   const lotLine = (o: ScoredLot) => {
     const name = (o.itemType === 'P' && o.colourName ? `${o.colourName} ${o.itemName}` : o.itemName).slice(0, 44);
-    return `| ${o.itemType} | ${o.itemNo} | ${name} | ${o.cond} | ${money(o.ask)} | ${o.qty} | ${money(o.ukSoldAvg, 3)} | ${money(o.ukSoldMedian, 2)} | ${o.ukSoldLots} | ${o.str.toFixed(2)} | ${o.ukLast2moQty} | ${money(o.listPrice, 3)} | ${money(o.netPerUnit, 3)} | **${money(o.lotProfit)}** | ${o.marginPct?.toFixed(0) ?? '—'}% | ${o.confidence}${o.skewFlag ? ' ⚠skew' : ''} | ${povCell(o)} |`;
+    const src = o.priceSource === 'uk' ? 'uk' : o.priceSource === 'world' ? 'world' : '—';
+    return `| ${o.itemType} | ${o.itemNo} | ${name} | ${o.cond} | ${money(o.ask)} | ${o.qty} | ${money(o.ukSoldAvg, 3)} | ${money(o.ukSoldMedian, 2)} | ${o.ukSoldLots} | ${o.str.toFixed(2)} | ${o.ukLast2moQty} | ${money(o.listPrice, 3)} | ${money(o.netPerUnit, 3)} | **${money(o.lotProfit)}** | ${o.marginPct?.toFixed(0) ?? '—'}% | ${o.confidence}${o.skewFlag ? ' ⚠skew' : ''} | ${src} | ${povCell(o)} |`;
   };
-  const header = '| T | Item | Name | C | Ask | Qty | UK 6MA | Med | Sales | STR | L2mo | List | Net/u | Lot £ | Mgn | Confidence | POV |';
-  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|';
+  const header = '| T | Item | Name | C | Ask | Qty | UK 6MA | Med | Sales | STR | L2mo | List | Net/u | Lot £ | Mgn | Confidence | Src | POV |';
+  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|';
 
   L.push(`## Buy list — ${passed.length} lots`);
   L.push('');
@@ -712,7 +874,7 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
     L.push(sep);
     for (const o of passed) L.push(lotLine(o));
     L.push('');
-    L.push('*Sales = UK transactions in 6mo (confidence: ≥5 solid, 2–4 thin, 1 single-sale). L2mo = UK pieces sold in the 2 most recent months. ⚠skew = 6MA sits >30% above median — benchmark propped up by outlier sales; trust the median. POV = BL part-out value (cache-only join, sets only); ⚠pov = ask < 50% of POV sold avg — a part-out arbitrage signal, independent of the STR-based buy gates above.*');
+    L.push('*Sales = UK-or-world transactions in 6mo, whichever priced the lot (confidence: ≥5 solid, 2–4 thin, 1 single-sale). L2mo = UK pieces sold in the 2 most recent months (0 for world-priced lots — L1 has no monthly buckets). ⚠skew = 6MA sits >30% above median — benchmark propped up by outlier sales; trust the median (world-priced lots never skew-flag — L1 has no median). Src = uk (L3 page-scrape, live-checked basis) or world (L1 worldwide fallback — live-check before buying, UK/world gap ~11% median). POV = BL part-out value (cache-only join, sets only); ⚠pov = ask < 50% of POV sold avg — a part-out arbitrage signal, independent of the STR-based buy gates above.*');
   }
   L.push('');
 
@@ -750,8 +912,11 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   if (meta.boiler.boilerplateCount > 0) {
     L.push(`- Boilerplate: ${meta.boiler.boilerplateCount} repeated description(s) covering ${meta.boiler.itemsCovered} lots exempted from the damage filter.`);
   }
-  L.push(`- Gates: ask ≥ ${money(MIN_ASK)}, margin ≥ ${(MIN_MARGIN * 100).toFixed(0)}%, STR ≥ ${MIN_STR}, shipping £${SHIPPING.toFixed(2)} allocated by list value.`);
+  L.push(`- Gates: ask ≥ ${money(MIN_ASK)} (economy dial), browser-scrape ask ≥ ${money(ENRICH_MIN_ASK)}, margin ≥ ${(MIN_MARGIN * 100).toFixed(0)}%, STR ≥ ${MIN_STR}, shipping £${SHIPPING.toFixed(2)} allocated by list value.`);
   L.push(`- Fee model: 9.4% variable (BL 3% + Bricqer 3.5% + PayPal 2.9%).`);
+  if (meta.gapFillCount > 0) {
+    L.push(`- Gap-fill: ${meta.gapFillCount} uncovered tuple(s) queued to \`bl_pg_refresh_queue\` (tier=tail) — run \`npx tsx scripts/pg/pg-residual-fill.ts\` to clear them.`);
+  }
   L.push('');
 
   L.push('## Next steps');
@@ -769,6 +934,36 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   }
   L.push('');
   return L.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Gap-fill enqueue: uncovered (priceSource 'none') tuples -> bl_pg_refresh_queue,
+// tier='tail', due immediately — pg-residual-fill.ts's default gap-fill mode picks
+// up any queue row with last_refreshed_at IS NULL, which a fresh insert satisfies.
+// Mirrors pg-residual-fill.ts's own enqueueFromInventoryFile shape.
+// ---------------------------------------------------------------------------
+
+async function enqueueGapFill(scored: ScoredLot[]): Promise<number> {
+  const seen = new Set<string>();
+  const rows: Array<{ item_type: PgItemType; item_no: string; colour_id: number; tier: 'tail'; next_due_at: string }> = [];
+  const nowIso = new Date().toISOString();
+  for (const s of scored) {
+    if (s.priceSource !== 'none') continue;
+    const ref: PgItemRef = { itemType: s.itemType, itemNo: s.itemNo, colourId: s.itemType === 'P' ? s.colourId : 0 };
+    const key = pgCacheKey(ref);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ item_type: ref.itemType, item_no: ref.itemNo, colour_id: ref.colourId, tier: 'tail', next_due_at: nowIso });
+  }
+  if (rows.length === 0) return 0;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await supabase
+      .from('bl_pg_refresh_queue')
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'item_type,item_no,colour_id', ignoreDuplicates: true });
+    if (error) console.error(`  ⚠ gap-fill enqueue failed: ${error.message}`);
+  }
+  return rows.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -802,15 +997,21 @@ async function main() {
 
   console.log('\n[4/5] Scoring...');
   const povMap = await fetchPovMap(lots);
-  const scored = scoreLots(lots, enrichOutcome.rows, povMap);
+  const l1Map = await fetchL1Map(enrichOutcome.tuples);
+  const scored = scoreLots(lots, enrichOutcome.rows, l1Map, povMap);
   const passed = scored.filter((s) => s.passed);
-  console.log(`  ${scored.length} lots scored, ${passed.length} pass gates`);
+  console.log(`  ${scored.length} lots scored, ${passed.length} pass gates (${l1Map.size} L1 tuples available as fallback)`);
+
+  const gapFillCount = await enqueueGapFill(scored);
+  if (gapFillCount > 0) {
+    console.log(`  gap-fill: ${gapFillCount} uncovered tuple(s) queued to bl_pg_refresh_queue (tier=tail) — run: npx tsx scripts/pg/pg-residual-fill.ts`);
+  }
 
   console.log('\n[5/5] Writing report...');
   const byType: Record<string, number> = {};
   for (const l of lots) byType[l.itemType] = (byType[l.itemType] ?? 0) + 1;
   const report = buildReport(
-    { storeName: storeMeta.storeName, storeId: storeMeta.storeId, totalLots: lots.length, byType, boiler, enrich: enrichOutcome },
+    { storeName: storeMeta.storeName, storeId: storeMeta.storeId, totalLots: lots.length, byType, boiler, enrich: enrichOutcome, gapFillCount },
     scored,
   );
   fs.writeFileSync(REPORT_FILE, report);
