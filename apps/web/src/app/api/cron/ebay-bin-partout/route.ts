@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
           totalCostGbp: opp.totalCostGbp,
           povTotal: opp.povTotal,
           multiple: opp.multiple,
+          realisablePovGbp: opp.realisablePovGbp,
+          povCaptureRate: opp.povCaptureRate,
           amazonPriceGbp: opp.amazon?.amazonPriceGbp ?? null,
           amazonProfitGbp: opp.amazonProfitGbp,
           amazonMarginPct: opp.amazonMarginPct,

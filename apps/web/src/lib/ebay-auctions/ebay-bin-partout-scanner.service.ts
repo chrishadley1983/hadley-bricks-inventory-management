@@ -27,6 +27,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEbayBrowseClient, type EbayItemSummary } from '@/lib/ebay/ebay-browse.client';
 import { extractSetNumbers } from './set-identifier';
+import { liquidityAdjustedPov, type PovLot } from '@/lib/bricklink/liquidity-pov';
 
 const DEFAULT_POSTAGE_GBP = 3.99;
 const AMAZON_FEE_RATE = 0.1836; // matches the Vinted sniper's margin model
@@ -84,6 +85,22 @@ export interface BinCandidate {
   postageGbp: number;
   totalCostGbp: number;
   multiple: number | null;    // povTotal / totalCost (null when no POV data)
+  /**
+   * Liquidity-adjusted ("realisable") POV — spec §3 F4, feeds this watcher +
+   * set-buy-check verdicts. This is a SET-LEVEL approximation: captureFraction(setStr)
+   * from lib/bricklink/liquidity-pov applied to each matched hitlist set's POV
+   * component, where setStr is BrickLink's own worldwide COMPLETE-SET sell-through
+   * rate (bricklink_pg_summary_cache, item_type='S', colour 0) — NOT a per-lot part
+   * STR, which would require a live per-set scrape the 15-min scan path must not do.
+   * null when none of the candidate's sets have a cached S-tuple str_used yet
+   * (coverage is thin today — ~1% of the hitlist as of 2026-07-08, growing as the PG
+   * platform backfill widens S-tuple coverage). Deliberately NOT backfilled with
+   * captureFraction(null)'s pessimistic default in that case — that would fabricate a
+   * number this set has no real signal for; flag-don't-suppress means add an honest
+   * figure when we have one, not manufacture one when we don't.
+   */
+  realisablePovGbp: number | null;
+  povCaptureRate: number | null;    // 0..1, only set alongside realisablePovGbp
   amazon: AmazonSeedPrice | null;   // NEW pass only
   amazonProfitGbp: number | null;
   amazonMarginPct: number | null;
@@ -354,6 +371,30 @@ export class EbayBinPartoutScannerService {
   }
 
   /**
+   * Batch-load per-set STR (BrickLink worldwide price-guide summary,
+   * bricklink_pg_summary_cache item_type='S', colour_id=0) for the liquidity-adjusted
+   * POV estimate (spec §3 F4). This table is small (low hundreds of rows as of
+   * 2026-07-08) so one unfiltered read per scan is cheap — no per-alert scrape. Rows
+   * absent from the map mean "no signal", not "illiquid"; callers must not fabricate a
+   * capture fraction for sets missing here.
+   */
+  private async loadSetStrMap(): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const { data, error } = await this.supabase
+      .from('bricklink_pg_summary_cache')
+      .select('item_no, str_used')
+      .eq('item_type', 'S')
+      .eq('colour_id', 0)
+      .not('str_used', 'is', null);
+    if (error || !data) return map;
+    for (const r of data) {
+      const str = Number(r.str_used);
+      if (Number.isFinite(str)) map.set(String(r.item_no), str);
+    }
+    return map;
+  }
+
+  /**
    * Fetch newly-listed items for one condition, saturation-aware: when a full
    * page is entirely newer than the cursor, keep paging (bounded) so a burst
    * of listings between cycles is not silently truncated.
@@ -464,14 +505,15 @@ export class EbayBinPartoutScannerService {
       base.hitlistRefreshed = await this.ensureHitlistFresh(config);
       const hitlist = await this.loadHitlist();
       base.hitlistSize = hitlist.size;
+      const setStrMap = await this.loadSetStrMap();
 
       const cursorUpdates: Record<string, string> = {};
 
       // Pass 1: USED part-out.
-      await this.scanPass('USED', config, hitlist, base, cursorUpdates);
+      await this.scanPass('USED', config, hitlist, setStrMap, base, cursorUpdates);
       // Pass 2: NEW sealed (Amazon resale OR New POV).
       if (config.newScanEnabled) {
-        await this.scanPass('NEW', config, hitlist, base, cursorUpdates);
+        await this.scanPass('NEW', config, hitlist, setStrMap, base, cursorUpdates);
       }
 
       if (Object.keys(cursorUpdates).length > 0) {
@@ -500,6 +542,7 @@ export class EbayBinPartoutScannerService {
     condition: 'USED' | 'NEW',
     config: BinPartoutConfig,
     hitlist: Map<string, HitlistEntry>,
+    setStrMap: Map<string, number>,
     base: Omit<BinScanResult, 'durationMs'>,
     cursorUpdates: Record<string, string>
   ): Promise<void> {
@@ -555,6 +598,8 @@ export class EbayBinPartoutScannerService {
       amazonMargin: number | null;
       signals: string[];
       tier: 'great' | 'good';
+      realisablePovGbp: number | null;
+      povCaptureRate: number | null;
     };
     const overBar: OverBar[] = [];
 
@@ -570,6 +615,24 @@ export class EbayBinPartoutScannerService {
           ? rc.sets.reduce((a, s) => a + s.usedPovGbp, 0)
           : rc.sets.reduce((a, s) => a + (s.newPovGbp ?? 0), 0);
       const povMultiple = povTotal > 0 ? povTotal / totalCost : null;
+
+      // Liquidity-adjusted ("realisable") POV — spec §3 F4. Set-level approximation
+      // via captureFraction(setStr); see the BinCandidate.realisablePovGbp doc comment
+      // for why a missing setStr is left null rather than backfilled with the
+      // pessimistic default.
+      const hasStrSignal = rc.sets.some((s) => setStrMap.has(s.setNumber));
+      let realisablePovGbp: number | null = null;
+      let povCaptureRate: number | null = null;
+      if (hasStrSignal && povTotal > 0) {
+        const lots: PovLot[] = rc.sets.map((s) => ({
+          qty: 1,
+          price: mode === 'used' ? s.usedPovGbp : s.newPovGbp,
+          str: setStrMap.get(s.setNumber) ?? null,
+        }));
+        const liq = liquidityAdjustedPov(lots);
+        realisablePovGbp = liq.realisable;
+        povCaptureRate = liq.captureRate;
+      }
 
       // eBay-floor learning (USED pass only): plausible complete single-set
       // listings teach us the going used market ask, no extra API calls.
@@ -626,6 +689,8 @@ export class EbayBinPartoutScannerService {
         amazonMargin,
         signals,
         tier,
+        realisablePovGbp,
+        povCaptureRate,
       });
     }
 
@@ -704,6 +769,8 @@ export class EbayBinPartoutScannerService {
         postageGbp: c.postage,
         totalCostGbp: c.totalCost,
         multiple: c.povTotal > 0 ? c.povTotal / c.totalCost : null,
+        realisablePovGbp: c.realisablePovGbp,
+        povCaptureRate: c.povCaptureRate,
         amazon: c.amazon,
         amazonProfitGbp: c.amazonProfit,
         amazonMarginPct: c.amazonMargin,
