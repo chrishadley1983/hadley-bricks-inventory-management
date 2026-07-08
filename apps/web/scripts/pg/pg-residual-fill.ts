@@ -76,7 +76,9 @@ const INVENTORY_FILE = argv['inventory-file'] ? path.resolve(process.cwd(), argv
 const DUE_MODE = argv['due'] === 'true';
 const SESSION_MAX = Math.max(1, Math.min(40, parseInt(argv['session-max'] ?? '40', 10)));
 const BREATHER_MINS = Math.max(1, parseFloat(argv['breather-mins'] ?? '15'));
-const MAX_SESSIONS = Math.max(1, parseInt(argv['max-sessions'] ?? '6', 10));
+// Default 8: a Jabbz-class residual set (~250 tuples) fits one default run
+// (8 x 40 = 320) — 6 x 40 = 240 fell 4 short of the 244 acceptance case.
+const MAX_SESSIONS = Math.max(1, parseInt(argv['max-sessions'] ?? '8', 10));
 const POOL_SIZE = Math.max(SESSION_MAX, parseInt(argv['pool-size'] ?? '5000', 10));
 const API_ROTATE = argv['no-api-rotate'] !== 'true';
 const API_ROTATE_MAX = Math.max(0, parseInt(argv['api-rotate-max'] ?? '50', 10));
@@ -124,15 +126,34 @@ async function enqueueFromInventoryFile(): Promise<void> {
   }
   const lots = JSON.parse(fs.readFileSync(INVENTORY_FILE, 'utf8')) as StoreLot[];
   const seen = new Set<string>();
-  const rows: Array<{ item_type: PgItemType; item_no: string; colour_id: number; tier: string; next_due_at: string }> = [];
+  const tuples: Array<{ item_type: PgItemType; item_no: string; colour_id: number }> = [];
   for (const l of lots) {
     const colour = l.itemType === 'P' ? l.colourId : 0;
     const key = `${l.itemType}:${l.itemNo}:${colour}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({ item_type: l.itemType, item_no: l.itemNo, colour_id: colour, tier: 'tail', next_due_at: new Date().toISOString() });
+    tuples.push({ item_type: l.itemType, item_no: l.itemNo, colour_id: colour });
   }
-  console.log(`[enqueue] ${rows.length} unique tuples from ${path.basename(INVENTORY_FILE)}`);
+  // Already-covered tuples get last_refreshed_at stamped at enqueue time (same
+  // contract as pg-universe --seed-from-cache) — otherwise thousands of covered
+  // rows sit NULL in the gap window, starving genuinely-uncovered tuples past
+  // --pool-size and looking instantly "due" to --due mode (E2E validation finding).
+  const covered = await fetchCoveredSet([...new Set(tuples.map((t) => t.item_no))]);
+  const nowIso = new Date().toISOString();
+  const spreadDue = () => new Date(Date.now() + Math.random() * 90 * 86400000).toISOString();
+  const rows = tuples.map((t) => {
+    const isCovered = covered.has(tupleKey(t));
+    return {
+      ...t,
+      tier: 'tail',
+      last_refreshed_at: isCovered ? nowIso : null,
+      next_due_at: isCovered ? spreadDue() : nowIso,
+    };
+  });
+  const uncoveredCount = rows.filter((r) => r.last_refreshed_at === null).length;
+  console.log(
+    `[enqueue] ${rows.length} unique tuples from ${path.basename(INVENTORY_FILE)} (${uncoveredCount} uncovered, ${rows.length - uncoveredCount} covered/stamped)`,
+  );
   const CHUNK = 500;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await supabase
@@ -264,6 +285,9 @@ async function releaseTuples(tuples: QueueRow[]): Promise<void> {
   const { error } = await supabase
     .from('bl_pg_refresh_queue')
     .update({ locked_by: null, locked_at: null })
+    // Scoped to our own lock: past the 8h stale window another run may have
+    // legitimately reclaimed these rows — never clobber its lock (validation finding).
+    .eq('locked_by', RUN_ID)
     .or(orFilterForTuples(tuples));
   if (error) throw new Error(`release failed: ${error.message}`);
 }
@@ -272,6 +296,7 @@ async function markFailure(t: QueueRow, reason: string): Promise<void> {
   const { error } = await supabase
     .from('bl_pg_refresh_queue')
     .update({ locked_by: null, locked_at: null, attempts: t.attempts + 1, last_error: reason, updated_at: new Date().toISOString() })
+    .eq('locked_by', RUN_ID)
     .eq('item_type', t.item_type)
     .eq('item_no', t.item_no)
     .eq('colour_id', t.colour_id);
@@ -293,6 +318,7 @@ async function markSuccess(t: QueueRow): Promise<void> {
       last_error: null,
       updated_at: now.toISOString(),
     })
+    .eq('locked_by', RUN_ID)
     .eq('item_type', t.item_type)
     .eq('item_no', t.item_no)
     .eq('colour_id', t.colour_id);
@@ -306,6 +332,7 @@ async function markChallenge(t: QueueRow): Promise<void> {
   const { error } = await supabase
     .from('bl_pg_refresh_queue')
     .update({ locked_by: null, locked_at: null, last_error: 'challenge', updated_at: new Date().toISOString() })
+    .eq('locked_by', RUN_ID)
     .eq('item_type', t.item_type)
     .eq('item_no', t.item_no)
     .eq('colour_id', t.colour_id);
