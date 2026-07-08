@@ -380,16 +380,25 @@ export class EbayBinPartoutScannerService {
    */
   private async loadSetStrMap(): Promise<Map<string, number>> {
     const map = new Map<string, number>();
-    const { data, error } = await this.supabase
-      .from('bricklink_pg_summary_cache')
-      .select('item_no, str_used')
-      .eq('item_type', 'S')
-      .eq('colour_id', 0)
-      .not('str_used', 'is', null);
-    if (error || !data) return map;
-    for (const r of data) {
-      const str = Number(r.str_used);
-      if (Number.isFinite(str)) map.set(String(r.item_no), str);
+    // Paginated (Supabase 1,000-row cap): safe today at ~313 str_used rows, but the
+    // hitlist set-layer fill is actively growing S-tuple L1 coverage toward ~12.6k —
+    // an unpaginated read would silently truncate once it crosses 1,000 (2026-07-08
+    // E2E finding).
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.supabase
+        .from('bricklink_pg_summary_cache')
+        .select('item_no, str_used')
+        .eq('item_type', 'S')
+        .eq('colour_id', 0)
+        .not('str_used', 'is', null)
+        .range(from, from + PAGE - 1);
+      if (error || !data) break;
+      for (const r of data) {
+        const str = Number(r.str_used);
+        if (Number.isFinite(str)) map.set(String(r.item_no), str);
+      }
+      if (data.length < PAGE) break;
     }
     return map;
   }
