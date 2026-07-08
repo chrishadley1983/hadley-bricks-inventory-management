@@ -74,7 +74,13 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
 
 const INVENTORY_FILE = argv['inventory-file'] ? path.resolve(process.cwd(), argv['inventory-file']) : null;
 const DUE_MODE = argv['due'] === 'true';
-const SESSION_MAX = Math.max(1, Math.min(40, parseInt(argv['session-max'] ?? '40', 10)));
+// Cap raised 40 → 400 (2026-07-08): the old clamp was a relic of the disproven
+// "challenged at ~43 requests" theory (that was a parser gap, PR #521 — lane C has
+// never actually been blocked). 400 mirrors lane D's observed per-session order of
+// magnitude. RAMP PROCEDURE: raise --session-max stepwise (40 → 80 → 160 → 320)
+// across successive nights, watching bl_pg_lane_telemetry.first_block_at_request
+// for lane='anon_curl' — any block signal, halve and hold. Default stays 40.
+const SESSION_MAX = Math.max(1, Math.min(400, parseInt(argv['session-max'] ?? '40', 10)));
 const BREATHER_MINS = Math.max(1, parseFloat(argv['breather-mins'] ?? '15'));
 // Default 8: a Jabbz-class residual set (~250 tuples) fits one default run
 // (8 x 40 = 320) — 6 x 40 = 240 fell 4 short of the 244 acceptance case.
