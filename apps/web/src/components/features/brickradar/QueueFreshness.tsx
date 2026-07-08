@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { ListTree, ShieldCheck, Archive, AlertOctagon } from 'lucide-react';
 import { CHART_TOOLTIP_STYLE, STATUS_TEXT, TREND_NEG_VAR, laneColorVar, seqVar, LANE_ORDER } from './chart-colors';
+import { InfoTip } from './InfoTip';
 import { laneLabel, type QueueTierSummary, type NextDueBucket, type LaneTelemetryDayRow } from './types';
 
 function TierStat({
@@ -23,12 +24,14 @@ function TierStat({
   label,
   value,
   hint,
+  info,
   tone,
 }: {
   icon: React.ElementType;
   label: string;
   value: number;
   hint: string;
+  info?: string;
   tone?: 'good' | 'warn' | 'serious';
 }) {
   return (
@@ -38,7 +41,10 @@ function TierStat({
         <div className={`text-lg font-semibold tabular-nums ${tone ? STATUS_TEXT[tone] : ''}`}>
           {value.toLocaleString()}
         </div>
-        <div className="text-xs font-medium">{label}</div>
+        <div className="flex items-center gap-1 text-xs font-medium">
+          {label}
+          {info && <InfoTip text={info} />}
+        </div>
         <div className="text-xs text-muted-foreground">{hint}</div>
       </div>
     </div>
@@ -150,7 +156,10 @@ export function QueueFreshness({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Queue &amp; freshness</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          Queue &amp; freshness
+          <InfoTip text="Section overview: how the refresh queue is split into tiers, how safely each lane is scraping, and how the active tier's 28-day cycle is spread across time." />
+        </CardTitle>
         <CardDescription>
           Refresh-queue tier composition, the sessions-to-first-403 trend (the tripwire for throttling down before a
           real ban), and how the active tier&apos;s 28-day refresh cycle is spread out.
@@ -158,27 +167,64 @@ export function QueueFreshness({
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <TierStat icon={ListTree} label="Active tier" value={tiers.activeTotal} hint="on the 28d cycle" />
-          <TierStat icon={ShieldCheck} label="By rank" value={tiers.activeByRank} hint="qualifies on 6mo value" />
-          <TierStat icon={ShieldCheck} label="By grace" value={tiers.activeByGrace} hint="new-release grace window" />
-          <TierStat icon={ShieldCheck} label="By floor" value={tiers.activeByFloor} hint="watchlist / own inventory" />
-          <TierStat icon={Archive} label="Tail tier" value={tiers.tailTotal} hint="off-cycle, refreshed on demand" />
+          <TierStat
+            icon={ListTree}
+            label="Active tier"
+            value={tiers.activeTotal}
+            hint="on the 28d cycle"
+            info="Tuples on the 28-day refresh cycle — the highest-value, most closely tracked slice of the catalogue."
+          />
+          <TierStat
+            icon={ShieldCheck}
+            label="By rank"
+            value={tiers.activeByRank}
+            hint="qualifies on 6mo value"
+            info="Active tuples that qualify purely on their 6-month sold-value ranking (the top ~60k)."
+          />
+          <TierStat
+            icon={ShieldCheck}
+            label="By grace"
+            value={tiers.activeByGrace}
+            hint="new-release grace window"
+            info="Newly released items held in the active tier during their grace window, even before they'd otherwise rank in on value."
+          />
+          <TierStat
+            icon={ShieldCheck}
+            label="By floor"
+            value={tiers.activeByFloor}
+            hint="watchlist / own inventory"
+            info="Active tuples pinned in because we hold stock or are watching them, regardless of rank."
+          />
+          <TierStat
+            icon={Archive}
+            label="Tail tier"
+            value={tiers.tailTotal}
+            hint="off-cycle, refreshed on demand"
+            info="Everything else — refreshed slower, on demand, with worldwide summary only (no UK detail)."
+          />
           <TierStat
             icon={AlertOctagon}
             label="Past due"
             value={tiers.pastDueCount}
             hint="active tuples overdue"
+            info="Active tuples overdue for refresh — the nightly cycle works these first."
             tone={tiers.pastDueCount > 0 ? 'warn' : 'good'}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <div>
-            <h4 className="mb-2 text-sm font-medium">Block-rate trend — last 14 days</h4>
+            <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+              Block-rate trend — last 14 days
+              <InfoTip text="Block-rate trend = how many requests each scrape session survived before BrickLink challenged it; higher = safer." />
+            </h4>
             <BlockRateTrendChart rows={telemetry14d} />
           </div>
           <div>
-            <h4 className="mb-2 text-sm font-medium">Next-due distribution — active tier</h4>
+            <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+              Next-due distribution — active tier
+              <InfoTip text="How the active tier's 28-day refresh cycle is spread across time buckets — a healthy queue has most tuples not yet due." />
+            </h4>
             <NextDueDistributionChart buckets={buckets} />
           </div>
         </div>

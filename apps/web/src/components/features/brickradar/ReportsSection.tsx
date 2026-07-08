@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ClipboardList, TrendingUp, TrendingDown, PackageX, PackageSearch, Boxes } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { ReportMarkdownCollapsible } from './markdown';
+import { InfoTip } from './InfoTip';
 import { STATUS_TEXT } from './chart-colors';
 import type { ReportRow, OwnStoreAuditSummary, DigestSummary } from './types';
 
@@ -24,6 +25,7 @@ function OwnStoreAuditCard({ report }: { report: ReportRow | null }) {
         <CardTitle className="flex items-center gap-2">
           <PackageSearch className="h-4 w-4" />
           Own-store audit
+          <InfoTip text="Automated scan comparing our own live listings against the market — flags overpriced, underpriced, dead-stock, and missing-restock lots." />
         </CardTitle>
         <CardDescription>
           {report ? `${report.subject ?? 'latest run'} — ${formatDate(report.generated_at)}` : 'Overpriced/underpriced/dead-stock/missing-restock scan of our own listings vs the market.'}
@@ -64,6 +66,7 @@ function DigestCard({ report }: { report: ReportRow | null }) {
         <CardTitle className="flex items-center gap-2">
           <ClipboardList className="h-4 w-4" />
           Weekly digest
+          <InfoTip text="Weekly roll-up of STR risers/fallers, fig movers, and overall coverage/freshness health." />
         </CardTitle>
         <CardDescription>
           {report ? `${report.subject ?? 'latest run'} — ${formatDate(report.generated_at)}` : 'STR risers/fallers, fig movers, and coverage health — pg-digest.ts weekly run.'}

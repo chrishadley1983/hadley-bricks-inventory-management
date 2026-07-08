@@ -10,5 +10,8 @@ export { TupleDetail } from './TupleDetail';
 export { PriceHistogramChart } from './PriceHistogramChart';
 export { MiniMarkdown, ReportMarkdownCollapsible } from './markdown';
 export { buildPriceHistogram } from './priceHistogram';
+export { InfoTip } from './InfoTip';
+export { ColourSwatch } from './ColourSwatch';
+export { GlossaryDialog } from './GlossaryDialog';
 export * from './chart-colors';
 export * from './types';

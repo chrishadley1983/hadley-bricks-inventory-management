@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, Gauge, History, AlertTriangle, Radar, Activity } from 'lucide-react';
 import { Sparkline } from './Sparkline';
+import { InfoTip } from './InfoTip';
 import { STATUS_TEXT } from './chart-colors';
 import type { HealthSummary } from './types';
 
@@ -35,6 +36,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <Database className="h-3.5 w-3.5" />
             L1 tuples
+            <InfoTip text="L1 tuples = worldwide summary rows we hold across BrickLink's whole catalogue — one row per (item, colour) tuple we've ever priced." />
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">{health.l1TuplesTotal.toLocaleString()}</CardTitle>
         </CardHeader>
@@ -48,6 +50,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <Gauge className="h-3.5 w-3.5" />
             Active-tier freshness
+            <InfoTip text="Active-tier freshness = % of the top-60k value tuples refreshed within their 28-day cycle." />
           </CardDescription>
           <CardTitle className={`text-2xl tabular-nums ${STATUS_TEXT[freshnessTone]}`}>{pct(health.activeFreshPct)}</CardTitle>
         </CardHeader>
@@ -63,6 +66,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5" />
             Past-due
+            <InfoTip text="Past-due = active tuples whose refresh window has elapsed — the nightly cycle works these first." />
           </CardDescription>
           <CardTitle className={`text-2xl tabular-nums ${STATUS_TEXT[health.activePastDueCount > 0 ? 'warn' : 'good']}`}>
             {health.activePastDueCount.toLocaleString()}
@@ -78,6 +82,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <History className="h-3.5 w-3.5" />
             Snapshots
+            <InfoTip text="Snapshots = monthly point-in-time L2 rows written per tuple, used to compute the month-over-month trend deltas below." />
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">{health.snapshotsCount.toLocaleString()}</CardTitle>
         </CardHeader>
@@ -91,6 +96,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <Radar className="h-3.5 w-3.5" />
             Last refresh
+            <InfoTip text="Last refresh = OK vs failed request counts from the most recent nightly catalogPG scrape session." />
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">
             {health.lastTelemetryRunDate ? (
@@ -127,6 +133,7 @@ export function HealthCards({ health }: { health: HealthSummary }) {
           <CardDescription className="flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5" />
             Acquisition (7d)
+            <InfoTip text="Acquisition (7d) = total catalogPG-lane requests made over the last 7 nights, plus the nightly average." />
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">{requests7d.toLocaleString()}</CardTitle>
         </CardHeader>

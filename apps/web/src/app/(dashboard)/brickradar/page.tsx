@@ -10,6 +10,7 @@ import {
   RecentScans,
   ReportsSection,
   TupleSearchCard,
+  GlossaryDialog,
   CHART_VARS_CLASSNAME,
   type HealthSummary,
   type LaneTelemetryDayRow,
@@ -20,6 +21,7 @@ import {
   type QueueTierSummary,
   type NextDueBucket,
 } from '@/components/features/brickradar';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Server-rendered on every request — health/telemetry/screens are all read live off
 // Supabase; there is no client-side polling or new Vercel workload here (spec
@@ -84,6 +86,31 @@ interface NextDueBucketDef {
   fromMs: number | null;
   toMs: number | null;
   overdue?: boolean;
+}
+
+/**
+ * Batch-resolve item names for a screen's rows from `bl_catalog_names` — ONE
+ * `.in()` query per screen, never one call per row (that would burn a BL API
+ * call per row across 200 rows; see resolveItemName's own docs). Both
+ * pg_screen_high_str (parts) and pg_screen_fig_radar (minifigs) are each a
+ * single item_type, so one `.eq(item_type).in(item_no)` query per screen
+ * covers the whole table. Cache-only — never calls the BrickLink API; names
+ * simply fill in over time as tuple drill-downs cache them.
+ */
+async function fetchCatalogNames(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- bl_catalog_names not yet in generated Database types
+  supabase: SupabaseClient<any>,
+  itemType: string,
+  itemNos: string[]
+): Promise<Map<string, string>> {
+  if (itemNos.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('bl_catalog_names')
+    .select('item_no, name')
+    .eq('item_type', itemType)
+    .in('item_no', itemNos);
+  if (error || !data) return new Map();
+  return new Map((data as { item_no: string; name: string }[]).map((r) => [r.item_no, r.name]));
 }
 
 export default async function BrickRadarPage() {
@@ -231,8 +258,18 @@ export default async function BrickRadarPage() {
     overdue: b.overdue,
   }));
 
-  const highStrRows = (highStrRes.data ?? []) as ScreenRow[];
-  const figRadarRows = (figRadarRes.data ?? []) as ScreenRow[];
+  const highStrRowsRaw = (highStrRes.data ?? []) as ScreenRow[];
+  const figRadarRowsRaw = (figRadarRes.data ?? []) as ScreenRow[];
+
+  // Batched (never per-row) name fill-in — see fetchCatalogNames above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- bl_catalog_names not yet in generated Database types
+  const namesSupabase = supabase as SupabaseClient<any>;
+  const [highStrNames, figRadarNames] = await Promise.all([
+    fetchCatalogNames(namesSupabase, 'P', [...new Set(highStrRowsRaw.map((r) => r.item_no))]),
+    fetchCatalogNames(namesSupabase, 'M', [...new Set(figRadarRowsRaw.map((r) => r.item_no))]),
+  ]);
+  const highStrRows = highStrRowsRaw.map((r) => ({ ...r, item_name: highStrNames.get(r.item_no) ?? null }));
+  const figRadarRows = figRadarRowsRaw.map((r) => ({ ...r, item_name: figRadarNames.get(r.item_no) ?? null }));
   // Movers are ranked by used_qty_delta; a "riser" needs a positive delta and a "faller"
   // a negative one — the raw desc/asc-limited queries can otherwise both surface the same
   // flat (delta=0) tail when there's little real movement yet.
@@ -244,15 +281,18 @@ export default async function BrickRadarPage() {
 
   return (
     <div className={`space-y-6 p-6 ${CHART_VARS_CLASSNAME}`}>
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Radar className="h-6 w-6 text-primary" />
-          BrickRadar
-        </h1>
-        <p className="text-muted-foreground">
-          BrickLink market-intelligence coverage, refresh health, and sourcing screens (spec:
-          docs/features/pg-market-intelligence/spec.md §5).
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Radar className="h-6 w-6 text-primary" />
+            BrickRadar
+          </h1>
+          <p className="text-muted-foreground">
+            BrickLink market-intelligence coverage, refresh health, and sourcing screens (spec:
+            docs/features/pg-market-intelligence/spec.md §5).
+          </p>
+        </div>
+        <GlossaryDialog />
       </div>
 
       <HealthCards health={health} />
@@ -265,11 +305,13 @@ export default async function BrickRadarPage() {
         <ScreenTable
           title="High-STR screen"
           description="L1 parts with STR ≥ 0.5 (either condition) and GBP sold value ≥ £20 — buy-target candidates for part sourcing."
+          infoTip="L1 worldwide STR/value gate used to surface part sourcing buy-candidates — click an item number for our drill-down, or the external-link icon for BrickLink's own catalogue page."
           rows={highStrRows}
         />
         <ScreenTable
           title="Fig radar"
           description="Same STR/value gate over L1 minifigs, plus new/used spread — a positive fig-arbitrage signal."
+          infoTip="Same STR/value gate applied to minifigs, with the new-vs-used price spread as an arbitrage signal."
           rows={figRadarRows}
           showSpread
         />

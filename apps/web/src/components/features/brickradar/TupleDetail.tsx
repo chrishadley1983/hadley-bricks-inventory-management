@@ -1,22 +1,16 @@
-import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ExternalLink, PackageSearch, TrendingUp } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { PriceHistogramChart } from './PriceHistogramChart';
 import { buildPriceHistogram } from './priceHistogram';
-import { itemTypeLabel } from './types';
+import { ColourSwatch } from './ColourSwatch';
+import { blColour } from '@/lib/bricklink/bl-colours';
+import { itemTypeLabel, bricklinkCatalogUrl } from './types';
 import type { SummaryCacheRow, PriceGuideCacheRow, PovRow } from './types';
 
 const BRICQER_FLOOR = 0.0699;
 const FLOOR_LABEL = `Bricqer floor (£${BRICQER_FLOOR.toFixed(4).replace(/0+$/, '')})`;
-
-function bricklinkCatalogUrl(itemType: string, itemNo: string, colourId: number): string {
-  const bareNo = itemNo.replace(/-1$/, '');
-  const params = new URLSearchParams({ [itemType]: bareNo });
-  if (colourId > 0) params.set('C', String(colourId));
-  return `https://www.bricklink.com/v2/catalog/catalogitem.page?${params.toString()}`;
-}
 
 function QuadrantStat({ label, lots, qty, avg, min, max, str }: {
   label: string;
@@ -217,6 +211,7 @@ export function TupleDetail({
   itemType,
   itemNo,
   colourId,
+  itemName,
   l1,
   l3,
   pov,
@@ -224,22 +219,34 @@ export function TupleDetail({
   itemType: string;
   itemNo: string;
   colourId: number;
+  /**
+   * Resolved via resolveItemName() by the drill-down route (bl_catalog_names
+   * cache, falling back to a live BrickLink API lookup) — null when neither the
+   * cache nor a live BL client were available. Non-fatal by design; the header
+   * falls back gracefully below.
+   */
+  itemName: string | null;
   l1: SummaryCacheRow | null;
   l3: PriceGuideCacheRow | null;
   pov: PovRow | null;
 }) {
   const notCovered = !l1 && !l3;
+  // Resolved name first, then the L3 cache's own item_name (scraped alongside
+  // the price-guide detail), then a synthesized "Part 3023 in Black" fallback
+  // so the header never shows a bare, meaningless tuple.
+  const displayName =
+    itemName ?? l3?.item_name ?? `${itemTypeLabel(itemType)} ${itemNo}${colourId > 0 ? ` in ${blColour(colourId).name}` : ''}`;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <Badge variant="outline" className="font-mono text-sm">{itemTypeLabel(itemType)}</Badge>
-        <h2 className="font-mono text-xl font-semibold">
-          {itemNo}
-          {colourId > 0 && <span className="text-muted-foreground"> · colour #{colourId}</span>}
-        </h2>
-        {l3?.item_name && <span className="text-muted-foreground">{l3.item_name}</span>}
-        <Link
+        <h2 className="font-mono text-xl font-semibold">{itemNo}</h2>
+        {colourId > 0 && <ColourSwatch colourId={colourId} />}
+        <span className="text-muted-foreground">{displayName}</span>
+        {/* External — BrickLink's own catalogue page, new tab. Plain <a>, not next/link,
+            since this leaves the app entirely (matches the ScreenTable row convention). */}
+        <a
           href={bricklinkCatalogUrl(itemType, itemNo, colourId)}
           target="_blank"
           rel="noopener noreferrer"
@@ -247,7 +254,7 @@ export function TupleDetail({
         >
           View on BrickLink
           <ExternalLink className="h-3.5 w-3.5" />
-        </Link>
+        </a>
       </div>
 
       {notCovered && (

@@ -1,13 +1,17 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate } from '@/lib/utils';
+import { InfoTip } from './InfoTip';
 import { laneLabel, type LaneTelemetryDayRow } from './types';
 
 export function LaneTelemetryTable({ rows }: { rows: LaneTelemetryDayRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lane telemetry — last 14 days (raw detail)</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          Lane telemetry — last 14 days (raw detail)
+          <InfoTip text="Raw per-lane, per-night request counts behind the block-rate trend chart above." />
+        </CardTitle>
         <CardDescription>
           Per-lane, per-night acquisition volume behind the block-rate trend chart above. First-block position
           tracks the sessions-to-first-403 trend (spec §4.4) — the tripwire for throttling down before a real ban.

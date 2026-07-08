@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { TupleDetail, type SummaryCacheRow, type PriceGuideCacheRow, type PovRow } from '@/components/features/brickradar';
+import { CredentialsRepository } from '@/lib/repositories';
+import { BrickLinkClient } from '@/lib/bricklink';
+import type { BrickLinkCredentials } from '@/lib/bricklink';
+import { resolveItemName, type CatalogItemType } from '@/lib/bricklink/item-names';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,11 +37,42 @@ export default async function TuplePage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  const userId = user.id;
 
   const candidates = itemNoCandidates(itemType, itemNo);
   const bareSetNo = itemType === 'S' ? itemNo.replace(/-\d+$/, '') : null;
 
-  const [l1Res, l3Res, povRes] = await Promise.all([
+  /**
+   * Resolve a human-readable BrickLink catalog name for this one tuple —
+   * cache-first (bl_catalog_names), falling back to a live BL API lookup only
+   * on a genuine miss. This is the single-item drill-down, so one BL call here
+   * is fine (unlike the screen tables, which must never call the API per row —
+   * see the page's batched bl_catalog_names lookup instead).
+   * Every failure (missing credentials, BL API error, cache read/write) is
+   * non-fatal and resolves to null; TupleDetail falls back to a synthesized
+   * "Part 3023 in Black" label when this is null.
+   */
+  async function resolveTupleName(): Promise<string | null> {
+    let blClient: BrickLinkClient | null = null;
+    try {
+      const credentialsRepo = new CredentialsRepository(supabase);
+      const credentials = await credentialsRepo.getCredentials<BrickLinkCredentials>(userId, 'bricklink');
+      if (credentials) {
+        blClient = new BrickLinkClient(credentials, { supabase, caller: 'brickradar-tuple-page' });
+      }
+    } catch (err) {
+      console.warn('[BrickRadar tuple page] BrickLink client init failed (non-fatal):', err);
+    }
+
+    try {
+      return await resolveItemName(supabase, blClient, itemType as CatalogItemType, itemNo);
+    } catch (err) {
+      console.warn('[BrickRadar tuple page] resolveItemName failed (non-fatal):', err);
+      return null;
+    }
+  }
+
+  const [l1Res, l3Res, povRes, itemName] = await Promise.all([
     supabase
       .from('bricklink_pg_summary_cache')
       .select('*')
@@ -62,6 +97,7 @@ export default async function TuplePage({
           .order('fetched_at', { ascending: false })
           .limit(1)
       : Promise.resolve({ data: [], error: null }),
+    resolveTupleName(),
   ]);
 
   const l1 = ((l1Res.data ?? [])[0] ?? null) as SummaryCacheRow | null;
@@ -77,7 +113,7 @@ export default async function TuplePage({
         </Link>
       </div>
 
-      <TupleDetail itemType={itemType} itemNo={itemNo} colourId={colourId} l1={l1} l3={l3} pov={pov} />
+      <TupleDetail itemType={itemType} itemNo={itemNo} colourId={colourId} itemName={itemName} l1={l1} l3={l3} pov={pov} />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { CHART_TOOLTIP_STYLE, TREND_POS_VAR, TREND_NEG_VAR } from './chart-colors';
+import { InfoTip } from './InfoTip';
 import type { TrendMoverRow } from './types';
 
 function tupleLabel(r: TrendMoverRow): string {
@@ -132,7 +133,10 @@ export function TrendMovers({ risers, fallers }: { risers: TrendMoverRow[]; fall
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Trend movers</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          Trend movers
+          <InfoTip text="Which tuples moved most in stocked used-quantity between the two most recent monthly L2 snapshots — a signal for restocks and sales-pace shifts." />
+        </CardTitle>
         <CardDescription>
           Month-over-month used-quantity movers between each tuple&apos;s two most recent L2 snapshots.
         </CardDescription>
