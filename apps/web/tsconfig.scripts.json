@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "jsx": "preserve",
+    "plugins": []
+  },
+  "include": ["scripts/pg/**/*.ts", "src/lib/bricklink/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -107,6 +107,21 @@ export interface EbayBinPartoutAlertParams {
   condition: string | undefined;
 }
 
+export interface PgCanaryDivergence {
+  /** e.g. "P 3001 c11" */
+  label: string;
+  /** lane name -> UK sold-new average GBP (null if that lane had no data this run) */
+  lanes: Record<string, number | null>;
+  maxDivergencePct: number;
+}
+
+export interface PgCanaryAlertParams {
+  runDate: string;
+  divergentCount: number;
+  totalTuples: number;
+  divergences: PgCanaryDivergence[];
+}
+
 export interface EbayJoblotAlertParams {
   ebayTitle: string;
   currentBid: number;
@@ -721,6 +736,47 @@ export class DiscordService {
     }
 
     return this.send('opportunities', embed);
+  }
+
+  /**
+   * Send a PG canary cross-lane divergence alert (spec §4.4: golden-tuple canary set
+   * fetched via every active lane daily; alert on >5% divergence between lanes — the
+   * defence against parse drift, FX drift, and BL format changes going unnoticed).
+   */
+  async sendPgCanaryAlert(params: PgCanaryAlertParams): Promise<DiscordSendResult> {
+    const { runDate, divergentCount, totalTuples, divergences } = params;
+
+    const fields: DiscordEmbedField[] = [
+      {
+        name: '📊 Summary',
+        value: `**${divergentCount}/${totalTuples}** golden tuples diverged >5% between lanes on ${runDate}`,
+        inline: false,
+      },
+    ];
+
+    const shown = divergences.slice(0, 10);
+    if (shown.length > 0) {
+      const lines = shown.map((d) => {
+        const laneStr = Object.entries(d.lanes)
+          .map(([lane, val]) => `${lane}=${val != null ? `£${val.toFixed(3)}` : 'n/a'}`)
+          .join(' · ');
+        return `• **${d.label}**: ${laneStr} (${d.maxDivergencePct.toFixed(1)}%)`;
+      });
+      fields.push({
+        name: `⚠️ Divergent tuples (top ${shown.length})`,
+        value: lines.join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+
+    const embed: DiscordEmbed = {
+      title: '🐤 PG Canary: cross-lane price divergence',
+      description: 'Golden-tuple prices disagree by more than 5% between two or more BrickLink acquisition lanes — check for parse drift, FX drift, or a BL page/API format change.',
+      color: DiscordColors.RED,
+      fields,
+    };
+
+    return this.send('alerts', embed);
   }
 
   /**

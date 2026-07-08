@@ -64,6 +64,8 @@ import {
 } from '../src/lib/bricklink/price-guide-cache.service';
 import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
 import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
+import { PartOutValueCacheService } from '../src/lib/bricklink/part-out-value-cache.service';
+import { parseSetNumber, resolvePovOptions } from '../src/lib/bricklink/part-out-value';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -112,6 +114,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
 const cacheService = new PriceGuideCacheService(supabase);
+const povCacheService = new PartOutValueCacheService(supabase);
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -448,6 +451,37 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
 }
 
 // ---------------------------------------------------------------------------
+// POV join (L4, cache-only — no live scraping during a scan; see PartOutValueCacheService.getCached)
+// ---------------------------------------------------------------------------
+
+interface PovSummary {
+  soldAvgGbp: number | null;
+  multiple: number | null;
+}
+
+/** Keys by the bare BL set number (no "-1" suffix) — matches parseSetNumber's itemNo. */
+async function fetchPovMap(lots: StoreLot[]): Promise<Map<string, PovSummary>> {
+  const map = new Map<string, PovSummary>();
+  const setNos = new Set<string>();
+  for (const l of lots) if (l.itemType === 'S') setNos.add(parseSetNumber(l.itemNo).itemNo);
+  for (const setNo of setNos) {
+    const opts = resolvePovOptions({ setNumber: setNo, itemSeq: 1 });
+    try {
+      const cached = await povCacheService.getCached(opts);
+      if (cached) {
+        map.set(setNo, {
+          soldAvgGbp: cached.row.sold_6mo_avg_gbp != null ? Number(cached.row.sold_6mo_avg_gbp) : null,
+          multiple: cached.row.partout_multiple != null ? Number(cached.row.partout_multiple) : null,
+        });
+      }
+    } catch (err) {
+      console.warn(`  ⚠ POV cache lookup failed for ${setNo}:`, (err as Error).message);
+    }
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------
 
@@ -474,9 +508,14 @@ interface ScoredLot extends StoreLot {
   rejectReason: string | null;
   passed: boolean;
   watch: boolean;
+  /** L4 join (sets only): BL's official part-out value, cache-only. Null for parts/figs or no cache hit. */
+  povSoldAvgGbp: number | null;
+  povMultiple: number | null;
+  /** ask < 0.5 × POV sold avg — a part-out arbitrage signal, distinct from the STR-based buy gates. */
+  povArbitrageFlag: boolean;
 }
 
-function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>): ScoredLot[] {
+function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>, povMap: Map<string, PovSummary>): ScoredLot[] {
   const pre: Array<{ lot: StoreLot; row: PgCacheRow | undefined; list: number; str: number }> = [];
   let damageFiltered = 0;
   for (const lot of lots) {
@@ -506,6 +545,8 @@ function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>): ScoredLot[]
     const stockQty = row ? (lot.cond === 'N' ? row.uk_stock_qty_new : row.uk_stock_qty_used) : 0;
     const confidence: Confidence = soldLots >= 5 ? 'solid' : soldLots >= 2 ? 'thin' : soldLots === 1 ? 'single-sale' : 'none';
     const skewFlag = soldAvg != null && soldMedian != null && soldMedian > 0 && soldAvg > soldMedian * 1.3;
+    const pov = lot.itemType === 'S' ? (povMap.get(parseSetNumber(lot.itemNo).itemNo) ?? null) : null;
+    const povArbitrageFlag = pov?.soldAvgGbp != null && lot.ask < 0.5 * pov.soldAvgGbp;
 
     const base: ScoredLot = {
       ...lot,
@@ -516,6 +557,7 @@ function scoreLots(lots: StoreLot[], rows: Map<string, PgCacheRow>): ScoredLot[]
       inboundPerUnit: 0, netPerUnit: null, lotProfit: null, marginPct: null, monthsOfStock: null,
       askVsUk: soldAvg != null && soldAvg > 0 ? +(lot.ask / soldAvg).toFixed(3) : null,
       confidence, skewFlag, rejectReason: null, passed: false, watch: false,
+      povSoldAvgGbp: pov?.soldAvgGbp ?? null, povMultiple: pov?.multiple ?? null, povArbitrageFlag,
     };
     if (!soldAvg || list <= 0) {
       base.rejectReason = row ? 'no UK sales in 6mo' : 'not enriched (partial run)';
@@ -649,12 +691,17 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
   }
   L.push('');
 
+  const povCell = (o: ScoredLot) => {
+    if (o.itemType !== 'S') return '';
+    if (o.povSoldAvgGbp == null) return '—';
+    return `${money(o.povSoldAvgGbp, 2)}${o.povMultiple != null ? ` (${o.povMultiple.toFixed(1)}x)` : ''}${o.povArbitrageFlag ? ' ⚠pov' : ''}`;
+  };
   const lotLine = (o: ScoredLot) => {
     const name = (o.itemType === 'P' && o.colourName ? `${o.colourName} ${o.itemName}` : o.itemName).slice(0, 44);
-    return `| ${o.itemType} | ${o.itemNo} | ${name} | ${o.cond} | ${money(o.ask)} | ${o.qty} | ${money(o.ukSoldAvg, 3)} | ${money(o.ukSoldMedian, 2)} | ${o.ukSoldLots} | ${o.str.toFixed(2)} | ${o.ukLast2moQty} | ${money(o.listPrice, 3)} | ${money(o.netPerUnit, 3)} | **${money(o.lotProfit)}** | ${o.marginPct?.toFixed(0) ?? '—'}% | ${o.confidence}${o.skewFlag ? ' ⚠skew' : ''} |`;
+    return `| ${o.itemType} | ${o.itemNo} | ${name} | ${o.cond} | ${money(o.ask)} | ${o.qty} | ${money(o.ukSoldAvg, 3)} | ${money(o.ukSoldMedian, 2)} | ${o.ukSoldLots} | ${o.str.toFixed(2)} | ${o.ukLast2moQty} | ${money(o.listPrice, 3)} | ${money(o.netPerUnit, 3)} | **${money(o.lotProfit)}** | ${o.marginPct?.toFixed(0) ?? '—'}% | ${o.confidence}${o.skewFlag ? ' ⚠skew' : ''} | ${povCell(o)} |`;
   };
-  const header = '| T | Item | Name | C | Ask | Qty | UK 6MA | Med | Sales | STR | L2mo | List | Net/u | Lot £ | Mgn | Confidence |';
-  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|';
+  const header = '| T | Item | Name | C | Ask | Qty | UK 6MA | Med | Sales | STR | L2mo | List | Net/u | Lot £ | Mgn | Confidence | POV |';
+  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|';
 
   L.push(`## Buy list — ${passed.length} lots`);
   L.push('');
@@ -665,7 +712,7 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
     L.push(sep);
     for (const o of passed) L.push(lotLine(o));
     L.push('');
-    L.push('*Sales = UK transactions in 6mo (confidence: ≥5 solid, 2–4 thin, 1 single-sale). L2mo = UK pieces sold in the 2 most recent months. ⚠skew = 6MA sits >30% above median — benchmark propped up by outlier sales; trust the median.*');
+    L.push('*Sales = UK transactions in 6mo (confidence: ≥5 solid, 2–4 thin, 1 single-sale). L2mo = UK pieces sold in the 2 most recent months. ⚠skew = 6MA sits >30% above median — benchmark propped up by outlier sales; trust the median. POV = BL part-out value (cache-only join, sets only); ⚠pov = ask < 50% of POV sold avg — a part-out arbitrage signal, independent of the STR-based buy gates above.*');
   }
   L.push('');
 
@@ -754,7 +801,8 @@ async function main() {
   const enrichOutcome = await enrich(lots);
 
   console.log('\n[4/5] Scoring...');
-  const scored = scoreLots(lots, enrichOutcome.rows);
+  const povMap = await fetchPovMap(lots);
+  const scored = scoreLots(lots, enrichOutcome.rows, povMap);
   const passed = scored.filter((s) => s.passed);
   console.log(`  ${scored.length} lots scored, ${passed.length} pass gates`);
 
