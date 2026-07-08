@@ -74,7 +74,9 @@ Register-PgTask -TaskName 'HadleyBricks-PG-Canary' -ScriptFile 'pg-canary.ps1' `
     -Trigger $canaryTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
     -Description 'Daily golden-tuple canary: cross-lane price divergence check (anon-curl vs catalogPG). Local-only.'
 
-$rankTrigger = New-ScheduledTaskTrigger -Daily -At '06:00'
+# 09:00: safely clear of the nightly refresh window (00:05 + 7h30m limit = 07:35) so
+# pg-rank never paginates tables lane D is actively writing (review finding #2).
+$rankTrigger = New-ScheduledTaskTrigger -Daily -At '09:00'
 Register-PgTask -TaskName 'HadleyBricks-PG-Rank' -ScriptFile 'pg-rank.ps1' `
     -Trigger $rankTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
     -Description 'Monthly ranking-cut recompute (runs daily, self-exits unless day 1). Local-only, no CDP needed.'

@@ -86,6 +86,9 @@ async function loadL1Scores(sb: SupabaseClient): Promise<{ scores: Map<string, n
       .select(
         'item_type,item_no,colour_id,currency,fx_rate,sold6m_new_qty,sold6m_new_qavg,sold6m_new_avg,sold6m_used_qty,sold6m_used_qavg,sold6m_used_avg',
       )
+      // Stable ordering: unordered OFFSET pagination over a concurrently-written
+      // table can skip/duplicate rows (lane D writes here nightly; review finding #2).
+      .order('id', { ascending: true })
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (error) throw new Error(`L1 read failed: ${error.message}`);
     const rows = data ?? [];
@@ -145,6 +148,10 @@ async function main(): Promise<void> {
     const { data, error } = await supabase
       .from('bl_pg_refresh_queue')
       .select('item_type,item_no,colour_id,tier,grace_until,rank_floor,next_due_at')
+      // Stable ordering by composite PK — same rationale as the L1 read above.
+      .order('item_type', { ascending: true })
+      .order('item_no', { ascending: true })
+      .order('colour_id', { ascending: true })
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (error) throw new Error(`queue read failed: ${error.message}`);
     const rows = (data ?? []) as QueueRow[];

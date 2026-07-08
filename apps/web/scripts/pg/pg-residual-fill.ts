@@ -13,10 +13,13 @@
  *
  * Session discipline (spec §4.2/§4.4): sessions of up to 40 requests, 4-6s jitter,
  * then a breather. On 3 consecutive failures within a session, don't abort the
- * whole run — mark those tuples `last_error='challenge'`, release their locks, end
- * the session early (counts as "blocked"), take the breather, and resume next
- * session. Two consecutive blocked sessions stop the run cleanly (resumable next
- * invocation — the queue *is* the resume mechanism).
+ * whole run — attempt lane-A rotation for the challenged tuples (resolve them via
+ * the authenticated BL REST client instead, budget-gated + capped per run; falls
+ * back to marking `last_error='challenge'` when rotation is disabled, credentials
+ * are missing, the run's rotation cap is hit, or BL's own daily budget trips),
+ * release locks, end the session early (counts as "blocked"), take the breather,
+ * and resume next session. Two consecutive blocked sessions stop the run cleanly
+ * (resumable next invocation — the queue *is* the resume mechanism).
  *
  * Usage (from apps/web):
  *   npx tsx scripts/pg/pg-residual-fill.ts
@@ -30,6 +33,8 @@
  *   --breather-mins=<n>       Minutes between sessions (default 15)
  *   --max-sessions=<n>        Sessions per run (default 6)
  *   --pool-size=<n>           Max queue rows considered as fill candidates (default 5000)
+ *   --api-rotate-max=<n>      Cap on lane-A (BL REST) rotations per run (default 50)
+ *   --no-api-rotate           Disable lane-A rotation — restores plain mark-challenge behaviour
  */
 
 import * as path from 'path';
@@ -41,11 +46,17 @@ import { createClient } from '@supabase/supabase-js';
 import {
   buildPgSummaryUrl,
   parsePgSummarySnippet,
+  resolvePgItemId,
   toSummaryCacheRow,
   validateCurrencyBasis,
   type PgSummaryCacheRow,
+  type PgSummaryQuad,
+  type PgSummaryQuads,
 } from '../../src/lib/bricklink/pg-summary';
 import type { PgItemType } from '../../src/lib/bricklink/price-guide-page';
+import { createScriptBlContext, type ScriptBlContext } from '../_bl-client';
+import { RateLimitError } from '../../src/lib/bricklink/client';
+import type { BrickLinkItemType, BrickLinkPriceGuide } from '../../src/lib/bricklink/types';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const UA =
@@ -67,6 +78,8 @@ const SESSION_MAX = Math.max(1, Math.min(40, parseInt(argv['session-max'] ?? '40
 const BREATHER_MINS = Math.max(1, parseFloat(argv['breather-mins'] ?? '15'));
 const MAX_SESSIONS = Math.max(1, parseInt(argv['max-sessions'] ?? '6', 10));
 const POOL_SIZE = Math.max(SESSION_MAX, parseInt(argv['pool-size'] ?? '5000', 10));
+const API_ROTATE = argv['no-api-rotate'] !== 'true';
+const API_ROTATE_MAX = Math.max(0, parseInt(argv['api-rotate-max'] ?? '50', 10));
 const RUN_ID = `pg-residual-fill-${Date.now()}`;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -188,6 +201,10 @@ async function buildCandidatePool(): Promise<QueueRow[]> {
       .select('item_type,item_no,colour_id,tier,attempts')
       .is('locked_by', null)
       .is('last_refreshed_at', null)
+      // Backstop against permanent-retry starvation: tuples that failed 8+ times
+      // across runs (incl. lane-A attempts) are parked until an operator
+      // investigates — visible via last_error, not silently retried forever.
+      .lt('attempts', 8)
       .order('created_at', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`gap-pool read failed: ${error.message}`);
@@ -222,14 +239,24 @@ function orFilterForTuples(tuples: QueueRow[]): string {
     .join(',');
 }
 
-async function claimTuples(tuples: QueueRow[]): Promise<void> {
-  if (tuples.length === 0) return;
-  const { error } = await supabase
+/**
+ * Claim tuples by locking them to this run. Returns only the rows the update
+ * actually touched (locked_by IS NULL at update time) — callers must NOT assume
+ * the full `tuples` argument was claimed, since a concurrent run may have
+ * grabbed some of them first. Use the returned rows as the working set so we
+ * never fetch/mark-success/mark-failure/release a tuple we don't hold the lock
+ * on (that would silently steal or clear another run's lock).
+ */
+async function claimTuples(tuples: QueueRow[]): Promise<QueueRow[]> {
+  if (tuples.length === 0) return [];
+  const { data, error } = await supabase
     .from('bl_pg_refresh_queue')
     .update({ locked_by: RUN_ID, locked_at: new Date().toISOString() })
     .is('locked_by', null)
-    .or(orFilterForTuples(tuples));
+    .or(orFilterForTuples(tuples))
+    .select('item_type,item_no,colour_id,tier,attempts');
   if (error) throw new Error(`claim failed: ${error.message}`);
+  return (data ?? []) as QueueRow[];
 }
 
 async function releaseTuples(tuples: QueueRow[]): Promise<void> {
@@ -270,6 +297,19 @@ async function markSuccess(t: QueueRow): Promise<void> {
     .eq('item_no', t.item_no)
     .eq('colour_id', t.colour_id);
   if (error) console.error(`  ⚠ markSuccess update failed for ${tupleKey(t)}: ${error.message}`);
+}
+
+/** Mark a challenged tuple unreachable this run (releases its lock). This is the
+ * pre-lane-A fallback behaviour, and stays the terminal outcome for any tuple
+ * lane-A can't/won't resolve (rotation disabled, no creds, cap hit, budget gate). */
+async function markChallenge(t: QueueRow): Promise<void> {
+  const { error } = await supabase
+    .from('bl_pg_refresh_queue')
+    .update({ locked_by: null, locked_at: null, last_error: 'challenge', updated_at: new Date().toISOString() })
+    .eq('item_type', t.item_type)
+    .eq('item_no', t.item_no)
+    .eq('colour_id', t.colour_id);
+  if (error) console.error(`  ⚠ challenge mark failed for ${tupleKey(t)}: ${error.message}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -331,12 +371,159 @@ async function fetchOne(t: QueueRow): Promise<FetchOutcome> {
 }
 
 // ---------------------------------------------------------------------------
+// Step 5b: lane-A rotation on challenge (Finding 4 / done-criteria F2)
+//
+// When a session hits 3 consecutive anon-curl failures, resolve the challenged
+// tuples via the authenticated BL REST client (`createScriptBlContext`) instead
+// of just marking them unreachable. Budget-gated (BrickLinkClient's own daily
+// counter) and capped per run (`--api-rotate-max`, default 50). Falls back to
+// the plain mark-challenge behaviour when: rotation is disabled
+// (`--no-api-rotate`), BL credentials are missing, the run's rotation cap is
+// hit, or BL's daily budget gate trips (RateLimitError — stop immediately,
+// since it will keep failing until UTC midnight).
+// ---------------------------------------------------------------------------
+
+const PG_TO_BL_TYPE: Record<PgItemType, BrickLinkItemType> = { P: 'PART', M: 'MINIFIG', S: 'SET' };
+
+/** Lazily created ONCE per run (undefined = not yet attempted, null = creation failed). */
+let blContext: ScriptBlContext | null | undefined;
+let blContextWarned = false;
+
+function getLaneABlContext(): ScriptBlContext | null {
+  if (blContext !== undefined) return blContext;
+  try {
+    blContext = createScriptBlContext('pg-residual-fill');
+  } catch (e) {
+    if (!blContextWarned) {
+      console.warn(`  [lane-A] BrickLink credentials unavailable — rotation disabled this run: ${(e as Error).message}`);
+      blContextWarned = true;
+    }
+    blContext = null;
+  }
+  return blContext;
+}
+
+let laneARotations = 0;
+const laneATelemetry: { requests: number; ok: number; failed: number; attempted: boolean; startedAt: string | null } = {
+  requests: 0,
+  ok: 0,
+  failed: 0,
+  attempted: false,
+  startedAt: null,
+};
+
+function guardedNum(v: string): number | null {
+  const n = parseFloat(v);
+  return Number.isNaN(n) ? null : n;
+}
+
+function guideToQuad(g: BrickLinkPriceGuide): PgSummaryQuad {
+  return {
+    lots: g.unit_quantity ?? 0,
+    qty: g.total_quantity ?? 0,
+    min: guardedNum(g.min_price),
+    avg: guardedNum(g.avg_price),
+    qavg: guardedNum(g.qty_avg_price),
+    max: guardedNum(g.max_price),
+  };
+}
+
+/** 4 calls per tuple (sold N/U, stock N/U), 1.1s spacing between every call. */
+async function fetchLaneAQuads(ctx: ScriptBlContext, t: QueueRow): Promise<PgSummaryQuads> {
+  const blType = PG_TO_BL_TYPE[t.item_type];
+  const itemNo = resolvePgItemId(t.item_type, t.item_no);
+  const fetchQuad = async (condition: 'N' | 'U', guideType: 'sold' | 'stock'): Promise<PgSummaryQuad> => {
+    await sleep(1100);
+    laneATelemetry.requests++;
+    const g = await ctx.bl.getPartPriceGuide(blType, itemNo, t.colour_id, { currencyCode: 'GBP', guideType, condition });
+    return guideToQuad(g);
+  };
+  const soldN = await fetchQuad('N', 'sold');
+  const soldU = await fetchQuad('U', 'sold');
+  const stockN = await fetchQuad('N', 'stock');
+  const stockU = await fetchQuad('U', 'stock');
+  return { soldN, soldU, stockN, stockU };
+}
+
+async function rotateToLaneA(tuples: QueueRow[]): Promise<void> {
+  if (tuples.length === 0) return;
+  if (!API_ROTATE) {
+    for (const t of tuples) await markChallenge(t);
+    return;
+  }
+  const ctx = getLaneABlContext();
+  if (!ctx) {
+    for (const t of tuples) await markChallenge(t);
+    return;
+  }
+
+  for (let i = 0; i < tuples.length; i++) {
+    const t = tuples[i];
+    if (laneARotations >= API_ROTATE_MAX) {
+      console.warn(`  [lane-A] rotation cap (${API_ROTATE_MAX}) reached this run — marking remaining challenged tuples instead.`);
+      for (const rest of tuples.slice(i)) await markChallenge(rest);
+      return;
+    }
+    if (!laneATelemetry.attempted) {
+      laneATelemetry.attempted = true;
+      laneATelemetry.startedAt = new Date().toISOString();
+    }
+    try {
+      const quads = await fetchLaneAQuads(ctx, t);
+      const row = toSummaryCacheRow({ itemType: t.item_type, itemNo: t.item_no, colourId: t.colour_id }, quads, 'store_api', 'store_api');
+      const validation = validateCurrencyBasis(row);
+      if (!validation.ok) throw new Error(`currency validation: ${validation.reason}`);
+      const { error } = await supabase
+        .from('bricklink_pg_summary_cache')
+        .upsert(row, { onConflict: 'item_type,item_no,colour_id' });
+      if (error) throw new Error(`upsert failed: ${error.message}`);
+      await markSuccess(t);
+      laneARotations++;
+      laneATelemetry.ok++;
+      console.log(`  [lane-A] rotated ${tupleKey(t)} (${laneARotations}/${API_ROTATE_MAX} this run)`);
+    } catch (e) {
+      if (e instanceof RateLimitError) {
+        console.warn(`  [lane-A] BL daily budget gate tripped — stopping rotation, marking remaining as challenge: ${e.message}`);
+        laneATelemetry.failed++;
+        for (const rest of tuples.slice(i)) await markChallenge(rest);
+        return;
+      }
+      laneATelemetry.failed++;
+      await markFailure(t, `lane-a: ${(e as Error).message}`.slice(0, 200));
+    }
+  }
+}
+
+/** Writes the single run-level lane-A telemetry row, if any rotation was attempted. */
+async function writeLaneATelemetryIfAny(): Promise<void> {
+  if (!laneATelemetry.attempted) return;
+  const { error } = await supabase.from('bl_pg_lane_telemetry').insert({
+    lane: 'store_api',
+    session_no: 0,
+    requests: laneATelemetry.requests,
+    ok: laneATelemetry.ok,
+    failed: laneATelemetry.failed,
+    first_block_at_request: null,
+    started_at: laneATelemetry.startedAt ?? new Date().toISOString(),
+    ended_at: new Date().toISOString(),
+    notes: 'residual-fill lane-A rotation',
+  });
+  if (error) console.error(`  ⚠ lane-A telemetry insert failed: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
 // Step 6: run one session
 // ---------------------------------------------------------------------------
 
-async function runSession(sessionNo: number, batch: QueueRow[]): Promise<{ blocked: boolean; processedCount: number }> {
-  console.log(`\n=== Session ${sessionNo}/${MAX_SESSIONS}: ${batch.length} tuples ===`);
-  await claimTuples(batch);
+async function runSession(sessionNo: number, requestedBatch: QueueRow[]): Promise<{ blocked: boolean; processedCount: number }> {
+  console.log(`\n=== Session ${sessionNo}/${MAX_SESSIONS}: ${requestedBatch.length} tuples ===`);
+  // claimTuples only actually locks rows still unlocked at update time — use the
+  // rows it returns as the working batch, not the requested batch, so we never
+  // fetch/mark a tuple another concurrent run already holds the lock on.
+  const batch = await claimTuples(requestedBatch);
+  if (batch.length < requestedBatch.length) {
+    console.warn(`  ⚠ claimed ${batch.length}/${requestedBatch.length} tuples — rest locked by another run, working the claimed subset only.`);
+  }
 
   const stats: SessionStats = { sessionNo, requests: 0, ok: 0, failed: 0, firstBlockAtRequest: null, startedAt: new Date().toISOString() };
   const pendingUpserts: PgSummaryCacheRow[] = [];
@@ -393,16 +580,8 @@ async function runSession(sessionNo: number, batch: QueueRow[]): Promise<{ block
         stats.firstBlockAtRequest = stats.requests;
       }
       if (consec >= 3) {
-        console.warn(`  ⚠ 3 consecutive failures at request ${stats.requests} — treating as a challenge, ending session early.`);
-        for (const f of recentFails.slice(-3)) {
-          const { error } = await supabase
-            .from('bl_pg_refresh_queue')
-            .update({ locked_by: null, locked_at: null, last_error: 'challenge', updated_at: new Date().toISOString() })
-            .eq('item_type', f.item_type)
-            .eq('item_no', f.item_no)
-            .eq('colour_id', f.colour_id);
-          if (error) console.error(`  ⚠ challenge mark failed for ${tupleKey(f)}: ${error.message}`);
-        }
+        console.warn(`  ⚠ 3 consecutive failures at request ${stats.requests} — treating as a challenge; attempting lane-A rotation before ending session early.`);
+        await rotateToLaneA(recentFails.slice(-3));
         blocked = true;
         // Release any remaining claimed-but-unattempted tuples in this batch so
         // they're free for the next session/run.
@@ -465,6 +644,7 @@ async function main(): Promise<void> {
       await sleep(BREATHER_MINS * 60000);
     }
   }
+  await writeLaneATelemetryIfAny();
   console.log('\nRun complete.');
 }
 

@@ -150,7 +150,12 @@ async function countDue(sb: SupabaseClient): Promise<number> {
     .from('bl_pg_refresh_queue')
     .select('item_type', { count: 'exact', head: true })
     .is('locked_by', null)
-    .or(`and(tier.eq.active,next_due_at.lte.${nowIso}),grace_until.gt.${nowIso}`);
+    // Due-ness ALWAYS requires next_due_at to have passed. Grace only widens the
+    // tier condition (a grace-listed tuple is claimable even if somehow demoted to
+    // tail) — it must never bypass the 28-day cadence, or every new release gets
+    // re-scraped nightly for 6 months (review finding #1).
+    .lte('next_due_at', nowIso)
+    .or(`tier.eq.active,grace_until.gt.${nowIso}`);
   if (error) throw new Error(`countDue failed: ${error.message}`);
   return count ?? 0;
 }
@@ -161,7 +166,9 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
     .from('bl_pg_refresh_queue')
     .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts')
     .is('locked_by', null)
-    .or(`and(tier.eq.active,next_due_at.lte.${nowIso}),grace_until.gt.${nowIso}`)
+    // Same due-ness semantics as countDue (see comment there).
+    .lte('next_due_at', nowIso)
+    .or(`tier.eq.active,grace_until.gt.${nowIso}`)
     .order('next_due_at', { ascending: true })
     .limit(limit);
   if (error) throw new Error(`claimBatch select failed: ${error.message}`);
@@ -169,13 +176,21 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
   if (rows.length === 0) return [];
 
   const filter = rows.map(tupleFilterGroup).join(',');
-  const { error: lockErr } = await sb
+  // .select() returns the rows the UPDATE actually locked — under a concurrent
+  // manual run, some may have been claimed between our SELECT and UPDATE (TOCTOU,
+  // review finding #6). Work only what we genuinely hold.
+  const { data: locked, error: lockErr } = await sb
     .from('bl_pg_refresh_queue')
     .update({ locked_by: runId, locked_at: nowIso })
     .is('locked_by', null)
-    .or(filter);
+    .or(filter)
+    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts');
   if (lockErr) throw new Error(`claimBatch lock failed: ${lockErr.message}`);
-  return rows;
+  const lockedRows = (locked ?? []) as QueueRow[];
+  if (lockedRows.length < rows.length) {
+    console.warn(`[pg-refresh-cycle] claimed ${lockedRows.length}/${rows.length} (rest locked by a concurrent run)`);
+  }
+  return lockedRows;
 }
 
 async function releaseAllLocksForRun(sb: SupabaseClient, runId: string): Promise<number> {
@@ -228,7 +243,10 @@ function toSummaryCacheRow(r: PgScrapeResult): Record<string, unknown> {
     stock_used_qavg: w.stockUsed.qtyAvg,
     stock_used_max: w.stockUsed.max,
     source: 'catalogpg',
-    no_data: false,
+    // Canonical no_data definition (matches pg-summary.ts): zero lots across all
+    // four quadrants. A successful scrape CAN legitimately return all-empty
+    // (review finding #8) — distinct from the PgNoDataError path handled upstream.
+    no_data: w.soldNew.lots + w.soldUsed.lots + w.stockNew.lots + w.stockUsed.lots === 0,
     fetch_identity: 'catalogpg_cdp',
     fx_rate: null,
     fetched_at: r.scrapedAt,

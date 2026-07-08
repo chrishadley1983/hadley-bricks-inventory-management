@@ -22,7 +22,9 @@ $log = Join-Path $logDir "canary-$stamp.log"
 Set-Location $webDir
 Write-Output "[pg-canary.ps1] $(Get-Date -Format o) starting (cwd=$webDir)" | Tee-Object -FilePath $log -Append
 
-& npx tsx scripts/pg/pg-canary.ts --cdp 2>&1 | Tee-Object -FilePath $log -Append
+# --api included so all three lanes are compared daily (spec §4.4 "every active
+# lane"); the golden set costs ~20 store-API calls/day, well inside the budget gate.
+& npx tsx scripts/pg/pg-canary.ts --cdp --api 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pg-canary.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
 exit $code
