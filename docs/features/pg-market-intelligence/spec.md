@@ -59,6 +59,8 @@ Turn the one-night POC — a 111k-tuple worldwide BrickLink price-guide cache wi
 
 **Rule of use:** screening may run on any layer; **a buy decision gets a live check** (lane A official, or lane D page when velocity detail is wanted) regardless of cache age. Every report labels its price source and its age.
 
+**Type beats freshness for triage (2026-07-08, Chris):** downstream consumers care about data TYPE (UK detail vs worldwide summary) and staleness — never the lane that produced a row. Stale-but-UK beats fresh-but-worldwide for pricing, so L3 reads use a **45-day window** (not a short TTL): the 28-day cycle keeps active tuples well inside it, and the mandatory buy-time live check absorbs residual staleness risk. If the digest's freshness ratio slips, the window inherits the problem — that ratio is the health metric to watch.
+
 ### 2.2 Acquisition lanes
 
 | Lane | Auth | Measured/known budget | Role |

@@ -30,7 +30,12 @@
  *                            are unaffected — cache hits stay free for every tuple regardless of ask.
  *   --min-margin=<pct>       Buy-list gate on net/list margin (default 0.20)
  *   --min-str=<ratio>        Buy-list gate on UK sell-through (default 0)
- *   --cache-ttl-days=<n>     PG cache freshness (default 7)
+ *   --cache-ttl-days=<n>     UK-detail (L3) read window (default 45 — Chris 2026-07-08:
+ *                            "use the best type available"; stale-but-UK beats fresh-worldwide
+ *                            for pricing, and the 28-day refresh cycle keeps active tuples
+ *                            well inside this window. Buy candidates get a live UK check
+ *                            before purchase regardless, so the window is triage-safe.
+ *                            Revisit if the cycle's freshness ratio slips — see the digest)
  *   --inventory-ttl-hours=<n> Reuse cached store scrape if younger (default 24)
  *   --force-rescrape         Ignore cached store inventory
  *   --max-pages=<n>          AJAX pages per item type (default 50)
@@ -97,7 +102,7 @@ const MIN_ASK = parseFloat(argv['min-ask'] ?? '0');
 const ENRICH_MIN_ASK = parseFloat(argv['enrich-min-ask'] ?? '0.10');
 const MIN_MARGIN = parseFloat(argv['min-margin'] ?? '0.20');
 const MIN_STR = parseFloat(argv['min-str'] ?? '0');
-const CACHE_TTL_DAYS = parseFloat(argv['cache-ttl-days'] ?? '7');
+const CACHE_TTL_DAYS = parseFloat(argv['cache-ttl-days'] ?? '45');
 const INVENTORY_TTL_HOURS = parseFloat(argv['inventory-ttl-hours'] ?? '24');
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
