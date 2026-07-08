@@ -905,7 +905,25 @@ function money(n: number | null | undefined, dp = 2): string {
   return n == null ? '—' : `£${n.toFixed(dp)}`;
 }
 
-function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
+/** Summary fields mirrored into bl_pg_scan_reports (BrickRadar dashboard, §5.1) —
+ * kept alongside the markdown so the persisted row's numbers can never drift from
+ * what the report itself says (single computation, two outputs). */
+interface ScanReportSummary {
+  verdict: 'BUY' | 'REVIEW' | 'SKIP';
+  lotsTotal: number;
+  lotsPassing: number;
+  outlayGbp: number;
+  rawNetGbp: number;
+  realisableNetGbp: number;
+  priceSourceUk: number;
+  priceSourceWorld: number;
+  priceSourceUncovered: number;
+  identityAmbiguous: number;
+  floorUnviable: number;
+  variantRecovered: number;
+}
+
+function buildReport(meta: ScanMeta, scored: ScoredLot[]): { md: string; summary: ScanReportSummary } {
   const passed = scored.filter((s) => s.passed).sort((a, b) => (b.realisableNet ?? 0) - (a.realisableNet ?? 0));
   const watch = scored.filter((s) => !s.passed && s.watch).sort((a, b) => (b.marginPct ?? 0) - (a.marginPct ?? 0));
   const benchmarked = scored.filter((s) => s.askVsUk != null);
@@ -1091,7 +1109,56 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): string {
     if (medianRatio != null && medianRatio >= 1) L.push('2. The store reprices actively; re-scanning it later is unlikely to help. Spend the next scan on a different seller.');
   }
   L.push('');
-  return L.join('\n');
+  return {
+    md: L.join('\n'),
+    summary: {
+      verdict,
+      lotsTotal: scored.length,
+      lotsPassing: passed.length,
+      outlayGbp: +outlay.toFixed(2),
+      rawNetGbp: +net.toFixed(2),
+      realisableNetGbp: +realisableNetSum.toFixed(2),
+      priceSourceUk: srcCounts.uk,
+      priceSourceWorld: srcCounts.world,
+      priceSourceUncovered: srcCounts.none,
+      identityAmbiguous: identityAmbiguous.length,
+      floorUnviable: floorUnviableLots.length,
+      variantRecovered: meta.variantRecoveredCount,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Persist hook (BrickRadar dashboard §5.1): best-effort insert into
+// bl_pg_scan_reports so /brickradar's "Recent store scans" section can list +
+// render past reports. Non-fatal — a write failure must never fail the scan
+// itself, the markdown file on disk remains the source of truth either way.
+// Cast to `any`: the table was added in a migration not yet pushed/type-generated
+// at the time this hook was written (see supabase/migrations/20260708200000_pg_scan_reports.sql).
+// ---------------------------------------------------------------------------
+
+async function persistScanReport(storeSlug: string, summary: ScanReportSummary, md: string): Promise<void> {
+  try {
+    const { error } = await (supabase as any).from('bl_pg_scan_reports').insert({
+      store_slug: storeSlug,
+      verdict: summary.verdict,
+      lots_total: summary.lotsTotal,
+      lots_passing: summary.lotsPassing,
+      outlay_gbp: summary.outlayGbp,
+      raw_net_gbp: summary.rawNetGbp,
+      realisable_net_gbp: summary.realisableNetGbp,
+      price_source_uk: summary.priceSourceUk,
+      price_source_world: summary.priceSourceWorld,
+      price_source_uncovered: summary.priceSourceUncovered,
+      identity_ambiguous: summary.identityAmbiguous,
+      floor_unviable: summary.floorUnviable,
+      variant_recovered: summary.variantRecovered,
+      report_md: md,
+    });
+    if (error) console.warn(`  ⚠ bl_pg_scan_reports insert failed: ${error.message}`);
+  } catch (err) {
+    console.warn(`  ⚠ bl_pg_scan_reports insert failed: ${(err as Error).message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1169,7 +1236,7 @@ async function main() {
   const byType: Record<string, number> = {};
   for (const l of lots) byType[l.itemType] = (byType[l.itemType] ?? 0) + 1;
   const variantRecoveredCount = lots.filter((l) => l.itemType === 'S' && l.itemSeq > 1).length;
-  const report = buildReport(
+  const { md: report, summary } = buildReport(
     {
       storeName: storeMeta.storeName,
       storeId: storeMeta.storeId,
@@ -1185,6 +1252,7 @@ async function main() {
   fs.writeFileSync(REPORT_FILE, report);
   console.log(`  saved → ${REPORT_FILE}\n`);
   console.log(report);
+  await persistScanReport(STORE_SLUG, summary, report);
 }
 
 main().catch((err) => {
