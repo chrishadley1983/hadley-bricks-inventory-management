@@ -109,6 +109,20 @@ async function loadTrendMovers(): Promise<{ risers: PgDigestMoverRow[]; fallers:
 }
 
 // ---------------------------------------------------------------------------
+// Quarterly UK↔worldwide divergence re-run reminder (spec §4.6/§7.4).
+// Bump NEXT_DIVERGENCE_DUE after each re-run — the study itself is one SQL query
+// over L2/L3 comparing uk vs world sold averages on shared tuples.
+const NEXT_DIVERGENCE_DUE = '2026-10-01';
+function divergenceReminderLines(): string[] {
+  if (new Date().toISOString().slice(0, 10) < NEXT_DIVERGENCE_DUE) return [];
+  return [
+    `## ⚠ Quarterly divergence re-run DUE (scheduled ${NEXT_DIVERGENCE_DUE})`,
+    '',
+    '- Re-run the UK↔worldwide divergence study (spec §7.4) and bump NEXT_DIVERGENCE_DUE in pg-digest.ts.',
+    '',
+  ];
+}
+
 // Coverage / freshness health
 // ---------------------------------------------------------------------------
 
@@ -310,6 +324,7 @@ async function main(): Promise<void> {
       ? coverage.laneTelemetry.map((l) => `- **${l.lane}**: ${l.requests7d} req, ${l.ok7d} ok / ${l.failed7d} failed — first-403 trend: ${l.firstBlockTrend}`)
       : ['_No telemetry rows in the last 7 days._']),
     '',
+    ...divergenceReminderLines(),
     '## Own-store audit (most recent, last 7 days)',
     '',
     ...(ownStoreAuditExcerpts.length > 0

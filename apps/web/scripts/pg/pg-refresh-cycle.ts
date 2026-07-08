@@ -39,6 +39,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as os from 'os';
 import * as path from 'path';
+import { discordService } from '../../src/lib/notifications/discord.service';
 import {
   PgScraper,
   PgBlockError,
@@ -610,6 +611,23 @@ async function main(): Promise<void> {
       `[pg-refresh-cycle] run ${RUN_ID} finished: ${totalProcessed} tuple(s) processed across ` +
         `${state.sessionsCompleted} session(s) (${state.blockedSessions} consecutive blocked) — stop reason: ${stopReason}`,
     );
+    // Ops threshold alert (spec §5.4): a night ending on repeated blocks means BL's
+    // tolerance shifted or the session is unhealthy — surface it, don't wait for the
+    // weekly digest. Fire-and-forget; alerting must never fail the run.
+    if (state.blockedSessions >= 2 || stopReason === 'two consecutive blocked sessions') {
+      try {
+        await discordService.sendPgOpsAlert({
+          title: 'lane D (browser catalogPG scrape) blocked repeatedly',
+          lines: [
+            `Run **${RUN_ID}** stopped: ${stopReason}.`,
+            `${totalProcessed} tuple(s) processed across ${state.sessionsCompleted} session(s); ${state.blockedSessions} consecutive blocked.`,
+            'Check bl_pg_lane_telemetry first_block_at_request trend and the domham91 CDP Chrome session before the next nightly window.',
+          ],
+        });
+      } catch (e) {
+        console.error(`[pg-refresh-cycle] ops alert failed: ${e instanceof Error ? e.message : e}`);
+      }
+    }
   }
 
   if (fatalError) throw fatalError;
