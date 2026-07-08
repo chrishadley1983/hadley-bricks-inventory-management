@@ -171,21 +171,25 @@ async function main(): Promise<void> {
       if (newTier === 'active') counts.activeAfter += 1;
       else counts.tailAfter += 1;
 
+      // Every row in a PostgREST upsert batch MUST carry the SAME columns —
+      // mixed payloads get their missing keys filled with NULL (union-of-columns),
+      // which violated tier's NOT NULL on the first real run (2026-07-08). So tier
+      // is always included, and the newly-active next_due_at spread happens in a
+      // separate, uniform second pass below.
       const update: Record<string, unknown> = {
         item_type: row.item_type,
         item_no: row.item_no,
         colour_id: row.colour_id,
         rank_score: score,
+        tier: newTier,
         updated_at: nowIso,
       };
       if (newTier !== oldTier) {
         counts.changed += 1;
-        update.tier = newTier;
         if (newTier === 'active') {
-          update.next_due_at = new Date(nowMs + Math.floor(Math.random() * NEW_RELEASE_SPREAD_MS)).toISOString();
           newlyActive.push({ key, score });
         } else {
-          // newly-tail: keep next_due_at as-is (omit from the update payload)
+          // newly-tail: keep next_due_at as-is
           newlyTail.push({ key, score });
         }
       }
@@ -198,6 +202,25 @@ async function main(): Promise<void> {
     if (rows.length < PAGE) break;
   }
   if (writeBatch.length > 0 && !DRY_RUN) await flushQueueUpdates(supabase, writeBatch);
+
+  // Second pass: spread newly-active tuples' next_due_at across the next 28 days
+  // (uniform-column batches — see the payload-mixing note above).
+  if (!DRY_RUN && newlyActive.length > 0) {
+    console.log(`[pg-rank] spreading next_due_at for ${newlyActive.length} newly-active tuple(s)...`);
+    const dueBatch = newlyActive.map((m) => {
+      const [item_type, item_no, colour_id] = m.key.split(':');
+      return {
+        item_type,
+        item_no,
+        colour_id: parseInt(colour_id, 10),
+        tier: 'active' as const,
+        rank_score: m.score,
+        next_due_at: new Date(nowMs + Math.floor(Math.random() * NEW_RELEASE_SPREAD_MS)).toISOString(),
+        updated_at: nowIso,
+      };
+    });
+    await flushQueueUpdates(supabase, dueBatch);
+  }
 
   console.log(`[pg-rank] tiers before: active=${counts.activeBefore} tail=${counts.tailBefore}`);
   console.log(`[pg-rank] tiers after:  active=${counts.activeAfter} tail=${counts.tailAfter} (${counts.changed} tuple(s) flipped tier)`);
