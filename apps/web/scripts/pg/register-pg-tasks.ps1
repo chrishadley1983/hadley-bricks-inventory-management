@@ -1,5 +1,6 @@
-# register-pg-tasks.ps1 — one-time: register the three PG Market Intelligence Windows
-# Scheduled Tasks (nightly lane D refresh, daily canary, monthly rank recompute).
+# register-pg-tasks.ps1 — one-time: register the four PG Market Intelligence Windows
+# Scheduled Tasks (nightly lane D refresh, daily canary, monthly rank recompute, weekly
+# digest).
 #
 # Prefer running from an ELEVATED PowerShell for S4U (run-while-logged-out); unelevated
 # falls back to interactive-only per task, matching register-ebay-pricing-task.ps1 /
@@ -7,9 +8,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File apps\web\scripts\pg\register-pg-tasks.ps1
 #
-# ZERO Vercel footprint (done-criteria F3 hard constraint): all three jobs are either
+# ZERO Vercel footprint (done-criteria F3 hard constraint): all four jobs are either
 # CDP/Chrome-bound (pg-refresh-cycle, pg-canary) or local-only Supabase compute
-# (pg-rank) and must never be wired up as a Vercel cron/route.
+# (pg-rank, pg-digest) and must never be wired up as a Vercel cron/route.
 $ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $PSCommandPath   # apps/web/scripts/pg
@@ -78,9 +79,15 @@ Register-PgTask -TaskName 'HadleyBricks-PG-Rank' -ScriptFile 'pg-rank.ps1' `
     -Trigger $rankTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
     -Description 'Monthly ranking-cut recompute (runs daily, self-exits unless day 1). Local-only, no CDP needed.'
 
+$digestTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At '07:45'
+Register-PgTask -TaskName 'HadleyBricks-PG-Digest' -ScriptFile 'pg-digest.ps1' `
+    -Trigger $digestTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
+    -Description 'Weekly PG market digest (screens + own-store audit + coverage health -> markdown + Discord). Local-only, no CDP needed.'
+
 Write-Host ''
-Write-Host 'All three PG tasks registered.' -ForegroundColor Cyan
+Write-Host 'All four PG tasks registered.' -ForegroundColor Cyan
 Write-Host "Test:  Start-ScheduledTask -TaskName 'HadleyBricks-PG-Refresh-Cycle'"
 Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Canary'"
 Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Rank'"
+Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Digest'"
 Write-Host 'Inspect: Get-ScheduledTask -TaskName "HadleyBricks-PG-*" | Get-ScheduledTaskInfo'

@@ -16372,6 +16372,67 @@ export type Database = {
         }
         Relationships: []
       }
+      pg_screen_fig_radar: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          new_used_spread: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_high_str: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_trend_movers: {
+        Row: {
+          colour_id: number | null
+          item_no: string | null
+          item_type: string | null
+          latest_date: string | null
+          latest_new_avg: number | null
+          latest_new_qty: number | null
+          latest_str_new: number | null
+          latest_str_used: number | null
+          latest_used_avg: number | null
+          latest_used_qty: number | null
+          new_avg_delta: number | null
+          new_qty_delta: number | null
+          prior_date: string | null
+          prior_new_avg: number | null
+          prior_new_qty: number | null
+          prior_used_avg: number | null
+          prior_used_qty: number | null
+          used_avg_delta: number | null
+          used_qty_delta: number | null
+        }
+        Relationships: []
+      }
       platform_performance_view: {
         Row: {
           avg_order_value: number | null

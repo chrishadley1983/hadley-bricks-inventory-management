@@ -122,6 +122,55 @@ export interface PgCanaryAlertParams {
   divergences: PgCanaryDivergence[];
 }
 
+/** One row of the digest's STR-mover / fig-radar-mover lists (spec §5.3). */
+export interface PgDigestMoverRow {
+  /** e.g. "P 3001 c11" */
+  label: string;
+  /** Combined sold6m qty delta (new+used) between the two most recent snapshots. */
+  qtyDelta: number;
+  latestStrNew?: number | null;
+  latestStrUsed?: number | null;
+}
+
+/** Per-lane 7-day telemetry rollup for the digest's coverage/freshness section. */
+export interface PgDigestLaneTelemetry {
+  lane: string;
+  requests7d: number;
+  ok7d: number;
+  failed7d: number;
+  /** Short human summary of the sessions-to-first-403 trend, e.g. "flat ~410" or "tightening 430→370". */
+  firstBlockTrend: string;
+}
+
+/** Coverage/freshness health block (spec §5.3/§5.4). */
+export interface PgDigestCoverageHealth {
+  l1Total: number;
+  activeTierCount: number;
+  /** % of the active tier refreshed within the last 28 days. */
+  activeWithin28dPct: number;
+  /** Active-tier tuples whose next_due_at has already passed. */
+  pastDueCount: number;
+  laneTelemetry: PgDigestLaneTelemetry[];
+}
+
+/** A markdown report's top-N lines for one section, carried into the digest verbatim. */
+export interface PgDigestReportExcerpt {
+  title: string;
+  lines: string[];
+}
+
+export interface PgDigestAlertParams {
+  runDate: string;
+  strRisers: PgDigestMoverRow[];
+  strFallers: PgDigestMoverRow[];
+  figMovers: PgDigestMoverRow[];
+  coverage: PgDigestCoverageHealth;
+  /** Top-5-per-section excerpts from the most recent own-store-audit report (last 7 days), if any. */
+  ownStoreAuditExcerpts: PgDigestReportExcerpt[];
+  /** Path to the full markdown digest report on disk, for reference in the embed. */
+  reportPath: string;
+}
+
 export interface EbayJoblotAlertParams {
   ebayTitle: string;
   currentBid: number;
@@ -777,6 +826,73 @@ export class DiscordService {
     };
 
     return this.send('alerts', embed);
+  }
+
+  /**
+   * Send the weekly PG market intelligence digest (spec §5.3): top STR risers/fallers,
+   * fig-radar movers, own-store audit top-5s, and coverage/freshness health. Reuses the
+   * daily-summary channel — this is a scheduled report, not an incident alert.
+   *
+   * Discord embed `description` has a hard 4096-char limit; the digest body is built as
+   * one markdown blob and truncated gracefully (with a visible "…truncated" marker) if a
+   * busy week's content would overflow it, rather than erroring or dropping sections
+   * silently.
+   */
+  async sendPgDigest(params: PgDigestAlertParams): Promise<DiscordSendResult> {
+    const { runDate, strRisers, strFallers, figMovers, coverage, ownStoreAuditExcerpts, reportPath } = params;
+
+    const moverLine = (m: PgDigestMoverRow) =>
+      `• **${m.label}**: ${m.qtyDelta > 0 ? '+' : ''}${m.qtyDelta} qty (STR ${m.latestStrNew?.toFixed(2) ?? '—'}/${m.latestStrUsed?.toFixed(2) ?? '—'})`;
+
+    const sections: string[] = [];
+
+    sections.push(`**📈 STR risers (top ${Math.min(10, strRisers.length)})**`);
+    sections.push(strRisers.length > 0 ? strRisers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push('', `**📉 STR fallers (top ${Math.min(10, strFallers.length)})**`);
+    sections.push(strFallers.length > 0 ? strFallers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push('', `**🧍 Fig radar movers (top ${Math.min(10, figMovers.length)})**`);
+    sections.push(figMovers.length > 0 ? figMovers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push(
+      '',
+      '**🩺 Coverage & freshness**',
+      `L1 total: **${coverage.l1Total.toLocaleString()}** · Active tier: **${coverage.activeTierCount.toLocaleString()}** · within 28d cycle: **${coverage.activeWithin28dPct.toFixed(1)}%** · past due: **${coverage.pastDueCount.toLocaleString()}**`,
+    );
+    if (coverage.laneTelemetry.length > 0) {
+      sections.push(
+        ...coverage.laneTelemetry.map(
+          (l) => `• **${l.lane}** (7d): ${l.requests7d} req, ${l.ok7d} ok / ${l.failed7d} failed — first-403 trend: ${l.firstBlockTrend}`,
+        ),
+      );
+    }
+
+    if (ownStoreAuditExcerpts.length > 0) {
+      sections.push('', '**🏪 Own-store audit (most recent, last 7d)**');
+      for (const excerpt of ownStoreAuditExcerpts) {
+        sections.push(`_${excerpt.title}_`, ...(excerpt.lines.length > 0 ? excerpt.lines.slice(0, 5) : ['_None._']));
+      }
+    } else {
+      sections.push('', '**🏪 Own-store audit**', '_No audit report from the last 7 days._');
+    }
+
+    sections.push('', `Full report: \`${reportPath}\``);
+
+    let description = sections.join('\n');
+    const DESCRIPTION_LIMIT = 4096;
+    if (description.length > DESCRIPTION_LIMIT) {
+      const marker = '\n\n_…truncated — see full report on disk._';
+      description = description.slice(0, DESCRIPTION_LIMIT - marker.length) + marker;
+    }
+
+    const embed: DiscordEmbed = {
+      title: `📊 PG weekly market digest — ${runDate}`,
+      description,
+      color: DiscordColors.BLUE,
+    };
+
+    return this.send('daily-summary', embed);
   }
 
   /**
