@@ -20,6 +20,7 @@ the E2E validation workflow checks these against live systems after merge + depl
 
 ## F3 — Refresh engine
 
+- [ ] **All scheduling is LOCAL** (hard constraint from Chris, 2026-07-08): the nightly driver and every recurring pg job run on the local bot (tsx scripts invoked by Windows scheduled tasks, or localhost:3000 routes on the NSSM service — same pattern as the ebay-pricing local migration). **No Vercel crons, no vercel.json entries, no new Vercel API-route workloads** — Fluid CPU headroom is not available (see vercel-fluid-cpu-reduction memory).
 - [ ] `pg-refresh-cycle.ts`: nightly driver — claims due active-cycle tuples, drives lane D (PgScraper) in sessions of 350 with 20-min breathers, 403 → 30-min backoff then resume, writes L3 + write-through, snapshots to `bricklink_pg_snapshots`, telemetry row per session.
 - [ ] `pg-rank.ts` (or SQL job): recomputes ranking cut monthly — top ~60k by 6-mo sold value, floors for watchlist/own-inventory tuples, grace-listed new releases always included; assigns `tier` in queue.
 - [ ] Canary: ~20 golden tuples fetched via each active lane daily; >5% cross-lane divergence → Discord alert.
