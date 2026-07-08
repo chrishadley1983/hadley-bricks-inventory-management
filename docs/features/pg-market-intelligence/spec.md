@@ -221,3 +221,9 @@ P0+P1 are ordinary repo feature work (branch → `/define-done` → `/build-feat
 5. Define and materialise the ranking cut (top-60k view + floors + new-release grace list).
 6. Live-check the Jabbz 140-lot shortlist = first live run of the F7 service design.
 7. Book the quarterly divergence re-run (first: 2026-10).
+8. **Scanner identity-ambiguity guard** (found 2026-07-08 Jabbz retro): store lots that are
+   variant subsets (advent-day builds `75366-N`, colXX series figs) scrape as the BASE set
+   number and inherit the full set's benchmark — 91 lots / £2.3k of phantom margin in one
+   scan. Guard: when 2+ distinct lot names resolve to one S-tuple, mark the benchmark
+   unusable ("identity ambiguous") instead of scoring; longer-term, recover the true
+   variant ID from the store AJAX payload. Same failure family as POV's is_aggregate_listing.
