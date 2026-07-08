@@ -1544,6 +1544,66 @@ export type Database = {
         }
         Relationships: []
       }
+      bl_pg_scan_reports: {
+        Row: {
+          created_at: string
+          floor_unviable: number | null
+          id: number
+          identity_ambiguous: number | null
+          lots_passing: number | null
+          lots_total: number | null
+          outlay_gbp: number | null
+          price_source_uk: number | null
+          price_source_uncovered: number | null
+          price_source_world: number | null
+          raw_net_gbp: number | null
+          realisable_net_gbp: number | null
+          report_md: string
+          scanned_at: string
+          store_slug: string
+          variant_recovered: number | null
+          verdict: string | null
+        }
+        Insert: {
+          created_at?: string
+          floor_unviable?: number | null
+          id?: never
+          identity_ambiguous?: number | null
+          lots_passing?: number | null
+          lots_total?: number | null
+          outlay_gbp?: number | null
+          price_source_uk?: number | null
+          price_source_uncovered?: number | null
+          price_source_world?: number | null
+          raw_net_gbp?: number | null
+          realisable_net_gbp?: number | null
+          report_md: string
+          scanned_at?: string
+          store_slug: string
+          variant_recovered?: number | null
+          verdict?: string | null
+        }
+        Update: {
+          created_at?: string
+          floor_unviable?: number | null
+          id?: never
+          identity_ambiguous?: number | null
+          lots_passing?: number | null
+          lots_total?: number | null
+          outlay_gbp?: number | null
+          price_source_uk?: number | null
+          price_source_uncovered?: number | null
+          price_source_world?: number | null
+          raw_net_gbp?: number | null
+          realisable_net_gbp?: number | null
+          report_md?: string
+          scanned_at?: string
+          store_slug?: string
+          variant_recovered?: number | null
+          verdict?: string | null
+        }
+        Relationships: []
+      }
       bricklink_api_calls_daily: {
         Row: {
           by_caller: Json

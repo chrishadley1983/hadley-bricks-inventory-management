@@ -89,6 +89,10 @@ export interface EbayBinPartoutAlertParams {
   totalCostGbp: number;
   povTotal: number;
   multiple: number | null;
+  /** Liquidity-adjusted ("realisable") POV — spec §3 F4. null when no set-level STR
+   *  signal was available (cache coverage is thin); do not treat as "no data = £0". */
+  realisablePovGbp?: number | null;
+  povCaptureRate?: number | null; // 0..1
   amazonPriceGbp?: number | null;
   amazonProfitGbp?: number | null;
   amazonMarginPct?: number | null;
@@ -661,6 +665,7 @@ export class DiscordService {
     const {
       conditionMode = 'used',
       sets, title, priceGbp, postageGbp, totalCostGbp, povTotal, multiple, tier,
+      realisablePovGbp = null, povCaptureRate = null,
       amazonPriceGbp, amazonProfitGbp, amazonMarginPct, amazon90dGbp, salesRank, asin, signals = [],
       bestOfferEnabled, offerSuggestionGbp, flags, sellerUsername, sellerScore,
       itemUrl, imageUrl, condition,
@@ -733,6 +738,15 @@ export class DiscordService {
         if (conditionMode === 'used' && primary.ebayFloorGbp != null) ctx.push(`typical eBay used ask: £${primary.ebayFloorGbp.toFixed(2)}`);
       }
       if (ctx.length) povLines.push(ctx.join(' · '));
+      // Realisable (liquidity-adjusted) POV — only shown when we have a genuine
+      // set-level STR signal (spec §3 F4); flag-don't-suppress means add the honest
+      // number when we have one, never fabricate one when the signal is absent.
+      if (realisablePovGbp != null) {
+        const capturePct = povCaptureRate != null ? Math.round(povCaptureRate * 100) : null;
+        povLines.push(
+          `Realisable (est): **£${realisablePovGbp.toFixed(2)}**${capturePct != null ? ` · ${capturePct}% capture` : ''}`
+        );
+      }
       // Thin used history -> the deep NEW figure is the sanity anchor; show both.
       const thinFlagged = flags.some((f) => f.includes('thin used-parts history'));
       if (conditionMode === 'used' && thinFlagged) {
@@ -825,6 +839,20 @@ export class DiscordService {
       fields,
     };
 
+    return this.send('alerts', embed);
+  }
+
+  /**
+   * PG ops threshold alert (spec §5.4): fired by the nightly refresh cycle when a
+   * lane trips its rate-discipline thresholds (e.g. >=2 blocked lane D sessions in
+   * one night). Incident-shaped -> alerts channel.
+   */
+  async sendPgOpsAlert(params: { title: string; lines: string[] }): Promise<DiscordSendResult> {
+    const embed: DiscordEmbed = {
+      title: `🛠️ PG ops: ${params.title}`,
+      description: params.lines.join('\n').slice(0, 4000),
+      color: DiscordColors.RED,
+    };
     return this.send('alerts', embed);
   }
 

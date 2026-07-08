@@ -36,6 +36,7 @@ import {
   TrendingDown,
   Megaphone,
   AlertTriangle,
+  Radar,
 } from 'lucide-react';
 
 interface NavItem {
@@ -112,6 +113,7 @@ const navSections: NavSection[] = [
     items: [
       { href: '/arbitrage', label: 'Arbitrage', icon: Scale },
       { href: '/arbitrage/ebay-auctions', label: 'eBay Auctions', icon: Gavel },
+      { href: '/brickradar', label: 'BrickRadar', icon: Radar },
     ],
   },
   {
