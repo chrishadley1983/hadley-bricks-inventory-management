@@ -1448,6 +1448,102 @@ export type Database = {
           },
         ]
       }
+      bl_pg_lane_telemetry: {
+        Row: {
+          ended_at: string | null
+          failed: number
+          first_block_at_request: number | null
+          id: number
+          lane: string
+          notes: string | null
+          ok: number
+          requests: number
+          run_date: string
+          session_no: number
+          started_at: string
+        }
+        Insert: {
+          ended_at?: string | null
+          failed?: number
+          first_block_at_request?: number | null
+          id?: never
+          lane: string
+          notes?: string | null
+          ok?: number
+          requests?: number
+          run_date?: string
+          session_no?: number
+          started_at?: string
+        }
+        Update: {
+          ended_at?: string | null
+          failed?: number
+          first_block_at_request?: number | null
+          id?: never
+          lane?: string
+          notes?: string | null
+          ok?: number
+          requests?: number
+          run_date?: string
+          session_no?: number
+          started_at?: string
+        }
+        Relationships: []
+      }
+      bl_pg_refresh_queue: {
+        Row: {
+          attempts: number
+          colour_id: number
+          created_at: string
+          grace_until: string | null
+          item_no: string
+          item_type: string
+          last_error: string | null
+          last_refreshed_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          next_due_at: string
+          rank_floor: string | null
+          rank_score: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          colour_id?: number
+          created_at?: string
+          grace_until?: string | null
+          item_no: string
+          item_type: string
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_due_at?: string
+          rank_floor?: string | null
+          rank_score?: number
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          colour_id?: number
+          created_at?: string
+          grace_until?: string | null
+          item_no?: string
+          item_type?: string
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_due_at?: string
+          rank_floor?: string | null
+          rank_score?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_api_calls_daily: {
         Row: {
           by_caller: Json
@@ -1705,6 +1801,213 @@ export type Database = {
         }
         Relationships: []
       }
+      bricklink_pg_snapshots: {
+        Row: {
+          colour_id: number
+          created_at: string
+          currency: string
+          fetch_identity: string | null
+          item_no: string
+          item_type: string
+          snapshot_date: string
+          sold6m_new_avg: number | null
+          sold6m_new_lots: number
+          sold6m_new_qavg: number | null
+          sold6m_new_qty: number
+          sold6m_used_avg: number | null
+          sold6m_used_lots: number
+          sold6m_used_qavg: number | null
+          sold6m_used_qty: number
+          source: string
+          stock_new_avg: number | null
+          stock_new_lots: number
+          stock_new_qty: number
+          stock_used_avg: number | null
+          stock_used_lots: number
+          stock_used_qty: number
+          str_new: number | null
+          str_used: number | null
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          fetch_identity?: string | null
+          item_no: string
+          item_type: string
+          snapshot_date: string
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          fetch_identity?: string | null
+          item_no?: string
+          item_type?: string
+          snapshot_date?: string
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+        }
+        Relationships: []
+      }
+      bricklink_pg_summary_cache: {
+        Row: {
+          colour_id: number
+          created_at: string
+          currency: string
+          demand_rank: number | null
+          fetch_identity: string | null
+          fetched_at: string
+          fx_rate: number | null
+          id: number
+          item_no: string
+          item_type: string
+          no_data: boolean
+          sold6m_new_avg: number | null
+          sold6m_new_lots: number
+          sold6m_new_max: number | null
+          sold6m_new_min: number | null
+          sold6m_new_qavg: number | null
+          sold6m_new_qty: number
+          sold6m_used_avg: number | null
+          sold6m_used_lots: number
+          sold6m_used_max: number | null
+          sold6m_used_min: number | null
+          sold6m_used_qavg: number | null
+          sold6m_used_qty: number
+          source: string
+          stock_new_avg: number | null
+          stock_new_lots: number
+          stock_new_max: number | null
+          stock_new_min: number | null
+          stock_new_qavg: number | null
+          stock_new_qty: number
+          stock_used_avg: number | null
+          stock_used_lots: number
+          stock_used_max: number | null
+          stock_used_min: number | null
+          stock_used_qavg: number | null
+          stock_used_qty: number
+          str_new: number | null
+          str_used: number | null
+          updated_at: string
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          demand_rank?: number | null
+          fetch_identity?: string | null
+          fetched_at?: string
+          fx_rate?: number | null
+          id?: never
+          item_no: string
+          item_type?: string
+          no_data?: boolean
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_max?: number | null
+          sold6m_new_min?: number | null
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_max?: number | null
+          sold6m_used_min?: number | null
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_max?: number | null
+          stock_new_min?: number | null
+          stock_new_qavg?: number | null
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_max?: number | null
+          stock_used_min?: number | null
+          stock_used_qavg?: number | null
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+          updated_at?: string
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          demand_rank?: number | null
+          fetch_identity?: string | null
+          fetched_at?: string
+          fx_rate?: number | null
+          id?: never
+          item_no?: string
+          item_type?: string
+          no_data?: boolean
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_max?: number | null
+          sold6m_new_min?: number | null
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_max?: number | null
+          sold6m_used_min?: number | null
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_max?: number | null
+          stock_new_min?: number | null
+          stock_new_qavg?: number | null
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_max?: number | null
+          stock_used_min?: number | null
+          stock_used_qavg?: number | null
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_pov_config: {
         Row: {
           backfill_batch_size: number
@@ -1768,6 +2071,102 @@ export type Database = {
           tier3_days?: number
           updated_at?: string
           usd_to_gbp_rate?: number | null
+        }
+        Relationships: []
+      }
+      bricklink_price_guide_cache: {
+        Row: {
+          colour_id: number
+          created_at: string
+          fetched_at: string
+          id: string
+          item_name: string | null
+          item_no: string
+          item_type: string
+          parse_version: number
+          uk_detail: Json | null
+          uk_sold_avg_new: number | null
+          uk_sold_avg_used: number | null
+          uk_sold_last2mo_qty_new: number
+          uk_sold_last2mo_qty_used: number
+          uk_sold_lots_new: number
+          uk_sold_lots_used: number
+          uk_sold_median_new: number | null
+          uk_sold_median_used: number | null
+          uk_sold_qty_avg_new: number | null
+          uk_sold_qty_avg_used: number | null
+          uk_sold_qty_new: number
+          uk_sold_qty_used: number
+          uk_stock_lots_new: number
+          uk_stock_lots_used: number
+          uk_stock_min_new: number | null
+          uk_stock_min_used: number | null
+          uk_stock_qty_new: number
+          uk_stock_qty_used: number
+          updated_at: string
+          world_detail: Json | null
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          item_name?: string | null
+          item_no: string
+          item_type: string
+          parse_version?: number
+          uk_detail?: Json | null
+          uk_sold_avg_new?: number | null
+          uk_sold_avg_used?: number | null
+          uk_sold_last2mo_qty_new?: number
+          uk_sold_last2mo_qty_used?: number
+          uk_sold_lots_new?: number
+          uk_sold_lots_used?: number
+          uk_sold_median_new?: number | null
+          uk_sold_median_used?: number | null
+          uk_sold_qty_avg_new?: number | null
+          uk_sold_qty_avg_used?: number | null
+          uk_sold_qty_new?: number
+          uk_sold_qty_used?: number
+          uk_stock_lots_new?: number
+          uk_stock_lots_used?: number
+          uk_stock_min_new?: number | null
+          uk_stock_min_used?: number | null
+          uk_stock_qty_new?: number
+          uk_stock_qty_used?: number
+          updated_at?: string
+          world_detail?: Json | null
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          item_name?: string | null
+          item_no?: string
+          item_type?: string
+          parse_version?: number
+          uk_detail?: Json | null
+          uk_sold_avg_new?: number | null
+          uk_sold_avg_used?: number | null
+          uk_sold_last2mo_qty_new?: number
+          uk_sold_last2mo_qty_used?: number
+          uk_sold_lots_new?: number
+          uk_sold_lots_used?: number
+          uk_sold_median_new?: number | null
+          uk_sold_median_used?: number | null
+          uk_sold_qty_avg_new?: number | null
+          uk_sold_qty_avg_used?: number | null
+          uk_sold_qty_new?: number
+          uk_sold_qty_used?: number
+          uk_stock_lots_new?: number
+          uk_stock_lots_used?: number
+          uk_stock_min_new?: number | null
+          uk_stock_min_used?: number | null
+          uk_stock_qty_new?: number
+          uk_stock_qty_used?: number
+          updated_at?: string
+          world_detail?: Json | null
         }
         Relationships: []
       }
@@ -15970,6 +16369,67 @@ export type Database = {
           platform: string | null
           sold_value: number | null
           user_id: string | null
+        }
+        Relationships: []
+      }
+      pg_screen_fig_radar: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          new_used_spread: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_high_str: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_trend_movers: {
+        Row: {
+          colour_id: number | null
+          item_no: string | null
+          item_type: string | null
+          latest_date: string | null
+          latest_new_avg: number | null
+          latest_new_qty: number | null
+          latest_str_new: number | null
+          latest_str_used: number | null
+          latest_used_avg: number | null
+          latest_used_qty: number | null
+          new_avg_delta: number | null
+          new_qty_delta: number | null
+          prior_date: string | null
+          prior_new_avg: number | null
+          prior_new_qty: number | null
+          prior_used_avg: number | null
+          prior_used_qty: number | null
+          used_avg_delta: number | null
+          used_qty_delta: number | null
         }
         Relationships: []
       }
