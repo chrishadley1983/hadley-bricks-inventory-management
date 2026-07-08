@@ -1,10 +1,10 @@
 # pg-canary.ps1 — daily runner for the PG golden-tuple canary (invoked by Windows Task
 # Scheduler, see register-pg-tasks.ps1).
 #
-# Runs the anon-curl lane unconditionally, plus catalogPG via the domham91 CDP Chrome
-# (--cdp) since it usually still has a live session shortly after the nightly refresh
-# cycle finishes. The BL store-API lane (--api) is left off by default to conserve the
-# daily quota — pass it manually when investigating a flagged divergence.
+# Runs all three lanes daily: anon-curl unconditionally, catalogPG via the domham91
+# CDP Chrome (--cdp, usually still live shortly after the nightly refresh cycle), and
+# the BL store API (--api) — the golden set costs ~20 store-API calls/day, well inside
+# the budget gate, and spec §4.4 wants every active lane compared daily.
 #
 # LOCAL-ONLY, same constraint as pg-refresh-cycle.ps1 — must never become a Vercel cron.
 #
