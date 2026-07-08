@@ -64,6 +64,18 @@ export interface PgQuadrantStats {
   max: number | null;
   /** Keyed "July 2026" in page order; only present for sold quadrants (stock has no months). */
   byMonth: Record<string, PgMonthBucket>;
+  /**
+   * Price (4dp string key, e.g. "0.0700") -> total qty transacted at that price, built from
+   * the SAME rows the aggregates above come from. Answers "what SHARE of qty sold/listed at
+   * price >= X" (see `qtyShareAtOrAbove`) — min/max alone only answer "did ANYTHING clear X".
+   *
+   * Capped at `HIST_MAX_BUCKETS` distinct prices: quadrants with more distinct prices keep
+   * the highest-qty buckets and roll the remaining low-qty distinct prices — the illiquid
+   * tail — into a synthetic `"other"` key holding their summed qty. This keeps
+   * `sum(Object.values(hist)) === qty` (total-qty integrity) at the cost of losing the exact
+   * price for that rolled-up tail.
+   */
+  hist: Record<string, number>;
 }
 
 export interface PgSideStats {
@@ -131,8 +143,27 @@ export function buildPgUrl(item: PgItemRef): string {
 // ---------------------------------------------------------------------------
 
 const EMPTY_STATS: PgQuadrantStats = {
-  lots: 0, qty: 0, avg: null, qtyAvg: null, median: null, min: null, max: null, byMonth: {},
+  lots: 0, qty: 0, avg: null, qtyAvg: null, median: null, min: null, max: null, byMonth: {}, hist: {},
 };
+
+/** Cap on distinct price buckets kept per quadrant histogram; see PgQuadrantStats.hist. */
+const HIST_MAX_BUCKETS = 150;
+
+/**
+ * Cap a raw price->qty map to the HIST_MAX_BUCKETS highest-qty buckets, rolling the
+ * remaining (lowest-qty, illiquid-tail) distinct prices into a single "other" key so the
+ * sum of all bucket values still equals total qty.
+ */
+function capHistogram(raw: Map<string, number>): Record<string, number> {
+  if (raw.size <= HIST_MAX_BUCKETS) return Object.fromEntries(raw);
+  const entries = [...raw.entries()].sort((a, b) => b[1] - a[1]);
+  const kept = entries.slice(0, HIST_MAX_BUCKETS);
+  const rolled = entries.slice(HIST_MAX_BUCKETS);
+  const other = rolled.reduce((s, [, q]) => s + q, 0);
+  const out: Record<string, number> = Object.fromEntries(kept);
+  if (other > 0) out.other = other;
+  return out;
+}
 
 /**
  * Aggregate rows into quadrant stats. Pass `ukOnly=true` to keep only non-converted
@@ -140,7 +171,7 @@ const EMPTY_STATS: PgQuadrantStats = {
  */
 export function computeQuadrantStats(rows: PgRawRow[], ukOnly: boolean): PgQuadrantStats {
   const kept = ukOnly ? rows.filter((r) => !r[3]) : rows;
-  if (kept.length === 0) return { ...EMPTY_STATS, byMonth: {} };
+  if (kept.length === 0) return { ...EMPTY_STATS, byMonth: {}, hist: {} };
   let qty = 0;
   let sum = 0;
   let qtySum = 0;
@@ -148,6 +179,7 @@ export function computeQuadrantStats(rows: PgRawRow[], ukOnly: boolean): PgQuadr
   let max = -Infinity;
   const prices: number[] = [];
   const byMonth: Record<string, { lots: number; qty: number; sum: number }> = {};
+  const histMap = new Map<string, number>();
   for (const [month, q, price] of kept) {
     qty += q;
     sum += price;
@@ -161,6 +193,8 @@ export function computeQuadrantStats(rows: PgRawRow[], ukOnly: boolean): PgQuadr
       b.qty += q;
       b.sum += price;
     }
+    const priceKey = price.toFixed(4);
+    histMap.set(priceKey, (histMap.get(priceKey) ?? 0) + q);
   }
   prices.sort((a, b) => a - b);
   // True median: average the two middles on even counts (upper-middle alone biases
@@ -181,6 +215,7 @@ export function computeQuadrantStats(rows: PgRawRow[], ukOnly: boolean): PgQuadr
     min: round4(min),
     max: round4(max),
     byMonth: months,
+    hist: capHistogram(histMap),
   };
 }
 
@@ -206,6 +241,37 @@ export function recentMonthsQty(stats: PgQuadrantStats, nMonths: number): number
     .sort((a, b) => parse(b[0]) - parse(a[0]))
     .slice(0, nMonths)
     .reduce((s, [, b]) => s + b.qty, 0);
+}
+
+/**
+ * Price-conditional sell-through: share of a quadrant's total qty transacted at price
+ * >= `price` — e.g. "what share of UK sold qty cleared our 7p floor", which min/max alone
+ * cannot answer (they only say whether ANYTHING cleared the floor).
+ *
+ * The `"other"` bucket (the capped-off illiquid tail — see PgQuadrantStats.hist) has no
+ * known price, so it is EXCLUDED from the numerator (never counted as "at or above") but
+ * IS included in the denominator (it is real qty that happened at some real price). That
+ * makes the returned share a safe LOWER BOUND on the true share at-or-above `price`: the
+ * true share can only be equal or higher, never lower, so callers can safely treat this as
+ * "at least this much sold at or above our price".
+ *
+ * Returns null when `hist` is absent (version-2 cache rows predate this field) or empty
+ * (genuinely no transactions).
+ */
+export function qtyShareAtOrAbove(hist: Record<string, number> | undefined, price: number): number | null {
+  if (!hist) return null;
+  const entries = Object.entries(hist);
+  if (entries.length === 0) return null;
+  let total = 0;
+  let atOrAbove = 0;
+  for (const [key, qty] of entries) {
+    total += qty;
+    if (key === 'other') continue;
+    const p = parseFloat(key);
+    if (!Number.isNaN(p) && p >= price) atOrAbove += qty;
+  }
+  if (total === 0) return null;
+  return atOrAbove / total;
 }
 
 // ---------------------------------------------------------------------------

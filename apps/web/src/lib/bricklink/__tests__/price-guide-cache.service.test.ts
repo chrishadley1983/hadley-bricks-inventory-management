@@ -60,9 +60,30 @@ describe('toPgCacheRow', () => {
     expect(world.soldNew.qty).toBe(5);
   });
 
-  it('zeroes colour for non-part items and stamps parse version', () => {
+  it('zeroes colour for non-part items and stamps parse version 3', () => {
     const m = toPgCacheRow({ ...makeResult(), item: { itemType: 'M', itemNo: 'sw1479', colourId: 99 } });
     expect(m.colour_id).toBe(0);
     expect(m.parse_version).toBe(PG_PARSE_VERSION);
+    expect(PG_PARSE_VERSION).toBe(3);
+  });
+
+  it('includes a per-quadrant price histogram in uk_detail and world_detail', () => {
+    const ukDetail = row.uk_detail as {
+      soldNew: { hist: Record<string, number> };
+      soldUsed: { hist: Record<string, number> };
+      stockNew: { hist: Record<string, number> };
+      stockUsed: { hist: Record<string, number> };
+    };
+    // UK-only soldUsed rows: [July,5,0.5], [May,1,0.4] (both non-converted)
+    expect(ukDetail.soldUsed.hist).toEqual({ '0.5000': 5, '0.4000': 1 });
+    // UK-only soldNew: converted June row excluded, only [July,2,0.1] kept
+    expect(ukDetail.soldNew.hist).toEqual({ '0.1000': 2 });
+    // stock hist present (even though quadrant-level fields historically only had min/max)
+    expect(ukDetail.stockNew.hist).toEqual({ '0.2000': 10 });
+    expect(ukDetail.stockUsed.hist).toEqual({ '0.1500': 7 }); // converted 0.9 row excluded
+
+    const worldDetail = row.world_detail as { soldNew: { hist: Record<string, number> } };
+    // World soldNew includes the converted June row too
+    expect(worldDetail.soldNew.hist).toEqual({ '0.1000': 2, '0.3000': 3 });
   });
 });

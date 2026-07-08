@@ -51,8 +51,12 @@ export interface PgCacheRow {
   fetched_at: string;
 }
 
+// v3 (2026-07-08): per-quadrant sold/stock price histograms added to uk_detail/world_detail
+// (soldNew.hist, soldUsed.hist, stockNew.hist, stockUsed.hist) — enables qtyShareAtOrAbove
+// price-conditional STR. Rows written under v2 have no `hist` key on the detail objects;
+// readers must treat it as optional (qtyShareAtOrAbove returns null for absent/empty hist).
 // v2 (2026-07-07): true median on even counts; item_name from title; noData size guard.
-export const PG_PARSE_VERSION = 2;
+export const PG_PARSE_VERSION = 3;
 
 export function pgCacheKey(item: { itemType: PgItemType; itemNo: string; colourId: number }): string {
   return `${item.itemType}:${item.itemNo}:${item.colourId}`;
@@ -85,16 +89,16 @@ export function toPgCacheRow(r: PgScrapeResult): PgCacheRow {
     uk_stock_min_new: uk.stockNew.min,
     uk_stock_min_used: uk.stockUsed.min,
     uk_detail: {
-      soldNew: { min: uk.soldNew.min, max: uk.soldNew.max, byMonth: uk.soldNew.byMonth },
-      soldUsed: { min: uk.soldUsed.min, max: uk.soldUsed.max, byMonth: uk.soldUsed.byMonth },
-      stockNew: { min: uk.stockNew.min, max: uk.stockNew.max },
-      stockUsed: { min: uk.stockUsed.min, max: uk.stockUsed.max },
+      soldNew: { min: uk.soldNew.min, max: uk.soldNew.max, byMonth: uk.soldNew.byMonth, hist: uk.soldNew.hist },
+      soldUsed: { min: uk.soldUsed.min, max: uk.soldUsed.max, byMonth: uk.soldUsed.byMonth, hist: uk.soldUsed.hist },
+      stockNew: { min: uk.stockNew.min, max: uk.stockNew.max, hist: uk.stockNew.hist },
+      stockUsed: { min: uk.stockUsed.min, max: uk.stockUsed.max, hist: uk.stockUsed.hist },
     },
     world_detail: {
-      soldNew: { lots: world.soldNew.lots, qty: world.soldNew.qty, avg: world.soldNew.avg, median: world.soldNew.median },
-      soldUsed: { lots: world.soldUsed.lots, qty: world.soldUsed.qty, avg: world.soldUsed.avg, median: world.soldUsed.median },
-      stockNew: { lots: world.stockNew.lots, qty: world.stockNew.qty, avg: world.stockNew.avg },
-      stockUsed: { lots: world.stockUsed.lots, qty: world.stockUsed.qty, avg: world.stockUsed.avg },
+      soldNew: { lots: world.soldNew.lots, qty: world.soldNew.qty, avg: world.soldNew.avg, median: world.soldNew.median, hist: world.soldNew.hist },
+      soldUsed: { lots: world.soldUsed.lots, qty: world.soldUsed.qty, avg: world.soldUsed.avg, median: world.soldUsed.median, hist: world.soldUsed.hist },
+      stockNew: { lots: world.stockNew.lots, qty: world.stockNew.qty, avg: world.stockNew.avg, hist: world.stockNew.hist },
+      stockUsed: { lots: world.stockUsed.lots, qty: world.stockUsed.qty, avg: world.stockUsed.avg, hist: world.stockUsed.hist },
     },
     parse_version: PG_PARSE_VERSION,
     fetched_at: r.scrapedAt,

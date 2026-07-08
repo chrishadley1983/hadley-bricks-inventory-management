@@ -5,6 +5,7 @@ import {
   computeQuadrantStats,
   computeSideStats,
   recentMonthsQty,
+  qtyShareAtOrAbove,
   classifyPgPage,
   parseItemNameFromTitle,
   PG_EXTRACT_JS,
@@ -116,6 +117,81 @@ describe('computeQuadrantStats', () => {
     const uk = computeQuadrantStats(allForeign, true);
     expect(uk.lots).toBe(0);
     expect(uk.avg).toBeNull();
+  });
+
+  it('builds a price->qty histogram from the same rows as the aggregates', () => {
+    const uk = computeQuadrantStats(rows, true);
+    // rows (UK-only, kept): [July,2,0.1], [June,3,0.3], [June,4,0.5]
+    expect(uk.hist).toEqual({ '0.1000': 2, '0.3000': 3, '0.5000': 4 });
+    // total-qty integrity: histogram values sum to quadrant qty
+    expect(Object.values(uk.hist).reduce((a, b) => a + b, 0)).toBe(uk.qty);
+  });
+
+  it('sums qty for repeated prices into one histogram bucket', () => {
+    const repeats: PgRawRow[] = [
+      ['July 2026', 2, 0.07, false],
+      ['June 2026', 5, 0.07, false],
+      ['June 2026', 1, 0.1, false],
+    ];
+    const uk = computeQuadrantStats(repeats, true);
+    expect(uk.hist).toEqual({ '0.0700': 7, '0.1000': 1 });
+  });
+
+  it('returns an empty histogram for empty input', () => {
+    expect(computeQuadrantStats([], true).hist).toEqual({});
+  });
+
+  it('caps a quadrant with >150 distinct prices to the 150 highest-qty buckets + "other"', () => {
+    // 200 distinct prices, each qty = its index (1..200) so we know exactly which 150
+    // survive (the 150 highest-qty = prices 51..200) and which 50 roll into "other".
+    const many: PgRawRow[] = [];
+    for (let i = 1; i <= 200; i++) {
+      many.push([null, i, i / 100, false]);
+    }
+    const stats = computeQuadrantStats(many, true);
+    const keys = Object.keys(stats.hist);
+    expect(keys).toHaveLength(151); // 150 kept + "other"
+    expect(stats.hist).toHaveProperty('other');
+    // rolled-off tail = qtys 1..50 = sum 1275; kept = qtys 51..200 = sum 18850
+    const rolledSum = Array.from({ length: 50 }, (_, i) => i + 1).reduce((a, b) => a + b, 0);
+    expect(stats.hist.other).toBe(rolledSum);
+    // total-qty integrity preserved even after capping
+    expect(Object.values(stats.hist).reduce((a, b) => a + b, 0)).toBe(stats.qty);
+    // a low-qty price (e.g. qty=1, price 0.01) was rolled off; a high-qty one (qty=200) kept
+    expect(stats.hist['0.0100']).toBeUndefined();
+    expect(stats.hist['2.0000']).toBe(200);
+  });
+});
+
+describe('qtyShareAtOrAbove', () => {
+  const hist = { '0.0100': 90, '0.0500': 5, '0.0700': 3, '0.1000': 2 }; // total 100
+
+  it('returns the share of qty at prices >= the given price', () => {
+    expect(qtyShareAtOrAbove(hist, 0.07)).toBeCloseTo(5 / 100, 6); // 0.07 + 0.10 buckets
+  });
+
+  it('is inclusive at the exact boundary price', () => {
+    expect(qtyShareAtOrAbove(hist, 0.05)).toBeCloseTo(10 / 100, 6); // 0.05 + 0.07 + 0.10
+  });
+
+  it('returns 0 when every bucket is below the given price', () => {
+    expect(qtyShareAtOrAbove(hist, 1.0)).toBe(0);
+  });
+
+  it('returns null when hist is absent (undefined — pre-v3 cache row)', () => {
+    expect(qtyShareAtOrAbove(undefined, 0.07)).toBeNull();
+  });
+
+  it('returns null when hist is empty', () => {
+    expect(qtyShareAtOrAbove({}, 0.07)).toBeNull();
+  });
+
+  it('excludes "other" from the numerator but includes it in the denominator', () => {
+    // "other" qty is real but its price is unknown, so it can never count toward
+    // "at or above" — this makes the result a safe lower bound, never an overstatement.
+    const withOther = { '0.0100': 10, other: 90 }; // total 100
+    expect(qtyShareAtOrAbove(withOther, 0.01)).toBeCloseTo(10 / 100, 6); // NOT 100/100
+    expect(qtyShareAtOrAbove(withOther, 100)).toBe(0);
   });
 });
 
