@@ -7,10 +7,10 @@ export function LaneTelemetryTable({ rows }: { rows: LaneTelemetryDayRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lane telemetry — last 7 days</CardTitle>
+        <CardTitle>Lane telemetry — last 14 days (raw detail)</CardTitle>
         <CardDescription>
-          Per-lane, per-night acquisition volume. First-block position tracks the sessions-to-first-403
-          trend (spec §4.4) — the tripwire for throttling down before a real ban.
+          Per-lane, per-night acquisition volume behind the block-rate trend chart above. First-block position
+          tracks the sessions-to-first-403 trend (spec §4.4) — the tripwire for throttling down before a real ban.
         </CardDescription>
       </CardHeader>
       <CardContent>
