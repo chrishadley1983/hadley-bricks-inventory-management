@@ -102,6 +102,8 @@ export interface MarkdownDigestSuggestion {
   diagnosisReason: string;
   ageDays: number;
   floor: number;
+  /** Units this row covers (Amazon: all units of the ASIN; eBay: 1). */
+  units?: number;
 }
 
 export interface MarkdownDigestAuction {
@@ -111,6 +113,8 @@ export interface MarkdownDigestAuction {
   ageDays: number;
   suggestedEndDate: string | null;
   reason: string;
+  /** Units this row covers (Amazon exit: all units of the ASIN; eBay: 1). */
+  units?: number;
 }
 
 export interface MarkdownDigestParams {
@@ -899,10 +903,12 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
   async sendMarkdownDigest(params: MarkdownDigestParams): Promise<void> {
     const { userEmail, suggestions, auctions, appBaseUrl } = params;
 
+    // Unit-weighted: Amazon rows cover all units of the ASIN.
     const totalReduction = suggestions.reduce(
-      (sum, s) => sum + Math.max(0, s.currentPrice - s.suggestedPrice),
+      (sum, s) => sum + Math.max(0, s.currentPrice - s.suggestedPrice) * (s.units ?? 1),
       0
     );
+    const totalUnits = suggestions.reduce((sum, s) => sum + (s.units ?? 1), 0);
     const ebayCount = suggestions.filter((s) => s.platform === 'ebay').length;
     const amazonCount = suggestions.filter((s) => s.platform === 'amazon').length;
     const markdownUrl = `${appBaseUrl || ''}/inventory/markdown`;
@@ -917,13 +923,15 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
       .map((s) => {
         const delta = s.currentPrice - s.suggestedPrice;
         const pct = s.currentPrice > 0 ? ((delta / s.currentPrice) * 100).toFixed(1) : '0';
+        const units = s.units ?? 1;
         return `<tr>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(s.setNumber || '-')}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml((s.itemName || '').slice(0, 48))}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${s.platform === 'amazon' ? 'AMZ' : 'eBay'}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;font-weight:${units > 1 ? '700' : '400'};">${units}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${s.currentPrice.toFixed(2)}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;color:#16A34A;">£${s.suggestedPrice.toFixed(2)}</td>
-          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;color:#DC2626;">-£${delta.toFixed(2)} (${pct}%)</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;color:#DC2626;">-£${delta.toFixed(2)}${units > 1 ? ` ×${units}` : ''} (${pct}%)</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(s.diagnosisReason)}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${s.ageDays}d</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${s.floor.toFixed(2)}</td>
@@ -936,6 +944,7 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
         (a) => `<tr>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml(a.setNumber || '-')}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;">${escapeHtml((a.itemName || '').slice(0, 48))}</td>
+          <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;font-weight:${(a.units ?? 1) > 1 ? '700' : '400'};">${a.units ?? 1}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">£${a.currentPrice.toFixed(2)}</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">${a.ageDays}d</td>
           <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">${a.suggestedEndDate ? new Date(a.suggestedEndDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-'}</td>
@@ -947,12 +956,13 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     const suggestionsSection =
       suggestions.length > 0
         ? `
-      <h3 style="color:#333;margin-top:24px;">Suggested price changes (${suggestions.length})</h3>
+      <h3 style="color:#333;margin-top:24px;">Suggested price changes (${suggestions.length} lines · ${totalUnits} units)</h3>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr style="background:#F3F4F6;">
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Set #</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Platform</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Units</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Current</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Suggested</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Change</th>
@@ -967,12 +977,13 @@ View Feed: ${process.env.NEXT_PUBLIC_APP_URL}/amazon-sync?feed=${feedId}
     const auctionsSection =
       auctions.length > 0
         ? `
-      <h3 style="color:#7C3AED;margin-top:24px;">Auction recommendations (${auctions.length})</h3>
-      <p style="color:#666;font-size:12px;margin-top:0;">Low-demand aged eBay listings — convert to auction manually if you agree.</p>
+      <h3 style="color:#7C3AED;margin-top:24px;">Auction / exit recommendations (${auctions.length})</h3>
+      <p style="color:#666;font-size:12px;margin-top:0;">Low-demand aged listings — convert to auction (eBay) or move off Amazon manually if you agree.</p>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr style="background:#F5F3FF;">
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Set #</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:left;">Item</th>
+          <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Units</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Current</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;">Age</th>
           <th style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">Suggested end</th>
