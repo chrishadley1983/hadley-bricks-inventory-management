@@ -55,6 +55,16 @@ function lotName(s: ScoredLot) {
   return `${s.itemNo}${s.colourName ? ` · ${s.colourName}` : ''}`;
 }
 
+/** Benchmark with provenance: † = worldwide fallback (+UK calibration applied). */
+function BenchCell({ s }: { s: ScoredLot }) {
+  return (
+    <span title={s.priceSource === 'world' ? 'Worldwide 6-mo avg, +11% UK calibration' : 'UK 6-mo sold avg'}>
+      {gbp(s.benchmarkAvg)}
+      {s.priceSource === 'world' && <sup className="text-muted-foreground">†</sup>}
+    </span>
+  );
+}
+
 function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 'magnet' }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">None.</p>;
   return (
@@ -78,7 +88,7 @@ function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 
               </TableCell>
               <TableCell className="text-right tabular-nums">{gbp(s.ask)}</TableCell>
               {kind === 'margin' && <>
-                <TableCell className="text-right tabular-nums">{gbp(s.ukSoldAvg)}</TableCell>
+                <TableCell className="text-right tabular-nums"><BenchCell s={s} /></TableCell>
                 <TableCell className="text-right tabular-nums">{gbp(s.ourList)}</TableCell>
                 <TableCell className="text-right tabular-nums">{gbp(s.netPerUnit)}</TableCell>
                 <TableCell className="text-right tabular-nums">{pct(s.marginPct)}</TableCell>
@@ -86,7 +96,7 @@ function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 
               </>}
               {kind === 'str' && <>
                 <TableCell className="text-right tabular-nums">{numf(s.strLots, 2)}</TableCell>
-                <TableCell className="text-right tabular-nums">{gbp(s.ukSoldAvg)}</TableCell>
+                <TableCell className="text-right tabular-nums"><BenchCell s={s} /></TableCell>
                 <TableCell>{s.withinMargin ? <Badge className="bg-emerald-600 hover:bg-emerald-600">BUY</Badge> : ''}</TableCell>
               </>}
               {kind === 'magnet' && <>
@@ -113,8 +123,9 @@ export function AssessmentDetail({ a }: { a: StoreAssessment }) {
               {a.store.storeName ?? a.store.slug}
               <VerdictBadge label={a.verdict.label} />
               <Badge variant="outline">{a.mode.toUpperCase()}</Badge>
+              {a.scanTruncated && <Badge variant="destructive">TRUNCATED SCAN</Badge>}
             </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">{a.store.country ?? '?'} · ID {a.store.storeId ?? '?'} · scanned {a.scannedAt.slice(0, 16).replace('T', ' ')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{a.store.country ?? '?'} · ID {a.store.storeId ?? '?'} · scanned {a.scannedAt.slice(0, 16).replace('T', ' ')} · engine v{a.engineVersion}</p>
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold tabular-nums">{a.verdict.grade}</div>
@@ -150,7 +161,7 @@ export function AssessmentDetail({ a }: { a: StoreAssessment }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Weighted-median ask = <span className="font-semibold text-foreground">{a.pricing.weightedMedianAskVsUk != null ? `${Math.round(a.pricing.weightedMedianAskVsUk * 100)}% of 6-mo market avg` : '—'}</span> across {a.pricing.covered} benchmarked lots (UK where available; see Data confidence).
+            Weighted-median ask = <span className="font-semibold text-foreground">{a.pricing.weightedMedianAskVsMarket != null ? `${Math.round(a.pricing.weightedMedianAskVsMarket * 100)}% of 6-mo market avg` : '—'}</span> across {a.pricing.covered} benchmarked lots (UK where available, worldwide +11% UK calibration otherwise; see Data confidence).
           </p>
           <BucketList buckets={a.pricing.positions} />
         </CardContent>
@@ -247,7 +258,10 @@ export function AssessmentDetail({ a }: { a: StoreAssessment }) {
         </Card>
         <Card>
           <CardHeader><CardTitle>9 · Ageing {a.ageing.motivatedSeller && <Badge variant="secondary" className="ml-1">motivated</Badge>}</CardTitle></CardHeader>
-          <CardContent><BucketList buckets={a.ageing.buckets} tone="warn" /></CardContent>
+          <CardContent className="space-y-3">
+            <BucketList buckets={a.ageing.buckets} tone="warn" />
+            <p className="text-xs text-muted-foreground">Signal computed over the {pct(a.ageing.benchmarkedValueShare)} of value with a sold-rate benchmark; no-data lots don&apos;t count as dead.</p>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>10 · Concentration</CardTitle></CardHeader>

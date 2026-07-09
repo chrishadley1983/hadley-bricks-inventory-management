@@ -70,14 +70,15 @@ export interface ScoredLot {
   ask: number; // their unit price (GBP)
   lotAskValue: number; // ask × qty
   damageNote: boolean;
-  // Market benchmark
-  ukSoldAvg: number | null;
+  // Market benchmark (UK 6mo sold avg where covered; worldwide avg ×UK uplift otherwise —
+  // see priceSource for provenance)
+  benchmarkAvg: number | null;
   strLots: number | null; // sold_lots / stock_lots (house STR)
   strQty: number | null; // sold_qty / stock_qty (Bricqer pricing input)
   worldSupplyLots: number | null; // worldwide stock lots (seller count) for this condition
   demandRank: number | null;
   priceSource: PriceSource;
-  askVsUk: number | null; // ask ÷ UK 6mo avg
+  askVsMarket: number | null; // ask ÷ benchmarkAvg
   position: PricePosition;
   // Arbitrage math (what WE'd realise reselling it)
   ourList: number | null; // Bricqer list (P/M) or set sold avg (S)
@@ -112,7 +113,7 @@ export interface SizeSection {
 
 export interface PricingSection {
   covered: number; // lots with a usable benchmark
-  weightedMedianAskVsUk: number | null;
+  weightedMedianAskVsMarket: number | null;
   label: 'cheap' | 'at-market' | 'premium' | 'unknown';
   positions: Bucket[]; // UNDER / KEEN / AT-MARKET / PREMIUM / OVER
 }
@@ -164,8 +165,11 @@ export interface ConfidenceSection {
 }
 
 export interface AgeingSection {
-  buckets: Bucket[]; // fresh / normal / overstock / dead
-  overstockValueShare: number; // ≥12mo cover — motivated-seller signal
+  buckets: Bucket[]; // fresh / normal / overstock / dead / no-data
+  /** (overstock + dead) ÷ BENCHMARKED value — no-data lots are excluded, not counted as dead. */
+  overstockValueShare: number;
+  /** Share of store value that had a sold-rate benchmark at all (the denominator above). */
+  benchmarkedValueShare: number;
   motivatedSeller: boolean;
 }
 
@@ -179,13 +183,25 @@ export interface Verdict {
   label: 'BUY' | 'REVIEW' | 'SKIP';
   headline: string;
   reasons: string[];
-  signals: { price: number; margin: number; coverage: number; magnet: number };
+  /**
+   * Cherry-pick-first signal breakdown (each 0..1):
+   * value = buyable net + breadth (the money on the table — dominant weight),
+   * efficiency = ROI on the buyable outlay,
+   * magnet = scarce-and-selling lots,
+   * price = whole-store price posture (search-cost modifier, minority weight),
+   * coverage = benchmark confidence (UK full, world-fallback half).
+   */
+  signals: { value: number; efficiency: number; magnet: number; price: number; coverage: number };
 }
 
 export interface StoreAssessment {
+  /** Bumped when scoring semantics change — persisted rows carry the version they were built with. */
+  engineVersion: number;
   store: { slug: string; storeId: number | null; storeName: string | null; country: string | null };
   mode: AssessMode;
   scannedAt: string;
+  /** True when the inventory scan hit its page cap (or stopped early) — totals understate the store. */
+  scanTruncated: boolean;
   inputs: AssessmentInputs;
   verdict: Verdict;
   size: SizeSection;
@@ -206,6 +222,6 @@ export const DEFAULT_INPUTS: AssessmentInputs = {
   minStr: 0.5,
   magnetMaxSupplyLots: 3,
   inboundPerUnit: 0,
-  cacheTtlDays: null,
+  cacheTtlDays: 90,
   feeModel: { blFee: 0.03, bricqerFee: 0.035, paypalPct: 0.029 },
 };

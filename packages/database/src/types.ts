@@ -13980,17 +13980,19 @@ export type Database = {
           buyable_net_gbp: number | null
           buyable_outlay_gbp: number | null
           created_at: string
+          engine_version: number
           feedback_score: number | null
           grade: number | null
           high_str_lots: number | null
           id: string
           magnet_lots: number | null
-          median_ask_vs_uk: number | null
+          median_ask_vs_market: number | null
           mode: string
           orders_per_month: number | null
           positive_pct: number | null
           price_coverage: number | null
           report_md: string | null
+          scan_truncated: boolean
           scanned_at: string
           store_country: string | null
           store_id: number | null
@@ -14010,17 +14012,19 @@ export type Database = {
           buyable_net_gbp?: number | null
           buyable_outlay_gbp?: number | null
           created_at?: string
+          engine_version?: number
           feedback_score?: number | null
           grade?: number | null
           high_str_lots?: number | null
           id?: string
           magnet_lots?: number | null
-          median_ask_vs_uk?: number | null
+          median_ask_vs_market?: number | null
           mode?: string
           orders_per_month?: number | null
           positive_pct?: number | null
           price_coverage?: number | null
           report_md?: string | null
+          scan_truncated?: boolean
           scanned_at?: string
           store_country?: string | null
           store_id?: number | null
@@ -14040,17 +14044,19 @@ export type Database = {
           buyable_net_gbp?: number | null
           buyable_outlay_gbp?: number | null
           created_at?: string
+          engine_version?: number
           feedback_score?: number | null
           grade?: number | null
           high_str_lots?: number | null
           id?: string
           magnet_lots?: number | null
-          median_ask_vs_uk?: number | null
+          median_ask_vs_market?: number | null
           mode?: string
           orders_per_month?: number | null
           positive_pct?: number | null
           price_coverage?: number | null
           report_md?: string | null
+          scan_truncated?: boolean
           scanned_at?: string
           store_country?: string | null
           store_id?: number | null

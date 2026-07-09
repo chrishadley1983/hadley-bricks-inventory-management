@@ -94,17 +94,28 @@ export async function preflight(cdp: CDPClient, storeSlug: string): Promise<Stor
   return { storeId: parsed.storeId, storeName: parsed.storeName, country: parsed.country, isUK: parsed.country === 'United Kingdom' };
 }
 
+export interface StoreScrapeResult {
+  lots: StoreLot[];
+  /**
+   * True when any item type hit the page cap with results still coming, or a scan
+   * stopped early on a page of duplicates (inventory shifting mid-scrape). Totals
+   * built from a truncated scrape understate the store — surface this, never hide it.
+   */
+  truncated: boolean;
+}
+
 /** Scrape all P/S/M inventory lots from the store via the searchitems AJAX endpoint. */
 export async function scrapeStoreInventory(
   cdp: CDPClient,
   storeId: number,
   opts: { maxPages?: number; pageDelayMs?: number; onProgress?: (msg: string) => void } = {},
-): Promise<StoreLot[]> {
+): Promise<StoreScrapeResult> {
   const maxPages = opts.maxPages ?? 50;
   const pageDelay = Math.max(3000, opts.pageDelayMs ?? 3000);
   const log = opts.onProgress ?? (() => {});
   const all: StoreLot[] = [];
   const seen = new Set<number>();
+  let truncated = false;
 
   for (const type of ['P', 'S', 'M'] as StoreLot['itemType'][]) {
     for (let pg = 1; pg <= maxPages; pg++) {
@@ -147,11 +158,22 @@ export async function scrapeStoreInventory(
         added++;
       }
       log(`  [${type}] pg=${pg} +${added} (total ${all.length})`);
-      if (added === 0) break;
+      if (added === 0) {
+        // A full page of already-seen invIDs means the store's paging shifted under
+        // us — we can't tell what we missed, so treat the scan as incomplete.
+        log(`  [${type}] pg=${pg}: page was all duplicates (inventory shifted?) — marking scan truncated`);
+        truncated = true;
+        break;
+      }
+      if (pg === maxPages && items.length >= 100) {
+        // Full page at the cap → almost certainly more pages behind it.
+        log(`  [${type}] hit the ${maxPages}-page cap with results still coming — scan truncated (raise --max-pages)`);
+        truncated = true;
+      }
       if (pg < maxPages) await sleep(pageDelay);
     }
   }
-  return all;
+  return { lots: all, truncated };
 }
 
 /**
@@ -184,10 +206,15 @@ export async function scrapeStoreProfile(cdp: CDPClient, storeSlug: string, meta
     // 2. feedback.asp carries the Praise/Neutral/Complaint summary in 4 columns
     //    [last week, last month, last 6 months, all time]. The 6-month praise count is
     //    our order-rate proxy; all-time counts give the positive %.
-    const user = sf.username ?? meta.storeName;
+    //    Only the StoreFront username is trusted here — the store DISPLAY name is not a
+    //    username, and querying feedback.asp with it could silently return some other
+    //    member's stats. No username → leave the feedback fields null.
+    const user = sf.username;
     if (user) {
       await cdp.navigate(`https://www.bricklink.com/feedback.asp?u=${encodeURIComponent(user)}`, 3500);
       const txt = await cdp.evaluate<string>('document.body.innerText || ""');
+      // Belt-and-braces: make sure the page is actually about this member before parsing.
+      if (!txt.toLowerCase().includes(user.toLowerCase())) return base;
       const row = (label: string): number[] | null => {
         const m = txt.match(new RegExp(`${label}:\\s*([\\d,]+)\\s+([\\d,]+)\\s+([\\d,]+)\\s+([\\d,]+)`, 'i'));
         return m ? m.slice(1, 5).map((x) => parseInt(x.replace(/,/g, ''), 10)) : null;

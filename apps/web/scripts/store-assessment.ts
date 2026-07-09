@@ -26,7 +26,7 @@ import * as path from 'path';
 import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
-import { computeStoreAssessment } from '../src/lib/bl-store-assessment/engine';
+import { computeStoreAssessment, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
 import { renderAssessment } from '../src/lib/bl-store-assessment/format';
 import type { StoreLot, AssessMode } from '../src/lib/bl-store-assessment/types';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
@@ -47,7 +47,6 @@ const NO_PERSIST = argv['no-persist'] === 'true';
 const ALLOW_NON_UK = argv['allow-non-uk'] === 'true';
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
-const USER_ID = argv['user-id'] ?? '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const INVENTORY_TTL_DAYS = parseFloat(argv['inventory-ttl-days'] ?? '7');
@@ -60,7 +59,7 @@ const inputs = {
   minStr: parseFloat(argv['min-str'] ?? '0.5'),
   magnetMaxSupplyLots: parseInt(argv['magnet-max-supply'] ?? '3', 10),
   inboundPerUnit: parseFloat(argv['inbound-per-unit'] ?? '0'),
-  cacheTtlDays: argv['cache-ttl-days'] ? parseInt(argv['cache-ttl-days'], 10) : null,
+  cacheTtlDays: parseInt(argv['cache-ttl-days'] ?? '90', 10),
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -70,16 +69,38 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const OUT_DIR = path.resolve(__dirname, `../../../tmp/stores/${STORE_SLUG}`);
 const INVENTORY_FILE = path.join(OUT_DIR, 'inventory.json');
+const INVENTORY_META_FILE = path.join(OUT_DIR, 'inventory.meta.json');
 const log = (m: string) => { if (!JSON_OUT) console.log(m); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function readCachedInventory(): StoreLot[] | null {
+/**
+ * Resolve the owning user for the persisted row: flag → env → the sole profiles row.
+ * Errors out rather than guessing when several profiles exist.
+ */
+async function resolveUserId(sb: ReturnType<typeof createClient>): Promise<string> {
+  const fromArgs = argv['user-id'] ?? process.env.STORE_ASSESSMENT_USER_ID;
+  if (fromArgs) return fromArgs;
+  const { data, error } = await sb.from('profiles').select('id').limit(2);
+  if (error) throw new Error(`resolveUserId: profiles read failed: ${error.message}`);
+  if (!data || data.length !== 1) {
+    throw new Error(`resolveUserId: ${data?.length ?? 0} profiles found — pass --user-id=<uuid> or set STORE_ASSESSMENT_USER_ID`);
+  }
+  return data[0].id as string;
+}
+
+/** Cached inventory + whether that scrape was truncated (sidecar meta; absent = assume complete). */
+function readCachedInventory(): { lots: StoreLot[]; truncated: boolean } | null {
   if (FORCE_RESCRAPE || !fs.existsSync(INVENTORY_FILE)) return null;
   const ageDays = (Date.now() - fs.statSync(INVENTORY_FILE).mtimeMs) / 86400000;
   if (ageDays > INVENTORY_TTL_DAYS) return null;
   try {
     const cached = JSON.parse(fs.readFileSync(INVENTORY_FILE, 'utf8')) as StoreLot[];
-    if (cached.length > 0) { log(`[scrape] reusing cached inventory (${ageDays.toFixed(1)}d old, ${cached.length} lots)`); return cached; }
+    if (cached.length > 0) {
+      let truncated = false;
+      try { truncated = (JSON.parse(fs.readFileSync(INVENTORY_META_FILE, 'utf8')) as { truncated?: boolean }).truncated ?? false; } catch { /* pre-meta cache */ }
+      log(`[scrape] reusing cached inventory (${ageDays.toFixed(1)}d old, ${cached.length} lots${truncated ? ', TRUNCATED scrape' : ''})`);
+      return { lots: cached, truncated };
+    }
   } catch { /* fall through to fresh scrape */ }
   return null;
 }
@@ -89,22 +110,31 @@ async function main() {
   log(`\n=== BL STORE ASSESSMENT (${MODE}) — ${STORE_SLUG} ===`);
 
   const cdp = await connectCdp(CDP_PORT, STORE_SLUG!);
+  try {
+    await run(cdp);
+  } finally {
+    cdp.close();
+  }
+}
+
+async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
   log('[1/5] Preflight...');
   const meta = await preflight(cdp, STORE_SLUG!);
   log(`  ${meta.storeName} (${meta.country}, ID ${meta.storeId})`);
   if (!meta.isUK && !ALLOW_NON_UK) {
     console.error(`[preflight] Store country is "${meta.country}", not UK — aborting (arbitrage is UK-only; pass --allow-non-uk to override).`);
-    cdp.close();
     process.exit(1);
   }
 
   log('[2/5] Inventory...');
-  let lots = readCachedInventory();
-  if (!lots) {
-    lots = await scrapeStoreInventory(cdp, meta.storeId, { maxPages: MAX_PAGES, pageDelayMs: PAGE_DELAY_MS, onProgress: log });
-    fs.writeFileSync(INVENTORY_FILE, JSON.stringify(lots, null, 2));
-    log(`  scraped ${lots.length} lots → inventory.json`);
+  let inv = readCachedInventory();
+  if (!inv) {
+    inv = await scrapeStoreInventory(cdp, meta.storeId, { maxPages: MAX_PAGES, pageDelayMs: PAGE_DELAY_MS, onProgress: log });
+    fs.writeFileSync(INVENTORY_FILE, JSON.stringify(inv.lots, null, 2));
+    fs.writeFileSync(INVENTORY_META_FILE, JSON.stringify({ truncated: inv.truncated, scrapedAt: new Date().toISOString() }, null, 2));
+    log(`  scraped ${inv.lots.length} lots → inventory.json${inv.truncated ? '  ⚠ TRUNCATED' : ''}`);
   }
+  const { lots, truncated } = inv;
 
   log('[3/5] Store profile (feedback / order rate)...');
   const profile = await scrapeStoreProfile(cdp, STORE_SLUG!, meta);
@@ -133,7 +163,7 @@ async function main() {
         if (!prev || value > prev.value) tuples.set(key, { itemType: l.itemType, itemNo: l.itemNo, colourId: l.colourId, value });
       }
       // Keep only those lacking fresh UK coverage, ranked by value, capped at the budget.
-      const pg = await readPriceGuide(supabase, [...tuples.values()].map((t) => ({ itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, scheme: 'bl' as const })), { ttlDays: inputs.cacheTtlDays ?? 45 });
+      const pg = await readPriceGuide(supabase, [...tuples.values()].map((t) => ({ itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, scheme: 'bl' as const })), { ttlDays: inputs.cacheTtlDays });
       const ranked = [...tuples.values()]
         .filter((t) => pg.get(pgKey(t.itemType, t.itemNo, t.itemType === 'P' ? t.colourId : 0))?.coverage !== 'uk')
         .sort((a, b) => b.value - a.value)
@@ -142,7 +172,7 @@ async function main() {
       let filled = 0;
       for (const t of ranked) {
         try {
-          await ensurePriceGuide(bl, supabase, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: inputs.cacheTtlDays ?? 45, scheme: 'bl' });
+          await ensurePriceGuide(bl, supabase, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: inputs.cacheTtlDays, scheme: 'bl' });
           filled++;
           if (filled % 20 === 0) log(`  gap-filled ${filled}/${ranked.length}`);
         } catch (e) {
@@ -155,29 +185,32 @@ async function main() {
   }
 
   log(`[5/5] Scoring ${lots.length} lots...`);
-  const assessment = await computeStoreAssessment(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, inputs });
+  const assessment = await computeStoreAssessment(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, scanTruncated: truncated, inputs });
   const report = renderAssessment(assessment);
 
   const reportFile = path.join(OUT_DIR, `assessment-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(reportFile, report);
 
   if (!NO_PERSIST) {
+    const userId = await resolveUserId(supabase);
     const v = assessment.verdict;
     const { error } = await supabase.from('store_assessments').insert({
-      user_id: USER_ID,
+      user_id: userId,
       scanned_at: assessment.scannedAt,
       store_slug: STORE_SLUG,
       store_id: meta.storeId,
       store_name: meta.storeName,
       store_country: meta.country,
       mode: MODE,
+      engine_version: ENGINE_VERSION,
+      scan_truncated: assessment.scanTruncated,
       grade: v.grade,
       verdict: v.label,
       total_lots: assessment.size.totalLots,
       total_pieces: assessment.size.totalPieces,
       total_value: assessment.size.totalValue,
       avg_value_per_lot: assessment.size.avgValuePerLot,
-      median_ask_vs_uk: assessment.pricing.weightedMedianAskVsUk,
+      median_ask_vs_market: assessment.pricing.weightedMedianAskVsMarket,
       buyable_lots: assessment.withinMargin.lots,
       buyable_outlay_gbp: assessment.withinMargin.outlay,
       buyable_net_gbp: assessment.withinMargin.projectedNet,
@@ -194,8 +227,6 @@ async function main() {
     if (error) console.error(`[persist] failed: ${error.message}`);
     else log(`[persist] saved to store_assessments`);
   }
-
-  cdp.close();
 
   if (JSON_OUT) console.log(JSON.stringify(assessment, null, 2));
   else console.log(report);

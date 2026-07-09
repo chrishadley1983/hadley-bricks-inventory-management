@@ -42,6 +42,12 @@ Key flags: `--min-margin` (0.20), `--min-str` (0.5), `--magnet-max-supply` (3),
 Typical flow: run the assess lens across candidate stores → run the **buy lens**
 (`/bl-basket <slug>`) on the winners to build the cart.
 
+Engine v2 notes (2026-07-09): the verdict is **cherry-pick-first** — buyable net +
+ROI dominate; whole-store price posture is only a search-cost modifier, so a premium
+store with a strong sub-basket grades REVIEW, not SKIP. Worldwide-fallback benchmarks
+carry a +11% UK calibration (marked † in reports). If the report shows
+**⚠ SCAN TRUNCATED**, re-run with a higher `--max-pages` — totals understate the store.
+
 ---
 
 # BrickLink Seller Basket Builder (buy lens)

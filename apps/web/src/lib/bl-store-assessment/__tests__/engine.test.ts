@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { assembleAssessment } from '../engine';
+import { assembleAssessment, WORLD_TO_UK_UPLIFT } from '../engine';
 import { pgKey, type PriceGuideView, type SideView } from '../../bricklink/price-guide/read';
 import { DEFAULT_INPUTS, type StoreLot, type AssessmentInputs } from '../types';
+import { normalizeAssessment } from '../normalize';
 
 const EMPTY: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
@@ -23,34 +24,46 @@ function view(itemType: 'P' | 'S' | 'M', itemNo: string, blColour: number, used:
   };
 }
 
+function lot(p: Partial<StoreLot> & Pick<StoreLot, 'invID' | 'itemType' | 'itemNo' | 'unitPriceGBP'>): StoreLot {
+  return {
+    colourId: 0, colourName: null, itemName: `${p.itemNo} item`, invNew: 'Used',
+    invComplete: null, invQty: 1, description: null, ...p,
+  };
+}
+
 const inputs: AssessmentInputs = { ...DEFAULT_INPUTS };
+type SupplyMap = Map<string, { stockLotsNew: number | null; stockLotsUsed: number | null; demandRank: number | null }>;
 
-const lots: StoreLot[] = [
-  // A: cheap fast-mover, scarce → within margin + high STR + magnet
-  { invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, colourName: 'Red', itemName: 'Brick 2x4', invNew: 'Used', invComplete: null, invQty: 10, unitPriceGBP: 0.50, description: null },
-  // B: overpriced new part → not within margin, OVER position
-  { invID: 2, itemType: 'P', itemNo: '3002', colourId: 1, colourName: 'Blue', itemName: 'Brick 2x3', invNew: 'New', invComplete: null, invQty: 1, unitPriceGBP: 5.00, description: null },
-  // C: set with no price data → no benchmark
-  { invID: 3, itemType: 'S', itemNo: '8043', colourId: 0, colourName: null, itemName: 'Excavator', invNew: 'New', invComplete: 'Complete', invQty: 1, unitPriceGBP: 100, description: null },
-];
-
-const pgMap = new Map<string, PriceGuideView>([
-  [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
-  [pgKey('P', '3002', 1), view('P', '3002', 1, EMPTY, side({ soldAvg: 2.00, soldLots: 5, soldQty: 5, stockLots: 5, stockQty: 5 }))],
-  [pgKey('S', '8043', 0), view('S', '8043', 0, EMPTY, EMPTY, 'none')],
-]);
-
-const supplyMap = new Map<string, { stockLotsNew: number | null; stockLotsUsed: number | null; demandRank: number | null }>([
-  [pgKey('P', '3001', 5), { stockLotsNew: null, stockLotsUsed: 2, demandRank: 5 }],
-  [pgKey('P', '3002', 1), { stockLotsNew: 30, stockLotsUsed: null, demandRank: 900 }],
-]);
-
-describe('assembleAssessment', () => {
-  const a = assembleAssessment({
+function assemble(lots: StoreLot[], pgMap: Map<string, PriceGuideView>, supplyMap: SupplyMap = new Map(), extra: { scanTruncated?: boolean } = {}) {
+  return assembleAssessment({
     slug: 'TestStore',
     storeMeta: { storeId: 42, storeName: 'Test Store', country: 'United Kingdom' },
-    lots, profile: null, mode: 'light', inputs, pgMap, supplyMap,
+    lots, profile: null, mode: 'light', inputs, pgMap, supplyMap, ...extra,
   });
+}
+
+describe('assembleAssessment', () => {
+  const lots: StoreLot[] = [
+    // A: cheap fast-mover, scarce → within margin + high STR + magnet
+    lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, colourName: 'Red', invNew: 'Used', invQty: 10, unitPriceGBP: 0.50 }),
+    // B: overpriced new part → not within margin, OVER position
+    lot({ invID: 2, itemType: 'P', itemNo: '3002', colourId: 1, colourName: 'Blue', invNew: 'New', unitPriceGBP: 5.00 }),
+    // C: set with no price data → no benchmark
+    lot({ invID: 3, itemType: 'S', itemNo: '8043', invNew: 'New', invComplete: 'Complete', unitPriceGBP: 100 }),
+  ];
+
+  const pgMap = new Map<string, PriceGuideView>([
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+    [pgKey('P', '3002', 1), view('P', '3002', 1, EMPTY, side({ soldAvg: 2.00, soldLots: 5, soldQty: 5, stockLots: 5, stockQty: 5 }))],
+    [pgKey('S', '8043', 0), view('S', '8043', 0, EMPTY, EMPTY, 'none')],
+  ]);
+
+  const supplyMap: SupplyMap = new Map([
+    [pgKey('P', '3001', 5), { stockLotsNew: null, stockLotsUsed: 2, demandRank: 5 }],
+    [pgKey('P', '3002', 1), { stockLotsNew: 30, stockLotsUsed: null, demandRank: 900 }],
+  ]);
+
+  const a = assemble(lots, pgMap, supplyMap);
 
   it('totals size & value from the raw scrape', () => {
     expect(a.size.totalLots).toBe(3);
@@ -96,13 +109,176 @@ describe('assembleAssessment', () => {
     expect(a.confidence.ukValueShare).toBeLessThan(0.5);
   });
 
-  it('produces a verdict with a grade and label', () => {
+  it('produces a verdict with a grade, label, and v2 signals', () => {
     expect(a.verdict.grade).toBeGreaterThanOrEqual(0);
     expect(a.verdict.grade).toBeLessThanOrEqual(100);
     expect(['BUY', 'REVIEW', 'SKIP']).toContain(a.verdict.label);
+    expect(a.verdict.signals).toHaveProperty('value');
+    expect(a.verdict.signals).toHaveProperty('efficiency');
   });
 
   it('counts set completeness from raw invComplete', () => {
     expect(a.partMix.setCompleteness.complete).toBe(1);
+  });
+
+  it('stamps the engine version and defaults scanTruncated false', () => {
+    expect(a.engineVersion).toBe(2);
+    expect(a.scanTruncated).toBe(false);
+  });
+});
+
+describe('world-fallback benchmark calibration', () => {
+  const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3005', colourId: 4, invNew: 'Used', unitPriceGBP: 1.00 })];
+  const pgMap = new Map([
+    [pgKey('P', '3005', 4), view('P', '3005', 4, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY, 'world_fallback')],
+  ]);
+  const a = assemble(lots, pgMap);
+  const s = a.size.biggestLots[0];
+
+  it('uplifts the worldwide avg to UK level', () => {
+    expect(s.priceSource).toBe('world');
+    expect(s.benchmarkAvg).toBeCloseTo(1.00 * WORLD_TO_UK_UPLIFT, 4);
+    expect(s.askVsMarket).toBeCloseTo(1 / WORLD_TO_UK_UPLIFT, 3);
+  });
+
+  it('prices resale off the calibrated benchmark', () => {
+    // used STR 2.0 -> ×1.8 on the uplifted £1.11
+    expect(s.ourList).toBeCloseTo(1.11 * 1.8, 2);
+  });
+});
+
+describe('ageing no-data handling', () => {
+  // £90 of value with NO benchmark + £10 benchmarked-and-dead (sold 0 in 6mo).
+  const lots = [
+    lot({ invID: 1, itemType: 'P', itemNo: '9999', colourId: 1, unitPriceGBP: 90 }),
+    lot({ invID: 2, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 10 }),
+  ];
+  const pgMap = new Map([
+    [pgKey('P', '9999', 1), view('P', '9999', 1, EMPTY, EMPTY, 'none')],
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 8.00, soldLots: 0, soldQty: 0, stockLots: 5, stockQty: 9 }), EMPTY)],
+  ]);
+  const a = assemble(lots, pgMap);
+
+  it('separates no-benchmark lots from dead stock', () => {
+    const noData = a.ageing.buckets.find((b) => b.key === 'no benchmark data');
+    const dead = a.ageing.buckets.find((b) => b.key.startsWith('dead'));
+    expect(noData?.lots).toBe(1);
+    expect(noData?.value).toBeCloseTo(90, 2);
+    expect(dead?.lots).toBe(1);
+    expect(dead?.value).toBeCloseTo(10, 2);
+  });
+
+  it('does not flag motivated seller off a sliver of benchmarked value', () => {
+    // 100% of BENCHMARKED value is dead, but only 10% of the store is benchmarked.
+    expect(a.ageing.overstockValueShare).toBeCloseTo(1, 3);
+    expect(a.ageing.benchmarkedValueShare).toBeCloseTo(0.1, 3);
+    expect(a.ageing.motivatedSeller).toBe(false);
+  });
+});
+
+describe('cherry-pick-first verdict', () => {
+  // A PREMIUM-postured store hiding a strong buyable minifig sub-basket
+  // (the Quaysretire shape): must not be graded SKIP.
+  const lots: StoreLot[] = [
+    // One big over-priced lot dominates the value-weighted pricing median.
+    lot({ invID: 100, itemType: 'S', itemNo: '10179', invNew: 'New', unitPriceGBP: 500 }),
+    // Ten cheap fast-moving used minifigs, all comfortably within margin.
+    ...Array.from({ length: 10 }, (_, i) =>
+      lot({ invID: i + 1, itemType: 'M', itemNo: `sw000${i}`, invNew: 'Used', unitPriceGBP: 2.00 })),
+  ];
+  const pgMap = new Map<string, PriceGuideView>([
+    [pgKey('S', '10179', 0), view('S', '10179', 0, EMPTY, side({ soldAvg: 250, soldLots: 4, soldQty: 4, stockLots: 4, stockQty: 4 }))],
+    ...Array.from({ length: 10 }, (_, i) => [
+      pgKey('M', `sw000${i}`, 0),
+      view('M', `sw000${i}`, 0, side({ soldAvg: 5.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY),
+    ] as const),
+  ]);
+  const a = assemble(lots, pgMap);
+
+  it('is premium-postured but not SKIP', () => {
+    expect(a.pricing.label).toBe('premium'); // weighted median dragged by the big lot
+    expect(a.withinMargin.lots).toBe(10);
+    expect(a.withinMargin.projectedNet).toBeGreaterThan(40);
+    expect(a.verdict.label).not.toBe('SKIP');
+  });
+
+  it('hard-SKIPs a store with nothing meaningful to buy', () => {
+    const bare = assemble(
+      [lot({ invID: 1, itemType: 'P', itemNo: '3002', colourId: 1, invNew: 'New', unitPriceGBP: 5.00 })],
+      new Map([[pgKey('P', '3002', 1), view('P', '3002', 1, EMPTY, side({ soldAvg: 2.00, soldLots: 5, soldQty: 5, stockLots: 5, stockQty: 5 }))]]),
+    );
+    expect(bare.withinMargin.lots).toBe(0);
+    expect(bare.verdict.label).toBe('SKIP');
+  });
+});
+
+describe('pricing label aligns with position bands', () => {
+  const mk = (ask: number) => {
+    const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: ask })];
+    const pgMap = new Map([
+      [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 5, soldQty: 5, stockLots: 10, stockQty: 10 }), EMPTY)],
+    ]);
+    return assemble(lots, pgMap).pricing;
+  };
+
+  it('0.93 is cheap (below the KEEN ceiling), 1.00 is at-market, 1.20 is premium', () => {
+    expect(mk(0.93).label).toBe('cheap');
+    expect(mk(1.00).label).toBe('at-market');
+    expect(mk(1.20).label).toBe('premium');
+  });
+});
+
+describe('scan truncation caveat', () => {
+  const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 0.50 })];
+  const pgMap = new Map([
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+  ]);
+  const a = assemble(lots, pgMap, new Map(), { scanTruncated: true });
+
+  it('carries the flag and warns in the verdict', () => {
+    expect(a.scanTruncated).toBe(true);
+    expect(a.verdict.reasons.some((r) => r.toLowerCase().includes('truncated'))).toBe(true);
+  });
+});
+
+describe('normalizeAssessment (v1 rows)', () => {
+  const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 0.50 })];
+  const pgMap = new Map([
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+  ]);
+
+  it('maps v1 field names onto the v2 shape', () => {
+    // Build a v2 assessment, then dress it down to the persisted v1 shape.
+    const v2 = assemble(lots, pgMap);
+    type Loose = Record<string, unknown>;
+    const raw = JSON.parse(JSON.stringify(v2)) as {
+      engineVersion?: unknown; scanTruncated?: unknown;
+      ageing: Loose; pricing: Loose;
+      size: { biggestLots: Loose[] };
+      withinMargin: { top: Loose[] };
+      highStr: { top: Loose[] };
+      magnets: { top: Loose[] };
+      verdict: { signals: unknown };
+    };
+    delete raw.engineVersion;
+    delete raw.scanTruncated;
+    delete raw.ageing.benchmarkedValueShare;
+    raw.pricing.weightedMedianAskVsUk = raw.pricing.weightedMedianAskVsMarket;
+    delete raw.pricing.weightedMedianAskVsMarket;
+    for (const rows of [raw.size.biggestLots, raw.withinMargin.top, raw.highStr.top, raw.magnets.top]) {
+      for (const r of rows) {
+        r.ukSoldAvg = r.benchmarkAvg; delete r.benchmarkAvg;
+        r.askVsUk = r.askVsMarket; delete r.askVsMarket;
+      }
+    }
+    raw.verdict.signals = { price: 0.4, margin: 0.3, coverage: 0.2, magnet: 0.1 };
+
+    const up = normalizeAssessment(raw);
+    expect(up.engineVersion).toBe(1);
+    expect(up.scanTruncated).toBe(false);
+    expect(up.pricing.weightedMedianAskVsMarket).toBe(v2.pricing.weightedMedianAskVsMarket);
+    expect(up.size.biggestLots[0].benchmarkAvg).toBe(v2.size.biggestLots[0].benchmarkAvg);
+    expect(up.ageing.benchmarkedValueShare).toBe(1);
+    expect(up.verdict.signals.value).toBe(0.3);
   });
 });
