@@ -57,8 +57,8 @@ export function blGuideToQuadrant(g: BrickLinkPriceGuide, isSold: boolean): PgQu
     if (p == null) continue;
     const key = p.toFixed(4);
     rawHist.set(key, (rawHist.get(key) ?? 0) + q);
-    if (isSold && (d as any).date_ordered) {
-      const dt = new Date((d as any).date_ordered as string);
+    if (isSold && d.date_ordered) {
+      const dt = new Date(d.date_ordered as string);
       if (!Number.isNaN(dt.getTime())) {
         const label = `${MONTHS[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`;
         const b = (byMonthAcc[label] ??= { lots: 0, qty: 0, sum: 0 });

@@ -47,7 +47,10 @@ export interface PriceGuideView {
   qtyShareAtOrAbove(condition: 'U' | 'N', price: number): number | null;
 }
 
+type Row = Record<string, unknown>;
 const str = (sold: number, stock: number): number | null => (stock > 0 ? sold / stock : null);
+const iNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
+const nOrNull = (v: unknown): number | null => (v == null ? null : (Number(v) as number));
 export function pgKey(itemType: string, itemNo: string, blColourId: number): string {
   return `${itemType}:${itemNo}:${blColourId}`;
 }
@@ -57,36 +60,36 @@ const EMPTY_SIDE: SideView = {
   stockLots: 0, stockQty: 0, stockMin: null, strLots: null, strQty: null, hist: undefined,
 };
 
-function ukSide(row: any, cond: 'new' | 'used'): SideView {
-  const soldLots = row[`uk_sold_lots_${cond}`] ?? 0;
-  const soldQty = row[`uk_sold_qty_${cond}`] ?? 0;
-  const stockLots = row[`uk_stock_lots_${cond}`] ?? 0;
-  const stockQty = row[`uk_stock_qty_${cond}`] ?? 0;
-  const detail = (row.uk_detail ?? {}) as any;
+function ukSide(row: Row, cond: 'new' | 'used'): SideView {
+  const soldLots = iNum(row[`uk_sold_lots_${cond}`]);
+  const soldQty = iNum(row[`uk_sold_qty_${cond}`]);
+  const stockLots = iNum(row[`uk_stock_lots_${cond}`]);
+  const stockQty = iNum(row[`uk_stock_qty_${cond}`]);
+  const detail = (row.uk_detail ?? {}) as Record<string, { hist?: Record<string, number> }>;
   const histKey = cond === 'new' ? 'soldNew' : 'soldUsed';
   return {
-    soldAvg: row[`uk_sold_avg_${cond}`] ?? null,
-    soldMedian: row[`uk_sold_median_${cond}`] ?? null,
-    soldQtyAvg: row[`uk_sold_qty_avg_${cond}`] ?? null,
+    soldAvg: nOrNull(row[`uk_sold_avg_${cond}`]),
+    soldMedian: nOrNull(row[`uk_sold_median_${cond}`]),
+    soldQtyAvg: nOrNull(row[`uk_sold_qty_avg_${cond}`]),
     soldLots, soldQty,
-    soldLast2moQty: row[`uk_sold_last2mo_qty_${cond}`] ?? 0,
+    soldLast2moQty: iNum(row[`uk_sold_last2mo_qty_${cond}`]),
     stockLots, stockQty,
-    stockMin: row[`uk_stock_min_${cond}`] ?? null,
+    stockMin: nOrNull(row[`uk_stock_min_${cond}`]),
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
     hist: detail?.[histKey]?.hist,
   };
 }
 
-function worldSide(row: any, cond: 'new' | 'used'): SideView {
-  const soldLots = row[`sold6m_${cond}_lots`] ?? 0;
-  const soldQty = row[`sold6m_${cond}_qty`] ?? 0;
-  const stockLots = row[`stock_${cond}_lots`] ?? 0;
-  const stockQty = row[`stock_${cond}_qty`] ?? 0;
+function worldSide(row: Row, cond: 'new' | 'used'): SideView {
+  const soldLots = iNum(row[`sold6m_${cond}_lots`]);
+  const soldQty = iNum(row[`sold6m_${cond}_qty`]);
+  const stockLots = iNum(row[`stock_${cond}_lots`]);
+  const stockQty = iNum(row[`stock_${cond}_qty`]);
   return {
     ...EMPTY_SIDE,
-    soldAvg: row[`sold6m_${cond}_avg`] ?? null,
-    soldQtyAvg: row[`sold6m_${cond}_qavg`] ?? null,
+    soldAvg: nOrNull(row[`sold6m_${cond}_avg`]),
+    soldQtyAvg: nOrNull(row[`sold6m_${cond}_qavg`]),
     soldLots, soldQty, stockLots, stockQty,
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
@@ -133,7 +136,7 @@ export async function readPriceGuide(
   const itemNos = [...new Set(norm.map((n) => n.itemNo))];
 
   // 1. UK rows from price_guide_cache
-  const ukRows = new Map<string, any>();
+  const ukRows = new Map<string, Row>();
   const COLS = 'item_type,item_no,colour_id,item_name,fetched_at,uk_detail,' +
     ['new', 'used'].flatMap((c) => [
       `uk_sold_avg_${c}`, `uk_sold_qty_avg_${c}`, `uk_sold_median_${c}`, `uk_sold_lots_${c}`,
@@ -150,7 +153,7 @@ export async function readPriceGuide(
         .order('id')
         .range(from, from + 999);
       if (error) throw new Error(`readPriceGuide UK read failed: ${error.message}`);
-      for (const r of (data ?? []) as any[]) ukRows.set(pgKey(r.item_type, r.item_no, r.colour_id), r);
+      for (const r of (data ?? []) as unknown as Row[]) ukRows.set(pgKey(String(r.item_type), String(r.item_no), Number(r.colour_id)), r);
       if (!data || data.length < 1000) break;
       from += 1000;
     }
@@ -162,10 +165,10 @@ export async function readPriceGuide(
     const key = pgKey(n.itemType, n.itemNo, n.blColourId);
     if (out.has(key)) continue;
     const row = ukRows.get(key);
-    const ageDays = row ? (now - new Date(row.fetched_at).getTime()) / 86400000 : null;
+    const ageDays = row ? (now - new Date(String(row.fetched_at)).getTime()) / 86400000 : null;
     const stale = opts.ttlDays != null && ageDays != null && ageDays > opts.ttlDays;
     if (row && !stale) {
-      out.set(key, makeView(n, row.item_name ?? null, ukSide(row, 'used'), ukSide(row, 'new'), ageDays, 'uk'));
+      out.set(key, makeView(n, (row.item_name as string | null) ?? null, ukSide(row, 'used'), ukSide(row, 'new'), ageDays, 'uk'));
     } else {
       missing.push(n);
     }
@@ -174,7 +177,7 @@ export async function readPriceGuide(
   // 2. world fallback from pg_summary
   if (allowWorld && missing.length) {
     const missNos = [...new Set(missing.map((m) => m.itemNo))];
-    const worldRows = new Map<string, any>();
+    const worldRows = new Map<string, Row>();
     const WCOLS = 'item_type,item_no,colour_id,sold6m_new_avg,sold6m_used_avg,sold6m_new_qavg,sold6m_used_qavg,' +
       'sold6m_new_lots,sold6m_used_lots,sold6m_new_qty,sold6m_used_qty,stock_new_lots,stock_used_lots,stock_new_qty,stock_used_qty';
     for (let i = 0; i < missNos.length; i += 300) {
@@ -188,7 +191,7 @@ export async function readPriceGuide(
           .order('id')
           .range(from, from + 999);
         if (error) throw new Error(`readPriceGuide world read failed: ${error.message}`);
-        for (const r of (data ?? []) as any[]) worldRows.set(pgKey(r.item_type, r.item_no, r.colour_id), r);
+        for (const r of (data ?? []) as unknown as Row[]) worldRows.set(pgKey(String(r.item_type), String(r.item_no), Number(r.colour_id)), r);
         if (!data || data.length < 1000) break;
         from += 1000;
       }
