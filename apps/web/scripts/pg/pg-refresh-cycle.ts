@@ -303,15 +303,13 @@ function toOkQueueUpdate(t: QueueRow): Record<string, unknown> {
 }
 
 function toUnlockOnlyQueueUpdate(t: QueueRow): Record<string, unknown> {
+  // A block isn't the tuple's fault: release the lock and touch nothing else, so
+  // next_due_at / attempts / last_refreshed_at are preserved and it retries next run.
+  // flush() applies this as an UPDATE (not upsert), so omitted columns stay untouched.
   return {
     item_type: t.item_type,
     item_no: t.item_no,
     colour_id: t.colour_id,
-    // flush() writes via upsert (INSERT ... ON CONFLICT), so every row must satisfy the
-    // NOT NULL constraint on next_due_at even though the row already exists. A blocked
-    // tuple isn't the tuple's fault — keep its existing due time so it stays due and
-    // retries next session/night (omitting it crashed the whole flush; see git history).
-    next_due_at: t.next_due_at,
     locked_by: null,
     locked_at: null,
     updated_at: new Date().toISOString(),
@@ -343,10 +341,6 @@ function toErrorQueueUpdate(t: QueueRow, err: unknown): Record<string, unknown> 
     colour_id: t.colour_id,
     last_error: message.slice(0, 500),
     attempts,
-    // upsert (INSERT ... ON CONFLICT) requires next_due_at (NOT NULL) on every row —
-    // keep the existing due time so a transient hiccup retries next session rather than
-    // crashing the flush. The attempts>=3 branch below overrides this with a cooldown.
-    next_due_at: t.next_due_at,
     locked_by: null,
     locked_at: null,
     updated_at: nowIso,
@@ -427,10 +421,31 @@ async function flush(sb: SupabaseClient, batches: Batches): Promise<void> {
     if (error) throw new Error(`snapshots upsert failed: ${error.message}`);
   }
   if (batches.queueUpdates.length > 0) {
-    const { error } = await sb
-      .from('bl_pg_refresh_queue')
-      .upsert(batches.queueUpdates, { onConflict: 'item_type,item_no,colour_id' });
-    if (error) throw new Error(`queue upsert failed: ${error.message}`);
+    // Every queued row here was claimed (locked) earlier this run, so it already exists —
+    // use per-row UPDATE, never upsert. An upsert is INSERT ... ON CONFLICT, which (a)
+    // forces every row to satisfy the table's NOT NULL columns even on the update path and
+    // (b) unions the column set across the heterogeneous batch, so a row that deliberately
+    // omits a column (e.g. a block only releases the lock) gets NULL written for whatever
+    // the OK rows in the same batch set. That crashed the whole flush the first time a
+    // block landed alongside an OK row. UPDATE touches only each row's own columns.
+    const results = await Promise.all(
+      batches.queueUpdates.map((row) => {
+        const { item_type, item_no, colour_id, ...fields } = row as {
+          item_type: string;
+          item_no: string;
+          colour_id: number;
+          [k: string]: unknown;
+        };
+        return sb
+          .from('bl_pg_refresh_queue')
+          .update(fields)
+          .eq('item_type', item_type)
+          .eq('item_no', item_no)
+          .eq('colour_id', colour_id);
+      }),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw new Error(`queue update failed: ${failed.error.message}`);
   }
   batches.scrapeResults = [];
   batches.summaryRows = [];
