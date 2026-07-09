@@ -16,6 +16,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { strRatioFromCache } from './pricing';
+import { readPriceGuide, pgKey } from '../bricklink/price-guide/read';
+import { loadColourMap } from '../bricklink/colour-map';
 import type {
   ActionItem,
   CompositionRow,
@@ -163,35 +165,32 @@ async function loadSnapshot(
  */
 async function loadBLCache(
   supabase: SupabaseClient<Database>,
-  partNumbers: string[]
+  partLots: Array<{ item_number: string; color_id: number | null }>
 ): Promise<Map<string, BLCacheRow>> {
+  // Unified price cache (F7): source UK 6MA + STR from bricklink_price_guide_cache via
+  // readPriceGuide, colour-normalised Bricqer->BL (fixes the legacy mixed-colour-scheme join
+  // bug — snapshot color_id is Bricqer scheme, price_guide_cache is BL). World-fallback fills
+  // gaps until UK coverage is warmed. Keyed by `${item_number}|${bricqer_color_id}` and shaped
+  // as BLCacheRow (STR stored ×100) so the enrich loop + strRatioFromCache are unchanged.
   const map = new Map<string, BLCacheRow>();
-  const unique = [...new Set(partNumbers)];
-  const PART_BATCH = 300;
-  const PAGE = 1000;
-  for (let i = 0; i < unique.length; i += PART_BATCH) {
-    const batch = unique.slice(i, i + PART_BATCH);
-    for (let from = 0; ; from += PAGE) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('bricklink_part_price_cache')
-        .select(
-          'part_number,colour_id,price_new,price_used,sell_through_rate_new,sell_through_rate_used'
-        )
-        .in('part_number', batch)
-        .order('id', { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) throw error;
-      for (const r of data ?? []) {
-        map.set(`${r.part_number}|${r.colour_id}`, {
-          priceNew: r.price_new == null ? null : Number(r.price_new),
-          priceUsed: r.price_used == null ? null : Number(r.price_used),
-          strNew: r.sell_through_rate_new == null ? null : Number(r.sell_through_rate_new),
-          strUsed: r.sell_through_rate_used == null ? null : Number(r.sell_through_rate_used),
-        });
-      }
-      if (!data || data.length < PAGE) break;
-    }
+  if (partLots.length === 0) return map;
+  const refs = partLots.map((l) => ({
+    itemType: 'P' as const, itemNo: l.item_number, colourId: l.color_id ?? 0, scheme: 'bricqer' as const,
+  }));
+  const [views, cmap] = await Promise.all([
+    readPriceGuide(supabase, refs, { allowWorldFallback: true }),
+    loadColourMap(supabase),
+  ]);
+  for (const l of partLots) {
+    const blColour = cmap.toBl(l.color_id ?? 0, 'bricqer');
+    const v = views.get(pgKey('P', l.item_number, blColour));
+    if (!v) continue;
+    map.set(`${l.item_number}|${l.color_id}`, {
+      priceNew: v.new.soldAvg,
+      priceUsed: v.used.soldAvg,
+      strNew: v.new.strQty == null ? null : v.new.strQty * 100,
+      strUsed: v.used.strQty == null ? null : v.used.strQty * 100,
+    });
   }
   return map;
 }
@@ -338,11 +337,11 @@ export async function computeStoreQuality(
       .then((r: any) => r.data),
   ]);
 
-  const partNumbers = rawLots.filter((l) => l.item_type === 'Part').map((l) => l.item_number);
+  const partLots = rawLots.filter((l) => l.item_type === 'Part');
   const minifigIds = rawLots.filter((l) => l.item_type === 'Minifig').map((l) => l.item_number);
 
   const [blCache, mfCache, sales] = await Promise.all([
-    loadBLCache(supabase, partNumbers),
+    loadBLCache(supabase, partLots),
     loadMinifigCache(supabase, minifigIds),
     loadRealizedSales(supabase, userId, windowDays),
   ]);
