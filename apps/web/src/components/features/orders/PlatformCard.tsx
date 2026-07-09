@@ -19,7 +19,7 @@ interface PlatformCardProps {
   distribution: Partial<Record<UiOrderStatus, number>>;
   /** Which status chips to render, in order */
   statusOrder: UiOrderStatus[];
-  /** Chip label overrides (e.g. Completed → "Done", Cancelled → "Refunded") */
+  /** Chip label overrides (e.g. Cancelled → "Refunded" on eBay) */
   chipLabels?: Partial<Record<UiOrderStatus, string>>;
   lastSyncedAt: string | Date | null;
   /** Shown instead of a sync timestamp when the platform has no manual sync */
@@ -31,6 +31,8 @@ interface PlatformCardProps {
   configureLabel?: string;
   /** Still resolving configuration/counts — show a skeleton, not "Not configured" */
   loading?: boolean;
+  /** Extra classes on the root Card (layout overrides per card) */
+  className?: string;
   /** Action buttons / platform-specific extras */
   children?: ReactNode;
 }
@@ -39,6 +41,7 @@ interface PlatformCardProps {
 function freshness(lastSyncedAt: string | Date | null): {
   label: string;
   className: string;
+  stale: boolean;
 } | null {
   if (!lastSyncedAt) return null;
   const date = new Date(lastSyncedAt);
@@ -48,26 +51,31 @@ function freshness(lastSyncedAt: string | Date | null): {
   if (hours < 24) {
     return {
       label: `Synced ${distance}`,
-      className:
-        'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+      stale: false,
     };
   }
   if (hours < 72) {
     return {
       label: `Synced ${distance}`,
       className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+      stale: false,
     };
   }
   return {
     label: `Stale — last sync ${distance}`,
     className: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400',
+    stale: true,
   };
 }
+
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * A platform scorecard: brand-accented rail, order count, a stacked
  * status-distribution bar, clickable status chips, sync freshness badge and a
- * slot for platform-specific actions.
+ * slot for platform-specific actions. Actions pin to the card bottom so a row
+ * of cards keeps its buttons aligned.
  */
 export function PlatformCard({
   platformKey,
@@ -84,6 +92,7 @@ export function PlatformCard({
   titleHref,
   configureLabel = 'Configure',
   loading = false,
+  className,
   children,
 }: PlatformCardProps) {
   const meta = PLATFORM_META[platformKey] ?? { name: platformKey, color: '#64748B' };
@@ -108,8 +117,9 @@ export function PlatformCard({
   return (
     <Card
       className={cn(
-        'relative overflow-hidden transition-shadow hover:shadow-md',
-        active && 'ring-2 ring-primary'
+        'relative overflow-hidden flex flex-col',
+        active && 'ring-2 ring-primary',
+        className
       )}
     >
       <div
@@ -118,13 +128,15 @@ export function PlatformCard({
       />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-5">
         {titleHref ? <Link href={titleHref}>{title}</Link> : title}
-        {configured ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-        ) : (
+        {!configured ? (
           <AlertTriangle className="h-4 w-4 text-amber-500" />
+        ) : fresh?.stale ? (
+          <AlertTriangle className="h-4 w-4 text-rose-500" aria-label="Sync stale" />
+        ) : (
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-1 flex-col gap-3">
         {loading ? (
           <div className="space-y-2" aria-busy>
             <div className="h-9 w-24 animate-pulse rounded bg-muted" />
@@ -134,17 +146,22 @@ export function PlatformCard({
         ) : configured ? (
           <>
             <div className="space-y-2">
-              <div
-                className="cursor-pointer hover:text-primary flex items-baseline gap-1.5"
+              <button
+                type="button"
+                className={cn(
+                  'flex items-baseline gap-1.5 text-left cursor-pointer hover:text-primary rounded-sm',
+                  FOCUS_RING
+                )}
                 onClick={onSelect}
               >
                 <span className="text-3xl font-bold tabular-nums tracking-tight">
                   {total.toLocaleString()}
                 </span>
                 <span className="text-xs text-muted-foreground font-medium">orders</span>
-              </div>
+              </button>
 
-              {/* Status distribution bar */}
+              {/* Status distribution bar — flex-grow keeps segments honest
+                  (proportional to count) while min-w keeps tiny ones visible */}
               <div
                 className="flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-muted"
                 aria-hidden
@@ -152,14 +169,14 @@ export function PlatformCard({
                 {segments.map((seg) => (
                   <div
                     key={seg.status}
-                    className={cn('h-full', STATUS_META[seg.status].bar)}
-                    style={{ width: `${Math.max((seg.count / Math.max(total, 1)) * 100, 1.5)}%` }}
+                    className={cn('h-full min-w-[3px] basis-0', STATUS_META[seg.status].bar)}
+                    style={{ flexGrow: seg.count }}
                     title={`${STATUS_META[seg.status].label}: ${seg.count.toLocaleString()}`}
                   />
                 ))}
               </div>
 
-              <div className="flex gap-x-3 gap-y-1 text-xs flex-wrap">
+              <div className="flex gap-x-3 gap-y-2 text-xs flex-wrap">
                 {statusOrder.map((s) => {
                   const count = distribution[s] ?? 0;
                   return (
@@ -167,8 +184,9 @@ export function PlatformCard({
                       key={s}
                       type="button"
                       className={cn(
-                        'inline-flex items-center gap-1 hover:underline underline-offset-2',
-                        count > 0 ? STATUS_META[s].text : 'text-muted-foreground/50'
+                        'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 -mx-1.5 -my-1 hover:bg-muted',
+                        FOCUS_RING,
+                        count > 0 ? STATUS_META[s].text : 'text-muted-foreground'
                       )}
                       onClick={() => onStatusSelect(s)}
                     >
@@ -183,8 +201,9 @@ export function PlatformCard({
             {fresh ? (
               <span
                 className={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  fresh.className
+                  'inline-flex items-center self-start rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  fresh.className,
+                  fresh.stale && 'font-semibold'
                 )}
               >
                 {fresh.label}
@@ -195,7 +214,7 @@ export function PlatformCard({
               <p className="text-[11px] text-muted-foreground">Never synced</p>
             )}
 
-            {children}
+            {children ? <div className="mt-auto space-y-3 pt-1">{children}</div> : null}
           </>
         ) : (
           <>

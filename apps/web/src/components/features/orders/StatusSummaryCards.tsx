@@ -1,5 +1,6 @@
 'use client';
 
+import type { KeyboardEvent } from 'react';
 import { Layers } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,18 @@ interface StatusSummaryCardsProps {
   loading?: boolean;
 }
 
-function CountOrSkeleton({ loading, value, dim }: { loading: boolean; value: number; dim?: boolean }) {
+function CountOrSkeleton({
+  loading,
+  value,
+  dim,
+  accent,
+}: {
+  loading: boolean;
+  value: number;
+  dim?: boolean;
+  /** Status text colour applied when the count demands action */
+  accent?: string;
+}) {
   if (loading) {
     return <span className="inline-block h-8 w-16 animate-pulse rounded bg-muted align-middle" />;
   }
@@ -22,7 +34,8 @@ function CountOrSkeleton({ loading, value, dim }: { loading: boolean; value: num
     <span
       className={cn(
         'text-3xl font-bold tabular-nums tracking-tight',
-        dim && 'text-muted-foreground/50'
+        accent,
+        dim && 'text-muted-foreground'
       )}
     >
       {value.toLocaleString()}
@@ -30,10 +43,14 @@ function CountOrSkeleton({ loading, value, dim }: { loading: boolean; value: num
   );
 }
 
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
 /**
- * Clickable status-lifecycle scorecards. Each card carries the status colour
- * as a top rail + tinted icon chip; actionable statuses (Paid/Packed) pulse
- * when non-zero so pending work is visible at a glance.
+ * Clickable status-lifecycle scorecards. Colour is reserved for meaning:
+ * actionable statuses (Paid/Packed) tint their card surface and count when
+ * work is waiting; everything else stays quiet so the dispatch queue is the
+ * loudest thing in the row.
  */
 export function StatusSummaryCards({
   total,
@@ -42,24 +59,33 @@ export function StatusSummaryCards({
   onSelect,
   loading = false,
 }: StatusSummaryCardsProps) {
+  const cardKeyDown = (action: () => void) => (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      action();
+    }
+  };
+
   return (
     <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
       <Card
         role="button"
+        tabIndex={0}
         aria-pressed={selectedStatus === 'all'}
         className={cn(
-          'relative overflow-hidden cursor-pointer transition-all hover:shadow-md',
-          selectedStatus === 'all' ? 'ring-2 ring-primary shadow-sm' : 'hover:bg-muted/50'
+          'cursor-pointer transition-all hover:shadow-md',
+          FOCUS_RING,
+          selectedStatus === 'all' ? 'border-foreground/30 shadow-sm' : 'hover:bg-muted/50'
         )}
         onClick={() => onSelect('all')}
+        onKeyDown={cardKeyDown(() => onSelect('all'))}
       >
-        <div className="absolute inset-x-0 top-0 h-1 bg-foreground/80" />
-        <CardContent className="pt-4 pb-3">
+        <CardContent className="pt-5 pb-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap truncate">
               All Orders
             </span>
-            <span className="rounded-md p-1.5 bg-muted text-foreground/70">
+            <span className="rounded-md p-1.5 text-muted-foreground/70">
               <Layers className="h-3.5 w-3.5" />
             </span>
           </div>
@@ -75,40 +101,41 @@ export function StatusSummaryCards({
         const count = counts[s] ?? 0;
         const needsAction = meta.actionable && count > 0;
         const selected = selectedStatus === s;
+        const toggle = () => onSelect(selected ? 'all' : s);
         return (
           <Card
             key={s}
             role="button"
+            tabIndex={0}
             aria-pressed={selected}
             className={cn(
-              'relative overflow-hidden cursor-pointer transition-all hover:shadow-md',
-              selected ? 'ring-2 ring-primary shadow-sm' : 'hover:bg-muted/50'
+              'cursor-pointer transition-all hover:shadow-md',
+              FOCUS_RING,
+              needsAction && meta.activeSurface,
+              selected ? 'ring-2 ring-primary shadow-sm' : !needsAction && 'hover:bg-muted/50'
             )}
-            onClick={() => onSelect(selected ? 'all' : s)}
+            onClick={toggle}
+            onKeyDown={cardKeyDown(toggle)}
           >
-            <div className={cn('absolute inset-x-0 top-0 h-1', meta.bar)} />
-            <CardContent className="pt-4 pb-3">
+            <CardContent className="pt-5 pb-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {meta.label}
+                <span
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate"
+                  title={meta.cardLabel ?? meta.label}
+                >
+                  {meta.cardLabel ?? meta.label}
                 </span>
-                <span className={cn('rounded-md p-1.5', meta.chip)}>
+                <span className="rounded-md p-1.5 text-muted-foreground/70">
                   <Icon className="h-3.5 w-3.5" />
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
-                <CountOrSkeleton loading={loading} value={count} dim={count === 0} />
-                {!loading && needsAction && (
-                  <span className="relative flex h-2 w-2" title="Needs action">
-                    <span
-                      className={cn(
-                        'animate-ping absolute inline-flex h-full w-full rounded-full opacity-60',
-                        meta.bar
-                      )}
-                    />
-                    <span className={cn('relative inline-flex rounded-full h-2 w-2', meta.bar)} />
-                  </span>
-                )}
+                <CountOrSkeleton
+                  loading={loading}
+                  value={count}
+                  dim={count === 0}
+                  accent={needsAction ? meta.text : undefined}
+                />
               </div>
             </CardContent>
           </Card>

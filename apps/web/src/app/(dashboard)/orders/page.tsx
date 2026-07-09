@@ -200,7 +200,7 @@ async function fetchEbayStatusSummary(days?: string): Promise<{ data: EbayStatus
 }
 
 async function fetchEbaySyncLog(): Promise<{
-  logs: Array<{ started_at: string; status: string }>;
+  logs: Array<{ started_at: string; status: string; sync_type: string }>;
 }> {
   const response = await fetch('/api/integrations/ebay/sync');
   if (!response.ok) return { logs: [] };
@@ -436,10 +436,6 @@ const MARKETPLACE_STATUS_ORDER: UiOrderStatus[] = [
   'Completed',
   'Cancelled',
 ];
-const DONE_LABELS: Partial<Record<UiOrderStatus, string>> = {
-  Completed: 'Done',
-  Cancelled: 'Cancelled',
-};
 
 /** Convert a status-summary API payload into a UI-status distribution map. */
 function toDistribution(
@@ -618,7 +614,11 @@ export default function OrdersPage() {
     feeReconciliationPreview?.data?.totalItemsNeedingReconciliation || 0;
 
   const ebayConnected = ebayConnectionStatus?.isConnected || false;
-  const ebayLastSync = ebaySyncLog?.logs?.[0]?.started_at;
+  // Only a COMPLETED orders sync counts as "synced" — the newest log row may be
+  // a failed or still-running attempt, which must not render a green badge.
+  const ebayLastSync = ebaySyncLog?.logs?.find(
+    (l) => l.sync_type === 'ORDERS' && l.status === 'COMPLETED'
+  )?.started_at;
   const ebayUnfulfilledCount =
     (ebayStatusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Packed || 0);
 
@@ -782,47 +782,39 @@ export default function OrdersPage() {
     <>
       <Header title="Orders" />
       <div className="p-6 space-y-6">
-        {/* Header Section */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
-            <p className="text-muted-foreground">
-              View and manage orders from your connected platforms
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {/* Timeframe Selector */}
-            <Select
-              value={timeframe}
-              onValueChange={(v: string) => setTimeframe(v as TimeframeOption)}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Timeframe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="7">Last 7 Days</SelectItem>
-                <SelectItem value="30">Last 30 Days</SelectItem>
-                <SelectItem value="90">Last 90 Days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending || !hasAnyPlatformConfigured}
-            >
-              {syncMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Sync All Platforms
-                </>
-              )}
-            </Button>
-          </div>
+        {/* Page controls — the shell Header already titles the page */}
+        <div className="flex items-center justify-end gap-4">
+          {/* Timeframe Selector */}
+          <Select
+            value={timeframe}
+            onValueChange={(v: string) => setTimeframe(v as TimeframeOption)}
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Timeframe" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="7">Last 7 Days</SelectItem>
+              <SelectItem value="30">Last 30 Days</SelectItem>
+              <SelectItem value="90">Last 90 Days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending || !hasAnyPlatformConfigured}
+          >
+            {syncMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync All Platforms
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Sync Status Alert */}
@@ -868,11 +860,11 @@ export default function OrdersPage() {
           loading={!statusSummary}
         />
 
-        {/* Action strip — dispatch queue at a glance */}
+        {/* Action strip — dispatch queue at a glance, with direct exits */}
         {actionableCount > 0 && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
             <Zap className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <p className="text-sm text-amber-800 dark:text-amber-300">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-300">
               <span className="font-semibold tabular-nums">{actionableCount}</span>{' '}
               {actionableCount === 1 ? 'order needs' : 'orders need'} dispatching
               {combinedStatusSummary.Paid > 0 && (
@@ -882,6 +874,30 @@ export default function OrdersPage() {
                 <> · {combinedStatusSummary.Packed} packed awaiting post</>
               )}
             </p>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {combinedStatusSummary.Paid > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-amber-300 bg-white/60 text-amber-900 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  onClick={() => setStatus('Paid')}
+                >
+                  View paid
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              )}
+              {combinedStatusSummary.Packed > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-amber-300 bg-white/60 text-amber-900 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  onClick={() => setStatus('Packed')}
+                >
+                  View packed
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -900,7 +916,6 @@ export default function OrdersPage() {
             total={bricklinkStatusSummary?.total || 0}
             distribution={toDistribution(bricklinkStatusSummary?.data)}
             statusOrder={MARKETPLACE_STATUS_ORDER}
-            chipLabels={DONE_LABELS}
             lastSyncedAt={bricklinkStatus?.lastSyncedAt || null}
             onSelect={() => {
               setPlatform(platform === 'bricklink' ? 'all' : 'bricklink');
@@ -934,7 +949,6 @@ export default function OrdersPage() {
             total={brickowlStatusSummary?.total || 0}
             distribution={toDistribution(brickowlStatusSummary?.data)}
             statusOrder={MARKETPLACE_STATUS_ORDER}
-            chipLabels={DONE_LABELS}
             lastSyncedAt={brickowlStatus?.lastSyncedAt || null}
             onSelect={() => {
               setPlatform(platform === 'brickowl' ? 'all' : 'brickowl');
@@ -968,7 +982,6 @@ export default function OrdersPage() {
             total={amazonStatusSummary?.total || 0}
             distribution={toDistribution(amazonStatusSummary?.data)}
             statusOrder={MARKETPLACE_STATUS_ORDER}
-            chipLabels={DONE_LABELS}
             lastSyncedAt={amazonStatus?.lastSyncedAt || null}
             titleHref="/orders/amazon"
             onSelect={() => {
@@ -1147,7 +1160,7 @@ export default function OrdersPage() {
               Cancelled: ebayStatusSummary?.data?.Refunded || 0,
             }}
             statusOrder={['Paid', 'Packed', 'Completed', 'Cancelled']}
-            chipLabels={{ Completed: 'Done', Cancelled: 'Refunded' }}
+            chipLabels={{ Cancelled: 'Refunded' }}
             lastSyncedAt={ebayLastSync || null}
             titleHref="/orders/ebay"
             configureLabel="Connect"
@@ -1207,16 +1220,18 @@ export default function OrdersPage() {
             </Button>
           </PlatformCard>
 
-          {/* Shopify — inbound sales only, no manual sync */}
+          {/* Shopify — inbound sales only, no manual sync. At xl it spans the
+              full row so it doesn't orphan next to three empty cells; at 2xl it
+              joins the others as a fifth column. */}
           {shopifyOrdersTotal > 0 && (
             <PlatformCard
               platformKey="shopify"
+              className="xl:col-span-4 2xl:col-span-1"
               configured
               active={platform === 'shopify'}
               total={shopifyOrdersTotal}
               distribution={toDistribution(shopifyStatusSummary?.data)}
               statusOrder={['Pending', 'Paid', 'Completed', 'Cancelled']}
-              chipLabels={DONE_LABELS}
               lastSyncedAt={null}
               syncNote="Inbound sales — ingested automatically by the full-sync job"
               onSelect={() => {
@@ -1329,7 +1344,7 @@ export default function OrdersPage() {
                   <SelectItem value="Packed">Packed</SelectItem>
                   <SelectItem value="Shipped">Shipped</SelectItem>
                   <SelectItem value="Completed">Completed</SelectItem>
-                  <SelectItem value="Cancelled">Cancelled</SelectItem>
+                  <SelectItem value="Cancelled">Cancelled / Refunded</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1421,7 +1436,7 @@ export default function OrdersPage() {
                               : '-'}
                           </TableCell>
                           <TableCell>{order.buyer_name || '-'}</TableCell>
-                          <TableCell className="max-w-[300px]">
+                          <TableCell className="max-w-[300px] xl:max-w-[420px] 2xl:max-w-[560px]">
                             {(() => {
                               const orderWithItems = order as PlatformOrder & {
                                 order_items?: Array<{
