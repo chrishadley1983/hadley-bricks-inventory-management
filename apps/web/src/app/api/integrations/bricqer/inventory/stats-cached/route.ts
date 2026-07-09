@@ -38,14 +38,47 @@ const DELAY_MS = 600; // Rate limit: 600ms between requests
 
 /**
  * GET /api/integrations/bricqer/inventory/stats-cached
- * Get cached Bricqer inventory statistics
+ * Get Bricqer inventory statistics.
+ *
+ * Primary source: bricqer_inventory_snapshot (kept fresh by the regular sync),
+ * aggregated with the same lot definition as the manual scan — distinct
+ * (item, colour, condition, comment) with quantity > 0. Falls back to the
+ * legacy bricqer_stats_cache row (manual-scan output) when the snapshot is
+ * empty, so a first-time user still sees the scan result.
  */
 export async function GET() {
   try {
     const { user, supabase, unauthorized } = await requireUser();
     if (unauthorized) return unauthorized;
 
-    // Get cached stats
+    // Aggregate the live snapshot in Postgres (single round-trip; ~20k active
+    // rows would need 20 paged requests client-side).
+    const { data: stats, error: statsError } = await supabase
+      .rpc('get_bricqer_snapshot_stats', { p_user_id: user.id })
+      .maybeSingle<{
+        lot_count: number;
+        piece_count: number;
+        inventory_value: number;
+        last_synced: string | null;
+      }>();
+
+    if (statsError) {
+      console.error('[bricqer stats] snapshot RPC failed, falling back to cache:', statsError);
+    }
+
+    if (stats && stats.piece_count > 0) {
+      return NextResponse.json({
+        data: {
+          lotCount: Number(stats.lot_count),
+          pieceCount: Number(stats.piece_count),
+          inventoryValue: Number(stats.inventory_value),
+          storageLocations: 0,
+          lastUpdated: stats.last_synced,
+        },
+      });
+    }
+
+    // Snapshot empty — fall back to the manual-scan cache
     const { data: cached } = await supabase
       .from('bricqer_stats_cache')
       .select('*')

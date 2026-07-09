@@ -2,38 +2,50 @@
  * Partout Service
  *
  * Calculates the total value of a LEGO set's individual parts if sold separately.
- * Uses caching to minimize BrickLink API calls.
+ * All price reads/fetches go through the unified price cache (`readPriceGuide` /
+ * `ensurePriceGuide`) — every API fetch captures a complete 4-quadrant row, and
+ * cached data is shared with every other price consumer.
+ *
+ * Semantics preserved from the legacy implementation:
+ *  - prices are UK sold averages, falling back to UK stock (asking) averages
+ *  - sell-through rate is LOTS-based ×100 (sold lots / stock lots)
+ *  - stockAvailable and timesSold fields are lot counts
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { RateLimitError, type BrickLinkClient } from './client';
 import type { BrickLinkItemType, BrickLinkSubsetEntry } from './types';
-import type { PartPriceCacheService } from './part-price-cache.service';
+import { ensurePriceGuide } from './price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef, type PgType, type PriceGuideView } from './price-guide/read';
+import { loadColourMap, type ColourMap } from './colour-map';
 import type {
   PartoutData,
   PartValue,
   PartIdentifier,
-  PartPriceData,
-  CachedPartWithIdentifier,
   PartoutProgressCallback,
 } from '@/types/partout';
 
-/** Color map type */
-type ColorMap = Map<number, string>;
-
-/** Batch size for API calls - smaller to avoid rate limiting */
+/** Batch size between progress events / batch delays */
 const BATCH_SIZE = 10;
 
-/** Delay between individual API calls in milliseconds */
-const REQUEST_DELAY_MS = 200;
+/** Delay between per-part fetches in milliseconds (each fetch = 4 parallel BL calls) */
+const REQUEST_DELAY_MS = 500;
 
 /** Delay between batches in milliseconds */
 const BATCH_DELAY_MS = 2000;
+
+/** Cache freshness for POV reads (matches the legacy 6-month default) */
+const POV_TTL_DAYS = 180;
 
 /** Generate BrickLink image URL for a part */
 function getPartImageUrl(type: BrickLinkItemType, partNumber: string, colorId: number): string {
   // BrickLink image URL pattern
   const typeCode = type === 'MINIFIG' ? 'MN' : type === 'SET' ? 'SN' : 'PN';
   return `https://img.bricklink.com/ItemImage/${typeCode}/${colorId}/${partNumber}.png`;
+}
+
+function toPgType(type: BrickLinkItemType): PgType {
+  return type === 'MINIFIG' ? 'M' : type === 'SET' ? 'S' : 'P';
 }
 
 /** Delay helper */
@@ -45,58 +57,10 @@ function delay(ms: number): Promise<void> {
  * Partout Service
  */
 export class PartoutService {
-  private colorMap: ColorMap | null = null;
-  private colorMapPromise: Promise<ColorMap> | null = null;
-
   constructor(
     private brickLinkClient: BrickLinkClient,
-    private cacheService: PartPriceCacheService
+    private supabase: SupabaseClient
   ) {}
-
-  /**
-   * Get or fetch the color map
-   * Colors are cached for the lifetime of the service instance
-   */
-  private async getColorMap(): Promise<ColorMap> {
-    // Return cached map if available
-    if (this.colorMap) {
-      return this.colorMap;
-    }
-
-    // If a fetch is in progress, wait for it
-    if (this.colorMapPromise) {
-      return this.colorMapPromise;
-    }
-
-    // Start fetching colors
-    this.colorMapPromise = this.fetchColors();
-    this.colorMap = await this.colorMapPromise;
-    this.colorMapPromise = null;
-
-    return this.colorMap;
-  }
-
-  /**
-   * Fetch all colors from BrickLink and create a lookup map
-   */
-  private async fetchColors(): Promise<ColorMap> {
-    try {
-      console.log('[PartoutService] Fetching colors from BrickLink');
-      const colors = await this.brickLinkClient.getColors();
-      const map = new Map<number, string>();
-
-      for (const color of colors) {
-        map.set(color.color_id, color.color_name);
-      }
-
-      console.log(`[PartoutService] Loaded ${map.size} colors`);
-      return map;
-    } catch (error) {
-      console.error('[PartoutService] Failed to fetch colors:', error);
-      // Return empty map on error - colors will show as "Unknown"
-      return new Map();
-    }
-  }
 
   /**
    * Get the complete partout value analysis for a set
@@ -116,61 +80,68 @@ export class PartoutService {
       `[PartoutService] Getting partout value for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`
     );
 
-    // 1. Fetch colors and parts list in parallel
-    const [colorMap, subsets] = await Promise.all([
-      this.getColorMap(),
+    // forceRefresh: a TTL of 0 makes every cached row count as stale, so
+    // ensurePriceGuide re-fetches and re-captures each tuple.
+    const ttlDays = forceRefresh ? 0 : POV_TTL_DAYS;
+
+    // 1. Fetch colour map and parts list in parallel
+    const [colourMap, subsets] = await Promise.all([
+      loadColourMap(this.supabase),
       this.brickLinkClient.getSubsets('SET', setNumber, {
         breakMinifigs: false, // Keep minifigs as items, don't break into parts
         breakSets: false, // Keep included sets as items
       }),
     ]);
 
-    // 2. Flatten parts list with color names
-    const parts = this.flattenSubsets(subsets, colorMap);
+    // 2. Flatten parts list with colour names
+    const parts = this.flattenSubsets(subsets, colourMap);
     console.log(`[PartoutService] Found ${parts.length} unique parts/colours`);
 
     if (parts.length === 0) {
       return this.createEmptyResult(setNumber);
     }
 
-    // 3. If force refresh, delete existing cache entries for these parts
-    if (forceRefresh) {
-      console.log(`[PartoutService] Force refresh: clearing cache for ${parts.length} parts`);
-      await this.cacheService.deleteCachedPrices(parts);
-    }
+    // 3. Read fresh UK views from the unified cache
+    const refs: ItemRef[] = parts.map((p) => ({
+      itemType: toPgType(p.partType),
+      itemNo: p.partNumber,
+      colourId: p.colourId,
+      scheme: 'bl' as const,
+    }));
+    const views = await readPriceGuide(this.supabase, refs, {
+      ttlDays,
+      allowWorldFallback: false,
+    });
 
-    // 4. Check cache for each part+colour (will be empty if force refreshed)
-    const { cached, uncached } = await this.cacheService.getCachedPrices(parts);
+    const keyOf = (p: PartIdentifier) =>
+      pgKey(toPgType(p.partType), p.partNumber, toPgType(p.partType) === 'P' ? p.colourId : 0);
+    const isCached = (p: PartIdentifier) => views.get(keyOf(p))?.coverage === 'uk';
+    const cached = parts.filter((p) => isCached(p));
+    const uncached = parts.filter((p) => !isCached(p));
 
     // Report initial progress with cache stats (fetched=0, total=uncached, cached=cached)
     onProgress?.(0, uncached.length, cached.length);
 
-    // 5. Fetch uncached parts in batches
-    const freshPrices = await this.fetchUncachedPrices(uncached, cached.length, onProgress);
+    // 4. Fetch uncached parts in batches — each fetch captures into the unified cache
+    const fetchedCount = await this.fetchUncached(uncached, views, ttlDays, cached.length, onProgress);
 
-    // 5. Upsert fresh prices to cache
-    if (freshPrices.length > 0) {
-      await this.cacheService.upsertPrices(freshPrices);
-    }
+    // 5. Get set prices for ratio calculation (captured to the unified cache too)
+    const setView = await this.getSetView(setNumber, ttlDays);
+    const setPriceNew = setView ? (setView.new.stockAvg ?? setView.new.soldAvg) : null;
+    const setPriceUsed = setView ? (setView.used.stockAvg ?? setView.used.soldAvg) : null;
 
-    // 6. Get set prices for ratio calculation
-    const [setPriceNew, setPriceUsed] = await Promise.all([
-      this.getSetPrice(setNumber, 'N'),
-      this.getSetPrice(setNumber, 'U'),
-    ]);
+    // 6. Build part values from the views
+    const partValues = parts.map((p) => this.toPartValue(p, views.get(keyOf(p)), isCached(p)));
 
-    // 7. Combine cached and fresh data into part values
-    const partValues = this.buildPartsList(cached, freshPrices, parts);
-
-    // 8. Calculate totals
+    // 7. Calculate totals
     const povNew = partValues.reduce((sum, p) => sum + p.totalNew, 0);
     const povUsed = partValues.reduce((sum, p) => sum + p.totalUsed, 0);
 
-    // 9. Calculate ratios
+    // 8. Calculate ratios
     const ratioNew = setPriceNew ? povNew / setPriceNew : null;
     const ratioUsed = setPriceUsed ? povUsed / setPriceUsed : null;
 
-    // 10. Determine recommendation based on new condition ratio
+    // 9. Determine recommendation based on new condition ratio
     const recommendation = ratioNew !== null && ratioNew > 1 ? 'part-out' : 'sell-complete';
 
     return {
@@ -187,7 +158,7 @@ export class PartoutService {
       recommendation,
       cacheStats: {
         fromCache: cached.length,
-        fromApi: freshPrices.length,
+        fromApi: fetchedCount,
         total: parts.length,
       },
       parts: partValues.sort((a, b) => b.totalNew - a.totalNew), // Sort by value descending
@@ -196,10 +167,8 @@ export class PartoutService {
 
   /**
    * Flatten subset entries into a list of part identifiers
-   * @param subsets Subset entries from BrickLink API
-   * @param colorMap Map of color IDs to color names
    */
-  private flattenSubsets(subsets: BrickLinkSubsetEntry[], colorMap: ColorMap): PartIdentifier[] {
+  private flattenSubsets(subsets: BrickLinkSubsetEntry[], colourMap: ColourMap): PartIdentifier[] {
     const parts: PartIdentifier[] = [];
 
     for (const subset of subsets) {
@@ -209,8 +178,8 @@ export class PartoutService {
           continue;
         }
 
-        // Get color name from our fetched color map (API response may not include it)
-        const colourName = colorMap.get(entry.color_id) || entry.color_name || 'Unknown';
+        // Colour ids in subsets are BL-scheme; name from the canonical map
+        const colourName = colourMap.name(entry.color_id) || entry.color_name || 'Unknown';
 
         parts.push({
           partNumber: entry.item.no,
@@ -227,37 +196,44 @@ export class PartoutService {
   }
 
   /**
-   * Fetch prices for uncached parts in batches with rate limiting protection
-   * Uses sequential requests with delays to avoid hitting BrickLink's rate limit
+   * Fetch views for uncached parts via ensurePriceGuide, updating `views` in place.
+   * Sequential with delays to respect BrickLink rate limits; stops on RateLimitError.
+   * Returns the number of parts fetched.
    */
-  private async fetchUncachedPrices(
+  private async fetchUncached(
     parts: PartIdentifier[],
+    views: Map<string, PriceGuideView>,
+    ttlDays: number,
     cachedCount: number,
     onProgress?: PartoutProgressCallback
-  ): Promise<PartPriceData[]> {
+  ): Promise<number> {
     if (parts.length === 0) {
-      return [];
+      return 0;
     }
 
     console.log(
       `[PartoutService] Fetching ${parts.length} uncached parts from BrickLink (sequential with ${REQUEST_DELAY_MS}ms delay)`
     );
 
-    const results: PartPriceData[] = [];
+    let fetchedCount = 0;
     let rateLimitHit = false;
 
     for (let i = 0; i < parts.length && !rateLimitHit; i += BATCH_SIZE) {
       const batch = parts.slice(i, i + BATCH_SIZE);
 
-      // Process batch sequentially with delays between requests
       for (let j = 0; j < batch.length && !rateLimitHit; j++) {
         const part = batch[j];
+        const itemType = toPgType(part.partType);
 
         try {
-          const priceData = await this.fetchPartPrice(part);
-          if (priceData) {
-            results.push(priceData);
-          }
+          const view = await ensurePriceGuide(
+            this.brickLinkClient,
+            this.supabase,
+            { itemType, itemNo: part.partNumber, colourId: part.colourId },
+            { ttlDays }
+          );
+          views.set(pgKey(itemType, part.partNumber, itemType === 'P' ? part.colourId : 0), view);
+          fetchedCount++;
         } catch (error) {
           if (error instanceof RateLimitError) {
             console.warn(`[PartoutService] Rate limit hit at part ${part.partNumber}. Stopping.`);
@@ -286,266 +262,57 @@ export class PartoutService {
 
     if (rateLimitHit) {
       console.warn(
-        `[PartoutService] Rate limit stopped fetching. Got ${results.length}/${parts.length} parts before limit.`
+        `[PartoutService] Rate limit stopped fetching. Got ${fetchedCount}/${parts.length} parts before limit.`
       );
     } else {
-      console.log(`[PartoutService] Fetched ${results.length}/${parts.length} prices from API`);
+      console.log(`[PartoutService] Fetched ${fetchedCount}/${parts.length} prices from API`);
     }
-    return results;
+    return fetchedCount;
+  }
+
+  /** Build a PartValue from a price view (or an empty one when no data). */
+  private toPartValue(part: PartIdentifier, view: PriceGuideView | undefined, fromCache: boolean): PartValue {
+    const hasData = view != null && view.coverage === 'uk';
+    const priceNew = hasData ? (view.new.soldAvg ?? view.new.stockAvg) : null;
+    const priceUsed = hasData ? (view.used.soldAvg ?? view.used.stockAvg) : null;
+
+    return {
+      partNumber: part.partNumber,
+      partType: part.partType,
+      name: part.name,
+      colourId: part.colourId,
+      colourName: part.colourName ?? 'Unknown',
+      imageUrl: getPartImageUrl(part.partType, part.partNumber, part.colourId),
+      quantity: part.quantity,
+      priceNew,
+      priceUsed,
+      totalNew: (priceNew ?? 0) * part.quantity,
+      totalUsed: (priceUsed ?? 0) * part.quantity,
+      sellThroughRateNew: hasData && view.new.strLots !== null ? view.new.strLots * 100 : null,
+      sellThroughRateUsed: hasData && view.used.strLots !== null ? view.used.strLots * 100 : null,
+      stockAvailableNew: hasData ? view.new.stockLots : null,
+      stockAvailableUsed: hasData ? view.used.stockLots : null,
+      timesSoldNew: hasData ? view.new.soldLots : null,
+      timesSoldUsed: hasData ? view.used.soldLots : null,
+      fromCache: hasData && fromCache,
+    };
   }
 
   /**
-   * Fetch price for a single part from BrickLink
-   * Makes sequential API calls with delays to avoid rate limiting.
-   * Fetches: new stock, used stock, new sold, and used sold data
+   * Get the price view for the complete set (ensures + captures on miss)
    */
-  private async fetchPartPrice(part: PartIdentifier): Promise<PartPriceData | null> {
+  private async getSetView(setNumber: string, ttlDays: number): Promise<PriceGuideView | null> {
     try {
-      // Make API calls sequentially with delays to avoid rate limiting
-      // Call 1: New stock
-      const stockNew = await this.safeGetPriceGuide(part, 'N', 'stock');
-      await delay(REQUEST_DELAY_MS);
-
-      // Call 2: Used stock
-      const stockUsed = await this.safeGetPriceGuide(part, 'U', 'stock');
-      await delay(REQUEST_DELAY_MS);
-
-      // Call 3: New sold data (for sell-through calculation)
-      const soldNew = await this.safeGetPriceGuide(part, 'N', 'sold');
-      await delay(REQUEST_DELAY_MS);
-
-      // Call 4: Used sold data (for sell-through calculation)
-      const soldUsed = await this.safeGetPriceGuide(part, 'U', 'sold');
-
-      // Log when we can't get prices
-      if (!stockNew && !stockUsed) {
-        console.warn(
-          `[PartoutService] No price data for ${part.partType} ${part.partNumber} color ${part.colourId}`
-        );
-      }
-
-      // Extract stock and sold quantities (unit_quantity = number of lots/transactions)
-      const stockAvailableNew = stockNew?.unit_quantity ?? null;
-      const stockAvailableUsed = stockUsed?.unit_quantity ?? null;
-      const timesSoldNew = soldNew?.unit_quantity ?? null;
-      const timesSoldUsed = soldUsed?.unit_quantity ?? null;
-
-      // Calculate sell-through rates: (times sold / stock available) * 100
-      const sellThroughRateNew =
-        stockAvailableNew && timesSoldNew && stockAvailableNew > 0
-          ? (timesSoldNew / stockAvailableNew) * 100
-          : null;
-      const sellThroughRateUsed =
-        stockAvailableUsed && timesSoldUsed && stockAvailableUsed > 0
-          ? (timesSoldUsed / stockAvailableUsed) * 100
-          : null;
-
-      // Parse prices from SOLD data (actual sale prices, not asking prices)
-      // Fall back to stock prices if no sold data available
-      const priceNew =
-        soldNew && soldNew.total_quantity > 0
-          ? parseFloat(soldNew.avg_price)
-          : stockNew && stockNew.total_quantity > 0
-            ? parseFloat(stockNew.avg_price)
-            : null;
-      const priceUsed =
-        soldUsed && soldUsed.total_quantity > 0
-          ? parseFloat(soldUsed.avg_price)
-          : stockUsed && stockUsed.total_quantity > 0
-            ? parseFloat(stockUsed.avg_price)
-            : null;
-
-      return {
-        partNumber: part.partNumber,
-        partType: part.partType,
-        colourId: part.colourId,
-        colourName: part.colourName ?? null,
-        priceNew: priceNew && priceNew > 0 ? priceNew : null,
-        priceUsed: priceUsed && priceUsed > 0 ? priceUsed : null,
-        sellThroughRateNew,
-        sellThroughRateUsed,
-        stockAvailableNew,
-        stockAvailableUsed,
-        timesSoldNew,
-        timesSoldUsed,
-      };
-    } catch (error) {
-      console.error(`[PartoutService] Error fetching price for ${part.partNumber}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Safe wrapper for getPartPriceGuide that handles errors gracefully
-   * Returns null on normal errors (404, etc.) but re-throws RateLimitError
-   */
-  private async safeGetPriceGuide(
-    part: PartIdentifier,
-    condition: 'N' | 'U',
-    guideType: 'stock' | 'sold'
-  ): Promise<{ avg_price: string; total_quantity: number; unit_quantity: number } | null> {
-    try {
-      const result = await this.brickLinkClient.getPartPriceGuide(
-        part.partType,
-        part.partNumber,
-        part.colourId,
-        {
-          condition,
-          guideType,
-          countryCode: 'UK',
-          currencyCode: 'GBP',
-        }
+      return await ensurePriceGuide(
+        this.brickLinkClient,
+        this.supabase,
+        { itemType: 'S', itemNo: setNumber, colourId: 0 },
+        { ttlDays }
       );
-      return result;
-    } catch (error) {
-      // Re-throw rate limit errors so the batch processor can stop
-      if (error instanceof RateLimitError) {
-        throw error;
-      }
-      // Log and return null for other errors (404 not found, etc.)
-      console.warn(
-        `[PartoutService] safeGetPriceGuide failed for ${part.partNumber} (${condition}/${guideType}):`,
-        error instanceof Error ? error.message : error
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Get the price for the complete set
-   */
-  private async getSetPrice(setNumber: string, condition: 'N' | 'U'): Promise<number | null> {
-    try {
-      const priceGuide = await this.brickLinkClient.getSetPriceGuide(setNumber, {
-        condition,
-      });
-      return priceGuide ? parseFloat(priceGuide.avg_price) : null;
     } catch (error) {
       console.warn(`[PartoutService] Could not get set price for ${setNumber}:`, error);
       return null;
     }
-  }
-
-  /**
-   * Build the parts list combining cached and fresh data
-   */
-  private buildPartsList(
-    cached: CachedPartWithIdentifier[],
-    freshPrices: PartPriceData[],
-    allParts: PartIdentifier[]
-  ): PartValue[] {
-    const partValues: PartValue[] = [];
-
-    // Create a map of fresh prices for easy lookup
-    const freshMap = new Map<string, PartPriceData>();
-    for (const price of freshPrices) {
-      const key = `${price.partNumber}:${price.colourId}`;
-      freshMap.set(key, price);
-    }
-
-    // Process cached parts
-    for (const cachedPart of cached) {
-      const priceNew = cachedPart.priceNew ?? 0;
-      const priceUsed = cachedPart.priceUsed ?? 0;
-
-      partValues.push({
-        partNumber: cachedPart.partNumber,
-        partType: cachedPart.partType as BrickLinkItemType,
-        name: cachedPart.name,
-        colourId: cachedPart.colourId,
-        colourName: cachedPart.colourName ?? 'Unknown',
-        imageUrl: getPartImageUrl(
-          cachedPart.partType as BrickLinkItemType,
-          cachedPart.partNumber,
-          cachedPart.colourId
-        ),
-        quantity: cachedPart.quantity,
-        priceNew: cachedPart.priceNew,
-        priceUsed: cachedPart.priceUsed,
-        totalNew: priceNew * cachedPart.quantity,
-        totalUsed: priceUsed * cachedPart.quantity,
-        sellThroughRateNew: cachedPart.sellThroughRateNew,
-        sellThroughRateUsed: cachedPart.sellThroughRateUsed,
-        stockAvailableNew: cachedPart.stockAvailableNew,
-        stockAvailableUsed: cachedPart.stockAvailableUsed,
-        timesSoldNew: cachedPart.timesSoldNew,
-        timesSoldUsed: cachedPart.timesSoldUsed,
-        fromCache: true,
-      });
-    }
-
-    // Process parts that were fetched from API
-    for (const price of freshPrices) {
-      // Find the original part to get name and quantity
-      const originalPart = allParts.find(
-        (p) => p.partNumber === price.partNumber && p.colourId === price.colourId
-      );
-
-      if (!originalPart) continue;
-
-      const priceNew = price.priceNew ?? 0;
-      const priceUsed = price.priceUsed ?? 0;
-
-      partValues.push({
-        partNumber: price.partNumber,
-        partType: price.partType as BrickLinkItemType,
-        name: originalPart.name,
-        colourId: price.colourId,
-        colourName: price.colourName ?? originalPart.colourName ?? 'Unknown',
-        imageUrl: getPartImageUrl(
-          price.partType as BrickLinkItemType,
-          price.partNumber,
-          price.colourId
-        ),
-        quantity: originalPart.quantity,
-        priceNew: price.priceNew,
-        priceUsed: price.priceUsed,
-        totalNew: priceNew * originalPart.quantity,
-        totalUsed: priceUsed * originalPart.quantity,
-        sellThroughRateNew: price.sellThroughRateNew,
-        sellThroughRateUsed: price.sellThroughRateUsed,
-        stockAvailableNew: price.stockAvailableNew,
-        stockAvailableUsed: price.stockAvailableUsed,
-        timesSoldNew: price.timesSoldNew,
-        timesSoldUsed: price.timesSoldUsed,
-        fromCache: false,
-      });
-    }
-
-    // Handle parts with no price data (neither cached nor fetched)
-    const processedKeys = new Set([
-      ...cached.map((c) => `${c.partNumber}:${c.colourId}`),
-      ...freshPrices.map((f) => `${f.partNumber}:${f.colourId}`),
-    ]);
-
-    for (const part of allParts) {
-      const key = `${part.partNumber}:${part.colourId}`;
-      if (!processedKeys.has(key)) {
-        // Part has no price data
-        partValues.push({
-          partNumber: part.partNumber,
-          partType: part.partType,
-          name: part.name,
-          colourId: part.colourId,
-          colourName: part.colourName ?? 'Unknown',
-          imageUrl: getPartImageUrl(part.partType, part.partNumber, part.colourId),
-          quantity: part.quantity,
-          priceNew: null,
-          priceUsed: null,
-          totalNew: 0,
-          totalUsed: 0,
-          sellThroughRateNew: null,
-          sellThroughRateUsed: null,
-          stockAvailableNew: null,
-          stockAvailableUsed: null,
-          timesSoldNew: null,
-          timesSoldUsed: null,
-          fromCache: false,
-        });
-      }
-    }
-
-    return partValues;
   }
 
   /**

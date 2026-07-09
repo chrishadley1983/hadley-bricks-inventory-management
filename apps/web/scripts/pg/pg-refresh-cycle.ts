@@ -11,8 +11,8 @@
  * must never become a Vercel cron or API route.
  *
  * Per-tuple write fan-out on every successful scrape:
- *   1. L3 (bricklink_price_guide_cache) via PriceGuideCacheService.upsert + write-through to
- *      bricklink_part_price_cache (parts/minifigs) — same as bl-pg-store-scan.ts.
+ *   1. L3 (bricklink_price_guide_cache) via PriceGuideCacheService.upsert — the unified
+ *      price cache all consumers read via readPriceGuide; same as bl-pg-store-scan.ts.
  *   2. L1 (bricklink_pg_summary_cache) — the page carries WORLDWIDE quadrants too, so every
  *      lane D fetch also refreshes the worldwide summary row (source='catalogpg').
  *   3. L2 (bricklink_pg_snapshots) — one row per tuple per day, L1-shaped, for MoM deltas.
@@ -406,7 +406,6 @@ function emptyBatches(): Batches {
 async function flush(sb: SupabaseClient, batches: Batches): Promise<void> {
   if (batches.scrapeResults.length > 0) {
     await cacheService.upsert(batches.scrapeResults);
-    await cacheService.writeThroughPartPriceCache(batches.scrapeResults);
   }
   if (batches.summaryRows.length > 0) {
     const { error } = await sb

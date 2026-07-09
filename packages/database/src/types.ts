@@ -17727,6 +17727,15 @@ export type Database = {
           your_qty: number
         }[]
       }
+      get_bricqer_snapshot_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          inventory_value: number
+          last_synced: string
+          lot_count: number
+          piece_count: number
+        }[]
+      }
       get_connection_coverage: {
         Args: never
         Returns: {

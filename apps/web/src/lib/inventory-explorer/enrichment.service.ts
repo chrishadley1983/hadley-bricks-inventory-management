@@ -1,28 +1,33 @@
 /**
  * Inventory Explorer — BrickLink Price Enrichment Service
  *
- * Fetches BrickLink price guide data (avg price, STR, sold, for-sale counts)
- * for snapshot items and caches in the existing bricklink_part_price_cache table.
+ * Warms the unified price cache (`bricklink_price_guide_cache`) for snapshot items
+ * via `ensurePriceGuide` — 4 API calls per tuple capturing a COMPLETE row (both
+ * conditions, sold+stock, median/hist). The backlog is computed against the same
+ * cache via `readPriceGuide`, so tuples already covered by PG lanes, store scans
+ * or assessments are never re-fetched.
  *
- * Uses 2 API calls per item: stock + sold for the item's condition.
  * Rate-limited to stay within BrickLink's 5000 req/day limit.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { BrickLinkClient } from '../bricklink/client';
-import type { BrickLinkCredentials, BrickLinkItemType } from '../bricklink/types';
+import type { BrickLinkCredentials } from '../bricklink/types';
 import { CredentialsRepository } from '../repositories/credentials.repository';
+import { ensurePriceGuide } from '../bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef, type PgType } from '../bricklink/price-guide/read';
+import { loadColourMap } from '../bricklink/colour-map';
 
-/** Map explorer item_type to BrickLink item type */
-function toBrickLinkType(itemType: string): BrickLinkItemType {
+/** Map explorer item_type to price-guide item type */
+function toPgType(itemType: string): PgType {
   switch (itemType) {
     case 'Set':
-      return 'SET';
+      return 'S';
     case 'Minifig':
-      return 'MINIFIG';
+      return 'M';
     default:
-      return 'PART';
+      return 'P';
   }
 }
 
@@ -42,20 +47,27 @@ export interface EnrichmentResult {
   errors: number;
 }
 
-/** Delay between API requests (ms) */
-const REQUEST_DELAY = 250;
+/** Delay between tuples (ms) — each tuple is 4 parallel BL API calls */
+const REQUEST_DELAY = 500;
 
 /** Delay between batches (ms) */
 const BATCH_DELAY = 2000;
 
-/** Batch size for BrickLink API calls */
+/** Batch size between progress events / batch delays */
 const BATCH_SIZE = 10;
 
-/** Max items to enrich per manual invocation */
-const MAX_ITEMS_PER_RUN = 200;
+/**
+ * Max tuples to enrich per manual invocation. Each tuple costs 4 BL API calls
+ * (all quadrants) but covers BOTH conditions, so 100 tuples ≈ the old 200
+ * single-condition items at the same ~400-call budget.
+ */
+const MAX_ITEMS_PER_RUN = 100;
 
-/** Max items for daily cron refresh per invocation (fits within 5-min Vercel timeout) */
-export const MAX_ITEMS_DAILY_REFRESH = 200;
+/** Max tuples for daily cron refresh per invocation (fits within 5-min Vercel timeout) */
+export const MAX_ITEMS_DAILY_REFRESH = 100;
+
+/** UK cache rows older than this are re-fetched */
+const FRESH_TTL_DAYS = 90;
 
 export class EnrichmentService {
   constructor(
@@ -67,8 +79,8 @@ export class EnrichmentService {
 
   /**
    * Enrich snapshot items with BrickLink price data.
-   * Prioritises items by value (most expensive first).
-   * Skips items already in the cache (unless stale).
+   * Prioritises tuples by value (most expensive first).
+   * Skips tuples already fresh in the unified cache.
    */
   async enrich(options?: {
     maxItems?: number;
@@ -89,19 +101,8 @@ export class EnrichmentService {
       caller: this.caller,
     });
 
-    // 2. Build BL colour-name → BL colour_id map. The snapshot stores Bricqer's
-    //    internal color_id enum (NOT BL's), but both sides use BL's American
-    //    colour names — so we translate by name.
-    const blColours = await client.getColors();
-    const blColorByName = new Map<string, number>();
-    for (const c of blColours) {
-      blColorByName.set(c.color_name.toLowerCase().trim(), c.color_id);
-    }
-
-    // 3. Get distinct items from snapshot that need enrichment
-    //    We fetch consolidated (item_number, BL_colour_id, condition, item_type)
-    //    ordered by total value descending (most valuable first)
-    const candidates = await this.getUnenrichedItems(maxItems, blColorByName);
+    // 2. Get tuples from snapshot that need enrichment (no fresh UK row)
+    const candidates = await this.getUnenrichedItems(maxItems);
 
     if (candidates.length === 0) {
       return { totalProcessed: 0, alreadyCached: 0, newlyFetched: 0, errors: 0 };
@@ -117,7 +118,12 @@ export class EnrichmentService {
 
       for (const item of batch) {
         try {
-          await this.fetchAndCache(client, item);
+          await ensurePriceGuide(
+            client,
+            this.supabase,
+            { itemType: item.itemType, itemNo: item.itemNumber, colourId: item.blColourId },
+            { ttlDays: FRESH_TTL_DAYS }
+          );
           fetched++;
         } catch (err) {
           errors++;
@@ -170,26 +176,24 @@ export class EnrichmentService {
   }
 
   /**
-   * Get snapshot items that don't have fresh BrickLink data.
-   * Returns consolidated unique (item_number, BL_color_id, condition, item_type) combos.
+   * Get snapshot tuples with no fresh UK row in the unified cache.
+   * Returns consolidated unique (item_number, BL_colour_id, item_type) tuples —
+   * a single capture covers both conditions, so condition is NOT part of the key.
    *
-   * IMPORTANT: snapshot.color_id is Bricqer's internal enum (NOT BL's). We
-   * translate Bricqer→BL via color_name; rows whose name doesn't map to a BL
-   * colour are dropped so we never write Bricqer ids into the BL cache.
-   *
-   * Freshness is condition-aware: a cache row is "fresh" for a candidate only
-   * if the relevant new/used columns are populated, not just by date.
+   * Snapshot colour ids are Bricqer-scheme; they are normalised to BL ids via the
+   * canonical colour map (by name first, id fallback). Unmappable rows are dropped
+   * so we never key the unified cache by a Bricqer id.
    */
   private async getUnenrichedItems(
-    limit: number,
-    blColorByName: Map<string, number>
-  ): Promise<Array<{ itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string; totalValue: number }>> {
-    // Get top items by value from snapshot
+    limit: number
+  ): Promise<Array<{ itemNumber: string; blColourId: number; itemType: PgType; totalValue: number }>> {
+    const cmap = await loadColourMap(this.supabase);
+
+    // Get all snapshot rows (paginated past the 1000-row cap)
     const allItems: Array<{
       item_number: string;
       color_id: number | null;
       color_name: string | null;
-      condition: string;
       item_type: string;
       bricqer_price: number;
       quantity: number;
@@ -200,7 +204,7 @@ export class EnrichmentService {
     while (true) {
       const { data } = await this.supabase
         .from('bricqer_inventory_snapshot')
-        .select('item_number, color_id, color_name, condition, item_type, bricqer_price, quantity')
+        .select('item_number, color_id, color_name, item_type, bricqer_price, quantity')
         .eq('user_id', this.userId)
         .not('color_id', 'is', null)
         .range(offset, offset + pageSize - 1);
@@ -211,155 +215,63 @@ export class EnrichmentService {
       offset += pageSize;
     }
 
-    // Consolidate by (item_number, BL_color_id, condition, item_type) and sum value.
-    // Translate Bricqer color_id → BL color_id via color_name; skip unmappable rows.
-    const map = new Map<string, { itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string; totalValue: number }>();
+    // Consolidate by (item_number, BL_colour_id, item_type) and sum value
+    const map = new Map<string, { itemNumber: string; blColourId: number; itemType: PgType; totalValue: number }>();
     let unmappable = 0;
 
     for (const item of allItems) {
-      if (item.color_id === null || !item.color_name) continue;
-      const blColorId = blColorByName.get(item.color_name.toLowerCase().trim());
-      if (blColorId === undefined) {
-        unmappable++;
-        continue;
+      const itemType = toPgType(item.item_type);
+      let blColourId = 0;
+      if (itemType === 'P') {
+        const resolved = cmap.normalise({
+          colourId: item.color_id ?? undefined,
+          colourName: item.color_name,
+          scheme: 'bricqer',
+        });
+        if (!resolved.mapped) {
+          unmappable++;
+          continue;
+        }
+        blColourId = resolved.blId;
       }
-      const key = `${item.item_number}|${blColorId}|${item.condition}`;
+      const key = pgKey(itemType, item.item_number, blColourId);
       const existing = map.get(key);
       if (existing) {
         existing.totalValue += item.bricqer_price * item.quantity;
       } else {
         map.set(key, {
           itemNumber: item.item_number,
-          colorId: blColorId,
-          colorName: item.color_name,
-          condition: item.condition,
-          itemType: item.item_type,
+          blColourId,
+          itemType,
           totalValue: item.bricqer_price * item.quantity,
         });
       }
     }
     if (unmappable > 0) {
-      console.warn(`[Enrichment] dropped ${unmappable} snapshot rows whose color_name didn't map to a BL colour`);
+      console.warn(`[Enrichment] dropped ${unmappable} snapshot rows whose colour didn't map to a BL colour`);
     }
 
-    // Check which ones already have fresh cache entries (condition-aware).
+    // Filter to tuples without a fresh UK row in the unified cache
     const candidates = Array.from(map.values());
-    const partNumbers = [...new Set(candidates.map((c) => c.itemNumber))];
+    const refs: ItemRef[] = candidates.map((c) => ({
+      itemType: c.itemType,
+      itemNo: c.itemNumber,
+      colourId: c.blColourId,
+      scheme: 'bl' as const,
+    }));
+    const views = await readPriceGuide(this.supabase, refs, {
+      ttlDays: FRESH_TTL_DAYS,
+      allowWorldFallback: false,
+    });
 
-    const freshThresholdMs = 90 * 24 * 60 * 60 * 1000; // 90 days
-    const freshAfter = new Date(Date.now() - freshThresholdMs).toISOString();
-
-    type CacheRow = {
-      part_number: string;
-      colour_id: number;
-      stock_available_new: number | null;
-      stock_available_used: number | null;
-      times_sold_new: number | null;
-      times_sold_used: number | null;
-    };
-    const cacheMap = new Map<string, CacheRow>();
-    const CHUNK = 500;
-    for (let i = 0; i < partNumbers.length; i += CHUNK) {
-      const chunk = partNumbers.slice(i, i + CHUNK);
-      const { data: cached } = await this.supabase
-        .from('bricklink_part_price_cache')
-        .select('part_number, colour_id, stock_available_new, stock_available_used, times_sold_new, times_sold_used')
-        .in('part_number', chunk)
-        .gte('fetched_at', freshAfter);
-      for (const c of (cached ?? []) as CacheRow[]) {
-        cacheMap.set(`${c.part_number}|${c.colour_id}`, c);
-      }
-    }
-
-    // Filter: keep candidates whose specific condition's columns are NOT already populated.
     const unenriched = candidates.filter((c) => {
-      const cached = cacheMap.get(`${c.itemNumber}|${c.colorId}`);
-      if (!cached) return true;
-      const isNew = c.condition === 'New';
-      const stock = isNew ? cached.stock_available_new : cached.stock_available_used;
-      const sold = isNew ? cached.times_sold_new : cached.times_sold_used;
-      // Already-fresh-for-this-condition iff at least one of the two non-null
-      return stock == null && sold == null;
+      const view = views.get(pgKey(c.itemType, c.itemNumber, c.blColourId));
+      return !view || view.coverage !== 'uk';
     });
 
     // Sort by value descending and take top N
     unenriched.sort((a, b) => b.totalValue - a.totalValue);
     return unenriched.slice(0, limit);
-  }
-
-  /**
-   * Fetch BrickLink price data for a single item and cache it.
-   * Makes 2 API calls: stock + sold for the item's condition.
-   *
-   * `item.colorId` MUST be a BrickLink color_id, not a Bricqer one.
-   */
-  private async fetchAndCache(
-    client: BrickLinkClient,
-    item: { itemNumber: string; colorId: number; colorName: string; condition: string; itemType: string }
-  ): Promise<void> {
-    const blType = toBrickLinkType(item.itemType);
-    const blCondition = item.condition === 'New' ? 'N' : 'U';
-
-    // Fetch stock data (current listings)
-    const stockData = await client.getPartPriceGuide(blType, item.itemNumber, item.colorId, {
-      condition: blCondition,
-      guideType: 'stock',
-      currencyCode: 'GBP',
-    });
-
-    await sleep(REQUEST_DELAY);
-
-    // Fetch sold data (historical sales)
-    const soldData = await client.getPartPriceGuide(blType, item.itemNumber, item.colorId, {
-      condition: blCondition,
-      guideType: 'sold',
-      currencyCode: 'GBP',
-    });
-
-    // Calculate STR: times_sold / (times_sold + stock_available)
-    // Store 0 (not null) when BL returned data but no market activity — null means "never fetched"
-    const stockAvailable = stockData.total_quantity || 0;
-    const timesSold = soldData.total_quantity || 0;
-    const str = stockAvailable + timesSold > 0
-      ? (timesSold / (timesSold + stockAvailable)) * 100
-      : 0;
-
-    const avgPrice = soldData.avg_price ? parseFloat(soldData.avg_price) : null;
-
-    // Build upsert row — use the new/used split columns
-    const isNew = blCondition === 'N';
-    const now = new Date().toISOString();
-
-    const { error } = await this.supabase
-      .from('bricklink_part_price_cache')
-      .upsert(
-        {
-          part_number: item.itemNumber,
-          part_type: blType,
-          colour_id: item.colorId,
-          colour_name: item.colorName,
-          fetched_at: now,
-          updated_at: now,
-          ...(isNew
-            ? {
-                price_new: avgPrice,
-                sell_through_rate_new: str,
-                stock_available_new: stockAvailable,
-                times_sold_new: timesSold,
-              }
-            : {
-                price_used: avgPrice,
-                sell_through_rate_used: str,
-                stock_available_used: stockAvailable,
-                times_sold_used: timesSold,
-              }),
-        },
-        { onConflict: 'part_number,colour_id' }
-      );
-
-    if (error) {
-      console.error(`[Enrichment] Cache upsert error for ${item.itemNumber}:`, error.message);
-    }
   }
 }
 

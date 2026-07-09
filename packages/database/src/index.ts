@@ -7,16 +7,10 @@ export type InventoryItem = Tables<'inventory_items'>;
 export type InventoryItemInsert = TablesInsert<'inventory_items'>;
 export type InventoryItemUpdate = TablesUpdate<'inventory_items'>;
 
-// Inventory status type (based on actual usage in the app - some values are uppercase, some title case)
-export type InventoryStatus =
-  | 'In Stock' | 'IN STOCK'
-  | 'Listed' | 'LISTED'
-  | 'Sold' | 'SOLD'
-  | 'Shipped' | 'SHIPPED'
-  | 'Archived' | 'ARCHIVED'
-  | 'Backlog' | 'BACKLOG'
-  | 'Returned' | 'RETURNED'
-  | 'NOT YET RECEIVED';
+// Inventory status type — canonical uppercase values only. The DB enforces this
+// set via chk_inventory_status; mixed-case variants caused invisible rows in
+// every status-filtered view (43 'Not Yet Received' items, fixed 2026-07-09).
+export type InventoryStatus = 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD' | 'RETURNED';
 
 export type Purchase = Tables<'purchases'>;
 export type PurchaseInsert = TablesInsert<'purchases'>;

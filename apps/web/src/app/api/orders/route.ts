@@ -9,6 +9,7 @@ const QuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).optional().default(50),
   platform: z.string().optional(),
   status: z.string().optional(),
+  search: z.string().max(100).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 });
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, platform, status, startDate, endDate } = parsed.data;
+    const { page, pageSize, platform, status, search, startDate, endDate } = parsed.data;
 
     // platform='bricqer' is a deprecated aggregation path — BL/BO data now lives
     // under platform='bricklink' / platform='brickowl' in this same table.
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
         platform: platform === 'bricqer' ? undefined : platform,
         excludePlatforms: ['bricqer'],
         status,
+        search,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
       },

@@ -251,6 +251,9 @@ export class BrickLinkSyncService {
       items_count: normalized.items.length,
       raw_data:
         normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      // Refresh on every upsert — "Last sync" on the orders page is max(synced_at),
+      // which otherwise only moves when a brand-new order is inserted.
+      synced_at: new Date().toISOString(),
     };
 
     // Upsert order
@@ -308,6 +311,7 @@ export class BrickLinkSyncService {
       items_count: normalized.items.length,
       raw_data:
         normalized.rawData as unknown as Database['public']['Tables']['platform_orders']['Insert']['raw_data'],
+      synced_at: new Date().toISOString(),
     };
 
     const savedOrder = await this.orderRepo.upsert(orderInsert);

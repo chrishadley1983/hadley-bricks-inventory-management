@@ -7,7 +7,7 @@ import { classifyOverlap, type OwnStockIndex } from '../overlap';
 
 const EMPTY: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
-  stockLots: 0, stockQty: 0, stockMin: null, strLots: null, strQty: null, hist: undefined,
+  stockLots: 0, stockQty: 0, stockMin: null, stockMax: null, stockAvg: null, strLots: null, strQty: null, hist: undefined,
 };
 
 function side(p: Partial<SideView>): SideView {

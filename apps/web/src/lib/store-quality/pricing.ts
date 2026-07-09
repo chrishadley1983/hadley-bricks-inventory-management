@@ -5,10 +5,10 @@
  * single source of truth, v3 2026-07-07) and is re-exported here so existing
  * store-quality imports keep working.
  *
- * NOTE on STR scale: Bricqer's STR is the ratio `times_sold / stock_available`.
- * The `bricklink_part_price_cache.sell_through_rate_*` columns store that ratio
- * **×100** (i.e. a percentage that can exceed 100). The multiplier expects
- * the raw RATIO (0.5 = 50%), so callers must divide the cached value by 100.
+ * NOTE on STR scale: Bricqer's STR is the qty ratio `sold_qty / stock_qty`.
+ * The unified price cache exposes this as `view.<side>.strQty` (raw ratio,
+ * 0.5 = 50%, can exceed 1) via `readPriceGuide` — pass it to the multiplier
+ * directly. `strRatioFromCache` remains only for legacy ×100 inputs.
  */
 
 import { bricqerListPrice, type BricqerCondition } from '../bricklink/bricqer-pricing';

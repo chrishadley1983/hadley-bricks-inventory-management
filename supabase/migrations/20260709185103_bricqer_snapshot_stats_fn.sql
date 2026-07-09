@@ -23,4 +23,4 @@ as $$
   from public.bricqer_inventory_snapshot
   where user_id = p_user_id
     and quantity > 0;
-$$;;
+$$;

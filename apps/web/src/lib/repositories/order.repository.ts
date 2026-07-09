@@ -15,6 +15,8 @@ export interface OrderFilters {
   /** Platforms to exclude from results (applied even when `platform` is not set). */
   excludePlatforms?: string[];
   status?: string;
+  /** Case-insensitive match against platform_order_id or buyer_name. */
+  search?: string;
   startDate?: Date;
   endDate?: Date;
 }
@@ -122,6 +124,14 @@ export class OrderRepository extends BaseRepository<
         query = query.or(
           `internal_status.eq.Pending,and(internal_status.is.null,${excludeConditions})`
         );
+      }
+    }
+
+    if (filters?.search) {
+      // Strip characters that would break the PostgREST or() filter syntax.
+      const term = filters.search.replace(/[,()"'\\]/g, '').trim();
+      if (term) {
+        query = query.or(`platform_order_id.ilike.%${term}%,buyer_name.ilike.%${term}%`);
       }
     }
 

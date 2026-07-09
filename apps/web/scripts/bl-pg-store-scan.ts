@@ -8,7 +8,7 @@
  *
  * Data paths:
  *   - rich cache:  bricklink_price_guide_cache   (median, monthly velocity, worldwide)
- *   - write-through: bricklink_part_price_cache  (so bl-basket etc. benefit unchanged)
+ *     — the unified price cache; all consumers (bl-basket etc.) read it via readPriceGuide
  *
  * The cache IS the resume mechanism: every scraped page is upserted in batches, so an
  * interrupted run re-uses everything on the next invocation.
@@ -441,7 +441,6 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
     const flush = async () => {
       if (pendingUpserts.length === 0) return;
       await cacheService.upsert(pendingUpserts);
-      await cacheService.writeThroughPartPriceCache(pendingUpserts);
       pendingUpserts.length = 0;
     };
 
