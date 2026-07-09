@@ -2,8 +2,8 @@
  * Part Out Value cache service.
  *
  * Reads/writes the `bricklink_part_out_value_cache` table (keyed by set + full option-variant)
- * with staleness tracking, plus the single-row `bricklink_pov_config` defaults. Mirrors
- * PartPriceCacheService conventions (shared cache, direct Supabase client, idempotent upsert).
+ * with staleness tracking, plus the single-row `bricklink_pov_config` defaults. Follows the
+ * house cache conventions (shared cache, direct Supabase client, idempotent upsert).
  *
  * UK retail (Brickset RRP) is read from the existing `brickset_sets` cache — no Brickset API
  * calls — and denormalised onto the row so the generated `partout_multiple` column computes.

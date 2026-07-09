@@ -1,10 +1,11 @@
 /**
  * "What if we listed everything at the UK lowest new price?"
  *
- * For every (part, colour) lot in the scraped inventory, fetch BL UK Stock
- * guide for New condition and read `min_price` — the lowest current UK
- * asking price. Compute total inventory value at min_price × qty and
- * compare against Bricqer-list and seller ask.
+ * For every (part, colour) lot in the scraped inventory, read the UK Stock
+ * min ask (`uk_stock_min`) from the unified price cache — cache-first via
+ * readPriceGuide, fetching uncached tuples with ensurePriceGuide (4 BL calls,
+ * all quadrants, captured automatically). Compute total inventory value at
+ * min × qty and compare against Bricqer-list and seller ask.
  *
  * Usage:
  *   cd apps/web && npx tsx scripts/reprice-at-uk-min.ts --store-slug=<SLUG>
@@ -14,7 +15,8 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { BrickLinkPriceGuide, BrickLinkItemType } from '../src/lib/bricklink/types';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 import { createScriptBlContext } from './_bl-client';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -30,17 +32,17 @@ if (!SLUG) { console.error('Missing --store-slug=<SLUG>'); process.exit(1); }
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '2000', 10);
 const UNDERCUT_PCT = parseFloat(argv['undercut-pct'] ?? '0'); // e.g. 0.01 = 1% under min
+const CACHE_TTL_DAYS = 90; // unified price cache freshness
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const OUT_DIR = path.join(ROOT, 'tmp', 'stores', SLUG);
 const INV_PATH = path.join(OUT_DIR, 'inventory.json');
 if (!fs.existsSync(INV_PATH)) { console.error(`No inventory.json at ${INV_PATH}`); process.exit(1); }
 
-const { bl } = createScriptBlContext('reprice-at-uk-min-script');
+const { bl, supabase } = createScriptBlContext('reprice-at-uk-min-script');
 
 type StoreItemCode = 'P' | 'S' | 'M';
 type ItemCondition = 'N' | 'U';
-const STORE_TO_API: Record<StoreItemCode, BrickLinkItemType> = { P: 'PART', S: 'SET', M: 'MINIFIG' };
 
 interface ScrapedItem {
   invID: number; itemType: StoreItemCode; itemNo: string; colourId: number; colourName: string | null;
@@ -74,36 +76,71 @@ async function main() {
     const k = `${it.itemType}:${it.itemNo}:${it.colourId}:${cond}`;
     if (!tuples.has(k)) tuples.set(k, { itemType: it.itemType, itemNo: it.itemNo, colourId: it.colourId, condition: cond });
   }
+  // Dedupe to distinct (type, item, colour) items — one unified-cache row serves
+  // both conditions (all four quadrants captured together).
+  const itemTuples = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; conditions: ItemCondition[] }>();
+  for (const t of tuples.values()) {
+    const ik = `${t.itemType}:${t.itemNo}:${t.colourId}`;
+    const existing = itemTuples.get(ik);
+    if (existing) existing.conditions.push(t.condition);
+    else itemTuples.set(ik, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, conditions: [t.condition] });
+  }
   console.log(`Unique tuples: ${tuples.size}`);
-  console.log(`Estimated runtime: ~${Math.ceil(tuples.size * API_DELAY_MS / 60000)} min (1 stock call per tuple)`);
+  console.log(`Estimated runtime: ~${Math.ceil(itemTuples.size * API_DELAY_MS / 60000)} min worst-case (cache-first; 4 BL calls per uncached item)`);
 
-  // Fetch UK Stock guide for each tuple
-  const stockGuide = new Map<string, { minPrice: number | null; avgPrice: number | null; qtyAvgPrice: number | null; totalQty: number; sellers: number }>();
-  let calls = 0, fetched = 0, missing = 0;
-  for (const [key, t] of tuples) {
-    if (calls + 1 > API_BUDGET) { console.warn(`API budget reached`); break; }
-    try {
-      await sleep(API_DELAY_MS);
-      const g: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: t.condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK' });
-      calls++;
-      fetched++;
-      const minPrice = parseFloat(g.min_price);
-      const avgPrice = parseFloat(g.avg_price);
-      const qtyAvgPrice = parseFloat(g.qty_avg_price);
-      stockGuide.set(key, {
-        minPrice: minPrice > 0 ? minPrice : null,
-        avgPrice: avgPrice > 0 ? avgPrice : null,
-        qtyAvgPrice: qtyAvgPrice > 0 ? qtyAvgPrice : null,
-        totalQty: g.total_quantity ?? 0,
-        sellers: g.price_detail?.length ?? 0,
-      });
-      if (!(minPrice > 0)) missing++;
-      if (fetched % 100 === 0) console.log(`  fetched ${fetched}/${tuples.size} (${missing} no UK stock)`);
-    } catch (err) {
-      console.warn(`  fetch error ${key}: ${(err as Error).message}`);
+  // UK Stock data per condition-tuple: min ask (uk_stock_min), qty-weighted avg ask
+  // (derived from the stock histogram) and seller lot count, from the unified price
+  // cache. Colour ids come from the BL store scrape → BL scheme. Strict UK, no world
+  // fallback — a non-UK view is a cache miss.
+  const stockGuide = new Map<string, { minPrice: number | null; qtyAvgPrice: number | null; totalQty: number; sellers: number }>();
+  const applyStockSide = (key: string, side: SideView) => {
+    stockGuide.set(key, {
+      minPrice: side.stockMin !== null && side.stockMin > 0 ? side.stockMin : null,
+      qtyAvgPrice: side.stockAvg !== null && side.stockAvg > 0 ? side.stockAvg : null,
+      totalQty: side.stockQty,
+      sellers: side.stockLots,
+    });
+  };
+
+  const refs: ItemRef[] = [...itemTuples.values()].map((t) => ({ itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, scheme: 'bl' as const }));
+  const views = await readPriceGuide(supabase, refs, { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false });
+  let cacheHits = 0, missing = 0;
+  const needFetch = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; conditions: ItemCondition[] }>();
+  for (const [ik, t] of itemTuples) {
+    const view = views.get(pgKey(t.itemType, t.itemNo, t.colourId));
+    if (view && view.coverage === 'uk') {
+      for (const cond of t.conditions) {
+        const key = `${ik}:${cond}`;
+        applyStockSide(key, cond === 'N' ? view.new : view.used);
+        if (stockGuide.get(key)!.minPrice == null) missing++;
+      }
+      cacheHits++;
+    } else {
+      needFetch.set(ik, t);
     }
   }
-  console.log(`Fetched ${fetched} tuples (${missing} had no UK New stock at all).`);
+  console.log(`Cache: ${cacheHits}/${itemTuples.size} items served from unified price cache; fetching ${needFetch.size} via BL API.`);
+
+  // Uncached → ensurePriceGuide (4 calls per item, all quadrants, captured automatically).
+  let calls = 0, fetched = 0;
+  for (const [ik, t] of needFetch) {
+    if (calls + 4 > API_BUDGET) { console.warn(`API budget reached`); break; }
+    try {
+      await sleep(API_DELAY_MS);
+      const view = await ensurePriceGuide(bl, supabase, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: CACHE_TTL_DAYS });
+      calls += 4;
+      fetched++;
+      for (const cond of t.conditions) {
+        const key = `${ik}:${cond}`;
+        applyStockSide(key, cond === 'N' ? view.new : view.used);
+        if (stockGuide.get(key)!.minPrice == null) missing++;
+      }
+      if (fetched % 100 === 0) console.log(`  fetched ${fetched}/${needFetch.size} (${missing} no UK stock)`);
+    } catch (err) {
+      console.warn(`  fetch error ${ik}: ${(err as Error).message}`);
+    }
+  }
+  console.log(`Fetched ${fetched} tuples (${missing} condition-tuples had no UK stock at all).`);
 
   // Score each lot
   type Scored = ScrapedItem & {

@@ -14,7 +14,6 @@ import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { CredentialsRepository } from '@/lib/repositories';
 import { PartoutService } from '@/lib/bricklink/partout.service';
-import { PartPriceCacheService } from '@/lib/bricklink/part-price-cache.service';
 import type { PartoutStreamEvent } from '@/types/partout';
 
 // Increase timeout for large sets (5 minutes)
@@ -100,8 +99,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         supabase,
         caller: 'partout-stream',
       });
-      const cacheService = new PartPriceCacheService(supabase);
-      const partoutService = new PartoutService(brickLinkClient, cacheService);
+      const partoutService = new PartoutService(brickLinkClient, supabase);
 
       // 5. Emit start event
       await writer.write(

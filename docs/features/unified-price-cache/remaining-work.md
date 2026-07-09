@@ -1,6 +1,18 @@
 # Unified Price Cache — remaining work (F7‑tail → F8 → F9)
 
-**Status 2026-07-09:** F1–F6 foundation shipped (PR #534) + deployed + E2E‑validated PASS.
+**Status 2026-07-09 (evening): COMPLETE.** F7‑tail + F8 + F9 all shipped on
+`feature/price-cache-cutover`. Every reader below is on `readPriceGuide()`, every writer on
+`ensurePriceGuide()`/`capturePriceGuide()`; `writeThroughPartPriceCache` deleted;
+`PartPriceCacheService` deleted; `bricklink_part_price_cache` renamed to
+`bricklink_part_price_cache_deprecated` (migration 20260710000000). Documented exceptions:
+live-check lane (partial upsert of fetched quadrants — see its header), arbitrage
+bricklink-sync.service (stock-snapshot + seller price_detail lane, capture would poison
+freshness — see its header), pg-canary (drift detector, must stay cache-independent),
+pg-residual-fill lane-A rotation (feeds the worldwide pg_summary layer), analyze-bl-order's
+GLOBAL-fallback + non-P/M/S catalogue-type calls. `fetchBLCache` kept as a thin adapter over
+readPriceGuide (bricqer-scheme keying for the Explorer). Historical checklist below.
+
+**Status 2026-07-09 (morning):** F1–F6 foundation shipped (PR #534) + deployed + E2E‑validated PASS.
 F7 **store‑quality reader migrated** (PR pending, cut from fresh branch off main). This doc is the
 precise pick‑up checklist for the rest. Common functions to use everywhere:
 `readPriceGuide()` (read), `ensurePriceGuide()`/`capturePriceGuide()` (write), `loadColourMap()`

@@ -14,13 +14,14 @@
  * enforces the shared daily budget gate and throws `RateLimitError` when our share is spent —
  * `liveCheckBatch` treats that as a clean stop, not a crash.
  *
- * Write-through is intentionally PARTIAL, not a full-row replace: `bricklink_price_guide_cache`
+ * The cache write is intentionally PARTIAL, not a full-row replace: `bricklink_price_guide_cache`
  * (L3) is primarily filled by lane D's catalogPG page scrape, which also carries median,
  * monthly buckets and worldwide context that the plain price-guide API does not return. A
  * live check therefore only ever writes the columns it actually fetched (sold new/used, and
  * stock new/used when requested) — columns it did not fetch are omitted from the upsert
  * payload entirely so Postgres/PostgREST leaves the existing value untouched on conflict,
- * rather than nulling out data lane D already collected.
+ * rather than nulling out data lane D already collected. (This partial-write semantic is why
+ * this lane does NOT go through `capturePriceGuide`, which always writes complete rows.)
  *
  * Known gap: `bricklink_price_guide_cache` has no per-lane provenance column (unlike L1's
  * `fetch_identity`/`fx_rate` added in the P0 migration) and `fetched_at` is a single
@@ -111,21 +112,6 @@ export interface UkCacheFieldsRow {
   updated_at: string;
 }
 
-/** Partial `bricklink_part_price_cache` upsert row (parts + minifigs only). */
-export interface PartPriceCacheFieldsRow {
-  part_number: string;
-  part_type: 'PART' | 'MINIFIG';
-  colour_id: number;
-  price_new?: number | null;
-  price_used?: number | null;
-  stock_available_new?: number;
-  stock_available_used?: number;
-  times_sold_new?: number;
-  times_sold_used?: number;
-  fetched_at: string;
-  updated_at: string;
-}
-
 export interface ConditionSummary {
   lots: number;
   qty: number;
@@ -145,7 +131,6 @@ export interface LiveCheckTupleResult {
   sold: { N: ConditionSummary | null; U: ConditionSummary | null };
   stock: { N: ConditionSummary | null; U: ConditionSummary | null };
   wroteToUkCache: boolean;
-  wroteToPartPriceCache: boolean;
   /** Age (days) of any prior `bricklink_price_guide_cache` row for this tuple; null = new tuple. */
   priorCacheAgeDays: number | null;
 }
@@ -259,45 +244,6 @@ export function apiPriceGuideToUkCacheFields(
   return row;
 }
 
-/**
- * Map the same fetches into a partial `bricklink_part_price_cache` write-through row (parts
- * + minifigs only — mirrors `PriceGuideCacheService.writeThroughPartPriceCache`'s semantics:
- * price_* = UK sold avg, times_sold_* = UK sold qty, stock_available_* = UK stock qty).
- * Returns null for sets (that table has no set rows) or when nothing was fetched.
- */
-export function apiPriceGuideToPartPriceCacheFields(
-  tuple: LiveCheckTuple,
-  fetches: TupleFetches,
-  fetchedAt: string = new Date().toISOString(),
-): PartPriceCacheFieldsRow | null {
-  if (tuple.itemType === 'S') return null;
-
-  const soldNew = summariseGuideFetch(fetches.soldNew);
-  const soldUsed = summariseGuideFetch(fetches.soldUsed);
-  const stockNew = summariseGuideFetch(fetches.stockNew);
-  const stockUsed = summariseGuideFetch(fetches.stockUsed);
-  if (!soldNew && !soldUsed && !stockNew && !stockUsed) return null;
-
-  const row: PartPriceCacheFieldsRow = {
-    part_number: tuple.itemNo,
-    part_type: tuple.itemType === 'P' ? 'PART' : 'MINIFIG',
-    colour_id: tuple.itemType === 'P' ? tuple.colourId : 0,
-    fetched_at: fetchedAt,
-    updated_at: fetchedAt,
-  };
-  if (soldNew) {
-    row.price_new = soldNew.avg;
-    row.times_sold_new = soldNew.qty;
-  }
-  if (soldUsed) {
-    row.price_used = soldUsed.avg;
-    row.times_sold_used = soldUsed.qty;
-  }
-  if (stockNew) row.stock_available_new = stockNew.qty;
-  if (stockUsed) row.stock_available_used = stockUsed.qty;
-  return row;
-}
-
 // ---------------------------------------------------------------------------
 // Fetch + write-through
 // ---------------------------------------------------------------------------
@@ -325,8 +271,7 @@ async function fetchOne(
 
 /**
  * Live-check a single tuple: fetch the official UK sold (and optionally stock) price guide
- * from the BL store API, write through to L3 (`bricklink_price_guide_cache`) and, for
- * parts/minifigs, `bricklink_part_price_cache`.
+ * from the BL store API and write through to L3 (`bricklink_price_guide_cache`).
  *
  * Throws `RateLimitError` if the client's daily budget gate trips mid-tuple — callers
  * (notably `liveCheckBatch`) must treat that as "stop issuing further requests", not a
@@ -419,20 +364,6 @@ export async function liveCheckTuple(
     }
   }
 
-  let wroteToPartPriceCache = false;
-  const partRow = apiPriceGuideToPartPriceCacheFields(tuple, fetches, fetchedAt);
-  if (partRow) {
-    const { error } = await supabase
-      .from('bricklink_part_price_cache')
-      .upsert(partRow, { onConflict: 'part_number,colour_id', ignoreDuplicates: false });
-    if (error) {
-      errors.push(`partPriceCache upsert: ${error.message}`);
-      console.warn(`[liveCheckTuple] partPriceCache upsert failed for ${pgCacheKey(tuple)}:`, error.message);
-    } else {
-      wroteToPartPriceCache = true;
-    }
-  }
-
   return {
     tuple,
     fetchedAt,
@@ -443,7 +374,6 @@ export async function liveCheckTuple(
     sold: { N: summariseGuideFetch(fetches.soldNew), U: summariseGuideFetch(fetches.soldUsed) },
     stock: { N: summariseGuideFetch(fetches.stockNew), U: summariseGuideFetch(fetches.stockUsed) },
     wroteToUkCache,
-    wroteToPartPriceCache,
     priorCacheAgeDays,
   };
 }

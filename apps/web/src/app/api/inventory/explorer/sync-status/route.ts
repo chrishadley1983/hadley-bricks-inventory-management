@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api/require-user';
+import { fetchBLCache } from '@/lib/inventory-explorer/bricklink-lookup';
 
 /** 90-day freshness threshold matching enrichment.service.ts */
 const FRESH_THRESHOLD_DAYS = 90;
@@ -35,6 +36,7 @@ export async function GET() {
     interface LotInfo {
       itemNumber: string;
       colorId: number | null;
+      itemType: string;
       condition: string;
       totalQty: number;
     }
@@ -46,7 +48,7 @@ export async function GET() {
     while (true) {
       const { data } = await supabase
         .from('bricqer_inventory_snapshot')
-        .select('item_number, color_id, condition, comment, quantity')
+        .select('item_number, color_id, item_type, condition, comment, quantity')
         .eq('user_id', user.id)
         .range(offset, offset + pageSize - 1);
 
@@ -61,6 +63,7 @@ export async function GET() {
           lotMap.set(key, {
             itemNumber: row.item_number,
             colorId: row.color_id,
+            itemType: row.item_type,
             condition: row.condition,
             totalQty: row.quantity,
           });
@@ -74,48 +77,23 @@ export async function GET() {
     const consolidatedLots = lotMap.size;
     const totalItems = Array.from(lotMap.values()).reduce((sum, l) => sum + l.totalQty, 0);
 
-    // Count enriched vs stale consolidated lots
-    // A lot is "enriched" if (item_number, color_id) has fresh BL cache for its condition
-    const freshAfter = new Date(Date.now() - FRESH_THRESHOLD_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-    // Get fresh cache entries (keyed by part_number|colour_id)
-    // We also need to know which conditions have data
-    const freshCache = new Map<string, { hasNew: boolean; hasUsed: boolean }>();
-    const allPartNumbers = [...new Set(Array.from(lotMap.values()).filter((l) => l.colorId !== null).map((l) => l.itemNumber))];
-
-    for (let i = 0; i < allPartNumbers.length; i += 500) {
-      const batch = allPartNumbers.slice(i, i + 500);
-      const { data: cached } = await supabase
-        .from('bricklink_part_price_cache')
-        .select('part_number, colour_id, sell_through_rate_new, sell_through_rate_used')
-        .in('part_number', batch)
-        .gte('fetched_at', freshAfter);
-
-      if (cached) {
-        for (const row of cached) {
-          const cacheKey = `${row.part_number}|${row.colour_id}`;
-          const existing = freshCache.get(cacheKey) || { hasNew: false, hasUsed: false };
-          if (row.sell_through_rate_new !== null) existing.hasNew = true;
-          if (row.sell_through_rate_used !== null) existing.hasUsed = true;
-          freshCache.set(cacheKey, existing);
-        }
-      }
-    }
+    // Count enriched vs stale consolidated lots.
+    // A lot is "enriched" if its tuple has a fresh UK row in the unified price
+    // cache — a capture always writes all four quadrants, so one row covers
+    // both conditions (world-fallback data does NOT count as enriched).
+    const enrichable = Array.from(lotMap.values()).filter((l) => l.colorId !== null);
+    const blCache = await fetchBLCache(supabase, enrichable, {
+      ttlDays: FRESH_THRESHOLD_DAYS,
+      allowWorldFallback: false,
+    });
 
     let enrichedLots = 0;
-    for (const lot of lotMap.values()) {
-      if (lot.colorId === null) continue;
-      const cacheKey = `${lot.itemNumber}|${lot.colorId}`;
-      const entry = freshCache.get(cacheKey);
-      if (!entry) continue;
-
-      const isEnriched = lot.condition === 'New' ? entry.hasNew : entry.hasUsed;
-      if (isEnriched) enrichedLots++;
+    for (const lot of enrichable) {
+      const entry = blCache.get(`${lot.itemNumber}|${lot.colorId ?? ''}`);
+      if (entry && entry.coverage === 'uk') enrichedLots++;
     }
 
-    // Lots with color_id that could be enriched
-    const enrichableLots = Array.from(lotMap.values()).filter((l) => l.colorId !== null).length;
-    const staleLots = enrichableLots - enrichedLots;
+    const staleLots = enrichable.length - enrichedLots;
 
     return NextResponse.json({
       data: {

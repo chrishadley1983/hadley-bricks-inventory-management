@@ -14,6 +14,7 @@ import { getEbayBrowseClient } from '@/lib/ebay';
 import type { EbayItemSummary } from '@/lib/ebay';
 import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
+import { ensurePriceGuide } from '@/lib/bricklink/price-guide/capture';
 import { createAmazonCatalogClient, createAmazonPricingClient } from '@/lib/amazon';
 import type { AmazonCredentials } from '@/lib/amazon';
 import { CredentialsRepository } from '@/lib/repositories';
@@ -27,6 +28,9 @@ function isScientificNotation(value: string | null | undefined): boolean {
   if (!value) return false;
   return /^[\d.]+[eE][+-]?\d+$/.test(value);
 }
+
+/** UK price-guide cache freshness for the pricing panel (days). */
+const BRICKSET_PRICING_TTL_DAYS = 7;
 
 const QuerySchema = z.object({
   setNumber: z.string().min(1, 'Set number is required'),
@@ -316,33 +320,32 @@ async function fetchBricklinkPricing(
       caller: 'brickset-pricing',
     });
 
-    // Get price guide for specified condition in UK
-    const priceGuide = await blClient.getSetPriceGuide(setNumber, {
-      condition,
-      countryCode: 'UK',
-      currencyCode: 'GBP',
-    });
+    // Unified price cache: serves from a fresh UK row when available, otherwise
+    // fetches + captures all four quadrants (so this lookup warms the shared cache)
+    const view = await ensurePriceGuide(
+      blClient,
+      supabase,
+      { itemType: 'S', itemNo: setNumber, colourId: 0 },
+      { ttlDays: BRICKSET_PRICING_TTL_DAYS }
+    );
 
+    const side = condition === 'N' ? view.new : view.used;
     console.log(
-      `[fetchBricklinkPricing] ${condition} response:`,
+      `[fetchBricklinkPricing] ${condition} view:`,
       JSON.stringify({
-        min_price: priceGuide.min_price,
-        avg_price: priceGuide.avg_price,
-        max_price: priceGuide.max_price,
-        unit_quantity: priceGuide.unit_quantity,
+        stockMin: side.stockMin,
+        stockAvg: side.stockAvg,
+        stockMax: side.stockMax,
+        stockLots: side.stockLots,
+        coverage: view.coverage,
       })
     );
 
-    // BrickLink API returns prices as strings, need to parse them
-    const minPrice = priceGuide.min_price ? parseFloat(priceGuide.min_price) : null;
-    const avgPrice = priceGuide.avg_price ? parseFloat(priceGuide.avg_price) : null;
-    const maxPrice = priceGuide.max_price ? parseFloat(priceGuide.max_price) : null;
-
     return {
-      minPrice: minPrice !== null && !isNaN(minPrice) ? minPrice : null,
-      avgPrice: avgPrice !== null && !isNaN(avgPrice) ? avgPrice : null,
-      maxPrice: maxPrice !== null && !isNaN(maxPrice) ? maxPrice : null,
-      lotCount: priceGuide.unit_quantity || 0,
+      minPrice: side.stockMin,
+      avgPrice: side.stockAvg ?? side.soldAvg,
+      maxPrice: side.stockMax,
+      lotCount: side.stockLots,
     };
   } catch (error) {
     console.error(`[fetchBricklinkPricing] Error for ${condition}:`, error);

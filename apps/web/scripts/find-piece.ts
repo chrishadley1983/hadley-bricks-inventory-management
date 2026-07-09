@@ -10,9 +10,10 @@
  *   5. Optionally, owned sets that contain it (--include-sets).
  *
  * Each row is enriched with BL UK 6-month avg sold price (£) and sell-through
- * rate (STR = times_sold / stock_available) from `bricklink_part_price_cache`
- * for parts, and `minifig_price_cache` for minifigs. Useful for "I need to
- * steal a part to complete an order" — low STR + low qty = safer to redirect.
+ * rate (strQty = sold qty ÷ stock qty) from the unified price cache
+ * (`bricklink_price_guide_cache` via readPriceGuide) for parts, and
+ * `minifig_price_cache` for minifigs. Useful for "I need to steal a part to
+ * complete an order" — low STR + low qty = safer to redirect.
  *
  * Bricqer color_id ≠ BL color_id. We always join Bricqer rows on color_name
  * (case-insensitive) and only translate to BL color_id for the supersets API
@@ -28,7 +29,9 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '../.env.local') });
 
 import { createScriptBlContext } from './_bl-client';
-import { BrickLinkApiError } from '../src/lib/bricklink/client';
+import { BrickLinkApiError, RateLimitError } from '../src/lib/bricklink/client';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef, type PriceGuideView } from '../src/lib/bricklink/price-guide/read';
 
 const BL_COLOR_IDS: Record<string, number> = {
   // Greys
@@ -246,16 +249,8 @@ async function fetchSupersets(partNo: string): Promise<SupersetEntry[]> {
 }
 
 // ── Price cache lookups ─────────────────────────────────────────────────────
-type PartCacheRow = {
-  part_number: string;
-  colour_id: number;
-  price_new: number | null;
-  price_used: number | null;
-  stock_available_new: number | null;
-  stock_available_used: number | null;
-  times_sold_new: number | null;
-  times_sold_used: number | null;
-};
+const PART_CACHE_TTL_DAYS = 90; // unified price-guide cache freshness window
+
 type MinifigCacheRow = {
   bricklink_id: string;
   bricklink_avg_sold_price: number | null;
@@ -263,26 +258,35 @@ type MinifigCacheRow = {
   terapeak_sell_through_rate: number | null;
 };
 
-async function fetchPartPrices(partNumbers: string[]): Promise<Map<string, PartCacheRow>> {
-  const out = new Map<string, PartCacheRow>();
-  if (partNumbers.length === 0) return out;
-  const unique = [...new Set(partNumbers)];
-  const CHUNK = 500;
-  for (let i = 0; i < unique.length; i += CHUNK) {
-    const chunk = unique.slice(i, i + CHUNK);
-    const { data, error } = await supabase
-      .from('bricklink_part_price_cache')
-      .select(
-        'part_number, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used',
-      )
-      .in('part_number', chunk);
-    if (error) {
-      console.warn('  part-price cache fetch error:', error.message);
-      continue;
-    }
-    for (const row of (data ?? []) as PartCacheRow[]) {
-      out.set(`${row.part_number}:${row.colour_id}`, row);
-    }
+/**
+ * Read UK price views for (part, colour) pairs from the unified price cache.
+ * Keyed by pgKey('P', partNo, blColourId). Pairs whose colour name has no BL
+ * colour-id mapping are skipped (no price shown, same as before). Views with
+ * non-UK coverage (missing or stale row) are treated as cache misses.
+ */
+async function fetchPartPrices(
+  pairs: Array<{ partNumber: string; colorName: string | null }>,
+): Promise<Map<string, PriceGuideView>> {
+  const out = new Map<string, PriceGuideView>();
+  const refs = new Map<string, ItemRef>();
+  for (const p of pairs) {
+    const blColorId = lookupBlColorId(p.colorName);
+    if (blColorId === undefined) continue;
+    refs.set(pgKey('P', p.partNumber, blColorId), {
+      itemType: 'P',
+      itemNo: p.partNumber,
+      colourId: blColorId,
+      scheme: 'bl',
+    });
+  }
+  if (refs.size === 0) return out;
+  const views = await readPriceGuide(supabase, [...refs.values()], {
+    ttlDays: PART_CACHE_TTL_DAYS,
+    allowWorldFallback: false,
+  });
+  for (const [key, view] of views) {
+    if (view.coverage !== 'uk') continue; // stale/missing → treated as cache miss
+    out.set(key, view);
   }
   return out;
 }
@@ -311,56 +315,20 @@ async function fetchMinifigPrices(ids: string[]): Promise<Map<string, MinifigCac
   return out;
 }
 
-type PriceGuideResp = {
-  avg_price: string;
-  qty_avg_price?: string;
-  total_quantity: number;
-  unit_quantity: number;
-  currency_code: string;
-};
-
-async function fetchPriceGuide(args: {
-  partNo: string;
-  colorId: number;
-  condition: 'N' | 'U';
-  guideType: 'sold' | 'stock';
-}): Promise<PriceGuideResp | null> {
-  try {
-    const guide = await bl.getPartPriceGuide('PART', args.partNo, args.colorId, {
-      condition: args.condition,
-      countryCode: 'UK',
-      currencyCode: 'GBP',
-      guideType: args.guideType,
-    });
-    return guide as unknown as PriceGuideResp;
-  } catch (err) {
-    if (err instanceof BrickLinkApiError) {
-      if (err.code === 429) throw new Error('rate-limited');
-      console.warn(
-        `  [BL ${args.partNo}:${args.colorId} ${args.condition}/${args.guideType}] ${err.code}: ${err.message}`,
-      );
-      return null;
-    }
-    throw err;
-  }
-}
-
 function pickPartPriceStr(
-  cache: Map<string, PartCacheRow>,
+  cache: Map<string, PriceGuideView>,
   partNumber: string,
   colorName: string | null,
   condition: string | null,
 ): { price: number | null; str: number | null } {
   const blColorId = lookupBlColorId(colorName);
   if (blColorId === undefined) return { price: null, str: null };
-  const row = cache.get(`${partNumber}:${blColorId}`);
-  if (!row) return { price: null, str: null };
+  const view = cache.get(pgKey('P', partNumber, blColorId));
+  if (!view) return { price: null, str: null };
   const isNew = (condition ?? '').toLowerCase().startsWith('n');
-  const price = isNew ? row.price_new : row.price_used;
-  const stock = isNew ? row.stock_available_new : row.stock_available_used;
-  const sold = isNew ? row.times_sold_new : row.times_sold_used;
-  const str = stock != null && stock > 0 && sold != null ? sold / stock : null;
-  return { price: price ?? null, str };
+  const side = isNew ? view.new : view.used;
+  // strQty = sold qty ÷ stock qty — the same formula the legacy columns encoded.
+  return { price: side.soldAvg, str: side.strQty };
 }
 
 function pickMinifigPriceStr(
@@ -593,15 +561,15 @@ async function main() {
   const setContainers = setContainerKeys ? rollUp(ownedSetContainers, setContainerKeys) : [];
 
   // ── Phase 4: bulk-fetch price/STR for everything we'll render ─────────────
-  let partCache: Map<string, PartCacheRow> = new Map();
+  let partCache: Map<string, PriceGuideView> = new Map();
   let minifigCache: Map<string, MinifigCacheRow> = new Map();
   if (!SKIP_PRICES) {
-    const partNumbers = new Set<string>();
-    for (const g of standalone) for (const r of g.rows) partNumbers.add(r.item_number);
-    for (const c of torsoLikeContainers) partNumbers.add(c.no);
-    for (const r of namePatternRows) partNumbers.add(r.item_number);
-    for (const r of familyVariants) partNumbers.add(r.item_number);
-    partCache = await fetchPartPrices([...partNumbers]);
+    const pairs: Array<{ partNumber: string; colorName: string | null }> = [];
+    for (const g of standalone) for (const r of g.rows) pairs.push({ partNumber: r.item_number, colorName: r.color_name });
+    for (const c of torsoLikeContainers) pairs.push({ partNumber: c.no, colorName: c.colorName });
+    for (const r of namePatternRows) pairs.push({ partNumber: r.item_number, colorName: r.color_name });
+    for (const r of familyVariants) pairs.push({ partNumber: r.item_number, colorName: r.color_name });
+    partCache = await fetchPartPrices(pairs);
 
     const figIds = figs.map((f) => f.no);
     minifigCache = await fetchMinifigPrices(figIds);
@@ -609,103 +577,54 @@ async function main() {
 
   // ── Phase 4b: on-demand BL Price Guide fetch for cache misses ─────────────
   if (!SKIP_PRICES && !NO_FETCH_MISSING) {
-    type Miss = { partNumber: string; blColorId: number; condition: 'N' | 'U' };
+    type Miss = { partNumber: string; blColorId: number };
     const misses: Miss[] = [];
     const seen = new Set<string>();
 
-    function flag(partNumber: string, colorName: string | null, condition: string | null) {
+    function flag(partNumber: string, colorName: string | null) {
       const blColorId = lookupBlColorId(colorName);
       if (blColorId === undefined) return; // can't query without a BL colour id
-      const cond: 'N' | 'U' = (condition ?? '').toLowerCase().startsWith('n') ? 'N' : 'U';
-      const k = `${partNumber}:${blColorId}:${cond}`;
+      const k = pgKey('P', partNumber, blColorId);
       if (seen.has(k)) return;
-      const cached = partCache.get(`${partNumber}:${blColorId}`);
-      if (cached) {
-        const stock = cond === 'N' ? cached.stock_available_new : cached.stock_available_used;
-        const sold = cond === 'N' ? cached.times_sold_new : cached.times_sold_used;
-        // Cached for this condition if either stock or sold is non-null
-        if (stock != null || sold != null) return;
-      }
+      // Unified rows are complete (all 4 quadrants in one row) — any fresh UK view
+      // covers both conditions, so a present view means no fetch needed.
+      if (partCache.has(k)) return;
       seen.add(k);
-      misses.push({ partNumber, blColorId, condition: cond });
+      misses.push({ partNumber, blColorId });
     }
 
-    for (const g of standalone) for (const r of g.rows) flag(r.item_number, r.color_name, r.condition);
-    for (const c of torsoLikeContainers) flag(c.no, c.colorName, c.condition);
-    for (const r of namePatternRows) flag(r.item_number, r.color_name, r.condition);
-    for (const r of familyVariants) flag(r.item_number, r.color_name, r.condition);
+    for (const g of standalone) for (const r of g.rows) flag(r.item_number, r.color_name);
+    for (const c of torsoLikeContainers) flag(c.no, c.colorName);
+    for (const r of namePatternRows) flag(r.item_number, r.color_name);
+    for (const r of familyVariants) flag(r.item_number, r.color_name);
 
     if (misses.length > 0) {
       const cap = Math.min(misses.length, MAX_FETCH);
       console.log(
-        `\n[fetch] ${misses.length} cache miss(es) — fetching ${cap} from BL Price Guide (${cap * 2} calls @ 250ms)…`,
+        `\n[fetch] ${misses.length} cache miss(es) — fetching ${cap} from BL Price Guide (${cap * 4} calls @ 250ms)…`,
       );
-      const dirtyKeys = new Set<string>();
       let fetched = 0;
       for (const m of misses.slice(0, cap)) {
-        const key = `${m.partNumber}:${m.blColorId}`;
         try {
           await new Promise((res) => setTimeout(res, 250));
-          const sold = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'sold' });
-          await new Promise((res) => setTimeout(res, 250));
-          const stock = await fetchPriceGuide({ ...m, partNo: m.partNumber, colorId: m.blColorId, guideType: 'stock' });
+          // One ensurePriceGuide call = all four UK quadrants (sold/stock × N/U),
+          // 4 API calls, captured into the unified price cache automatically —
+          // no manual upsert-back needed.
+          const view = await ensurePriceGuide(
+            bl,
+            supabase,
+            { itemType: 'P', itemNo: m.partNumber, colourId: m.blColorId },
+            { ttlDays: PART_CACHE_TTL_DAYS },
+          );
           fetched++;
-          const avg = sold ? parseFloat(sold.avg_price) : 0;
-          const soldQty = sold?.total_quantity ?? 0;
-          const stockQty = stock?.total_quantity ?? 0;
-          const existing: PartCacheRow = partCache.get(key) ?? {
-            part_number: m.partNumber,
-            colour_id: m.blColorId,
-            price_new: null,
-            price_used: null,
-            stock_available_new: null,
-            stock_available_used: null,
-            times_sold_new: null,
-            times_sold_used: null,
-          };
-          if (m.condition === 'N') {
-            existing.price_new = avg > 0 ? avg : null;
-            existing.stock_available_new = stockQty;
-            existing.times_sold_new = soldQty;
-          } else {
-            existing.price_used = avg > 0 ? avg : null;
-            existing.stock_available_used = stockQty;
-            existing.times_sold_used = soldQty;
-          }
-          partCache.set(key, existing);
-          dirtyKeys.add(key);
+          partCache.set(pgKey('P', m.partNumber, m.blColorId), view);
         } catch (err) {
-          if ((err as Error).message === 'rate-limited') {
+          if (err instanceof RateLimitError || (err instanceof BrickLinkApiError && err.code === 429)) {
             console.warn(`  rate-limited at ${fetched} fetches — stopping`);
             break;
           }
-          console.warn(`  fetch failed for ${m.partNumber}:${m.blColorId}/${m.condition}:`, (err as Error).message);
+          console.warn(`  fetch failed for ${m.partNumber}:${m.blColorId}:`, (err as Error).message);
         }
-      }
-
-      // Bulk upsert dirty rows
-      if (dirtyKeys.size > 0) {
-        const rows = [...dirtyKeys].map((k) => {
-          const r = partCache.get(k)!;
-          return {
-            part_number: r.part_number,
-            part_type: 'PART',
-            colour_id: r.colour_id,
-            price_new: r.price_new,
-            price_used: r.price_used,
-            stock_available_new: r.stock_available_new,
-            stock_available_used: r.stock_available_used,
-            times_sold_new: r.times_sold_new,
-            times_sold_used: r.times_sold_used,
-            fetched_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-        });
-        const { error } = await supabase
-          .from('bricklink_part_price_cache')
-          .upsert(rows, { onConflict: 'part_number,colour_id', ignoreDuplicates: false });
-        if (error) console.warn('  cache upsert error:', error.message);
-        else console.log(`[fetch] upserted ${rows.length} rows to cache`);
       }
       if (misses.length > cap) {
         console.log(`[fetch] ${misses.length - cap} miss(es) skipped (over --max-fetch=${MAX_FETCH}). Re-run to continue.`);

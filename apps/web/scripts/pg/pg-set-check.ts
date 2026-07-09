@@ -300,7 +300,6 @@ async function upgradeTopLots(
         const row = toPgCacheRow(scraped);
         result.upgraded.set(pgCacheKey(ref), row);
         await cacheService.upsert([scraped]);
-        await cacheService.writeThroughPartPriceCache([scraped]);
         result.scraped++;
         blockRetried = false;
       } catch (err) {

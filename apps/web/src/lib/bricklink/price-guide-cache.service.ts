@@ -1,14 +1,13 @@
 /**
  * Cache service for catalogPG page-scrape results.
  *
- * Two-layer save:
- *  1. `bricklink_price_guide_cache` — system of record for the rich page data
- *     (median, monthly velocity, worldwide context). One row per (item_type, item_no,
- *     colour_id); one scraped page fills exactly one row (both conditions × sold+stock).
- *  2. Write-through to `bricklink_part_price_cache` (parts + minifigs) using its existing
- *     semantics — price_* = UK sold avg, times_sold_* = UK sold TOTAL QTY (not lots; that's
- *     what bl-basket wrote from the API), stock_available_* = UK stock qty — so bl-basket,
- *     the stale-pricing screener and store-quality benefit with zero code changes.
+ * `bricklink_price_guide_cache` is the system of record for the rich page data
+ * (median, monthly velocity, worldwide context). One row per (item_type, item_no,
+ * colour_id); one scraped page fills exactly one row (both conditions × sold+stock).
+ * This `upsert` is the single physical write path — `capturePriceGuide` (the common
+ * write function in price-guide/capture.ts) delegates here. The legacy
+ * `bricklink_part_price_cache` write-through was retired with the unified-price-cache
+ * cutover; all consumers read via `readPriceGuide`.
  *
  * Reads paginate explicitly (Supabase caps responses at 1,000 rows — the same trap that
  * bit bl-basket's cache reads; see that script's enrichWithPrices comment).
@@ -156,35 +155,4 @@ export class PriceGuideCacheService {
     }
   }
 
-  /**
-   * Write-through to the legacy part-price cache (parts + minifigs only — that table has
-   * no set rows). Preserves that table's semantics exactly as bl-basket writes them from
-   * the API: null price + 0 sold is the honoured "no UK sales" sentinel.
-   */
-  async writeThroughPartPriceCache(results: PgScrapeResult[]): Promise<number> {
-    const pm = results.filter((r) => r.item.itemType === 'P' || r.item.itemType === 'M');
-    if (pm.length === 0) return 0;
-    const now = new Date().toISOString();
-    const rows = pm.map((r) => ({
-      part_number: r.item.itemNo,
-      part_type: r.item.itemType === 'P' ? 'PART' : 'MINIFIG',
-      colour_id: r.item.itemType === 'P' ? r.item.colourId : 0,
-      price_new: r.uk.soldNew.avg,
-      price_used: r.uk.soldUsed.avg,
-      stock_available_new: r.uk.stockNew.qty,
-      stock_available_used: r.uk.stockUsed.qty,
-      times_sold_new: r.uk.soldNew.qty,
-      times_sold_used: r.uk.soldUsed.qty,
-      fetched_at: now,
-      updated_at: now,
-    }));
-    const CHUNK = 100;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const { error } = await this.supabase
-        .from('bricklink_part_price_cache')
-        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'part_number,colour_id', ignoreDuplicates: false });
-      if (error) throw new Error(`part price cache write-through failed: ${error.message}`);
-    }
-    return rows.length;
-  }
 }
