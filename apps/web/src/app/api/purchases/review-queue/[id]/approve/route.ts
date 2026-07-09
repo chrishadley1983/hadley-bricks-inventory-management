@@ -311,7 +311,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           amazon_asin: enriched.amazon_asin,
           listing_value: enriched.list_price,
           sku: newSku,
-          status: 'Not Yet Received',
+          status: 'NOT YET RECEIVED',
           notes: `Imported from review queue. Seller: ${sellerUsername}. https://mail.google.com/mail/u/0/#all/${emailRecord.email_id}`,
         })
         .select('id')

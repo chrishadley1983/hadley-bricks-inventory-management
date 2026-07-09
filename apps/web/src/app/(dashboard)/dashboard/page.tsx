@@ -29,20 +29,12 @@ const BricqerInventoryWidget = dynamic(
   { ssr: false, loading: () => <StatCardSkeleton /> }
 );
 
-const FinancialSnapshotWidget = dynamic(
+const InventoryPipelineWidget = dynamic(
   () =>
     import('@/components/features/dashboard').then((mod) => ({
-      default: mod.FinancialSnapshotWidget,
+      default: mod.InventoryPipelineWidget,
     })),
-  { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
-);
-
-const StatusBreakdownWidget = dynamic(
-  () =>
-    import('@/components/features/dashboard').then((mod) => ({
-      default: mod.StatusBreakdownWidget,
-    })),
-  { ssr: false, loading: () => <WidgetCardSkeleton lines={5} /> }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
 const RecentActivityWidget = dynamic(
@@ -53,8 +45,8 @@ const RecentActivityWidget = dynamic(
   { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
-const LowStockWidget = dynamic(
-  () => import('@/components/features/dashboard').then((mod) => ({ default: mod.LowStockWidget })),
+const AlertsWidget = dynamic(
+  () => import('@/components/features/dashboard').then((mod) => ({ default: mod.AlertsWidget })),
   { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
 );
 
@@ -89,13 +81,14 @@ export default function DashboardPage() {
     <>
       <Header title="Dashboard" />
       <div className="p-6">
-        {/* Summary Section */}
+        {/* KPI band */}
         <div className="mb-6">
           <DashboardSummaryWidget />
         </div>
 
         {/* Dashboard Controls */}
         <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
+          <span className="text-xs text-muted-foreground">Filters the pipeline &amp; alerts only</span>
           {/* Platform Filter */}
           <div className="flex items-center gap-2">
             <Label htmlFor="platform-filter" className="text-sm text-muted-foreground">
@@ -128,19 +121,20 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Inventory stat widgets */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <BricqerInventoryWidget />
-          <FinancialSnapshotWidget />
-          <div className="md:col-span-2">
-            <StatusBreakdownWidget />
+        {/* Inventory pipeline + Bricqer store */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <InventoryPipelineWidget />
+          </div>
+          <div className="lg:self-start">
+            <BricqerInventoryWidget />
           </div>
         </div>
 
-        {/* Bottom widgets */}
+        {/* Bottom widgets — alerts lead so attention items surface first */}
         <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <AlertsWidget />
           <RecentActivityWidget />
-          <LowStockWidget />
         </div>
       </div>
     </>
