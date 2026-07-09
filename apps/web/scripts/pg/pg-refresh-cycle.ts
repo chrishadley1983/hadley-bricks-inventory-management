@@ -307,6 +307,11 @@ function toUnlockOnlyQueueUpdate(t: QueueRow): Record<string, unknown> {
     item_type: t.item_type,
     item_no: t.item_no,
     colour_id: t.colour_id,
+    // flush() writes via upsert (INSERT ... ON CONFLICT), so every row must satisfy the
+    // NOT NULL constraint on next_due_at even though the row already exists. A blocked
+    // tuple isn't the tuple's fault — keep its existing due time so it stays due and
+    // retries next session/night (omitting it crashed the whole flush; see git history).
+    next_due_at: t.next_due_at,
     locked_by: null,
     locked_at: null,
     updated_at: new Date().toISOString(),
@@ -338,6 +343,10 @@ function toErrorQueueUpdate(t: QueueRow, err: unknown): Record<string, unknown> 
     colour_id: t.colour_id,
     last_error: message.slice(0, 500),
     attempts,
+    // upsert (INSERT ... ON CONFLICT) requires next_due_at (NOT NULL) on every row —
+    // keep the existing due time so a transient hiccup retries next session rather than
+    // crashing the flush. The attempts>=3 branch below overrides this with a cooldown.
+    next_due_at: t.next_due_at,
     locked_by: null,
     locked_at: null,
     updated_at: nowIso,
