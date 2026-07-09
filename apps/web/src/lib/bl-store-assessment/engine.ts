@@ -18,6 +18,16 @@ import {
   type Verdict, type Condition, type ItemTypeCode, DEFAULT_INPUTS,
 } from './types';
 
+/** Bumped when scoring semantics change; persisted with every run. v2 = audit fixes 2026-07-09. */
+export const ENGINE_VERSION = 2;
+
+/**
+ * Worldwide 6-mo averages run ~11% below UK (2026-07-07 pg_summary coverage study,
+ * UK+11% gap). Applied to world-fallback benchmarks so ask-vs-market and resale
+ * projections aren't systematically biased against UK stores.
+ */
+export const WORLD_TO_UK_UPLIFT = 1.11;
+
 // ---- damage-note filter (mirrors bl-basket, negation + boilerplate aware) ----
 
 const DAMAGE_KEYWORDS = new Set([
@@ -89,12 +99,16 @@ function weightedMedian(pairs: { value: number; weight: number }[]): number | nu
   return rows[rows.length - 1].value;
 }
 
-function classifyPosition(askVsUk: number | null): PricePosition {
-  if (askVsUk == null) return 'UNKNOWN';
-  if (askVsUk < 0.70) return 'UNDER';
-  if (askVsUk < 0.95) return 'KEEN';
-  if (askVsUk < 1.15) return 'AT-MARKET';
-  if (askVsUk < 1.50) return 'PREMIUM';
+// One price scale everywhere: per-lot buckets, the store label, and the verdict's
+// price signal all break at the same points.
+export const PRICE_BANDS = { under: 0.70, keen: 0.95, atMarket: 1.15, premium: 1.50 };
+
+function classifyPosition(askVsMarket: number | null): PricePosition {
+  if (askVsMarket == null) return 'UNKNOWN';
+  if (askVsMarket < PRICE_BANDS.under) return 'UNDER';
+  if (askVsMarket < PRICE_BANDS.keen) return 'KEEN';
+  if (askVsMarket < PRICE_BANDS.atMarket) return 'AT-MARKET';
+  if (askVsMarket < PRICE_BANDS.premium) return 'PREMIUM';
   return 'OVER';
 }
 
@@ -150,21 +164,25 @@ function scoreLot(
   const side: SideView | null = pv ? (condition === 'N' ? pv.new : pv.used) : null;
   const priceSource: PriceSource = pv?.coverage === 'uk' ? 'uk' : pv?.coverage === 'world_fallback' ? 'world' : 'none';
 
-  const ukSoldAvg = side?.soldAvg ?? null;
+  // Benchmark: UK sold avg where covered; worldwide avg calibrated up to UK level otherwise.
+  const rawAvg = side?.soldAvg ?? null;
+  const benchmarkAvg = rawAvg && rawAvg > 0
+    ? round(priceSource === 'world' ? rawAvg * WORLD_TO_UK_UPLIFT : rawAvg, 4)
+    : null;
   const strLots = side?.strLots ?? null;
   const strQty = side?.strQty ?? null;
   const worldSupplyLots = supply ? (condition === 'N' ? supply.stockLotsNew : supply.stockLotsUsed) : null;
 
   const ask = lot.unitPriceGBP;
   const damageNote = hasDamageNote(lot.description, boilerplate);
-  const askVsUk = ukSoldAvg && ukSoldAvg > 0 ? ask / ukSoldAvg : null;
+  const askVsMarket = benchmarkAvg ? ask / benchmarkAvg : null;
 
   // What we'd realise reselling it: parts/minifigs priced by the Bricqer formula,
   // sets by their whole-set 6mo sold avg (modelling, not mirroring — Bricqer doesn't
   // auto-price sets).
   const ourList = lot.itemType === 'S'
-    ? (ukSoldAvg && ukSoldAvg > 0 ? ukSoldAvg : null)
-    : bricqerListPrice(ukSoldAvg, condition, strQty ?? 0);
+    ? benchmarkAvg
+    : bricqerListPrice(benchmarkAvg, condition, strQty ?? 0);
 
   const feePct = inp.feeModel.blFee + inp.feeModel.bricqerFee + inp.feeModel.paypalPct;
   const netPerUnit = ourList == null ? null : ourList * (1 - feePct) - ask - inp.inboundPerUnit;
@@ -180,8 +198,8 @@ function scoreLot(
     invID: lot.invID, itemType: lot.itemType, itemNo: lot.itemNo, colourId: lot.colourId,
     colourName: lot.colourName, itemName: lot.itemName, condition, invQty: lot.invQty,
     ask, lotAskValue: round(ask * lot.invQty), damageNote,
-    ukSoldAvg, strLots, strQty, worldSupplyLots, demandRank: supply?.demandRank ?? null,
-    priceSource, askVsUk, position: classifyPosition(askVsUk),
+    benchmarkAvg, strLots, strQty, worldSupplyLots, demandRank: supply?.demandRank ?? null,
+    priceSource, askVsMarket, position: classifyPosition(askVsMarket),
     ourList: ourList == null ? null : round(ourList, 4),
     netPerUnit: netPerUnit == null ? null : round(netPerUnit, 4),
     marginPct: marginPct == null ? null : round(marginPct, 4),
@@ -197,7 +215,11 @@ function buildSize(scored: ScoredLot[]): SizeSection {
   const totalPieces = sum(scored.map((s) => s.invQty));
   const totalValue = round(sum(scored.map((s) => s.lotAskValue)));
   const byTypeMap = new Map<ItemTypeCode, ScoredLot[]>();
-  for (const s of scored) (byTypeMap.get(s.itemType) ?? byTypeMap.set(s.itemType, []).get(s.itemType)!).push(s);
+  for (const s of scored) {
+    let rows = byTypeMap.get(s.itemType);
+    if (!rows) byTypeMap.set(s.itemType, (rows = []));
+    rows.push(s);
+  }
   const byType: Bucket[] = (['P', 'S', 'M'] as ItemTypeCode[])
     .filter((t) => byTypeMap.has(t))
     .map((t) => {
@@ -215,7 +237,7 @@ function buildSize(scored: ScoredLot[]): SizeSection {
 }
 
 function buildPricing(scored: ScoredLot[]): PricingSection {
-  const covered = scored.filter((s) => s.askVsUk != null && s.position !== 'UNKNOWN');
+  const covered = scored.filter((s) => s.askVsMarket != null && s.position !== 'UNKNOWN');
   const coveredValue = round(sum(covered.map((s) => s.lotAskValue)));
   const order: PricePosition[] = ['UNDER', 'KEEN', 'AT-MARKET', 'PREMIUM', 'OVER'];
   const positions: Bucket[] = order.map((p) => {
@@ -223,9 +245,12 @@ function buildPricing(scored: ScoredLot[]): PricingSection {
     const value = round(sum(rows.map((r) => r.lotAskValue)));
     return { key: p, lots: rows.length, pieces: sum(rows.map((r) => r.invQty)), value, valueShare: coveredValue ? round(value / coveredValue, 4) : 0 };
   });
-  const wm = weightedMedian(covered.map((s) => ({ value: s.askVsUk as number, weight: s.lotAskValue })));
-  const label: PricingSection['label'] = wm == null ? 'unknown' : wm < 0.90 ? 'cheap' : wm <= 1.10 ? 'at-market' : 'premium';
-  return { covered: covered.length, weightedMedianAskVsUk: wm == null ? null : round(wm, 3), label, positions };
+  const wm = weightedMedian(covered.map((s) => ({ value: s.askVsMarket as number, weight: s.lotAskValue })));
+  // Label breaks on the same bands as the per-lot buckets: cheap = below KEEN's
+  // ceiling, premium = at/above AT-MARKET's ceiling.
+  const label: PricingSection['label'] =
+    wm == null ? 'unknown' : wm < PRICE_BANDS.keen ? 'cheap' : wm < PRICE_BANDS.atMarket ? 'at-market' : 'premium';
+  return { covered: covered.length, weightedMedianAskVsMarket: wm == null ? null : round(wm, 3), label, positions };
 }
 
 function buildPartMix(scored: ScoredLot[]): PartMixSection {
@@ -233,9 +258,10 @@ function buildPartMix(scored: ScoredLot[]): PartMixSection {
   for (const s of scored) {
     const k = `${s.itemType}:${s.condition}`;
     const c = cells.get(k) ?? { itemType: s.itemType, condition: s.condition, lots: 0, pieces: 0, value: 0 };
-    c.lots += 1; c.pieces += s.invQty; c.value = round(c.value + s.lotAskValue);
+    c.lots += 1; c.pieces += s.invQty; c.value += s.lotAskValue;
     cells.set(k, c);
   }
+  for (const c of cells.values()) c.value = round(c.value);
   const totalValue = round(sum(scored.map((s) => s.lotAskValue)));
   const newValue = round(sum(scored.filter((s) => s.condition === 'N').map((s) => s.lotAskValue)));
   const usedLots = scored.filter((s) => s.condition === 'U');
@@ -293,15 +319,22 @@ function buildConfidence(scored: ScoredLot[]): ConfidenceSection {
   };
 }
 
+/**
+ * Months-of-cover distribution. `soldQtyOf` returns the market 6-mo sold qty, or
+ * null when the lot has NO benchmark at all — those go to a separate no-data bucket
+ * and are excluded from the motivated-seller ratio, so poor cache coverage can't
+ * masquerade as dead stock. A benchmark with zero sales is genuinely dead.
+ */
 function buildAgeing(scored: ScoredLot[], soldQtyOf: (s: ScoredLot) => number | null): AgeingSection {
   const totalValue = sum(scored.map((s) => s.lotAskValue));
   type Acc = { lots: number; pieces: number; value: number };
   const z = (): Acc => ({ lots: 0, pieces: 0, value: 0 });
-  const buckets = { fresh: z(), normal: z(), overstock: z(), dead: z() };
+  const buckets = { fresh: z(), normal: z(), overstock: z(), dead: z(), noData: z() };
   const add = (b: Acc, s: ScoredLot) => { b.lots += 1; b.pieces += s.invQty; b.value += s.lotAskValue; };
   for (const s of scored) {
     const sold6m = soldQtyOf(s);
-    if (!sold6m || sold6m <= 0) { add(buckets.dead, s); continue; }
+    if (sold6m == null) { add(buckets.noData, s); continue; }
+    if (sold6m <= 0) { add(buckets.dead, s); continue; }
     const mos = s.invQty / (sold6m / 6); // months of cover at market rate
     if (mos < 3) add(buckets.fresh, s);
     else if (mos < 12) add(buckets.normal, s);
@@ -309,11 +342,19 @@ function buildAgeing(scored: ScoredLot[], soldQtyOf: (s: ScoredLot) => number | 
     else add(buckets.dead, s);
   }
   const mk = (key: string, b: Acc): Bucket => ({ key, lots: b.lots, pieces: b.pieces, value: round(b.value), valueShare: totalValue ? round(b.value / totalValue, 4) : 0 });
-  const overstockValueShare = totalValue ? round((buckets.overstock.value + buckets.dead.value) / totalValue, 4) : 0;
+  const benchmarkedValue = totalValue - buckets.noData.value;
+  const benchmarkedValueShare = totalValue ? round(benchmarkedValue / totalValue, 4) : 0;
+  const overstockValueShare = benchmarkedValue > 0 ? round((buckets.overstock.value + buckets.dead.value) / benchmarkedValue, 4) : 0;
   return {
-    buckets: [mk('fresh (<3mo)', buckets.fresh), mk('normal (3–12mo)', buckets.normal), mk('overstock (12–36mo)', buckets.overstock), mk('dead (>36mo / no sales)', buckets.dead)],
+    buckets: [
+      mk('fresh (<3mo)', buckets.fresh), mk('normal (3–12mo)', buckets.normal),
+      mk('overstock (12–36mo)', buckets.overstock), mk('dead (>36mo / no sales)', buckets.dead),
+      mk('no benchmark data', buckets.noData),
+    ],
     overstockValueShare,
-    motivatedSeller: overstockValueShare >= 0.5,
+    benchmarkedValueShare,
+    // Don't call a seller motivated off a sliver of benchmarked value.
+    motivatedSeller: overstockValueShare >= 0.5 && benchmarkedValueShare >= 0.3,
   };
 }
 
@@ -326,24 +367,60 @@ function buildConcentration(scored: ScoredLot[]): ConcentrationSection {
   };
 }
 
-function buildVerdict(pricing: PricingSection, margin: MarginSection, confidence: ConfidenceSection, magnets: MagnetSection): Verdict {
-  const wm = pricing.weightedMedianAskVsUk;
-  const price = wm == null ? 0.5 : clamp01((1.10 - wm) / (1.10 - 0.70));
-  const marginSig = clamp01(margin.projectedNet / 100) * 0.6 + clamp01(margin.lots / 40) * 0.4;
-  const coverage = clamp01(confidence.ukValueShare);
-  const magnet = clamp01(magnets.lots / 15);
-  const grade = round(100 * (0.40 * price + 0.30 * marginSig + 0.15 * coverage + 0.15 * magnet), 1);
-  let label: Verdict['label'] = grade >= 60 ? 'BUY' : grade >= 35 ? 'REVIEW' : 'SKIP';
-  if (margin.projectedNet < 10 && margin.lots < 3) label = 'SKIP';
+/**
+ * Verdict calibration. Cherry-pick-first: arbitrage IS cherry-picking, so the money
+ * on the table (buyable net + breadth) dominates the grade. Whole-store price posture
+ * is only a search-cost modifier — a premium store hiding a strong sub-basket should
+ * read REVIEW, not SKIP.
+ */
+const VERDICT = {
+  weights: { value: 0.45, efficiency: 0.15, magnet: 0.15, price: 0.10, coverage: 0.15 },
+  /** £ projected net that maxes the value signal. */
+  netSaturationGbp: 150,
+  /** Buyable-lot count that maxes the breadth half of the value signal. */
+  lotsSaturation: 40,
+  /** Magnet-lot count that maxes the magnet signal. */
+  magnetSaturation: 15,
+  /** Grade thresholds. */
+  buyAt: 60, reviewAt: 35,
+  /** Hard SKIP floor: nothing meaningful to buy, whatever the other signals say. */
+  minNetGbp: 10, minLots: 3,
+} as const;
+
+interface VerdictCaveats { scanTruncated: boolean }
+
+function buildVerdict(
+  pricing: PricingSection, margin: MarginSection, confidence: ConfidenceSection,
+  magnets: MagnetSection, caveats: VerdictCaveats,
+): Verdict {
+  const wm = pricing.weightedMedianAskVsMarket;
+  const value = 0.7 * clamp01(margin.projectedNet / VERDICT.netSaturationGbp) + 0.3 * clamp01(margin.lots / VERDICT.lotsSaturation);
+  const efficiency = clamp01((margin.roiPct ?? 0) / 100);
+  const magnet = clamp01(magnets.lots / VERDICT.magnetSaturation);
+  // Search-cost modifier on the shared price bands: UNDER-floor → 1, AT-MARKET ceiling → 0.
+  const price = wm == null ? 0.5 : clamp01((PRICE_BANDS.atMarket - wm) / (PRICE_BANDS.atMarket - PRICE_BANDS.under));
+  // Benchmark confidence: UK counts in full, calibrated world-fallback at half.
+  const coverage = clamp01(confidence.ukValueShare + 0.5 * confidence.worldValueShare);
+  const w = VERDICT.weights;
+  const grade = round(100 * (w.value * value + w.efficiency * efficiency + w.magnet * magnet + w.price * price + w.coverage * coverage), 1);
+  let label: Verdict['label'] = grade >= VERDICT.buyAt ? 'BUY' : grade >= VERDICT.reviewAt ? 'REVIEW' : 'SKIP';
+  if (margin.projectedNet < VERDICT.minNetGbp && margin.lots < VERDICT.minLots) label = 'SKIP';
+
   const reasons: string[] = [];
-  reasons.push(wm == null ? 'No price benchmark coverage — cannot judge pricing.' : `Prices at ${Math.round(wm * 100)}% of 6-mo market avg (${pricing.label}).`);
-  reasons.push(`${margin.lots} lots within margin → £${margin.projectedNet.toFixed(2)} projected net${margin.blendedMarginPct != null ? ` (${margin.blendedMarginPct}% margin)` : ''}.`);
+  reasons.push(`${margin.lots} lots within margin → £${margin.projectedNet.toFixed(2)} projected net${margin.blendedMarginPct != null ? ` (${margin.blendedMarginPct}% margin)` : ''}${margin.roiPct != null ? `, ${margin.roiPct}% ROI` : ''}.`);
+  reasons.push(wm == null ? 'No price benchmark coverage — cannot judge pricing.' : `Prices at ${Math.round(wm * 100)}% of 6-mo market avg (${pricing.label}) — search-cost signal only.`);
   if (magnets.lots) reasons.push(`${magnets.lots} magnet lots (scarce + selling) — ${magnets.alsoWithinMargin} also within buying margin.`);
-  reasons.push(`${Math.round(confidence.ukValueShare * 100)}% of store value has UK price data.`);
+  reasons.push(`Benchmarks: ${Math.round(confidence.ukValueShare * 100)}% of value UK data, ${Math.round(confidence.worldValueShare * 100)}% worldwide (+${Math.round((WORLD_TO_UK_UPLIFT - 1) * 100)}% UK calibration).`);
+  if (caveats.scanTruncated) reasons.push('⚠ Inventory scan truncated at the page cap — totals and buyables understate the store.');
+  if (confidence.noneValueShare > 0.3) reasons.push(`⚠ ${Math.round(confidence.noneValueShare * 100)}% of store value has NO benchmark — grade is low-confidence.`);
+
   const headline = margin.lots
     ? `£${margin.projectedNet.toFixed(2)} projected net across ${margin.lots} buyable lots${margin.blendedMarginPct != null ? ` (${margin.blendedMarginPct}% margin)` : ''}`
     : 'No lots clear the buying margin';
-  return { grade, label, headline, reasons, signals: { price: round(price, 3), margin: round(marginSig, 3), coverage: round(coverage, 3), magnet: round(magnet, 3) } };
+  return {
+    grade, label, headline, reasons,
+    signals: { value: round(value, 3), efficiency: round(efficiency, 3), magnet: round(magnet, 3), price: round(price, 3), coverage: round(coverage, 3) },
+  };
 }
 
 // ---- entry point ----
@@ -354,6 +431,8 @@ export interface AssessArgs {
   lots: StoreLot[];
   profile: StoreProfile | null;
   mode: AssessMode;
+  /** True when the inventory scrape hit its page cap — carried into the verdict caveats. */
+  scanTruncated?: boolean;
   inputs?: Partial<AssessmentInputs>;
   scannedAt?: string;
 }
@@ -373,7 +452,8 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
 
   const [pgMap, supplyMap] = await Promise.all([
     readPriceGuide(supabase, refs, { ttlDays: inputs.cacheTtlDays ?? undefined }),
-    readWorldSupply(supabase, refs.map((r) => ({ itemType: r.itemType, itemNo: r.itemNo, blColourId: blColour({ itemType: r.itemType, colourId: r.colourId }) }))),
+    // refs were built with blColour() already applied — colourId is canonical here.
+    readWorldSupply(supabase, refs.map((r) => ({ itemType: r.itemType, itemNo: r.itemNo, blColourId: r.colourId }))),
   ]);
 
   return assembleAssessment({ ...args, inputs, pgMap, supplyMap });
@@ -397,12 +477,13 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     return scoreLot(l, pgMap.get(k), supplyMap.get(k), boilerplate, inputs);
   });
 
-  // Per-lot 6mo market sold qty (for the ageing proxy), keyed by scored order.
+  // Per-lot 6mo market sold qty for the ageing proxy. null = NO benchmark (no-data
+  // bucket); a covered row with 0 sales stays 0 (genuinely dead).
   const soldQtyByInv = new Map<number, number | null>();
   for (const l of lots) {
     const pv = pgMap.get(pgKey(l.itemType, l.itemNo, blColour(l)));
     const cond = l.invNew === 'New' ? 'new' : 'used';
-    soldQtyByInv.set(l.invID, pv ? (pv[cond] as SideView).soldQty || null : null);
+    soldQtyByInv.set(l.invID, pv && pv.coverage !== 'none' ? (pv[cond] as SideView).soldQty : null);
   }
 
   const size = buildSize(scored);
@@ -422,12 +503,15 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
   const confidence = buildConfidence(scored);
   const ageing = buildAgeing(scored, (s) => soldQtyByInv.get(s.invID) ?? null);
   const concentration = buildConcentration(scored);
-  const verdict = buildVerdict(pricing, withinMargin, confidence, magnets);
+  const scanTruncated = args.scanTruncated ?? false;
+  const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
 
   return {
+    engineVersion: ENGINE_VERSION,
     store: { slug: args.slug, storeId: args.storeMeta.storeId, storeName: args.storeMeta.storeName, country: args.storeMeta.country },
     mode: args.mode,
     scannedAt: args.scannedAt ?? new Date().toISOString(),
+    scanTruncated,
     inputs,
     verdict, size, pricing, feedback: args.profile, partMix,
     withinMargin, highStr, magnets, confidence, ageing, concentration,

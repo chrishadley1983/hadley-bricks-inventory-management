@@ -24,13 +24,16 @@ function bucketLines(buckets: Bucket[]): string {
     .join('\n');
 }
 
+/** Benchmark with provenance: † = worldwide fallback (+UK calibration applied). */
+const bench = (s: ScoredLot): string => `${gbp(s.benchmarkAvg)}${s.priceSource === 'world' ? '†' : ' '}`;
+
 function lotTable(rows: ScoredLot[], cols: 'margin' | 'str' | 'magnet' | 'size'): string {
   if (rows.length === 0) return '  (none)';
   return rows
     .map((s) => {
       const base = `  ${lotLabel(s).padEnd(54)} ask ${gbp(s.ask).padStart(8)}`;
-      if (cols === 'margin') return `${base}  6MA ${gbp(s.ukSoldAvg).padStart(8)}  list ${gbp(s.ourList).padStart(8)}  net/u ${gbp(s.netPerUnit).padStart(7)}  ${pct(s.marginPct, 0).padStart(5)}  ×${s.invQty}`;
-      if (cols === 'str') return `${base}  STR ${num(s.strLots, 2).padStart(5)}  6MA ${gbp(s.ukSoldAvg).padStart(8)}  ${s.withinMargin ? 'BUY' : '   '}`;
+      if (cols === 'margin') return `${base}  6MA ${bench(s).padStart(9)}  list ${gbp(s.ourList).padStart(8)}  net/u ${gbp(s.netPerUnit).padStart(7)}  ${pct(s.marginPct, 0).padStart(5)}  ×${s.invQty}`;
+      if (cols === 'str') return `${base}  STR ${num(s.strLots, 2).padStart(5)}  6MA ${bench(s).padStart(9)}  ${s.withinMargin ? 'BUY' : '   '}`;
       if (cols === 'magnet') return `${base}  supply ${String(s.worldSupplyLots ?? '—').padStart(3)}  STR ${num(s.strLots, 2).padStart(5)}  ${s.withinMargin ? 'BUY' : '   '}`;
       return `${base}  ×${s.invQty}  = ${gbp(s.lotAskValue)}`;
     })
@@ -42,7 +45,8 @@ export function renderAssessment(a: StoreAssessment): string {
   const rule = '─'.repeat(72);
   L.push(rule);
   L.push(`STORE ASSESSMENT — ${a.store.storeName ?? a.store.slug}  (${a.store.country ?? '?'}, ID ${a.store.storeId ?? '?'})`);
-  L.push(`mode: ${a.mode.toUpperCase()}   scanned: ${a.scannedAt.slice(0, 16).replace('T', ' ')}`);
+  L.push(`mode: ${a.mode.toUpperCase()}   scanned: ${a.scannedAt.slice(0, 16).replace('T', ' ')}   engine v${a.engineVersion}`);
+  if (a.scanTruncated) L.push(`⚠ SCAN TRUNCATED — inventory hit the page cap; every total below understates the store.`);
   L.push(rule);
 
   // Verdict
@@ -56,7 +60,7 @@ export function renderAssessment(a: StoreAssessment): string {
   L.push(bucketLines(a.size.byType));
 
   // 2. Pricing strategy
-  const wmStr = a.pricing.weightedMedianAskVsUk != null ? `${Math.round(a.pricing.weightedMedianAskVsUk * 100)}% of 6-mo market avg` : '—';
+  const wmStr = a.pricing.weightedMedianAskVsMarket != null ? `${Math.round(a.pricing.weightedMedianAskVsMarket * 100)}% of 6-mo market avg` : '—';
   L.push(`\n[2] PRICING STRATEGY  —  ${a.pricing.label.toUpperCase()} (weighted median ask = ${wmStr})`);
   L.push(`  covered lots: ${a.pricing.covered}`);
   L.push(bucketLines(a.pricing.positions));
@@ -81,7 +85,7 @@ export function renderAssessment(a: StoreAssessment): string {
   if (sc.complete + sc.incomplete + sc.sealed + sc.unknown > 0) L.push(`  sets: ${sc.complete} complete · ${sc.incomplete} incomplete · ${sc.sealed} sealed · ${sc.unknown} unknown`);
 
   // 5. Within margin
-  L.push(`\n[5] LOTS WITHIN PRICING MARGIN (≥${pct(a.inputs.minMargin)} net, ex-postage=${a.inputs.inboundPerUnit === 0})`);
+  L.push(`\n[5] LOTS WITHIN PRICING MARGIN (≥${pct(a.inputs.minMargin)} net, inbound/unit ${gbp(a.inputs.inboundPerUnit)}${a.inputs.inboundPerUnit === 0 ? ' — ex-postage' : ''})`);
   L.push(`  ${a.withinMargin.lots} lots · outlay ${gbp(a.withinMargin.outlay)} · projected net ${gbp(a.withinMargin.projectedNet)} · margin ${num(a.withinMargin.blendedMarginPct, 1)}% · ROI ${num(a.withinMargin.roiPct, 0)}%`);
   L.push(lotTable(a.withinMargin.top, 'margin'));
 
@@ -96,11 +100,12 @@ export function renderAssessment(a: StoreAssessment): string {
   L.push(lotTable(a.magnets.top, 'magnet'));
 
   // Extras
-  L.push(`\n[8] DATA CONFIDENCE`);
+  L.push(`\n[8] DATA CONFIDENCE  († = worldwide benchmark, +11% UK calibration)`);
   L.push(`  value with UK data ${pct(a.confidence.ukValueShare)} · world-fallback ${pct(a.confidence.worldValueShare)} · no benchmark ${pct(a.confidence.noneValueShare)}`);
 
-  L.push(`\n[9] AGEING / MOTIVATED-SELLER SIGNAL  ${a.ageing.motivatedSeller ? '⚠ MOTIVATED (>50% overstock)' : ''}`);
+  L.push(`\n[9] AGEING / MOTIVATED-SELLER SIGNAL  ${a.ageing.motivatedSeller ? '⚠ MOTIVATED (>50% of benchmarked value overstock/dead)' : ''}`);
   L.push(bucketLines(a.ageing.buckets));
+  L.push(`  benchmarked value: ${pct(a.ageing.benchmarkedValueShare)} of store (no-data lots excluded from the signal)`);
 
   L.push(`\n[10] CONCENTRATION`);
   L.push(`  top-10 lots = ${pct(a.concentration.top10ValueShare)} of value · ${a.concentration.distinctItems} distinct items`);
