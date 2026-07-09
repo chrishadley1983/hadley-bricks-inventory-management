@@ -29,20 +29,12 @@ const BricqerInventoryWidget = dynamic(
   { ssr: false, loading: () => <StatCardSkeleton /> }
 );
 
-const FinancialSnapshotWidget = dynamic(
+const InventoryPipelineWidget = dynamic(
   () =>
     import('@/components/features/dashboard').then((mod) => ({
-      default: mod.FinancialSnapshotWidget,
+      default: mod.InventoryPipelineWidget,
     })),
-  { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
-);
-
-const StatusBreakdownWidget = dynamic(
-  () =>
-    import('@/components/features/dashboard').then((mod) => ({
-      default: mod.StatusBreakdownWidget,
-    })),
-  { ssr: false, loading: () => <WidgetCardSkeleton lines={5} /> }
+  { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
 const RecentActivityWidget = dynamic(
@@ -53,8 +45,8 @@ const RecentActivityWidget = dynamic(
   { ssr: false, loading: () => <WidgetCardSkeleton lines={6} /> }
 );
 
-const LowStockWidget = dynamic(
-  () => import('@/components/features/dashboard').then((mod) => ({ default: mod.LowStockWidget })),
+const AlertsWidget = dynamic(
+  () => import('@/components/features/dashboard').then((mod) => ({ default: mod.AlertsWidget })),
   { ssr: false, loading: () => <WidgetCardSkeleton lines={4} /> }
 );
 
@@ -89,7 +81,7 @@ export default function DashboardPage() {
     <>
       <Header title="Dashboard" />
       <div className="p-6">
-        {/* Summary Section */}
+        {/* KPI band */}
         <div className="mb-6">
           <DashboardSummaryWidget />
         </div>
@@ -128,19 +120,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Inventory stat widgets */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <BricqerInventoryWidget />
-          <FinancialSnapshotWidget />
-          <div className="md:col-span-2">
-            <StatusBreakdownWidget />
+        {/* Inventory pipeline + Bricqer store */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <InventoryPipelineWidget />
           </div>
+          <BricqerInventoryWidget />
         </div>
 
         {/* Bottom widgets */}
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <RecentActivityWidget />
-          <LowStockWidget />
+          <AlertsWidget />
         </div>
       </div>
     </>

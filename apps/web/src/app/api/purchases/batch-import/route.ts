@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
             amazon_asin: item.amazon_asin,
             listing_value: item.list_price,
             sku: newSku,
-            status: 'Not Yet Received',
+            status: 'NOT YET RECEIVED',
             notes: `Auto-imported. Seller: ${item.seller_username || 'unknown'}. https://mail.google.com/mail/u/0/#all/${item.email_id}`,
           })
           .select('id')

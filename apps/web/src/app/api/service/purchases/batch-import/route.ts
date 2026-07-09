@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
               amazon_asin: item.amazon_asin,
               listing_value: item.list_price, // listing_value is the column name in DB
               sku: newSku,
-              status: 'Not Yet Received',
+              status: 'NOT YET RECEIVED',
               notes: `Auto-imported. Seller: ${item.seller_username || 'unknown'}. https://mail.google.com/mail/u/0/#all/${item.email_id}`,
             })
             .select('id')
@@ -467,7 +467,7 @@ export async function POST(request: NextRequest) {
                 amazon_asin: bItem.amazon_asin,
                 listing_value: bItem.list_price,
                 sku: newSku2,
-                status: 'Not Yet Received',
+                status: 'NOT YET RECEIVED',
                 notes: `Auto-imported (bundle ${i + 1}/${bundle.items.length}). Seller: ${bundle.seller_username || 'unknown'}. https://mail.google.com/mail/u/0/#all/${bundle.email_id}`,
               })
               .select('id')
