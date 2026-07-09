@@ -35,6 +35,12 @@ try {
 }
 
 # npx tsx runs the TypeScript job directly; all output is teed to the daily log.
+# npx writes a benign "npm warn config ignoring workspace config at .../.npmrc" line to
+# stderr on every call; under ErrorActionPreference=Stop that stderr write is promoted to a
+# terminating error and kills the runner BEFORE tsx runs (empty log after "starting",
+# exit 1, no telemetry). Drop to Continue around the native call — $LASTEXITCODE is the
+# real pass/fail signal.
+$ErrorActionPreference = 'Continue'
 & npx tsx scripts/pg/pg-refresh-cycle.ts 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append

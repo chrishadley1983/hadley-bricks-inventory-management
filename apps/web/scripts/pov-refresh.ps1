@@ -19,6 +19,10 @@ $log = Join-Path $logDir "refresh-$stamp.log"
 Set-Location $webDir
 Write-Output "[pov-refresh.ps1] $(Get-Date -Format o) starting (cwd=$webDir)" | Tee-Object -FilePath $log -Append
 # npx tsx runs the TypeScript job directly; all output is teed to the daily log.
+# npx's "npm warn config ignoring workspace config" stderr line would abort the runner
+# under ErrorActionPreference=Stop before tsx runs — drop to Continue; $LASTEXITCODE is
+# the real pass/fail signal.
+$ErrorActionPreference = 'Continue'
 & npx tsx scripts/pov-refresh.ts 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pov-refresh.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
