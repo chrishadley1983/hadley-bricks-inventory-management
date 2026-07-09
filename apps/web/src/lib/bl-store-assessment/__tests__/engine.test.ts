@@ -3,6 +3,7 @@ import { assembleAssessment, WORLD_TO_UK_UPLIFT } from '../engine';
 import { pgKey, type PriceGuideView, type SideView } from '../../bricklink/price-guide/read';
 import { DEFAULT_INPUTS, type StoreLot, type AssessmentInputs } from '../types';
 import { normalizeAssessment } from '../normalize';
+import { classifyOverlap, type OwnStockIndex } from '../overlap';
 
 const EMPTY: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
@@ -122,8 +123,13 @@ describe('assembleAssessment', () => {
   });
 
   it('stamps the engine version and defaults scanTruncated false', () => {
-    expect(a.engineVersion).toBe(2);
+    expect(a.engineVersion).toBe(3);
     expect(a.scanTruncated).toBe(false);
+  });
+
+  it('reports overlap as unavailable when no own-stock index is supplied', () => {
+    expect(a.overlap.available).toBe(false);
+    expect(a.withinMargin.top[0].overlap).toBeNull();
   });
 });
 
@@ -262,6 +268,7 @@ describe('normalizeAssessment (v1 rows)', () => {
     };
     delete raw.engineVersion;
     delete raw.scanTruncated;
+    delete (raw as Record<string, unknown>).overlap;
     delete raw.ageing.benchmarkedValueShare;
     raw.pricing.weightedMedianAskVsUk = raw.pricing.weightedMedianAskVsMarket;
     delete raw.pricing.weightedMedianAskVsMarket;
@@ -280,5 +287,54 @@ describe('normalizeAssessment (v1 rows)', () => {
     expect(up.size.biggestLots[0].benchmarkAvg).toBe(v2.size.biggestLots[0].benchmarkAvg);
     expect(up.ageing.benchmarkedValueShare).toBe(1);
     expect(up.verdict.signals.value).toBe(0.3);
+    expect(up.overlap.available).toBe(false);
+  });
+});
+
+describe('overlap tagging vs our own inventory', () => {
+  const index: OwnStockIndex = {
+    snapshotAt: '2026-07-09T06:00:00Z',
+    salesWindowDays: 180,
+    stockQty: new Map([
+      ['P:3001:5:U', 100], // deep stock, no sales → DUPLICATE
+      ['P:3003:2:U', 2],   // thin: 2 in stock vs 30 sold in 6mo (5/mo → need 10)
+    ]),
+    soldUnits: new Map([
+      ['P:3003:green:U', 30],
+      ['M:sw0001::U', 4],  // sold but not stocked → RESTOCK_OUT
+    ]),
+  };
+
+  it('classifies each path', () => {
+    const base = { colourName: null as string | null, condition: 'U' as const };
+    expect(classifyOverlap({ itemType: 'P', itemNo: '3001', blColourId: 5, ...base }, index).tag).toBe('DUPLICATE');
+    expect(classifyOverlap({ itemType: 'P', itemNo: '3003', blColourId: 2, colourName: 'Green', condition: 'U' }, index).tag).toBe('RESTOCK_THIN');
+    expect(classifyOverlap({ itemType: 'M', itemNo: 'sw0001', blColourId: 0, ...base }, index).tag).toBe('RESTOCK_OUT');
+    expect(classifyOverlap({ itemType: 'P', itemNo: '9999', blColourId: 1, ...base }, index).tag).toBe('NEW');
+    expect(classifyOverlap({ itemType: 'S', itemNo: '8043-1', blColourId: 0, ...base }, index).tag).toBeNull();
+    expect(classifyOverlap({ itemType: 'P', itemNo: '3001', blColourId: 5, ...base }, null).tag).toBeNull();
+  });
+
+  it('rolls up buyable tags and fresh net share, and reasons on it', () => {
+    // Two buyable used minifigs: one NEW to us, one RESTOCK_OUT.
+    const lots = [
+      lot({ invID: 1, itemType: 'M', itemNo: 'sw0001', invNew: 'Used', unitPriceGBP: 2.00 }),
+      lot({ invID: 2, itemType: 'M', itemNo: 'sw0002', invNew: 'Used', unitPriceGBP: 2.00 }),
+    ];
+    const pgMap = new Map<string, PriceGuideView>([
+      [pgKey('M', 'sw0001', 0), view('M', 'sw0001', 0, side({ soldAvg: 5.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+      [pgKey('M', 'sw0002', 0), view('M', 'sw0002', 0, side({ soldAvg: 5.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+    ]);
+    const a = assembleAssessment({
+      slug: 'TestStore', storeMeta: { storeId: 42, storeName: 'Test Store', country: 'United Kingdom' },
+      lots, profile: null, mode: 'light', inputs, pgMap, supplyMap: new Map(), ownStock: index,
+    });
+    expect(a.withinMargin.lots).toBe(2);
+    const byTag = Object.fromEntries(a.overlap.buyableTags.map((t) => [t.tag, t]));
+    expect(byTag.RESTOCK_OUT.lots).toBe(1); // sw0001 — in our sales, not stocked
+    expect(byTag.NEW.lots).toBe(1);         // sw0002 — unknown to us
+    expect(a.overlap.available).toBe(true);
+    expect(a.overlap.freshNetShare).toBe(1); // all buyable net is fresh demand
+    expect(a.verdict.reasons.some((r) => r.includes('fresh demand'))).toBe(true);
   });
 });

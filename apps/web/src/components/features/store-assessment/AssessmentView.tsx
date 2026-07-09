@@ -65,8 +65,22 @@ function BenchCell({ s }: { s: ScoredLot }) {
   );
 }
 
+const OVERLAP_BADGE: Record<string, { label: string; cls: string; title: string }> = {
+  NEW: { label: 'NEW', cls: 'bg-emerald-600 hover:bg-emerald-600', title: 'Not stocked, never sold by us — a new unique lot' },
+  RESTOCK_OUT: { label: 'R-OUT', cls: 'bg-sky-600 hover:bg-sky-600', title: 'We sold out of this — proven demand restock' },
+  RESTOCK_THIN: { label: 'R-THIN', cls: 'bg-amber-500 hover:bg-amber-500', title: 'Stocked, but thin vs our own sell rate' },
+  DUPLICATE: { label: 'DUP', cls: 'bg-muted text-muted-foreground hover:bg-muted', title: 'Already stocked with adequate depth' },
+};
+
+function OverlapBadge({ s }: { s: ScoredLot }) {
+  if (!s.overlap) return null;
+  const b = OVERLAP_BADGE[s.overlap];
+  return <Badge className={b.cls} title={`${b.title}${s.ourQty != null ? ` (our qty ${s.ourQty})` : ''}`}>{b.label}</Badge>;
+}
+
 function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 'magnet' }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">None.</p>;
+  const showOverlap = kind === 'margin' && rows.some((s) => s.overlap != null);
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -74,7 +88,7 @@ function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 
           <TableRow>
             <TableHead>Item</TableHead>
             <TableHead className="text-right">Ask</TableHead>
-            {kind === 'margin' && <><TableHead className="text-right">6MA</TableHead><TableHead className="text-right">Our list</TableHead><TableHead className="text-right">Net/u</TableHead><TableHead className="text-right">Margin</TableHead><TableHead className="text-right">Qty</TableHead></>}
+            {kind === 'margin' && <><TableHead className="text-right">6MA</TableHead><TableHead className="text-right">Our list</TableHead><TableHead className="text-right">Net/u</TableHead><TableHead className="text-right">Margin</TableHead><TableHead className="text-right">Qty</TableHead>{showOverlap && <TableHead>Ours?</TableHead>}</>}
             {kind === 'str' && <><TableHead className="text-right">STR</TableHead><TableHead className="text-right">6MA</TableHead><TableHead>Buy?</TableHead></>}
             {kind === 'magnet' && <><TableHead className="text-right">Supply</TableHead><TableHead className="text-right">STR</TableHead><TableHead>Buy?</TableHead></>}
           </TableRow>
@@ -93,6 +107,7 @@ function LotTable({ rows, kind }: { rows: ScoredLot[]; kind: 'margin' | 'str' | 
                 <TableCell className="text-right tabular-nums">{gbp(s.netPerUnit)}</TableCell>
                 <TableCell className="text-right tabular-nums">{pct(s.marginPct)}</TableCell>
                 <TableCell className="text-right tabular-nums">{s.invQty}</TableCell>
+                {showOverlap && <TableCell><OverlapBadge s={s} /></TableCell>}
               </>}
               {kind === 'str' && <>
                 <TableCell className="text-right tabular-nums">{numf(s.strLots, 2)}</TableCell>
@@ -222,6 +237,34 @@ export function AssessmentDetail({ a }: { a: StoreAssessment }) {
             <Stat label="ROI" value={a.withinMargin.roiPct != null ? `${a.withinMargin.roiPct}%` : '—'} />
           </div>
           <LotTable rows={a.withinMargin.top} kind="margin" />
+        </CardContent>
+      </Card>
+
+      {/* Overlap vs our store */}
+      <Card>
+        <CardHeader><CardTitle>5b · Overlap vs our store <span className="text-sm font-normal text-muted-foreground">(buyable lots)</span></CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {a.overlap.available ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {a.overlap.buyableTags.map((t) => (
+                  <Stat
+                    key={t.tag}
+                    label={OVERLAP_BADGE[t.tag].label === 'NEW' ? 'New unique' : t.tag === 'RESTOCK_OUT' ? 'Restock (sold out)' : t.tag === 'RESTOCK_THIN' ? 'Restock (thin)' : 'Duplicate'}
+                    value={t.lots.toLocaleString()}
+                    sub={`net ${gbp(t.projectedNet)} · outlay ${gbp(t.outlay)}`}
+                  />
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {a.overlap.freshNetShare != null && <>Fresh demand (new + sold-out restock) = <span className="font-semibold text-foreground">{pct(a.overlap.freshNetShare)}</span> of buyable net. </>}
+                {a.overlap.untaggedBuyableLots > 0 && <>{a.overlap.untaggedBuyableLots} buyable sets sit outside Bricqer. </>}
+                Snapshot {a.overlap.snapshotAt ? a.overlap.snapshotAt.slice(0, 16).replace('T', ' ') : 'age unknown'} · our sales window {a.overlap.salesWindowDays ?? '—'}d.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not computed for this run (older engine version or no user index).</p>
+          )}
         </CardContent>
       </Card>
 

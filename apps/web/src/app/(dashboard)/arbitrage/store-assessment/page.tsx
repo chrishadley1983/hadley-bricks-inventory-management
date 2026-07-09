@@ -23,6 +23,7 @@ interface Row {
   total_value: number | null;
   median_ask_vs_market: number | null;
   buyable_lots: number | null;
+  buyable_fresh_lots: number | null;
   buyable_net_gbp: number | null;
   magnet_lots: number | null;
   feedback_score: number | null;
@@ -30,7 +31,7 @@ interface Row {
 
 const gbp = (n: number | null) => (n == null ? '—' : `£${Number(n).toFixed(0)}`);
 
-const LIST_COLS = 'id,scanned_at,store_slug,store_name,store_country,mode,scan_truncated,grade,verdict,total_lots,total_value,median_ask_vs_market,buyable_lots,buyable_net_gbp,magnet_lots,feedback_score';
+const LIST_COLS = 'id,scanned_at,store_slug,store_name,store_country,mode,scan_truncated,grade,verdict,total_lots,total_value,median_ask_vs_market,buyable_lots,buyable_fresh_lots,buyable_net_gbp,magnet_lots,feedback_score';
 // Supabase caps responses at 1,000 rows — page through run history so latest-per-store
 // dedupe sees every store, not just the most recent slice. Hard cap keeps it bounded.
 const MAX_HISTORY_ROWS = 5000;
@@ -90,6 +91,7 @@ export default async function StoreAssessmentListPage() {
                     <TableHead className="text-right">Value</TableHead>
                     <TableHead className="text-right">Prices vs market</TableHead>
                     <TableHead className="text-right">Buyable</TableHead>
+                    <TableHead className="text-right" title="Buyable lots that are NEW to us or restock something we sold out of">Fresh</TableHead>
                     <TableHead className="text-right">Proj. net</TableHead>
                     <TableHead className="text-right">Magnets</TableHead>
                     <TableHead className="text-right">Scanned</TableHead>
@@ -110,6 +112,7 @@ export default async function StoreAssessmentListPage() {
                       <TableCell className="text-right tabular-nums">{gbp(r.total_value)}</TableCell>
                       <TableCell className="text-right tabular-nums">{r.median_ask_vs_market != null ? `${Math.round(r.median_ask_vs_market * 100)}%` : '—'}</TableCell>
                       <TableCell className="text-right tabular-nums">{r.buyable_lots?.toLocaleString() ?? '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.buyable_fresh_lots?.toLocaleString() ?? '—'}</TableCell>
                       <TableCell className="text-right tabular-nums">{gbp(r.buyable_net_gbp)}</TableCell>
                       <TableCell className="text-right tabular-nums">{r.magnet_lots?.toLocaleString() ?? '—'}</TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground tabular-nums">{r.scanned_at.slice(0, 10)}</TableCell>

@@ -89,7 +89,14 @@ export interface ScoredLot {
   // Highlights
   highStr: boolean;
   magnet: boolean;
+  // Overlap vs OUR store (engine v3+; null = sets / no index available)
+  overlap: OverlapTagValue | null;
+  ourQty: number | null; // our current stocked qty for this (item, colour, condition)
+  ourSoldWindow: number | null; // units WE sold in the sales window
 }
+
+/** Mirror of overlap.ts OverlapTag (kept here so section shapes don't import the loader). */
+export type OverlapTagValue = 'NEW' | 'RESTOCK_OUT' | 'RESTOCK_THIN' | 'DUPLICATE';
 
 // ---- Section shapes -------------------------------------------------------
 
@@ -178,6 +185,27 @@ export interface ConcentrationSection {
   distinctItems: number;
 }
 
+export interface OverlapTagStat {
+  tag: OverlapTagValue;
+  lots: number;
+  outlay: number; // ask × qty summed over buyable lots with this tag
+  projectedNet: number;
+}
+
+/**
+ * How the store's BUYABLE lots overlap our own inventory. "Fresh demand" = NEW +
+ * RESTOCK_OUT — lots that widen the catalogue or refill proven sellers, the buys
+ * that don't cannibalise existing depth.
+ */
+export interface OverlapSection {
+  available: boolean; // false when no user index was supplied (or old rows)
+  snapshotAt: string | null; // our Bricqer snapshot freshness
+  salesWindowDays: number | null;
+  buyableTags: OverlapTagStat[]; // NEW / RESTOCK_OUT / RESTOCK_THIN / DUPLICATE over withinMargin lots
+  untaggedBuyableLots: number; // buyable sets (no Bricqer home) — outside the tag scheme
+  freshNetShare: number | null; // share of buyable projected net from NEW + RESTOCK_OUT
+}
+
 export interface Verdict {
   grade: number; // 0..100 Arbitrage Attractiveness
   label: 'BUY' | 'REVIEW' | 'SKIP';
@@ -214,6 +242,7 @@ export interface StoreAssessment {
   confidence: ConfidenceSection;
   ageing: AgeingSection;
   concentration: ConcentrationSection;
+  overlap: OverlapSection;
 }
 
 export const DEFAULT_INPUTS: AssessmentInputs = {

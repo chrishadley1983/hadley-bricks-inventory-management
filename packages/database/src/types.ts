@@ -13978,6 +13978,7 @@ export type Database = {
           blended_margin_pct: number | null
           buyable_lots: number | null
           buyable_net_gbp: number | null
+          buyable_fresh_lots: number | null
           buyable_outlay_gbp: number | null
           created_at: string
           engine_version: number
@@ -14010,6 +14011,7 @@ export type Database = {
           blended_margin_pct?: number | null
           buyable_lots?: number | null
           buyable_net_gbp?: number | null
+          buyable_fresh_lots?: number | null
           buyable_outlay_gbp?: number | null
           created_at?: string
           engine_version?: number
@@ -14042,6 +14044,7 @@ export type Database = {
           blended_margin_pct?: number | null
           buyable_lots?: number | null
           buyable_net_gbp?: number | null
+          buyable_fresh_lots?: number | null
           buyable_outlay_gbp?: number | null
           created_at?: string
           engine_version?: number

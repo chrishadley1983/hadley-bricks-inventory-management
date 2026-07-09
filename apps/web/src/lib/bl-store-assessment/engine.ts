@@ -15,11 +15,16 @@ import {
   type StoreAssessment, type PricePosition, type PriceSource, type Bucket, type SizeSection,
   type PricingSection, type PartMixCell, type PartMixSection, type MarginSection, type HighStrSection,
   type MagnetSection, type ConfidenceSection, type AgeingSection, type ConcentrationSection,
+  type OverlapSection, type OverlapTagStat, type OverlapTagValue,
   type Verdict, type Condition, type ItemTypeCode, DEFAULT_INPUTS,
 } from './types';
+import { loadOwnStockIndex, classifyOverlap, type OwnStockIndex } from './overlap';
 
-/** Bumped when scoring semantics change; persisted with every run. v2 = audit fixes 2026-07-09. */
-export const ENGINE_VERSION = 2;
+/**
+ * Bumped when scoring semantics change; persisted with every run.
+ * v2 = audit fixes 2026-07-09. v3 = additive lot-overlap vs our own inventory.
+ */
+export const ENGINE_VERSION = 3;
 
 /**
  * Worldwide 6-mo averages run ~11% below UK (2026-07-07 pg_summary coverage study,
@@ -205,6 +210,8 @@ function scoreLot(
     marginPct: marginPct == null ? null : round(marginPct, 4),
     lotProfit: lotProfit == null ? null : round(lotProfit),
     withinMargin, highStr, magnet,
+    // Overlap is a post-pass (assembleAssessment) — scoring never depends on it.
+    overlap: null, ourQty: null, ourSoldWindow: null,
   };
 }
 
@@ -367,6 +374,37 @@ function buildConcentration(scored: ScoredLot[]): ConcentrationSection {
   };
 }
 
+/** Roll up overlap tags over the BUYABLE lots — the actionable set. */
+function buildOverlap(scored: ScoredLot[], index: OwnStockIndex | null | undefined): OverlapSection {
+  const buyable = scored.filter((s) => s.withinMargin);
+  if (!index) {
+    return {
+      available: false, snapshotAt: null, salesWindowDays: null,
+      buyableTags: [], untaggedBuyableLots: buyable.length, freshNetShare: null,
+    };
+  }
+  const order: OverlapTagValue[] = ['NEW', 'RESTOCK_OUT', 'RESTOCK_THIN', 'DUPLICATE'];
+  const buyableTags: OverlapTagStat[] = order.map((tag) => {
+    const rows = buyable.filter((s) => s.overlap === tag);
+    return {
+      tag,
+      lots: rows.length,
+      outlay: round(sum(rows.map((s) => s.ask * s.invQty))),
+      projectedNet: round(sum(rows.map((s) => s.lotProfit ?? 0))),
+    };
+  });
+  const totalNet = sum(buyable.map((s) => s.lotProfit ?? 0));
+  const freshNet = sum(buyable.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').map((s) => s.lotProfit ?? 0));
+  return {
+    available: true,
+    snapshotAt: index.snapshotAt,
+    salesWindowDays: index.salesWindowDays,
+    buyableTags,
+    untaggedBuyableLots: buyable.filter((s) => s.overlap == null).length,
+    freshNetShare: totalNet > 0 ? round(freshNet / totalNet, 4) : null,
+  };
+}
+
 /**
  * Verdict calibration. Cherry-pick-first: arbitrage IS cherry-picking, so the money
  * on the table (buyable net + breadth) dominates the grade. Whole-store price posture
@@ -433,6 +471,8 @@ export interface AssessArgs {
   mode: AssessMode;
   /** True when the inventory scrape hit its page cap — carried into the verdict caveats. */
   scanTruncated?: boolean;
+  /** When set, suggested lots are overlap-tagged against THIS user's Bricqer stock + sales. */
+  userId?: string | null;
   inputs?: Partial<AssessmentInputs>;
   scannedAt?: string;
 }
@@ -450,19 +490,21 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
     refs.push({ itemType: l.itemType, itemNo: l.itemNo, colourId: blColour(l), scheme: 'bl' });
   }
 
-  const [pgMap, supplyMap] = await Promise.all([
+  const [pgMap, supplyMap, ownStock] = await Promise.all([
     readPriceGuide(supabase, refs, { ttlDays: inputs.cacheTtlDays ?? undefined }),
     // refs were built with blColour() already applied — colourId is canonical here.
     readWorldSupply(supabase, refs.map((r) => ({ itemType: r.itemType, itemNo: r.itemNo, blColourId: r.colourId }))),
+    args.userId ? loadOwnStockIndex(supabase, args.userId) : Promise.resolve(null),
   ]);
 
-  return assembleAssessment({ ...args, inputs, pgMap, supplyMap });
+  return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock });
 }
 
 export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
   inputs: AssessmentInputs; // fully resolved (no partials)
   pgMap: Map<string, PriceGuideView>;
   supplyMap: Map<string, WorldSupply>;
+  ownStock?: OwnStockIndex | null; // overlap index; absent → overlap.available = false
 }
 
 /**
@@ -486,6 +528,17 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     soldQtyByInv.set(l.invID, pv && pv.coverage !== 'none' ? (pv[cond] as SideView).soldQty : null);
   }
 
+  // Overlap tagging vs OUR stock — post-pass so scoring stays independent of it.
+  if (args.ownStock) {
+    for (const s of scored) {
+      const r = classifyOverlap(
+        { itemType: s.itemType, itemNo: s.itemNo, blColourId: blColour(s), colourName: s.colourName, condition: s.condition },
+        args.ownStock,
+      );
+      s.overlap = r.tag; s.ourQty = r.ourQty; s.ourSoldWindow = r.ourSoldWindow;
+    }
+  }
+
   const size = buildSize(scored);
   const pricing = buildPricing(scored);
   const partMix = buildPartMix(scored);
@@ -503,8 +556,13 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
   const confidence = buildConfidence(scored);
   const ageing = buildAgeing(scored, (s) => soldQtyByInv.get(s.invID) ?? null);
   const concentration = buildConcentration(scored);
+  const overlap = buildOverlap(scored, args.ownStock);
   const scanTruncated = args.scanTruncated ?? false;
   const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
+  if (overlap.available && overlap.freshNetShare != null) {
+    const fresh = overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');
+    verdict.reasons.push(`${sum(fresh.map((t) => t.lots))} buyable lots are fresh demand (new to us / sold-out restock) — ${Math.round(overlap.freshNetShare * 100)}% of the projected net.`);
+  }
 
   return {
     engineVersion: ENGINE_VERSION,
@@ -514,6 +572,6 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     scanTruncated,
     inputs,
     verdict, size, pricing, feedback: args.profile, partMix,
-    withinMargin, highStr, magnets, confidence, ageing, concentration,
+    withinMargin, highStr, magnets, confidence, ageing, concentration, overlap,
   };
 }

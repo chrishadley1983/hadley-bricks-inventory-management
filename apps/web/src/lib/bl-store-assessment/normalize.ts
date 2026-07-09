@@ -53,5 +53,14 @@ export function normalizeAssessment(rawInput: unknown): StoreAssessment {
   }
 
   a.verdict.signals = upgradeSignals(a.verdict.signals as unknown as Raw);
+
+  // v1/v2 rows predate overlap tagging (engine v3) — synthesize an unavailable section.
+  if (a.overlap === undefined) {
+    a.overlap = {
+      available: false, snapshotAt: null, salesWindowDays: null,
+      buyableTags: [], untaggedBuyableLots: a.withinMargin?.lots ?? 0, freshNetShare: null,
+    };
+  }
+
   return a;
 }

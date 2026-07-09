@@ -3,6 +3,7 @@
  * Produces the `report_md` persisted alongside the structured assessment.
  */
 import type { StoreAssessment, ScoredLot, Bucket } from './types';
+import { THIN_COVER_MONTHS } from './overlap';
 
 const gbp = (n: number | null | undefined): string => (n == null ? '—' : `£${n.toFixed(2)}`);
 const pct = (n: number | null | undefined, dp = 0): string => (n == null ? '—' : `${(n * 100).toFixed(dp)}%`);
@@ -27,12 +28,15 @@ function bucketLines(buckets: Bucket[]): string {
 /** Benchmark with provenance: † = worldwide fallback (+UK calibration applied). */
 const bench = (s: ScoredLot): string => `${gbp(s.benchmarkAvg)}${s.priceSource === 'world' ? '†' : ' '}`;
 
+const OVERLAP_SHORT: Record<string, string> = { NEW: 'NEW', RESTOCK_OUT: 'R-OUT', RESTOCK_THIN: 'R-THIN', DUPLICATE: 'DUP' };
+const overlapCol = (s: ScoredLot): string => (s.overlap ? OVERLAP_SHORT[s.overlap] ?? '' : '').padEnd(6);
+
 function lotTable(rows: ScoredLot[], cols: 'margin' | 'str' | 'magnet' | 'size'): string {
   if (rows.length === 0) return '  (none)';
   return rows
     .map((s) => {
       const base = `  ${lotLabel(s).padEnd(54)} ask ${gbp(s.ask).padStart(8)}`;
-      if (cols === 'margin') return `${base}  6MA ${bench(s).padStart(9)}  list ${gbp(s.ourList).padStart(8)}  net/u ${gbp(s.netPerUnit).padStart(7)}  ${pct(s.marginPct, 0).padStart(5)}  ×${s.invQty}`;
+      if (cols === 'margin') return `${base}  6MA ${bench(s).padStart(9)}  list ${gbp(s.ourList).padStart(8)}  net/u ${gbp(s.netPerUnit).padStart(7)}  ${pct(s.marginPct, 0).padStart(5)}  ×${s.invQty}  ${overlapCol(s)}`;
       if (cols === 'str') return `${base}  STR ${num(s.strLots, 2).padStart(5)}  6MA ${bench(s).padStart(9)}  ${s.withinMargin ? 'BUY' : '   '}`;
       if (cols === 'magnet') return `${base}  supply ${String(s.worldSupplyLots ?? '—').padStart(3)}  STR ${num(s.strLots, 2).padStart(5)}  ${s.withinMargin ? 'BUY' : '   '}`;
       return `${base}  ×${s.invQty}  = ${gbp(s.lotAskValue)}`;
@@ -109,6 +113,23 @@ export function renderAssessment(a: StoreAssessment): string {
 
   L.push(`\n[10] CONCENTRATION`);
   L.push(`  top-10 lots = ${pct(a.concentration.top10ValueShare)} of value · ${a.concentration.distinctItems} distinct items`);
+
+  // 11. Overlap vs our store
+  L.push(`\n[11] OVERLAP vs OUR STORE  (buyable lots only)`);
+  if (a.overlap.available) {
+    const label: Record<string, string> = {
+      NEW: 'NEW (not stocked, never sold)', RESTOCK_OUT: 'RESTOCK-OUT (sold out, proven)',
+      RESTOCK_THIN: `RESTOCK-THIN (<${THIN_COVER_MONTHS}mo of our sell rate)`, DUPLICATE: 'DUPLICATE (already deep)',
+    };
+    for (const t of a.overlap.buyableTags) {
+      L.push(`  ${label[t.tag].padEnd(36)} ${String(t.lots).padStart(4)} lots  outlay ${gbp(t.outlay).padStart(8)}  net ${gbp(t.projectedNet).padStart(8)}`);
+    }
+    if (a.overlap.untaggedBuyableLots) L.push(`  (sets, outside Bricqer)                 ${String(a.overlap.untaggedBuyableLots).padStart(4)} lots`);
+    if (a.overlap.freshNetShare != null) L.push(`  fresh demand (NEW + RESTOCK-OUT) = ${pct(a.overlap.freshNetShare)} of buyable net`);
+    L.push(`  our snapshot: ${a.overlap.snapshotAt ? a.overlap.snapshotAt.slice(0, 16).replace('T', ' ') : 'unknown age'} · our sales window: ${a.overlap.salesWindowDays ?? '—'}d`);
+  } else {
+    L.push('  (no user index — run the CLI with a resolvable user id to tag overlap)');
+  }
 
   L.push(`\n${rule}`);
   return L.join('\n');
