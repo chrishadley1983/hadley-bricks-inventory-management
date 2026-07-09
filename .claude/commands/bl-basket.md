@@ -11,7 +11,40 @@ description: >
   arbitrage in <store>", "basket from <store>", or pastes a store.bricklink.com URL.
 ---
 
-# BrickLink Seller Basket Builder
+# BrickLink Seller Arbitrage — Basket + Assessment
+
+Two lenses on the **same** store scrape:
+
+- **Buy lens (this doc):** build an arbitrage purchase basket — score every lot,
+  build a staged cart, validate totals, persist to `arbitrage_purchases`.
+- **Assess lens (`scripts/store-assessment.ts`):** a whole-store scorecard —
+  size & value, pricing strategy, feedback & order rate, part mix, lots within
+  buying margin, high-STR lots, and magnets (scarce + selling). Persists to
+  `store_assessments`, rendered on `/arbitrage/store-assessment`.
+
+Both share the scrape helper (`scripts/lib/store-scrape.ts`) and the cached
+price-guide / STR / worldwide-supply layers, so a fresh
+`tmp/stores/<slug>/inventory.json` from either is reused by the other.
+
+## Assess lens (store scorecard)
+
+```bash
+# Light: scrape → caches only. Fast; reuses a fresh inventory.json.
+cd apps/web && npx tsx scripts/store-assessment.ts --store-slug=<name>
+
+# Full: scrape → live gap-fill UK price guides for top uncovered lots → richer scorecard.
+cd apps/web && npx tsx scripts/store-assessment.ts --store-slug=<name> --mode=full
+```
+
+Key flags: `--min-margin` (0.20), `--min-str` (0.5), `--magnet-max-supply` (3),
+`--inbound-per-unit` (0 = ex-postage), `--cache-ttl-days` (90),
+`--gapfill-budget` (120, full only), `--json`, `--no-persist`, `--allow-non-uk`.
+Typical flow: run the assess lens across candidate stores → run the **buy lens**
+(`/bl-basket <slug>`) on the winners to build the cart.
+
+---
+
+# BrickLink Seller Basket Builder (buy lens)
 
 End-to-end arbitrage workflow for a single UK BrickLink seller. Produces a
 terminal-based decision report, builds a staged cart on BL, validates totals,

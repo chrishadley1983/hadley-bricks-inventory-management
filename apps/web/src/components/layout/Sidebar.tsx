@@ -112,6 +112,7 @@ const navSections: NavSection[] = [
     defaultOpen: false,
     items: [
       { href: '/arbitrage', label: 'Arbitrage', icon: Scale },
+      { href: '/arbitrage/store-assessment', label: 'Store Assessment', icon: Store },
       { href: '/arbitrage/ebay-auctions', label: 'eBay Auctions', icon: Gavel },
       { href: '/brickradar', label: 'BrickRadar', icon: Radar },
     ],

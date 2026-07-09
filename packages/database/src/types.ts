@@ -13971,6 +13971,107 @@ export type Database = {
           },
         ]
       }
+      store_assessments: {
+        Row: {
+          assessment: Json | null
+          avg_value_per_lot: number | null
+          blended_margin_pct: number | null
+          buyable_lots: number | null
+          buyable_net_gbp: number | null
+          buyable_outlay_gbp: number | null
+          created_at: string
+          feedback_score: number | null
+          grade: number | null
+          high_str_lots: number | null
+          id: string
+          magnet_lots: number | null
+          median_ask_vs_uk: number | null
+          mode: string
+          orders_per_month: number | null
+          positive_pct: number | null
+          price_coverage: number | null
+          report_md: string | null
+          scanned_at: string
+          store_country: string | null
+          store_id: number | null
+          store_name: string | null
+          store_slug: string
+          total_lots: number | null
+          total_pieces: number | null
+          total_value: number | null
+          user_id: string
+          verdict: string | null
+        }
+        Insert: {
+          assessment?: Json | null
+          avg_value_per_lot?: number | null
+          blended_margin_pct?: number | null
+          buyable_lots?: number | null
+          buyable_net_gbp?: number | null
+          buyable_outlay_gbp?: number | null
+          created_at?: string
+          feedback_score?: number | null
+          grade?: number | null
+          high_str_lots?: number | null
+          id?: string
+          magnet_lots?: number | null
+          median_ask_vs_uk?: number | null
+          mode?: string
+          orders_per_month?: number | null
+          positive_pct?: number | null
+          price_coverage?: number | null
+          report_md?: string | null
+          scanned_at?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_name?: string | null
+          store_slug: string
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          user_id: string
+          verdict?: string | null
+        }
+        Update: {
+          assessment?: Json | null
+          avg_value_per_lot?: number | null
+          blended_margin_pct?: number | null
+          buyable_lots?: number | null
+          buyable_net_gbp?: number | null
+          buyable_outlay_gbp?: number | null
+          created_at?: string
+          feedback_score?: number | null
+          grade?: number | null
+          high_str_lots?: number | null
+          id?: string
+          magnet_lots?: number | null
+          median_ask_vs_uk?: number | null
+          mode?: string
+          orders_per_month?: number | null
+          positive_pct?: number | null
+          price_coverage?: number | null
+          report_md?: string | null
+          scanned_at?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_name?: string | null
+          store_slug?: string
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          user_id?: string
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_assessments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_quality_runs: {
         Row: {
           ageing_score: number | null
