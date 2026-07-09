@@ -6,7 +6,16 @@ v2 branch is merged. Ordered roughly by expected value.
 
 ---
 
-## 1. Lot-overlap against our own inventory ("new unique lots" vs restock) — *Chris priority*
+## 1. Lot-overlap against our own inventory ("new unique lots" vs restock) — ✅ SHIPPED (engine v3, 2026-07-09)
+
+Implemented as `bl-store-assessment/overlap.ts` + section 11 of the report:
+NEW / RESTOCK_OUT / RESTOCK_THIN / DUPLICATE per lot (snapshot join BL-colour-normalised;
+RESTOCK detection via our 6-mo BL+BO sales; sales matching is colour-NAME based since
+order_items carry no colour id), rollup over buyable lots with `freshNetShare`,
+`buyable_fresh_lots` column, Ours? badges in the drill-in, verdict reason. Remaining
+idea from this item: feed freshNetShare into the verdict grade itself.
+
+Original scope:
 
 Every suggestion table (within-margin, high-STR, magnets) should say whether buying a
 lot **creates a new unique lot in our store** or adds depth to something we already

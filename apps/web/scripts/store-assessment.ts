@@ -74,18 +74,21 @@ const log = (m: string) => { if (!JSON_OUT) console.log(m); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Resolve the owning user for the persisted row: flag → env → the sole profiles row.
- * Errors out rather than guessing when several profiles exist.
+ * Resolve the owning user: flag → env → the sole owner of Bricqer snapshot rows.
+ * The shared Supabase project has dozens of profiles (tournament app etc.), but
+ * exactly one runs the brick business — the one with a Bricqer inventory. Errors
+ * out rather than guessing if that's ever ambiguous.
  */
 async function resolveUserId(sb: ReturnType<typeof createClient>): Promise<string> {
   const fromArgs = argv['user-id'] ?? process.env.STORE_ASSESSMENT_USER_ID;
   if (fromArgs) return fromArgs;
-  const { data, error } = await sb.from('profiles').select('id').limit(2);
-  if (error) throw new Error(`resolveUserId: profiles read failed: ${error.message}`);
-  if (!data || data.length !== 1) {
-    throw new Error(`resolveUserId: ${data?.length ?? 0} profiles found — pass --user-id=<uuid> or set STORE_ASSESSMENT_USER_ID`);
+  const res = await sb.from('bricqer_inventory_snapshot').select('user_id').limit(1000);
+  if (res.error) throw new Error(`resolveUserId: snapshot read failed: ${res.error.message}`);
+  const owners = [...new Set((res.data ?? []).map((r) => r.user_id as string))];
+  if (owners.length !== 1) {
+    throw new Error(`resolveUserId: ${owners.length} snapshot owners found — pass --user-id=<uuid> or set STORE_ASSESSMENT_USER_ID`);
   }
-  return data[0].id as string;
+  return owners[0];
 }
 
 /** Cached inventory + whether that scrape was truncated (sidecar meta; absent = assume complete). */
@@ -185,14 +188,20 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
   }
 
   log(`[5/5] Scoring ${lots.length} lots...`);
-  const assessment = await computeStoreAssessment(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, scanTruncated: truncated, inputs });
+  // userId also drives overlap tagging (our stock + sales), so resolve it before
+  // scoring — a resolution failure only disables overlap, never blocks the report.
+  const userId = await resolveUserId(supabase).catch((e) => {
+    log(`  ⚠ ${(e as Error).message} — overlap tagging disabled`);
+    return null;
+  });
+  const assessment = await computeStoreAssessment(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, scanTruncated: truncated, userId, inputs });
   const report = renderAssessment(assessment);
 
   const reportFile = path.join(OUT_DIR, `assessment-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(reportFile, report);
 
-  if (!NO_PERSIST) {
-    const userId = await resolveUserId(supabase);
+  if (!NO_PERSIST && userId) {
+    const freshTags = assessment.overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');
     const v = assessment.verdict;
     const { error } = await supabase.from('store_assessments').insert({
       user_id: userId,
@@ -217,6 +226,7 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
       blended_margin_pct: assessment.withinMargin.blendedMarginPct,
       high_str_lots: assessment.highStr.lots,
       magnet_lots: assessment.magnets.lots,
+      buyable_fresh_lots: assessment.overlap.available ? freshTags.reduce((n, t) => n + t.lots, 0) : null,
       feedback_score: profile.feedbackScore,
       positive_pct: profile.positivePct,
       orders_per_month: profile.ordersPerMonth,
@@ -226,6 +236,8 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     });
     if (error) console.error(`[persist] failed: ${error.message}`);
     else log(`[persist] saved to store_assessments`);
+  } else if (!NO_PERSIST) {
+    console.error('[persist] skipped — no resolvable user id (pass --user-id or set STORE_ASSESSMENT_USER_ID)');
   }
 
   if (JSON_OUT) console.log(JSON.stringify(assessment, null, 2));
