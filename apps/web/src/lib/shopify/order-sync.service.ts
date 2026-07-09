@@ -186,13 +186,21 @@ export class ShopifyOrderSyncService {
       ? parseFloat(order.total_shipping_price_set.shop_money.amount)
       : null;
 
+    // Shopify keeps financial_status='paid' after dispatch — fulfillment_status is
+    // the lifecycle signal. Without this, every Shopify sale counts as an actionable
+    // "Paid" order on the orders dashboard forever.
+    const status =
+      order.fulfillment_status === 'fulfilled'
+        ? 'Completed'
+        : (order.financial_status ?? null);
+
     const { error } = await this.supabase.from('platform_orders').upsert(
       {
         user_id: this.userId,
         platform: 'shopify',
         platform_order_id: String(order.id),
         order_date: order.created_at,
-        status: order.financial_status ?? null,
+        status,
         buyer_name: customerName,
         buyer_email: order.email,
         total: order.total_price ? parseFloat(order.total_price) : null,

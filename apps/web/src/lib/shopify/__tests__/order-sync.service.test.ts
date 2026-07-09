@@ -143,6 +143,28 @@ describe('ShopifyOrderSyncService.syncOrders', () => {
     expect(supabase._captured.updates.some((u: any) => u.table === 'shopify_config')).toBe(true);
   });
 
+  it('records fulfilled orders as Completed, unfulfilled as their financial status', async () => {
+    mocks.getOrders.mockResolvedValue([
+      makeOrder({ id: 5001, fulfillment_status: 'fulfilled' }),
+      makeOrder({ id: 5002, fulfillment_status: null }),
+    ]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': { data: [], error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    await svc.syncOrders();
+
+    const orderUpserts = supabase._captured.upserts.filter(
+      (u: any) => u.table === 'platform_orders'
+    );
+    expect(orderUpserts).toHaveLength(2);
+    const byId = Object.fromEntries(orderUpserts.map((u: any) => [u.payload.platform_order_id, u.payload]));
+    expect(byId['5001'].status).toBe('Completed');
+    expect(byId['5002'].status).toBe('paid');
+  });
+
   it('is idempotent — a line for an already-sold item is unmatched, not re-marked', async () => {
     mocks.getOrders.mockResolvedValue([makeOrder()]);
     const supabase = createSupabase({

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePerfPage } from '@/hooks';
 import { format } from 'date-fns';
+import { useDebouncedCallback } from 'use-debounce';
 import {
   RefreshCw,
   ChevronLeft,
@@ -27,8 +28,17 @@ import {
   Square,
   Calculator,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import { ConfirmOrdersDialog } from '@/components/features/orders/ConfirmOrdersDialog';
+import { StatusSummaryCards } from '@/components/features/orders/StatusSummaryCards';
+import { PlatformCard } from '@/components/features/orders/PlatformCard';
+import {
+  PLATFORM_META,
+  STATUS_META,
+  toUiStatus,
+  type UiOrderStatus,
+} from '@/components/features/orders/order-status-meta';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -58,7 +68,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import type { PlatformOrder, OrderStatus } from '@hadley-bricks/database';
 import { HeaderSkeleton } from '@/components/ui/skeletons';
 
@@ -414,44 +424,71 @@ async function bulkUpdateStatus(
   return response.json();
 }
 
-function getStatusColor(status: string | null): string {
-  const statusLower = (status || '').toLowerCase();
-  if (statusLower.includes('completed') || statusLower.includes('received')) {
-    return 'bg-green-100 text-green-800';
-  }
-  if (statusLower.includes('shipped') || statusLower.includes('packed')) {
-    return 'bg-blue-100 text-blue-800';
-  }
-  if (statusLower.includes('paid') || statusLower.includes('ready')) {
-    return 'bg-purple-100 text-purple-800';
-  }
-  if (statusLower.includes('pending') || statusLower.includes('processing')) {
-    return 'bg-yellow-100 text-yellow-800';
-  }
-  if (statusLower.includes('cancel') || statusLower.includes('npb')) {
-    return 'bg-red-100 text-red-800';
-  }
-  return 'bg-gray-100 text-gray-800';
-}
-
 type TimeframeOption = 'all' | '7' | '30' | '90';
+
+/** Statuses the eBay orders API understands — anything else must skip the eBay fetch. */
+const EBAY_COMPATIBLE_STATUSES = new Set(['all', 'Paid', 'Packed', 'Completed', 'Cancelled']);
+
+const MARKETPLACE_STATUS_ORDER: UiOrderStatus[] = [
+  'Pending',
+  'Paid',
+  'Shipped',
+  'Completed',
+  'Cancelled',
+];
+const DONE_LABELS: Partial<Record<UiOrderStatus, string>> = {
+  Completed: 'Done',
+  Cancelled: 'Cancelled',
+};
+
+/** Convert a status-summary API payload into a UI-status distribution map. */
+function toDistribution(
+  summary: Record<OrderStatus, number> | undefined
+): Partial<Record<UiOrderStatus, number>> {
+  if (!summary) return {};
+  return {
+    Pending: summary.Pending || 0,
+    Paid: summary.Paid || 0,
+    Packed: summary.Packed || 0,
+    Shipped: summary.Shipped || 0,
+    Completed: summary.Completed || 0,
+    Cancelled: summary.Cancelled || 0,
+  };
+}
 
 export default function OrdersPage() {
   usePerfPage('OrdersPage');
 
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [platform, setPlatform] = useState('all');
-  const [status, setStatus] = useState('all');
+  const [platform, setPlatformState] = useState('all');
+  const [status, setStatusState] = useState('all');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmDialogPlatform, setConfirmDialogPlatform] = useState<'amazon' | 'ebay'>('amazon');
   const [timeframe, setTimeframe] = useState<TimeframeOption>('all');
 
+  // Filter changes reset pagination so page N of the old filter can't leak through.
+  const setPlatform = (value: string) => {
+    setPlatformState(value);
+    setPage(1);
+  };
+  const setStatus = (value: string) => {
+    setStatusState(value);
+    setPage(1);
+  };
+
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, 300);
+
   // Use different query based on platform selection
   const isEbayPlatform = platform === 'ebay';
   const isAllPlatforms = platform === 'all';
+  const ebayStatusCompatible = EBAY_COMPATIBLE_STATUSES.has(status);
 
   // Regular orders query (when not filtering to eBay only)
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -460,11 +497,12 @@ export default function OrdersPage() {
     enabled: !isEbayPlatform,
   });
 
-  // eBay orders query (when eBay platform selected OR when showing all platforms)
+  // eBay orders query (when eBay platform selected OR when showing all platforms).
+  // Skipped for statuses eBay can't have (Pending/Shipped) — the API rejects them.
   const { data: ebayOrdersData, isLoading: ebayOrdersLoading } = useQuery({
     queryKey: ['ebay', 'orders', 'list', page, status, search],
     queryFn: () => fetchEbayOrders(page, status, search),
-    enabled: isEbayPlatform || isAllPlatforms,
+    enabled: (isEbayPlatform || isAllPlatforms) && ebayStatusCompatible,
   });
 
   const { data: platformStatuses, isLoading: statusLoading } = useQuery({
@@ -526,6 +564,15 @@ export default function OrdersPage() {
     refetchInterval: 30000,
   });
 
+  // Shopify orders live in platform_orders too (inbound sale sync) but have no
+  // entry in the sync-status API — surface them via their status summary so the
+  // platform cards reconcile with the All Orders total.
+  const { data: shopifyStatusSummary } = useQuery({
+    queryKey: ['orders', 'status-summary', 'shopify', timeframe],
+    queryFn: () => fetchStatusSummary(timeframe, 'shopify'),
+    refetchInterval: 30000,
+  });
+
   // Amazon backfill query - poll while running
   const { data: backfillStatus } = useQuery({
     queryKey: ['amazon', 'backfill'],
@@ -582,7 +629,7 @@ export default function OrdersPage() {
 
   // Compute combined status summary (regular orders + eBay orders)
   // Note: eBay orders are stored in a separate table so we need to add them
-  const combinedStatusSummary = {
+  const combinedStatusSummary: Record<UiOrderStatus, number> = {
     Pending: statusSummary?.data?.Pending || 0,
     Paid: (statusSummary?.data?.Paid || 0) + (ebayStatusSummary?.data?.Paid || 0),
     Packed: (statusSummary?.data?.Packed || 0) + (ebayStatusSummary?.data?.Packed || 0),
@@ -596,6 +643,9 @@ export default function OrdersPage() {
   const platformOrdersTotal = statusSummary?.total || 0;
   const ebayOrdersTotal = ebayStatusSummary?.data?.all || 0;
   const totalOrderCount = platformOrdersTotal + ebayOrdersTotal;
+
+  const shopifyOrdersTotal = shopifyStatusSummary?.total || 0;
+  const actionableCount = combinedStatusSummary.Paid + combinedStatusSummary.Packed;
 
   const hasAnyPlatformConfigured =
     bricklinkStatus?.isConfigured ||
@@ -611,8 +661,8 @@ export default function OrdersPage() {
     },
   });
 
-  const amazonSyncMutation = useMutation({
-    mutationFn: () => triggerPlatformSync('amazon'),
+  const platformSyncMutation = useMutation({
+    mutationFn: (platformKey: string) => triggerPlatformSync(platformKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['platforms', 'sync-status'] });
@@ -640,6 +690,7 @@ export default function OrdersPage() {
   let orders: PlatformOrder[];
   let pagination: OrdersResponse['pagination'] | undefined;
   let isLoading: boolean;
+  let isMergedView = false;
 
   if (isEbayPlatform) {
     // eBay only
@@ -647,7 +698,9 @@ export default function OrdersPage() {
     pagination = ebayOrdersData?.pagination;
     isLoading = ebayOrdersLoading;
   } else if (isAllPlatforms) {
-    // Merge regular orders with eBay orders
+    // Merge regular orders with eBay orders — both sources are fetched for the
+    // same page number, so paging advances through both result sets together.
+    isMergedView = true;
     const regularOrders = ordersData?.data || [];
     const ebayOrders = (ebayOrdersData?.data || []).map(transformEbayOrderForDisplay);
 
@@ -658,14 +711,16 @@ export default function OrdersPage() {
       return dateB - dateA;
     });
 
-    // For "all platforms", we show a combined view - pagination is approximate
     const regularTotal = ordersData?.pagination?.total || 0;
     const ebayTotal = ebayOrdersData?.pagination?.total || 0;
     pagination = {
-      page: 1,
+      page,
       pageSize: orders.length,
       total: regularTotal + ebayTotal,
-      totalPages: 1,
+      totalPages: Math.max(
+        ordersData?.pagination?.totalPages || 0,
+        ebayOrdersData?.pagination?.totalPages || 0
+      ),
     };
     isLoading = ordersLoading || ebayOrdersLoading;
   } else {
@@ -716,6 +771,11 @@ export default function OrdersPage() {
     if (lower.includes('packed') || lower.includes('ready')) return 'Packed';
     if (lower.includes('cancel') || lower.includes('npb')) return 'Cancelled';
     return raw || 'Pending';
+  };
+
+  const selectPlatformStatus = (platformKey: string, s: UiOrderStatus) => {
+    setPlatform(platformKey);
+    setStatus(s);
   };
 
   return (
@@ -800,618 +860,372 @@ export default function OrdersPage() {
         )}
 
         {/* Status Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-7">
-          <Card
-            className={`cursor-pointer transition-colors ${status === 'all' ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
-            onClick={() => setStatus('all')}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">All Orders</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalOrderCount.toLocaleString()}</div>
-            </CardContent>
-          </Card>
+        <StatusSummaryCards
+          total={totalOrderCount}
+          counts={combinedStatusSummary}
+          selectedStatus={status}
+          onSelect={setStatus}
+          loading={!statusSummary}
+        />
 
-          {(['Pending', 'Paid', 'Packed', 'Shipped', 'Completed', 'Cancelled'] as const).map(
-            (s) => (
-              <Card
-                key={s}
-                className={`cursor-pointer transition-colors ${status === s ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
-                onClick={() => setStatus(status === s ? 'all' : s)}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {s === 'Cancelled' ? 'Cancelled/Refunded' : s}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {combinedStatusSummary[s]?.toLocaleString() || '0'}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          )}
-        </div>
+        {/* Action strip — dispatch queue at a glance */}
+        {actionableCount > 0 && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+            <Zap className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              <span className="font-semibold tabular-nums">{actionableCount}</span>{' '}
+              {actionableCount === 1 ? 'order needs' : 'orders need'} dispatching
+              {combinedStatusSummary.Paid > 0 && (
+                <> · {combinedStatusSummary.Paid} paid awaiting pick</>
+              )}
+              {combinedStatusSummary.Packed > 0 && (
+                <> · {combinedStatusSummary.Packed} packed awaiting post</>
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Platform Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* BrickLink Card */}
-          <Card className={`${platform === 'bricklink' ? 'ring-2 ring-primary' : ''}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle
-                className="text-sm font-medium cursor-pointer hover:text-primary"
-                onClick={() => setPlatform(platform === 'bricklink' ? 'all' : 'bricklink')}
+        <div
+          className={cn(
+            'grid gap-4 md:grid-cols-2 xl:grid-cols-4',
+            shopifyOrdersTotal > 0 && '2xl:grid-cols-5'
+          )}
+        >
+          <PlatformCard
+            platformKey="bricklink"
+            loading={statusLoading}
+            configured={!!bricklinkStatus?.isConfigured}
+            active={platform === 'bricklink'}
+            total={bricklinkStatusSummary?.total || 0}
+            distribution={toDistribution(bricklinkStatusSummary?.data)}
+            statusOrder={MARKETPLACE_STATUS_ORDER}
+            chipLabels={DONE_LABELS}
+            lastSyncedAt={bricklinkStatus?.lastSyncedAt || null}
+            onSelect={() => {
+              setPlatform(platform === 'bricklink' ? 'all' : 'bricklink');
+              setStatus('all');
+            }}
+            onStatusSelect={(s) => selectPlatformStatus('bricklink', s)}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => platformSyncMutation.mutate('bricklink')}
+              disabled={platformSyncMutation.isPending}
+            >
+              {platformSyncMutation.isPending && platformSyncMutation.variables === 'bricklink' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </PlatformCard>
+
+          <PlatformCard
+            platformKey="brickowl"
+            loading={statusLoading}
+            configured={!!brickowlStatus?.isConfigured}
+            active={platform === 'brickowl'}
+            total={brickowlStatusSummary?.total || 0}
+            distribution={toDistribution(brickowlStatusSummary?.data)}
+            statusOrder={MARKETPLACE_STATUS_ORDER}
+            chipLabels={DONE_LABELS}
+            lastSyncedAt={brickowlStatus?.lastSyncedAt || null}
+            onSelect={() => {
+              setPlatform(platform === 'brickowl' ? 'all' : 'brickowl');
+              setStatus('all');
+            }}
+            onStatusSelect={(s) => selectPlatformStatus('brickowl', s)}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => platformSyncMutation.mutate('brickowl')}
+              disabled={platformSyncMutation.isPending}
+            >
+              {platformSyncMutation.isPending && platformSyncMutation.variables === 'brickowl' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </PlatformCard>
+
+          <PlatformCard
+            platformKey="amazon"
+            loading={statusLoading}
+            configured={!!amazonStatus?.isConfigured}
+            active={platform === 'amazon'}
+            total={amazonStatusSummary?.total || 0}
+            distribution={toDistribution(amazonStatusSummary?.data)}
+            statusOrder={MARKETPLACE_STATUS_ORDER}
+            chipLabels={DONE_LABELS}
+            lastSyncedAt={amazonStatus?.lastSyncedAt || null}
+            titleHref="/orders/amazon"
+            onSelect={() => {
+              setPlatform(platform === 'amazon' ? 'all' : 'amazon');
+              setStatus('all');
+            }}
+            onStatusSelect={(s) => selectPlatformStatus('amazon', s)}
+          >
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  platformSyncMutation.mutate('amazon');
+                }}
+                disabled={platformSyncMutation.isPending}
               >
-                BrickLink
-              </CardTitle>
-              {bricklinkStatus?.isConfigured ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {bricklinkStatus?.isConfigured ? (
-                <>
-                  <div className="space-y-1">
-                    <div
-                      className="text-2xl font-bold cursor-pointer hover:text-primary"
-                      onClick={() => {
-                        setPlatform('bricklink');
-                        setStatus('all');
-                      }}
-                    >
-                      {(bricklinkStatusSummary?.total || 0).toLocaleString()} orders
-                    </div>
-                    <div className="flex gap-2 text-xs flex-wrap">
-                      <span
-                        className="text-yellow-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('bricklink');
-                          setStatus('Pending');
-                        }}
-                      >
-                        {bricklinkStatusSummary?.data?.Pending || 0} Pending
-                      </span>
-                      <span
-                        className="text-purple-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('bricklink');
-                          setStatus('Paid');
-                        }}
-                      >
-                        {bricklinkStatusSummary?.data?.Paid || 0} Paid
-                      </span>
-                      <span
-                        className="text-blue-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('bricklink');
-                          setStatus('Shipped');
-                        }}
-                      >
-                        {bricklinkStatusSummary?.data?.Shipped || 0} Shipped
-                      </span>
-                      <span
-                        className="text-green-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('bricklink');
-                          setStatus('Completed');
-                        }}
-                      >
-                        {bricklinkStatusSummary?.data?.Completed || 0} Done
-                      </span>
-                      <span
-                        className="text-red-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('bricklink');
-                          setStatus('Cancelled');
-                        }}
-                      >
-                        {bricklinkStatusSummary?.data?.Cancelled || 0} Cancelled
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {bricklinkStatus.lastSyncedAt
-                      ? `Last sync: ${format(new Date(bricklinkStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                      : 'Never synced'}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
-                  <Link href="/settings/integrations">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Configure
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* BrickOwl Card */}
-          <Card className={`${platform === 'brickowl' ? 'ring-2 ring-primary' : ''}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle
-                className="text-sm font-medium cursor-pointer hover:text-primary"
-                onClick={() => setPlatform(platform === 'brickowl' ? 'all' : 'brickowl')}
+                {platformSyncMutation.isPending && platformSyncMutation.variables === 'amazon' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <RefreshCw className="mr-1 h-4 w-4" />
+                    Sync
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open('/api/picking-list/amazon?format=pdf', '_blank');
+                }}
               >
-                BrickOwl
-              </CardTitle>
-              {brickowlStatus?.isConfigured ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {brickowlStatus?.isConfigured ? (
-                <>
-                  <div className="space-y-1">
-                    <div
-                      className="text-2xl font-bold cursor-pointer hover:text-primary"
-                      onClick={() => {
-                        setPlatform('brickowl');
-                        setStatus('all');
-                      }}
-                    >
-                      {(brickowlStatusSummary?.total || 0).toLocaleString()} orders
-                    </div>
-                    <div className="flex gap-2 text-xs flex-wrap">
-                      <span
-                        className="text-yellow-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('brickowl');
-                          setStatus('Pending');
-                        }}
-                      >
-                        {brickowlStatusSummary?.data?.Pending || 0} Pending
-                      </span>
-                      <span
-                        className="text-purple-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('brickowl');
-                          setStatus('Paid');
-                        }}
-                      >
-                        {brickowlStatusSummary?.data?.Paid || 0} Paid
-                      </span>
-                      <span
-                        className="text-blue-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('brickowl');
-                          setStatus('Shipped');
-                        }}
-                      >
-                        {brickowlStatusSummary?.data?.Shipped || 0} Shipped
-                      </span>
-                      <span
-                        className="text-green-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('brickowl');
-                          setStatus('Completed');
-                        }}
-                      >
-                        {brickowlStatusSummary?.data?.Completed || 0} Done
-                      </span>
-                      <span
-                        className="text-red-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('brickowl');
-                          setStatus('Cancelled');
-                        }}
-                      >
-                        {brickowlStatusSummary?.data?.Cancelled || 0} Cancelled
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {brickowlStatus.lastSyncedAt
-                      ? `Last sync: ${format(new Date(brickowlStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                      : 'Never synced'}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
-                  <Link href="/settings/integrations">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Configure
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                <ClipboardList className="mr-1 h-4 w-4" />
+                Pick List
+              </Button>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDialogPlatform('amazon');
+                setConfirmDialogOpen(true);
+              }}
+            >
+              <ConfirmIcon className="mr-2 h-4 w-4" />
+              Confirm Orders Processed
+            </Button>
 
-          {/* Amazon Card */}
-          <Card className={`${platform === 'amazon' ? 'ring-2 ring-primary' : ''}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Link href="/orders/amazon">
-                <CardTitle className="text-sm font-medium cursor-pointer hover:text-primary">
-                  Amazon
-                </CardTitle>
-              </Link>
-              {amazonStatus?.isConfigured ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {amazonStatus?.isConfigured ? (
-                <>
-                  <div className="space-y-1">
-                    <div
-                      className="text-2xl font-bold cursor-pointer hover:text-primary"
-                      onClick={() => {
-                        setPlatform('amazon');
-                        setStatus('all');
-                      }}
-                    >
-                      {(amazonStatusSummary?.total || 0).toLocaleString()} orders
-                    </div>
-                    <div className="flex gap-2 text-xs flex-wrap">
-                      <span
-                        className="text-yellow-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('amazon');
-                          setStatus('Pending');
-                        }}
-                      >
-                        {amazonStatusSummary?.data?.Pending || 0} Pending
-                      </span>
-                      <span
-                        className="text-purple-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('amazon');
-                          setStatus('Paid');
-                        }}
-                      >
-                        {amazonStatusSummary?.data?.Paid || 0} Paid
-                      </span>
-                      <span
-                        className="text-blue-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('amazon');
-                          setStatus('Shipped');
-                        }}
-                      >
-                        {amazonStatusSummary?.data?.Shipped || 0} Shipped
-                      </span>
-                      <span
-                        className="text-green-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('amazon');
-                          setStatus('Completed');
-                        }}
-                      >
-                        {amazonStatusSummary?.data?.Completed || 0} Done
-                      </span>
-                      <span
-                        className="text-red-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('amazon');
-                          setStatus('Cancelled');
-                        }}
-                      >
-                        {amazonStatusSummary?.data?.Cancelled || 0} Cancelled
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {amazonStatus.lastSyncedAt
-                      ? `Last sync: ${format(new Date(amazonStatus.lastSyncedAt), 'MMM d, h:mm a')}`
-                      : 'Never synced'}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        amazonSyncMutation.mutate();
-                      }}
-                      disabled={amazonSyncMutation.isPending}
-                    >
-                      {amazonSyncMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-1 h-4 w-4" />
-                          Sync
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open('/api/picking-list/amazon?format=pdf', '_blank');
-                      }}
-                    >
-                      <ClipboardList className="mr-1 h-4 w-4" />
-                      Pick List
-                    </Button>
-                  </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDialogPlatform('amazon');
-                      setConfirmDialogOpen(true);
-                    }}
-                  >
-                    <ConfirmIcon className="mr-2 h-4 w-4" />
-                    Confirm Orders Processed
-                  </Button>
-
-                  {/* Fee Reconciliation Section */}
-                  {itemsNeedingFeeReconciliation > 0 && (
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                        <span>{itemsNeedingFeeReconciliation} items missing fee data</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          feeReconciliationMutation.mutate();
-                        }}
-                        disabled={feeReconciliationMutation.isPending}
-                      >
-                        {feeReconciliationMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Calculator className="mr-2 h-4 w-4" />
-                        )}
-                        {feeReconciliationMutation.isPending ? 'Reconciling...' : 'Reconcile Fees'}
-                      </Button>
-                      {feeReconciliationMutation.isSuccess && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Updated {feeReconciliationMutation.data.data.itemsUpdated} items
-                        </p>
-                      )}
-                    </div>
+            {/* Fee Reconciliation Section */}
+            {itemsNeedingFeeReconciliation > 0 && (
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                  <span>{itemsNeedingFeeReconciliation} items missing fee data</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    feeReconciliationMutation.mutate();
+                  }}
+                  disabled={feeReconciliationMutation.isPending}
+                >
+                  {feeReconciliationMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Calculator className="mr-2 h-4 w-4" />
                   )}
-
-                  {/* Backfill Section */}
-                  {ordersNeedingBackfill > 0 && !isBackfillRunning && (
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                        <span>{ordersNeedingBackfill} orders missing item details</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          backfillMutation.mutate(50);
-                        }}
-                        disabled={backfillMutation.isPending}
-                      >
-                        {backfillMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="mr-2 h-4 w-4" />
-                        )}
-                        Fetch Missing Items
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Backfill Progress */}
-                  {isBackfillRunning && backfillProgress && (
-                    <div className="pt-2 border-t space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Fetching items: {backfillProgress.processed}/{backfillProgress.total}
-                        </span>
-                        {backfillProgress.estimatedSecondsRemaining !== null && (
-                          <span className="text-muted-foreground">
-                            ~{Math.ceil(backfillProgress.estimatedSecondsRemaining / 60)}m remaining
-                          </span>
-                        )}
-                      </div>
-                      <Progress
-                        value={(backfillProgress.processed / backfillProgress.total) * 100}
-                        className="h-2"
-                      />
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-green-600">{backfillProgress.success} success</span>
-                        {backfillProgress.failed > 0 && (
-                          <span className="text-red-600">{backfillProgress.failed} failed</span>
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          stopBackfillMutation.mutate();
-                        }}
-                        disabled={stopBackfillMutation.isPending}
-                      >
-                        <Square className="mr-2 h-4 w-4" />
-                        Stop Backfill
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Backfill Complete Message */}
-                  {!isBackfillRunning &&
-                    backfillProgress &&
-                    backfillProgress.processed > 0 &&
-                    ordersNeedingBackfill === 0 && (
-                      <div className="pt-2 border-t">
-                        <div className="flex items-center gap-2 text-xs text-green-600">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>All order items fetched</span>
-                        </div>
-                      </div>
-                    )}
-                </>
-              ) : (
-                <>
-                  <div className="text-lg font-medium text-muted-foreground">Not configured</div>
-                  <Link href="/settings/integrations">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Configure
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* eBay Card */}
-          <Card className={`${platform === 'ebay' ? 'ring-2 ring-primary' : ''}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Link href="/orders/ebay">
-                <CardTitle className="text-sm font-medium cursor-pointer hover:text-primary">
-                  eBay
-                </CardTitle>
-              </Link>
-              {ebayConnected ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              )}
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {ebayConnected ? (
-                <>
-                  <div className="space-y-1">
-                    <div
-                      className="text-2xl font-bold cursor-pointer hover:text-primary"
-                      onClick={() => {
-                        setPlatform('ebay');
-                        setStatus('all');
-                      }}
-                    >
-                      {(ebayStatusSummary?.data?.all || 0).toLocaleString()} orders
-                    </div>
-                    <div className="flex gap-2 text-xs flex-wrap">
-                      <span
-                        className="text-purple-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('ebay');
-                          setStatus('Paid');
-                        }}
-                      >
-                        {ebayStatusSummary?.data?.Paid || 0} Paid
-                      </span>
-                      <span
-                        className="text-blue-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('ebay');
-                          setStatus('Packed');
-                        }}
-                      >
-                        {ebayStatusSummary?.data?.Packed || 0} Packed
-                      </span>
-                      <span
-                        className="text-green-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('ebay');
-                          setStatus('Completed');
-                        }}
-                      >
-                        {ebayStatusSummary?.data?.Completed || 0} Done
-                      </span>
-                      <span
-                        className="text-red-600 cursor-pointer hover:underline"
-                        onClick={() => {
-                          setPlatform('ebay');
-                          setStatus('Cancelled');
-                        }}
-                      >
-                        {ebayStatusSummary?.data?.Refunded || 0} Refunded
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {ebayLastSync
-                      ? `Last sync: ${format(new Date(ebayLastSync), 'MMM d, h:mm a')}`
-                      : 'Never synced'}
+                  {feeReconciliationMutation.isPending ? 'Reconciling...' : 'Reconcile Fees'}
+                </Button>
+                {feeReconciliationMutation.isSuccess && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Updated {feeReconciliationMutation.data.data.itemsUpdated} items
                   </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ebaySyncMutation.mutate();
-                      }}
-                      disabled={ebaySyncMutation.isPending}
-                    >
-                      {ebaySyncMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-1 h-4 w-4" />
-                          Sync
-                        </>
-                      )}
-                    </Button>
-                    {ebayUnfulfilledCount > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open('/api/picking-list/ebay?format=pdf', '_blank');
-                        }}
-                      >
-                        <ClipboardList className="mr-1 h-4 w-4" />
-                        Pick List
-                      </Button>
-                    )}
+                )}
+              </div>
+            )}
+
+            {/* Backfill Section */}
+            {ordersNeedingBackfill > 0 && !isBackfillRunning && (
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                  <span>{ordersNeedingBackfill} orders missing item details</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    backfillMutation.mutate(50);
+                  }}
+                  disabled={backfillMutation.isPending}
+                >
+                  {backfillMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Fetch Missing Items
+                </Button>
+              </div>
+            )}
+
+            {/* Backfill Progress */}
+            {isBackfillRunning && backfillProgress && (
+              <div className="pt-2 border-t space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Fetching items: {backfillProgress.processed}/{backfillProgress.total}
+                  </span>
+                  {backfillProgress.estimatedSecondsRemaining !== null && (
+                    <span className="text-muted-foreground">
+                      ~{Math.ceil(backfillProgress.estimatedSecondsRemaining / 60)}m remaining
+                    </span>
+                  )}
+                </div>
+                <Progress
+                  value={(backfillProgress.processed / backfillProgress.total) * 100}
+                  className="h-2"
+                />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-green-600">{backfillProgress.success} success</span>
+                  {backfillProgress.failed > 0 && (
+                    <span className="text-red-600">{backfillProgress.failed} failed</span>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopBackfillMutation.mutate();
+                  }}
+                  disabled={stopBackfillMutation.isPending}
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop Backfill
+                </Button>
+              </div>
+            )}
+
+            {/* Backfill Complete Message */}
+            {!isBackfillRunning &&
+              backfillProgress &&
+              backfillProgress.processed > 0 &&
+              ordersNeedingBackfill === 0 && (
+                <div className="pt-2 border-t">
+                  <div className="flex items-center gap-2 text-xs text-green-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>All order items fetched</span>
                   </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDialogPlatform('ebay');
-                      setConfirmDialogOpen(true);
-                    }}
-                  >
-                    <ConfirmIcon className="mr-2 h-4 w-4" />
-                    Confirm Orders Processed
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="text-lg font-medium text-muted-foreground">Not connected</div>
-                  <Link href="/settings/integrations">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Connect
-                    </Button>
-                  </Link>
-                </>
+                </div>
               )}
-            </CardContent>
-          </Card>
+          </PlatformCard>
+
+          <PlatformCard
+            platformKey="ebay"
+            loading={!ebayConnectionStatus}
+            configured={ebayConnected}
+            active={platform === 'ebay'}
+            total={ebayStatusSummary?.data?.all || 0}
+            distribution={{
+              Paid: ebayStatusSummary?.data?.Paid || 0,
+              Packed: ebayStatusSummary?.data?.Packed || 0,
+              Completed: ebayStatusSummary?.data?.Completed || 0,
+              Cancelled: ebayStatusSummary?.data?.Refunded || 0,
+            }}
+            statusOrder={['Paid', 'Packed', 'Completed', 'Cancelled']}
+            chipLabels={{ Completed: 'Done', Cancelled: 'Refunded' }}
+            lastSyncedAt={ebayLastSync || null}
+            titleHref="/orders/ebay"
+            configureLabel="Connect"
+            onSelect={() => {
+              setPlatform(platform === 'ebay' ? 'all' : 'ebay');
+              setStatus('all');
+            }}
+            onStatusSelect={(s) => selectPlatformStatus('ebay', s)}
+          >
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ebaySyncMutation.mutate();
+                }}
+                disabled={ebaySyncMutation.isPending}
+              >
+                {ebaySyncMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <RefreshCw className="mr-1 h-4 w-4" />
+                    Sync
+                  </>
+                )}
+              </Button>
+              {ebayUnfulfilledCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open('/api/picking-list/ebay?format=pdf', '_blank');
+                  }}
+                >
+                  <ClipboardList className="mr-1 h-4 w-4" />
+                  Pick List
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDialogPlatform('ebay');
+                setConfirmDialogOpen(true);
+              }}
+            >
+              <ConfirmIcon className="mr-2 h-4 w-4" />
+              Confirm Orders Processed
+            </Button>
+          </PlatformCard>
+
+          {/* Shopify — inbound sales only, no manual sync */}
+          {shopifyOrdersTotal > 0 && (
+            <PlatformCard
+              platformKey="shopify"
+              configured
+              active={platform === 'shopify'}
+              total={shopifyOrdersTotal}
+              distribution={toDistribution(shopifyStatusSummary?.data)}
+              statusOrder={['Pending', 'Paid', 'Completed', 'Cancelled']}
+              chipLabels={DONE_LABELS}
+              lastSyncedAt={null}
+              syncNote="Inbound sales — ingested automatically by the full-sync job"
+              onSelect={() => {
+                setPlatform(platform === 'shopify' ? 'all' : 'shopify');
+                setStatus('all');
+              }}
+              onStatusSelect={(s) => selectPlatformStatus('shopify', s)}
+            />
+          )}
         </div>
 
         {/* Confirm Orders Dialog */}
@@ -1480,9 +1294,12 @@ export default function OrdersPage() {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search orders..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search order ID or buyer..."
+                  value={searchInput}
+                  onChange={(e) => {
+                    setSearchInput(e.target.value);
+                    debouncedSearch(e.target.value);
+                  }}
                   className="pl-9"
                 />
               </div>
@@ -1497,6 +1314,7 @@ export default function OrdersPage() {
                   <SelectItem value="brickowl">BrickOwl</SelectItem>
                   <SelectItem value="amazon">Amazon</SelectItem>
                   <SelectItem value="ebay">eBay</SelectItem>
+                  <SelectItem value="shopify">Shopify</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -1554,173 +1372,182 @@ export default function OrdersPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    orders.map((order) => (
-                      <TableRow
-                        key={order.id}
-                        className={selectedOrders.has(order.id) ? 'bg-muted/50' : ''}
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedOrders.has(order.id)}
-                            onCheckedChange={() => toggleOrderSelection(order.id)}
-                            aria-label={`Select order ${order.platform_order_id}`}
+                    orders.map((order) => {
+                      const effectiveStatus = getEffectiveStatus(order);
+                      const uiStatus = toUiStatus(effectiveStatus);
+                      const statusMeta = STATUS_META[uiStatus];
+                      const platformMeta = PLATFORM_META[order.platform];
+                      const platformBadge = (
+                        <Badge
+                          variant="outline"
+                          className="capitalize cursor-pointer hover:bg-muted gap-1.5 font-medium"
+                        >
+                          <span
+                            className="inline-block h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: platformMeta?.color ?? '#64748B' }}
                           />
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {order.platform_order_id}
-                        </TableCell>
-                        <TableCell>
-                          {order.platform === 'ebay' ? (
-                            <Link href="/orders/ebay">
-                              <Badge
-                                variant="outline"
-                                className="capitalize cursor-pointer hover:bg-muted"
-                              >
-                                {order.platform}
-                              </Badge>
-                            </Link>
-                          ) : order.platform === 'amazon' ? (
-                            <Link href="/orders/amazon">
-                              <Badge
-                                variant="outline"
-                                className="capitalize cursor-pointer hover:bg-muted"
-                              >
-                                {order.platform}
-                              </Badge>
-                            </Link>
-                          ) : (
+                          {order.platform}
+                        </Badge>
+                      );
+                      return (
+                        <TableRow
+                          key={order.id}
+                          className={selectedOrders.has(order.id) ? 'bg-muted/50' : ''}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedOrders.has(order.id)}
+                              onCheckedChange={() => toggleOrderSelection(order.id)}
+                              aria-label={`Select order ${order.platform_order_id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {order.platform_order_id}
+                          </TableCell>
+                          <TableCell>
+                            {order.platform === 'ebay' ? (
+                              <Link href="/orders/ebay">{platformBadge}</Link>
+                            ) : order.platform === 'amazon' ? (
+                              <Link href="/orders/amazon">{platformBadge}</Link>
+                            ) : (
+                              <span onClick={() => setPlatform(order.platform)}>
+                                {platformBadge}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {order.order_date
+                              ? format(new Date(order.order_date), 'MMM d, yyyy')
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{order.buyer_name || '-'}</TableCell>
+                          <TableCell className="max-w-[300px]">
+                            {(() => {
+                              const orderWithItems = order as PlatformOrder & {
+                                order_items?: Array<{
+                                  id: string;
+                                  item_name?: string | null;
+                                  item_number?: string | null;
+                                  inventory_item_id?: string | null;
+                                  legacy_item_id?: string;
+                                }>;
+                              };
+                              const items = orderWithItems.order_items || [];
+                              const itemNames = items
+                                .map((item) => item.item_name)
+                                .filter(Boolean)
+                                .join(', ');
+                              const linkedItem = items.find((item) => item.inventory_item_id);
+                              const firstItem = items[0];
+                              // For eBay orders, get legacy_item_id for external link
+                              const ebayItemId =
+                                order.platform === 'ebay' && firstItem?.legacy_item_id;
+                              // For Amazon orders, item_number contains the ASIN
+                              const amazonAsin =
+                                order.platform === 'amazon' && firstItem?.item_number;
+
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="truncate text-sm"
+                                    title={itemNames || order.notes || '-'}
+                                  >
+                                    {itemNames || order.notes || '-'}
+                                  </span>
+                                  {ebayItemId && (
+                                    <a
+                                      href={`https://www.ebay.co.uk/itm/${ebayItemId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="View on eBay"
+                                      className="flex-shrink-0"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                    </a>
+                                  )}
+                                  {amazonAsin && (
+                                    <a
+                                      href={`https://www.amazon.co.uk/dp/${amazonAsin}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="View on Amazon"
+                                      className="flex-shrink-0"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                    </a>
+                                  )}
+                                  {linkedItem?.inventory_item_id && (
+                                    <a
+                                      href={`/inventory/${linkedItem.inventory_item_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="View linked inventory item"
+                                      className="flex-shrink-0"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5 text-green-600 hover:text-green-700" />
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell>
                             <Badge
                               variant="outline"
-                              className="capitalize cursor-pointer hover:bg-muted"
-                              onClick={() => setPlatform(order.platform)}
+                              className={cn('gap-1.5 font-medium border', statusMeta.badge)}
                             >
-                              {order.platform}
+                              <span
+                                className={cn(
+                                  'inline-block h-1.5 w-1.5 rounded-full',
+                                  statusMeta.bar
+                                )}
+                              />
+                              {effectiveStatus}
                             </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {order.order_date
-                            ? format(new Date(order.order_date), 'MMM d, yyyy')
-                            : '-'}
-                        </TableCell>
-                        <TableCell>{order.buyer_name || '-'}</TableCell>
-                        <TableCell className="max-w-[300px]">
-                          {(() => {
-                            const orderWithItems = order as PlatformOrder & {
-                              order_items?: Array<{
-                                id: string;
-                                item_name?: string | null;
-                                item_number?: string | null;
-                                inventory_item_id?: string | null;
-                                legacy_item_id?: string;
-                              }>;
-                            };
-                            const items = orderWithItems.order_items || [];
-                            const itemNames = items
-                              .map((item) => item.item_name)
-                              .filter(Boolean)
-                              .join(', ');
-                            const linkedItem = items.find((item) => item.inventory_item_id);
-                            const firstItem = items[0];
-                            // For eBay orders, get legacy_item_id for external link
-                            const ebayItemId =
-                              order.platform === 'ebay' && firstItem?.legacy_item_id;
-                            // For Amazon orders, item_number contains the ASIN
-                            const amazonAsin =
-                              order.platform === 'amazon' && firstItem?.item_number;
-
-                            return (
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="truncate text-sm"
-                                  title={itemNames || order.notes || '-'}
-                                >
-                                  {itemNames || order.notes || '-'}
-                                </span>
-                                {ebayItemId && (
-                                  <a
-                                    href={`https://www.ebay.co.uk/itm/${ebayItemId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="View on eBay"
-                                    className="flex-shrink-0"
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">
+                            {formatCurrency(order.total, order.currency)}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={
+                                      order.platform === 'ebay'
+                                        ? `/orders/ebay/${order.id}`
+                                        : `/orders/${order.id}`
+                                    }
                                   >
-                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                  </a>
-                                )}
-                                {amazonAsin && (
-                                  <a
-                                    href={`https://www.amazon.co.uk/dp/${amazonAsin}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="View on Amazon"
-                                    className="flex-shrink-0"
+                                    View Details
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={
+                                      order.platform === 'ebay'
+                                        ? `/orders/ebay/${order.id}`
+                                        : `/orders/${order.id}`
+                                    }
                                   >
-                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                  </a>
-                                )}
-                                {linkedItem?.inventory_item_id && (
-                                  <a
-                                    href={`/inventory/${linkedItem.inventory_item_id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="View linked inventory item"
-                                    className="flex-shrink-0"
-                                  >
-                                    <ExternalLink className="h-3.5 w-3.5 text-green-600 hover:text-green-700" />
-                                  </a>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(getEffectiveStatus(order))}>
-                            {getEffectiveStatus(order)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(order.total, order.currency)}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={
-                                    order.platform === 'ebay'
-                                      ? `/orders/ebay/${order.id}`
-                                      : `/orders/${order.id}`
-                                  }
-                                >
-                                  View Details
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={
-                                    order.platform === 'ebay'
-                                      ? `/orders/ebay/${order.id}`
-                                      : `/orders/${order.id}`
-                                  }
-                                >
-                                  Update Status
-                                </Link>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                                    Update Status
+                                  </Link>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -1730,9 +1557,18 @@ export default function OrdersPage() {
             {pagination && pagination.totalPages > 1 && (
               <div className="flex items-center justify-between pt-4">
                 <p className="text-sm text-muted-foreground">
-                  Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
-                  {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
-                  {pagination.total} orders
+                  {isMergedView ? (
+                    <>
+                      Page {pagination.page} of {pagination.totalPages} ·{' '}
+                      {pagination.total.toLocaleString()} orders across all platforms
+                    </>
+                  ) : (
+                    <>
+                      Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
+                      {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
+                      {pagination.total.toLocaleString()} orders
+                    </>
+                  )}
                 </p>
                 <div className="flex gap-2">
                   <Button
